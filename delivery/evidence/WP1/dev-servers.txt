@@ -1,0 +1,22 @@
+# Manual check of the development servers (project folder, Node v24.21.0 portable first in PATH)
+# Throwaway DATABASE_PATH in the session scratchpad; processes stopped and files removed afterwards.
+
+$ DATABASE_PATH=<scratch>/dev.db PORT=3201 node src/server/index.ts      # = npm run dev:server without --watch
+$ npx vite --port 5199 --strictPort                                       # = npm run dev:client on another port
+dev:server (node src/server/index.ts) /api/health -> 200 {"status":"ok"}
+dev:client (vite) / -> 200 index.html with /main.tsx
+dev:client transforms main.tsx -> 200
+dev:client proxy /api/health -> 502           # expected: the Vite proxy targets port 3000, the API ran on 3201
+proxied login from origin http://127.0.0.1:5199 -> 403 origin_rejected   # expected: only port 5173 is a default origin
+
+$ DATABASE_PATH=<scratch>/dev.db node src/server/index.ts                # API on the default port 3000
+$ npx vite                                                                # default port 5173
+dev:client proxy /api/health -> 200 {"status":"ok"}
+proxied login from http://127.0.0.1:5173 -> 401 invalid_credentials      # origin accepted; unknown synthetic account
+proxied login from http://localhost:5173 -> 401 invalid_credentials
+
+# UI check (built server, synthetic data, Claude desktop built-in browser, 1280x860 viewport):
+# sign-in page rendered under the CSP; after sign-in the two-week view showed
+# 2026-09-21 8h 00m / credit 0m, 2026-09-22 8h 40m / eligible 40m / credit 30m,
+# 2026-09-25 6h 00m + 2h 00m off-calendar / credit 2h 00m, 2026-09-27 16m / credit 30m,
+# total provisional credit 3h 00m. Screenshot: ui-timesheet-synthetic.jpg

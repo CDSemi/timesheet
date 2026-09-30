@@ -1,0 +1,697 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "reporting_zone": "America/Los_Angeles",
+    "normal_weekdays_iso": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "holidays": [
+      "2026-09-07"
+    ],
+    "required_minutes": 480,
+    "threshold_minutes": 30,
+    "rounding_step_minutes": 30,
+    "breaks_confirmed": true
+  },
+  "cases": [
+    {
+      "id": "TM-01",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T16:00:00Z",
+            "end_utc": "2026-09-22T01:00:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T18:00:00Z",
+                "end_utc": "2026-09-21T18:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T20:00:00Z",
+                "end_utc": "2026-09-21T20:30:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T22:30:00Z",
+                "end_utc": "2026-09-21T22:45:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ],
+        "start_local": "2026-09-21T09:00:00-07:00",
+        "end_local": "2026-09-21T18:00:00-07:00"
+      },
+      "expected": {
+        "regular_minutes": 480,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 0,
+        "credited_minutes": 0
+      }
+    },
+    {
+      "id": "TM-02",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T16:00:00Z",
+            "end_utc": "2026-09-22T02:15:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T18:00:00Z",
+                "end_utc": "2026-09-21T18:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T20:00:00Z",
+                "end_utc": "2026-09-21T20:30:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T22:30:00Z",
+                "end_utc": "2026-09-21T22:45:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 555,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 75,
+        "credited_minutes": 60
+      }
+    },
+    {
+      "id": "TM-03",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T16:00:00Z",
+            "end_utc": "2026-09-22T02:16:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T18:00:00Z",
+                "end_utc": "2026-09-21T18:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T20:00:00Z",
+                "end_utc": "2026-09-21T20:30:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T22:30:00Z",
+                "end_utc": "2026-09-21T22:45:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 556,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 76,
+        "credited_minutes": 90
+      }
+    },
+    {
+      "id": "TM-04",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-27",
+        "sessions": [
+          {
+            "start_utc": "2026-09-27T16:00:00Z",
+            "end_utc": "2026-09-27T18:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 0,
+        "nonworking_minutes": 120,
+        "eligible_minutes": 120,
+        "credited_minutes": 120
+      }
+    },
+    {
+      "id": "TM-05",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-07",
+        "sessions": [
+          {
+            "start_utc": "2026-09-07T16:00:00Z",
+            "end_utc": "2026-09-07T18:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 0,
+        "nonworking_minutes": 120,
+        "eligible_minutes": 120,
+        "credited_minutes": 120
+      }
+    },
+    {
+      "id": "TM-06",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-22T05:00:00Z",
+            "end_utc": "2026-09-22T14:00:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-22T09:00:00Z",
+                "end_utc": "2026-09-22T10:00:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 480,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 0,
+        "credited_minutes": 0
+      }
+    },
+    {
+      "id": "TM-07",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-25",
+        "sessions": [
+          {
+            "start_utc": "2026-09-26T05:00:00Z",
+            "end_utc": "2026-09-26T09:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 120,
+        "nonworking_minutes": 120,
+        "eligible_minutes": 120,
+        "credited_minutes": 120
+      }
+    },
+    {
+      "id": "TM-08",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-25",
+        "sessions": [
+          {
+            "start_utc": "2026-09-26T06:30:00Z",
+            "end_utc": "2026-09-26T07:30:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-26T06:45:00Z",
+                "end_utc": "2026-09-26T07:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 15,
+        "nonworking_minutes": 15,
+        "eligible_minutes": 15,
+        "credited_minutes": 0
+      }
+    },
+    {
+      "id": "TM-09",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T19:00:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T17:00:00Z",
+                "end_utc": "2026-09-21T17:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          },
+          {
+            "start_utc": "2026-09-21T20:00:00Z",
+            "end_utc": "2026-09-22T01:16:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T22:00:00Z",
+                "end_utc": "2026-09-21T22:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 526,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 46,
+        "credited_minutes": 60
+      }
+    },
+    {
+      "id": "TM-10",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T19:15:40Z",
+            "breaks": []
+          },
+          {
+            "start_utc": "2026-09-21T20:00:00Z",
+            "end_utc": "2026-09-22T00:15:40Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 511,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 31,
+        "credited_minutes": 30
+      }
+    },
+    {
+      "id": "TM-11",
+      "kind": "incomplete",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": null,
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "calculation_status": "incomplete",
+        "credited_minutes": null,
+        "ledger_events": 0
+      }
+    },
+    {
+      "id": "TM-12",
+      "kind": "validation",
+      "input": {
+        "records": [
+          {
+            "work_date": "2026-09-21",
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T17:00:00Z",
+            "breaks": []
+          },
+          {
+            "work_date": "2026-09-22",
+            "start_utc": "2026-09-21T16:00:00Z",
+            "end_utc": "2026-09-21T18:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected_error": "overlapping_user_intervals"
+    },
+    {
+      "id": "TM-13",
+      "kind": "validation",
+      "input": {
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T14:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected_error": "end_not_after_start"
+    },
+    {
+      "id": "TM-14",
+      "kind": "validation",
+      "input": {
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T16:00:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T16:00:00Z",
+                "end_utc": "2026-09-21T16:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected_error": "break_outside_session"
+    },
+    {
+      "id": "TM-15",
+      "kind": "validation",
+      "input": {
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T18:00:00Z",
+            "breaks": [
+              {
+                "start_utc": "2026-09-21T16:00:00Z",
+                "end_utc": "2026-09-21T16:15:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              },
+              {
+                "start_utc": "2026-09-21T16:10:00Z",
+                "end_utc": "2026-09-21T16:30:00Z",
+                "counts_as_work": false,
+                "confirmed": true
+              }
+            ]
+          }
+        ]
+      },
+      "expected_error": "overlapping_breaks"
+    },
+    {
+      "id": "TM-16",
+      "kind": "local_time_resolution",
+      "input": {
+        "local": "2026-03-08T02:30:00",
+        "zone": "America/Los_Angeles",
+        "fold": null
+      },
+      "expected_error": "nonexistent_local_time"
+    },
+    {
+      "id": "TM-17",
+      "kind": "local_time_resolution",
+      "input": {
+        "local": "2026-11-01T01:30:00",
+        "zone": "America/Los_Angeles",
+        "fold": null
+      },
+      "expected_error": "ambiguous_local_time"
+    },
+    {
+      "id": "TM-18",
+      "kind": "local_time_resolution",
+      "input": {
+        "local": "2026-11-01T01:30:00",
+        "zone": "America/Los_Angeles",
+        "fold": 0
+      },
+      "expected": {
+        "utc": "2026-11-01T08:30:00Z",
+        "offset": "-07:00"
+      }
+    },
+    {
+      "id": "TM-19",
+      "kind": "local_time_resolution",
+      "input": {
+        "local": "2026-11-01T01:30:00",
+        "zone": "America/Los_Angeles",
+        "fold": 1
+      },
+      "expected": {
+        "utc": "2026-11-01T09:30:00Z",
+        "offset": "-08:00"
+      }
+    },
+    {
+      "id": "TM-20",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-03-08",
+        "sessions": [
+          {
+            "start_utc": "2026-03-08T09:30:00Z",
+            "end_utc": "2026-03-08T10:30:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 0,
+        "nonworking_minutes": 60,
+        "eligible_minutes": 60,
+        "credited_minutes": 60
+      }
+    },
+    {
+      "id": "TM-21",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-11-01",
+        "sessions": [
+          {
+            "start_utc": "2026-11-01T07:30:00Z",
+            "end_utc": "2026-11-01T10:30:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 0,
+        "nonworking_minutes": 180,
+        "eligible_minutes": 180,
+        "credited_minutes": 180
+      }
+    },
+    {
+      "id": "TM-22",
+      "kind": "display",
+      "input": {
+        "instant_utc": "2026-09-22T01:00:00Z",
+        "work_date": "2026-09-21",
+        "zones": [
+          "America/Los_Angeles",
+          "Asia/Ho_Chi_Minh"
+        ]
+      },
+      "expected": {
+        "local_by_zone": {
+          "America/Los_Angeles": "2026-09-21T18:00:00-07:00",
+          "Asia/Ho_Chi_Minh": "2026-09-22T08:00:00+07:00"
+        },
+        "work_date": "2026-09-21"
+      }
+    },
+    {
+      "id": "TM-23",
+      "kind": "pay_period",
+      "input": {
+        "payroll_date": "2026-10-02",
+        "due_local_time": "17:00"
+      },
+      "expected": {
+        "period_start": "2026-09-14",
+        "period_end": "2026-09-27",
+        "due_local_date": "2026-09-29",
+        "due_at_utc": "2026-09-30T00:00:00Z"
+      }
+    },
+    {
+      "id": "TM-24",
+      "kind": "pay_period",
+      "input": {
+        "payroll_date": "2026-01-09",
+        "due_local_time": "17:00"
+      },
+      "expected": {
+        "period_start": "2025-12-22",
+        "period_end": "2026-01-04",
+        "due_local_date": "2026-01-06",
+        "due_at_utc": "2026-01-07T01:00:00Z"
+      }
+    },
+    {
+      "id": "TM-25",
+      "kind": "edit_reason",
+      "input": {
+        "now_utc": "2026-09-29T20:00:00Z",
+        "anchor_payroll_date": "2026-10-02",
+        "cycle_days": 14,
+        "target_payroll_date": "2026-09-18",
+        "finalized": false
+      },
+      "expected": {
+        "current_payroll_date": "2026-10-02",
+        "reason_required": true
+      }
+    },
+    {
+      "id": "TM-26",
+      "kind": "edit_reason",
+      "input": {
+        "now_utc": "2026-09-29T20:00:00Z",
+        "anchor_payroll_date": "2026-10-02",
+        "cycle_days": 14,
+        "target_payroll_date": "2026-10-02",
+        "finalized": false
+      },
+      "expected": {
+        "current_payroll_date": "2026-10-02",
+        "reason_required": false
+      }
+    },
+    {
+      "id": "TM-27",
+      "kind": "edit_reason",
+      "input": {
+        "now_utc": "2026-09-29T20:00:00Z",
+        "anchor_payroll_date": "2026-10-02",
+        "cycle_days": 14,
+        "target_payroll_date": "2026-10-16",
+        "finalized": false
+      },
+      "expected": {
+        "current_payroll_date": "2026-10-02",
+        "reason_required": false
+      }
+    },
+    {
+      "id": "TM-28",
+      "kind": "edit_reason",
+      "input": {
+        "now_utc": "2026-09-29T20:00:00Z",
+        "anchor_payroll_date": "2026-10-02",
+        "cycle_days": 14,
+        "target_payroll_date": "2026-10-02",
+        "finalized": true
+      },
+      "expected": {
+        "current_payroll_date": "2026-10-02",
+        "reason_required": true
+      }
+    },
+    {
+      "id": "TM-29",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-22",
+        "sessions": [
+          {
+            "start_utc": "2026-09-22T16:00:00Z",
+            "end_utc": "2026-09-22T18:00:00Z",
+            "breaks": []
+          }
+        ],
+        "category": "Off",
+        "attendance_expected": false
+      },
+      "expected": {
+        "regular_minutes": 120,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 0,
+        "credited_minutes": 0
+      }
+    },
+    {
+      "id": "TM-30",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-21",
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T15:00:00Z",
+            "end_utc": "2026-09-21T16:00:00Z",
+            "breaks": []
+          }
+        ],
+        "future_break_suggestions_ignored": true
+      },
+      "expected": {
+        "regular_minutes": 60,
+        "nonworking_minutes": 0,
+        "eligible_minutes": 0,
+        "credited_minutes": 0
+      }
+    },
+    {
+      "id": "TM-31",
+      "kind": "interval_calculation",
+      "input": {
+        "work_date": "2026-09-06",
+        "sessions": [
+          {
+            "start_utc": "2026-09-07T05:00:00Z",
+            "end_utc": "2026-09-07T09:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "regular_minutes": 0,
+        "nonworking_minutes": 240,
+        "eligible_minutes": 240,
+        "credited_minutes": 240
+      }
+    },
+    {
+      "id": "TM-32",
+      "kind": "incomplete_breaks",
+      "input": {
+        "work_date": "2026-09-21",
+        "breaks_confirmed": false,
+        "sessions": [
+          {
+            "start_utc": "2026-09-21T16:00:00Z",
+            "end_utc": "2026-09-22T01:00:00Z",
+            "breaks": []
+          }
+        ]
+      },
+      "expected": {
+        "calculation_status": "incomplete_breaks",
+        "credited_minutes": null,
+        "ledger_events": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "units": "integer_minutes",
+  "deficit_defaults": {
+    "required_minutes": 480,
+    "regular_minutes": 480,
+    "nonworking_minutes": 0,
+    "leave_minutes": 0,
+    "category": "Worked",
+    "normal_work_date": true,
+    "attendance_expected": true,
+    "records_complete": true,
+    "finalization_origin": "manual",
+    "available_minutes": 0
+  },
+  "deficit_cases": [
+    {
+      "id": "DF-01",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "ignore"
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 0,
+        "decision": "ignored"
+      }
+    },
+    {
+      "id": "DF-02",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "auto_deduct",
+        "available_minutes": 120
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 60,
+        "decision": "authorized"
+      }
+    },
+    {
+      "id": "DF-03",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "choose_at_signoff",
+        "manual_choice": "deduct",
+        "available_minutes": 120
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 60,
+        "decision": "authorized"
+      }
+    },
+    {
+      "id": "DF-04",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "choose_at_signoff",
+        "manual_choice": "ignore",
+        "available_minutes": 120
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 0,
+        "decision": "declined"
+      }
+    },
+    {
+      "id": "DF-05",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "choose_at_signoff",
+        "finalization_origin": "automatic",
+        "available_minutes": 120
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 0,
+        "decision": "pending"
+      }
+    },
+    {
+      "id": "DF-06",
+      "input": {
+        "regular_minutes": 420,
+        "mode": "auto_deduct",
+        "available_minutes": 30
+      },
+      "expected": {
+        "deficit_minutes": 60,
+        "debit_minutes": 0,
+        "decision": "insufficient_balance"
+      }
+    },
+    {
+      "id": "DF-07",
+      "input": {
+        "regular_minutes": 240,
+        "leave_minutes": 240,
+        "mode": "auto_deduct",
+        "available_minutes": 120
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-08",
+      "input": {
+        "regular_minutes": 0,
+        "category": "Vacation",
+        "attendance_expected": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-09",
+      "input": {
+        "regular_minutes": 0,
+        "category": "Holiday",
+        "normal_work_date": false,
+        "attendance_expected": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-10",
+      "input": {
+        "regular_minutes": 0,
+        "category": "Off",
+        "normal_work_date": false,
+        "attendance_expected": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-11",
+      "input": {
+        "regular_minutes": null,
+        "records_complete": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": null,
+        "debit_minutes": 0,
+        "decision": "incomplete"
+      }
+    },
+    {
+      "id": "DF-12",
+      "input": {
+        "regular_minutes": 120,
+        "nonworking_minutes": 120,
+        "mode": "auto_deduct",
+        "available_minutes": 600
+      },
+      "expected": {
+        "deficit_minutes": 240,
+        "debit_minutes": 240,
+        "decision": "authorized"
+      }
+    },
+    {
+      "id": "DF-13",
+      "input": {
+        "regular_minutes": 540,
+        "leave_minutes": 240,
+        "mode": "ignore"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-14",
+      "input": {
+        "regular_minutes": 479,
+        "mode": "auto_deduct",
+        "available_minutes": 10
+      },
+      "expected": {
+        "deficit_minutes": 1,
+        "debit_minutes": 1,
+        "decision": "authorized"
+      }
+    },
+    {
+      "id": "DF-15",
+      "input": {
+        "regular_minutes": 0,
+        "category": "Sick",
+        "attendance_expected": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    },
+    {
+      "id": "DF-16",
+      "input": {
+        "regular_minutes": 0,
+        "category": "Shutdown",
+        "normal_work_date": false,
+        "attendance_expected": false,
+        "mode": "auto_deduct"
+      },
+      "expected": {
+        "deficit_minutes": 0,
+        "debit_minutes": 0,
+        "decision": "not_applicable"
+      }
+    }
+  ],
+  "ledger_scenarios": [
+    {
+      "id": "LG-01",
+      "opening_balance_minutes": 0,
+      "events": [
+        {
+          "type": "finalize_credit",
+          "source_key": "ts1-r1-day1",
+          "minutes": 60
+        },
+        {
+          "type": "retry_same_credit",
+          "source_key": "ts1-r1-day1",
+          "minutes": 60
+        }
+      ],
+      "expected": {
+        "new_deltas": [
+          60
+        ],
+        "balance_minutes": 60,
+        "duplicate_effect": "no_second_event"
+      }
+    },
+    {
+      "id": "LG-02",
+      "opening_balance_minutes": 60,
+      "events": [
+        {
+          "type": "correct_posted_credit",
+          "previous_minutes": 60,
+          "corrected_minutes": 90
+        }
+      ],
+      "expected": {
+        "new_deltas": [
+          30
+        ],
+        "balance_minutes": 90
+      }
+    },
+    {
+      "id": "LG-03",
+      "opening_balance_minutes": 600,
+      "events": [
+        {
+          "type": "approve_leave",
+          "request_id": "leave1",
+          "minutes": 480
+        },
+        {
+          "type": "consume_reserved_leave",
+          "request_id": "leave1",
+          "minutes": 480
+        },
+        {
+          "type": "retry_consumption",
+          "request_id": "leave1",
+          "minutes": 480
+        }
+      ],
+      "expected": {
+        "new_deltas": [
+          -480
+        ],
+        "balance_minutes": 120,
+        "reserved_minutes": 0,
+        "available_minutes": 120
+      }
+    },
+    {
+      "id": "LG-04",
+      "opening_balance_minutes": 600,
+      "events": [
+        {
+          "type": "approve_leave",
+          "request_id": "leave2",
+          "minutes": 120
+        }
+      ],
+      "expected": {
+        "new_deltas": [],
+        "balance_minutes": 600,
+        "reserved_minutes": 120,
+        "available_minutes": 480
+      }
+    },
+    {
+      "id": "LG-05",
+      "opening_balance_minutes": 600,
+      "events": [
+        {
+          "type": "approve_leave",
+          "request_id": "leave3",
+          "minutes": 120
+        },
+        {
+          "type": "cancel_unused_leave",
+          "request_id": "leave3"
+        }
+      ],
+      "expected": {
+        "new_deltas": [],
+        "balance_minutes": 600,
+        "reserved_minutes": 0,
+        "available_minutes": 600
+      }
+    },
+    {
+      "id": "LG-06",
+      "opening_balance_minutes": 600,
+      "events": [
+        {
+          "type": "approve_leave",
+          "request_id": "leave4",
+          "minutes": 120
+        },
+        {
+          "type": "consume_reserved_leave",
+          "request_id": "leave4",
+          "minutes": 120
+        },
+        {
+          "type": "reverse_used_leave",
+          "request_id": "leave4",
+          "minutes": 120
+        }
+      ],
+      "expected": {
+        "new_deltas": [
+          -120,
+          120
+        ],
+        "balance_minutes": 600,
+        "reserved_minutes": 0,
+        "available_minutes": 600
+      }
+    },
+    {
+      "id": "LG-07",
+      "opening_balance_minutes": 100,
+      "events": [
+        {
+          "type": "concurrent_reservation_requests",
+          "requests": [
+            {
+              "request_id": "a",
+              "minutes": 80
+            },
+            {
+              "request_id": "b",
+              "minutes": 80
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "new_deltas": [],
+        "successful_requests": 1,
+        "rejected_or_pending_requests": 1,
+        "balance_minutes": 100,
+        "reserved_minutes": 80,
+        "available_minutes": 20
+      }
+    },
+    {
+      "id": "LG-08",
+      "opening_balance_minutes": 0,
+      "events": [
+        {
+          "type": "correct_posted_credit",
+          "previous_minutes": 60,
+          "corrected_minutes": 0,
+          "previous_credit_already_spent": true
+        }
+      ],
+      "expected": {
+        "new_deltas": [
+          -60
+        ],
+        "balance_minutes": -60,
+        "reconciliation_required": true
+      }
+    },
+    {
+      "id": "LG-09",
+      "opening_balance_minutes": 60,
+      "events": [
+        {
+          "type": "late_review_unchanged_automatic_revision",
+          "previous_credit_minutes": 60
+        },
+        {
+          "type": "resend_same_revision"
+        }
+      ],
+      "expected": {
+        "new_deltas": [],
+        "balance_minutes": 60
+      }
+    },
+    {
+      "id": "LG-10",
+      "opening_balance_minutes": 600,
+      "events": [
+        {
+          "type": "change_category",
+          "category": "OT-funded leave",
+          "leave_minutes": 480,
+          "approval_recorded": false
+        }
+      ],
+      "expected": {
+        "new_deltas": [],
+        "balance_minutes": 600,
+        "reserved_minutes": 0,
+        "approval_required": true
+      }
+    }
+  ]
+}
