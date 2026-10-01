@@ -58,6 +58,7 @@ Seed tạo `admin@example.invalid` và `employee@example.invalid`. Cung cấp `S
 | `scripts/smoke-built-server.mjs` | Kiểm tra đầu-cuối server đã build |
 | `scripts/source-digest.mjs` | Digest source ghi trong bàn giao |
 | `eslint.config.js` | Gate lint: `@typescript-eslint/no-deprecated` |
+| `.editorconfig`, `.gitattributes` | UTF-8, LF, thụt lề 2 dấu cách (Python 4); CRLF chỉ cho `.bat`/`.cmd`/`.ps1` của Windows; file binary |
 
 ## API (WP1)
 

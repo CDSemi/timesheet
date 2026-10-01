@@ -58,6 +58,7 @@ The seed creates `admin@example.invalid` and `employee@example.invalid`. Supply 
 | `scripts/smoke-built-server.mjs` | End-to-end check of the built server |
 | `scripts/source-digest.mjs` | Source digest recorded in handoffs |
 | `eslint.config.js` | Lint gate: `@typescript-eslint/no-deprecated` |
+| `.editorconfig`, `.gitattributes` | UTF-8, LF, 2-space indentation (Python 4); CRLF only for Windows `.bat`/`.cmd`/`.ps1`; binary assets |
 
 ## API (WP1)
 
