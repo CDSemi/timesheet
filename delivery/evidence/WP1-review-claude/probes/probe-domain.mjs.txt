@@ -1,0 +1,396 @@
+// Independent recomputation of WP1 rules against the BUILT production engine (dist/domain).
+// Usage: node probe-domain.mjs <path-to-clean-clone>
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import * as O from './oracle.mjs';
+
+const root = process.argv[2];
+const eng = await import(pathToFileURL(`${root}/dist/domain/index.js`).href);
+const fixture = (name) => JSON.parse(readFileSync(`${root}/fixtures/${name}`, 'utf8'));
+
+let checks = 0;
+const failures = [];
+function check(label, ok, detail) {
+  checks += 1;
+  if (!ok && failures.length < 40) failures.push(`${label}: ${detail ?? ''}`);
+  else if (!ok) failures.push('…');
+}
+const section = (name) => console.log(`\n## ${name}`);
+const report = (name, before) => console.log(`${name}: ${checks - before} checks, failures so far ${failures.length}`);
+
+// Deterministic PRNG (mulberry32) so the run is reproducible.
+let seed = 0x5eed2026;
+function rnd() {
+  seed |= 0;
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+const pick = (xs) => xs[ri(0, xs.length - 1)];
+
+// ---------------------------------------------------------------------------------------
+section('0a. LA statutory DST oracle agrees with platform tz data (sanity of the oracle)');
+{
+  const before = checks;
+  for (let y = 2007; y <= 2037; y += 1) {
+    const from = O.daysFromCivil(y, 1, 1) * O.DAY;
+    const to = O.daysFromCivil(y + 1, 1, 1) * O.DAY;
+    for (let t = from; t < to; t += 1800) {
+      check(`LA date ${t}`, O.laLocalDate(t) === O.intlLocalDate('America/Los_Angeles', t), `${O.laLocalDate(t)} vs ${O.intlLocalDate('America/Los_Angeles', t)}`);
+    }
+  }
+  report('LA oracle vs Intl, every 30 min 2007–2037', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('0b. Oracle reproduces the fixture expectations (independent recomputation)');
+{
+  const before = checks;
+  const ot = fixture('overtime_cases.json');
+  for (const c of ot.cases) {
+    const pol = { ...ot.default_policy, ...(c.input.policy_override ?? {}) };
+    const r = O.otOracle(c.input.regular_minutes, c.input.nonworking_minutes, pol.required_minutes, pol.threshold_minutes, pol.rounding_step_minutes);
+    check(`${c.id} oracle`, r.E === c.expected.normal_excess_minutes && r.T === c.expected.eligible_minutes && r.credit === c.expected.credited_minutes, JSON.stringify(r));
+  }
+  const tm = fixture('time_cases.json');
+  const d = tm.defaults;
+  const versions = [{ effectiveFrom: '1900-01-01', seq: 1, weekdays: new Set(d.normal_weekdays_iso), holidays: new Set(d.holidays) }];
+  for (const c of tm.cases.filter((x) => x.kind === 'interval_calculation' || x.kind.startsWith('incomplete'))) {
+    const confirmed = c.input.breaks_confirmed ?? d.breaks_confirmed;
+    const sessions = c.input.sessions.map((s) => ({
+      start: O.parseIsoUtc(s.start_utc),
+      end: s.end_utc === null ? null : O.parseIsoUtc(s.end_utc),
+      breaksConfirmed: confirmed,
+      breaks: s.breaks.map((b) => ({ start: O.parseIsoUtc(b.start_utc), end: O.parseIsoUtc(b.end_utc), countsAsWork: b.counts_as_work })),
+    }));
+    const r = O.workDayOracle({ sessions, localDateOf: O.laLocalDate, versions, B: d.required_minutes, N: d.threshold_minutes, M: d.rounding_step_minutes });
+    if (c.expected.calculation_status) {
+      check(`${c.id} oracle status`, r.status === c.expected.calculation_status, r.status);
+    } else {
+      check(`${c.id} oracle`, r.R === c.expected.regular_minutes && r.O === c.expected.nonworking_minutes && r.T === c.expected.eligible_minutes && r.credit === c.expected.credited_minutes, JSON.stringify(r));
+    }
+  }
+  const lg = fixture('ledger_cases.json');
+  for (const c of lg.deficit_cases) {
+    const i = { ...lg.deficit_defaults, ...c.input };
+    const def = O.deficitOracle({ B: i.required_minutes, R: i.regular_minutes, O: i.nonworking_minutes, L: i.leave_minutes, normal: i.normal_work_date, category: i.category, complete: i.records_complete });
+    check(`${c.id} oracle deficit`, def === c.expected.deficit_minutes, `${def} vs ${c.expected.deficit_minutes}`);
+  }
+  report('fixture recomputation', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('1. R-04 daily formula: exhaustive grid against computeDailyOvertime');
+{
+  const before = checks;
+  const policies = [];
+  for (const B of [1, 450, 480, 600, 1440]) for (const N of [0, 1, 30, 45, 60, 1440]) for (const M of [1, 7, 15, 30, 60, 1440]) policies.push([B, N, M]);
+  for (const [B, N, M] of policies) {
+    for (let R = 0; R <= 1440; R += 1) {
+      for (const Om of [0, 1, 14, 15, 16, 29, 30, 31, 44, 45, 46, 75, 76, 120, 479, 480, 1440]) {
+        const o = O.otOracle(R, Om, B, N, M);
+        const e = eng.computeDailyOvertime(R, Om, { requiredMinutes: B, thresholdMinutes: N, roundingStepMinutes: M });
+        check(`B${B} N${N} M${M} R${R} O${Om}`, e.normalExcessMinutes === o.E && e.eligibleMinutes === o.T && e.creditedMinutes === o.credit, `${JSON.stringify(e)} vs ${JSON.stringify(o)}`);
+      }
+    }
+  }
+  // Named review boundaries with the default policy (weekday excess 30/31, 45/46, 75/76; off-day 15/16).
+  for (const [R, Om, credit] of [[510, 0, 0], [511, 0, 30], [525, 0, 30], [526, 0, 60], [555, 0, 60], [556, 0, 90], [0, 15, 0], [0, 16, 30], [0, 120, 120], [500, 0, 0], [480, 0, 0]]) {
+    const e = eng.computeDailyOvertime(R, Om, { requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30 });
+    check(`named R${R} O${Om}`, e.creditedMinutes === credit, `${e.creditedMinutes} vs ${credit}`);
+  }
+  report('OT grid', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('2. R-01/R-03/R-04 interval engine: randomized sessions vs brute-force oracle');
+const holidays2026 = ['2026-01-01', '2026-01-02', '2026-02-16', '2026-05-25', '2026-07-03', '2026-09-07', '2026-11-26', '2026-11-27', '2026-12-25'];
+const interestingDates = [
+  '2026-03-06', '2026-03-07', '2026-03-08', '2026-03-09', // LA spring forward (Sun 03-08)
+  '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02', // LA fall back (Sun 11-01)
+  '2027-03-13', '2027-03-14', '2027-11-06', '2027-11-07',
+  '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08', // Labor Day weekend; Santiago DST (09-06)
+  '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28',
+  '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28', // Thanksgiving + floating holiday
+  '2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01', '2027-01-04',
+  '2026-04-03', '2026-04-04', '2026-04-05', // Santiago fall back (Sun 04-05 00:00 → Sat 23:00)
+  '2026-10-03', '2026-10-04', // Lord Howe spring forward (half hour)
+  '2026-03-28', '2026-03-29', // Europe/London
+];
+const zones = [
+  { zone: 'America/Los_Angeles', localDateOf: O.laLocalDate, oracle: 'statutory US rule' },
+  { zone: 'America/Los_Angeles', localDateOf: (t) => O.intlLocalDate('America/Los_Angeles', t), oracle: 'Intl' },
+  { zone: 'Asia/Ho_Chi_Minh', localDateOf: (t) => O.intlLocalDate('Asia/Ho_Chi_Minh', t), oracle: 'Intl' },
+  { zone: 'America/Santiago', localDateOf: (t) => O.intlLocalDate('America/Santiago', t), oracle: 'Intl' },
+  { zone: 'Australia/Lord_Howe', localDateOf: (t) => O.intlLocalDate('Australia/Lord_Howe', t), oracle: 'Intl' },
+  { zone: 'Europe/London', localDateOf: (t) => O.intlLocalDate('Europe/London', t), oracle: 'Intl' },
+  { zone: 'Asia/Kolkata', localDateOf: (t) => O.intlLocalDate('Asia/Kolkata', t), oracle: 'Intl' },
+  { zone: 'America/St_Johns', localDateOf: (t) => O.intlLocalDate('America/St_Johns', t), oracle: 'Intl' },
+];
+
+function engineVersions(oracleVersions) {
+  return oracleVersions.map((v, i) => ({
+    id: `cal-${i + 1}`,
+    seq: v.seq,
+    effectiveFrom: v.effectiveFrom,
+    weekdays: [...v.weekdays],
+    dates: [...v.holidays].map((date) => ({ date, kind: 'holiday', name: 'Synthetic' })),
+  }));
+}
+
+function randomDay(z) {
+  const workDate = pick(interestingDates);
+  // approximate local midnight of workDate via the oracle's own date function
+  let t = O.parseDate(workDate) * O.DAY - 14 * 3600;
+  while (z.localDateOf(t) < workDate) t += 60;
+  const midnight = t;
+  const sessions = [];
+  let cursor = midnight + ri(-4 * 3600, 20 * 3600) + (rnd() < 0.5 ? ri(0, 59) : 0);
+  const count = ri(1, 3);
+  for (let i = 0; i < count; i += 1) {
+    const len = rnd() < 0.15 ? ri(1, 600) : ri(10 * 60, 16 * 3600) + (rnd() < 0.5 ? ri(0, 59) : 0);
+    const start = cursor;
+    const end = start + len;
+    const breaks = [];
+    let bc = start + ri(0, Math.max(0, Math.floor(len / 3)));
+    for (let k = ri(0, 3); k > 0 && bc < end - 1; k -= 1) {
+      const bl = Math.min(end - bc, ri(1, 3600));
+      breaks.push({ start: bc, end: bc + bl, countsAsWork: rnd() < 0.2 });
+      bc = bc + bl + ri(0, 7200);
+    }
+    sessions.push({ start, end, breaks, breaksConfirmed: rnd() < 0.95 });
+    cursor = end + ri(0, 4 * 3600);
+  }
+  if (rnd() < 0.05) sessions[sessions.length - 1].end = null;
+  return { workDate, sessions };
+}
+
+const coverage = { multiDate: 0, laDstCrossing: 0, subMinuteSeconds: 0, secondVersionUsed: 0, multiSession: 0, breakAcrossMidnight: 0, bothClasses: 0, perSessionFloorWouldDiffer: 0, mathRoundWouldDiffer: 0 };
+const laTransitions = ['2026-03-08T10:00:00Z', '2026-11-01T09:00:00Z', '2027-03-14T10:00:00Z', '2027-11-07T09:00:00Z'].map(O.parseIsoUtc);
+{
+  const before = checks;
+  let compared = 0;
+  const statusCounts = {};
+  for (let trial = 0; trial < 12_000; trial += 1) {
+    const z = pick(zones);
+    const { workDate, sessions } = randomDay(z);
+    const B = pick([480, 480, 480, 450, 600, 1]);
+    const N = pick([30, 30, 0, 45, 60]);
+    const M = pick([30, 30, 15, 60, 1, 7]);
+    const weekdays = rnd() < 0.85 ? new Set([1, 2, 3, 4, 5]) : new Set([1, 2, 3, 4, 5, 6].filter(() => rnd() < 0.7).concat([3]));
+    const v1 = { effectiveFrom: '2025-01-01', seq: 1, weekdays, holidays: new Set(holidays2026) };
+    const versions = [v1];
+    if (rnd() < 0.4) {
+      // a later version effective mid-shift: different holidays/weekdays from its own date on
+      const eff = O.addDays(workDate, pick([0, 1]));
+      versions.push({ effectiveFrom: eff, seq: 2, weekdays: new Set([1, 2, 3, 4, 5, 6, 7].filter(() => rnd() < 0.6)), holidays: new Set(rnd() < 0.5 ? [O.addDays(workDate, 1)] : []) });
+      if (versions[1].weekdays.size === 0) versions[1].weekdays.add(1);
+    }
+    const expected = O.workDayOracle({ sessions, localDateOf: z.localDateOf, versions, B, N, M });
+    let actual;
+    try {
+      actual = eng.computeWorkDay({
+        workDate,
+        reportingZone: z.zone,
+        policy: { id: 'p', requiredMinutes: B, thresholdMinutes: N, roundingStepMinutes: M },
+        calendarVersions: engineVersions(versions),
+        sessions: sessions.map((s) => ({
+          startUtc: s.start,
+          endUtc: s.end,
+          breaksConfirmed: s.breaksConfirmed,
+          breaks: s.breaks.map((b) => ({ startUtc: b.start, endUtc: b.end, countsAsWork: b.countsAsWork, confirmed: true })),
+        })),
+      });
+    } catch (error) {
+      actual = { status: `throw:${error.code ?? error.message}` };
+    }
+    statusCounts[expected.status] = (statusCounts[expected.status] ?? 0) + 1;
+    compared += 1;
+    if (expected.status !== 'complete') {
+      check(`trial ${trial} status`, actual.status === expected.status, `${z.zone} ${workDate} engine ${actual.status} oracle ${expected.status}`);
+      if (actual.status === expected.status && expected.status !== 'calendar_missing') {
+        check(`trial ${trial} no invented minutes`, actual.creditedMinutes === null && actual.regularMinutes === null, JSON.stringify(actual));
+      }
+      continue;
+    }
+    const same =
+      actual.status === 'complete' &&
+      actual.regularSeconds === expected.rs &&
+      actual.nonworkingSeconds === expected.os &&
+      actual.regularMinutes === expected.R &&
+      actual.nonworkingMinutes === expected.O &&
+      actual.normalExcessMinutes === expected.E &&
+      actual.eligibleMinutes === expected.T &&
+      actual.creditedMinutes === expected.credit;
+    check(`trial ${trial}`, same, `${z.zone}/${z.oracle} ${workDate} B${B} N${N} M${M} engine ${JSON.stringify({ s: actual.status, rs: actual.regularSeconds, os: actual.nonworkingSeconds, c: actual.creditedMinutes })} oracle ${JSON.stringify(expected)} sessions ${JSON.stringify(sessions)}`);
+    // Coverage of the behaviours the review prompt names (and probe sensitivity to two classic mistakes).
+    if (actual.segments.length > 1) coverage.multiDate += 1;
+    if (sessions.length > 1) coverage.multiSession += 1;
+    if (z.zone === 'America/Los_Angeles' && sessions.some((s) => laTransitions.some((x) => s.start < x && x < s.end))) coverage.laDstCrossing += 1;
+    if (expected.rs % 60 !== 0 || expected.os % 60 !== 0) coverage.subMinuteSeconds += 1;
+    if (versions.length > 1 && actual.segments.some((seg) => seg.calendarVersionId === 'cal-2')) coverage.secondVersionUsed += 1;
+    if (expected.rs > 0 && expected.os > 0) coverage.bothClasses += 1;
+    if (sessions.some((s) => s.breaks.some((b) => !b.countsAsWork && z.localDateOf(b.start) !== z.localDateOf(b.end - 1)))) coverage.breakAcrossMidnight += 1;
+    const perSession = sessions.reduce(
+      (acc, s) => {
+        const m = O.secondsByLocalDate(O.netIntervals(s), z.localDateOf);
+        let r = 0;
+        let o = 0;
+        for (const [d, sec] of m) (O.classify(versions, d) === 'normal' ? (r += sec) : (o += sec));
+        return { R: acc.R + Math.floor(r / 60), O: acc.O + Math.floor(o / 60) };
+      },
+      { R: 0, O: 0 },
+    );
+    if (O.otOracle(perSession.R, perSession.O, B, N, M).credit !== expected.credit || perSession.R !== expected.R) coverage.perSessionFloorWouldDiffer += 1;
+    if (Math.round(expected.T / M) * M !== expected.credit) coverage.mathRoundWouldDiffer += 1;
+    // The per-segment seconds must add up to net work, and every segment date must be classified with its own version.
+    const net = sessions.flatMap(O.netIntervals).reduce((sum, [a, b]) => sum + b - a, 0);
+    check(`trial ${trial} segments sum`, actual.segments.reduce((s, x) => s + x.seconds, 0) === net, `${net}`);
+    for (const seg of actual.segments) {
+      const cls = O.classify(versions, seg.localDate);
+      check(`trial ${trial} segment ${seg.localDate}`, seg.dayClass === cls, `${seg.dayClass} vs ${cls}`);
+    }
+  }
+  console.log('oracle status distribution', statusCounts, 'trials', compared);
+  console.log('coverage of complete trials', coverage);
+  report('randomized interval engine', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('3. Local time resolution (R-07) against the statutory LA rule');
+{
+  const before = checks;
+  const days = ['2026-03-08', '2026-11-01', '2027-03-14', '2027-11-07', '2026-07-15', '2026-01-15', '2026-03-07', '2026-10-31'];
+  for (const day of days) {
+    for (let minute = 0; minute < 1440; minute += 1) {
+      const hh = String(Math.floor(minute / 60)).padStart(2, '0');
+      const mm = String(minute % 60).padStart(2, '0');
+      const local = `${day}T${hh}:${mm}`;
+      const wall = O.parseDate(day) * O.DAY + minute * 60;
+      const cands = O.laCandidates(wall);
+      const attempt = (opts) => {
+        try {
+          const r = eng.resolveLocalDateTime(local, 'America/Los_Angeles', opts);
+          return { utc: r.utc, offset: r.offsetSeconds };
+        } catch (error) {
+          return { error: error.code };
+        }
+      };
+      const plain = attempt({});
+      if (cands.length === 0) {
+        check(`${local} gap`, plain.error === 'nonexistent_local_time', JSON.stringify(plain));
+        check(`${local} gap fold`, attempt({ fold: 0 }).error === 'nonexistent_local_time' && attempt({ offset: '-08:00' }).error === 'nonexistent_local_time', '');
+      } else if (cands.length === 2) {
+        check(`${local} ambiguous`, plain.error === 'ambiguous_local_time', JSON.stringify(plain));
+        check(`${local} fold0`, attempt({ fold: 0 }).utc === cands[0], '');
+        check(`${local} fold1`, attempt({ fold: 1 }).utc === cands[1], '');
+        check(`${local} offset -07`, attempt({ offset: '-07:00' }).utc === cands[0], '');
+        check(`${local} offset -08`, attempt({ offset: '-08:00' }).utc === cands[1], '');
+        check(`${local} bad offset`, attempt({ offset: '-05:00' }).error === 'offset_mismatch', '');
+      } else {
+        check(`${local} unique`, plain.utc === cands[0], `${JSON.stringify(plain)} vs ${cands[0]}`);
+        check(`${local} unique fold ignored`, attempt({ fold: 1 }).utc === cands[0], '');
+      }
+    }
+  }
+  report('local resolution, every minute of 8 days', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('4. Pay periods, due instants, current period and edit-reason relation (FR-02, R-07)');
+{
+  const before = checks;
+  const schedule = {
+    anchorPayrollDate: '2026-10-02', cycleDays: 14, periodStartOffsetDays: -18, periodEndOffsetDays: -5,
+    dueOffsetDays: -3, dueLocalTime: '17:00', reportingZone: 'America/Los_Angeles',
+  };
+  for (let d = O.parseDate('2024-01-01'); d <= O.parseDate('2029-12-31'); d += 1) {
+    const date = O.dateStr(d);
+    const k = O.payrollIndexOf(date, schedule.anchorPayrollDate);
+    const want = O.periodOracle(schedule.anchorPayrollDate, k);
+    const got = eng.payPeriodContaining(schedule, date);
+    check(`period of ${date}`, got.periodStart === want.start && got.periodEnd === want.end && got.payrollDate === want.payroll && got.dueLocalDate === want.dueDate && got.dueAtUtc === want.dueAtUtc && O.weekdayIso(O.parseDate(want.dueDate)) === 2 && O.weekdayIso(O.parseDate(want.payroll)) === 5, `${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+    const cur = eng.currentPayPeriod(schedule, date);
+    const ck = O.currentIndexOracle(date, schedule.anchorPayrollDate);
+    check(`current on ${date}`, cur.index === ck && cur.payrollDate === O.periodOracle(schedule.anchorPayrollDate, ck).payroll, `${cur.payrollDate}`);
+    for (const target of [k - 1, k, k + 1, ck - 1, ck, ck + 1]) {
+      for (const finalized of [false, true]) {
+        const r = eng.editReasonRequirement({ schedule, todayLocal: date, targetPeriodIndex: target, finalized });
+        const relation = target < ck ? 'old' : target === ck ? 'current' : 'future';
+        check(`relation ${date} → ${target}`, r.relation === relation && r.reasonRequired === (finalized || relation === 'old'), JSON.stringify(r));
+      }
+    }
+  }
+  report('periods 2024–2029', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('5. Flexible arrival (R-02): shifted suggestions and expected finish');
+{
+  const before = checks;
+  const rules = [
+    { startOffsetMinutes: 120, durationMinutes: 15, countsAsWork: false },
+    { startOffsetMinutes: 240, durationMinutes: 30, countsAsWork: false },
+    { startOffsetMinutes: 390, durationMinutes: 15, countsAsWork: false },
+  ];
+  const at = (local) => eng.resolveLocalDateTime(local, 'America/Los_Angeles').utc;
+  for (const [start, finish, b1, b2, b3] of [
+    ['07:00', '16:00', '09:00', '11:00', '13:30'],
+    ['08:00', '17:00', '10:00', '12:00', '14:30'],
+    ['09:00', '18:00', '11:00', '13:00', '15:30'],
+  ]) {
+    const s = at(`2026-09-21T${start}`);
+    const suggestions = eng.suggestBreaks(s, rules);
+    check(`suggestions ${start}`, suggestions.map((x) => eng.formatInZone('America/Los_Angeles', x.startUtc).slice(11, 16)).join() === [b1, b2, b3].join() && suggestions.every((x) => x.confirmed === false), JSON.stringify(suggestions));
+    const fin = eng.expectedFinishUtc(s, 480, eng.excludedBreakMinutes(rules));
+    check(`finish ${start}`, eng.formatInZone('America/Los_Angeles', fin).slice(11, 16) === finish, '');
+  }
+  // Policy consistency: 08:00–17:00 = 480 + 60 is accepted; other combinations are rejected.
+  const base = { requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30, referenceStart: '08:00', referenceEnd: '17:00', breaks: rules, deficitMode: 'ignore' };
+  let ok = true;
+  try { eng.validateWorkPolicyRules(base); } catch { ok = false; }
+  check('default policy consistent', ok, '');
+  for (const [field, value, code] of [['referenceEnd', '16:30', 'inconsistent_reference_schedule'], ['requiredMinutes', 450, 'inconsistent_reference_schedule'], ['thresholdMinutes', -1, 'invalid_threshold_minutes'], ['roundingStepMinutes', 7.5, 'invalid_rounding_step'], ['requiredMinutes', 0, 'invalid_required_minutes']]) {
+    let code2 = null;
+    try { eng.validateWorkPolicyRules({ ...base, [field]: value }); } catch (error) { code2 = error.code; }
+    check(`policy ${field}=${value}`, code2 === code, code2);
+  }
+  // A short shift never deducts future (unconfirmed) suggestions: 1 h shift with no actual breaks = 60.
+  const r = eng.computeWorkDay({
+    workDate: '2026-09-21', reportingZone: 'America/Los_Angeles',
+    policy: { id: 'p', requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30 },
+    calendarVersions: [{ id: 'c', seq: 1, effectiveFrom: '2026-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }],
+    sessions: [{ startUtc: at('2026-09-21T08:00'), endUtc: at('2026-09-21T09:00'), breaks: [], breaksConfirmed: true }],
+  });
+  check('short shift keeps 60', r.regularMinutes === 60, JSON.stringify(r));
+  // Suggested (unconfirmed) breaks keep the day pending rather than being deducted.
+  const pending = eng.computeWorkDay({
+    workDate: '2026-09-21', reportingZone: 'America/Los_Angeles',
+    policy: { id: 'p', requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30 },
+    calendarVersions: [{ id: 'c', seq: 1, effectiveFrom: '2026-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }],
+    sessions: [{ startUtc: at('2026-09-21T09:00'), endUtc: at('2026-09-21T18:00'), breaks: eng.suggestBreaks(at('2026-09-21T09:00'), rules), breaksConfirmed: true }],
+  });
+  check('unconfirmed suggestions pending', pending.status === 'incomplete_breaks' && pending.creditedMinutes === null, pending.status);
+  report('flexible arrival', before);
+}
+
+// ---------------------------------------------------------------------------------------
+section('6. R-05 deficit minutes grid');
+{
+  const before = checks;
+  for (const B of [480, 450, 1]) for (const R of [0, 1, 239, 240, 420, 479, 480, 540, null]) for (const Om of [0, 120]) for (const L of [0, 60, 240, 480, 600]) for (const normal of [true, false]) for (const category of ['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shutdown']) for (const complete of [true, false]) {
+    const want = O.deficitOracle({ B, R, O: R === null ? null : Om, L, normal, category, complete: complete && R !== null });
+    let got;
+    try {
+      got = eng.computeDeficitMinutes({ requiredMinutes: B, regularMinutes: R, nonworkingMinutes: R === null ? null : Om, leaveMinutes: L, normalWorkDate: normal, attendanceExpected: eng.isAttendanceExpected({ dayClass: normal ? 'normal' : 'nonworking' }, category), recordsComplete: complete && R !== null });
+    } catch (error) { got = `throw ${error.code}`; }
+    check(`deficit B${B} R${R} O${Om} L${L} ${normal} ${category} ${complete}`, got === want, `${got} vs ${want}`);
+  }
+  report('deficit grid', before);
+}
+
+console.log(`\nTOTAL checks ${checks}, failures ${failures.length}`);
+for (const f of failures) console.log(`FAIL ${f}`);
+process.exitCode = failures.length === 0 ? 0 : 1;

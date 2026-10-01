@@ -1,0 +1,51 @@
+PASS  cli migrate  — {"database":"<scratch>\\http-work\\probe.db","applied":[1],"version":1}
+PASS  cli seed  — Created synthetic seed data:
+PASS  built server healthy
+
+## Static file containment (raw, undecoded request paths)
+PASS  GET /../package.json does not leak files  — status 200
+PASS  GET /%2e%2e/package.json does not leak files  — status 200
+PASS  GET /..%2fpackage.json does not leak files  — status 200
+PASS  GET /%2e%2e%2fpackage.json does not leak files  — status 200
+PASS  GET /assets/..%2f..%2f..%2fpackage.json does not leak files  — status 200
+PASS  GET /..%5cpackage.json does not leak files  — status 200
+PASS  GET /%5c..%5c..%5cpackage.json does not leak files  — status 200
+PASS  GET /assets/%2e%2e%5c%2e%2e%5c%2e%2e%5cpackage.json does not leak files  — status 200
+PASS  GET /..\..\package.json does not leak files  — status 200
+PASS  GET //package.json does not leak files  — status 200
+PASS  GET /assets/../../server/index.js does not leak files  — status 200
+PASS  GET /%2e%2e/%2e%2e/src/server/index.ts does not leak files  — status 200
+PASS  GET /%2e%2e%2f%2e%2e%2fdist%2fserver%2fconfig.js does not leak files  — status 200
+PASS  GET /C:%5cWindows%5cwin.ini does not leak files  — status 200
+PASS  GET /index.html%00.js does not leak files  — status 200
+
+## Sign-in, cookie and headers
+PASS  login cookie HttpOnly, SameSite=Strict, Path=/, Max-Age, not Secure in development  — ts_session=<redacted>; Max-Age=604800; Path=/; HttpOnly; SameSite=Strict
+PASS  login response has no-store and CSP  — no-store
+PASS  login body holds no hash or token  — {"user":{"id":"fbdb57de-f517-4e0a-b0ef-e745cc013d78","email":"employee@example.invalid","display_name":"Example Employee","role":"employee"}}
+PASS  GET /api/auth/me no-store, nosniff
+
+## Origin / CSRF variants on a state-changing route
+PASS  PUT day: no Origin → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: Origin null → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: Origin with trailing slash → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: Origin other port → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: Origin 127.0.0.1 (not configured) → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: valid Origin + Sec-Fetch-Site cross-site → 403  — 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  PUT day: valid Origin + text/plain body → 415  — 415 {"error":{"code":"unsupported_media_type","message":"Send request bodies as appl
+PASS  PUT day: valid Origin + form body → 415  — 415 {"error":{"code":"unsupported_media_type","message":"Send request bodies as appl
+INFO  valid Origin, JSON body without Content-Type → 200 (Origin check is the CSRF control; HTML forms always send a type)
+PASS  70 kB body rejected 413  — 413
+
+## Login rate limit over a real socket
+PASS  5 failures then 429, also for the correct password  — 401,401,401,401,401,429 then 429, Retry-After 900
+PASS  another account from the same address is still allowed (per-account bucket)  — 200
+PASS  unknown account gets the same 401 shape
+
+## Configuration guards (dist/server/config.js)
+PASS  production without APP_ORIGINS refuses to start
+PASS  production defaults: Secure cookie, loopback bind
+PASS  APP_ORIGINS entries must be bare origins
+
+TOTAL http checks 37, failures 0
+probe-http exit=0

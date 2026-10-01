@@ -1,0 +1,199 @@
+// Independent review oracle for WP1, written from docs/02_TIME_AND_OT_RULES.md and
+// docs/01_PRODUCT_REQUIREMENTS.md only. It deliberately uses different algorithms from
+// src/domain: Hinnant civil-day arithmetic instead of Date, the statutory US DST rule for
+// America/Los_Angeles instead of ICU, brute-force per-UTC-minute date attribution instead of
+// midnight search, and distance-based rounding instead of the q/r formula.
+
+export const DAY = 86_400;
+
+// ---------- civil dates (proleptic Gregorian, days since 1970-01-01) ----------
+export function daysFromCivil(y, m, d) {
+  y -= m <= 2 ? 1 : 0;
+  const era = Math.floor(y / 400);
+  const yoe = y - era * 400;
+  const doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  return era * 146_097 + doe - 719_468;
+}
+
+export function civilFromDays(z) {
+  z += 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365);
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const d = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const m = mp + (mp < 10 ? 3 : -9);
+  return { y: yoe + era * 400 + (m <= 2 ? 1 : 0), m, d };
+}
+
+const p2 = (n) => String(n).padStart(2, '0');
+export function dateStr(days) {
+  const { y, m, d } = civilFromDays(days);
+  return `${String(y).padStart(4, '0')}-${p2(m)}-${p2(d)}`;
+}
+export function parseDate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return daysFromCivil(y, m, d);
+}
+/** ISO weekday 1 = Monday … 7 = Sunday; 1970-01-01 was a Thursday (4). */
+export function weekdayIso(days) {
+  return ((((days + 3) % 7) + 7) % 7) + 1;
+}
+export const addDays = (s, n) => dateStr(parseDate(s) + n);
+
+// ---------- America/Los_Angeles from the US rule in force since 2007 ----------
+function nthSunday(year, month, n) {
+  const first = daysFromCivil(year, month, 1);
+  const toSunday = (7 - weekdayIso(first)) % 7; // weekdayIso(Sunday) = 7
+  return first + toSunday + (n - 1) * 7;
+}
+/** DST: second Sunday of March 02:00 PST (10:00Z) until first Sunday of November 02:00 PDT (09:00Z). */
+export function laOffsetSeconds(t) {
+  const { y } = civilFromDays(Math.floor((t - 8 * 3600) / DAY));
+  const start = nthSunday(y, 3, 2) * DAY + 10 * 3600;
+  const end = nthSunday(y, 11, 1) * DAY + 9 * 3600;
+  return t >= start && t < end ? -7 * 3600 : -8 * 3600;
+}
+export const laLocalDate = (t) => dateStr(Math.floor((t + laOffsetSeconds(t)) / DAY));
+
+/** Wall-clock (local seconds since epoch as if UTC) → candidate instants in LA, ascending. */
+export function laCandidates(wall) {
+  const out = [];
+  for (const offset of [-7 * 3600, -8 * 3600]) {
+    const t = wall - offset;
+    if (laOffsetSeconds(t) === offset) out.push(t);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+// ---------- any zone: local date via Intl (same tz data, different algorithm) ----------
+const dateFormatters = new Map();
+export function intlLocalDate(zone, t) {
+  let f = dateFormatters.get(zone);
+  if (f === undefined) {
+    f = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    dateFormatters.set(zone, f);
+  }
+  return f.format(new Date(t * 1000));
+}
+
+// ---------- R-01: net work = session minus excluded breaks (boundary sweep) ----------
+export function netIntervals(session) {
+  const excluded = session.breaks.filter((b) => !b.countsAsWork);
+  const points = [...new Set([session.start, session.end, ...excluded.flatMap((b) => [b.start, b.end])])]
+    .filter((p) => p >= session.start && p <= session.end)
+    .sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i + 1 < points.length; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    const mid = (a + b) / 2;
+    if (!excluded.some((x) => x.start <= mid && mid < x.end)) {
+      if (out.length > 0 && out[out.length - 1][1] === a) out[out.length - 1][1] = b;
+      else out.push([a, b]);
+    }
+  }
+  return out;
+}
+
+// ---------- R-03: attribute every second to its reporting-zone local date ----------
+// Modern offsets are whole minutes, so the local date is constant inside each UTC minute.
+export function secondsByLocalDate(intervals, localDateOf) {
+  const map = new Map();
+  for (const [s, e] of intervals) {
+    for (let c = s; c < e; ) {
+      const next = Math.min(e, (Math.floor(c / 60) + 1) * 60);
+      const d = localDateOf(c);
+      map.set(d, (map.get(d) ?? 0) + (next - c));
+      c = next;
+    }
+  }
+  return map;
+}
+
+/** Calendar versions: [{effectiveFrom, seq, weekdays:Set, holidays:Set}] — version effective on each date. */
+export function classify(versions, date) {
+  let best;
+  for (const v of versions) {
+    if (v.effectiveFrom > date) continue;
+    if (!best || v.effectiveFrom > best.effectiveFrom || (v.effectiveFrom === best.effectiveFrom && v.seq > best.seq)) best = v;
+  }
+  if (!best) return 'missing';
+  if (best.holidays.has(date)) return 'nonworking';
+  return best.weekdays.has(weekdayIso(parseDate(date))) ? 'normal' : 'nonworking';
+}
+
+// ---------- R-04: daily formula, nearest multiple with midpoint down ----------
+export function otOracle(R, O, B, N, M) {
+  const E = Math.max(0, R - B);
+  const A = E > N ? E : 0; // N activates, it is not deducted
+  const T = A + O; // off-calendar minutes need neither B nor N
+  const lo = Math.floor(T / M) * M;
+  const hi = lo + M;
+  const credit = T - lo < hi - T ? lo : T - lo > hi - T ? hi : lo; // exact midpoint → down
+  return { E, A, T, credit };
+}
+
+export function workDayOracle({ sessions, localDateOf, versions, B, N, M }) {
+  if (sessions.length === 0) return { status: 'no_records' };
+  if (sessions.some((s) => s.end === null)) return { status: 'incomplete' };
+  if (sessions.some((s) => !s.breaksConfirmed)) return { status: 'incomplete_breaks' };
+  const byDate = secondsByLocalDate(sessions.flatMap(netIntervals), localDateOf);
+  let rs = 0;
+  let os = 0;
+  for (const [d, sec] of byDate) {
+    const cls = classify(versions, d);
+    if (cls === 'missing') return { status: 'calendar_missing' };
+    if (cls === 'normal') rs += sec;
+    else os += sec;
+  }
+  const R = Math.floor(rs / 60);
+  const O = Math.floor(os / 60);
+  return { status: 'complete', rs, os, R, O, ...otOracle(R, O, B, N, M) };
+}
+
+// ---------- R-05: deficit ----------
+export function deficitOracle({ B, R, O, L, normal, category, complete }) {
+  const attendanceExpected = normal && category === 'Worked';
+  if (!attendanceExpected) return 0;
+  if (!complete || R === null || O === null) return null;
+  const required = Math.max(0, B - Math.min(L, B));
+  return Math.max(0, required - (R + O));
+}
+
+// ---------- FR-02 / R-07: periods, due instants, current period ----------
+export function payrollIndexOf(date, anchor, cycle = 14) {
+  // period for payroll P = P-18 .. P-5 → index k such that anchor+14k-18 <= date <= anchor+14k-5
+  return Math.floor((parseDate(date) - (parseDate(anchor) - 18)) / cycle);
+}
+export function periodOracle(anchor, k) {
+  const P = parseDate(anchor) + 14 * k;
+  const due = P - 3;
+  const wall = due * DAY + 17 * 3600;
+  const cands = laCandidates(wall);
+  return {
+    payroll: dateStr(P),
+    start: dateStr(P - 18),
+    end: dateStr(P - 5),
+    dueDate: dateStr(due),
+    dueAtUtc: cands[0],
+  };
+}
+export function currentIndexOracle(today, anchor) {
+  // earliest payroll date on/after today
+  let k = Math.floor((parseDate(today) - parseDate(anchor)) / 14) - 2;
+  while (parseDate(anchor) + 14 * k < parseDate(today)) k += 1;
+  return k;
+}
+
+export function isoUtc(t) {
+  const days = Math.floor(t / DAY);
+  const s = t - days * DAY;
+  return `${dateStr(days)}T${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}Z`;
+}
+export function parseIsoUtc(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/.exec(s);
+  return daysFromCivil(+m[1], +m[2], +m[3]) * DAY + +m[4] * 3600 + +m[5] * 60 + +m[6];
+}

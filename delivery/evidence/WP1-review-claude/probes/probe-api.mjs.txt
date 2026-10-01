@@ -1,0 +1,312 @@
+// Independent API-level probes for WP1: production engine through real SQLite + HTTP routing
+// (in-process Hono app from the repository's own test harness, fresh migrated database each time).
+// Usage: node probe-api.mjs <path-to-clean-clone>
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import * as O from './oracle.mjs';
+
+const root = process.argv[2];
+const { createTestContext, la } = await import(pathToFileURL(`${root}/tests/support/testApp.ts`).href);
+const { createCalendarVersion } = await import(pathToFileURL(`${root}/src/server/services/calendars.ts`).href);
+
+let checks = 0;
+const failures = [];
+const notes = [];
+function check(label, ok, detail = '') {
+  checks += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
+  if (!ok) failures.push(label);
+}
+const note = (text) => {
+  notes.push(text);
+  console.log(`NOTE  ${text}`);
+};
+
+const SEED_CAL = [{ effectiveFrom: '2026-01-01', seq: 1, weekdays: new Set([1, 2, 3, 4, 5]), holidays: new Set(['2026-01-01', '2026-01-02', '2026-02-16', '2026-05-25', '2026-07-03', '2026-09-07', '2026-11-26', '2026-11-27', '2026-12-25']) }];
+const LA = 'America/Los_Angeles';
+const utcOfLa = (local) => {
+  const [d, hm] = local.split('T');
+  const [h, m] = hm.split(':').map(Number);
+  const c = O.laCandidates(O.parseDate(d) * O.DAY + h * 3600 + m * 60);
+  if (c.length !== 1) throw new Error(`oracle: ${local} is not unique in LA`);
+  return c[0];
+};
+const body = (start, end, breaks = [], extra = {}) => ({ start, end, input_zone: LA, breaks, breaks_confirmed: true, ...extra });
+
+/** Oracle for the API sessions of one work date, seed calendar and seed policy 480/30/30. */
+function expectFor(sessionsUtc) {
+  return O.workDayOracle({
+    sessions: sessionsUtc.map((s) => ({ ...s, breaksConfirmed: true })),
+    localDateOf: O.laLocalDate,
+    versions: SEED_CAL,
+    B: 480,
+    N: 30,
+    M: 30,
+  });
+}
+function compareCalc(label, calc, want) {
+  const ok =
+    calc?.status === 'complete' &&
+    calc.regular_seconds === want.rs &&
+    calc.nonworking_seconds === want.os &&
+    calc.regular_minutes === want.R &&
+    calc.nonworking_minutes === want.O &&
+    calc.eligible_minutes === want.T &&
+    calc.credited_minutes === want.credit;
+  check(label, ok, `API R ${calc?.regular_minutes} O ${calc?.nonworking_minutes} T ${calc?.eligible_minutes} credit ${calc?.credited_minutes} | oracle R ${want.R} O ${want.O} T ${want.T} credit ${want.credit}`);
+}
+
+// ---------------------------------------------------------------------------------------
+console.log('\n## A. Mixed overnight shifts, DST nights, multiple sessions and seconds through the API');
+{
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  const cookie = await t.login('employee');
+  // A1 Friday day session + night session into Saturday on the same work date.
+  const day = await t.request('POST', '/api/days/2026-09-25/sessions', {
+    cookie,
+    body: body(la('2026-09-25T09:00'), la('2026-09-25T17:30'), [
+      { start: la('2026-09-25T11:00'), end: la('2026-09-25T11:15'), counts_as_work: false },
+      { start: la('2026-09-25T13:00'), end: la('2026-09-25T13:30'), counts_as_work: false },
+    ]),
+  });
+  const night = await t.request('POST', '/api/days/2026-09-25/sessions', { cookie, body: body(la('2026-09-25T22:00'), la('2026-09-26T02:30')) });
+  check('A1 both Friday sessions accepted', day.status === 201 && night.status === 201, `${day.status}/${night.status}`);
+  compareCalc('A1 Friday day + night into Saturday (one daily B, Saturday tail off-calendar)', night.body.day?.calculation, expectFor([
+    { start: utcOfLa('2026-09-25T09:00'), end: utcOfLa('2026-09-25T17:30'), breaks: [
+      { start: utcOfLa('2026-09-25T11:00'), end: utcOfLa('2026-09-25T11:15'), countsAsWork: false },
+      { start: utcOfLa('2026-09-25T13:00'), end: utcOfLa('2026-09-25T13:30'), countsAsWork: false }] },
+    { start: utcOfLa('2026-09-25T22:00'), end: utcOfLa('2026-09-26T02:30'), breaks: [] },
+  ]));
+  // A5 seconds aggregation with manual UTC strings (TM-10 shape): 4h15m40s + 4h15m40s = 511 min 20 s → 511.
+  const s1 = await t.request('POST', '/api/days/2026-09-21/sessions', { cookie, body: body('2026-09-21T15:00:00Z', '2026-09-21T19:15:40Z') });
+  const s2 = await t.request('POST', '/api/days/2026-09-21/sessions', { cookie, body: body('2026-09-21T20:00:00Z', '2026-09-22T00:15:40Z') });
+  check('A5 seconds sessions accepted', s1.status === 201 && s2.status === 201);
+  compareCalc('A5 seconds aggregated across sessions before one floor (511, credit 30)', s2.body.day?.calculation, expectFor([
+    { start: O.parseIsoUtc('2026-09-21T15:00:00Z'), end: O.parseIsoUtc('2026-09-21T19:15:40Z'), breaks: [] },
+    { start: O.parseIsoUtc('2026-09-21T20:00:00Z'), end: O.parseIsoUtc('2026-09-22T00:15:40Z'), breaks: [] },
+  ]));
+  // A6 three sessions share one B: 180 + 240 + 136 = 556 → E 76 → 90.
+  const parts = [['07:00', '10:00'], ['11:00', '15:00'], ['16:00', '18:16']];
+  let last;
+  for (const [a, b] of parts) last = await t.request('POST', '/api/days/2026-09-22/sessions', { cookie, body: body(la(`2026-09-22T${a}`), la(`2026-09-22T${b}`)) });
+  compareCalc('A6 three sessions share one daily B (556 → 90)', last.body.day?.calculation, expectFor(parts.map(([a, b]) => ({ start: utcOfLa(`2026-09-22T${a}`), end: utcOfLa(`2026-09-22T${b}`), breaks: [] }))));
+  // A7 flexible arrival 07:00–16:00 with breaks shifted by one hour earlier: R 480, no OT, no deficit.
+  const early = await t.request('POST', '/api/days/2026-09-23/sessions', {
+    cookie,
+    body: body(la('2026-09-23T07:00'), la('2026-09-23T16:00'), [
+      { start: la('2026-09-23T09:00'), end: la('2026-09-23T09:15'), counts_as_work: false },
+      { start: la('2026-09-23T11:00'), end: la('2026-09-23T11:30'), counts_as_work: false },
+      { start: la('2026-09-23T13:30'), end: la('2026-09-23T13:45'), counts_as_work: false },
+    ]),
+  });
+  check('A7 07:00–16:00 flexible arrival = R 480, credit 0, deficit 0', early.body.day?.calculation?.regular_minutes === 480 && early.body.day?.calculation?.credited_minutes === 0 && early.body.day?.deficit_minutes === 0, JSON.stringify({ R: early.body.day?.calculation?.regular_minutes, c: early.body.day?.calculation?.credited_minutes, d: early.body.day?.deficit_minutes }));
+  // A8 off-day boundaries on a Saturday and Sunday: 15 → 0, 16 → 30 (one session per day).
+  const sat = await t.request('POST', '/api/days/2026-09-19/sessions', { cookie, body: body(la('2026-09-19T10:00'), la('2026-09-19T10:15')) });
+  check('A8 15 off-calendar minutes on a Saturday credit 0', sat.status === 201 && sat.body.day.calculation.credited_minutes === 0 && sat.body.day.calculation.nonworking_minutes === 15, `${sat.status}`);
+  const sun = await t.request('POST', '/api/days/2026-09-20/sessions', { cookie, body: body(la('2026-09-20T10:00'), la('2026-09-20T10:16')) });
+  check('A8 16 off-calendar minutes on a Sunday credit 30', sun.status === 201 && sun.body.day.calculation.credited_minutes === 30 && sun.body.day.calculation.nonworking_minutes === 16, `${sun.status}`);
+  const labor = await t.request('POST', '/api/days/2026-09-07/sessions', { cookie, body: body(la('2026-09-07T09:00'), la('2026-09-07T11:00'), [], { reason: 'probe: old period' }) });
+  check('A8 120 minutes on Labor Day (weekday holiday) are off-calendar and credit 120', labor.status === 201 && labor.body.day.calculation.nonworking_minutes === 120 && labor.body.day.calculation.credited_minutes === 120 && labor.body.day.category === 'Holiday', `${labor.status}`);
+  const sheet = await t.request('GET', '/api/timesheets/2026-10-02', { cookie });
+  const sum = sheet.body.days.reduce((s, d) => s + (d.calculation?.status === 'complete' ? d.calculation.credited_minutes : 0), 0);
+  check('A9 period total is the sum of independently rounded days (no weekly netting)', sheet.body.totals.provisional_credited_minutes === sum, `${sheet.body.totals.provisional_credited_minutes} vs ${sum}`);
+  t.close();
+}
+{
+  // A2 weekday into Thanksgiving with a break spanning midnight (clock after the shift).
+  const t = await createTestContext('2026-11-28T20:00:00Z');
+  const cookie = await t.login('employee');
+  const r = await t.request('POST', '/api/days/2026-11-25/sessions', {
+    cookie,
+    body: body(la('2026-11-25T20:00'), la('2026-11-26T04:00'), [{ start: la('2026-11-25T23:45'), end: la('2026-11-26T00:15'), counts_as_work: false }]),
+  });
+  check('A2 accepted without reason (current period on 2026-11-28)', r.status === 201 && r.body.day.edit.reason_required === false, `${r.status}`);
+  compareCalc('A2 Wednesday → Thanksgiving holiday split with a break across midnight (225/225 → 210)', r.body.day?.calculation, expectFor([
+    { start: utcOfLa('2026-11-25T20:00'), end: utcOfLa('2026-11-26T04:00'), breaks: [{ start: utcOfLa('2026-11-25T23:45'), end: utcOfLa('2026-11-26T00:15'), countsAsWork: false }] },
+  ]));
+  t.close();
+}
+{
+  // A3 spring-forward nights (2026-03-08): Saturday→Sunday and Sunday→Monday.
+  const t = await createTestContext('2026-03-10T20:00:00Z');
+  const cookie = await t.login('employee');
+  const a = await t.request('POST', '/api/days/2026-03-07/sessions', { cookie, body: body(la('2026-03-07T22:00'), la('2026-03-08T06:00')) });
+  compareCalc('A3a Sat 22:00 PST → Sun 06:00 PDT = 7 h elapsed, all off-calendar', a.body.day?.calculation, expectFor([{ start: utcOfLa('2026-03-07T22:00'), end: utcOfLa('2026-03-08T06:00'), breaks: [] }]));
+  const b = await t.request('POST', '/api/days/2026-03-08/sessions', { cookie, body: body(la('2026-03-08T23:00'), la('2026-03-09T07:00')) });
+  compareCalc('A3b Sun 23:00 → Mon 07:00 PDT: 60 off-calendar + 420 regular', b.body.day?.calculation, expectFor([{ start: utcOfLa('2026-03-08T23:00'), end: utcOfLa('2026-03-09T07:00'), breaks: [] }]));
+  t.close();
+}
+{
+  // A4 fall-back nights (2026-11-01).
+  const t = await createTestContext('2026-11-03T20:00:00Z');
+  const cookie = await t.login('employee');
+  const a = await t.request('POST', '/api/days/2026-10-31/sessions', { cookie, body: body(la('2026-10-31T22:00'), la('2026-11-01T06:00')) });
+  compareCalc('A4a Sat 22:00 PDT → Sun 06:00 PST = 9 h elapsed', a.body.day?.calculation, expectFor([{ start: utcOfLa('2026-10-31T22:00'), end: utcOfLa('2026-11-01T06:00'), breaks: [] }]));
+  const b = await t.request('POST', '/api/days/2026-11-01/sessions', { cookie, body: body(la('2026-11-01T20:00'), la('2026-11-02T05:00')) });
+  compareCalc('A4b Sun 20:00 → Mon 05:00: 240 off-calendar + 300 regular', b.body.day?.calculation, expectFor([{ start: utcOfLa('2026-11-01T20:00'), end: utcOfLa('2026-11-02T05:00'), breaks: [] }]));
+  t.close();
+}
+
+// ---------------------------------------------------------------------------------------
+console.log('\n## B. Two-user isolation (AC-01) on every implemented endpoint');
+{
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  const emp = await t.login('employee');
+  const adm = await t.login('admin');
+  const created = await t.request('POST', '/api/days/2026-09-21/sessions', { cookie: emp, body: body(la('2026-09-21T09:00'), la('2026-09-21T19:00'), [], { breaks_confirmed: true }) });
+  const empSession = created.body.session.id;
+  const ghost = randomUUID();
+  const update = { ...body(la('2026-09-21T08:00'), la('2026-09-21T09:00')), expected_version: 1, reason: 'probe' };
+  for (const [method, payload] of [['GET'], ['PUT', update], ['DELETE', { expected_version: 1, reason: 'probe' }]]) {
+    const other = await t.request(method, `/api/sessions/${empSession}`, { cookie: adm, body: payload });
+    const missing = await t.request(method, `/api/sessions/${ghost}`, { cookie: adm, body: payload });
+    check(`B1 ${method} another user's session is indistinguishable from a missing one`, other.status === 404 && JSON.stringify(other.body) === JSON.stringify(missing.body), `${other.status} ${JSON.stringify(other.body)}`);
+  }
+  const row = t.db.prepare('SELECT version, start_utc, end_utc FROM work_sessions WHERE id = ?').get(empSession);
+  check('B1 employee session untouched after admin attempts', row.version === 1 && row.start_utc === '2026-09-21T16:00:00Z', JSON.stringify(row));
+  const admSheet = await t.request('GET', '/api/timesheets/2026-10-02', { cookie: adm });
+  check('B2 admin timesheet totals and days exclude the employee data', admSheet.body.totals.provisional_credited_minutes === 0 && admSheet.body.days.every((d) => d.sessions.length === 0 && d.entry === null), JSON.stringify(admSheet.body.totals));
+  const admDay = await t.request('GET', '/api/days/2026-09-21', { cookie: adm });
+  check('B3 admin day view of the same date shows nothing of the employee', admDay.body.sessions.length === 0 && admDay.body.entry === null && admDay.body.calculation.status === 'no_records');
+  const admClock = await t.request('POST', '/api/clock/in', { cookie: adm, body: { input_zone: LA } });
+  const empOut = await t.request('POST', '/api/clock/out', { cookie: emp, body: { breaks: [], breaks_confirmed: true } });
+  check('B4 employee cannot clock out the admin running session', admClock.status === 201 && empOut.status === 409 && empOut.body.error.code === 'no_open_session', `${admClock.status}/${empOut.status}`);
+  // Owner/identity injection into every write body is rejected by the strict schemas.
+  const injections = [
+    ['POST', '/api/days/2026-09-22/sessions', { ...body(la('2026-09-22T09:00'), la('2026-09-22T10:00')), user_id: t.userIds.admin }],
+    ['PUT', `/api/sessions/${empSession}`, { ...update, owner_user_id: t.userIds.admin }],
+    ['PUT', `/api/sessions/${empSession}`, { ...update, work_date: '2026-09-22' }],
+    ['DELETE', `/api/sessions/${empSession}`, { expected_version: 1, user_id: t.userIds.admin }],
+    ['PUT', '/api/days/2026-09-22', { category: 'Worked', leave_minutes: 0, wfh: false, notes: '', user_id: t.userIds.admin }],
+    ['POST', '/api/clock/in', { input_zone: LA, user_id: t.userIds.admin }],
+    ['POST', '/api/clock/out', { breaks: [], breaks_confirmed: true, session_id: empSession }],
+    ['POST', '/api/policies', { effective_from: '2026-10-05', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '17:00', breaks: [{ start_offset_minutes: 120, duration_minutes: 60, counts_as_work: false }], deficit_mode: 'ignore', user_id: t.userIds.admin }],
+  ];
+  for (const [method, path, payload] of injections) {
+    const r = await t.request(method, path, { cookie: emp, body: payload });
+    check(`B5 ${method} ${path.replace(empSession, '{own}')} rejects identity/extra fields`, r.status === 422 && r.body.error.code === 'validation_error', `${r.status} ${r.body?.error?.code}`);
+  }
+  const overlap = await t.request('POST', '/api/days/2026-09-21/sessions', { cookie: emp, body: body(la('2026-09-21T18:00'), la('2026-09-21T20:00')) });
+  check('B6 overlap error only names the caller own session', overlap.status === 422 && overlap.body.error.details?.conflicting_session_id === empSession, JSON.stringify(overlap.body.error));
+  const policies = await t.request('GET', '/api/policies', { cookie: adm });
+  check('B7 admin sees only its own policy history', policies.body.policies.length === 1 && t.db.prepare('SELECT user_id FROM work_policies WHERE id = ?').pluck().get(policies.body.policies[0].id) === t.userIds.admin);
+  const audit = t.db.prepare('SELECT DISTINCT actor_user_id, owner_user_id FROM audit_events WHERE owner_user_id = ? AND operation LIKE ?').all(t.userIds.employee, 'work_session.%');
+  check('B8 every employee session audit event was performed by the employee', audit.length === 1 && audit[0].actor_user_id === t.userIds.employee, JSON.stringify(audit));
+  t.close();
+}
+
+// ---------------------------------------------------------------------------------------
+console.log('\n## C. Edit-reason enforcement (R-07, AC-04 WP1 part)');
+{
+  // C1 a running session whose period becomes old needs a reason at clock-out.
+  const t = await createTestContext('2026-09-28T05:00:00Z'); // LA 2026-09-27 22:00, Sunday of the current period
+  const cookie = await t.login('employee');
+  const inn = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: LA } });
+  check('C1 clock-in on 2026-09-27 (current period, no reason)', inn.status === 201 && inn.body.session.work_date === '2026-09-27');
+  t.clock.set('2026-10-03T18:00:00Z'); // current payroll is now 2026-10-16; 2026-09-27 is old
+  // The harness session lifetime is 12 h, so sign in again after moving the clock six days.
+  const expired = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true } });
+  check('C1 the 12 h test session expired as configured', expired.status === 401, String(expired.status));
+  const cookie2 = await t.login('employee');
+  const refused = await t.request('POST', '/api/clock/out', { cookie: cookie2, body: { breaks: [], breaks_confirmed: true } });
+  check('C1 clock-out after the period became old requires a reason', refused.status === 422 && refused.body.error.code === 'reason_required', `${refused.status} ${refused.body?.error?.code}`);
+  const ok = await t.request('POST', '/api/clock/out', { cookie: cookie2, body: { breaks: [], breaks_confirmed: true, reason: 'Forgot to clock out' } });
+  check('C1 clock-out with a reason is accepted and audited with it', ok.status === 200 && t.db.prepare("SELECT reason FROM audit_events WHERE operation = 'work_session.clock_out'").pluck().get() === 'Forgot to clock out', `${ok.status}`);
+  t.close();
+}
+{
+  // C2 the ±1 day work-date tolerance (implementation choice 1) versus the old-period reason rule.
+  const t = await createTestContext('2026-10-03T20:00:00Z'); // current period 2026-09-28 … 2026-10-11
+  const cookie = await t.login('employee');
+  const oldDay = await t.request('GET', '/api/days/2026-09-27', { cookie });
+  check('C2 2026-09-27 is old on 2026-10-03', oldDay.body.edit.period_relation === 'old' && oldDay.body.edit.reason_required === true);
+  const attributed = await t.request('POST', '/api/days/2026-09-28/sessions', { cookie, body: body(la('2026-09-27T22:00'), la('2026-09-27T23:30')) });
+  const calc = attributed.body.day?.calculation;
+  check('C2 observed: work lying wholly on old-period date 2026-09-27 is accepted on current date 2026-09-28 without a reason', attributed.status === 201, `status ${attributed.status}, segments ${JSON.stringify(calc?.segments?.map((s) => [s.local_date, s.day_class, s.seconds]))}, credited ${calc?.credited_minutes}`);
+  if (attributed.status === 201) note('C2: a session whose whole interval lies on an old-period date (Sun 2026-09-27 22:00–23:30) was attached to current-period work date 2026-09-28 with no reason; its 90 min appear as Sunday off-calendar OT on Monday 2026-09-28 (credit 90). Risk R-1.');
+  const reverse = await t.request('POST', '/api/days/2026-09-27/sessions', { cookie, body: body(la('2026-09-28T00:30'), la('2026-09-28T01:30')) });
+  check('C2 the reverse (current-date work on an old work date) requires a reason', reverse.status === 422 && reverse.body.error.code === 'reason_required', `${reverse.status} ${reverse.body?.error?.code}`);
+  const twoDays = await t.request('POST', '/api/days/2026-09-29/sessions', { cookie, body: body(la('2026-09-27T21:00'), la('2026-09-27T21:30')) });
+  check('C2 two days apart is rejected (work_date_mismatch)', twoDays.status === 422 && twoDays.body.error.code === 'work_date_mismatch', `${twoDays.status} ${twoDays.body?.error?.code}`);
+  t.close();
+}
+{
+  // C3 policy/calendar effective-date boundary after the period deadline (due 2026-09-29 17:00 PT).
+  const t = await createTestContext('2026-09-30T20:00:00Z'); // after the deadline, before payroll 2026-10-02
+  const cookie = await t.login('employee');
+  const before = await t.request('POST', '/api/days/2026-09-15/sessions', { cookie, body: body(la('2026-09-15T08:00'), la('2026-09-15T17:40'), [], {}) });
+  const policy = await t.request('POST', '/api/policies', { cookie, body: {
+    effective_from: '2026-09-14', required_minutes: 480, threshold_minutes: 0, rounding_step_minutes: 15, reference_start: '08:00', reference_end: '17:00',
+    breaks: [{ start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false }, { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false }, { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false }],
+    deficit_mode: 'ignore' } });
+  const after = await t.request('GET', '/api/days/2026-09-15', { cookie });
+  check('C3 observed: a policy version effective 2026-09-14 is accepted on 2026-09-30, after that period was due', policy.status === 201, `status ${policy.status}; day 2026-09-15 credit ${before.body.day?.calculation?.credited_minutes} → ${after.body.calculation?.credited_minutes}, policy ${after.body.calculation?.policy_version_id === policy.body.policy?.id ? 'new' : 'old'}`);
+  if (policy.status === 201) note(`C3: on 2026-09-30 (deadline 2026-09-29 17:00 PT passed) a policy effective 2026-09-14 was accepted without a reason and changed day 2026-09-15 from credit ${before.body.day?.calculation?.credited_minutes} to ${after.body.calculation?.credited_minutes}. Risk R-2 for WP3 finalization.`);
+  let calendarAccepted = true;
+  try {
+    createCalendarVersion(t.db, t.clock, { calendarId: t.calendarId, effectiveFrom: '2026-09-14', weekdays: [1, 2, 3, 4], dates: [] }, t.userIds.admin);
+  } catch {
+    calendarAccepted = false;
+  }
+  check('C3 observed: the same boundary applies to calendar versions', calendarAccepted);
+  t.close();
+}
+
+// ---------------------------------------------------------------------------------------
+console.log('\n## D. Versioning and audit details');
+{
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  const cookie = await t.login('employee');
+  const created = await t.request('POST', '/api/days/2026-09-24/sessions', { cookie, body: body(la('2026-09-24T09:00'), la('2026-09-24T17:00'), [{ start: la('2026-09-24T12:00'), end: la('2026-09-24T12:30'), counts_as_work: false }]) });
+  const id = created.body.session.id;
+  const updated = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: { ...body(la('2026-09-24T09:00'), la('2026-09-24T17:30'), [{ start: la('2026-09-24T12:00'), end: la('2026-09-24T13:00'), counts_as_work: false }]), expected_version: 1 } });
+  const ev = t.db.prepare("SELECT before_json, after_json, occurred_at, actor_user_id FROM audit_events WHERE entity_id = ? AND operation = 'work_session.update'").get(id);
+  const b = JSON.parse(ev.before_json);
+  const a = JSON.parse(ev.after_json);
+  check('D1 update audit keeps exact before/after including breaks', updated.status === 200 && b.breaks[0].end_utc === '2026-09-24T19:30:00Z' && a.breaks[0].end_utc === '2026-09-24T20:00:00Z' && b.version === 1 && a.version === 2 && ev.occurred_at === '2026-09-29T20:00:00Z' && ev.actor_user_id === t.userIds.employee, JSON.stringify({ b: b.breaks, a: a.breaks }));
+  const afterDelete = await t.request('DELETE', `/api/sessions/${id}`, { cookie, body: { expected_version: 2 } });
+  const again = await t.request('PUT', `/api/sessions/${id}`, { cookie, body: { ...body(la('2026-09-24T09:00'), la('2026-09-24T17:30')), expected_version: 3 } });
+  check('D2 deleted session cannot be updated (404)', afterDelete.status === 200 && again.status === 404, `${afterDelete.status}/${again.status}`);
+  const breaksLeft = t.db.prepare('SELECT count(*) FROM session_breaks WHERE session_id = ?').pluck().get(id);
+  check('D3 breaks of a deleted session are removed with it', breaksLeft === 0, String(breaksLeft));
+  const v = t.db.prepare('SELECT version FROM timesheets WHERE user_id = ?').pluck().get(t.userIds.employee);
+  check('D4 timesheet version bumped per change (create, update, delete → 3 or more incl. day-entry creation)', v >= 3, String(v));
+  t.close();
+}
+
+// ---------------------------------------------------------------------------------------
+console.log('\n## E. Database defense in depth (raw SQL, bypassing the API)');
+{
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  const cookie = await t.login('employee');
+  const created = await t.request('POST', '/api/days/2026-09-24/sessions', { cookie, body: body(la('2026-09-24T09:00'), la('2026-09-24T17:00'), [
+    { start: la('2026-09-24T10:00'), end: la('2026-09-24T10:15'), counts_as_work: false },
+    { start: la('2026-09-24T12:00'), end: la('2026-09-24T12:30'), counts_as_work: false }]) });
+  const id = created.body.session.id;
+  const breaks = t.db.prepare('SELECT id FROM session_breaks WHERE session_id = ? ORDER BY start_utc').pluck().all(id);
+  const attempt = (sql, ...args) => {
+    try {
+      t.db.prepare(sql).run(...args);
+      return 'accepted';
+    } catch (error) {
+      return `rejected: ${error.message}`;
+    }
+  };
+  const outside = attempt("UPDATE session_breaks SET end_utc = '2026-09-25T02:00:00Z' WHERE id = ?", breaks[0]);
+  const overlapping = attempt("UPDATE session_breaks SET start_utc = '2026-09-24T19:10:00Z', end_utc = '2026-09-24T19:40:00Z' WHERE id = ?", breaks[1]);
+  console.log(`INFO  raw UPDATE moving a break outside its session: ${outside}`);
+  console.log(`INFO  raw UPDATE making two breaks overlap: ${overlapping}`);
+  if (outside === 'accepted' || overlapping === 'accepted') note('E: session_breaks has INSERT-only triggers; raw UPDATEs that move a break outside its session or onto another break are accepted. The API never updates break rows (delete + insert), so this is optional hardening only (OPT-1).');
+  const ownerMove = attempt('UPDATE work_sessions SET user_id = ? WHERE id = ?', t.userIds.admin, id);
+  check('E1 session owner cannot be changed in SQL', ownerMove.startsWith('rejected'), ownerMove);
+  const tsMove = attempt('UPDATE timesheets SET user_id = ? WHERE user_id = ?', t.userIds.admin, t.userIds.employee);
+  check('E2 a timesheet with day entries cannot be moved to another user', tsMove.startsWith('rejected'), tsMove);
+  const policyEdit = attempt('UPDATE work_policies SET threshold_minutes = 0');
+  check('E3 policy versions immutable', policyEdit.includes('immutable_policy_version'), policyEdit);
+  t.close();
+}
+
+console.log(`\nTOTAL api checks ${checks}, failures ${failures.length}`);
+for (const f of failures) console.log(`FAIL ${f}`);
+console.log(`NOTES ${notes.length}`);
+process.exitCode = failures.length === 0 ? 0 : 1;

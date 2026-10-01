@@ -1,0 +1,70 @@
+
+## A. Mixed overnight shifts, DST nights, multiple sessions and seconds through the API
+PASS  A1 both Friday sessions accepted  — 201/201
+PASS  A1 Friday day + night into Saturday (one daily B, Saturday tail off-calendar)  — API R 585 O 150 T 255 credit 240 | oracle R 585 O 150 T 255 credit 240
+PASS  A5 seconds sessions accepted
+PASS  A5 seconds aggregated across sessions before one floor (511, credit 30)  — API R 511 O 0 T 31 credit 30 | oracle R 511 O 0 T 31 credit 30
+PASS  A6 three sessions share one daily B (556 → 90)  — API R 556 O 0 T 76 credit 90 | oracle R 556 O 0 T 76 credit 90
+PASS  A7 07:00–16:00 flexible arrival = R 480, credit 0, deficit 0  — {"R":480,"c":0,"d":0}
+PASS  A8 15 off-calendar minutes on a Saturday credit 0  — 201
+PASS  A8 16 off-calendar minutes on a Sunday credit 30  — 201
+PASS  A8 120 minutes on Labor Day (weekday holiday) are off-calendar and credit 120  — 201
+PASS  A9 period total is the sum of independently rounded days (no weekly netting)  — 390 vs 390
+PASS  A2 accepted without reason (current period on 2026-11-28)  — 201
+PASS  A2 Wednesday → Thanksgiving holiday split with a break across midnight (225/225 → 210)  — API R 225 O 225 T 225 credit 210 | oracle R 225 O 225 T 225 credit 210
+PASS  A3a Sat 22:00 PST → Sun 06:00 PDT = 7 h elapsed, all off-calendar  — API R 0 O 420 T 420 credit 420 | oracle R 0 O 420 T 420 credit 420
+PASS  A3b Sun 23:00 → Mon 07:00 PDT: 60 off-calendar + 420 regular  — API R 420 O 60 T 60 credit 60 | oracle R 420 O 60 T 60 credit 60
+PASS  A4a Sat 22:00 PDT → Sun 06:00 PST = 9 h elapsed  — API R 0 O 540 T 540 credit 540 | oracle R 0 O 540 T 540 credit 540
+PASS  A4b Sun 20:00 → Mon 05:00: 240 off-calendar + 300 regular  — API R 300 O 240 T 240 credit 240 | oracle R 300 O 240 T 240 credit 240
+
+## B. Two-user isolation (AC-01) on every implemented endpoint
+PASS  B1 GET another user's session is indistinguishable from a missing one  — 404 {"error":{"code":"not_found","message":"Work session not found"}}
+PASS  B1 PUT another user's session is indistinguishable from a missing one  — 404 {"error":{"code":"not_found","message":"Work session not found"}}
+PASS  B1 DELETE another user's session is indistinguishable from a missing one  — 404 {"error":{"code":"not_found","message":"Work session not found"}}
+PASS  B1 employee session untouched after admin attempts  — {"version":1,"start_utc":"2026-09-21T16:00:00Z","end_utc":"2026-09-22T02:00:00Z"}
+PASS  B2 admin timesheet totals and days exclude the employee data  — {"provisional_credited_minutes":0,"pending_days":0}
+PASS  B3 admin day view of the same date shows nothing of the employee
+PASS  B4 employee cannot clock out the admin running session  — 201/409
+PASS  B5 POST /api/days/2026-09-22/sessions rejects identity/extra fields  — 422 validation_error
+PASS  B5 PUT /api/sessions/{own} rejects identity/extra fields  — 422 validation_error
+PASS  B5 PUT /api/sessions/{own} rejects identity/extra fields  — 422 validation_error
+PASS  B5 DELETE /api/sessions/{own} rejects identity/extra fields  — 422 validation_error
+PASS  B5 PUT /api/days/2026-09-22 rejects identity/extra fields  — 422 validation_error
+PASS  B5 POST /api/clock/in rejects identity/extra fields  — 422 validation_error
+PASS  B5 POST /api/clock/out rejects identity/extra fields  — 422 validation_error
+PASS  B5 POST /api/policies rejects identity/extra fields  — 422 validation_error
+PASS  B6 overlap error only names the caller own session  — {"code":"overlapping_user_intervals","message":"This session overlaps another of your sessions","details":{"conflicting_session_id":"ea3bb67a-1866-4378-8db8-20e8b740f070"}}
+PASS  B7 admin sees only its own policy history
+PASS  B8 every employee session audit event was performed by the employee  — [{"actor_user_id":"86fe8a97-adbb-4154-a7c7-0848b43df9be","owner_user_id":"86fe8a97-adbb-4154-a7c7-0848b43df9be"}]
+
+## C. Edit-reason enforcement (R-07, AC-04 WP1 part)
+PASS  C1 clock-in on 2026-09-27 (current period, no reason)
+PASS  C1 the 12 h test session expired as configured  — 401
+PASS  C1 clock-out after the period became old requires a reason  — 422 reason_required
+PASS  C1 clock-out with a reason is accepted and audited with it  — 200
+PASS  C2 2026-09-27 is old on 2026-10-03
+PASS  C2 observed: work lying wholly on old-period date 2026-09-27 is accepted on current date 2026-09-28 without a reason  — status 201, segments [["2026-09-27","nonworking",5400]], credited 90
+NOTE  C2: a session whose whole interval lies on an old-period date (Sun 2026-09-27 22:00–23:30) was attached to current-period work date 2026-09-28 with no reason; its 90 min appear as Sunday off-calendar OT on Monday 2026-09-28 (credit 90). Risk R-1.
+PASS  C2 the reverse (current-date work on an old work date) requires a reason  — 422 reason_required
+PASS  C2 two days apart is rejected (work_date_mismatch)  — 422 work_date_mismatch
+PASS  C3 observed: a policy version effective 2026-09-14 is accepted on 2026-09-30, after that period was due  — status 201; day 2026-09-15 credit 90 → 105, policy new
+NOTE  C3: on 2026-09-30 (deadline 2026-09-29 17:00 PT passed) a policy effective 2026-09-14 was accepted without a reason and changed day 2026-09-15 from credit 90 to 105. Risk R-2 for WP3 finalization.
+PASS  C3 observed: the same boundary applies to calendar versions
+
+## D. Versioning and audit details
+PASS  D1 update audit keeps exact before/after including breaks  — {"b":[{"id":"7f42f21c-d494-4097-b1a5-3d20d58440c7","start_utc":"2026-09-24T19:00:00Z","end_utc":"2026-09-24T19:30:00Z","counts_as_work":false}],"a":[{"id":"d1a3512d-6637-4615-974b-c982217cec3a","start_utc":"2026-09-24T19:00:00Z","end_utc":"2026-09-24T20:00:00Z","counts_as_work":false}]}
+PASS  D2 deleted session cannot be updated (404)  — 200/404
+PASS  D3 breaks of a deleted session are removed with it  — 0
+PASS  D4 timesheet version bumped per change (create, update, delete → 3 or more incl. day-entry creation)  — 4
+
+## E. Database defense in depth (raw SQL, bypassing the API)
+INFO  raw UPDATE moving a break outside its session: accepted
+INFO  raw UPDATE making two breaks overlap: accepted
+NOTE  E: session_breaks has INSERT-only triggers; raw UPDATEs that move a break outside its session or onto another break are accepted. The API never updates break rows (delete + insert), so this is optional hardening only (OPT-1).
+PASS  E1 session owner cannot be changed in SQL  — rejected: immutable_session_owner
+PASS  E2 a timesheet with day entries cannot be moved to another user  — rejected: FOREIGN KEY constraint failed
+PASS  E3 policy versions immutable  — rejected: immutable_policy_version
+
+TOTAL api checks 51, failures 0
+NOTES 3
+probe-api exit=0

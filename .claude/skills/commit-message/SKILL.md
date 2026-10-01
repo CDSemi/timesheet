@@ -1,71 +1,147 @@
 ---
-name: "commit-message"
-description: "Write a commit description for any repo from the actual diff: plain imperative subject, then one type(scope) bullet per logical change; commit only when asked. Use for commit message, commit description, git commit, or when summarizing file changes."
+name: commit-message
+description: >-
+  Write concise commit descriptions for any Git or SVN project.
+  Use after file changes and whenever asked to write, revise, or summarize
+  a commit message. Require one plain imperative summary followed by typed
+  bullets grouped in a fixed order. Leave changes uncommitted unless
+  explicitly authorized.
 ---
 
-# Commit description
+# Commit Message
 
-Produce the commit description for a change set in whatever repo is at hand. The description is always English. Default deliverable is the text block — never create, amend or push a commit unless the user explicitly asks in the current turn.
+Describe the actual completed changes, not the conversation or implementation
+process. Apply these rules across projects, languages, frameworks, and tools.
 
-**Project conventions win.** If the repo's `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, commit template or recent history defines its own format (pure Conventional Commits subject, issue-key prefix, sign-offs, a required follow-up such as a changelog or release entry), follow that and use this skill only for the procedure. Otherwise use the format below.
+## Output contract
 
-## Default format
+If the project uses Git or SVN, include a concise commit description in every
+response following file changes. Detect version control from repository
+metadata, configuration, or the established project workflow.
+
+Use English unless the user explicitly requests another language.
+
+Use exactly this structure:
+
+Commit description:
 
 ```text
 Describe the overall completed change directly without a type or scope prefix.
 
 - type(scope): Describe the first material logical change.
-- type(scope): Describe each additional logical change when applicable.
+- type(scope): Describe each additional material logical change.
 ```
 
-- **Subject**: one plain-language imperative sentence, no type or scope prefix, no trailing period. It names the outcome of the whole change set, leading with the most important effect; two or three major outcomes may be joined with "and". Not a list of files.
-- **Blank line**, then one bullet per material logical change. A single-change commit still gets one bullet.
-- **Bullets**: `- type(scope): Sentence.` — type lowercase, scope lowercase kebab-case, sentence starts with a capital and ends with a period. Audience is developers: naming identifiers, files and configs is fine. Add the reason after a comma or "so" only when it helps a reviewer ("...so a refused request can no longer hold the lock forever"). Call out safety-, data- or compatibility-relevant behaviour explicitly.
-- Enclose the whole description in one standalone fenced `text` block.
+- Put `Commit description:` outside the code block.
+- Enclose the entire message in one standalone fenced code block labeled `text`.
+- Begin with exactly one plain-language summary line, followed by one blank line.
+- Start the summary directly with an imperative change description.
+- Never prefix the summary with a type, scope, issue key, label, or equivalent
+  decoration. Do not use `feat:`, `fix(api):`, `Summary:`, or similar prefixes.
+- Always include the per-change bullets, even when there is only one change.
+- Use exactly one bullet for a change set containing one material logical change.
+- Keep commentary, verification results, limitations, and next steps outside
+  the commit description.
 
-### Types (most specific wins)
+Use project terminology and established scopes where helpful. Do not infer
+permission to replace this format from commit history or templates.
 
-| Type | Use for |
-| --- | --- |
-| `feat` | New or extended behaviour or capability |
-| `fix` | Corrected behaviour or defect — name the symptom, not just the code |
-| `refactor` | Internal restructuring with no intended behaviour change |
-| `perf` | Speed or resource improvement with no functional change |
-| `docs` | Documentation, comments, translations |
-| `test` | Tests only |
-| `build` | Build system, project files, dependencies, packaging |
-| `ci` | Pipeline and automation config |
-| `chore` | Housekeeping: configuration data, generated files, version bumps, vendored binaries |
-| `revert` | Reverting an earlier change |
+## Describe logical changes
 
-If a refactor changes behaviour, the bullet is `feat` or `fix` and describes the behaviour. Mixed hunks in one file split into separate bullets by intent.
+- Keep every summary and bullet concise, specific, and imperative:
+  `Add`, `Fix`, `Prevent`, `Remove`, `Update`, or another concrete action.
+- Describe what the completed change accomplishes. Include the reason only
+  when it clarifies the effect.
+- Avoid vague descriptions such as `Update files`, `Make improvements`,
+  `Address feedback`, or `Apply requested changes`.
+- Group related edits by purpose, not by file, tool, execution order, or author.
+  One logical change may span multiple files; one file may contain several
+  logical changes.
+- Use one bullet per material logical change. Do not combine unrelated changes
+  merely because they share a type.
+- Include supporting edits in the same bullet when they serve the same outcome.
+  Give tests, documentation, or configuration their own bullets only when
+  they represent separately material changes.
+- Describe each change once. Do not repeat it under several types.
+- Exclude plans, abandoned edits, unrelated work, and unsupported claims.
+  Do not imply that unfinished functionality is complete.
+- Mention identifiers or paths only when they help identify the change.
+  Never expose secrets or private data.
+- Omit the summary's trailing period. End each bullet description with a period.
 
-### Scopes
+## Classify and order bullets
 
-Scope is the area of behaviour or the component, not the folder or project name. Reuse scopes already in history rather than inventing new ones: `git log --format=%B -50 | grep -oE '\b[a-z]+\(([^)]+)\)' | sort | uniq -c | sort -rn`. Omit the scope when the change is repo-wide (`docs:`, `chore:`).
+Use the following fixed group order. Skip absent groups.
 
-## Procedure
+| Order | Type | Use for |
+| --- | --- | --- |
+| 1 | `fix` | Correct defects or unintended behavior |
+| 2 | `feat` | Add or extend functionality or capabilities |
+| 3 | `perf` | Improve speed, resource use, or efficiency |
+| 4 | `chore` | Perform maintenance or formatting not covered by a more specific type |
+| 5 | `refactor` | Restructure internals without changing intended behavior |
+| 6 | `revert` | Reverse a previous change |
+| 7 | `docs` | Add or correct documentation, comments, or documentation translations |
+| 8 | `test` | Add or improve tests, fixtures, or test infrastructure |
+| 9 | `build` | Change build tooling, dependencies, compilation, or packaging |
+| 10 | `ci` | Change continuous integration or delivery workflows |
 
-1. **Read the real change set** — never from memory of the session alone. Working tree: `git status --short`, then `git diff HEAD --stat` and `git diff HEAD` (covers staged and unstaged). A named range or commit: `git show` / `git diff <range>`. Ignore build output, caches and local settings unless the user asks. Do not claim a build or test result that was not actually run.
-2. **Group hunks into logical changes** by intent and ownership, not by file: one bullet may span several files; one file may feed several bullets. Order bullets by importance, or by flow (behaviour, then configuration, then docs/chores).
-3. **Classify** each change with the type table and a reused scope.
-4. **Exclude what was not completed.** No bullet for planned or half-done work. Code present but not yet wired in is stated as such ("(not yet referenced)").
-5. **Write the subject last**, from the bullets, so it reflects the actual outcome.
-6. **Output** the description in one fenced `text` block, preceded by whatever summary the project's instructions require (e.g. a short list of changed files and what was verified). Then do any follow-up the project mandates for a change set (changelog or release-note entry, docs translation) or state in one line that none is needed.
+Apply these rules:
 
-## When asked to commit
+- Keep all bullets of the same type contiguous, regardless of scope.
+- Within each group, put the most consequential change first and keep related
+  areas together.
+- Use a flat bullet list. Do not add group headings, nested bullets, empty
+  groups, or blank lines between groups.
+- Prefix every bullet with exactly one lowercase type and an optional scope:
+  `- fix: ...` or `- fix(parser): ...`.
+- Use a short, meaningful component or functional area as the scope.
+  Reuse established scopes; omit the scope when it adds no useful information.
+- Classify by the primary intent of the logical change, not merely by the
+  files touched. Choose the most specific applicable type.
+- Use `docs`, `test`, `build`, or `ci` for changes confined to those concerns.
+  A documentation typo is `docs`; a broken pipeline correction is `ci`.
+- Use `fix` or `feat` for behavioral changes, even when restructuring code
+  is the main implementation technique.
+- Use `perf` for performance improvements without intended functional changes.
+- Use `revert` for an explicit reversal, even when that reversal remedies a defect.
+- Reserve `chore` for changes that do not fit another type.
 
-Only on an explicit request in the current turn.
+## Ground the description in evidence
 
-- Stage the files of this change set by path (`git add <paths>`), not `git add -A`; confirm with `git status --short` that nothing generated, local or unrelated is staged.
-- Use the approved description verbatim: subject as the first line, blank line, bullets as the body (`git commit -F <file>` or several `-m`; LF line endings in the message).
-- Never `--amend`, rebase, force-push or push unless that exact action was requested. Report `git log -1 --stat`.
+1. Establish the requested change set: the current task, staged changes,
+   a specified revision range, or another scope explicitly selected by the user.
+   Do not silently include unrelated pre-existing edits.
+2. Inspect the actual changes with read-only commands:
+  - Git: inspect status, staged diffs, unstaged diffs, and relevant new files.
+  - SVN: inspect status, diffs, and relevant added or unversioned files.
+  - Use revision-specific inspection when the user selects existing history.
+3. Inspect relevant new files separately when the diff does not include their
+   contents. Do not automatically exclude intentional generated or configuration
+   changes that belong to the requested change set.
+4. Derive the logical changes, assign their types, and apply the fixed group order.
+5. Write the summary from the completed bullet list. Capture the overall outcome
+   without turning it into a file inventory.
+6. Verify that each bullet is supported by the inspected changes and that
+   no material logical change is omitted.
 
-## Checklist before output
+When repository access is unavailable, use supplied diffs or other concrete
+evidence and state the limitation outside the code block. Never claim to have
+inspected unavailable changes. If no change is evidenced, do not fabricate
+a commit description.
 
-- [ ] Project's own convention checked and applied if one exists.
-- [ ] Subject: imperative, no prefix, no period, describes the outcome of the whole set.
-- [ ] Every bullet maps to hunks actually in the diff; nothing planned or unverified is claimed.
-- [ ] Types follow the table; behaviour-changing refactors are `feat`/`fix`.
-- [ ] Scopes lowercase kebab-case, reused from history where one exists.
-- [ ] One standalone fenced `text` block; commit not created unless asked.
+For changes spanning multiple repositories, provide a separate description
+for each repository and identify it outside its code block.
+
+## Leave version control unchanged
+
+Generating a commit description does not authorize a version-control mutation.
+
+- Leave changes uncommitted by default.
+- Do not run any command that creates or modifies a commit unless the user
+  explicitly requests it.
+- Do not stage files, revert working changes, rewrite history, or push merely
+  to prepare the description.
+- When a version-control action is explicitly authorized, perform only the
+  authorized action on the intended change set. A request to commit does not
+  imply permission to amend, rebase, or push.

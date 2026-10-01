@@ -1,0 +1,154 @@
+// HTTP probes against the BUILT server (dist/) over a real socket with raw request paths.
+// Usage: node probe-http.mjs <path-to-clean-clone> <work-dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { request } from 'node:http';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, work] = process.argv.slice(2);
+const port = 3198;
+const origin = `http://localhost:${port}`;
+rmSync(work, { recursive: true, force: true });
+mkdirSync(work, { recursive: true });
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: join(work, 'probe.db'),
+  APP_ORIGINS: origin,
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+};
+
+let failures = 0;
+let checks = 0;
+function check(label, ok, detail = '') {
+  checks += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
+  if (!ok) failures += 1;
+}
+
+function raw(method, path, { headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: '127.0.0.1', port, method, path, headers }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+}
+
+for (const args of [['dist/server/cli.js', 'migrate'], ['dist/server/cli.js', 'seed']]) {
+  const r = spawnSync(process.execPath, args, { cwd: root, env, encoding: 'utf8' });
+  check(`cli ${args[1]}`, r.status === 0, (r.stdout + r.stderr).trim().split('\n')[0]);
+}
+const server = spawn(process.execPath, ['dist/server/index.js'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverErr = '';
+server.stderr.on('data', (c) => (serverErr += c));
+try {
+  let healthy = false;
+  for (let i = 0; i < 50 && !healthy; i += 1) {
+    try {
+      healthy = (await raw('GET', '/api/health')).status === 200;
+    } catch {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  check('built server healthy', healthy);
+
+  console.log('\n## Static file containment (raw, undecoded request paths)');
+  const traversal = [
+    '/../package.json', '/%2e%2e/package.json', '/..%2fpackage.json', '/%2e%2e%2fpackage.json',
+    '/assets/..%2f..%2f..%2fpackage.json', '/..%5cpackage.json', '/%5c..%5c..%5cpackage.json',
+    '/assets/%2e%2e%5c%2e%2e%5c%2e%2e%5cpackage.json', '/..\\..\\package.json', '//package.json',
+    '/assets/../../server/index.js', '/%2e%2e/%2e%2e/src/server/index.ts', '/%2e%2e%2f%2e%2e%2fdist%2fserver%2fconfig.js',
+    '/C:%5cWindows%5cwin.ini', '/index.html%00.js',
+  ];
+  for (const path of traversal) {
+    let r;
+    try {
+      r = await raw('GET', path);
+    } catch (error) {
+      r = { status: 'socket error', text: String(error), headers: {} };
+    }
+    const leaked = /"name":\s*"timesheet"|createApp|loadConfig|\[fonts\]|APP_ORIGINS/.test(r.text);
+    check(`GET ${path} does not leak files`, !leaked && (r.status === 200 ? r.text.includes('<div id="root">') : true), `status ${r.status}`);
+  }
+
+  console.log('\n## Sign-in, cookie and headers');
+  const login = async (email, password, extra = {}) =>
+    raw('POST', '/api/auth/login', { headers: { origin, 'content-type': 'application/json', ...extra }, body: JSON.stringify({ email, password }) });
+  const ok = await login('employee@example.invalid', passwords.employee);
+  const setCookie = String(ok.headers['set-cookie'] ?? '');
+  check('login cookie HttpOnly, SameSite=Strict, Path=/, Max-Age, not Secure in development', ok.status === 200 && /HttpOnly/i.test(setCookie) && /SameSite=Strict/i.test(setCookie) && /Path=\//.test(setCookie) && /Max-Age=604800/.test(setCookie) && !/Secure/i.test(setCookie), setCookie.replace(/ts_session=[^;]+/, 'ts_session=<redacted>'));
+  check('login response has no-store and CSP', ok.headers['cache-control'] === 'no-store' && String(ok.headers['content-security-policy']).includes("frame-ancestors 'none'"), `${ok.headers['cache-control']}`);
+  check('login body holds no hash or token', !/scrypt|password|token/i.test(ok.text), ok.text);
+  const cookie = setCookie.split(';')[0];
+  const me = await raw('GET', '/api/auth/me', { headers: { cookie } });
+  check('GET /api/auth/me no-store, nosniff', me.status === 200 && me.headers['cache-control'] === 'no-store' && me.headers['x-content-type-options'] === 'nosniff');
+
+  console.log('\n## Origin / CSRF variants on a state-changing route');
+  const put = (headers, body = JSON.stringify({ category: 'Sick', leave_minutes: 0, wfh: false, notes: '' })) =>
+    raw('PUT', '/api/days/2026-09-29', { headers: { cookie, ...headers }, body });
+  const variants = [
+    ['no Origin', { 'content-type': 'application/json' }, 403],
+    ['Origin null', { origin: 'null', 'content-type': 'application/json' }, 403],
+    ['Origin with trailing slash', { origin: `${origin}/`, 'content-type': 'application/json' }, 403],
+    ['Origin other port', { origin: 'http://localhost:3199', 'content-type': 'application/json' }, 403],
+    ['Origin 127.0.0.1 (not configured)', { origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' }, 403],
+    ['valid Origin + Sec-Fetch-Site cross-site', { origin, 'sec-fetch-site': 'cross-site', 'content-type': 'application/json' }, 403],
+    ['valid Origin + text/plain body', { origin, 'content-type': 'text/plain' }, 415],
+    ['valid Origin + form body', { origin, 'content-type': 'application/x-www-form-urlencoded' }, 415],
+  ];
+  for (const [label, headers, want] of variants) {
+    const r = await put(headers);
+    check(`PUT day: ${label} → ${want}`, r.status === want, `${r.status} ${r.text.slice(0, 80)}`);
+  }
+  const noType = await put({ origin });
+  console.log(`INFO  valid Origin, JSON body without Content-Type → ${noType.status} (Origin check is the CSRF control; HTML forms always send a type)`);
+  const big = await raw('POST', '/api/days/2026-09-29/sessions', { headers: { cookie, origin, 'content-type': 'application/json' }, body: JSON.stringify({ pad: 'x'.repeat(70_000) }) });
+  check('70 kB body rejected 413', big.status === 413, String(big.status));
+
+  console.log('\n## Login rate limit over a real socket');
+  const statuses = [];
+  for (let i = 0; i < 6; i += 1) statuses.push((await login('admin@example.invalid', 'wrong-password-xyz')).status);
+  const correctAfter = await login('admin@example.invalid', passwords.admin);
+  check('5 failures then 429, also for the correct password', statuses.slice(0, 5).every((s) => s === 401) && statuses[5] === 429 && correctAfter.status === 429 && /^\d+$/.test(String(correctAfter.headers['retry-after'])), `${statuses.join(',')} then ${correctAfter.status}, Retry-After ${correctAfter.headers['retry-after']}`);
+  const otherAccount = await login('employee@example.invalid', passwords.employee);
+  check('another account from the same address is still allowed (per-account bucket)', otherAccount.status === 200, String(otherAccount.status));
+  const unknown = await login('nobody@example.invalid', 'whatever-password');
+  check('unknown account gets the same 401 shape', unknown.status === 401 && unknown.text.includes('invalid_credentials'));
+
+  console.log('\n## Configuration guards (dist/server/config.js)');
+  const { loadConfig } = await import(pathToFileURL(join(root, 'dist/server/config.js')).href);
+  let refused = false;
+  try {
+    loadConfig({ NODE_ENV: 'production' });
+  } catch {
+    refused = true;
+  }
+  check('production without APP_ORIGINS refuses to start', refused);
+  const prod = loadConfig({ NODE_ENV: 'production', APP_ORIGINS: 'https://timesheet.example.invalid' });
+  check('production defaults: Secure cookie, loopback bind', prod.cookieSecure === true && prod.host === '127.0.0.1');
+  let badOrigin = false;
+  try {
+    loadConfig({ APP_ORIGINS: 'https://x.example.invalid/path' });
+  } catch {
+    badOrigin = true;
+  }
+  check('APP_ORIGINS entries must be bare origins', badOrigin);
+} finally {
+  server.kill();
+  await new Promise((r) => setTimeout(r, 400));
+  if (serverErr.trim() !== '') console.log(`server stderr: ${serverErr.trim().slice(0, 500)}`);
+  rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+console.log(`\nTOTAL http checks ${checks}, failures ${failures}`);
+process.exitCode = failures === 0 ? 0 : 1;

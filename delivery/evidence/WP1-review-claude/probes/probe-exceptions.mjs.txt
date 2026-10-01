@@ -1,0 +1,17 @@
+// Payroll-date exceptions (engine only in WP1; no API until WP2): what the validator accepts.
+import { pathToFileURL } from 'node:url';
+const eng = await import(pathToFileURL(`${process.argv[2]}/dist/domain/index.js`).href);
+const schedule = { anchorPayrollDate: '2026-10-02', cycleDays: 14, periodStartOffsetDays: -18, periodEndOffsetDays: -5, dueOffsetDays: -3, dueLocalTime: '17:00', reportingZone: 'America/Los_Angeles' };
+const show = (label, fn) => { try { console.log(label, JSON.stringify(fn())); } catch (e) { console.log(label, 'throws', e.code ?? e.message); } };
+const early = [{ nominalPayrollDate: '2026-10-02', payrollDate: '2026-09-26' }];
+show('validate payroll moved 6 days earlier (before period end 09-27):', () => { eng.validatePayrollExceptions(schedule, early); return 'accepted'; });
+const p = eng.payPeriodForPayrollDate(schedule, '2026-09-26', early);
+show('resulting period:', () => ({ start: p.periodStart, end: p.periodEnd, payroll: p.payrollDate, due: p.dueLocalDate }));
+for (const today of ['2026-09-25', '2026-09-26', '2026-09-27']) {
+  const cur = eng.currentPayPeriod(schedule, today, early);
+  const own = eng.payPeriodContaining(schedule, today, early);
+  const req = eng.editReasonRequirement({ schedule, exceptions: early, todayLocal: today, targetPeriodIndex: own.index, finalized: false });
+  console.log(`today ${today}: current payroll ${cur.payrollDate}; today's own period ${own.periodStart}..${own.periodEnd} is '${req.relation}', reason_required=${req.reasonRequired}`);
+}
+const late = [{ nominalPayrollDate: '2026-10-02', payrollDate: '2026-10-08', dueLocalDate: '2026-10-09' }];
+show('validate due date after the (moved) payroll date:', () => { eng.validatePayrollExceptions(schedule, late); return 'accepted'; });
