@@ -1,6 +1,17 @@
-# Bước tiếp theo: review độc lập WP1
+# Bước tiếp theo: sửa F-01 của WP1, rồi review độc lập lại
 
-**Hiện tại: WP1 đã triển khai, chờ review độc lập; WP2 chưa bắt đầu.** Đối chiếu [STATE](delivery/STATE.json), [DEVELOPMENT](../DEVELOPMENT.vi.md) và [bàn giao WP1](delivery/WP1_HANDOFF.vi.md). Bước tiếp theo là mục 5 với [WP1_REVIEW](prompts/WP1_REVIEW.md) tiếng Anh chuẩn; chỉ bắt đầu WP2 sau khi review đó đạt.
+**Hiện tại: WP1 đã review độc lập — FIX REQUIRED (2026-10-02); F-01 chưa sửa; WP2 chưa bắt đầu.** Đối chiếu [STATE](delivery/STATE.json), [DEVELOPMENT](../DEVELOPMENT.vi.md), [bàn giao WP1](delivery/WP1_HANDOFF.vi.md) và [review độc lập](delivery/WP1_REVIEW.vi.md). Bước tiếp theo của Claude là [FIX_FINDINGS](prompts/FIX_FINDINGS.md), chỉ sửa F-01: thay break đã lưu bằng bộ break thực tế được xác nhận lúc Clock out, thêm regression và chạy gate WP1 bắt buộc. Sau đó đưa source và handoff song ngữ cập nhật để review độc lập lại theo [WP1_REVIEW](prompts/WP1_REVIEW.md) tiếng Anh chuẩn. Chỉ bắt đầu WP2 sau khi lần kiểm lại trả PASS.
+
+Dùng prompt này cho bước hiện tại:
+
+~~~text
+Đọc AGENTS.md, handoff/delivery/WP1_HANDOFF.md,
+handoff/delivery/WP1_REVIEW.md và handoff/prompts/FIX_FINDINGS.md.
+Chỉ tái hiện và sửa finding F-01 của WP1. Thêm regression có ý nghĩa,
+chạy gate WP1 bắt buộc và cập nhật handoff WP1 song ngữ với bằng chứng
+thực tế cùng một bước tiếp theo: review độc lập lại WP1. Trao đổi bằng
+tiếng Việt. Giữ công việc không liên quan. Chưa triển khai WP2 hay commit/push.
+~~~
 
 Mục 1–4 giữ hướng dẫn khởi tạo lịch sử của gói docs r1.1 để tham khảo; không lặp lại trên repo đã triển khai. Từ ngày 30/09/2026, file này cùng `prompts/`, `templates/` và `delivery/` nằm trong `handoff/`, còn `fixtures/`, `examples/` và `inputs/` nằm trong `reference/`; các đường dẫn bên dưới theo bố cục đó, trừ danh sách kiểm tra khi giải nén r1.1 ở mục 1. **WP là work package**, một trong năm giai đoạn của lộ trình.
 

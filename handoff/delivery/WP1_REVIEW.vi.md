@@ -99,6 +99,8 @@ Handoff triển khai ghi không còn lỗi đã biết. Các self-fix SQL NULL a
 - **Software readiness:** WP1 FIX REQUIRED; giữ nguyên source ứng dụng, F-01 chưa sửa, WP2 chưa bắt đầu.
 - **Quyền owner:** không cho phép hay thực hiện triển khai/gửi thật; chỉ test local dữ liệu giả lập và smoke loopback. Không thay credential, billing hay Git commit/push.
 - **Kết quả pilot:** chưa có; pilot WP5 còn chờ, không tuyên bố kết quả provider/recipient.
-- **Một hành động/prompt tiếp theo:** đưa Claude review này cùng [FIX_FINDINGS](../prompts/FIX_FINDINGS.md), chỉ sửa **F-01** với regression có giới hạn, lưu handoff WP1 song ngữ cập nhật, rồi review độc lập lại WP1 trước WP2. Giữ nguyên handoff gốc và STATE/NEXT_ACTION; review này là quyết định gate hiện tại.
+- **Một hành động/prompt tiếp theo:** đưa Claude review này cùng [FIX_FINDINGS](../prompts/FIX_FINDINGS.md), chỉ sửa **F-01** với regression có giới hạn, lưu handoff WP1 song ngữ cập nhật, rồi review độc lập lại WP1 trước WP2. Giữ nguyên handoff triển khai gốc; review này là quyết định gate hiện tại.
 
-Thay đổi review chưa commit: báo cáo song ngữ này cùng log/runner reproduction mới trong `handoff/delivery/evidence/WP1-review-codex/`. Không triển khai production code, thay quy tắc nghiệp vụ canonical hay làm gói tiếp theo.
+Các deliverable review ban đầu sau đó được ghi trong commit `c9eb8b9e055a25893fb3c80e3cdde5c2d8271bf4`. Không triển khai production code, thay quy tắc nghiệp vụ canonical hay làm gói tiếp theo.
+
+**Cập nhật điều phối, 2026-10-02:** lượt review ban đầu bỏ sót cập nhật trạng thái. NEXT_ACTION (hai ngôn ngữ), STATE, README và DEVELOPMENT hiện ghi FIX REQUIRED, F-01 chưa sửa và trình tự sửa có giới hạn → review độc lập lại. Prompt active là FIX_FINDINGS; WP2 chưa bắt đầu. Lượt cập nhật này chỉ đổi tài liệu, không thay ứng dụng đã review hay đánh dấu F-01 đã sửa. Xem [checkpoint trạng thái](WP1_STATUS_CHECKPOINT.vi.md) và bằng chứng validation được ghi tại đó. Thay đổi follow-up chưa commit.

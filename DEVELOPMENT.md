@@ -1,6 +1,6 @@
 # Development guide
 
-Status: **WP1 foundation — implemented, independent review pending.** English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
+Status: **WP1 independently reviewed — FIX REQUIRED; F-01 unresolved; WP2 not started.** See the [independent review](handoff/delivery/WP1_REVIEW.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
 
 ## Prerequisites
 

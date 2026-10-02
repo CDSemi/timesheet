@@ -99,6 +99,8 @@ The implementation handoff says no known remaining defect. Its self-fixes for SQ
 - **Software readiness:** WP1 FIX REQUIRED; application source preserved, F-01 unresolved, WP2 not started.
 - **Owner permission:** no real deployment/sending authorized or performed; only synthetic local tests and loopback smoke were used. No credentials, billing or Git commit/push changes.
 - **Pilot result:** none; WP5 pilot remains pending and no provider/recipient outcome is claimed.
-- **One next action/prompt:** give Claude this review with [FIX_FINDINGS](../prompts/FIX_FINDINGS.md), fix **F-01 only** with bounded regressions, save the bilingual updated WP1 handoff, then return for independent WP1 recheck before WP2. The original handoff and STATE/NEXT_ACTION were preserved; this review is the current gate decision.
+- **One next action/prompt:** give Claude this review with [FIX_FINDINGS](../prompts/FIX_FINDINGS.md), fix **F-01 only** with bounded regressions, save the bilingual updated WP1 handoff, then return for independent WP1 recheck before WP2. The original implementation handoff is preserved; this review is the current gate decision.
 
-Review changes remain uncommitted: this bilingual report and new logs/reproduction runners under `handoff/delivery/evidence/WP1-review-codex/`. No production code, canonical business rule or future package was implemented.
+The initial review deliverables were subsequently recorded in commit `c9eb8b9e055a25893fb3c80e3cdde5c2d8271bf4`. No production code, canonical business rule or future package was implemented.
+
+**Coordination follow-up, 2026-10-02:** the initial review omitted the status updates. NEXT_ACTION (both languages), STATE, README and DEVELOPMENT now record FIX REQUIRED, unresolved F-01 and the bounded fix → independent recheck sequence. The active prompt is FIX_FINDINGS; WP2 remains unstarted. This follow-up changes documentation only; it does not change the reviewed application or mark F-01 fixed. See [status checkpoint](WP1_STATUS_CHECKPOINT.md) and its recorded validation evidence. Follow-up changes remain uncommitted.

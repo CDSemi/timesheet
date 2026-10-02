@@ -1,6 +1,6 @@
 # Timesheet Web — bộ tài liệu triển khai
 
-Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **nền tảng WP1 đã triển khai; chờ review độc lập; WP2 chưa bắt đầu**.
+Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **WP1 đã review độc lập — FIX REQUIRED; F-01 chưa sửa; WP2 chưa bắt đầu**.
 
 File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch của file tiếng Anh tương ứng. Khóa JSON và enum giữ tiếng Anh. Các manifest trong `handoff/delivery/` là snapshot lịch sử của gói docs r1.1, không chứng nhận repo hiện tại; xem [VALIDATION](handoff/delivery/VALIDATION.vi.md).
 
@@ -9,7 +9,7 @@ File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch củ
 1. Đọc [NEXT_ACTION](handoff/NEXT_ACTION.vi.md).
 2. Đọc [yêu cầu](docs/01_PRODUCT_REQUIREMENTS.vi.md), [quy tắc giờ/OT](docs/02_TIME_AND_OT_RULES.vi.md) và [lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md).
 3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md) và [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md); hai tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
-4. Bước tiếp theo là review độc lập bằng [prompt review WP1](handoff/prompts/WP1_REVIEW.vi.md). Không làm lại triển khai WP1 hay bắt đầu WP2 trước khi review đó đạt.
+4. Đọc [review độc lập WP1](handoff/delivery/WP1_REVIEW.vi.md). Bước tiếp theo là sửa có giới hạn F-01 theo [FIX_FINDINGS](handoff/prompts/FIX_FINDINGS.vi.md), rồi review độc lập lại WP1. Không làm lại triển khai WP1 hay bắt đầu WP2 trước khi lần kiểm lại đạt.
 
 Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào mọi phiên. Dùng [RESUME](handoff/prompts/RESUME.vi.md) sau gián đoạn.
 

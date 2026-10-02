@@ -1,6 +1,6 @@
 # Timesheet Web — implementation package
 
-Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1 foundation implemented; independent review pending; WP2 not started**.
+Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1 independently reviewed — FIX REQUIRED; F-01 unresolved; WP2 not started**.
 
 English `.md` files are authoritative. Every `.vi.md` is a translation of the corresponding English file. JSON keys and enum values stay in English. The manifests in `handoff/delivery/` are historical snapshots of the r1.1 documentation package, not certification of the current repository; see [VALIDATION](handoff/delivery/VALIDATION.md).
 
@@ -9,7 +9,7 @@ English `.md` files are authoritative. Every `.vi.md` is a translation of the co
 1. Read [NEXT_ACTION](handoff/NEXT_ACTION.md).
 2. Read [requirements](docs/01_PRODUCT_REQUIREMENTS.md), [time/OT rules](docs/02_TIME_AND_OT_RULES.md) and [roadmap](docs/09_IMPLEMENTATION_ROADMAP.md).
 3. Read [DEVELOPMENT](DEVELOPMENT.md) and the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md); they describe the complete source in this repository and how to verify it.
-4. The next action is independent review with [WP1_REVIEW](handoff/prompts/WP1_REVIEW.md). Do not restart WP1 implementation or begin WP2 before that review passes.
+4. Read the [independent WP1 review](handoff/delivery/WP1_REVIEW.md). The next action is the bounded F-01 fix with [FIX_FINDINGS](handoff/prompts/FIX_FINDINGS.md), then independent WP1 recheck. Do not restart WP1 implementation or begin WP2 before that recheck passes.
 
 Each prompt names its reading scope. Do not paste every document into every session. Use [RESUME](handoff/prompts/RESUME.md) after an interruption.
 

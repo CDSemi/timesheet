@@ -1,6 +1,6 @@
 # Hướng dẫn phát triển
 
-Trạng thái: **nền tảng WP1 — đã triển khai, chờ review độc lập.** Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
+Trạng thái: **WP1 đã review độc lập — FIX REQUIRED; F-01 chưa sửa; WP2 chưa bắt đầu.** Xem [review độc lập](handoff/delivery/WP1_REVIEW.vi.md) và [bước tiếp theo](handoff/NEXT_ACTION.vi.md). Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
 
 ## Điều kiện cần
 

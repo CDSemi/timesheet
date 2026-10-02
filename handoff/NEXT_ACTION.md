@@ -1,6 +1,17 @@
-# Next action: independent WP1 review
+# Next action: fix WP1 finding F-01, then independent recheck
 
-**Current status: WP1 implemented, independent review pending; WP2 not started.** Cross-check [STATE](delivery/STATE.json), [DEVELOPMENT](../DEVELOPMENT.md) and the [WP1 handoff](delivery/WP1_HANDOFF.md). The next action is section 5 with [WP1_REVIEW](prompts/WP1_REVIEW.md); start WP2 only after that review passes.
+**Current status: WP1 independently reviewed — FIX REQUIRED (2026-10-02); F-01 unresolved; WP2 not started.** Cross-check [STATE](delivery/STATE.json), [DEVELOPMENT](../DEVELOPMENT.md), the [WP1 handoff](delivery/WP1_HANDOFF.md) and the [independent review](delivery/WP1_REVIEW.md). Claude's next action is [FIX_FINDINGS](prompts/FIX_FINDINGS.md), limited to F-01: replace saved breaks with the confirmed actual break set at Clock out, with regression coverage and the required WP1 gate. Then return the updated bilingual handoff and source for independent recheck with [WP1_REVIEW](prompts/WP1_REVIEW.md). Start WP2 only after that recheck returns PASS.
+
+Use this prompt for the current action:
+
+~~~text
+Read AGENTS.md, handoff/delivery/WP1_HANDOFF.md,
+handoff/delivery/WP1_REVIEW.md and handoff/prompts/FIX_FINDINGS.md.
+Reproduce and fix WP1 finding F-01 only. Add meaningful regression tests,
+run the required WP1 gate and update the bilingual WP1 handoff with actual
+evidence and one next action: independent WP1 recheck. Communicate in
+Vietnamese. Preserve unrelated work. Do not implement WP2 or commit/push.
+~~~
 
 Sections 1–4 keep the historical r1.1 startup walkthrough for reference; do not repeat them on the implemented repository. Since 2026-09-30 this file, `prompts/`, `templates/` and `delivery/` live in `handoff/`, and `fixtures/`, `examples/` and `inputs/` in `reference/`; the paths below follow that layout except the r1.1 extraction checklist in section 1. **WP means work package**, one of the five stages in the roadmap.
 
