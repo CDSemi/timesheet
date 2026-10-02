@@ -13,7 +13,7 @@ function rule(policy: OvertimePolicyFixture): OvertimeRule {
   };
 }
 
-describe('fixtures/overtime_cases.json (R-04)', () => {
+describe('reference/fixtures/overtime_cases.json (R-04)', () => {
   it('contains the 33 named scenarios and the documented default comparison/rounding modes', () => {
     const total =
       fixture.cases.length + fixture.daily_separation_cases.length + fixture.invalid_policy_cases.length;

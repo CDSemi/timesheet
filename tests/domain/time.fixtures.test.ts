@@ -74,7 +74,7 @@ function computeIntervalCase(testCase: IntervalCase) {
   });
 }
 
-describe('fixtures/time_cases.json (R-01…R-07)', () => {
+describe('reference/fixtures/time_cases.json (R-01…R-07)', () => {
   it('contains the 32 named scenarios', () => {
     expect(fixture.cases).toHaveLength(32);
   });

@@ -12,8 +12,8 @@ import { createUser, findUserByEmail } from './services/users.ts';
  * and two isolated example.invalid accounts. Never used for production bootstrap.
  */
 
-const POLICY_EXAMPLE = new URL('../../examples/policy.example.json', import.meta.url);
-const HOLIDAYS_EXAMPLE = new URL('../../examples/holidays.2026.example.json', import.meta.url);
+const POLICY_EXAMPLE = new URL('../../reference/examples/policy.example.json', import.meta.url);
+const HOLIDAYS_EXAMPLE = new URL('../../reference/examples/holidays.2026.example.json', import.meta.url);
 
 interface PolicyExample {
   calendar: { reporting_zone: string; normal_weekdays_iso: number[] };
@@ -94,7 +94,7 @@ export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions =
       effectiveFrom: '2026-01-01',
       weekdays: example.calendar.normal_weekdays_iso,
       dates: holidays.holidays.map((holiday) => ({ date: holiday.date, kind: 'holiday' as const, name: holiday.name })),
-      note: 'Synthetic seed from examples/holidays.2026.example.json',
+      note: 'Synthetic seed from reference/examples/holidays.2026.example.json',
     },
     null,
   );
@@ -116,7 +116,7 @@ export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions =
         userId: id,
         calendarId,
         effectiveFrom: policy.effective_from,
-        note: 'Synthetic seed from examples/policy.example.json',
+        note: 'Synthetic seed from reference/examples/policy.example.json',
         rules: {
           requiredMinutes: policy.required_minutes,
           thresholdMinutes: policy.threshold_minutes,

@@ -21,7 +21,7 @@ npm run test:fixtures  # chỉ test miền và fixture
 npm run build          # tsc → dist/domain + dist/server; Vite → dist/client
 npm run smoke          # server đã build qua HTTP thật với CSDL dùng một lần
 npm run verify         # typecheck, lint, test, build và smoke trong một lần chạy
-npm run digest         # digest source không phụ thuộc nền tảng (bỏ delivery/) cho bàn giao
+npm run digest         # digest source không phụ thuộc nền tảng (bỏ handoff/) cho bàn giao
 npm run migrate        # áp migration còn thiếu vào DATABASE_PATH
 npm run seed           # người dùng tổng hợp example.invalid; bị từ chối khi NODE_ENV=production
 npm start              # ứng dụng đã build (API + client) tại http://127.0.0.1:3000
@@ -53,12 +53,15 @@ Seed tạo `admin@example.invalid` và `employee@example.invalid`. Cung cấp `S
 | `src/server/services/` | Lịch, chính sách, kỳ lương, truy vấn và lệnh timesheet, audit |
 | `src/server/routes/`, `http/` | Route Hono, schema, origin/CSRF và xử lý lỗi |
 | `src/client/` | Khung React (đăng nhập, xem hai tuần, chấm công vào/ra) |
-| `tests/domain/` | Mọi kịch bản trong `fixtures/overtime_cases.json`, `time_cases.json` và các ca thiếu giờ của `ledger_cases.json`, cùng các ca biên của engine |
+| `tests/domain/` | Mọi kịch bản trong `reference/fixtures/overtime_cases.json`, `time_cases.json` và các ca thiếu giờ của `ledger_cases.json`, cùng các ca biên của engine |
 | `tests/integration/` | Migration mới, bất biến schema, xác thực, cô lập hai người dùng, quy tắc API |
+| `reference/` | Dữ liệu tham chiếu: fixture do `tests/domain/` đọc, ví dụ do seed giả đọc, workbook mẫu đã làm sạch |
+| `handoff/` | Quy trình giữa các agent (trạng thái, prompt, mẫu, bàn giao, review, bằng chứng); không tính vào `npm run digest` |
 | `scripts/smoke-built-server.mjs` | Kiểm tra đầu-cuối server đã build |
 | `scripts/source-digest.mjs` | Digest source ghi trong bàn giao |
 | `eslint.config.js` | Gate lint: `@typescript-eslint/no-deprecated` |
 | `.editorconfig`, `.gitattributes` | UTF-8, LF, thụt lề 2 dấu cách (Python 4); CRLF chỉ cho `.bat`/`.cmd`/`.ps1` của Windows; file binary |
+| `.idea/inspectionProfiles/` | Profile inspection JetBrains dùng chung (phần còn lại của `.idea/` chỉ ở máy cục bộ): tắt "Import can be shortened", vì cách sửa thành import thư mục làm typecheck NodeNext lỗi (TS2834) |
 
 ## API (WP1)
 

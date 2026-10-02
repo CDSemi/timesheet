@@ -40,7 +40,7 @@ Allow 3–5 targeted fix/recheck sessions: **16–23 bounded sessions total**, r
 
 Max 20x provides more scheduling headroom, not a reason to spend more per task. Context, model, tools and output affect usage; advertised message ranges cannot guarantee a coding phase fits a window. Standard speed is the default; accelerated modes can consume more allowance.
 
-The five packages and session estimate remain unchanged after confirming Max 20x. Actual reset waits may be shorter; do not infer a fixed completion date or unused allowance from the plan label. For folder setup, manual model selection and the first copyable prompt, follow [NEXT_ACTION](../NEXT_ACTION.md).
+The five packages and session estimate remain unchanged after confirming Max 20x. Actual reset waits may be shorter; do not infer a fixed completion date or unused allowance from the plan label. For folder setup, manual model selection and the first copyable prompt, follow [NEXT_ACTION](../handoff/NEXT_ACTION.md).
 
 ## Working loop
 

@@ -37,4 +37,4 @@ Two isolated test users must work throughout the first release. Administrator st
 
 Initial scope includes holiday CSV import, basic user administration, email notifications and OT evidence export. Optional ntfy may remain disabled. Deferred: paid payroll calculations, HR synchronization, SMS, public registration, native mobile apps, manager portal, arbitrary report designer and multi-node hosting.
 
-The tracked workbook is a [sanitized template sample](../inputs/README.md); no personal original is retained. Import history as `imported_unverified`; do not infer genuine sign-off, sent email or zero OT from its blank caches, 8.5-hour formula or dynamic signature dates.
+The tracked workbook is a [sanitized template sample](../reference/inputs/README.md); no personal original is retained. Import history as `imported_unverified`; do not infer genuine sign-off, sent email or zero OT from its blank caches, 8.5-hour formula or dynamic signature dates.

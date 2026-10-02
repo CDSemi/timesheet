@@ -37,6 +37,6 @@ Hai user test phải được cách ly trong toàn bộ bản đầu. Quyền ad
 
 Có CSV lịch lễ, quản trị user cơ bản, email và xuất bằng chứng OT. ntfy tùy chọn có thể chưa bật. Hoãn: tính OT trả lương, đồng bộ HR, SMS, đăng ký công khai, app di động native, portal manager, tự thiết kế báo cáo và chạy nhiều node.
 
-Workbook được theo dõi là [mẫu đã làm sạch](../inputs/README.vi.md); không giữ bản gốc cá nhân. Nhập lịch sử với `imported_unverified`; không suy ra sign-off thật, đã gửi hay OT bằng không từ cache trống, công thức 8,5 giờ hoặc ngày ký động.
+Workbook được theo dõi là [mẫu đã làm sạch](../reference/inputs/README.vi.md); không giữ bản gốc cá nhân. Nhập lịch sử với `imported_unverified`; không suy ra sign-off thật, đã gửi hay OT bằng không từ cache trống, công thức 8,5 giờ hoặc ngày ký động.
 
 Bản dịch của [01_PRODUCT_REQUIREMENTS.md](01_PRODUCT_REQUIREMENTS.md); tiếng Anh là nguồn chuẩn.

@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { expect } from 'vitest';
 import { isDomainError } from '../../src/domain/errors.ts';
 
-/** Loads a canonical fixture file from /fixtures (never copied into tests). */
+/** Loads a canonical fixture file from /reference/fixtures (never copied into tests). */
 export function loadFixture<T>(name: string): T {
-  return JSON.parse(readFileSync(new URL(`../../fixtures/${name}`, import.meta.url), 'utf8')) as T;
+  return JSON.parse(readFileSync(new URL(`../../reference/fixtures/${name}`, import.meta.url), 'utf8')) as T;
 }
 
 /** Asserts that `action` throws a DomainError with the given semantic code. */

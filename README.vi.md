@@ -2,16 +2,16 @@
 
 Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **nền tảng WP1 đã triển khai; chờ review độc lập; WP2 chưa bắt đầu**.
 
-File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch của file tiếng Anh tương ứng. Khóa JSON và enum giữ tiếng Anh. Các manifest trong `delivery/` là snapshot lịch sử của gói docs r1.1, không chứng nhận repo hiện tại; xem [VALIDATION](delivery/VALIDATION.vi.md).
+File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch của file tiếng Anh tương ứng. Khóa JSON và enum giữ tiếng Anh. Các manifest trong `handoff/delivery/` là snapshot lịch sử của gói docs r1.1, không chứng nhận repo hiện tại; xem [VALIDATION](handoff/delivery/VALIDATION.vi.md).
 
 ## Bắt đầu
 
-1. Đọc [NEXT_ACTION](NEXT_ACTION.vi.md).
+1. Đọc [NEXT_ACTION](handoff/NEXT_ACTION.vi.md).
 2. Đọc [yêu cầu](docs/01_PRODUCT_REQUIREMENTS.vi.md), [quy tắc giờ/OT](docs/02_TIME_AND_OT_RULES.vi.md) và [lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md).
-3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md) và [bàn giao WP1](delivery/WP1_HANDOFF.vi.md); hai tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
-4. Bước tiếp theo là review độc lập bằng [prompt review WP1](prompts/WP1_REVIEW.vi.md). Không làm lại triển khai WP1 hay bắt đầu WP2 trước khi review đó đạt.
+3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md) và [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md); hai tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
+4. Bước tiếp theo là review độc lập bằng [prompt review WP1](handoff/prompts/WP1_REVIEW.vi.md). Không làm lại triển khai WP1 hay bắt đầu WP2 trước khi review đó đạt.
 
-Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào mọi phiên. Dùng [RESUME](prompts/RESUME.vi.md) sau gián đoạn.
+Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào mọi phiên. Dùng [RESUME](handoff/prompts/RESUME.vi.md) sau gián đoạn.
 
 ## Hướng đã chọn
 
@@ -23,6 +23,14 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 - Ưu tiên usage trong gói; **dự kiến không dùng** 2.500 credits dự trữ.
 
 ## Bản đồ tài liệu
+
+| Thư mục | Phụ trách |
+|---|---|
+| `docs/` | Tài liệu đặc tả 01–10 (bảng dưới); `docs/agents/` cấu hình skill cho agent |
+| `src/`, `tests/`, `scripts/` | Source ứng dụng, test tự động và script phát triển; xem [DEVELOPMENT](DEVELOPMENT.vi.md) |
+| `handoff/` | Quy trình làm việc giữa các agent: [NEXT_ACTION](handoff/NEXT_ACTION.vi.md) (trạng thái và bước tiếp theo), `prompts/` (hướng dẫn triển khai/review/sửa/tiếp tục), `templates/` (mẫu bàn giao/review/checkpoint) và `delivery/` (trạng thái, bàn giao, review, bằng chứng và kiểm tra gói tài liệu) |
+| `reference/` | Dữ liệu tham chiếu: [fixture](reference/fixtures/README.vi.md) (91 tình huống tham chiếu mà test đọc), [ví dụ](reference/examples/README.vi.md) (cấu hình mẫu an toàn mà seed giả đọc) và [inputs](reference/inputs/README.vi.md) (workbook mẫu đã làm sạch) |
+| `.agents/`, `.claude/` | Skill đã cài cho agent, khóa phiên bản bằng `skills-lock.json` |
 
 | File | Phụ trách |
 |---|---|
@@ -37,9 +45,7 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 | [09 Lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md) | Năm giai đoạn và gate |
 | [10 Quyết định](docs/10_DECISIONS_AND_SOURCES.vi.md) | Mặc định, nguồn gốc, nguồn chính thức |
 
-`prompts/` có hướng dẫn triển khai/review/sửa/tiếp tục. `templates/` có mẫu bàn giao/review/checkpoint. [Fixture](fixtures/README.vi.md) chứa 91 tình huống tham chiếu; [ví dụ](examples/README.vi.md) chứa cấu hình mẫu an toàn. `delivery/` ghi trạng thái và kiểm tra gói tài liệu.
-
-[Excel mẫu](inputs/Timesheet_Rev8_2026.xlsx) là mẫu công khai: gồm biểu mẫu, sheet thông tin làm việc và ngày lễ của workbook gốc, đã xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên nhân viên, ảnh chữ ký, metadata tác giả và đường dẫn máy). Không giữ bản gốc cá nhân. Không đưa workbook vào image production; dùng dữ liệu giả để demo.
+[Excel mẫu](reference/inputs/Timesheet_Rev8_2026.xlsx) là mẫu công khai: gồm biểu mẫu, sheet thông tin làm việc và ngày lễ của workbook gốc, đã xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên nhân viên, ảnh chữ ký, metadata tác giả và đường dẫn máy). Không giữ bản gốc cá nhân. Không đưa workbook vào image production; dùng dữ liệu giả để demo.
 
 Nền tảng WP1 đã có source và bằng chứng kiểm tra của bên triển khai; xem DEVELOPMENT và bàn giao. Chưa triển khai production hay gửi email thật. Docs song ngữ không bắt buộc UI bản đầu song ngữ. Thông tin model được kiểm lại ngày 30/09/2026; khả dụng và usage thực tế cần xem trong client.
 

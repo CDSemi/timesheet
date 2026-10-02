@@ -40,7 +40,7 @@ Dự trù 3–5 phiên sửa/kiểm lại mục tiêu: **tổng 16–23 phiên c
 
 Max 20x cho dư lịch hơn, không phải lý do tốn hơn mỗi việc. Context, model, tool, output ảnh hưởng usage; khoảng tin nhắn quảng bá không bảo đảm giai đoạn coding vừa cửa sổ. Mặc định Standard; tăng tốc có thể tốn allowance hơn.
 
-Sau khi xác nhận Max 20x, giữ nguyên năm giai đoạn và ước lượng số phiên. Thời gian đợi reset thực tế có thể ngắn hơn; không suy ra ngày hoàn thành cố định hoặc usage còn lại từ tên gói. Xem [NEXT_ACTION](../NEXT_ACTION.vi.md) để đặt thư mục, chọn model bằng tay và copy prompt đầu tiên.
+Sau khi xác nhận Max 20x, giữ nguyên năm giai đoạn và ước lượng số phiên. Thời gian đợi reset thực tế có thể ngắn hơn; không suy ra ngày hoàn thành cố định hoặc usage còn lại từ tên gói. Xem [NEXT_ACTION](../handoff/NEXT_ACTION.vi.md) để đặt thư mục, chọn model bằng tay và copy prompt đầu tiên.
 
 ## Vòng làm việc
 

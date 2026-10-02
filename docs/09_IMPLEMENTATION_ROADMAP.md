@@ -20,7 +20,7 @@ Checkpoints: (1) Repository/schema/auth and daily engine; (2) intervals/zones, i
 
 Gate: Type check/build, fresh SQLite migration tests, all time/OT fixtures, two-user isolation on implemented endpoints. Explicitly verify 09:00–18:00, N/M boundaries, off-day minutes, DST, seconds aggregation and mixed overnight shifts.
 
-Prompts: [Implement](../prompts/WP1_IMPLEMENT.md) / [Review](../prompts/WP1_REVIEW.md).
+Prompts: [Implement](../handoff/prompts/WP1_IMPLEMENT.md) / [Review](../handoff/prompts/WP1_REVIEW.md).
 
 ## WP2 — Personal workspace and OT ledger
 
@@ -32,7 +32,7 @@ Checkpoints: (1) Editor/settings/calendar; (2) ledger/leave/history/integration;
 
 Gate: Core browser flows; AC-01/03/04/05 for implemented services; concurrent reservations; partial leave; correction deltas; safe evidence export; admin is not blanket private-data access.
 
-Prompts: [Implement](../prompts/WP2_IMPLEMENT.md) / [Review](../prompts/WP2_REVIEW.md).
+Prompts: [Implement](../handoff/prompts/WP2_IMPLEMENT.md) / [Review](../handoff/prompts/WP2_REVIEW.md).
 
 ## WP3 — PDF, sign-off and automatic submission
 
@@ -44,7 +44,7 @@ Checkpoints: (1) Snapshot/review/PDF/ledger transaction; (2) jobs/reminders/adap
 
 Gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays. All sending stays dry-run/capture.
 
-Prompts: [Implement](../prompts/WP3_IMPLEMENT.md) / [Review](../prompts/WP3_REVIEW.md).
+Prompts: [Implement](../handoff/prompts/WP3_IMPLEMENT.md) / [Review](../handoff/prompts/WP3_REVIEW.md).
 
 ## WP4 — Docker, import and recovery
 
@@ -56,7 +56,7 @@ Checkpoints: (1) Image/installation dry-run and restore; (2) workbook preview an
 
 Gate: AC-11/12/15: clean install, migrations, restart persistence, backup under writes, isolated restore with file hashes/balances, identical re-import no-op and outbound paused after restore.
 
-Prompts: [Implement](../prompts/WP4_IMPLEMENT.md) / [Review](../prompts/WP4_REVIEW.md).
+Prompts: [Implement](../handoff/prompts/WP4_IMPLEMENT.md) / [Review](../handoff/prompts/WP4_REVIEW.md).
 
 ## WP5 — Independent acceptance and pilot
 
@@ -68,10 +68,10 @@ Checkpoints: ChatGPT assesses first; Claude fixes; ChatGPT rechecks; owner revie
 
 Gate: AC-13 plus every unresolved required gate; complete reproducible release, verified restore, no blocking integrity/privacy/submission defect. Separate software readiness from owner authorization and actual production pilot outcome.
 
-Prompts: [Implement](../prompts/WP5_IMPLEMENT.md) / [Review](../prompts/WP5_REVIEW.md).
+Prompts: [Implement](../handoff/prompts/WP5_IMPLEMENT.md) / [Review](../handoff/prompts/WP5_REVIEW.md).
 
 ## Handover and completion
 
 Each package delivers code/migrations/tests, reproducible commands, HANDOFF, review findings/disposition and one next action. Current package integrity/privacy blockers prevent advancing. Human-facing requirements/operations stay bilingual. No fake logs, required-path TODOs, personal timesheet data, signature images or secrets in public git.
 
-Use [FIX_FINDINGS](../prompts/FIX_FINDINGS.md) for bounded fixes and [RESUME](../prompts/RESUME.md) for interruption. Missing NAS access means software ready/pilot pending, not production accepted. Completion requires required gates, authorized pilot, a restorable installation and the owner's normal two-week workflow. Observe one real period after activation.
+Use [FIX_FINDINGS](../handoff/prompts/FIX_FINDINGS.md) for bounded fixes and [RESUME](../handoff/prompts/RESUME.md) for interruption. Missing NAS access means software ready/pilot pending, not production accepted. Completion requires required gates, authorized pilot, a restorable installation and the owner's normal two-week workflow. Observe one real period after activation.

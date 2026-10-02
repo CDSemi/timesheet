@@ -1,6 +1,6 @@
 # Test and acceptance plan
 
-This package contains specifications, not a running app. Package checks do not certify application behavior. Turn the [91 fixtures](../fixtures/README.md) into tests of production code with independently specified expectations.
+This package contains specifications, not a running app. Package checks do not certify application behavior. Turn the [91 fixtures](../reference/fixtures/README.md) into tests of production code with independently specified expectations.
 
 ## Required gates
 

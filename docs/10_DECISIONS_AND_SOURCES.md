@@ -33,7 +33,7 @@ On 2026-09-30, the user supplied a plan screenshot showing Max with 20x Pro usag
 
 ## Workbook evidence
 
-The [sanitized template](../inputs/Timesheet_Rev8_2026.xlsx) supports the 14-day Friday-payroll/Tuesday-due form. It does not establish legal payroll policy, true past signature dates, email delivery or opening OT balance. [Input notes](../inputs/README.md) record what was removed, its hash and formula defects. On 2026-09-30 the owner removed all personal data (dated attendance sheets, name, signature and metadata) and published the template as a public sample; the personal original is not retained.
+The [sanitized template](../reference/inputs/Timesheet_Rev8_2026.xlsx) supports the 14-day Friday-payroll/Tuesday-due form. It does not establish legal payroll policy, true past signature dates, email delivery or opening OT balance. [Input notes](../reference/inputs/README.md) record what was removed, its hash and formula defects. On 2026-09-30 the owner removed all personal data (dated attendance sheets, name, signature and metadata) and published the template as a public sample; the personal original is not retained.
 
 Replace the earlier proposal's 8.5-hour calculation/debit, auto-sign wording, in-memory-only scheduling assumption and live-file-only backup shortcut. Exactly-once ordinary SMTP delivery must not be assumed.
 

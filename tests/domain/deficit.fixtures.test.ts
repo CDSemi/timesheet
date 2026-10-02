@@ -7,7 +7,7 @@ const fixture = loadFixture<LedgerFixtureFile>('ledger_cases.json');
 
 // ledger_cases.json holds 16 deficit cases (pure R-05 decisions, WP1 engine) and 10
 // ledger scenarios (transactional posting/reservations, WP2 services; not run here).
-describe('fixtures/ledger_cases.json deficit_cases (R-05)', () => {
+describe('reference/fixtures/ledger_cases.json deficit_cases (R-05)', () => {
   it('contains 16 deficit cases and 10 ledger scenarios', () => {
     expect(fixture.deficit_cases).toHaveLength(16);
     expect(fixture.ledger_scenarios).toHaveLength(10);

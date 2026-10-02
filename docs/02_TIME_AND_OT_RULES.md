@@ -71,4 +71,4 @@ Current means the earliest configured payroll date on/after today's date in the 
 
 Use actual `signed_at`, never TODAY(). Manual time entry must show and use its selected input zone, defaulting to the current display zone; conversion must preserve the saved accounting date. Display instants in the viewer's current zone while keeping accounting dates unchanged. PDF/deadline use the saved reporting zone. Reject nonexistent DST local times; require explicit offset/fold for ambiguous times. Duration is elapsed UTC time.
 
-See [fixture guide](../fixtures/README.md) for independent expected examples.
+See [fixture guide](../reference/fixtures/README.md) for independent expected examples.

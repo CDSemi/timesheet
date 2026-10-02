@@ -71,6 +71,6 @@ Hiện tại là payroll được cấu hình sớm nhất bằng/sau hôm nay t
 
 Dùng `signed_at` thật, không TODAY(). Nhập giờ tay phải hiện và dùng múi giờ nhập đã chọn, mặc định múi giờ hiển thị hiện tại; quy đổi phải giữ ngày ghi sổ đã lưu. Hiển thị thời điểm theo múi giờ người xem nhưng giữ ngày ghi sổ. PDF/hạn dùng múi giờ báo cáo đã lưu. Từ chối giờ DST không tồn tại; yêu cầu offset/fold rõ cho giờ mơ hồ. Thời lượng là thời gian UTC trôi qua.
 
-Xem [hướng dẫn fixture](../fixtures/README.vi.md) cho kết quả mẫu độc lập.
+Xem [hướng dẫn fixture](../reference/fixtures/README.vi.md) cho kết quả mẫu độc lập.
 
 Bản dịch của [02_TIME_AND_OT_RULES.md](02_TIME_AND_OT_RULES.md); tiếng Anh là nguồn chuẩn.

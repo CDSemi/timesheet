@@ -1,6 +1,6 @@
 # Kế hoạch kiểm thử và nghiệm thu
 
-Gói này là đặc tả, chưa có app chạy. Kiểm tra gói không chứng nhận hành vi ứng dụng. Chuyển [91 fixture](../fixtures/README.vi.md) thành test code production với kết quả kỳ vọng được xác lập độc lập.
+Gói này là đặc tả, chưa có app chạy. Kiểm tra gói không chứng nhận hành vi ứng dụng. Chuyển [91 fixture](../reference/fixtures/README.vi.md) thành test code production với kết quả kỳ vọng được xác lập độc lập.
 
 ## Gate bắt buộc
 

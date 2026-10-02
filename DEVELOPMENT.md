@@ -21,7 +21,7 @@ npm run test:fixtures  # domain and fixture tests only
 npm run build          # tsc → dist/domain + dist/server; Vite → dist/client
 npm run smoke          # built server over real HTTP with a throwaway database
 npm run verify         # typecheck, lint, test, build and smoke in one run
-npm run digest         # platform-independent source digest (delivery/ excluded) for handoffs
+npm run digest         # platform-independent source digest (handoff/ excluded) for handoffs
 npm run migrate        # apply pending migrations to DATABASE_PATH
 npm run seed           # synthetic example.invalid users; refused when NODE_ENV=production
 npm start              # built app (API + client) on http://127.0.0.1:3000
@@ -53,12 +53,15 @@ The seed creates `admin@example.invalid` and `employee@example.invalid`. Supply 
 | `src/server/services/` | Calendars, policies, periods, timesheet queries and commands, audit |
 | `src/server/routes/`, `http/` | Hono routes, schemas, origin/CSRF and error handling |
 | `src/client/` | React skeleton (sign-in, two-week view, clock in/out) |
-| `tests/domain/` | Every scenario of `fixtures/overtime_cases.json`, `time_cases.json` and the deficit cases of `ledger_cases.json`, plus engine edge cases |
+| `tests/domain/` | Every scenario of `reference/fixtures/overtime_cases.json`, `time_cases.json` and the deficit cases of `ledger_cases.json`, plus engine edge cases |
 | `tests/integration/` | Fresh migrations, schema invariants, auth, two-user isolation, API rules |
+| `reference/` | Reference data: fixtures read by `tests/domain/`, examples read by the synthetic seed, sanitized workbook template |
+| `handoff/` | Agent workflow (status, prompts, templates, handoffs, reviews, evidence); excluded from `npm run digest` |
 | `scripts/smoke-built-server.mjs` | End-to-end check of the built server |
 | `scripts/source-digest.mjs` | Source digest recorded in handoffs |
 | `eslint.config.js` | Lint gate: `@typescript-eslint/no-deprecated` |
 | `.editorconfig`, `.gitattributes` | UTF-8, LF, 2-space indentation (Python 4); CRLF only for Windows `.bat`/`.cmd`/`.ps1`; binary assets |
+| `.idea/inspectionProfiles/` | Shared JetBrains inspection profile (the rest of `.idea/` stays local): turns off "Import can be shortened", whose directory-import fix fails NodeNext type checking (TS2834) |
 
 ## API (WP1)
 
