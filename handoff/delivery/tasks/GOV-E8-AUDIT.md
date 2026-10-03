@@ -1,7 +1,14 @@
 # GOV-E8-AUDIT dispatch brief
 
 - Mission/task: timesheet-software-readiness / GOV-E8-AUDIT; board package GOV; kind
-  audit; attempt 1; depends on GOV-E8-GATE (PASS required); fresh context.
+  audit; attempt 1; depends on GOV-E8-GATE2 (PASS required); fresh context.
+- Update after GOV-E8-GATE FAIL:
+  - The target is now the GOV-E8-FREEZE2 commit, with the GOV-E8-GATE2 digest.
+  - The scope adds the check_recovery.py harness fix: synthetic probes are now
+    independent of the live active package. Verify that no probe was weakened, the probe
+    count did not fall, and the regression probe exists.
+  - The governance range is `f7b9f8e3f07b68e636da54ba589b286fa59561b8..<freeze2>`.
+  - GOV-E8-FIX2 is also an author.
 - Profile/routing: timesheet-auditor, requested opus/xhigh, no override. Routing: size S,
   risk M, novelty no. Task record in English; GOV_E8_REVIEW.md/.vi.md bilingual (REVIEW
   template).

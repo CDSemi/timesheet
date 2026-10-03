@@ -33,8 +33,13 @@ America/Los_Angeles).
 - Chủ dự án trả lời "dùng đề xuất" (2026-10-03): áp dụng E-2, E-3 và E-8 theo đề xuất
   (`owner_decisions` trên board). WP2-DEC (worker) đang ghi các quyết định vào tài liệu
   02/03/04/10 và fixture.
-- Bước tiếp: commit đóng băng WP2-DEC → chuỗi GOV-E8 (mục UI trong AGENTS.md: sửa, đóng
-  băng, gate, audit mới, nghiệm thu) → WP2-T03 (worker-high, override opus novelty).
+- Commit quyết định 393779ddf62b80246d9c52a0d563086a3ffddcbb đã push (tài liệu/fixture của
+  WP2-DEC cùng mục UI trong AGENTS của GOV-E8-FIX). GOV-E8-GATE đang chạy trên commit này.
+- GOV-E8-GATE FAIL: probe giả lập trong check_recovery.py mặc định package WP1 (lỗi tiềm
+  ẩn của harness lộ ra khi chuyển sang WP2; bản thân thay đổi E-8 đạt mọi kiểm tra khác).
+  GOV-E8-FIX2 (worker) đang làm cho các probe tự chứa, không phụ thuộc board thật.
+- Bước tiếp: GOV-E8-FREEZE2 → GOV-E8-GATE2 → GOV-E8-AUDIT mới → GOV-E8-ACCEPT →
+  WP2-T03 (worker-high, override opus novelty).
 
 ## Khôi phục điều phối
 

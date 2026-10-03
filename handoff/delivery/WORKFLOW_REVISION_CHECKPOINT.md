@@ -32,8 +32,13 @@ America/Los_Angeles).
 - Owner replied "dùng đề xuất" (2026-10-03): E-2, E-3 and E-8 adopted as recommended
   (board `owner_decisions`). WP2-DEC (worker) is encoding them in docs 02/03/04/10 and
   the fixture.
-- Next action: WP2-DEC freeze → GOV-E8 chain (AGENTS.md UI section: fix, freeze, gate,
-  fresh audit, accept) → WP2-T03 (worker-high, opus override novelty).
+- Decision commit 393779ddf62b80246d9c52a0d563086a3ffddcbb pushed (WP2-DEC docs/fixture
+  plus GOV-E8-FIX AGENTS UI section). GOV-E8-GATE running on it.
+- GOV-E8-GATE FAIL: check_recovery.py synthetic probes assumed active package WP1 (latent
+  harness defect exposed by the WP2 advance; E-8 change itself passed every other check).
+  GOV-E8-FIX2 (worker) is making the probes self-contained.
+- Next action: GOV-E8-FREEZE2 → GOV-E8-GATE2 → fresh GOV-E8-AUDIT → GOV-E8-ACCEPT →
+  WP2-T03 (worker-high, opus override novelty).
 
 ## Orchestration recovery
 

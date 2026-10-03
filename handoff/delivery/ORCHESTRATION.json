@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "gov-e8-freeze",
+  "phase": "gov-e8-freeze2",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "GOV-E8-FREEZE",
+  "next_task_id": "GOV-E8-FREEZE2",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -50,7 +50,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+    "last_commit": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
     "unpushed": []
   },
   "owner_decisions": [
@@ -1624,10 +1624,148 @@
       "id": "GOV-E8-FREEZE",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "GOV-E8-FIX",
         "WP2-DEC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae9c8ea666ed77551",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+        "handoff/delivery/evidence/GOV-E8-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+      "report": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-E8-FREEZE/node-version.txt",
+        "handoff/delivery/evidence/GOV-E8-FREEZE/precommit.txt",
+        "handoff/delivery/evidence/GOV-E8-FREEZE/diff-check.txt",
+        "handoff/delivery/evidence/GOV-E8-FREEZE/validate.txt",
+        "handoff/delivery/evidence/GOV-E8-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "branch": "main",
+      "commit_sha": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 34 files (decision commit E-2/E-3/E-8); precommit, diff-check, JSON parse and validator exit 0.",
+      "next_action": "None; GOV-E8-GATE runs on 393779d."
+    },
+    {
+      "id": "GOV-E8-GATE",
+      "package": "GOV",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
+      "depends_on": [
+        "GOV-E8-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a9a0d02e182c2a2c5",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-E8-GATE.md",
+        "handoff/delivery/evidence/GOV-E8-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-GATE.md",
+      "report": "handoff/delivery/tasks/GOV-E8-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-E8-GATE/node-version.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/digest-before.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/validate-orchestration.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/check-recovery.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/preflight.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/verify.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/diff-check.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/gov-paths.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/wording-forbidden.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/wording-required.txt",
+        "handoff/delivery/evidence/GOV-E8-GATE/digest-after.txt"
+      ],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "source_digest": "7586ba0821899960e24879ffacb435132edb9ab3e243be5a0a5bfb459290ec2f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "FAIL",
+      "failure": "check_recovery.py exit 1 'Running task outside active package': synthetic probes default to package WP1 while the live board active package is WP2 (latent harness defect exposed by the package advance; not caused by the E-8 change). All other checks passed.",
+      "next_action": "None; GOV-E8-FIX2 fixes the probe harness, then GOV-E8-FREEZE2 and GOV-E8-GATE2."
+    },
+    {
+      "id": "GOV-E8-FIX2",
+      "package": "GOV",
+      "kind": "fix",
+      "status": "done",
+      "addresses_gate": "GOV-E8-GATE",
+      "depends_on": [],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aab35502b4e6ccfdb",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/check_recovery.py",
+        "handoff/delivery/tasks/GOV-E8-FIX2.md",
+        "handoff/delivery/evidence/GOV-E8-FIX2"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-FIX2.md",
+      "report": "handoff/delivery/tasks/GOV-E8-FIX2.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-E8-FIX2/check-recovery.txt",
+        "handoff/delivery/evidence/GOV-E8-FIX2/validate-orchestration.txt",
+        "handoff/delivery/evidence/GOV-E8-FIX2/diff-check.txt"
+      ],
+      "baseline_commit": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported): probes run in suite() on synthetic board/state; one live-board acceptance probe; WP3 regression probe; 81 -> 82 probes, none weakened; check_recovery, validator and diff-check exit 0.",
+      "next_action": "None; GOV-E8-FREEZE2."
+    },
+    {
+      "id": "GOV-E8-FREEZE2",
+      "package": "GOV",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "GOV-E8-FIX2"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -1645,13 +1783,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/GOV-E8-FREEZE.md",
-        "handoff/delivery/evidence/GOV-E8-FREEZE"
+        "handoff/delivery/tasks/GOV-E8-FREEZE2.md",
+        "handoff/delivery/evidence/GOV-E8-FREEZE2"
       ],
-      "prompt": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
-      "report": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/GOV-E8-FREEZE2.md",
+      "report": "handoff/delivery/tasks/GOV-E8-FREEZE2.md",
       "evidence": [],
-      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "baseline_commit": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
       "branch": "main",
       "commit_sha": null,
       "pushed": null,
@@ -1659,15 +1797,15 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Decision commit (E-2/E-3/E-8: docs, fixture, AGENTS UI section); push."
+      "next_action": "Freeze the check_recovery fix plus gate records; push."
     },
     {
-      "id": "GOV-E8-GATE",
+      "id": "GOV-E8-GATE2",
       "package": "GOV",
       "kind": "gate",
       "status": "pending",
       "depends_on": [
-        "GOV-E8-FREEZE"
+        "GOV-E8-FREEZE2"
       ],
       "profile": "timesheet-verifier",
       "requested_model": "sonnet",
@@ -1685,18 +1823,18 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "handoff/delivery/tasks/GOV-E8-GATE.md",
-        "handoff/delivery/evidence/GOV-E8-GATE"
+        "handoff/delivery/tasks/GOV-E8-GATE2.md",
+        "handoff/delivery/evidence/GOV-E8-GATE2"
       ],
-      "prompt": "handoff/delivery/tasks/GOV-E8-GATE.md",
-      "report": "handoff/delivery/tasks/GOV-E8-GATE.md",
+      "prompt": "handoff/delivery/tasks/GOV-E8-GATE2.md",
+      "report": "handoff/delivery/tasks/GOV-E8-GATE2.md",
       "evidence": [],
-      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "baseline_commit": "393779ddf62b80246d9c52a0d563086a3ffddcbb",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Gate the decision commit."
+      "next_action": "Re-run the GOV-E8 gate on the FREEZE2 commit."
     },
     {
       "id": "GOV-E8-AUDIT",
@@ -1704,7 +1842,7 @@
       "kind": "audit",
       "status": "pending",
       "depends_on": [
-        "GOV-E8-GATE"
+        "GOV-E8-GATE2"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -1735,7 +1873,8 @@
       "reviewed_digest": null,
       "author_agent_ids": [
         "aa102ee05d1b8af38",
-        "a6b907acae4ca9c63"
+        "a6b907acae4ca9c63",
+        "aab35502b4e6ccfdb"
       ],
       "decision": null,
       "next_action": "Fresh governance audit of the AGENTS UI section change (E-8)."
