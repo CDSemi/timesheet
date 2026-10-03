@@ -272,11 +272,15 @@ describe('admin router is account administration, not private-data access (AC-01
       .sort();
   }
 
-  it('exposes exactly the reviewed account routes', () => {
+  it('exposes exactly the reviewed account and company-calendar routes', () => {
     expect(adminRoutes()).toEqual(
       [
         'GET /api/admin/users',
         'PATCH /api/admin/users/:id',
+        // Company calendar configuration (WP2-T08): dates, names and aggregate counts only.
+        'POST /api/admin/calendar/import/commit',
+        'POST /api/admin/calendar/import/preview',
+        'POST /api/admin/payroll-exceptions',
         'POST /api/admin/users',
         'POST /api/admin/users/:id/deactivate',
         'POST /api/admin/users/:id/reactivate',

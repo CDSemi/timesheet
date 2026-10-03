@@ -82,4 +82,8 @@ Evidence goes in handoff/delivery/evidence/WP2-T07-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 197053699d9b5c125fa0c3e8ccb8acf0f421011f; post-HEAD a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6.
+- Commit a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6; pushed to origin main; remote SHA equal.
+- Staged count 23.
+- Checks (Node v24.21.0): precommit, diff --check, JSON parse, validate_orchestration, check_recovery all exit 0; no literal passwords in the diff.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-T07-FREEZE/.

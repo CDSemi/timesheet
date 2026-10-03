@@ -1,0 +1,757 @@
+$ node --version -> v24.21.0; npm exec -- vitest run tests/integration/holiday-import.test.ts tests/integration/payroll-exceptions.test.ts  (expected red before the services and routes exist)
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/payroll-exceptions.test.ts (12 tests | 11 failed) 2894ms
+   ❯ access control (2)
+     × rejects a missing Origin, unknown fields and an unknown calendar 243ms
+   ❯ creating an exception (4)
+     × stores the exception with its reason, audits it and shows it on the calendar read 233ms
+     × requires a reason and validates the exception without writing 237ms
+     × refuses a second exception for the same payroll date 233ms
+     × uses the exception when the period row is first created later 253ms
+   ❯ stored pay_periods rows (E-10) (6)
+     × refreshes an unfinalized stored row in the same transaction, keeping its id and period 243ms
+     × refreshes the due date alone when only the deadline moves 234ms
+     × refuses when a finalized timesheet references the row and changes nothing 239ms
+     × refuses when any user’s finalized timesheet references the row, even if the others are drafts 236ms
+     × does not touch a finalized period when the exception belongs to another period 236ms
+     × rolls back the exception and the refreshed row when the audit event cannot be written 239ms
+ ❯ tests/integration/holiday-import.test.ts (28 tests | 26 failed) 6552ms
+   ❯ access control on the admin import routes (3)
+     × rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar 239ms
+   ❯ preview (9)
+     × writes nothing: no version, no audit event, no employee row 241ms
+     × reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash 231ms
+     × diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4) 253ms
+     × keeps every manual date when the CSV lists none of them and nothing is marked for removal 234ms
+     × flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit 236ms
+     × ignores CSV rows before the effective date and says so 237ms
+     × refuses an effective date before the prospective boundary in the preview and names the earliest 236ms
+     × lists the affected default-labelled draft days and the preserved explicit overrides, without identities 241ms
+     × counts only draft days: a finalized period blocks the commit and is reported 237ms
+   ❯ commit (11)
+     × creates one immutable version and one audit event from a matching preview 212ms
+     × refuses a missing, malformed, stale or mismatched preview hash and writes nothing 210ms
+     × refuses an effective date before the prospective boundary 217ms
+     × refuses an effective date earlier than the latest version 211ms
+     × refuses a CSV with issues or removal problems and writes nothing 219ms
+     × treats an identical re-commit as a no-op: no new version, no audit event 221ms
+     × removes a manual date only when the commit lists it explicitly 212ms
+     × rolls the version back when the audit event cannot be written 215ms
+     × keeps the classification of past dates and old finalized periods unchanged 230ms
+     × preserves explicit labels and relabels default rows at read time (E-4) 236ms
+     × refuses a change that would alter a finalized timesheet, then accepts a later date 224ms
+   ❯ missing next-year calendar warning (E-12), with a fixed clock (5)
+     × is empty before 1 October in the reporting zone and appears from then 325ms
+     × is empty in the new year until the next 1 October 270ms
+     × disappears once a committed version holds next-year dates 217ms
+     × does not count a version that is not in force for next year 221ms
+     × keeps the existing calendar fields 220ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 37 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > access control on the admin import routes > rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:99:26
+     97|     expect(noOrigin.status).toBe(403);
+     98|     const extra = await t.request('POST', PREVIEW, { cookie: admin, bo…
+     99|     expect(extra.status).toBe(422);
+       |                          ^
+    100|     const unknown = await preview(csv('2026-10-20,Synthetic Day'), { c…
+    101|     expect(unknown.status).toBe(404);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > writes nothing: no version, no audit event, no employee row
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:112:29
+    110|     const audits = auditCount();
+    111|     const response = await preview(csv('2026-10-07,Synthetic Company D…
+    112|     expect(response.status).toBe(200);
+       |                             ^
+    113|     expect(response.body.can_commit).toBe(true);
+    114|     expect(response.body.preview_hash).toMatch(/^[0-9a-f]{64}$/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:136:29
+    134|       ),
+    135|     );
+    136|     expect(response.status).toBe(200);
+       |                             ^
+    137|     expect(response.body.can_commit).toBe(false);
+    138|     expect(response.body.preview_hash).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4)
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:173:29
+    171|     );
+    172|     const response = await preview(text, { remove_dates: ['2026-10-21'…
+    173|     expect(response.status).toBe(200);
+       |                             ^
+    174|     const diff = response.body.diff;
+    175|     expect(diff.added).toEqual([{ date: '2026-12-24', kind: 'holiday',…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > keeps every manual date when the CSV lists none of them and nothing is marked for removal
+TypeError: Cannot read properties of undefined (reading 'removed')
+ ❯ tests/integration/holiday-import.test.ts:188:31
+    186|   it('keeps every manual date when the CSV lists none of them and noth…
+    187|     const response = await preview(csv('2026-12-24,Synthetic Eve'));
+    188|     expect(response.body.diff.removed).toEqual([]);
+       |                               ^
+    189|     expect(response.body.diff.kept).toHaveLength(9);
+    190|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ tests/integration/holiday-import.test.ts:196:38
+    194|       remove_dates: ['2026-10-31', '2026-12-25', '2026-09-07'],
+    195|     });
+    196|     expect(response.body.can_commit).toBe(false);
+       |                                      ^
+    197|     expect(response.body.removal_problems.map((item: { code: string })…
+    198|       'remove_not_found',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > ignores CSV rows before the effective date and says so
+TypeError: Cannot read properties of undefined (reading 'ignored_past')
+ ❯ tests/integration/holiday-import.test.ts:206:31
+    204|   it('ignores CSV rows before the effective date and says so', async (…
+    205|     const response = await preview(csv('2026-02-16,Renamed Past Day', …
+    206|     expect(response.body.diff.ignored_past.map((item: { date: string }…
+       |                               ^
+    207|     expect(response.body.diff.added.map((item: { date: string }) => it…
+    208|     expect(response.body.diff.renamed).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > refuses an effective date before the prospective boundary in the preview and names the earliest
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:213:29
+    211|   it('refuses an effective date before the prospective boundary in the…
+    212|     const response = await preview(csv('2026-12-24,Synthetic Eve'), { …
+    213|     expect(response.status).toBe(200);
+       |                             ^
+    214|     expect(response.body.can_commit).toBe(false);
+    215|     expect(response.body.preview_hash).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > lists the affected default-labelled draft days and the preserved explicit overrides, without identities
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:227:29
+    225|       csv('2026-10-07,Synthetic Company Day', '2026-10-08,Synthetic Sh…
+    226|     );
+    227|     expect(response.status).toBe(200);
+       |                             ^
+    228|     expect(response.body.affected_days).toEqual([
+    229|       { date: '2026-10-07', label_before: 'Worked', label_after: 'Holi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > preview > counts only draft days: a finalized period blocks the commit and is reported
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ tests/integration/holiday-import.test.ts:243:38
+    241|     t.db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHER…
+    242|     const response = await preview(csv('2026-10-07,Synthetic Company D…
+    243|     expect(response.body.can_commit).toBe(false);
+       |                                      ^
+    244|     expect(response.body.finalized_conflicts).toEqual([
+    245|       expect.objectContaining({ date: '2026-10-07', finalized_timeshee…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > creates one immutable version and one audit event from a matching preview
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:257:35
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > refuses a missing, malformed, stale or mismatched preview hash and writes nothing
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:302:28
+    300|
+    301|     const missing = await t.request('POST', COMMIT, { cookie: admin, b…
+    302|     expect(missing.status).toBe(422);
+       |                            ^
+    303|     const malformed = await t.request('POST', COMMIT, { cookie: admin,…
+    304|     expect(malformed.status).toBe(422);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > refuses an effective date before the prospective boundary
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:352:29
+    350|       body: { ...importBody(TEXT(), { effective_from: '2026-09-27' }),…
+    351|     });
+    352|     expect(response.status).toBe(422);
+       |                             ^
+    353|     expect(response.body.error.code).toBe('retroactive_change');
+    354|     expect(response.body.error.details.earliest_effective_from).toBe(B…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > refuses an effective date earlier than the latest version
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:359:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > refuses a CSV with issues or removal problems and writes nothing
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:375:24
+    373|       body: { ...importBody(csv('2026-02-30,Impossible', '2026-10-20,=…
+    374|     });
+    375|     expect(bad.status).toBe(422);
+       |                        ^
+    376|     expect(bad.body.error.code).toBe('invalid_holiday_import');
+    377|     expect(bad.body.error.details.issues.map((issue: { code: string })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > treats an identical re-commit as a no-op: no new version, no audit event
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:388:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > removes a manual date only when the commit lists it explicitly
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:426:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written
+AssertionError: expected 404 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 404
+
+ ❯ tests/integration/holiday-import.test.ts:446:29
+    444|       body: { ...importBody(TEXT()), preview_hash: previewed.body.prev…
+    445|     });
+    446|     expect(response.status).toBe(500);
+       |                             ^
+    447|     expect(versionCount()).toBe(versions);
+    448|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > keeps the classification of past dates and old finalized periods unchanged
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:472:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > preserves explicit labels and relabels default rows at read time (E-4)
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:494:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > commit > refuses a change that would alter a finalized timesheet, then accepts a later date
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:507:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty before 1 October in the reporting zone and appears from then
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/holiday-import.test.ts:522:55
+    520|   it('is empty before 1 October in the reporting zone and appears from…
+    521|     t.clock.set('2026-09-30T18:00:00Z');
+    522|     expect(await warnings(await t.login('employee'))).toEqual([]);
+       |                                                       ^
+    523|     // 05:00Z on 1 October is 22:00 on 30 September in Los Angeles: st…
+    524|     t.clock.set('2026-10-01T05:00:00Z');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty in the new year until the next 1 October
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/holiday-import.test.ts:539:55
+    537|   it('is empty in the new year until the next 1 October', async () => {
+    538|     t.clock.set('2027-01-01T20:00:00Z');
+    539|     expect(await warnings(await t.login('employee'))).toEqual([]);
+       |                                                       ^
+    540|     t.clock.set('2027-09-30T20:00:00Z');
+    541|     expect(await warnings(await t.login('employee'))).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > disappears once a committed version holds next-year dates
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ previewAndCommit tests/integration/holiday-import.test.ts:45:60
+     43| async function previewAndCommit(text: string, overrides: Record<string…
+     44|   const previewed = await preview(text, overrides);
+     45|   expect(previewed.status, JSON.stringify(previewed.body)).toBe(200);
+       |                                                            ^
+     46|   const commit = await t.request('POST', COMMIT, {
+     47|     cookie: admin,
+ ❯ tests/integration/holiday-import.test.ts:547:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > does not count a version that is not in force for next year
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ tests/integration/holiday-import.test.ts:574:39
+    572|       t.userIds.admin,
+    573|     );
+    574|     expect((await warnings(employee)).map((item: { year: number }) => …
+       |                                       ^
+    575|   });
+    576|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/37]⎯
+
+ FAIL  tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > keeps the existing calendar fields
+AssertionError: expected [ 'id', 'name', 'payroll', …(3) ] to deeply equal [ 'id', 'name', 'payroll', …(4) ]
+
+- Expected
++ Received
+
+@@ -3,7 +3,6 @@
+    "name",
+    "payroll",
+    "payroll_exceptions",
+    "reporting_zone",
+    "versions",
+-   "warnings",
+  ]
+
+ ❯ tests/integration/holiday-import.test.ts:579:42
+    577|   it('keeps the existing calendar fields', async () => {
+    578|     const calendar = (await t.request('GET', '/api/calendar', { cookie…
+    579|     expect(Object.keys(calendar).sort()).toEqual(
+       |                                          ^
+    580|       ['id', 'name', 'payroll', 'payroll_exceptions', 'reporting_zone'…
+    581|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > access control > rejects a missing Origin, unknown fields and an unknown calendar
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:80:26
+     78|     expect((await t.request('POST', PATH, { cookie: admin, body: excep…
+     79|     const extra = await t.request('POST', PATH, { cookie: admin, body:…
+     80|     expect(extra.status).toBe(422);
+       |                          ^
+     81|     const unknown = await t.request('POST', PATH, { cookie: admin, bod…
+     82|     expect(unknown.status).toBe(404);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:90:60
+     88|   it('stores the exception with its reason, audits it and shows it on …
+     89|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+     90|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+     91|     expect(response.body.payroll_exception).toMatchObject({
+     92|       calendar_id: t.calendarId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > requires a reason and validates the exception without writing
+AssertionError: missing reason: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:133:38
+    131|     for (const [label, body, status, code] of cases) {
+    132|       const response = await t.request('POST', PATH, { cookie: admin, …
+    133|       expect(response.status, label).toBe(status);
+       |                                      ^
+    134|       expect(response.body.error.code, label).toBe(code);
+    135|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > refuses a second exception for the same payroll date
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:143:94
+    141|
+    142|   it('refuses a second exception for the same payroll date', async () …
+    143|     expect((await t.request('POST', PATH, { cookie: admin, body: excep…
+       |                                                                                              ^
+    144|     const duplicate = await t.request('POST', PATH, { cookie: admin, b…
+    145|     expect(duplicate.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > uses the exception when the period row is first created later
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:153:94
+    151|   it('uses the exception when the period row is first created later', …
+    152|     expect(periodRow()).toBeUndefined();
+    153|     expect((await t.request('POST', PATH, { cookie: admin, body: excep…
+       |                                                                                              ^
+    154|     await addSession(employee, '2026-10-07');
+    155|     expect(periodRow()).toMatchObject({ payroll_date: '2026-10-15', du…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:168:60
+    166|
+    167|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+    168|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+    169|     expect(response.body.refreshed_pay_period).toBe(true);
+    170|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes the due date alone when only the deadline moves
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:204:60
+    202|       body: exceptionBody({ payroll_date: '2026-10-16', due_local_date…
+    203|     });
+    204|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+    205|     expect(periodRow()).toMatchObject({ payroll_date: '2026-10-16', du…
+    206|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when a finalized timesheet references the row and changes nothing
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:214:29
+    212|     const audits = auditCount();
+    213|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+    214|     expect(response.status).toBe(409);
+       |                             ^
+    215|     expect(response.body.error.code).toBe('period_finalized');
+    216|     expect(periodRow()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when any user’s finalized timesheet references the row, even if the others are drafts
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:226:29
+    224|     t.db.prepare('UPDATE timesheets SET finalized_revision_no = 2 WHER…
+    225|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+    226|     expect(response.status).toBe(409);
+       |                             ^
+    227|     expect(response.body.error.code).toBe('period_finalized');
+    228|     expect(exceptionRows()).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:239:60
+    237|       body: exceptionBody({ nominal_payroll_date: '2026-10-30', payrol…
+    238|     });
+    239|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+    240|     expect(response.body.refreshed_pay_period).toBe(false);
+    241|     expect(periodRow()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/37]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written
+AssertionError: expected 404 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 404
+
+ ❯ tests/integration/payroll-exceptions.test.ts:251:29
+    249|     );
+    250|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+    251|     expect(response.status).toBe(500);
+       |                             ^
+    252|     expect(periodRow()).toEqual(before);
+    253|     expect(exceptionRows()).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/37]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  37 failed | 3 passed (40)
+   Start at  01:36:50
+   Duration  7.25s (tests 89%, transform 9%, import 2%)
+
+(exit 1)

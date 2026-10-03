@@ -212,3 +212,37 @@ export const adminUserUpdateBody = z
   });
 
 export const adminUserStatusBody = z.strictObject({ reason: z.string().max(1000).optional() });
+
+/*
+ * Calendar administration (WP2-T08). The holiday CSV travels as one string field inside the
+ * 64 KB body limit; the parser enforces rows, names and dates. Dates are checked by the domain.
+ */
+const holidayImportShape = {
+  calendar_id: z.string().min(1).max(64),
+  year: z.number().int().min(2000).max(2100),
+  effective_from: z.string().max(10),
+  csv: z.string().max(50_000),
+  /** Dates to drop from the calendar; a date the CSV does not list is otherwise kept (E-4). */
+  remove_dates: z.array(z.string().max(10)).max(500).optional(),
+};
+
+export const holidayImportPreviewBody = z.strictObject(holidayImportShape);
+export type HolidayImportPreviewBody = z.infer<typeof holidayImportPreviewBody>;
+
+export const holidayImportCommitBody = z.strictObject({
+  ...holidayImportShape,
+  /** The hash returned by the matching preview. */
+  preview_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  note: z.string().max(500).optional(),
+});
+export type HolidayImportCommitBody = z.infer<typeof holidayImportCommitBody>;
+
+export const adminPayrollExceptionBody = z.strictObject({
+  calendar_id: z.string().min(1).max(64),
+  nominal_payroll_date: z.string().max(10),
+  payroll_date: z.string().max(10),
+  due_local_date: z.string().max(10).nullable().optional(),
+  due_local_time: z.string().max(5).nullable().optional(),
+  /** Required and non-blank; checked by the service for a precise error code. */
+  reason: z.string().max(1000),
+});

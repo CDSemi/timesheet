@@ -505,6 +505,10 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/admin/users',
         'POST /api/admin/users/:id/deactivate',
         'POST /api/admin/users/:id/reactivate',
+        // Company calendar administration (WP2-T08): preview writes nothing, commit needs its hash.
+        'POST /api/admin/calendar/import/commit',
+        'POST /api/admin/calendar/import/preview',
+        'POST /api/admin/payroll-exceptions',
         'POST /api/auth/login',
         'POST /api/auth/logout',
         'POST /api/clock/in',

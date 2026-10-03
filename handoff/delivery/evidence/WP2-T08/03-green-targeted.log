@@ -1,0 +1,149 @@
+$ node --version -> v24.21.0; npm exec -- vitest run tests/domain/holiday-csv.test.ts tests/integration/holiday-import.test.ts tests/integration/payroll-exceptions.test.ts tests/integration/isolation.test.ts tests/integration/ot-api.test.ts
+
+
+ RUN  v5.0.2 <project>
+
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv rows > reads date,name and the optional kind, skipping a header, blank lines, a BOM and CRLF 2ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv rows > unquotes doubled quotes and trims cells 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv rows > accepts a lone CR as a line break outside quotes 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv rows > reports nothing for an empty or header-only text 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags invalid dates without throwing 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags a duplicate date at its second occurrence and keeps the first row 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags empty names, including whitespace and a missing column 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags rows outside the import year 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags an unknown kind and wrong column counts 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags control characters and over-long names 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > flags an unterminated quote and keeps reading nothing after it 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv validation > stops after the row limit with one issue 5ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a name starting with equals 1ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a name starting with plus 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a name starting with minus 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a name starting with at 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a name starting with tab 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a quoted name starting with a CR 1ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > rejects a formula in the date and kind cells and never copies it into a row 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > allows a leading operator after the first character 0ms
+ ✓ tests/domain/holiday-csv.test.ts > parseHolidayCsv formula-leading cells (spreadsheet injection) > truncates echoed values in issues 0ms
+ ✓ tests/domain/holiday-csv.test.ts > diffHolidayDates > adds, renames and changes kinds, and keeps base dates the CSV does not list 1ms
+ ✓ tests/domain/holiday-csv.test.ts > diffHolidayDates > removes a date only when it is listed explicitly 0ms
+ ✓ tests/domain/holiday-csv.test.ts > diffHolidayDates > reports removal problems without applying them 0ms
+ ✓ tests/domain/holiday-csv.test.ts > diffHolidayDates > ignores CSV dates before the effective date so past classification cannot move 1ms
+ ✓ tests/domain/holiday-csv.test.ts > diffHolidayDates > is identical for the same input in any CSV order 0ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/preview, changing nothing 273ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > starts at zero 274ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > answers 401 without a session and 403 to an employee, changing nothing 278ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > hides another user’s session from direct reads, updates and deletes — also for admins 288ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/commit, changing nothing 240ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > rejects a missing Origin, unknown fields and an unknown calendar 238ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > keeps posted, provisional (E-6), reserved and available apart 249ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps timesheet and day views per user 238ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar 236ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read 234ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > raises the negative flag for a truthful correction below zero (LG-08) 232ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > validates overlap per user, so another user’s times neither block nor leak 232ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > requires a reason and validates the exception without writing 240ms
+ ✓ tests/integration/holiday-import.test.ts > preview > writes nothing: no version, no audit event, no employee row 243ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > rejects client-supplied owner fields instead of trusting them 237ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > requires a session 230ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash 257ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > refuses a second exception for the same payroll date 260ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > lists only the caller’s entries in posting order, with the balance 263ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps day entries private per user 263ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > ignores a client-supplied owner parameter 276ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > uses the exception when the period row is first created later 294ms
+ ✓ tests/integration/holiday-import.test.ts > preview > diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4) 294ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps policy versions per user 288ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the permission and reserves 1:1 minutes (201), then lists it 310ms
+ ✓ tests/integration/holiday-import.test.ts > preview > keeps every manual date when the CSV lists none of them and nothing is marked for removal 297ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period 310ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > never lets one user clock out another user’s running session 310ms
+ ✓ tests/integration/holiday-import.test.ts > preview > flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit 248ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > is idempotent per request key (200 duplicate) and refuses a changed payload (409) 251ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes the due date alone when only the deadline moves 256ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > attributes audit events to the acting owner 253ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > rejects insufficient balance with 409 and creates nothing (E-5) 256ms
+ ✓ tests/integration/holiday-import.test.ts > preview > ignores CSV rows before the effective date and says so 257ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when a finalized timesheet references the row and changes nothing 266ms
+ ✓ tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > answers 404 to an admin swapping the identifier of an employee leave request 271ms
+ ✓ tests/integration/holiday-import.test.ts > preview > refuses an effective date before the prospective boundary in the preview and names the earliest 260ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > needs the recorded permission and rejects owner or unknown fields 264ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when any user’s finalized timesheet references the row, even if the others are drafts 258ms
+ ✓ tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > answers 404 to an employee swapping the identifier of an admin leave request 274ms
+ ✓ tests/integration/holiday-import.test.ts > preview > lists the affected default-labelled draft days and the preserved explicit overrides, without identities 260ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the session user as both actor and owner 259ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period 259ms
+ ✓ tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > keeps summary, ledger, leave list, evidence export and history private per user 269ms
+stderr | tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written
+Unhandled request error SqliteError: forced_audit_failure
+    at recordAudit (<project>/src/server/services/audit.ts:22:5)
+    at sqliteTransaction.<anonymous> (<project>/src/server/services/calendars.ts:333:7)
+    at sqliteTransaction (D:\Dropbox\Work.CDSemi\timesheet\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at createPayrollException (<project>/src/server/services/calendars.ts:345:6)
+    at <project>/src/server/routes/admin.ts:156:20
+    at dispatch (file:///<project>/node_modules/hono/dist/compose.js:35:11)
+    at <project>/src/server/http/auth.ts:28:7
+    at <project>/src/server/http/auth.ts:14:5
+    at <project>/src/server/http/auth.ts:26:5
+    at dispatch (file:///<project>/node_modules/hono/dist/compose.js:35:11) {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written 262ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > posts a partial linked debit and keeps the remainder reserved 250ms
+ ✓ tests/integration/holiday-import.test.ts > preview > counts only draft days: a finalized period blocks the commit and is reported 255ms
+ ✓ tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > exposes exactly the reviewed account and company-calendar routes 250ms
+ ✓ tests/integration/holiday-import.test.ts > commit > creates one immutable version and one audit event from a matching preview 235ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > refuses stale versions, over-use and use before the leave date 237ms
+ ✓ tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > has an admin router source that reaches only account services and tables 232ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a missing, malformed, stale or mismatched preview hash and writes nothing 233ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel releases the unused reservation and retries are unchanged 233ms
+ ✓ tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > answers 404 to an admin probing for another user’s private data under /api/admin 236ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel with a stale version is refused while minutes are still reserved 230ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date before the prospective boundary 230ms
+ ✓ tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > keeps the user list free of employee sessions, leave and history content 229ms
+ ✓ tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > still answers 404 to an admin swapping identifiers after administering the employee account 233ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date earlier than the latest version 226ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > reverse gives used minutes back with a reason and a linked positive delta 227ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a CSV with issues or removal problems and writes nothing 222ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > returns 404 for another user’s request on consume, cancel and reverse, also for admins 223ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > shows an admin only the admin’s own summary, ledger and requests 214ms
+ ✓ tests/integration/holiday-import.test.ts > commit > treats an identical re-commit as a no-op: no new version, no audit event 217ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies 214ms
+ ✓ tests/integration/holiday-import.test.ts > commit > removes a manual date only when the commit lists it explicitly 214ms
+stderr | tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written
+Unhandled request error SqliteError: forced_audit_failure
+    at recordAudit (<project>/src/server/services/audit.ts:22:5)
+    at sqliteTransaction.<anonymous> (<project>/src/server/services/calendars.ts:193:7)
+    at sqliteTransaction (D:\Dropbox\Work.CDSemi\timesheet\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at createCalendarVersion (<project>/src/server/services/calendars.ts:204:6)
+    at sqliteTransaction.<anonymous> (<project>/src/server/services/holidayImport.ts:311:23)
+    at sqliteTransaction (D:\Dropbox\Work.CDSemi\timesheet\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at commitHolidayImport (<project>/src/server/services/holidayImport.ts:337:6)
+    at <project>/src/server/routes/admin.ts:131:20
+    at dispatch (file:///<project>/node_modules/hono/dist/compose.js:35:11)
+    at <project>/src/server/http/auth.ts:28:7 {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies 214ms
+ ✓ tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written 214ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies 217ms
+ ✓ tests/integration/holiday-import.test.ts > commit > keeps the classification of past dates and old finalized periods unchanged 237ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies 212ms
+ ✓ tests/integration/holiday-import.test.ts > commit > preserves explicit labels and relabels default rows at read time (E-4) 220ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > exposes exactly the reviewed OT, history and evidence routes 220ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a change that would alter a finalized timesheet, then accepts a later date 220ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting 214ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > never imports a ledger posting function into an HTTP router 228ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty before 1 October in the reporting zone and appears from then 409ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty in the new year until the next 1 October 354ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > disappears once a committed version holds next-year dates 263ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > does not count a version that is not in force for next year 205ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > keeps the existing calendar fields 212ms
+
+ Test Files  5 passed (5)
+      Tests  107 passed (107)
+   Start at  01:44:17
+   Duration  7.76s (tests 89%, transform 9%, import 3%)
+
+(exit 0)

@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t07-freeze",
+  "phase": "wp2-t08-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5",
+  "current_source_digest": "95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T07-FREEZE",
+  "next_task_id": "WP2-T08-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -73,7 +73,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "197053699d9b5c125fa0c3e8ccb8acf0f421011f",
+    "last_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
     "unpushed": []
   },
   "owner_decisions": [
@@ -2331,9 +2331,114 @@
       "id": "WP2-T07-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-T07"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5e867bd112220174",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T07-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T07-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T07-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T07-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T07-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-T07-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "197053699d9b5c125fa0c3e8ccb8acf0f421011f",
+      "branch": "main",
+      "commit_sha": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 23 paths (exact expected set); precommit, diff-check, JSON parse, validator and check_recovery (82) exit 0; no literal passwords (test passwords generated per run).",
+      "next_action": "None; WP2-T08 runs on a0f06f5."
+    },
+    {
+      "id": "WP2-T08",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP2-T07-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "afa0524a5750c2324",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/domain/holidayCsv.ts",
+        "src/server/services/holidayImport.ts",
+        "src/server/services/calendars.ts",
+        "src/server/services/periods.ts",
+        "src/server/routes/admin.ts",
+        "src/server/routes/api.ts",
+        "src/server/http/schemas.ts",
+        "tests/domain/holiday-csv.test.ts",
+        "tests/integration/holiday-import.test.ts",
+        "tests/integration/payroll-exceptions.test.ts",
+        "tests/integration/ot-api.test.ts",
+        "tests/integration/isolation.test.ts",
+        "handoff/delivery/tasks/WP2-T08.md",
+        "handoff/delivery/evidence/WP2-T08"
+      ],
+      "deviations": [
+        "tests/integration/isolation.test.ts: three new admin routes added to its exact route inventory (accepted; path added to owned_paths after the fact).",
+        "createPayrollException lives in calendars.ts because the isolation test forbids admin.ts importing a module named periods (accepted)."
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T08.md",
+      "report": "handoff/delivery/tasks/WP2-T08.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T08/01-red-domain.log",
+        "handoff/delivery/evidence/WP2-T08/02-red-integration.log",
+        "handoff/delivery/evidence/WP2-T08/03-green-targeted.log",
+        "handoff/delivery/evidence/WP2-T08/04-mutation-checks.log",
+        "handoff/delivery/evidence/WP2-T08/05-verify.log",
+        "handoff/delivery/evidence/WP2-T08/06-digest.log",
+        "handoff/delivery/evidence/WP2-T08/calendar-reassignment-probe.test.ts.txt",
+        "handoff/delivery/evidence/WP2-T08/calendar-reassignment-probe-output.json.txt"
+      ],
+      "baseline_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
+      "source_digest": "95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). Pure holiday-CSV parser and merge diff. Admin preview/commit merges into the latest version (only remove_dates removes; manual dates kept, E-4); past rows are ignored; preview_hash covers the resulting version. Commit refusals: 422 invalid/retroactive/before latest, 409 finalized_period_affected or stale_preview; then one immutable version and one audit event, or a no-op. Payroll exceptions (E-10) with reason refresh an unfinalized pay_periods row in one transaction, 409 period_finalized otherwise. E-12 warnings tested with a fixed clock. Red 37/40, then 107 green; 11 mutations caught; verify 514 tests. Finding: T07 calendar reassignment regroups draft periods, orphans timesheets and hides finalized state (fix: WP2-CALFIX). Notes for AUDIT-B: commit refusals precede the hash comparison; a calendar without a version is refused. Not independent acceptance.",
+      "next_action": "None; WP2-T08-FREEZE, then WP2-CALFIX."
+    },
+    {
+      "id": "WP2-T08-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T08"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -2351,13 +2456,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-T07-FREEZE.md",
-        "handoff/delivery/evidence/WP2-T07-FREEZE"
+        "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T08-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T07-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP2-T07-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "197053699d9b5c125fa0c3e8ccb8acf0f421011f",
+      "baseline_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -2365,22 +2470,23 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the T07 set with the T08 brief; on a permission denial stop without retrying."
+      "next_action": "Commit and push the T08 set with the CALFIX brief; on a permission denial stop without retrying."
     },
     {
-      "id": "WP2-T08",
+      "id": "WP2-CALFIX",
       "package": "WP2",
-      "kind": "implement",
+      "kind": "fix",
       "status": "pending",
+      "addresses_finding": "WP2-T08 calendar reassignment finding (defect in WP2-T07 code)",
       "depends_on": [
-        "WP2-T07-FREEZE"
+        "WP2-T08-FREEZE"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "sonnet",
       "requested_effort": "high",
       "model_override_reason": null,
       "routing": {
-        "size": "M",
+        "size": "S",
         "risk": "H",
         "novelty": false
       },
@@ -2391,29 +2497,23 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/domain/holidayCsv.ts",
-        "src/server/services/holidayImport.ts",
-        "src/server/services/calendars.ts",
-        "src/server/services/periods.ts",
+        "src/server/services/users.ts",
         "src/server/routes/admin.ts",
-        "src/server/routes/api.ts",
-        "src/server/http/schemas.ts",
-        "tests/domain/holiday-csv.test.ts",
-        "tests/integration/holiday-import.test.ts",
-        "tests/integration/payroll-exceptions.test.ts",
-        "tests/integration/ot-api.test.ts",
-        "handoff/delivery/tasks/WP2-T08.md",
-        "handoff/delivery/evidence/WP2-T08"
+        "tests/integration/user-admin.test.ts",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "handoff/delivery/tasks/WP2-CALFIX.md",
+        "handoff/delivery/evidence/WP2-CALFIX"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T08.md",
-      "report": "handoff/delivery/tasks/WP2-T08.md",
+      "prompt": "handoff/delivery/tasks/WP2-CALFIX.md",
+      "report": "handoff/delivery/tasks/WP2-CALFIX.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Calendar administration: holiday CSV preview/commit (E-4), payroll exceptions (E-10), next-year warning (E-12); red-first; verify."
+      "next_action": "Refuse calendar reassignment (409 calendar_in_use) while the user has data, after the rule-8 guard on canonical texts; record the decision in docs/10 and one canonical sentence (+vi); red-first; verify."
     },
     {
       "id": "WP2-INFRA1",

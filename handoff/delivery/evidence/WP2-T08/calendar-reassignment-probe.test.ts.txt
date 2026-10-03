@@ -1,0 +1,158 @@
+import { writeFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, it } from 'vitest';
+import { createCalendar, createCalendarVersion } from '../../src/server/services/calendars.ts';
+import { createTestContext, la, type TestContext } from '../support/testApp.ts';
+
+/*
+ * REPORT-ONLY PROBE (WP2-T08): does an admin PATCH of a user's calendar_id regroup or relabel the
+ * user's draft days, change the saved reporting zone of existing timesheets, or hide a finalized
+ * timesheet? It prints observations as JSON; it asserts nothing about desired behaviour.
+ */
+
+let t: TestContext;
+
+beforeEach(async () => {
+  t = await createTestContext('2026-10-09T20:00:00Z');
+});
+afterEach(() => t.close());
+
+describe('probe: PATCH /api/admin/users/:id calendar_id', () => {
+  it('prints what changes for the user', async () => {
+    const admin = await t.login('admin');
+    const employee = await t.login('employee');
+    // Calendar B: another reporting zone, payroll shifted by three days, a holiday on 2026-10-07.
+    const calendarB = createCalendar(
+      t.db,
+      t.clock,
+      {
+        name: 'Synthetic calendar B',
+        schedule: {
+          reportingZone: 'Asia/Ho_Chi_Minh',
+          anchorPayrollDate: '2026-10-05',
+          cycleDays: 14,
+          periodStartOffsetDays: -18,
+          periodEndOffsetDays: -5,
+          dueOffsetDays: -3,
+          dueLocalTime: '17:00',
+        },
+      },
+      null,
+    );
+    createCalendarVersion(
+      t.db,
+      t.clock,
+      {
+        calendarId: calendarB,
+        effectiveFrom: '2026-01-01',
+        weekdays: [1, 2, 3, 4, 5],
+        dates: [{ date: '2026-10-07', kind: 'holiday', name: 'Synthetic calendar B holiday' }],
+      },
+      null,
+    );
+
+    const post = (date: string, extra: Record<string, unknown> = {}) =>
+      t.request('POST', `/api/days/${date}/sessions`, {
+        cookie: employee,
+        body: { start: la(`${date}T09:00`), end: la(`${date}T17:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true, ...extra },
+      });
+    await post('2026-10-07'); // default-labelled entry in the current draft period
+    await t.request('PUT', '/api/days/2026-10-08', {
+      cookie: employee,
+      body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: '' },
+    });
+    await post('2026-09-21', { reason: 'Synthetic backfill for the probe' });
+
+    const snapshot = async (label: string, payrollDate: string) => {
+      const sheet = await t.request('GET', `/api/timesheets/${payrollDate}`, { cookie: employee });
+      const calendar = await t.request('GET', '/api/calendar', { cookie: employee });
+      const current = await t.request('GET', '/api/periods/current', { cookie: employee });
+      const day = await t.request('GET', '/api/days/2026-10-07', { cookie: employee });
+      const day2 = await t.request('GET', '/api/days/2026-10-08', { cookie: employee });
+      return {
+        label,
+        calendar_id: calendar.body.id,
+        reporting_zone: calendar.body.reporting_zone,
+        today_local: current.body.today_local,
+        current_payroll: current.body.current?.payroll_date,
+        sheet_status: sheet.status,
+        sheet_error: sheet.status === 200 ? null : sheet.body.error?.code,
+        sheet_period: sheet.body.period && {
+          payroll_date: sheet.body.period.payroll_date,
+          start: sheet.body.period.period_start,
+          end: sheet.body.period.period_end,
+          relation: sheet.body.period.relation,
+        },
+        timesheet: sheet.body.timesheet,
+        day_1007: day.body.classification && {
+          category: day.body.category,
+          source: day.body.category_source,
+          class: day.body.classification.day_class,
+          reason: day.body.classification.reason,
+          sessions: day.body.sessions.length,
+          credited: day.body.calculation?.credited_minutes,
+        },
+        day_1008: { category: day2.body.category, source: day2.body.category_source },
+      };
+    };
+
+    const before = await snapshot('before: calendar A', '2026-10-16');
+    const rowsBefore = {
+      timesheets: t.db.prepare('SELECT t.id, p.calendar_id, p.period_start, p.payroll_date FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id WHERE t.user_id = ?').all(t.userIds.employee),
+      sessions: t.db.prepare('SELECT work_date, start_utc, input_zone FROM work_sessions WHERE user_id = ? ORDER BY work_date').all(t.userIds.employee),
+      entries: t.db.prepare('SELECT work_date, category, category_source, timesheet_id FROM day_entries WHERE user_id = ? ORDER BY work_date').all(t.userIds.employee),
+    };
+    // Finalize the old period 2026-09-14…09-27 (payroll 2026-10-02) to see whether it stays finalized.
+    t.db
+      .prepare("UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ? AND pay_period_id IN (SELECT id FROM pay_periods WHERE period_start = '2026-09-14')")
+      .run(t.userIds.employee);
+    const finalizedBefore = await t.request('GET', '/api/timesheets/2026-10-02', { cookie: employee });
+
+    const patched = await t.request('PATCH', `/api/admin/users/${t.userIds.employee}`, {
+      cookie: admin,
+      body: { calendar_id: calendarB },
+    });
+    const after = await snapshot('after: calendar B (same session cookie)', '2026-10-16');
+    const afterRegrouped = await snapshot('after: calendar B, payroll 2026-10-19', '2026-10-19');
+    const finalizedAfter = await t.request('GET', '/api/timesheets/2026-10-02', { cookie: employee });
+    const finalizedAfterB = await t.request('GET', '/api/timesheets/2026-10-05', { cookie: employee });
+    const rowsAfter = {
+      timesheets: t.db.prepare('SELECT t.id, p.calendar_id, p.period_start, p.payroll_date, t.finalized_revision_no FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id WHERE t.user_id = ?').all(t.userIds.employee),
+      sessions: t.db.prepare('SELECT work_date, start_utc, input_zone FROM work_sessions WHERE user_id = ? ORDER BY work_date').all(t.userIds.employee),
+      entries: t.db.prepare('SELECT work_date, category, category_source, timesheet_id FROM day_entries WHERE user_id = ? ORDER BY work_date').all(t.userIds.employee),
+    };
+    const oldSheetEdit = await t.request('PUT', '/api/days/2026-09-22', {
+      cookie: employee,
+      body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: 'probe edit without reason in an old, previously finalized period' },
+    });
+
+    writeFileSync(process.env.PROBE_OUT ?? 'probe.json',
+      JSON.stringify(
+        {
+          patch_status: patched.status,
+          before,
+          after,
+          afterRegrouped,
+          finalized_old_period: {
+            before_reassignment: { status: finalizedBefore.status, timesheet: finalizedBefore.body.timesheet, reason_required: finalizedBefore.body.reason_required },
+            after_reassignment_calendar_a_date: { status: finalizedAfter.status, error: finalizedAfter.body.error?.code ?? null },
+            after_reassignment_calendar_b_payroll_2026_10_05: {
+              status: finalizedAfterB.status,
+              period: finalizedAfterB.body.period && {
+                start: finalizedAfterB.body.period.period_start,
+                end: finalizedAfterB.body.period.period_end,
+                relation: finalizedAfterB.body.period.relation,
+              },
+              timesheet: finalizedAfterB.body.timesheet,
+              reason_required: finalizedAfterB.body.reason_required,
+            },
+            edit_2026_09_22_without_reason_after_reassignment: { status: oldSheetEdit.status, code: oldSheetEdit.body.error?.code ?? 'accepted' },
+          },
+          stored_rows_before: rowsBefore,
+          stored_rows_after: rowsAfter,
+        },
+        null,
+        2,
+      ),
+    );
+  });
+});

@@ -7,14 +7,14 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 197053699d9b5c125fa0c3e8ccb8acf0f421011f, commit đóng băng
-    WP2-T06.
-  - Digest mã nguồn 155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a
+  - HEAD = origin/main = a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6, commit đóng băng
+    WP2-T07.
+  - Digest mã nguồn 705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5
     (tác giả tự báo).
-  - Chưa commit: WP2-T07 (digest mã nguồn
-    705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5, tác giả tự báo),
-    bằng chứng của T06-FREEZE, brief T08, board và checkpoint này. WP2-T07-FREEZE sẽ commit
-    chúng.
+  - Chưa commit: WP2-T08 (digest mã nguồn
+    95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061, tác giả tự báo),
+    bằng chứng của T07-FREEZE, brief CALFIX, board và checkpoint này. WP2-T08-FREEZE sẽ
+    commit chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -45,7 +45,14 @@ America/Los_Angeles).
 - WP2-T06 (xem trước chính sách cá nhân) đã xong: tác giả tự báo verify 414 test.
   Committer đã đóng băng ở 1970536 mà không bị bộ phân loại chặn.
 - WP2-T07 (quản trị người dùng) đã xong: tác giả tự báo verify 448 test, 5 mutation đều bị
-  test phát hiện. Đang chạy WP2-T07-FREEZE (committer).
+  test phát hiện. Committer đã đóng băng ở a0f06f5.
+- WP2-T08 (quản trị lịch) đã xong: tác giả tự báo verify 514 test, 11 mutation đều bị test
+  phát hiện. Đang chạy WP2-T08-FREEZE (committer).
+  - Phát hiện: việc admin đổi `calendar_id` (WP2-T07) làm gom lại kỳ nháp của người dùng,
+    làm các bảng giờ hiện có bị mồ côi và che mất trạng thái đã chốt.
+  - WP2-CALFIX sẽ từ chối việc đổi lịch khi người dùng đã có dữ liệu. Đây là quyết định
+    của coordinator, chủ dự án có thể đảo lại; đổi lịch theo hướng chỉ áp dụng về sau là
+    phương án để chủ dự án chọn sau.
 - WP2-T05-FREEZE đã xong (hai commit của chủ dự án, e768b71 và a8a5890). Diễn biến của
   commit đóng băng:
   - Attempt 1 bị chặn. Bộ phân loại quyền của auto mode từ chối lệnh stage/kiểm tra với
@@ -75,7 +82,8 @@ America/Los_Angeles).
     - digest khớp;
     - validator và check_recovery exit 0.
 - Còn lại:
-  - WP2-T08..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
+  - WP2-CALFIX, rồi WP2-T09..T13, mỗi task kèm commit đóng băng
+    ([plan](tasks/WP2-PLAN.md)).
   - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
     trình duyệt.
   - Hai audit bằng opus mới:
@@ -95,9 +103,12 @@ America/Los_Angeles).
     bỏ các số tạm tính.
   - WP2-T06 tạo một vòng import ở mức hàm giữa policies.ts và timesheets.ts. AUDIT-B nên
     đánh giá điểm này.
-  - WP2-T07: admin PATCH `calendar_id` sẽ đổi lịch báo cáo và múi giờ ngày nghỉ của người
-    dùng từ các kỳ sau. WP2-T08 báo cáo việc này có gom lại kỳ nháp hiện tại hay không
-    (rule 7, R-07). AUDIT-B cũng kiểm tra.
+  - Đổi lịch của người dùng ở WP2-T07: WP2-T08 đã xác nhận là có lỗi, WP2-CALFIX sẽ
+    sửa. AUDIT-B kiểm tra lại.
+  - Ghi chú thiết kế của WP2-T08 cho AUDIT-B:
+    - các bước từ chối khi lưu chạy trước bước so hash, nên một yêu cầu giống hệt gửi lại
+      sau khi mốc đã dời sẽ nhận `retroactive_change`;
+    - lịch chưa có phiên bản nào sẽ bị từ chối.
   - Backlog quản trị vẫn để gộp vào một đợt GOV sau: R1 (check_recovery thừa hưởng trạng
     thái thật; sửa trước software_ready), R2 (mục 2 của AGENTS.vi), giới hạn của
     precommit và ADV-A-05.
@@ -106,7 +117,7 @@ America/Los_Angeles).
     billing, cài đặt toàn cục hay cài đặt quyền.
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
-- Bước tiếp: ghi kết quả WP2-T07-FREEZE, rồi giao WP2-T08 (brief sẵn).
+- Bước tiếp: ghi kết quả WP2-T08-FREEZE, rồi giao WP2-CALFIX (brief sẵn).
   - Committer chạy quy trình bình thường một lần.
   - Nếu bộ phân loại chặn, coordinator dừng và xin chủ dự án một tin nhắn duyệt nêu rõ
     hành động và rủi ro, hoặc một commit tay. Khi đó Commit description trong chat sẽ
@@ -117,7 +128,7 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T07-FREEZE (committer). WP2-T08 chờ task này.
+- Đang chạy: WP2-T08-FREEZE (committer). WP2-CALFIX chờ task này.
 - Process còn sống: không biết có process nào ngoài committer. Các worker và committer
   trước đều báo không còn process nào.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.

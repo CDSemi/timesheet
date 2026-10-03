@@ -16,6 +16,7 @@ import {
   sessionUpdateBody,
 } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
+import { calendarWarnings } from '../services/calendars.ts';
 import { commitDayBatch, previewDayBatch } from '../services/dayEntries.ts';
 import { periodJson } from '../services/periods.ts';
 import {
@@ -83,6 +84,8 @@ export function apiRoutes(deps: AppDeps) {
         due_local_date: item.dueLocalDate ?? null,
         due_local_time: item.dueLocalTime ?? null,
       })),
+      // E-12: from 1 October, a warning while next year's company calendar dates are missing.
+      warnings: calendarWarnings(deps.clock, s, scope.calendarVersions),
     });
   });
 

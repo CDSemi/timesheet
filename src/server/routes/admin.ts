@@ -1,8 +1,17 @@
 import { Hono } from 'hono';
 import { requireAdmin } from '../http/auth.ts';
 import { notFound } from '../http/errors.ts';
-import { adminUserCreateBody, adminUserStatusBody, adminUserUpdateBody } from '../http/schemas.ts';
+import {
+  adminPayrollExceptionBody,
+  adminUserCreateBody,
+  adminUserStatusBody,
+  adminUserUpdateBody,
+  holidayImportCommitBody,
+  holidayImportPreviewBody,
+} from '../http/schemas.ts';
 import { normalizeReason, readJson } from '../http/validation.ts';
+import { createPayrollException } from '../services/calendars.ts';
+import { calendarVersionJson, commitHolidayImport, previewHolidayImport } from '../services/holidayImport.ts';
 import {
   createUser,
   deactivateUser,
@@ -35,6 +44,10 @@ function accountJson(account: UserAccount) {
  * private data; a future manager role needs explicit assignment). The admin-set temporary
  * password (E-11) is hashed on creation and is never returned, logged or audited. There is
  * no password reset route: FR-01 and E-11 do not require one.
+ *
+ * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
+ * holiday CSV preview/commit and payroll exceptions return dates, names and aggregate counts
+ * only, never a user's rows.
  */
 export function adminRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -96,6 +109,64 @@ export function adminRoutes(deps: AppDeps) {
       reason: normalizeReason(body.reason),
     });
     return c.json({ user: accountJson(account) });
+  });
+
+  // Holiday CSV: preview writes nothing; commit needs the preview hash (E-4, AC-05, R-07).
+  app.post('/calendar/import/preview', async (c) => {
+    const body = await readJson(c, holidayImportPreviewBody);
+    return c.json(
+      previewHolidayImport(deps.db, deps.clock, {
+        calendarId: body.calendar_id,
+        year: body.year,
+        effectiveFrom: body.effective_from,
+        csv: body.csv,
+        removeDates: body.remove_dates ?? [],
+      }),
+    );
+  });
+
+  app.post('/calendar/import/commit', async (c) => {
+    const actor = c.get('user');
+    const body = await readJson(c, holidayImportCommitBody);
+    const result = commitHolidayImport(
+      deps.db,
+      deps.clock,
+      {
+        calendarId: body.calendar_id,
+        year: body.year,
+        effectiveFrom: body.effective_from,
+        csv: body.csv,
+        removeDates: body.remove_dates ?? [],
+        previewHash: body.preview_hash,
+        note: normalizeReason(body.note),
+      },
+      actor.id,
+    );
+    // An identical re-commit is a no-op: 200, nothing written.
+    return c.json(
+      { committed: result.committed, unchanged: !result.committed, version: calendarVersionJson(result.version), preview_hash: result.previewHash },
+      result.committed ? 201 : 200,
+    );
+  });
+
+  // Payroll exception with a required reason; refreshes an unfinalized stored period (E-10).
+  app.post('/payroll-exceptions', async (c) => {
+    const actor = c.get('user');
+    const body = await readJson(c, adminPayrollExceptionBody);
+    const result = createPayrollException(
+      deps.db,
+      deps.clock,
+      {
+        calendarId: body.calendar_id,
+        nominalPayrollDate: body.nominal_payroll_date,
+        payrollDate: body.payroll_date,
+        dueLocalDate: body.due_local_date ?? null,
+        dueLocalTime: body.due_local_time ?? null,
+        reason: body.reason,
+      },
+      actor.id,
+    );
+    return c.json({ payroll_exception: result.exception, refreshed_pay_period: result.refreshedPayPeriod }, 201);
   });
 
   return app;

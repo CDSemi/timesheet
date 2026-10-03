@@ -7,13 +7,13 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 197053699d9b5c125fa0c3e8ccb8acf0f421011f, the WP2-T06 freeze.
-  - Source digest 155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a
+  - HEAD = origin/main = a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6, the WP2-T07 freeze.
+  - Source digest 705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5
     (author-reported).
-  - Uncommitted: WP2-T07 (source digest
-    705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5, author-reported),
-    the T06-FREEZE evidence, the T08 brief, the board and this checkpoint. WP2-T07-FREEZE
-    commits them.
+  - Uncommitted: WP2-T08 (source digest
+    95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061, author-reported),
+    the T07-FREEZE evidence, the CALFIX brief, the board and this checkpoint.
+    WP2-T08-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -40,7 +40,13 @@ America/Los_Angeles).
 - WP2-T06 (personal policy preview) is done: author-reported verify 414 tests. Frozen in
   1970536 by the committer, with no classifier denial.
 - WP2-T07 (user administration) is done: author-reported verify 448 tests and 5 mutations
-  caught. WP2-T07-FREEZE (committer) is in progress.
+  caught. Frozen in a0f06f5 by the committer.
+- WP2-T08 (calendar administration) is done: author-reported verify 514 tests and 11
+  mutations caught. WP2-T08-FREEZE (committer) is in progress.
+  - Finding: WP2-T07's admin `calendar_id` change regroups the user's draft period,
+    orphans existing timesheets and hides finalized state.
+  - WP2-CALFIX refuses the change while the user has data. This is a coordinator decision,
+    reversible by the owner; a prospective reassignment is an owner option for later.
 - WP2-T05-FREEZE is done (two owner commits, e768b71 and a8a5890). Freeze history:
   - Attempt 1 is blocked. The auto-mode permission classifier denied the staging/check
     command as "Credential Leakage". Nothing executed and nothing was committed.
@@ -71,7 +77,7 @@ America/Los_Angeles).
     - the digest matches;
     - the validator and check_recovery exit 0.
 - Remaining:
-  - WP2-T08..T13 with their freezes ([plan](tasks/WP2-PLAN.md)).
+  - WP2-CALFIX, then WP2-T09..T13, each with its freeze ([plan](tasks/WP2-PLAN.md)).
   - The package-final gate: clean export, WP1→WP2 upgrade, 20 concurrency runs and the
     browser flows.
   - Two fresh opus audits:
@@ -91,9 +97,12 @@ America/Los_Angeles).
     finalization must drop the provisional figures.
   - WP2-T06 added a function-level import cycle between policies.ts and timesheets.ts.
     AUDIT-B should judge it.
-  - WP2-T07: an admin PATCH of `calendar_id` changes the user's future reporting calendar
-    and leave-date zone. WP2-T08 reports whether it regroups the current draft period
-    (rule 7, R-07). AUDIT-B checks it as well.
+  - WP2-T07 calendar reassignment: confirmed defective by WP2-T08 and fixed by
+    WP2-CALFIX. AUDIT-B rechecks it.
+  - WP2-T08 design notes for AUDIT-B:
+    - commit refusals precede the hash comparison, so a retried identical request after
+      the boundary moves gets `retroactive_change`;
+    - a calendar without a version is refused.
   - The governance backlog stays batched for one later GOV cycle: R1 (check_recovery
     inherits the live status; fix before software_ready), R2 (AGENTS.vi item 2),
     precommit limits and ADV-A-05.
@@ -102,7 +111,7 @@ America/Los_Angeles).
     billing, global settings or permission settings.
   - Commits go only through timesheet-committer, on main until the first release. No
     amend, force-push or tags.
-- Next action: record the WP2-T07-FREEZE result, then dispatch WP2-T08 (brief ready).
+- Next action: record the WP2-T08-FREEZE result, then dispatch WP2-CALFIX (brief ready).
   - The committer runs the normal procedure once.
   - If the classifier denies it, the coordinator stops and asks the owner for an
     approval message that names the action and its danger, or for a manual commit. The
@@ -113,7 +122,7 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T07-FREEZE (committer). WP2-T08 is pending on it.
+- Running: WP2-T08-FREEZE (committer). WP2-CALFIX is pending on it.
 - Live processes: none known besides the committer. The earlier workers and committers
   reported none left.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
