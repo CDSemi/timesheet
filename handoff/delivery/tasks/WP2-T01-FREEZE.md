@@ -55,4 +55,7 @@ handoff/delivery/evidence/WP2-T01-FREEZE/. Return at most 200 words.
 
 ## Results
 
-(Committer appends here.)
+- Pre HEAD f32978fcc7dec9429f0aa544c4ee4ee26c14f798; post HEAD 396b399b2d58ccc7ea90dc78be9e7c2f9a832be2.
+- Commit 396b399; pushed to origin main; remote SHA 396b399b2d58ccc7ea90dc78be9e7c2f9a832be2.
+- Staged 30 files; masked files none; checks (Node v24.21.0) precommit 0, diff-check 0, JSON 0, validator 0.
+- Blockers none.

@@ -144,7 +144,7 @@ describe('calculations through the API', () => {
     });
     expect(response.body.day.calculation.regular_minutes).toBe(420);
     expect(response.body.day.deficit_minutes).toBe(60);
-    expect(t.db.prepare("SELECT name FROM sqlite_master WHERE name LIKE '%ledger%'").all()).toEqual([]);
+    expect(t.db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
   });
 });
 

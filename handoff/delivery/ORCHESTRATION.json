@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t01-freeze",
+  "phase": "wp2-t02-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T01-FREEZE",
+  "next_task_id": "WP2-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -50,7 +50,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "f32978fcc7dec9429f0aa544c4ee4ee26c14f798",
+    "last_commit": "396b399b2d58ccc7ea90dc78be9e7c2f9a832be2",
     "unpushed": []
   },
   "owner_decisions": [
@@ -1339,9 +1339,109 @@
       "id": "WP2-T01-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2d4a024824e63167",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T01-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T01-FREEZE/node-version.txt",
+        "handoff/delivery/evidence/WP2-T01-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-T01-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "f32978fcc7dec9429f0aa544c4ee4ee26c14f798",
+      "branch": "main",
+      "commit_sha": "396b399b2d58ccc7ea90dc78be9e7c2f9a832be2",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 30 files; Node v24.21.0; precommit, diff-check, JSON parse and validator exit 0; staged diff clean.",
+      "next_action": "None; WP2-T02 next."
+    },
+    {
+      "id": "WP2-T02",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP2-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ac8dc499fe285f6f8",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/db/migrations/0002_ot_ledger.ts",
+        "src/server/db/migrations.ts",
+        "src/domain/ledger.ts",
+        "src/domain/index.ts",
+        "src/server/services/ledger.ts",
+        "tests/domain/ledger.fixtures.test.ts",
+        "tests/integration/ledger.test.ts",
+        "tests/integration/migrations.test.ts",
+        "tests/support/fixtures.ts",
+        "handoff/delivery/tasks/WP2-T02.md",
+        "handoff/delivery/evidence/WP2-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T02.md",
+      "report": "handoff/delivery/tasks/WP2-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T02/red-run-1-missing-modules.txt",
+        "handoff/delivery/evidence/WP2-T02/red-run-2-stubs.txt",
+        "handoff/delivery/evidence/WP2-T02/green-run.txt",
+        "handoff/delivery/evidence/WP2-T02/mutation-a-debit-balance-check-removed.txt",
+        "handoff/delivery/evidence/WP2-T02/mutation-b-correction-not-by-difference.txt",
+        "handoff/delivery/evidence/WP2-T02/verify-run-1-failed.txt",
+        "handoff/delivery/evidence/WP2-T02/verify.txt",
+        "handoff/delivery/evidence/WP2-T02/digest.txt",
+        "handoff/delivery/evidence/WP2-T02/precommit-check.txt"
+      ],
+      "baseline_commit": "396b399b2d58ccc7ea90dc78be9e7c2f9a832be2",
+      "source_digest": "56ee04d52ad71070cba1b6707c6c56c4291cb6483b20eb944bb4e4227732b358",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported, opus): migration 0002 (append-only ot_ledger, versioned ot_leave_requests with triggers), pure balance/correction, idempotent postCredit, postCorrection with reconciliation flag, postDeficitDebit pending outcome; red 35/10 then 45/45 green; two mutations caught; verify 229 tests; WP1 upgrade migration preserves rows; one-line deviation in timesheet-api.test.ts accepted. Open design notes for the package audit: 409 source_key_conflict, pending debit not persisted (WP3), no reconciliation clear workflow yet, zero-minute credits rejected, pending-approval leave state would need 0003.",
+      "next_action": "None; WP2-T02-FREEZE."
+    },
+    {
+      "id": "WP2-T02-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T02"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -1359,13 +1459,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-T01-FREEZE.md",
-        "handoff/delivery/evidence/WP2-T01-FREEZE"
+        "handoff/delivery/tasks/WP2-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T02-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T01-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP2-T01-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP2-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T02-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "f32978fcc7dec9429f0aa544c4ee4ee26c14f798",
+      "baseline_commit": "396b399b2d58ccc7ea90dc78be9e7c2f9a832be2",
       "branch": "main",
       "commit_sha": null,
       "pushed": null,
@@ -1373,53 +1473,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Intermediate freeze of T01 plus WP2 plan records; push."
-    },
-    {
-      "id": "WP2-T02",
-      "package": "WP2",
-      "kind": "implement",
-      "status": "pending",
-      "depends_on": [
-        "WP2-T01-FREEZE"
-      ],
-      "profile": "timesheet-worker-high",
-      "requested_model": "opus",
-      "requested_effort": "high",
-      "model_override_reason": "novelty",
-      "routing": {
-        "size": "M",
-        "risk": "H",
-        "novelty": true
-      },
-      "actual_model": null,
-      "actual_source": null,
-      "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
-      "owned_paths": [
-        "src/server/db/migrations/0002_ot_ledger.ts",
-        "src/server/db/migrations.ts",
-        "src/domain/ledger.ts",
-        "src/domain/index.ts",
-        "src/server/services/ledger.ts",
-        "tests/domain/ledger.fixtures.test.ts",
-        "tests/integration/ledger.test.ts",
-        "tests/integration/migrations.test.ts",
-        "tests/support/fixtures.ts",
-        "handoff/delivery/tasks/WP2-T02.md",
-        "handoff/delivery/evidence/WP2-T02"
-      ],
-      "prompt": "handoff/delivery/tasks/WP2-T02.md",
-      "report": "handoff/delivery/tasks/WP2-T02.md",
-      "evidence": [],
-      "baseline_commit": "f32978fcc7dec9429f0aa544c4ee4ee26c14f798",
-      "source_digest": null,
-      "reviewed_digest": null,
-      "author_agent_ids": [],
-      "decision": null,
-      "next_action": "OT ledger core: migration 0002, pure balance, idempotent posting, corrections, debit outcome; red-first; verify."
+      "next_action": "Intermediate freeze of T02; push."
     }
   ],
   "future_packages": [

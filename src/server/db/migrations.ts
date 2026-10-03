@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Db } from './database.ts';
 import { migration0001 } from './migrations/0001_initial.ts';
+import { migration0002 } from './migrations/0002_ot_ledger.ts';
 
 export interface Migration {
   version: number;
@@ -9,7 +10,7 @@ export interface Migration {
 }
 
 /** Ordered, append-only list. Never edit an applied migration; add a new one. */
-export const MIGRATIONS: readonly Migration[] = [migration0001];
+export const MIGRATIONS: readonly Migration[] = [migration0001, migration0002];
 
 export class MigrationError extends Error {
   constructor(message: string) {

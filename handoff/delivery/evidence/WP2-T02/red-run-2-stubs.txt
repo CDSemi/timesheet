@@ -1,0 +1,594 @@
+$ npm test -- tests/domain/ledger.fixtures.test.ts tests/integration/ledger.test.ts tests/integration/migrations.test.ts  (baseline 396b399 source + throwing stubs for the new modules, no 0002 migration; red)
+v24.21.0
+
+> timesheet@0.1.0 test
+> vitest run tests/domain/ledger.fixtures.test.ts tests/integration/ledger.test.ts tests/integration/migrations.test.ts
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/domain/ledger.fixtures.test.ts (11 tests | 11 failed) 9ms
+   ❯ pure ledger balance (R-06) (6)
+     × posted balance is the sum of signed deltas; an empty ledger is zero 3ms
+     × available balance is posted minus active reservations 0ms
+     × flags a negative posted balance and an over-committed reservation for reconciliation 0ms
+     × correction delta is new minus old 0ms
+     × a debit is allowed only when available covers it exactly or more (R-05) 0ms
+     × rejects fractional, unsafe or negative magnitudes with invalid_minutes 2ms
+   ❯ reference/fixtures/ledger_cases.json ledger arithmetic (5)
+     × LG-01: a single 60-minute credit makes a balance of 60 0ms
+     × LG-02: the correction posts new minus old and the balance follows 0ms
+     × LG-08: the correction posts new minus old and the balance follows 0ms
+     × LG-09 (zero-delta part): an unchanged revision has a zero correction delta and no new delta 0ms
+     × every scenario that states reserved and available minutes satisfies available = posted − reserved 0ms
+ ❯ tests/integration/migrations.test.ts (12 tests | 2 failed) 701ms
+   ❯ fresh SQLite migrations (6)
+     × applies every migration to an empty file database with the required pragmas 14ms
+   ❯ upgrade from a populated WP1 (version 1) database (1)
+     × applies only 0002, keeps every WP1 row unchanged and leaves a consistent, usable schema 129ms
+ ❯ tests/integration/ledger.test.ts (22 tests | 22 failed) 2634ms
+   ❯ LG-01 idempotent credit posting (R-06, AC-03 posting) (7)
+     × posts the first finalize credit once; the retry returns the same entry and appends nothing 132ms
+     × stores the posting facts: signed delta, type, key, opaque source_ref, work date, actor and origin 117ms
+     × refuses a reused key with a different payload as source_key_conflict and appends nothing 122ms
+     × scopes source keys per user: the same key for another user is a separate posting 127ms
+     × rejects non-positive or fractional credits and posts nothing 127ms
+     × a manual posting requires an actor 120ms
+     × rolls back with the caller transaction: an outer failure leaves no entry and no audit event 144ms
+   ❯ LG-02 correction by difference (R-06) (5)
+     × correcting a posted 60 to 90 posts +30 linked to the original; the balance is 90 132ms
+     × a retried correction returns the existing entry; a later correction uses the corrected value as old 119ms
+     × refuses a stale expected previous value with 409 and appends nothing 116ms
+     × requires a reason, refuses another user’s entry (404) and refuses correcting a correction 117ms
+     × corrects a posted deficit debit by its difference in debit minutes 115ms
+   ❯ LG-08 truthful negative correction is kept and flagged (2)
+     × correcting an already spent 60 credit to 0 posts −60, keeps −60 and requires reconciliation 115ms
+     × a correction that leaves the balance non-negative is not flagged 126ms
+   ❯ LG-09 zero-delta correction (1)
+     × an unchanged revision posts no delta and leaves the balance at 60 116ms
+   ❯ R-05 deficit debit outcome (4)
+     × insufficient available balance returns pending with no entry (no silent overdraft) 116ms
+     × active reservations reduce what a debit may use 111ms
+     × a sufficient balance posts the exact debit as a negative delta once; a retry returns it 116ms
+     × another user’s balance never funds a debit 109ms
+   ❯ append-only and versioned storage (triggers) (3)
+     × rejects UPDATE and DELETE on ledger entries 113ms
+     × enforces delta sign, links and per-user unique keys in the schema itself 113ms
+     × keeps leave requests undeletable, with immutable permission facts, monotonic counters and +1 versions 110ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 35 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > posted balance is the sum of signed deltas; an empty ledger is zero
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ postedBalance src/domain/ledger.ts:5:70
+ ❯ tests/domain/ledger.fixtures.test.ts:19:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > available balance is posted minus active reservations
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ reservedBalance src/domain/ledger.ts:6:78
+ ❯ tests/domain/ledger.fixtures.test.ts:24:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > flags a negative posted balance and an over-committed reservation for reconciliation
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ summarizeBalance src/domain/ledger.ts:10:108
+ ❯ tests/domain/ledger.fixtures.test.ts:37:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > correction delta is new minus old
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ correctionDelta src/domain/ledger.ts:8:83
+ ❯ tests/domain/ledger.fixtures.test.ts:48:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > a debit is allowed only when available covers it exactly or more (R-05)
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ canDebit src/domain/ledger.ts:9:74
+ ❯ tests/domain/ledger.fixtures.test.ts:54:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > rejects fractional, unsafe or negative magnitudes with invalid_minutes
+AssertionError: expected a DomainError, got Error: not implemented: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ expectDomainError tests/support/fixtures.ts:19:82
+     17|   }
+     18|   expect(thrown, `expected DomainError ${code}`).toBeDefined();
+     19|   expect(isDomainError(thrown), `expected a DomainError, got ${String(…
+       |                                                                                  ^
+     20|   if (isDomainError(thrown)) expect(thrown.code).toBe(code);
+     21| }
+ ❯ tests/domain/ledger.fixtures.test.ts:60:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-01: a single 60-minute credit makes a balance of 60
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ postedBalance src/domain/ledger.ts:5:70
+ ❯ tests/domain/ledger.fixtures.test.ts:72:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-02: the correction posts new minus old and the balance follows
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-08: the correction posts new minus old and the balance follows
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ correctionDelta src/domain/ledger.ts:8:83
+ ❯ tests/domain/ledger.fixtures.test.ts:84:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-09 (zero-delta part): an unchanged revision has a zero correction delta and no new delta
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ correctionDelta src/domain/ledger.ts:8:83
+ ❯ tests/domain/ledger.fixtures.test.ts:96:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/35]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > every scenario that states reserved and available minutes satisfies available = posted − reserved
+Error: not implemented
+ ❯ todo src/domain/ledger.ts:3:9
+      1| // Red-first stub (replaced by the implementation in the same task).
+      2| const todo = (): never => {
+      3|   throw new Error('not implemented');
+       |         ^
+      4| };
+      5| export const postedBalance = (_deltas: readonly number[]): number => t…
+ ❯ availableBalance src/domain/ledger.ts:7:81
+ ❯ tests/domain/ledger.fixtures.test.ts:107:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > posts the first finalize credit once; the retry returns the same entry and appends nothing
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:79:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > stores the posting facts: signed delta, type, key, opaque source_ref, work date, actor and origin
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:92:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > refuses a reused key with a different payload as source_key_conflict and appends nothing
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:111:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > scopes source keys per user: the same key for another user is a separate posting
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:119:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > rejects non-positive or fractional credits and posts nothing
+AssertionError: expected a DomainError, got Error: not implemented: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ expectDomainError tests/support/fixtures.ts:19:82
+     17|   }
+     18|   expect(thrown, `expected DomainError ${code}`).toBeDefined();
+     19|   expect(isDomainError(thrown), `expected a DomainError, got ${String(…
+       |                                                                                  ^
+     20|   if (isDomainError(thrown)) expect(thrown.code).toBe(code);
+     21| }
+ ❯ tests/integration/ledger.test.ts:128:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > a manual posting requires an actor
+AssertionError: expected ApiError actor_required: expected Error: not implemented to be an instance of ApiError
+ ❯ expectApiError tests/integration/ledger.test.ts:49:47
+     47|     thrown = error;
+     48|   }
+     49|   expect(thrown, `expected ApiError ${code}`).toBeInstanceOf(ApiError);
+       |                                               ^
+     50|   if (thrown instanceof ApiError) expect({ status: thrown.status, code…
+     51| }
+ ❯ tests/integration/ledger.test.ts:134:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > rolls back with the caller transaction: an outer failure leaves no entry and no audit event
+AssertionError: expected [Function] to throw error matching /synthetic failure/ but got 'not implemented'
+
+- Expected:
+/synthetic failure/
+
++ Received:
+"not implemented"
+
+ ❯ tests/integration/ledger.test.ts:156:7
+    154|         throw new Error('synthetic failure after posting, before final…
+    155|       }),
+    156|     ).toThrow(/synthetic failure/);
+       |       ^
+    157|     expect(ledgerRows(employee)).toBe(0);
+    158|     expect(ledgerAudits(employee)).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > correcting a posted 60 to 90 posts +30 linked to the original; the balance is 90
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:169:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > a retried correction returns the existing entry; a later correction uses the corrected value as old
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:198:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > refuses a stale expected previous value with 409 and appends nothing
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:219:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > requires a reason, refuses another user’s entry (404) and refuses correcting a correction
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:238:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > corrects a posted deficit debit by its difference in debit minutes
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:264:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-08 truthful negative correction is kept and flagged > correcting an already spent 60 credit to 0 posts −60, keeps −60 and requires reconciliation
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:287:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-08 truthful negative correction is kept and flagged > a correction that leaves the balance non-negative is not flagged
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:324:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-09 zero-delta correction > an unchanged revision posts no delta and leaves the balance at 60
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:343:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > R-05 deficit debit outcome > insufficient available balance returns pending with no entry (no silent overdraft)
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:364:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > R-05 deficit debit outcome > active reservations reduce what a debit may use
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:378:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > R-05 deficit debit outcome > a sufficient balance posts the exact debit as a negative delta once; a retry returns it
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:389:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > R-05 deficit debit outcome > another user’s balance never funds a debit
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:402:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > rejects UPDATE and DELETE on ledger entries
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:411:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > enforces delta sign, links and per-user unique keys in the schema itself
+Error: not implemented
+ ❯ todo src/server/services/ledger.ts:9:9
+      7| }
+      8| const todo = (): never => {
+      9|   throw new Error('not implemented');
+       |         ^
+     10| };
+     11| export const postCredit = (_ctx: LedgerContext, _input: unknown): any …
+ ❯ postCredit src/server/services/ledger.ts:11:74
+ ❯ credit tests/integration/ledger.test.ts:56:10
+ ❯ tests/integration/ledger.test.ts:419:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/35]⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > keeps leave requests undeletable, with immutable permission facts, monotonic counters and +1 versions
+SqliteError: no such table: ot_leave_requests
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insertReservation tests/integration/ledger.test.ts:62:6
+     60| function insertReservation(userId: string, id: string, reservedMinutes…
+     61|   t.db
+     62|     .prepare(
+       |      ^
+     63|       `INSERT INTO ot_leave_requests (id, user_id, request_key, leave_…
+     64|          reserved_minutes, consumed_minutes, released_minutes, reverse…
+ ❯ tests/integration/ledger.test.ts:442:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/35]⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ tests/integration/migrations.test.ts:53:20
+     51| describe('fresh SQLite migrations', () => {
+     52|   it('applies every migration to an empty file database with the requi…
+     53|     expect(LATEST).toBe(2);
+       |                    ^
+     54|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATE…
+     55|     const tables = db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/35]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies only 0002, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [], version: 1 } to deeply equal { applied: [ 2 ], version: 2 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     2,
+-   ],
+-   "version": 2,
++   "applied": [],
++   "version": 1,
+  }
+
+ ❯ tests/integration/migrations.test.ts:174:71
+    172|     }
+    173|
+    174|     expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).…
+       |                                                                       ^
+    175|
+    176|     const after = snapshot(db);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/35]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  35 failed | 10 passed (45)
+   Start at  21:31:17
+   Duration  3.14s (tests 79%, transform 16%, import 5%)
+
+exit=1

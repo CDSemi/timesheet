@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
-import { MIGRATIONS, migrate, MigrationError } from '../../src/server/db/migrations.ts';
+import { MIGRATIONS, migrate, MigrationError, migrationChecksum } from '../../src/server/db/migrations.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
+import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
 import { MutableClock } from '../support/testApp.ts';
 
 const EXPECTED_TABLES = [
@@ -14,6 +15,8 @@ const EXPECTED_TABLES = [
   'calendar_versions',
   'calendars',
   'day_entries',
+  'ot_leave_requests',
+  'ot_ledger',
   'pay_periods',
   'payroll_exceptions',
   'schema_migrations',
@@ -23,6 +26,10 @@ const EXPECTED_TABLES = [
   'work_policies',
   'work_sessions',
 ];
+
+/** Latest schema version; every migration is applied in order from 1. */
+const LATEST = MIGRATIONS.length;
+const ALL_VERSIONS = MIGRATIONS.map((migration) => migration.version);
 
 let dir: string;
 let db: Db;
@@ -43,25 +50,28 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(migrate(db)).toEqual({ applied: [1], version: 1 });
+    expect(LATEST).toBe(2);
+    expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .pluck()
       .all();
     expect(tables).toEqual(EXPECTED_TABLES);
-    expect(db.pragma('user_version', { simple: true })).toBe(1);
+    expect(db.pragma('user_version', { simple: true })).toBe(LATEST);
     expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(db.pragma('busy_timeout', { simple: true })).toBe(5000);
     expect(db.pragma('synchronous', { simple: true })).toBe(2);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
-    const recorded = db.prepare('SELECT version, name, checksum FROM schema_migrations').get() as {
-      version: number;
-      name: string;
-      checksum: string;
-    };
-    const sql = MIGRATIONS[0]?.sql ?? '';
-    expect(recorded).toEqual({ version: 1, name: 'initial', checksum: createHash('sha256').update(sql).digest('hex') });
+    const recorded = db.prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version').all();
+    expect(recorded).toEqual(
+      MIGRATIONS.map((migration) => ({
+        version: migration.version,
+        name: migration.name,
+        checksum: createHash('sha256').update(migration.sql).digest('hex'),
+      })),
+    );
+    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger']);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
       .pluck()
@@ -71,7 +81,7 @@ describe('fresh SQLite migrations', () => {
 
   it('is idempotent: a second run applies nothing', () => {
     migrate(db);
-    expect(migrate(db)).toEqual({ applied: [], version: 1 });
+    expect(migrate(db)).toEqual({ applied: [], version: LATEST });
   });
 
   it('refuses a database whose applied migration checksum changed', () => {
@@ -82,25 +92,107 @@ describe('fresh SQLite migrations', () => {
 
   it('refuses a database newer than the application (no silent downgrade)', () => {
     migrate(db);
-    db.prepare("INSERT INTO schema_migrations VALUES (2, 'future', 'x', '2026-09-29T00:00:00Z')").run();
+    db.prepare("INSERT INTO schema_migrations VALUES (?, 'future', 'x', '2026-09-29T00:00:00Z')").run(LATEST + 1);
     expect(() => migrate(db)).toThrow(/newer than this application/);
   });
 
   it('rolls back a failing migration completely', () => {
-    const broken = [...MIGRATIONS, { version: 2, name: 'broken', sql: 'CREATE TABLE ok_table (x INTEGER); SELECT * FROM missing_table;' }];
+    const broken = [
+      ...MIGRATIONS,
+      { version: LATEST + 1, name: 'broken', sql: 'CREATE TABLE ok_table (x INTEGER); SELECT * FROM missing_table;' },
+    ];
     migrate(db);
     expect(() => migrate(db, broken)).toThrow();
     expect(db.prepare("SELECT count(*) FROM sqlite_master WHERE name = 'ok_table'").pluck().get()).toBe(0);
-    expect(db.pragma('user_version', { simple: true })).toBe(1);
+    expect(db.pragma('user_version', { simple: true })).toBe(LATEST);
   });
 
   it('also migrates an in-memory database', () => {
     const memory = openDatabase(':memory:');
     try {
-      expect(migrate(memory).version).toBe(1);
+      expect(migrate(memory).version).toBe(LATEST);
     } finally {
       memory.close();
     }
+  });
+});
+
+describe('committed migrations', () => {
+  it('never edits migration 0001: its checksum equals the one applied by WP1 databases', () => {
+    const initial = MIGRATIONS[0];
+    if (initial === undefined) throw new Error('migration 0001 missing');
+    expect(migrationChecksum(initial)).toBe('1c0b248d74c4d83a11282dee28aaf056ae083fb12e0d5b5534cfebd7f2f0c9b5');
+  });
+});
+
+describe('upgrade from a populated WP1 (version 1) database', () => {
+  const WP1_TABLES = EXPECTED_TABLES.filter((name) => !name.startsWith('ot_'));
+  const AT = '2026-09-29T20:00:00Z';
+
+  /** Every row of every WP1 table, in storage order, for a before/after comparison. */
+  function snapshot(target: Db): Record<string, unknown[]> {
+    return Object.fromEntries(
+      WP1_TABLES.map((name) => [name, target.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]),
+    );
+  }
+
+  it('applies only 0002, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+    const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
+    expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
+    const seed = await seedSynthetic(db, new MutableClock(AT), {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass' },
+    });
+    const employee = seed.users.find((user) => user.role === 'employee')?.id ?? '';
+    db.prepare(
+      `INSERT INTO pay_periods VALUES ('p1', ?, 0, '2026-10-02', '2026-10-02', '2026-09-14', '2026-09-27',
+         '2026-09-29', '17:00', '2026-09-30T00:00:00Z', 0, ?)`,
+    ).run(seed.calendarId, AT);
+    db.prepare(
+      `INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at) VALUES ('ts1', ?, 'p1', 3, ?, ?)`,
+    ).run(employee, AT, AT);
+    db.prepare(
+      `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, leave_minutes, wfh, notes, version, created_at, updated_at)
+       VALUES ('d1', ?, 'ts1', '2026-09-21', 'Worked', 120, 1, 'Synthetic note', 2, ?, ?)`,
+    ).run(employee, AT, AT);
+    db.prepare(
+      `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed, created_at, updated_at)
+       VALUES ('s1', ?, '2026-09-21', '2026-09-21T16:00:00Z', '2026-09-22T01:00:00Z', 'America/Los_Angeles', 'clock', 1, ?, ?)`,
+    ).run(employee, AT, AT);
+    db.prepare(
+      `INSERT INTO session_breaks (id, session_id, user_id, start_utc, end_utc, counts_as_work)
+       VALUES ('b1', 's1', ?, '2026-09-21T20:00:00Z', '2026-09-21T20:30:00Z', 0)`,
+    ).run(employee);
+    db.prepare(
+      `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json)
+       VALUES ('a1', ?, ?, ?, 'session.create', 'work_session', 's1', NULL, NULL, '{"id":"s1"}')`,
+    ).run(AT, employee, employee);
+    const before = snapshot(db);
+    for (const name of ['users', 'calendar_versions', 'work_policies', 'timesheets', 'day_entries', 'work_sessions', 'session_breaks']) {
+      expect(before[name]?.length, name).toBeGreaterThan(0);
+    }
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2], version: 2 });
+
+    const after = snapshot(db);
+    // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
+    expect(after.schema_migrations?.slice(0, 1)).toEqual(before.schema_migrations);
+    expect(after.schema_migrations?.slice(1)).toEqual([
+      expect.objectContaining({ version: 2, name: 'ot_ledger', applied_at: '2026-10-02T18:00:00Z' }),
+    ]);
+    expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
+    expect(db.pragma('user_version', { simple: true })).toBe(2);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
+    expect(db.prepare('SELECT count(*) FROM ot_leave_requests').pluck().get()).toBe(0);
+
+    // Existing WP1 users can post immediately after the upgrade.
+    postCredit(
+      { db, clock: new MutableClock('2026-10-02T18:00:00Z') },
+      { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
+    );
+    expect(getBalance(db, employee).postedMinutes).toBe(30);
+    expect(migrate(db)).toEqual({ applied: [], version: 2 });
   });
 });
 

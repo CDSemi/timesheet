@@ -1,0 +1,61 @@
+$ npm test -- tests/domain/ledger.fixtures.test.ts tests/integration/ledger.test.ts tests/integration/migrations.test.ts --reporter=verbose  (implementation, green)
+v24.21.0
+
+> timesheet@0.1.0 test
+> vitest run tests/domain/ledger.fixtures.test.ts tests/integration/ledger.test.ts tests/integration/migrations.test.ts --reporter=verbose
+
+
+ RUN  v5.0.2 <repo>
+
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > posted balance is the sum of signed deltas; an empty ledger is zero 1ms
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > available balance is posted minus active reservations 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > flags a negative posted balance and an over-committed reservation for reconciliation 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > correction delta is new minus old 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > a debit is allowed only when available covers it exactly or more (R-05) 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > pure ledger balance (R-06) > rejects fractional, unsafe or negative magnitudes with invalid_minutes 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-01: a single 60-minute credit makes a balance of 60 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-02: the correction posts new minus old and the balance follows 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-08: the correction posts new minus old and the balance follows 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > LG-09 (zero-delta part): an unchanged revision has a zero correction delta and no new delta 0ms
+ ✓ tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json ledger arithmetic > every scenario that states reserved and available minutes satisfies available = posted − reserved 0ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 20ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 13ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 16ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 15ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 17ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 8ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 0001: its checksum equals the one applied by WP1 databases 6ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > posts the first finalize credit once; the retry returns the same entry and appends nothing 135ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies only 0002, keeps every WP1 row unchanged and leaves a consistent, usable schema 133ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > stores the posting facts: signed delta, type, key, opaque source_ref, work date, actor and origin 115ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 117ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > refuses a reused key with a different payload as source_key_conflict and appends nothing 117ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 117ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > scopes source keys per user: the same key for another user is a separate posting 114ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 116ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > rejects non-positive or fractional credits and posts nothing 115ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 116ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > a manual posting requires an actor 114ms
+ ✓ tests/integration/ledger.test.ts > LG-01 idempotent credit posting (R-06, AC-03 posting) > rolls back with the caller transaction: an outer failure leaves no entry and no audit event 111ms
+ ✓ tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > correcting a posted 60 to 90 posts +30 linked to the original; the balance is 90 108ms
+ ✓ tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > a retried correction returns the existing entry; a later correction uses the corrected value as old 111ms
+ ✓ tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > refuses a stale expected previous value with 409 and appends nothing 109ms
+ ✓ tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > requires a reason, refuses another user’s entry (404) and refuses correcting a correction 109ms
+ ✓ tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > corrects a posted deficit debit by its difference in debit minutes 110ms
+ ✓ tests/integration/ledger.test.ts > LG-08 truthful negative correction is kept and flagged > correcting an already spent 60 credit to 0 posts −60, keeps −60 and requires reconciliation 110ms
+ ✓ tests/integration/ledger.test.ts > LG-08 truthful negative correction is kept and flagged > a correction that leaves the balance non-negative is not flagged 112ms
+ ✓ tests/integration/ledger.test.ts > LG-09 zero-delta correction > an unchanged revision posts no delta and leaves the balance at 60 110ms
+ ✓ tests/integration/ledger.test.ts > R-05 deficit debit outcome > insufficient available balance returns pending with no entry (no silent overdraft) 110ms
+ ✓ tests/integration/ledger.test.ts > R-05 deficit debit outcome > active reservations reduce what a debit may use 111ms
+ ✓ tests/integration/ledger.test.ts > R-05 deficit debit outcome > a sufficient balance posts the exact debit as a negative delta once; a retry returns it 111ms
+ ✓ tests/integration/ledger.test.ts > R-05 deficit debit outcome > another user’s balance never funds a debit 109ms
+ ✓ tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > rejects UPDATE and DELETE on ledger entries 124ms
+ ✓ tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > enforces delta sign, links and per-user unique keys in the schema itself 113ms
+ ✓ tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > keeps leave requests undeletable, with immutable permission facts, monotonic counters and +1 versions 110ms
+
+ Test Files  3 passed (3)
+      Tests  45 passed (45)
+   Start at  21:35:21
+   Duration  2.98s (tests 79%, transform 15%, import 6%)
+
+exit=0

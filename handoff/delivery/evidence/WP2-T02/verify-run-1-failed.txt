@@ -1,0 +1,84 @@
+$ npm run verify
+v24.21.0
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/timesheet-api.test.ts (14 tests | 1 failed) 3245ms
+   ❯ calculations through the API (7)
+     × reports the raw deficit on a short confirmed weekday without posting anything 244ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/timesheet-api.test.ts > calculations through the API > reports the raw deficit on a short confirmed weekday without posting anything
+AssertionError: expected [ { name: 'ot_ledger' }, …(9) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "name": "ot_ledger",
++   },
++   {
++     "name": "sqlite_autoindex_ot_ledger_1",
++   },
++   {
++     "name": "sqlite_autoindex_ot_ledger_2",
++   },
++   {
++     "name": "sqlite_autoindex_ot_ledger_3",
++   },
++   {
++     "name": "ot_ledger_user_date",
++   },
++   {
++     "name": "ot_ledger_corrects",
++   },
++   {
++     "name": "ot_ledger_leave",
++   },
++   {
++     "name": "ot_ledger_correction_target",
++   },
++   {
++     "name": "ot_ledger_no_update",
++   },
++   {
++     "name": "ot_ledger_no_delete",
++   },
++ ]
+
+ ❯ tests/integration/timesheet-api.test.ts:147:93
+    145|     expect(response.body.day.calculation.regular_minutes).toBe(420);
+    146|     expect(response.body.day.deficit_minutes).toBe(60);
+    147|     expect(t.db.prepare("SELECT name FROM sqlite_master WHERE name LIK…
+       |                                                                                             ^
+    148|   });
+    149| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 13 passed (14)
+      Tests  1 failed | 228 passed (229)
+   Start at  21:35:37
+   Duration  4.40s (tests 83%, transform 10%, import 6%)
+
+exit=1

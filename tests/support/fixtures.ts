@@ -160,5 +160,38 @@ export interface LedgerFixtureFile {
     input: Partial<DeficitFixtureInput> & { mode: DeficitFixtureInput['mode'] };
     expected: { deficit_minutes: number | null; debit_minutes: number; decision: string };
   }>;
-  ledger_scenarios: Array<{ id: string }>;
+  ledger_scenarios: LedgerScenario[];
+}
+
+/** One ledger event; only the fields used by the event type are present. */
+export interface LedgerScenarioEvent {
+  type: string;
+  source_key?: string;
+  minutes?: number;
+  previous_minutes?: number;
+  corrected_minutes?: number;
+  previous_credit_already_spent?: boolean;
+  previous_credit_minutes?: number;
+  request_id?: string;
+}
+
+export interface LedgerScenario {
+  id: string;
+  opening_balance_minutes: number;
+  events: LedgerScenarioEvent[];
+  expected: {
+    new_deltas: number[];
+    balance_minutes: number;
+    reserved_minutes?: number;
+    available_minutes?: number;
+    duplicate_effect?: string;
+    reconciliation_required?: boolean;
+  };
+}
+
+/** Finds a ledger scenario by ID; a missing ID fails the test instead of skipping it. */
+export function ledgerScenario(file: LedgerFixtureFile, id: string): LedgerScenario {
+  const scenario = file.ledger_scenarios.find((item) => item.id === id);
+  if (scenario === undefined) throw new Error(`Ledger scenario ${id} missing from ledger_cases.json`);
+  return scenario;
 }

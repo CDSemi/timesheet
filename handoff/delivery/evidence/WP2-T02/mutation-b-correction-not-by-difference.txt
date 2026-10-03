@@ -1,0 +1,165 @@
+$ mutation B: correction posts the corrected value instead of the difference (deltaMinutes = sign * correctedMinutes); npm test -- tests/integration/ledger.test.ts
+v24.21.0
+
+> timesheet@0.1.0 test
+> vitest run tests/integration/ledger.test.ts
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/ledger.test.ts (22 tests | 6 failed) 2660ms
+   ❯ LG-02 correction by difference (R-06) (5)
+     × correcting a posted 60 to 90 posts +30 linked to the original; the balance is 90 144ms
+     × a retried correction returns the existing entry; a later correction uses the corrected value as old 121ms
+     × requires a reason, refuses another user’s entry (404) and refuses correcting a correction 118ms
+     × corrects a posted deficit debit by its difference in debit minutes 114ms
+   ❯ LG-08 truthful negative correction is kept and flagged (2)
+     × correcting an already spent 60 credit to 0 posts −60, keeps −60 and requires reconciliation 114ms
+   ❯ LG-09 zero-delta correction (1)
+     × an unchanged revision posts no delta and leaves the balance at 60 112ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > correcting a posted 60 to 90 posts +30 linked to the original; the balance is 90
+AssertionError: expected 90 to be 30 // Object.is equality
+
+- Expected
++ Received
+
+- 30
++ 90
+
+ ❯ tests/integration/ledger.test.ts:181:37
+    179|     });
+    180|     expect(correction.status).toBe('posted');
+    181|     expect(correction.deltaMinutes).toBe(30);
+       |                                     ^
+    182|     expect(correction.entry).toMatchObject({
+    183|       entryType: 'correction',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > a retried correction returns the existing entry; a later correction uses the corrected value as old
+AssertionError: expected 70 to be -20 // Object.is equality
+
+- Expected
++ Received
+
+- -20
++ 70
+
+ ❯ tests/integration/ledger.test.ts:212:33
+    210|     expect(retry.entry?.id).toBe(first.entry?.id);
+    211|     const second = postCorrection(ctx, { ...input, correctedMinutes: 7…
+    212|     expect(second.deltaMinutes).toBe(-20);
+       |                                 ^
+    213|     expect(second.entry?.correctsEntryId).toBe(original.entry.id);
+    214|     expect(listLedgerEntries(t.db, employee).map((entry) => entry.delt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > requires a reason, refuses another user’s entry (404) and refuses correcting a correction
+AssertionError: expected [ 60, 90 ] to deeply equal [ 60, 30 ]
+
+- Expected
++ Received
+
+  [
+    60,
+-   30,
++   90,
+  ]
+
+ ❯ tests/integration/ledger.test.ts:259:82
+    257|       'invalid_correction_target',
+    258|     );
+    259|     expect(listLedgerEntries(t.db, employee).map((entry) => entry.delt…
+       |                                                                                  ^
+    260|     expect(ledgerRows(admin)).toBe(0);
+    261|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > corrects a posted deficit debit by its difference in debit minutes
+AssertionError: expected -15 to be 45 // Object.is equality
+
+- Expected
++ Received
+
+- 45
++ -15
+
+ ❯ tests/integration/ledger.test.ts:275:37
+    273|       ...manual(employee),
+    274|     });
+    275|     expect(correction.deltaMinutes).toBe(45);
+       |                                     ^
+    276|     expect(getBalance(t.db, employee).postedMinutes).toBe(120 - 15);
+    277|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-08 truthful negative correction is kept and flagged > correcting an already spent 60 credit to 0 posts −60, keeps −60 and requires reconciliation
+AssertionError: expected 'unchanged' to be 'posted' // Object.is equality
+
+Expected: "posted"
+Received: "unchanged"
+
+ ❯ tests/integration/ledger.test.ts:308:31
+    306|       ...manual(employee),
+    307|     });
+    308|     expect(correction.status).toBe('posted');
+       |                               ^
+    309|     const newDeltas = listLedgerEntries(t.db, employee)
+    310|       .slice(before)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/integration/ledger.test.ts > LG-09 zero-delta correction > an unchanged revision posts no delta and leaves the balance at 60
+AssertionError: expected { status: 'posted', …(4) } to match object { status: 'unchanged', …(2) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "deltaMinutes": 0,
+-   "entry": null,
+-   "status": "unchanged",
++   "deltaMinutes": 60,
++   "entry": {
++     "actorUserId": "919e0ac8-6b51-4d23-be99-51528912df8d",
++     "correctsEntryId": "62f60803-a061-485a-aa28-2c128d3f523a",
++     "deltaMinutes": 60,
++     "entryType": "correction",
++     "id": "3ceaba31-216a-42ec-8c84-dfdb3b71ed00",
++     "leaveRequestId": null,
++     "origin": "manual",
++     "postedAt": "2026-10-02T18:00:00Z",
++     "reason": "Synthetic late review of an unchanged automatic revision",
++     "reconciliationRequired": false,
++     "sourceKey": "ts1-r2-day1",
++     "sourceRef": null,
++     "userId": "919e0ac8-6b51-4d23-be99-51528912df8d",
++     "workDate": "2026-09-21",
++   },
++   "status": "posted",
+  }
+
+ ❯ tests/integration/ledger.test.ts:355:23
+    353|       origin: 'manual',
+    354|     });
+    355|     expect(unchanged).toMatchObject({ status: 'unchanged', entry: null…
+       |                       ^
+    356|     expect(ledgerRows(employee) - before).toBe(scenario.expected.new_d…
+    357|     expect(ledgerAudits(employee)).toBe(audits);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 16 passed (22)
+   Start at  21:35:08
+   Duration  3.30s (tests 83%, transform 13%, import 4%)
+
+exit=1
