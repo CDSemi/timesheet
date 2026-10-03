@@ -1,0 +1,74 @@
+COMMAND: <workflow-python> probe-experiments.py <project> <scratch>/roots
+NOTE: scratch copies of .claude/{settings.json,agents} and handoff/ only; old = 393779d, new = ed92cb7 check_recovery.py
+[
+  {
+    "name": "old-live-WP2",
+    "exit": 1,
+    "error": "ValueError: Running task outside active package"
+  },
+  {
+    "name": "old-minimal-WP1",
+    "exit": 0,
+    "count": 81
+  },
+  {
+    "name": "new-live-WP2",
+    "exit": 0,
+    "count": 82
+  },
+  {
+    "name": "new-minimal-WP1",
+    "exit": 0,
+    "count": 82
+  },
+  {
+    "name": "new-live-tasks-WP3",
+    "exit": 0,
+    "count": 82
+  },
+  {
+    "name": "new-live-tasks-WP4",
+    "exit": 0,
+    "count": 82
+  },
+  {
+    "name": "new-live-tasks-WP5",
+    "exit": 0,
+    "count": 82
+  },
+  {
+    "name": "mutant-default-WP1-live-WP2",
+    "exit": 1,
+    "error": "ValueError: Running task outside active package"
+  },
+  {
+    "name": "mutant-inherit-live-active-WP2",
+    "exit": 1,
+    "error": "ValueError: Board/package summary disagree"
+  }
+]
+OLD_COUNT 81 NEW_COUNT 82
+ONLY_IN_OLD ['WP2 blocked by unresolved WP1']
+ONLY_IN_NEW ['next package blocked by unresolved base package', 'suite gives the same results when the base active package is WP3']
+COMMON 80 SAME_ORDER True
+LIVE_ACCEPTANCE_PROBES ['current board is valid']
+new-live-WP2 checks identical to new-live-WP2: True
+new-minimal-WP1 checks identical to new-live-WP2: True
+new-live-tasks-WP3 checks identical to new-live-WP2: True
+new-live-tasks-WP4 checks identical to new-live-WP2: True
+new-live-tasks-WP5 checks identical to new-live-WP2: True
+EXIT: 0
+
+COMMAND: git ls-remote origin refs/heads/main
+ed92cb7a59d1b26dbea0df7cfb6fb6b870f06ec2	refs/heads/main
+EXIT: 0
+
+COMMAND: (cd <scratch>/roots/mutant-default-WP1-live-WP2 && <workflow-python> handoff/delivery/check_recovery.py) 2>&1 | grep 'line [0-9]*, in'
+  File "<root>/handoff\delivery\check_recovery.py", line 426, in <module>
+  File "<root>/handoff\delivery\check_recovery.py", line 110, in suite
+  File "<root>/handoff\delivery\check_recovery.py", line 51, in accepts
+  File "<root>/handoff\delivery\validate_orchestration.py", line 334, in validate
+  File "<root>/handoff\delivery\validate_orchestration.py", line 34, in check
+ValueError: Running task outside active package
+EXIT: 1
+NOTE: line 426 is the suite() call after use_base("WP3"), so the regression rerun catches the restored defect.

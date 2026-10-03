@@ -37,8 +37,11 @@ America/Los_Angeles).
 - GOV-E8-GATE FAIL: check_recovery.py synthetic probes assumed active package WP1 (latent
   harness defect exposed by the WP2 advance; E-8 change itself passed every other check).
   GOV-E8-FIX2 (worker) is making the probes self-contained.
-- Next action: GOV-E8-FREEZE2 → GOV-E8-GATE2 → fresh GOV-E8-AUDIT → GOV-E8-ACCEPT →
-  WP2-T03 (worker-high, opus override novelty).
+- GOV-E8 accepted: GOV-E8-GATE2 PASS and fresh GOV-E8-AUDIT PASS on ed92cb7 (digest
+  7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.md). Low risks R1/R2 recorded in the board
+  `governance_backlog`. GOV-E8-ACCEPT (records) running.
+- Next action: record the accept SHA, then dispatch WP2-T03 (worker-high, opus override
+  novelty; brief [WP2-T03](tasks/WP2-T03.md)).
 
 ## Orchestration recovery
 

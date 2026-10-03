@@ -1,0 +1,38 @@
+COMMAND: git show 393779d:handoff/delivery/check_recovery.py > old; git show ed92cb7:handoff/delivery/check_recovery.py > new; <workflow-python> probe-body-diff.py old new
+--- old-393779d-probes
++++ new-ed92cb7-suite-dedented
+@@ -1,3 +1,2 @@
+ # Historical probes (adapted to the synthetic board).
+-accepts("current board is valid", real_board)
+ accepts("synthetic pending board", synthetic())
+@@ -74,6 +73,6 @@
+ rejects("unverified audit cannot unlock dependent task", invalid, "Dependency audit not PASS")
+-invalid = copy.deepcopy(real_board)
+-invalid.update(active_package="WP2")
+-invalid_state = copy.deepcopy(state)
+-invalid_state["active_work_package"] = "WP2"
++invalid = synthetic()
++invalid.update(active_package=NEXT_PACKAGE)
++invalid_state = synthetic_state(NEXT_PACKAGE)
++invalid_state["phases"][PACKAGES.index(BASE)]["independent_review"] = "failed"
+ try:
+@@ -82,5 +81,5 @@
+     assert "Prior package not independently passed" in str(error)
+-    passed.append("WP2 blocked by unresolved WP1")
++    passed.append("next package blocked by unresolved base package")
+ else:
+-    raise AssertionError("WP2 advanced past failed WP1")
++    raise AssertionError("next package advanced past failed base package")
+
+@@ -168,3 +167,3 @@
+ value = synthetic()
+-task_of(value, "S-PLAN").update(package="WP2", status="running", attempt=1, agent_id="synthetic-wp2")
++task_of(value, "S-PLAN").update(package=NEXT_PACKAGE, status="running", attempt=1, agent_id="synthetic-wp2")
+ rejects("running task of a non-active WP package rejected", value, "Running task outside active package")
+old body lines 313, new body lines 312, changed hunks 4
+EXIT: 0
+
+COMMAND: git diff -w --stat 393779d ed92cb7 -- handoff/delivery/check_recovery.py
+ handoff/delivery/check_recovery.py | 60 ++++++++++++++++++++++++++++++--------
+ 1 file changed, 48 insertions(+), 12 deletions(-)
+EXIT: 0

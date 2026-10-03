@@ -38,8 +38,11 @@ America/Los_Angeles).
 - GOV-E8-GATE FAIL: probe giả lập trong check_recovery.py mặc định package WP1 (lỗi tiềm
   ẩn của harness lộ ra khi chuyển sang WP2; bản thân thay đổi E-8 đạt mọi kiểm tra khác).
   GOV-E8-FIX2 (worker) đang làm cho các probe tự chứa, không phụ thuộc board thật.
-- Bước tiếp: GOV-E8-FREEZE2 → GOV-E8-GATE2 → GOV-E8-AUDIT mới → GOV-E8-ACCEPT →
-  WP2-T03 (worker-high, override opus novelty).
+- GOV-E8 đã nghiệm thu: GOV-E8-GATE2 PASS và GOV-E8-AUDIT mới PASS trên ed92cb7 (digest
+  7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.vi.md). Rủi ro thấp R1/R2 ghi trong
+  `governance_backlog` trên board. GOV-E8-ACCEPT (record) đang chạy.
+- Bước tiếp: ghi SHA nghiệm thu, rồi giao WP2-T03 (worker-high, override opus novelty;
+  brief [WP2-T03](tasks/WP2-T03.md)).
 
 ## Khôi phục điều phối
 

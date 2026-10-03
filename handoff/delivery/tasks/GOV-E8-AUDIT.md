@@ -42,3 +42,38 @@ Return at most 200 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+Auditor results (attempt 1). Self-reported model: claude-opus-5-5. Decision: PASS.
+
+- Identity: reviewed_commit ed92cb7a59d1b26dbea0df7cfb6fb6b870f06ec2 (equal to origin/main and
+  `git ls-remote`); HEAD before and after ed92cb7; `npm run digest` (Node v24.21.0) before and after
+  7586ba0821899960e24879ffacb435132edb9ab3e243be5a0a5bfb459290ec2f (539 files), equal to GOV-E8-GATE2.
+  Only handoff/ paths differ in the working tree. Authors (sonnet) are not stronger than the reviewer.
+- Scope 1-2 (E-8): the AGENTS.md/.vi.md UI section names `src/client/styles.css` CSS custom properties,
+  a 4px radius custom property, "cards and panels" and `transition: all 300ms ease-out` through a
+  shared custom property. No tailwind/brandkit/P8000/P9000/product-card match in AGENTS/CLAUDE (EN/VI),
+  docs/, prompts, templates, profiles, package.json or src/ (git grep exit 1). The three-skill
+  orchestration and the owner's other intent are kept; the changed EN/VI lines are equivalent. It is
+  consistent with docs/04 "Visual standard" and docs/10 E-8 (EN/VI).
+- Scope 2 (check_recovery.py): an exact body comparison of 393779d and ed92cb7 shows 4 expected hunks
+  only. 80 probes are kept in the same order, 1 is renamed ("next package blocked by unresolved base
+  package", now deterministic with the base phase `failed`) and 1 regression probe is added: 81 -> 82.
+  Exactly one live-board probe remains. Scratch runs: the old script fails on the live WP2 board
+  (reproduces GOV-E8-GATE); the old script passes 81 under WP1-era conditions; the new script passes 82
+  with identical names at active packages WP1-WP5. The mutant that restores the original defect fails in
+  the WP3 rerun (line 426), so the regression probe is meaningful. No probe was weakened.
+- Scope 3: governance paths changed in f7b9f8e..ed92cb7 are only AGENTS.md, AGENTS.vi.md and
+  handoff/delivery/check_recovery.py; `git diff --check` exit 0.
+- Scope 4: check_recovery.py exit 0 (count 82); validate_orchestration.py exit 0; validate_package.py
+  --preflight exit 0 (91 scenarios; rerun after the review files: 48 pairs, exit 0). Workflow Python 3.12.14.
+- Findings: none proven. Risks: R1 low/latent: the synthetic board still inherits the live `status`
+  and other mission fields, and at `software_ready` the suite fails at its first probe (reproduced in
+  scratch); this is outside this brief's active-package criterion, and an optional GOV task can fix it.
+  R2 low/pre-existing: AGENTS.vi item 2 lacks "mobile-first default"/"(clean padding/gap)". R3 info:
+  styles.css still uses 8px/6px/999px radii (WP2-T09 scope). R4 info: the owner phrase `4px / rounded`
+  is kept.
+- Outputs: handoff/delivery/GOV_E8_REVIEW.md, handoff/delivery/GOV_E8_REVIEW.vi.md, evidence in
+  handoff/delivery/evidence/GOV-E8-AUDIT/ (before, after, gov-paths, wording, check-recovery,
+  validate-orchestration, preflight, preflight-after-review, probe-* scripts and logs; masked, LF).
+- Next action: the coordinator records GOV-E8-AUDIT PASS; timesheet-committer commits the accept records.
+- Normalization (coordinator follow-up): stripped trailing whitespace in evidence probe-body-diff.txt line 26 and wording.txt line 13; all my files are LF with one final newline; no other content changed.
