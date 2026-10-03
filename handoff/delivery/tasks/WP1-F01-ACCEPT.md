@@ -55,3 +55,9 @@ handoff/delivery/evidence/WP1-F01-ACCEPT/. Return at most 200 words.
 ## Results
 
 (Committer appends here.)
+
+- Pre HEAD 68bbb31435543329b6c51f29703d9e2e7a4290bf; post HEAD and commit f32978fcc7dec9429f0aa544c4ee4ee26c14f798.
+- Pushed to origin main; remote SHA f32978fcc7dec9429f0aa544c4ee4ee26c14f798.
+- Node v24.21.0. Staged 54 files; masked files none.
+- Exits: precommit 0, diff --cached --check 0, JSON parse 0, validator 0. Blockers none.
+- Evidence: handoff/delivery/evidence/WP1-F01-ACCEPT/.

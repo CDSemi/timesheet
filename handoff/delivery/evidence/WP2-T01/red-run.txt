@@ -1,0 +1,371 @@
+$ vitest on baseline source f32978f + new tests (red)
+v24.21.0
+
+> timesheet@0.1.0 test
+> vitest run tests/integration/clock-out-breaks.test.ts tests/integration/break-contract.test.ts
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/break-contract.test.ts (6 tests | 4 failed) 1188ms
+   ❯ break end allowance on open sessions (WP2-T01) (6)
+     × create rejects a break ending after now + 5 minutes with typed 422 future_break and writes nothing 193ms
+     × create rejects a far-future break even when it is not the first one 183ms
+     × update applies the same bound to an open session and leaves the stored session unchanged 193ms
+     × Clock out keeps shape errors typed as break_outside_session for a submitted break after the clock-out instant 212ms
+ ❯ tests/integration/clock-out-breaks.test.ts (14 tests | 14 failed) 2629ms
+   ❯ Clock out replaces the stored break set when breaks are confirmed (F-01) (6)
+     × F-01A: confirming the already saved break closes the session with exactly one break (R 541, credit 60) 227ms
+     × F-01B: confirming zero breaks clears the saved break (R 556, E 76, credit 90) 189ms
+     × replaces rather than appends: a different submitted break becomes the only stored break 180ms
+     × records one clock_out audit event whose before/after show the replaced break set 192ms
+     × keeps the saved breaks and the pending state when an unconfirmed Clock out omits the list 188ms
+     × rolls back completely when the submitted set is invalid: still open, saved break intact, no audit event 211ms
+   ❯ Clock out break-list contract (WP2-T01, decision E-1) (8)
+     × requires expected_version 205ms
+     × returns 409 stale_version and rolls back when the session changed since it was loaded 190ms
+     × rejects a confirmed Clock out that omits the list 171ms
+     × treats an unconfirmed submitted list as the complete set: it replaces the saved rows and stays pending 173ms
+     × treats an unconfirmed empty list as present: it clears the saved rows and stays pending 178ms
+     × rolls back a failure injected after the DELETE: the original break rows and IDs are restored 178ms
+     × answers 409 stale_version and rolls back when the session UPDATE changes no row 174ms
+     × gives a legacy saved break that ends after the Clock out instant a typed 422 and changes nothing 172ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/break-contract.test.ts > break end allowance on open sessions (WP2-T01) > create rejects a break ending after now + 5 minutes with typed 422 future_break and writes nothing
+AssertionError: expected 201 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 201
+
+ ❯ tests/integration/break-contract.test.ts:57:29
+     55|       body: openBody([breakEndingAt(PAST_ALLOWANCE)]),
+     56|     });
+     57|     expect(response.status).toBe(422);
+       |                             ^
+     58|     expect(response.body.error.code).toBe('future_break');
+     59|     expect(response.body.error.details).toMatchObject({ break_index: 0…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯
+
+ FAIL  tests/integration/break-contract.test.ts > break end allowance on open sessions (WP2-T01) > create rejects a far-future break even when it is not the first one
+AssertionError: expected 201 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 201
+
+ ❯ tests/integration/break-contract.test.ts:72:29
+     70|       ]),
+     71|     });
+     72|     expect(response.status).toBe(422);
+       |                             ^
+     73|     expect(response.body.error.code).toBe('future_break');
+     74|     expect(response.body.error.details).toMatchObject({ break_index: 1…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯
+
+ FAIL  tests/integration/break-contract.test.ts > break end allowance on open sessions (WP2-T01) > update applies the same bound to an open session and leaves the stored session unchanged
+AssertionError: expected 200 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 200
+
+ ❯ tests/integration/break-contract.test.ts:89:29
+     87|       body: { ...openBody([breakEndingAt(PAST_ALLOWANCE)]), expected_v…
+     88|     });
+     89|     expect(rejected.status).toBe(422);
+       |                             ^
+     90|     expect(rejected.body.error.code).toBe('future_break');
+     91|     expect(counts(t.db)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯
+
+ FAIL  tests/integration/break-contract.test.ts > break end allowance on open sessions (WP2-T01) > Clock out keeps shape errors typed as break_outside_session for a submitted break after the clock-out instant
+AssertionError: expected 'validation_error' to be 'break_outside_session' // Object.is equality
+
+Expected: "break_outside_session"
+Received: "validation_error"
+
+ ❯ tests/integration/break-contract.test.ts:128:33
+    126|     });
+    127|     expect(out.status).toBe(422);
+    128|     expect(out.body.error.code).toBe('break_outside_session');
+       |                                 ^
+    129|     expect(t.db.prepare('SELECT end_utc FROM work_sessions').pluck().g…
+    130|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01A: confirming the already saved break closes the session with exactly one break (R 541, credit 60)
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:59:24
+     57|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+     58|     const out = await clockOut(t, cookie, { breaks: [SAVED_BREAK], bre…
+     59|     expect(out.status).toBe(200);
+       |                        ^
+     60|     expect(out.body.session).toMatchObject({
+     61|       id: sessionId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01B: confirming zero breaks clears the saved break (R 556, E 76, credit 90)
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:85:24
+     83|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+     84|     const out = await clockOut(t, cookie, { breaks: [], breaks_confirm…
+     85|     expect(out.status).toBe(200);
+       |                        ^
+     86|     expect(out.body.session).toMatchObject({ end_utc: '2026-09-30T01:1…
+     87|     expect(out.body.day.calculation).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > replaces rather than appends: a different submitted break becomes the only stored break
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:106:24
+    104|       breaks_confirmed: true,
+    105|     });
+    106|     expect(out.status).toBe(200);
+       |                        ^
+    107|     expect(storedBreaks(t.db, sessionId)).toEqual([
+    108|       { start_utc: '2026-09-29T20:00:00Z', end_utc: '2026-09-29T20:30:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > records one clock_out audit event whose before/after show the replaced break set
+AssertionError: expected [ { …(3) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ tests/integration/clock-out-breaks.test.ts:119:20
+    117|     await clockOut(t, cookie, { breaks: [], breaks_confirmed: true });
+    118|     const events = auditFor(t.db, sessionId);
+    119|     expect(events).toHaveLength(before + 1);
+       |                    ^
+    120|     const event = events[events.length - 1];
+    121|     expect(event?.operation).toBe('work_session.clock_out');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > keeps the saved breaks and the pending state when an unconfirmed Clock out omits the list
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:132:24
+    130|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+    131|     const out = await clockOut(t, cookie, { breaks_confirmed: false });
+    132|     expect(out.status).toBe(200);
+       |                        ^
+    133|     expect(out.body.session).toMatchObject({ end_utc: '2026-09-30T01:1…
+    134|     expect(out.body.session.breaks).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > rolls back completely when the submitted set is invalid: still open, saved break intact, no audit event
+AssertionError: expected 'validation_error' to be 'break_outside_session' // Object.is equality
+
+Expected: "break_outside_session"
+Received: "validation_error"
+
+ ❯ expectRejected tests/integration/clock-out-breaks.test.ts:146:40
+    144|       const response = await clockOut(t, cookie, { breaks, breaks_conf…
+    145|       expect(response.status, code).toBe(422);
+    146|       expect(response.body.error.code).toBe(code);
+       |                                        ^
+    147|       const row = t.db.prepare('SELECT end_utc, breaks_confirmed, vers…
+    148|       expect(row).toEqual({ end_utc: null, breaks_confirmed: 0, versio…
+ ❯ tests/integration/clock-out-breaks.test.ts:155:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > requires expected_version
+AssertionError: expected 200 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 200
+
+ ❯ tests/integration/clock-out-breaks.test.ts:190:24
+    188|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+    189|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+    190|     expect(out.status).toBe(422);
+       |                        ^
+    191|     expect(out.body.error.code).toBe('validation_error');
+    192|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > returns 409 stale_version and rolls back when the session changed since it was loaded
+AssertionError: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:216:24
+    214|     // The stale client still holds version 1 and confirms only the fi…
+    215|     const out = await clockOut(t, cookie, { breaks: [SAVED_BREAK], bre…
+    216|     expect(out.status).toBe(409);
+       |                        ^
+    217|     expect(out.body.error.code).toBe('stale_version');
+    218|     expect(sessionState(t.db, sessionId)).toEqual({ ...STILL_OPEN, ver…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > rejects a confirmed Clock out that omits the list
+AssertionError: expected 'validation_error' to be 'breaks_required' // Object.is equality
+
+Expected: "breaks_required"
+Received: "validation_error"
+
+ ❯ tests/integration/clock-out-breaks.test.ts:232:33
+    230|     const out = await clockOut(t, cookie, { breaks_confirmed: true });
+    231|     expect(out.status).toBe(422);
+    232|     expect(out.body.error.code).toBe('breaks_required');
+       |                                 ^
+    233|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+    234|     expect(storedBreaks(t.db, sessionId)).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > treats an unconfirmed submitted list as the complete set: it replaces the saved rows and stays pending
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:240:24
+    238|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+    239|     const out = await clockOut(t, cookie, { breaks: [SECOND_BREAK], br…
+    240|     expect(out.status).toBe(200);
+       |                        ^
+    241|     expect(out.body.session).toMatchObject({ breaks_confirmed: false }…
+    242|     expect(storedBreaks(t.db, sessionId)).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > treats an unconfirmed empty list as present: it clears the saved rows and stays pending
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:251:24
+    249|     const { t, cookie, sessionId } = await openSessionWithSavedBreak();
+    250|     const out = await clockOut(t, cookie, { breaks: [], breaks_confirm…
+    251|     expect(out.status).toBe(200);
+       |                        ^
+    252|     expect(storedBreaks(t.db, sessionId)).toEqual([]);
+    253|     expect(out.body.day.calculation).toMatchObject({ status: 'incomple…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > rolls back a failure injected after the DELETE: the original break rows and IDs are restored
+AssertionError: expected 422 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:268:24
+    266|     const out = await clockOut(t, cookie, { breaks: [], breaks_confirm…
+    267|     t.db.exec('DROP TRIGGER fail_clock_out_audit');
+    268|     expect(out.status).toBe(500);
+       |                        ^
+    269|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+    270|     expect(breakRowsWithIds(t.db, sessionId)).toEqual(rowsBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > answers 409 stale_version and rolls back when the session UPDATE changes no row
+AssertionError: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:289:24
+    287|     const out = await clockOut(t, cookie, { breaks: [], breaks_confirm…
+    288|     t.db.exec('DROP TRIGGER ignore_clock_out_update');
+    289|     expect(out.status).toBe(409);
+       |                        ^
+    290|     expect(out.body.error.code).toBe('stale_version');
+    291|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > gives a legacy saved break that ends after the Clock out instant a typed 422 and changes nothing
+AssertionError: expected 'validation_error' to be 'saved_break_after_clock_out' // Object.is equality
+
+Expected: "saved_break_after_clock_out"
+Received: "validation_error"
+
+ ❯ tests/integration/clock-out-breaks.test.ts:310:37
+    308|     const omitted = await clockOut(t, cookie, { breaks_confirmed: fals…
+    309|     expect(omitted.status).toBe(422);
+    310|     expect(omitted.body.error.code).toBe('saved_break_after_clock_out'…
+       |                                     ^
+    311|     expect(omitted.body.error.details.break_ids).toEqual(['legacy-futu…
+    312|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  18 failed | 2 passed (20)
+   Start at  21:21:32
+   Duration  3.26s (tests 78%, transform 17%, import 5%)

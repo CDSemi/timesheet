@@ -1,0 +1,38 @@
+$ mutation check: the clockOut zero-row guard (if (result.changes !== 1) throw staleVersion()) removed temporarily; vitest tests/integration/clock-out-breaks.test.ts. Source restored afterwards.
+
+> timesheet@0.1.0 test
+> vitest run tests/integration/clock-out-breaks.test.ts
+
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/clock-out-breaks.test.ts (14 tests | 1 failed) 2547ms
+   ❯ Clock out break-list contract (WP2-T01, decision E-1) (8)
+     × answers 409 stale_version and rolls back when the session UPDATE changes no row 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out break-list contract (WP2-T01, decision E-1) > answers 409 stale_version and rolls back when the session UPDATE changes no row
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/clock-out-breaks.test.ts:289:24
+    287|     const out = await clockOut(t, cookie, { breaks: [], breaks_confirm…
+    288|     t.db.exec('DROP TRIGGER ignore_clock_out_update');
+    289|     expect(out.status).toBe(409);
+       |                        ^
+    290|     expect(out.body.error.code).toBe('stale_version');
+    291|     expect(sessionState(t.db, sessionId)).toEqual(STILL_OPEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 passed (14)
+   Start at  21:20:28
+   Duration  2.93s (tests 90%, transform 6%, import 4%)

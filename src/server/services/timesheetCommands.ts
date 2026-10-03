@@ -57,6 +57,8 @@ export interface CommandContext {
 
 /** Manual entries may not describe future work; a small allowance covers clock skew. */
 const FUTURE_ALLOWANCE_SECONDS = 5 * 60;
+/** A break on an open session may end at most this long after now (clock skew allowance). */
+export const OPEN_SESSION_BREAK_ALLOWANCE_SECONDS = 5 * 60;
 const OPEN_END = '9999-12-31T23:59:59Z';
 
 interface EditScope {
@@ -167,6 +169,18 @@ interface ResolvedSession {
   breaks: Array<Omit<BreakInterval, 'confirmed'>>;
 }
 
+/** A break later than now + allowance cannot be actual evidence, so it is never stored or confirmed. */
+function assertNoFutureBreaks(ctx: CommandContext, breaks: ResolvedSession['breaks']): void {
+  const latest = nowEpoch(ctx.clock) + OPEN_SESSION_BREAK_ALLOWANCE_SECONDS;
+  const index = breaks.findIndex((item) => item.endUtc > latest);
+  if (index >= 0) {
+    throw new ApiError(422, 'future_break', 'A break cannot end later than five minutes from now', {
+      break_index: index,
+      latest_allowed_end: formatUtcInstant(latest),
+    });
+  }
+}
+
 function resolveSession(
   ctx: CommandContext,
   scope: UserScope,
@@ -197,6 +211,7 @@ function resolveSession(
   if (resolved.startUtc > latest || (resolved.endUtc ?? resolved.startUtc) > latest) {
     throw new ApiError(422, 'future_time', 'Actual work sessions cannot end in the future');
   }
+  assertNoFutureBreaks(ctx, resolved.breaks);
   return resolved;
 }
 
@@ -421,25 +436,51 @@ export function clockIn(ctx: CommandContext, input: ClockInBody) {
   return { session: sessionJson(session), day: getDayView(ctx.db, ctx.clock, ctx.user, session.work_date) };
 }
 
-/** Ends the running session now; the caller confirms actual breaks, none, or leaves them unknown. */
+/**
+ * Ends the running session now. `expected_version` is required (409 stale_version). A
+ * present `breaks` list is the complete actual set and replaces the saved rows, as in
+ * updateSession, whether or not it is confirmed. An omitted list is allowed only while the
+ * breaks stay unconfirmed and keeps the saved rows unchanged (WP2 decision E-1).
+ */
 export function clockOut(ctx: CommandContext, input: ClockOutBody) {
   const sessionId = writeTransaction(ctx.db, () => {
     const open = findOpenSession(ctx.db, ctx.user.id);
     if (open === undefined) throw new ApiError(409, 'no_open_session', 'There is no running session to clock out of');
+    if (open.version !== input.expected_version) throw staleVersion();
+    if (input.breaks === undefined && input.breaks_confirmed) {
+      throw new ApiError(422, 'breaks_required', 'Confirming breaks requires the complete list of breaks, including an empty list');
+    }
     const scope = loadScope(ctx.db, ctx.user);
     const edit = prepareEdit(ctx, scope, open.work_date, input.reason);
+    const endEpoch = nowEpoch(ctx.clock);
     const resolved = resolveSession(ctx, scope, open.work_date, {
       start: open.start_utc,
-      end: formatUtcInstant(nowEpoch(ctx.clock)),
-      breaks: input.breaks,
+      end: formatUtcInstant(endEpoch),
+      breaks: input.breaks ?? [],
       breaks_confirmed: input.breaks_confirmed,
     });
-    // Confirmed actual breaks (including the explicit empty set) are the session's whole
-    // break set, as in updateSession: drop the saved rows before inserting the submitted
-    // ones so they are neither duplicated nor silently kept (R-01, R-02). Unconfirmed
-    // breaks stay unknown and leave the saved rows untouched. Any later failure rolls the
-    // whole transaction back, restoring the deleted rows.
-    if (input.breaks_confirmed) {
+    const replaceBreaks = input.breaks !== undefined;
+    if (!replaceBreaks) {
+      // Legacy rows saved before the future-break rule can end after this Clock out. They
+      // cannot stay inside the closed session and are never deleted silently: the caller
+      // must resubmit the complete list, which replaces them.
+      const late = ctx.db
+        .prepare('SELECT id FROM session_breaks WHERE session_id = ? AND user_id = ? AND end_utc > ? ORDER BY start_utc')
+        .all(open.id, ctx.user.id, formatUtcInstant(endEpoch)) as Array<{ id: string }>;
+      if (late.length > 0) {
+        throw new ApiError(
+          422,
+          'saved_break_after_clock_out',
+          'A saved break ends after this Clock out; resubmit the complete list of breaks to replace it',
+          { break_ids: late.map((row) => row.id) },
+        );
+      }
+    }
+    // A submitted list is the session's whole break set, as in updateSession: drop the
+    // saved rows before inserting it so they are neither duplicated nor silently kept
+    // (R-01, R-02). An omitted list (unconfirmed only) leaves them untouched. Any later
+    // failure rolls the whole transaction back, restoring the deleted rows.
+    if (replaceBreaks) {
       ctx.db.prepare('DELETE FROM session_breaks WHERE session_id = ? AND user_id = ?').run(open.id, ctx.user.id);
     }
     const result = ctx.db

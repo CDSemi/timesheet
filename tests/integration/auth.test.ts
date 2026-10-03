@@ -25,7 +25,7 @@ const PROTECTED: Array<[string, string, unknown?]> = [
   ['PUT', '/api/sessions/any-id', {}],
   ['DELETE', '/api/sessions/any-id', { expected_version: 1 }],
   ['POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }],
-  ['POST', '/api/clock/out', { breaks: [], breaks_confirmed: true }],
+  ['POST', '/api/clock/out', { breaks: [], breaks_confirmed: true, expected_version: 1 }],
   ['GET', '/api/policies'],
   ['POST', '/api/policies', {}],
 ];

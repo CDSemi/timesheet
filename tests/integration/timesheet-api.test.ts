@@ -102,11 +102,11 @@ describe('calculations through the API', () => {
     const { t, cookie } = await setup('2026-09-28T15:00:00Z');
     expect((await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'Asia/Ho_Chi_Minh' } })).status).toBe(201);
     t.clock.set('2026-09-28T19:00:40Z');
-    await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true } });
+    await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 1 } });
     t.clock.set('2026-09-28T20:00:00Z');
     await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'Asia/Ho_Chi_Minh' } });
     t.clock.set('2026-09-29T00:30:30Z');
-    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true } });
+    const out = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: true, expected_version: 1 } });
     // 4h00m40s + 4h30m30s = 8h31m10s → R = 511 (per-session flooring would give 510 and no credit).
     expect(out.body.day.calculation).toMatchObject({
       regular_seconds: 30_670,
@@ -130,7 +130,7 @@ describe('calculations through the API', () => {
     const again = await t.request('POST', '/api/clock/in', { cookie, body: { input_zone: 'America/Los_Angeles' } });
     expect(again.body.error.code).toBe('open_session_exists');
     t.clock.set('2026-09-29T01:00:00Z');
-    const unknownBreaks = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: false } });
+    const unknownBreaks = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: [], breaks_confirmed: false, expected_version: 1 } });
     expect(unknownBreaks.body.day.calculation).toMatchObject({ status: 'incomplete_breaks', credited_minutes: null });
     const sheet = await t.request('GET', '/api/timesheets/2026-10-16', { cookie });
     expect(sheet.body.totals).toEqual({ provisional_credited_minutes: 0, pending_days: 1 });

@@ -152,7 +152,7 @@ describe('two-user isolation (AC-01)', () => {
     t.clock.set('2026-09-29T18:00:00Z');
     const clockOut = await t.request('POST', '/api/clock/out', {
       cookie: employee,
-      body: { breaks: [], breaks_confirmed: true },
+      body: { breaks: [], breaks_confirmed: true, expected_version: 1 },
     });
     expect(clockOut.status).toBe(409);
     expect(clockOut.body.error.code).toBe('no_open_session');

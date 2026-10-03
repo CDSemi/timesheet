@@ -51,6 +51,7 @@ export interface Session {
   input_zone: string;
   source: 'manual' | 'clock';
   breaks_confirmed: boolean;
+  version: number;
   breaks: Array<{ id: string; start_utc: string; end_utc: string; counts_as_work: boolean }>;
 }
 

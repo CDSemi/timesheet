@@ -87,11 +87,34 @@ export function TimesheetScreen({ user, onSignedOut }: { user: User; onSignedOut
     }
   }
 
+  /** Finds the running session in the loaded period, else in the current period. */
+  async function findRunningSession(): Promise<Session | undefined> {
+    const running = (sheet: TimesheetView) =>
+      sheet.days.flatMap((day) => day.sessions).find((session) => session.end_utc === null);
+    const shown = view === null ? undefined : running(view);
+    if (shown !== undefined || view === null) return shown;
+    const current = await api<TimesheetView>('GET', `/api/timesheets/${view.current_payroll_date}`);
+    return running(current);
+  }
+
   async function clock(action: 'in' | 'out') {
     setMessage(null);
     try {
-      const body = action === 'in' ? { input_zone: displayZone } : { breaks: [], breaks_confirmed: noBreaks };
-      await api('POST', `/api/clock/${action}`, body);
+      if (action === 'in') {
+        await api('POST', '/api/clock/in', { input_zone: displayZone });
+      } else {
+        const running = await findRunningSession();
+        if (running === undefined) {
+          setMessage('No running session found; reload the page.');
+          return;
+        }
+        // The version makes a stale Clock out fail with 409. Unticked breaks are sent as
+        // unknown by omitting the list, so saved breaks are kept; ticking confirms none.
+        const body = noBreaks
+          ? { breaks: [], breaks_confirmed: true, expected_version: running.version }
+          : { breaks_confirmed: false, expected_version: running.version };
+        await api('POST', '/api/clock/out', body);
+      }
       load();
     } catch (caught) {
       report(caught);

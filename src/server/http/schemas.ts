@@ -76,8 +76,15 @@ export const clockInBody = z.strictObject({
 export type ClockInBody = z.infer<typeof clockInBody>;
 
 export const clockOutBody = z.strictObject({
-  breaks: z.array(breakInput).max(20),
+  /**
+   * The session's complete actual break set. When present it replaces the saved rows,
+   * confirmed or not (an empty list clears them). Omit it only for an unconfirmed Clock
+   * out, which keeps the saved rows and leaves the breaks unknown (R-01, R-02).
+   */
+  breaks: z.array(breakInput).max(20).optional(),
   breaks_confirmed: z.boolean(),
+  /** Version of the running session as last loaded; a mismatch is 409 stale_version. */
+  expected_version: z.number().int().positive(),
   reason,
 });
 export type ClockOutBody = z.infer<typeof clockOutBody>;
