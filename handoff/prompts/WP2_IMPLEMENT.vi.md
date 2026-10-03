@@ -1,6 +1,6 @@
 # Triển khai WP2 — Không gian cá nhân và sổ OT
 
-Người dùng chọn: **Claude Code, Sonnet 5.5, Medium**, đăng nhập Max hiện có. Kiểm model/usage và dự phòng tài liệu 08. Prompt không cấu hình client.
+Thực hiện: subagent triển khai/sửa được coordinator giao; chọn profile/model/effort theo độ khó task ở tài liệu 08. ChatGPT/Codex cũng có thể nhận vai trò này. Dùng đăng nhập subscription hiện có.
 
 Triển khai **chỉ WP2**. Theo [AGENTS](../../AGENTS.md). Kiểm repo thật và bàn giao trước đã đạt trước khi sửa. Trao đổi tiếng Việt; code/comment và docs chuẩn tiếng Anh, tài liệu cho người đọc có bản dịch Việt tương ứng.
 
@@ -19,8 +19,10 @@ Checkpoint gợi ý: (1) Editor/settings/lịch; (2) sổ/phép/lịch sử/tíc
 
 Gate bắt buộc: Luồng browser chính; AC-01/03/04/05 cho service đã làm; giữ chỗ đồng thời; phép một phần; chênh lệch sửa; xuất bằng chứng an toàn; admin không xem mọi dữ liệu riêng.
 
-Thực hiện triển khai, không chỉ đề xuất. Gửi cục bộ ở dry-run/capture. Không đổi thanh toán, mua usage, chạy agent song song, mở host hay gửi tin thật. Tự quyết việc thường trong hợp đồng; báo mâu thuẫn yêu cầu thật.
+Thực hiện triển khai, không chỉ đề xuất. Gửi cục bộ ở dry-run/capture. Không đổi thanh toán, mua usage, mở host hay gửi tin thật. Tự quyết việc thường trong hợp đồng; báo mâu thuẫn yêu cầu thật.
 
 Giao source/migration/test thay đổi đầy đủ, lệnh/kết quả đúng và [HANDOFF](../templates/HANDOFF.vi.md) có bản chuẩn Anh và .vi.md. Ghi baseline/commit, model/effort thật nếu thấy, path bằng chứng, hạn chế và một bước tiếp theo để review độc lập. Chưa chạy không là đạt. Nếu gián đoạn lưu [CHECKPOINT](../templates/CHECKPOINT.vi.md), tiếp tục giai đoạn này. Không bắt đầu WP3.
 
 Bản dịch của [WP2_IMPLEMENT.md](WP2_IMPLEMENT.md); tiếng Anh là nguồn chuẩn.
+
+Ranh giới task: chỉ coordinator giao agent và chuyển giai đoạn. Lưu kết quả/checkpoint được giao sau mỗi bước liền mạch; không ghi state chung hoặc audit thay đổi của mình.

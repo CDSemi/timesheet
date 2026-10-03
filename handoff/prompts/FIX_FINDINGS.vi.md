@@ -1,6 +1,6 @@
 # Sửa phát hiện review đã chấp nhận
 
-Người dùng chọn Claude Code, model/effort cùng giai đoạn theo tài liệu 08, subscription hiện có. Giao source đầy đủ hiện tại, baseline đã review, REVIEW và HANDOFF.
+Thực hiện: subagent sửa được giao; coordinator chọn profile/model/effort theo độ khó ở tài liệu 08. Nhà cung cấp hỗ trợ nào cũng nhận được vai trò này bằng subscription hiện có. Giao source đủ, baseline/digest đã review, REVIEW và HANDOFF. Lưu checkpoint từng task; trả coordinator để auditor độc lập context mới kiểm lại.
 
 Theo AGENTS.md. Tái hiện từng lỗi chấp nhận, gắn ID quy tắc/AC rồi sửa phần liền mạch nhỏ nhất. Giữ việc không liên quan, lịch sử bất biến, quyền và phạm vi đã đạt. Thêm regression có ý nghĩa cho lỗi, không test chỉ lặp cách code.
 

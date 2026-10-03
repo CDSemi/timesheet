@@ -1,6 +1,6 @@
 # WP4 implementation — Docker, import and recovery
 
-Operator: **Claude Code, Sonnet 5.5, Medium**, existing Max sign-in. Verify model/usage and document 08's fallback. This prompt does not configure the client.
+Operator: assigned implementation/fix subagent under the coordinator; profile/model/effort selected by task complexity under document 08. ChatGPT/Codex may also execute this role. Use existing subscription sign-in.
 
 Implement **WP4 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
 
@@ -19,6 +19,8 @@ Suggested checkpoints: (1) Image/installation dry-run and restore; (2) workbook 
 
 Required gate: AC-11/12/15: clean install, migrations, restart persistence, backup under writes, isolated restore with file hashes/balances, identical re-import no-op and outbound paused after restore.
 
-Do the implementation, not just a proposal. Keep local sending in dry-run/capture. Do not change billing, buy usage, start parallel agents, expose a host or send real messages. Resolve routine choices within the contracts; flag actual contradictory requirements.
+Do the implementation, not just a proposal. Keep local sending in dry-run/capture. Do not change billing, buy usage, expose a host or send real messages. Resolve routine choices within the contracts; flag actual contradictory requirements.
 
 Deliver complete changed source/migrations/tests, exact commands/results and [HANDOFF](../templates/HANDOFF.md) with a .vi.md translation. Record baseline/commit, actual model/effort if observable, evidence paths, limitations and one next action for independent review. Unrun checks are not passed. If interrupted, save [CHECKPOINT](../templates/CHECKPOINT.md) and resume this package. Do not start WP5.
+
+Task boundary: only the coordinator delegates and advances packages. Save assigned task results/checkpoints after each coherent step; do not write shared workflow state or audit your own changes.

@@ -1,6 +1,6 @@
 # Fix accepted review findings
 
-Operator: Claude Code, same package model/effort from document 08; existing subscription. Provide the current complete source, reviewed baseline, REVIEW and HANDOFF.
+Operator: assigned fix subagent; coordinator selects profile/model/effort by complexity under document 08. Any supported vendor may execute this role using existing subscription. Provide complete source, reviewed baseline/digest, REVIEW and HANDOFF. Save task-local checkpoints; return to a fresh independent auditor through the coordinator.
 
 Follow AGENTS.md. Reproduce each accepted finding, link its rule/AC ID, then make the smallest coherent fix. Preserve unrelated work, immutable history, ownership and accepted scope. Add meaningful regression coverage for the defect, not tests that simply mirror implementation.
 

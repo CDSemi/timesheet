@@ -1,14 +1,6 @@
 # Implementation roadmap
 
-Five packages in order. Internal checkpoints are recovery points, not extra project phases. Claude implements/fixes; ChatGPT reviews independently; Huy owns business exceptions, setup values and real activation. Use Standard speed for ChatGPT; model fallbacks and estimates are in [AI workflow](08_AI_WORKFLOW_AND_BUDGET.md).
-
-| Package | Claude model / effort | ChatGPT model / effort | Sessions (Claude + GPT) |
-|---|---|---|---|
-| WP1 — Foundation and time calculation | Sonnet 5.5 / High | GPT-6.1 Sol / High | 2 + 1 |
-| WP2 — Personal workspace and OT ledger | Sonnet 5.5 / Medium | GPT-6.1 Sol / Medium | 2–3 + 1 |
-| WP3 — PDF, sign-off and automatic submission | Sonnet 5.5 / High | GPT-6.1 Sol / High | 2–3 + 1 |
-| WP4 — Docker, import and recovery | Sonnet 5.5 / Medium | GPT-6.1 Sol / High | 1–2 + 1 |
-| WP5 — Independent acceptance and pilot | Sonnet 5.5 / Medium | GPT-6.1 Sol / High | 1–2 + 1–2 |
+Five packages in order. One coordinator delegates planning, implementation, fixes, verification and independent audit; no vendor owns a mandatory role. The mission advances automatically after each required gate/audit PASS. Huy owns business exceptions, setup and real activation. Complexity routing and recovery are in [AI workflow](08_AI_WORKFLOW_AND_BUDGET.md). Internal checkpoints are recovery points, not extra phases.
 
 ## WP1 — Foundation and time calculation
 
@@ -60,11 +52,11 @@ Prompts: [Implement](../handoff/prompts/WP4_IMPLEMENT.md) / [Review](../handoff/
 
 ## WP5 — Independent acceptance and pilot
 
-Prerequisite: accepted earlier handoffs and complete current source. **Start with the ChatGPT review prompt**, then use Claude for accepted fixes.
+Prerequisite: accepted earlier handoffs and complete current source. **Start with a fresh independent audit using WP5_REVIEW**, then delegate accepted fixes to a worker.
 
 Start from the accepted WP1–WP4 release candidate and WP5 independent findings. Reproduce/fix accepted defects with bounded regression tests; preserve accepted scope and history. Prepare bilingual release/setup notes and the exact pilot packet (URL, sender/recipients, email/PDF, settings, restore proof and rollback). If no independent assessment exists, identify it as pending, never fabricate a pass. Do not perform real deployment/sending without owner authorization.
 
-Checkpoints: ChatGPT assesses first; Claude fixes; ChatGPT rechecks; owner reviews the concrete pilot.
+Checkpoints: Fresh auditor assesses first; worker fixes; independent auditor rechecks; owner reviews the concrete pilot.
 
 Gate: AC-13 plus every unresolved required gate; complete reproducible release, verified restore, no blocking integrity/privacy/submission defect. Separate software readiness from owner authorization and actual production pilot outcome.
 

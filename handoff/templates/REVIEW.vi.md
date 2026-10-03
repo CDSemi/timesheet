@@ -15,3 +15,11 @@
 Không lỗi bịa hoặc đạt chưa quan sát. Review một phần không là nghiệm thu toàn bộ.
 
 Bản dịch của [REVIEW.md](REVIEW.md); tiếng Anh là nguồn chuẩn.
+
+## Nguồn gốc subagent độc lập
+
+- Task/attempt review, reviewer ID và author ID đang kiểm:
+- Context mới; xác nhận reviewer không viết thay đổi:
+- Digest trước/sau; bằng chứng gate snapshot đó:
+- Path report mới giữ lịch sử review trước:
+- Xử lý phát hiện và task sửa/recheck tiếp của coordinator:

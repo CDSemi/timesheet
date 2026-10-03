@@ -1,6 +1,6 @@
 # WP5 implementation — Independent acceptance and pilot
 
-Operator: **Claude Code, Sonnet 5.5, Medium**, existing Max sign-in. Verify model/usage and document 08's fallback. This prompt does not configure the client.
+Operator: assigned implementation/fix subagent under the coordinator; profile/model/effort selected by task complexity under document 08. ChatGPT/Codex may also execute this role. Use existing subscription sign-in.
 
 Implement **WP5 only**. Follow [AGENTS](../../AGENTS.md). Inspect the actual repository and accepted earlier handoffs before editing. Communicate in Vietnamese; code/comments and canonical docs are English with matching human-facing Vietnamese translations.
 
@@ -15,10 +15,12 @@ Read only additional source/docs needed for a concrete dependency. Use the relev
 
 Scope: Start from the accepted WP1–WP4 release candidate and WP5 independent findings. Reproduce/fix accepted defects with bounded regression tests; preserve accepted scope and history. Prepare bilingual release/setup notes and the exact pilot packet (URL, sender/recipients, email/PDF, settings, restore proof and rollback). If no independent assessment exists, identify it as pending, never fabricate a pass. Do not perform real deployment/sending without owner authorization.
 
-Suggested checkpoints: ChatGPT assesses first; Claude fixes; ChatGPT rechecks; owner reviews the concrete pilot.
+Suggested checkpoints: Fresh auditor assesses first; assigned worker fixes; independent auditor rechecks; owner reviews the concrete pilot.
 
 Required gate: AC-13 plus every unresolved required gate; complete reproducible release, verified restore, no blocking integrity/privacy/submission defect. Separate software readiness from owner authorization and actual production pilot outcome.
 
-Do the implementation, not just a proposal. Keep local sending in dry-run/capture. Do not change billing, buy usage, start parallel agents, expose a host or send real messages. Resolve routine choices within the contracts; flag actual contradictory requirements.
+Do the implementation, not just a proposal. Keep local sending in dry-run/capture. Do not change billing, buy usage, expose a host or send real messages. Resolve routine choices within the contracts; flag actual contradictory requirements.
 
 Deliver complete changed source/migrations/tests, exact commands/results and [HANDOFF](../templates/HANDOFF.md) with a .vi.md translation. Record baseline/commit, actual model/effort if observable, evidence paths, limitations and one next action for independent review. Unrun checks are not passed. If interrupted, save [CHECKPOINT](../templates/CHECKPOINT.md) and resume this package. After acceptance, hand over the concrete pilot packet for owner authorization.
+
+Task boundary: only the coordinator delegates and advances packages. Save assigned task results/checkpoints after each coherent step; do not write shared workflow state or audit your own changes.

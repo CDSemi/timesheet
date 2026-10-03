@@ -1,14 +1,6 @@
 # Lộ trình triển khai
 
-Năm giai đoạn theo thứ tự. Checkpoint nội bộ là điểm tiếp tục, không phải chia thêm giai đoạn. Claude triển khai/sửa; ChatGPT review độc lập; Huy quyết ngoại lệ nghiệp vụ, cấu hình và kích hoạt thật. ChatGPT dùng Standard; dự phòng model/ước lượng ở [phối hợp AI](08_AI_WORKFLOW_AND_BUDGET.vi.md).
-
-| Giai đoạn | Claude model / effort | ChatGPT model / effort | Phiên (Claude + GPT) |
-|---|---|---|---|
-| WP1 — Nền tảng và bộ tính giờ | Sonnet 5.5 / High | GPT-6.1 Sol / High | 2 + 1 |
-| WP2 — Không gian cá nhân và sổ OT | Sonnet 5.5 / Medium | GPT-6.1 Sol / Medium | 2–3 + 1 |
-| WP3 — PDF, sign-off và tự nộp | Sonnet 5.5 / High | GPT-6.1 Sol / High | 2–3 + 1 |
-| WP4 — Docker, nhập và phục hồi | Sonnet 5.5 / Medium | GPT-6.1 Sol / High | 1–2 + 1 |
-| WP5 — Nghiệm thu độc lập và pilot | Sonnet 5.5 / Medium | GPT-6.1 Sol / High | 1–2 + 1–2 |
+Năm giai đoạn theo thứ tự. Một coordinator giao plan, implement, sửa, kiểm chứng và audit độc lập; không nhà cung cấp nào có vai trò bắt buộc. Nhiệm vụ tự tiến sau gate/audit PASS. Huy quyết ngoại lệ nghiệp vụ, setup và kích hoạt thật. Chọn theo độ khó và recovery ở [quy trình AI](08_AI_WORKFLOW_AND_BUDGET.vi.md). Checkpoint là điểm phục hồi, không thêm giai đoạn.
 
 ## WP1 — Nền tảng và bộ tính giờ
 
@@ -60,11 +52,11 @@ Prompt: [Triển khai](../handoff/prompts/WP4_IMPLEMENT.vi.md) / [Review](../han
 
 ## WP5 — Nghiệm thu độc lập và pilot
 
-Điều kiện: bàn giao trước đã đạt và source hiện tại đầy đủ. **Bắt đầu bằng prompt ChatGPT review**, rồi dùng Claude sửa lỗi chấp nhận.
+Điều kiện: bàn giao trước đã đạt và source hiện tại đầy đủ. **Bắt đầu bằng audit độc lập context mới theo WP5_REVIEW**, rồi giao worker sửa lỗi chấp nhận.
 
 Bắt đầu từ bản ứng viên WP1–WP4 đã đạt và lỗi review WP5. Tái hiện/sửa lỗi chấp nhận với regression có phạm vi; giữ phạm vi/lịch sử đã đạt. Chuẩn bị ghi chú phát hành/setup song ngữ và pilot chính xác (URL, sender/người nhận, thư/PDF, settings, bằng chứng restore, rollback). Nếu chưa có đánh giá độc lập ghi đang chờ, không bịa đạt. Không triển khai/gửi thật nếu chưa có phép chủ.
 
-Checkpoint: ChatGPT đánh giá trước; Claude sửa; ChatGPT kiểm lại; chủ hệ thống xem pilot cụ thể.
+Checkpoint: Auditor mới đánh giá trước; worker sửa; auditor độc lập kiểm lại; chủ hệ thống xem pilot cụ thể.
 
 Gate: AC-13 và mọi gate bắt buộc còn lại; bản phát hành đầy đủ lặp được, restore đã kiểm, không lỗi chặn toàn vẹn/riêng tư/nộp. Tách sẵn sàng phần mềm khỏi phép chủ và kết quả pilot production thật.
 

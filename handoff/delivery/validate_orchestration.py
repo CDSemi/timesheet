@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Read-only workflow/configuration validation; not application acceptance.
+
+Usage: python handoff/delivery/validate_orchestration.py [--board relative-path]
+Requires Python 3.9+. Does not run Claude, change state or inspect billing.
+"""
+import argparse
+import json
+import re
+from pathlib import Path, PurePosixPath
+
+ROOT = Path(__file__).resolve().parents[2]
+STATUSES = {"pending", "running", "interrupted", "blocked", "done", "cancelled"}
+KINDS = {"plan", "diagnose", "implement", "fix", "gate", "audit", "documentation"}
+PACKAGES = [f"WP{index}" for index in range(1, 6)]
+WRITERS = {"implement", "fix"}
+SHARED = {"handoff/delivery/STATE.json", "handoff/delivery/ORCHESTRATION.json",
+          "handoff/delivery/ORCHESTRATION.previous.json", "handoff/NEXT_ACTION.md",
+          "handoff/NEXT_ACTION.vi.md"}
+
+
+def check(ok, message):
+    if not ok:
+        raise ValueError(message)
+
+
+def local_path(value):
+    check(isinstance(value, str) and value != "", "Path must be a nonempty string")
+    path = PurePosixPath(value)
+    check(not path.is_absolute() and not set(path.parts) & {"..", ".git"}
+          and not any(char in value for char in "\\:*?[]"), f"Unsafe path: {value}")
+    target = (ROOT / value).resolve()
+    check(target != ROOT and ROOT in target.parents, f"Path escapes project: {value}")
+    return target
+
+
+def overlaps(left, right):
+    return left == right or left.startswith(right + "/") or right.startswith(left + "/")
+
+
+def profiles():
+    settings = json.loads((ROOT / ".claude/settings.json").read_text(encoding="utf-8"))
+    check(settings.get("agent") == "timesheet-coordinator", "Default coordinator missing")
+    result = {}
+    for path in sorted((ROOT / ".claude/agents").glob("timesheet-*.md")):
+        text = path.read_text(encoding="utf-8")
+        front = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+        check(front is not None, f"Invalid frontmatter: {path.name}")
+        fields = dict(line.split(": ", 1) for line in front[1].splitlines())
+        name = fields.get("name")
+        check(name and name not in result, "Missing or duplicate profile name")
+        check(fields.get("description"), f"Description missing: {name}")
+        check(fields.get("model") in {"sonnet", "opus", "haiku", "inherit"},
+              f"Unexpected model alias: {name}")
+        check(fields.get("effort") in {"low", "medium", "high", "xhigh", "max"},
+              f"Unexpected effort: {name}")
+        tools = {tool.strip() for tool in fields.get("tools", "").split(",")}
+        if name == "timesheet-coordinator":
+            check("Agent" in tools and "Bash" not in tools, "Coordinator must delegate shell work")
+        else:
+            check("Agent" not in tools, f"Nested delegation prohibited: {name}")
+        result[name] = fields
+    check(len(result) == 8, "Expected eight project profiles")
+    return result
+
+
+def validate(board, state, configured):
+    check(board.get("schema_version") == 1, "Unsupported board schema")
+    check(board.get("mission_id"), "Mission ID missing")
+    check(board.get("authorized_scope") == PACKAGES, "Mission scope must preserve WP1–WP5")
+    check(board.get("status") in {"ready", "running", "paused_usage", "blocked", "software_ready"},
+          "Invalid mission status")
+    check(board.get("max_active_subagents") == 2 and board.get("max_source_writers") == 1,
+          "Concurrency policy changed")
+    check(board.get("stop_before") == ["real_sending", "production_activation"],
+          "Owner activation boundary missing")
+    active = board.get("active_package")
+    check(active in PACKAGES and state.get("active_work_package") == active,
+          "Board/package summary disagree")
+    check(state.get("next_prompt") == "handoff/prompts/ORCHESTRATE.md",
+          "Entry prompt must be orchestration")
+    phases = {phase["id"]: phase for phase in state["phases"]}
+    for previous in PACKAGES[:PACKAGES.index(active)]:
+        check(phases[previous].get("independent_review") == "passed",
+              f"Prior package not independently passed: {previous}")
+    check(local_path(board["checkpoint"]).is_file(), "Workflow checkpoint/handoff missing")
+    tasks = board.get("tasks")
+    check(isinstance(tasks, list) and tasks, "Task list missing")
+    by_id = {}
+    for task in tasks:
+        name = task.get("id")
+        check(isinstance(name, str) and re.fullmatch(r"[A-Z0-9-]+", name), "Invalid task ID")
+        check(name not in by_id, f"Duplicate task: {name}")
+        by_id[name] = task
+        check(task.get("package") in PACKAGES, f"Invalid package: {name}")
+        check(task.get("status") in STATUSES and task.get("kind") in KINDS,
+              f"Invalid status/kind: {name}")
+        check(type(task.get("attempt")) is int and task["attempt"] >= 0, f"Invalid attempt: {name}")
+        profile = configured.get(task.get("profile"))
+        check(profile and profile["name"] != "timesheet-coordinator", f"Invalid task profile: {name}")
+        if task["status"] in {"pending", "running"}:
+            check(task.get("requested_model") == profile["model"] and
+                  task.get("requested_effort") == profile["effort"], f"Requested profile settings differ: {name}")
+        if task["kind"] == "audit":
+            check(task["profile"] == "timesheet-auditor", f"Audit requires audit profile: {name}")
+        if task["kind"] == "gate":
+            check(task["profile"] == "timesheet-verifier", f"Gate requires verifier profile: {name}")
+        if task["kind"] in WRITERS:
+            check(task["profile"] in {"timesheet-worker", "timesheet-worker-high", "timesheet-expert"},
+                  f"Source task requires worker profile: {name}")
+        check(task.get("next_action"), f"Next action missing: {name}")
+        check(local_path(task["prompt"]).is_file(), f"Prompt missing: {name}")
+        report = local_path(task["report"])
+        if task["status"] not in {"pending", "cancelled"}:
+            check(report.is_file() and report.with_name(report.stem + ".vi.md").is_file(),
+                  f"Durable bilingual brief/result missing: {name}")
+        paths = task.get("owned_paths")
+        check(isinstance(paths, list) and paths and len(paths) == len(set(paths)), f"Owned paths missing/duplicated: {name}")
+        check(any(overlaps(task["report"], value) for value in paths), f"Report outside owned paths: {name}")
+        for value in paths:
+            local_path(value)
+            check(not any(overlaps(value, shared) for shared in SHARED), f"Task owns shared state: {name}")
+        evidence = task.get("evidence")
+        check(isinstance(evidence, list), f"Evidence must be a list: {name}")
+        for value in evidence:
+            check(local_path(value).is_file(), f"Evidence file missing: {name}: {value}")
+        check(isinstance(task.get("depends_on"), list), f"Dependencies missing: {name}")
+        if task["status"] == "done" and task["kind"] in {"gate", "audit"}:
+            check(evidence and re.fullmatch(r"[a-f0-9]{64}", task.get("source_digest") or ""),
+                  f"Gate/audit lacks digest/execution evidence: {name}")
+        if task["status"] == "done" and task["kind"] == "gate":
+            check(task.get("decision") in {"PASS", "FAIL", "NOT VERIFIED"}, f"Gate verdict missing: {name}")
+        if task["kind"] == "audit" and task["status"] == "done":
+            check(task.get("decision") in {"PASS", "FIX REQUIRED", "NOT VERIFIED"}, f"Audit verdict missing: {name}")
+            authors = {item["agent_id"] for item in tasks if item["package"] == task["package"]
+                       and item["kind"] in WRITERS and item.get("agent_id")}
+            authors.update(task.get("author_agent_ids", []))
+            check(task.get("agent_id") and task["agent_id"] not in authors, f"Auditor is author or identity unknown: {name}")
+            if task["decision"] == "PASS":
+                check(task.get("reviewed_digest") == task["source_digest"], f"PASS digest mismatch: {name}")
+                if task["package"] == active:
+                    check(task["reviewed_digest"] == board.get("current_source_digest"), f"Stale PASS: {name}")
+    visited, visiting = set(), set()
+
+    def visit(name):
+        check(name not in visiting, f"Dependency cycle: {name}")
+        if name in visited:
+            return
+        visiting.add(name)
+        task = by_id[name]
+        check(len(task["depends_on"]) == len(set(task["depends_on"])), f"Duplicate dependencies: {name}")
+        for dependency in task["depends_on"]:
+            check(dependency in by_id and dependency != name, f"Unknown/self dependency: {name}")
+            visit(dependency)
+            if task["status"] in {"running", "done"}:
+                check(by_id[dependency]["status"] == "done", f"Unfinished dependency: {name}")
+                if by_id[dependency]["kind"] == "audit":
+                    check(by_id[dependency].get("decision") == "PASS", f"Dependency audit not PASS: {name}")
+                if by_id[dependency]["kind"] == "gate":
+                    check(by_id[dependency].get("decision") == "PASS", f"Dependency gate not PASS: {name}")
+                    if task["kind"] == "audit" and task["status"] == "done" and task.get("decision") == "PASS":
+                        check(by_id[dependency]["source_digest"] == task["reviewed_digest"],
+                              f"Gate/audit snapshot mismatch: {name}")
+        visiting.remove(name)
+        visited.add(name)
+
+    for name in by_id:
+        visit(name)
+    running = [task for task in tasks if task["status"] == "running"]
+    check(len(running) <= 2, "Too many active subagents")
+    writers = [task for task in running if task["kind"] in WRITERS or
+               any(not value.startswith("handoff/delivery/") for value in task["owned_paths"])]
+    check(len(writers) <= 1, "More than one source writer")
+    check(not writers or not any(task["kind"] in {"gate", "audit"} for task in running),
+          "Source writer overlaps verification/audit")
+    for index, left in enumerate(running):
+        check(left["package"] == active, "Running task outside active package")
+        for right in running[index + 1:]:
+            check(not any(overlaps(a, b) for a in left["owned_paths"] for b in right["owned_paths"]),
+                  f"Concurrent ownership conflict: {left['id']} / {right['id']}")
+    next_id = board.get("next_task_id")
+    if board["status"] == "software_ready":
+        check(next_id is None and not running, "Ready mission still has active work")
+        check(all(phases[item].get("independent_review") == "passed" for item in PACKAGES),
+              "Software readiness requires every package audit")
+        check(all(task["status"] in {"done", "cancelled"} for task in tasks), "Required tasks remain")
+    else:
+        check(next_id in by_id and by_id[next_id]["status"] not in {"done", "cancelled"}, "Next task invalid")
+    return {"status": "PASS", "profiles": len(configured), "tasks": len(tasks),
+            "active_tasks": len(running), "application_acceptance_verified": False,
+            "claude_runtime_verified": False}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--board", default="handoff/delivery/ORCHESTRATION.json")
+    args = parser.parse_args()
+    board = json.loads(local_path(args.board).read_text(encoding="utf-8"))
+    state = json.loads((ROOT / "handoff/delivery/STATE.json").read_text(encoding="utf-8"))
+    print(json.dumps(validate(board, state, profiles()), indent=2))
+
+
+if __name__ == "__main__":
+    main()

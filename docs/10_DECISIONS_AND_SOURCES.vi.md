@@ -60,3 +60,14 @@ Thay công thức/khoản trừ 8,5 giờ, cách nói tự ký, giả định sc
 Kiểm nguồn công khai không xem quota, điều khiển phí thật, kiến trúc NAS, credential hay người nhận. Kiểm trong client/setup thật. Khả dụng có thể đổi; danh sách model có ngày không là quyền truy cập vĩnh viễn.
 
 Bản dịch của [10_DECISIONS_AND_SOURCES.md](10_DECISIONS_AND_SOURCES.md); tiếng Anh là nguồn chuẩn.
+
+## Thay đổi điều phối đã chốt — 2026-10-02
+Chủ yêu cầu một prompt Claude, vai trò không gắn nhà cung cấp, main chỉ coordinator,
+chọn subagent theo độ khó để plan/chẩn đoán/implement/sửa/kiểm chứng/audit độc lập,
+và recovery bền vững sau reset usage.
+Tài liệu 08 và ORCHESTRATE thay phân chia nhà cung cấp, chính sách cấm subagent/đổi model
+trước đây. Không đổi nghiệp vụ, gate WP1–WP5, billing subscription hoặc quyền kích hoạt
+thật của chủ. Độc lập nghĩa context tác giả/reviewer riêng và bằng chứng chạy trên source
+hiện tại, không nhất thiết khác nhà cung cấp.
+Khả năng subagent/model/resume/checkpoint chính thức kiểm ngày 2026-10-02; sửa docs này
+chưa thử client/account Claude thật tại máy. Không cấu hình scheduler reset tự động.

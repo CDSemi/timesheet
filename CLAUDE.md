@@ -1,7 +1,10 @@
 @AGENTS.md
 
-# Claude project entry
+# Claude guidance
 
-Follow [AGENTS.md](AGENTS.md), the active implementation prompt, and its canonical reading list. Start with [NEXT_ACTION](handoff/NEXT_ACTION.md) when no package is active.
+Keep this file limited to Claude-specific additions; maintain shared rules in
+[AGENTS.md](AGENTS.md), the active implementation prompt, and its canonical
+reading list.
 
-Claude owns implementation and bounded fixes. ChatGPT owns independent review. Do not mark your own implementation independently reviewed. Keep handoffs/checkpoints in `handoff/delivery/` and use the subscription-first policy in document 08.
+When changing Claude-specific frontmatter, tool permissions, or invocation
+syntax, verify support in the targeted Claude Code version.

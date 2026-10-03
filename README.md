@@ -11,6 +11,8 @@ English `.md` files are authoritative. Every `.vi.md` is a translation of the co
 3. Read [DEVELOPMENT](DEVELOPMENT.md) and the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md); they describe the complete source in this repository and how to verify it.
 4. Read the [independent WP1 review](handoff/delivery/WP1_REVIEW.md). The next action is the bounded F-01 fix with [FIX_FINDINGS](handoff/prompts/FIX_FINDINGS.md), then independent WP1 recheck. Do not restart WP1 implementation or begin WP2 before that recheck passes.
 
+Give Claude the single entry prompt in NEXT_ACTION; the coordinator resumes [saved tasks](handoff/delivery/ORCHESTRATION.json) and advances only after independent gates. Project profiles live in `.claude/agents/`, with the default coordinator in `.claude/settings.json`.
+
 Each prompt names its reading scope. Do not paste every document into every session. Use [RESUME](handoff/prompts/RESUME.md) after an interruption.
 
 ## Selected direction
@@ -19,7 +21,7 @@ Each prompt names its reading scope. Do not paste every document into every sess
 - Eight worked hours/day, flexible start, configurable breaks, daily N/M OT rules.
 - All actual work outside normal working-calendar dates is OT-eligible without subtracting eight hours or applying weekday N; M rounding still applies.
 - Separate employee sign-off, automatic submission, signature image, delivery acceptance and manager permission.
-- Five work packages. Claude implements; ChatGPT independently reviews; Huy supplies deployment values and authorizes the real pilot.
+- Five work packages under one resumable coordinator mission. Subagents plan/implement/fix/verify/audit; vendor roles are optional. Huy supplies setup values and authorizes the real pilot.
 - Subscription usage first; **zero planned spending** from the 2,500 reserve credits.
 
 ## Map
@@ -30,7 +32,7 @@ Each prompt names its reading scope. Do not paste every document into every sess
 | `src/`, `tests/`, `scripts/` | Application source, automated tests and development scripts; see [DEVELOPMENT](DEVELOPMENT.md) |
 | `handoff/` | Agent workflow: [NEXT_ACTION](handoff/NEXT_ACTION.md) (status and next step), `prompts/` (implementation/review/fix/resume instructions), `templates/` (handoff/review/checkpoint forms) and `delivery/` (state, handoffs, reviews, evidence and package validation) |
 | `reference/` | Reference data: [fixtures](reference/fixtures/README.md) (91 reference scenarios that the tests read), [examples](reference/examples/README.md) (safe configuration samples that the synthetic seed reads) and [inputs](reference/inputs/README.md) (the sanitized workbook template) |
-| `.agents/`, `.claude/` | Installed agent skills, pinned by `skills-lock.json` |
+| `.agents/`, `.claude/` | Skills pinned by `skills-lock.json`; project orchestration in `.claude/agents/` and `settings.json` |
 
 | File | Responsibility |
 |---|---|

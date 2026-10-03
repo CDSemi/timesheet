@@ -1,7 +1,12 @@
+Bản dịch của [CLAUDE.md](CLAUDE.md); tiếng Anh là nguồn chuẩn.
+
+@AGENTS.md
+
 # Điểm vào dự án cho Claude
 
-Theo [AGENTS.md](AGENTS.md), prompt triển khai hiện tại và danh sách nguồn chuẩn của nó. Bắt đầu từ [NEXT_ACTION](handoff/NEXT_ACTION.vi.md) khi chưa có giai đoạn đang làm.
+Chỉ đặt các hướng dẫn bổ sung riêng cho Claude trong file này; giữ quy tắc
+chung trong [AGENTS.md](AGENTS.md), prompt triển khai hiện tại và danh sách
+nguồn chuẩn của nó.
 
-Claude phụ trách triển khai và sửa có phạm vi. ChatGPT phụ trách review độc lập. Không đánh dấu phần mình làm là đã review độc lập. Giữ bàn giao/checkpoint trong `handoff/delivery/` và theo chính sách ưu tiên subscription ở tài liệu 08.
-
-Bản dịch của [CLAUDE.md](CLAUDE.md); tiếng Anh là nguồn chuẩn.
+Khi sửa frontmatter, quyền công cụ hoặc cú pháp gọi riêng cho Claude, kiểm
+tra khả năng hỗ trợ trong phiên bản Claude Code được nhắm đến.

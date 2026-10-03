@@ -1,51 +1,62 @@
-# AI workflow and usage budget
+# AI orchestration and subscription usage
 
-## Subscription-first policy
+## Authority and roles
 
-User context: **Claude Max 20x**, confirmed by the user-provided plan screenshot on **2026-09-30**, with no purchased extra usage; ChatGPT Business **standard seat**, with **2,500 reserve credits**. The confirmed tier replaces the earlier conservative 5x assumption. This is a work estimate, not a quota guarantee or credit quote.
+The owner's 2026-10-02 request replaces the fixed Claude-implements / ChatGPT-reviews split and the earlier prohibition on selecting subagent models/effort and concurrency. Roles belong to tasks, not vendors. Default: one Claude Code mission from the current WP1 finding through WP5 software readiness. ChatGPT/Codex may perform any role if the owner chooses; manual vendor handoff is optional.
 
-Use existing subscription authentication in Claude Code and ChatGPT Work/Codex. API billing is separate. Do not attach an API key or enable paid overage to solve a usage limit. Planned reserve-credit consumption is **zero**.
+The main agent coordinates only: delegate inspection, planning, diagnosis, implementation, fixes, verification and fresh independent audit. It owns dependencies, assignments, evidence, status and recovery. It may write workflow records/consolidated handoffs, not application source or its own acceptance verdict. Routine choices and advancing after passed gates are authorized. Business exceptions, real deployment/sending and secrets remain with the owner. Prepare the pilot packet before requesting real activation. No unauthorized commits/amendments/pushes.
 
-Check the actual client's model/effort/speed and usage dashboard before each bounded session. A prompt cannot switch the model or control billing. Purchased credits may be consumed according to workspace controls; inspect them rather than assuming a prompt prevents charges. Save a recoverable checkpoint and wait for reset when allowance is insufficient. The owner may explicitly authorize one bounded reserve-credit exception.
+## Configuration and complexity routing
 
-## Model allocation
+`.claude/settings.json` selects `timesheet-coordinator`. Project definitions in `.claude/agents/` configure model aliases/effort; prose alone does not configure the client. These files do not change global settings, speed, authentication or billing.
 
-Official names/controls rechecked on **2026-09-30**; account/client availability is not guaranteed.
-
-| Work | Model | Effort / speed |
+| Profile | Model / effort | Assignment |
 |---|---|---|
-| Claude implementation WP1, WP3 | Sonnet 5.5 | High |
-| Claude implementation WP2, WP4; WP5 targeted fixes | Sonnet 5.5 | Medium; High only for a concrete integrity/recovery defect |
-| ChatGPT review WP1, WP3, WP4, WP5 | GPT-6.1 Sol | High, Standard |
-| ChatGPT review WP2 | GPT-6.1 Sol | Medium, Standard |
+| timesheet-coordinator | sonnet / medium | Dispatch, dependencies, state and Vietnamese updates |
+| timesheet-light | sonnet / low | Explicit documentation, translation and inventory |
+| timesheet-planner | sonnet / high | Inspect, decompose, diagnose and assess risk |
+| timesheet-worker | sonnet / medium | Routine implementation with clear contracts |
+| timesheet-worker-high | sonnet / high | Time/OT, ownership, transactions, sign-off, concurrency, recovery |
+| timesheet-expert | opus / high | Bounded hard issue after two failed reproducible attempts, or demonstrated exceptional complexity |
+| timesheet-verifier | sonnet / high | Required gates, source identity and interruption reconciliation |
+| timesheet-auditor | opus / high | Fresh independent standards/spec audit and recheck |
 
-Claude Code: select the model using /model and the supported effort control (/effort where available). Identifier: claude-sonnet-5-5. For Work/Codex choose the visible model/reasoning control; gpt-6.1-sol names the recommendation, not an API instruction. Record actual settings if labels differ.
+Choose the smallest sufficient supported profile by task complexity/risk, not package number. An auditor may use the same model family as an implementer; it must be a different instance/context that did not author the reviewed change. No automatic max effort or accelerated speed.
 
-Fallback: the available preceding Sonnet release and GPT-6 Sol with comparable supported effort. Verify the picker/client; update an outdated client if needed. If neither family is available, agree on a supported coding model without silently changing billing.
+Delegate read-only client/version/profile checks at startup. Record requested settings separately from actual observable settings; use null when not observable. Verify the installed client recognizes `agent`, `model`, `effort`, `Agent` and profiles. Restart if the new agents directory has not loaded. Account/managed controls can override project settings. If Opus is unavailable under the subscription, use a fresh Sonnet/high auditor. If effort is unsupported, use a supported level and record the fallback. The coordinator may amend only project profile configuration for supported fallbacks before dispatch, recording the reason. Never switch to API billing. If delegation is unavailable, save a configuration blocker instead of implementing in the main context.
 
-After two bounded attempts fail on the same reproducible hard issue, prepare a small reproducer for **one** escalation: Claude Opus 5.5 Medium or GPT-6 Astra Medium, chosen by the owner according to remaining usage. No default parallel agents, accelerated speed, Max/Ultra effort or both escalations. Vendor effort labels do not measure equivalent compute.
+## Dispatch and ownership
 
-## Workload estimate
+Follow [ORCHESTRATE](../handoff/prompts/ORCHESTRATE.md). Each brief includes task ID, package/prompt, canonical reading list, dependencies, baseline/digest, exact writable paths, output/evidence paths, rule/AC coverage and next step. Workers execute only that task, not the coordinator mission. Only the coordinator writes ORCHESTRATION.json, STATE.json and NEXT_ACTION.
 
-| Package | Claude sessions | ChatGPT sessions | Owner attention |
-|---|---:|---:|---:|
-| WP1 | 2 | 1 | 1–2 hours |
-| WP2 | 2–3 | 1 | 1–2 hours |
-| WP3 | 2–3 | 1 | 1–2 hours |
-| WP4 | 1–2 | 1 | 2–3 hours |
-| WP5 | 1–2 | 1–2 | 1–2 hours |
-| Base total | **8–12** | **5–6** | **6–11 hours** |
+At most two subagents are active; only one writes source/configuration. Parallelize independent read-only analysis or disjoint report/evidence work. Serialize installs, migrations, builds and gates using shared outputs/databases. Stop source writers before gate/audit. No nested delegation; workers return escalation to the coordinator. Default: this checkout with explicit ownership. A worktree must preserve the exact reviewed snapshot including required uncommitted files; do not use a default-branch checkout that loses them. Never reset/clean unrelated work.
 
-Allow 3–5 targeted fix/recheck sessions: **16–23 bounded sessions total**, roughly **2–4 weeks of evenings**, including usage-reset pauses and owner checks. A session means a coherent request ending in inspectable code/tests/handoff, not one chat message or a fixed token/five-hour allocation. Hardware/email setup or environment faults can extend this. Calibrate remaining estimates after WP1 using actual observed usage; do not invent tokens/credits if the client does not expose them.
+## Durable state and recovery
 
-Max 20x provides more scheduling headroom, not a reason to spend more per task. Context, model, tools and output affect usage; advertised message ranges cannot guarantee a coding phase fits a window. Standard speed is the default; accelerated modes can consume more allowance.
+[ORCHESTRATION.json](../handoff/delivery/ORCHESTRATION.json) is the durable task board. [STATE.json](../handoff/delivery/STATE.json) remains the package acceptance summary. Native task lists/chat are convenience views, not the sole record.
 
-The five packages and session estimate remain unchanged after confirming Max 20x. Actual reset waits may be shorter; do not infer a fixed completion date or unused allowance from the plan label. For folder setup, manual model selection and the first copyable prompt, follow [NEXT_ACTION](../handoff/NEXT_ACTION.md).
+Store task ID/dependencies, kind/status, profile, requested/actual settings, agent/session IDs when observable, attempt, owned paths, prompt/report/evidence, baseline/digests, decision and next action. Statuses: pending, running, interrupted, blocked, done, cancelled. Implementation done is not independent acceptance. An audit PASS requires independent current-source proof.
 
-## Working loop
+Before dispatch, save the bilingual brief and running status. Before replacing a valid board, save its contents as ORCHESTRATION.previous.json. Have a subagent validate the replacement. One coordinator writes shared state. Workers append durable bilingual results after each coherent edit/check and before returning, using [TASK](../handoff/templates/TASK.md). Reconcile actual outputs/evidence before updating state. Gate decisions are PASS / FAIL / NOT VERIFIED; successful package summaries use independent_review: passed. After acceptance, update STATE, NEXT_ACTION and bilingual HANDOFF together. New reviews use new paths; preserve historical evidence.
 
-Read only the active prompt's canonical files and necessary source. Keep one coding agent. Save intermediate decisions and execution logs; load translations/Excel only when needed.
+Checkpoint before long work, after results, before compaction, at visible usage warnings and before stopping. Record unfinished edits, uncertain command completion, live processes, owned paths, remaining gates and next action. Do not rely on getting a final turn after a hard limit.
 
-Claude hands over complete source or a complete archive plus baseline/commit, migrations, tests and HANDOFF. A patch without its base is insufficient. ChatGPT traces behavior, runs meaningful checks and gives reproducible findings instead of rebuilding/redesigning. Claude fixes accepted findings; ChatGPT rechecks affected behavior and the required gate. Do not reopen accepted architecture in every session.
+On resume, delegate reconciliation of board/backup, checkpoint and actual checkout first. Previously running tasks become interrupted until process/session status is confirmed; do not launch another writer while one may still run. Continue a subagent by recorded ID in the resumed session if available. Otherwise retain task ID, increment attempt and delegate the saved remainder to a replacement. Do not repeat accepted packages or assume uncertain commands passed.
 
-Near a limit, finish a safe coherent change, run focused checks and save CHECKPOINT; resume after reset using RESUME. Never turn an interruption into a false “passed.” Sources are in document 10; recheck dated model information when starting substantially later.
+If state is damaged, recover the last valid previous board and reconcile task reports, source and logs before dispatch. Observed files/evidence outrank stale narrative; report discrepancies. Changed source identity invalidates an old audit pass.
+
+## Gates and independent audit
+
+Freeze source, delegate the required gate, save HANDOFF, then delegate fresh independent audit with WPn_REVIEW. Do not fork the implementer's reasoning into the auditor. Auditor inspects standards/spec, traces production behavior, independently runs mandatory checks/probes and records digest before/after. It cannot fix audited source. PASS / FIX REQUIRED / NOT VERIFIED require actual evidence, not the implementer's summary.
+
+FIX REQUIRED creates bounded fixes followed by gate/audit on the new digest. NOT VERIFIED blocks advancement until missing execution/source/evidence is resolved. WP1 needs F-01 fixed/rechecked; only PASS allows WP2. Repeat through WP4. WP5 starts with independent acceptance, then fixes/rechecks and concrete pilot preparation. Software readiness, owner permission and real pilot outcome are separate.
+
+## Subscription and limits
+
+Existing context: Claude Max 20x (owner screenshot, 2026-09-30), ChatGPT Business standard seat and 2,500 reported reserve credits. Included subscription sign-in first; planned reserve spending remains zero. No extra usage/overage, API keys, purchased credits or account/workspace billing changes.
+
+Subagents consume the same allowance; more agents do not multiply quota. Record remaining/reset values only when observable, with timestamp/timezone. Do not invent token budgets, reset times, quotas or completion dates. Reduce concurrency/checkpoint when usage is low; never evade a limit through another billing route.
+
+After reset, Resume/Continue the same Claude session or open a new session with the same entry prompt. Durable recovery does not schedule an automatic wake-up or guarantee that a stopped client restarts itself. A manual Resume/Continue may be needed; the owner need not resend the business brief. The old 16–23-session estimate described the two-client workflow; estimate remaining work from accepted tasks instead.
+
+Capabilities checked 2026-10-02: [subagents](https://code.claude.com/docs/en/sub-agents), [model/effort](https://code.claude.com/docs/en/model-config), [resume CLI](https://code.claude.com/docs/en/cli-reference), [checkpoint limits](https://code.claude.com/docs/en/checkpointing). Native rewind does not replace task records or cover every shell/subagent edit. Local Claude integration and subscription availability still require a real client check.

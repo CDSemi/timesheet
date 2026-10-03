@@ -19,3 +19,11 @@ Copy and complete with actual evidence. Keep matching .vi.md; machine logs need 
 - One next action and matching prompt:
 
 No “all passed” without execution evidence. Provider acceptance is not receipt; an automatic PDF is not employee sign-off.
+
+## Orchestration provenance
+
+- Mission/task IDs and board/checkpoint:
+- Implementer and independent auditor identities; separate contexts:
+- Current verified/reviewed digest; review report and decision:
+- Remaining tasks/dependencies; one next coordinator action:
+- Software readiness and pending owner pilot authorization separately:

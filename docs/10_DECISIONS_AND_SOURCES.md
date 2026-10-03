@@ -58,3 +58,15 @@ Reviewed during preparation on **2026-09-29**; Claude Desktop/model/Max and Chat
 | [Claude usage practices](https://support.claude.com/en/articles/9797557-usage-limit-best-practices) | Usage dashboard and allowance planning |
 
 Public checks did not inspect account quota, actual billing controls, NAS architecture, credentials or recipients. Verify those in the real client/setup. Availability can change; the dated model list is not permanent entitlement.
+
+## Confirmed orchestration change — 2026-10-02
+The owner requested a single Claude prompt, vendor-neutral work roles, a coordinator-only
+main agent, subagents selected by task complexity for planning/diagnosis/implementation/
+fixes/verification/independent audit, and durable recovery after usage reset.
+Document 08 and ORCHESTRATE replace the former vendor split and no-subagent/model-change
+policy. They do not change business rules, WP1–WP5 gates, subscription billing or the
+owner's real-activation boundary. Independent means separate author/reviewer context
+and executed current-source evidence, not necessarily a different vendor.
+Official subagent/model/resume/checkpoint capabilities were checked on 2026-10-02;
+the actual local Claude client/account has not been exercised by this documentation change.
+No automatic reset scheduler is configured.

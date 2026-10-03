@@ -1,6 +1,6 @@
 # Triển khai WP1 — Nền tảng và bộ tính giờ
 
-Người dùng chọn: **Claude Code, Sonnet 5.5, High**, đăng nhập Max hiện có. Kiểm model/usage và dự phòng tài liệu 08. Prompt không cấu hình client.
+Thực hiện: subagent triển khai/sửa được coordinator giao; chọn profile/model/effort theo độ khó task ở tài liệu 08. ChatGPT/Codex cũng có thể nhận vai trò này. Dùng đăng nhập subscription hiện có.
 
 Triển khai **chỉ WP1**. Theo [AGENTS](../../AGENTS.md). Kiểm repo thật và giữ file sẵn có không liên quan trước khi sửa. Trao đổi tiếng Việt; code/comment và docs chuẩn tiếng Anh, tài liệu cho người đọc có bản dịch Việt tương ứng.
 
@@ -19,8 +19,10 @@ Checkpoint gợi ý: (1) Repo/schema/auth và bộ tính ngày; (2) khoảng gi�
 
 Gate bắt buộc: Type check/build, migration trên SQLite mới, toàn bộ fixture giờ/OT, cách ly hai user tại endpoint đã làm. Kiểm rõ 09:00–18:00, biên N/M, phút ngày nghỉ, DST, cộng giây và ca đêm hỗn hợp.
 
-Thực hiện triển khai, không chỉ đề xuất. Gửi cục bộ ở dry-run/capture. Không đổi thanh toán, mua usage, chạy agent song song, mở host hay gửi tin thật. Tự quyết việc thường trong hợp đồng; báo mâu thuẫn yêu cầu thật.
+Thực hiện triển khai, không chỉ đề xuất. Gửi cục bộ ở dry-run/capture. Không đổi thanh toán, mua usage, mở host hay gửi tin thật. Tự quyết việc thường trong hợp đồng; báo mâu thuẫn yêu cầu thật.
 
 Giao source/migration/test thay đổi đầy đủ, lệnh/kết quả đúng và [HANDOFF](../templates/HANDOFF.vi.md) có bản chuẩn Anh và .vi.md. Ghi baseline/commit, model/effort thật nếu thấy, path bằng chứng, hạn chế và một bước tiếp theo để review độc lập. Chưa chạy không là đạt. Nếu gián đoạn lưu [CHECKPOINT](../templates/CHECKPOINT.vi.md), tiếp tục giai đoạn này. Không bắt đầu WP2.
 
 Bản dịch của [WP1_IMPLEMENT.md](WP1_IMPLEMENT.md); tiếng Anh là nguồn chuẩn.
+
+Ranh giới task: chỉ coordinator giao agent và chuyển giai đoạn. Lưu kết quả/checkpoint được giao sau mỗi bước liền mạch; không ghi state chung hoặc audit thay đổi của mình.

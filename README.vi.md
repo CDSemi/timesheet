@@ -11,6 +11,8 @@ File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch củ
 3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md) và [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md); hai tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
 4. Đọc [review độc lập WP1](handoff/delivery/WP1_REVIEW.vi.md). Bước tiếp theo là sửa có giới hạn F-01 theo [FIX_FINDINGS](handoff/prompts/FIX_FINDINGS.vi.md), rồi review độc lập lại WP1. Không làm lại triển khai WP1 hay bắt đầu WP2 trước khi lần kiểm lại đạt.
 
+Giao Claude prompt đầu vào duy nhất trong NEXT_ACTION; coordinator resume [task đã lưu](handoff/delivery/ORCHESTRATION.json), chỉ tiến sau gate độc lập. Profile ở `.claude/agents/`, coordinator mặc định ở `.claude/settings.json`.
+
 Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào mọi phiên. Dùng [RESUME](handoff/prompts/RESUME.vi.md) sau gián đoạn.
 
 ## Hướng đã chọn
@@ -19,7 +21,7 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 - Tám giờ thực làm/ngày, giờ vào linh hoạt, nghỉ cấu hình được, quy tắc OT N/M theo ngày.
 - Mọi giờ làm ngoài lịch ngày làm bình thường đủ điều kiện OT, không trừ tám giờ hay áp dụng N ngày thường; vẫn làm tròn theo M.
 - Tách sign-off của nhân viên, tự nộp, ảnh chữ ký, dịch vụ chấp nhận email và sự cho phép của manager.
-- Năm giai đoạn. Claude triển khai; ChatGPT review độc lập; Huy cung cấp cấu hình triển khai và cho phép pilot thật.
+- Năm giai đoạn dưới một nhiệm vụ coordinator có thể resume. Subagent plan/implement/sửa/kiểm chứng/audit; vai trò nhà cung cấp là tùy chọn. Huy cung cấp setup và cho phép pilot thật.
 - Ưu tiên usage trong gói; **dự kiến không dùng** 2.500 credits dự trữ.
 
 ## Bản đồ tài liệu
@@ -30,7 +32,7 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 | `src/`, `tests/`, `scripts/` | Source ứng dụng, test tự động và script phát triển; xem [DEVELOPMENT](DEVELOPMENT.vi.md) |
 | `handoff/` | Quy trình làm việc giữa các agent: [NEXT_ACTION](handoff/NEXT_ACTION.vi.md) (trạng thái và bước tiếp theo), `prompts/` (hướng dẫn triển khai/review/sửa/tiếp tục), `templates/` (mẫu bàn giao/review/checkpoint) và `delivery/` (trạng thái, bàn giao, review, bằng chứng và kiểm tra gói tài liệu) |
 | `reference/` | Dữ liệu tham chiếu: [fixture](reference/fixtures/README.vi.md) (91 tình huống tham chiếu mà test đọc), [ví dụ](reference/examples/README.vi.md) (cấu hình mẫu an toàn mà seed giả đọc) và [inputs](reference/inputs/README.vi.md) (workbook mẫu đã làm sạch) |
-| `.agents/`, `.claude/` | Skill đã cài cho agent, khóa phiên bản bằng `skills-lock.json` |
+| `.agents/`, `.claude/` | Skill ghim bằng `skills-lock.json`; điều phối dự án ở `.claude/agents/` và `.claude/settings.json` |
 
 | File | Phụ trách |
 |---|---|

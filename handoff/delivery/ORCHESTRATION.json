@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "mission_id": "timesheet-software-readiness",
+  "status": "ready",
+  "authorized_scope": [
+    "WP1",
+    "WP2",
+    "WP3",
+    "WP4",
+    "WP5"
+  ],
+  "stop_before": [
+    "real_sending",
+    "production_activation"
+  ],
+  "active_package": "WP1",
+  "phase": "plan",
+  "coordinator_session_id": null,
+  "current_source_digest": null,
+  "max_active_subagents": 2,
+  "max_source_writers": 1,
+  "next_task_id": "WP1-F01-PLAN",
+  "checkpoint": "handoff/delivery/ORCHESTRATION_HANDOFF.md",
+  "updated_at": "2026-10-02",
+  "tasks": [
+    {
+      "id": "WP1-F01-PLAN",
+      "package": "WP1",
+      "kind": "plan",
+      "status": "pending",
+      "depends_on": [],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP1-F01-PLAN.md",
+        "handoff/delivery/tasks/WP1-F01-PLAN.vi.md"
+      ],
+      "prompt": "handoff/prompts/FIX_FINDINGS.md",
+      "report": "handoff/delivery/tasks/WP1-F01-PLAN.md",
+      "evidence": [],
+      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Inspect current checkout and client profiles; finalize bounded F-01 plan without source edits."
+    },
+    {
+      "id": "WP1-F01-FIX",
+      "package": "WP1",
+      "kind": "fix",
+      "status": "pending",
+      "depends_on": [
+        "WP1-F01-PLAN"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "src/server/services/timesheetCommands.ts",
+        "tests/integration",
+        "handoff/delivery/WP1_HANDOFF.md",
+        "handoff/delivery/WP1_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP1-F01-FIX.md",
+        "handoff/delivery/tasks/WP1-F01-FIX.vi.md"
+      ],
+      "prompt": "handoff/prompts/FIX_FINDINGS.md",
+      "report": "handoff/delivery/tasks/WP1-F01-FIX.md",
+      "evidence": [],
+      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Reproduce and fix F-01 only, with regression coverage; return for required gate."
+    },
+    {
+      "id": "WP1-F01-GATE",
+      "package": "WP1",
+      "kind": "gate",
+      "status": "pending",
+      "depends_on": [
+        "WP1-F01-FIX"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP1-F01-GATE.md",
+        "handoff/delivery/tasks/WP1-F01-GATE.vi.md",
+        "handoff/delivery/evidence/WP1-F01-GATE"
+      ],
+      "prompt": "handoff/prompts/WP1_REVIEW.md",
+      "report": "handoff/delivery/tasks/WP1-F01-GATE.md",
+      "evidence": [],
+      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Run required WP1 gate against frozen source and record digest plus actual evidence."
+    },
+    {
+      "id": "WP1-F01-AUDIT",
+      "package": "WP1",
+      "kind": "audit",
+      "status": "pending",
+      "depends_on": [
+        "WP1-F01-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/WP1_RECHECK.md",
+        "handoff/delivery/WP1_RECHECK.vi.md",
+        "handoff/delivery/tasks/WP1-F01-AUDIT.md",
+        "handoff/delivery/tasks/WP1-F01-AUDIT.vi.md",
+        "handoff/delivery/evidence/WP1-F01-AUDIT"
+      ],
+      "prompt": "handoff/prompts/WP1_REVIEW.md",
+      "report": "handoff/delivery/tasks/WP1-F01-AUDIT.md",
+      "evidence": [],
+      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Independently recheck F-01 and WP1 gate; advance only on PASS at the same current digest."
+    }
+  ],
+  "future_packages": [
+    "WP2",
+    "WP3",
+    "WP4",
+    "WP5"
+  ],
+  "future_package_policy": "Create bounded plan/tasks only after previous required gate and independent audit PASS; WP5 starts with audit."
+}

@@ -21,3 +21,11 @@ Sao chép và điền bằng chứng thật. Giữ bản .vi.md tương ứng; l
 Không “tất cả đạt” thiếu bằng chứng chạy. Provider chấp nhận không là nhận thật; PDF tự động không là sign-off nhân viên.
 
 Bản dịch của [HANDOFF.md](HANDOFF.md); tiếng Anh là nguồn chuẩn.
+
+## Nguồn gốc điều phối
+
+- Mission/task ID và bảng/checkpoint:
+- Định danh implementer/auditor độc lập; context riêng:
+- Digest đã kiểm/review hiện tại; report/verdict:
+- Task/dependency còn; một bước coordinator tiếp:
+- Tách sẵn sàng phần mềm và phép pilot của chủ đang chờ:

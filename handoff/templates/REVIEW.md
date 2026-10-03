@@ -13,3 +13,11 @@
 - One next action/prompt:
 
 No invented findings or unobserved passes. A partial review is not a complete acceptance.
+
+## Independent subagent provenance
+
+- Review task/attempt, reviewer ID and reviewed author IDs:
+- Fresh context; confirm reviewer did not author changes:
+- Source digest before/after; gate evidence for that snapshot:
+- New report path preserving previous review history:
+- Finding dispositions and next coordinator fix/recheck task:

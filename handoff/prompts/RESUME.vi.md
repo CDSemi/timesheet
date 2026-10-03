@@ -1,11 +1,19 @@
-# Tiếp tục việc gián đoạn
+# Tiếp tục nhiệm vụ đã lưu
 
-Chọn vai trò/model/effort theo checkpoint, có xét dự phòng tài liệu 08; kiểm usage subscription thật.
+Theo AGENTS.md, ORCHESTRATE.md và tài liệu 08. Giữ đăng nhập subscription hiện có.
 
-Tiếp tục từ CHECKPOINT, repo hiện tại đầy đủ và HANDOFF/REVIEW cuối. Theo AGENTS.md. Kiểm file/thay đổi chưa commit trước; không đè việc khác hay cho rằng lệnh đã xong. Chỉ đọc prompt hiện tại, docs chuẩn cần và source đổi.
+1. Đọc ORCHESTRATION.json (bản previous hợp lệ nếu hỏng), CHECKPOINT quy trình mới,
+   STATE và HANDOFF/REVIEW hiện tại. Kiểm file chưa commit thật.
+2. Giao đối chiếu task running/interrupted và process còn chạy. Xác nhận writer
+   cũ dừng trước tạo cái thay. Lệnh chưa rõ xong là unverified. Giữ việc không
+   liên quan và giai đoạn đã đạt.
+3. Tiếp subagent cũ trong phiên resume nếu ID còn dùng được. Nếu không, giữ task ID,
+   tăng attempt, ghi agent/settings mới, giao đúng phần còn/evidence đã lưu.
+4. Kiểm lại gate/audit nếu source đổi. PASS/checkpoint cũ không là nghiệm thu.
+   Tiếp tối đa hai subagent, một writer source.
+5. Lưu bảng và checkpoint từng task/giai đoạn song ngữ sau mỗi kết quả. Reset usage
+   không tự chạy prompt; có thể cần Resume/Continue.
 
-Xác định phần đã xong, gate đã kiểm cuối và phạm vi liền mạch nhỏ nhất còn lại. Tiếp tục không làm lại giai đoạn đã đạt. Nếu checkpoint khác file, theo bằng chứng thật và báo chênh lệch. Giữ dry-run, không đổi phí.
-
-Kiểm tập trung và gate còn thiếu. Xong thì HANDOFF để review; chưa xong cập nhật CHECKPOINT với bước cụ thể. Trao đổi tiếng Việt; artifact cho người đọc chuẩn Anh có bản dịch Việt tương ứng. Gián đoạn không là hoàn tất.
-
-Bản dịch của [RESUME.md](RESUME.md); tiếng Anh là nguồn chuẩn.
+Main chỉ điều phối. Worker chạy giai đoạn có giới hạn, verifier gate, audit độc lập
+context mới. Giữ dry-run/capture; không đổi billing, kích hoạt thật hoặc tự commit/push.
+Không gán vai trò nhà cung cấp cứng hoặc bắt chọn lại model thủ công.

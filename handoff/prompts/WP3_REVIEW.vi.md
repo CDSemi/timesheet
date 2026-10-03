@@ -1,6 +1,6 @@
 # Review độc lập WP3 — PDF, sign-off và tự nộp
 
-Người dùng chọn: **ChatGPT Work/Codex, GPT-6.1 Sol, High, tốc độ Standard**, subscription Business. Kiểm khả dụng/usage thật và dự phòng tài liệu 08. Cung cấp source đủ, baseline/commit, HANDOFF, bằng chứng test và docs này.
+Thực hiện: subagent audit độc lập context mới do coordinator giao; profile/model/effort theo tài liệu 08. Review ChatGPT/Codex tùy chọn cũng hợp lệ. Cung cấp source hiện tại đủ, baseline/digest, HANDOFF và bằng chứng. Auditor không được là tác giả thay đổi đang kiểm.
 
 Review độc lập **WP3** theo [AGENTS](../../AGENTS.md). Trao đổi tiếng Việt; tạo REVIEW tiếng Anh kèm bản dịch Việt. Không tin báo đạt thiếu bằng chứng, làm lại giai đoạn hay mở lại kiến trúc đã chốt.
 
@@ -20,6 +20,8 @@ Kiểm trạng thái repo/bàn giao, truy hành vi quan trọng qua code product
 
 Trả [REVIEW](../templates/REVIEW.vi.md): PASS / FIX REQUIRED / NOT VERIFIED, baseline đã kiểm chính xác, lỗi ưu tiên, file/hàm, cách tái hiện, kỳ vọng/thực tế, ID quy tắc/AC và sửa có phạm vi. Tách lỗi quan sát được với rủi ro/đề xuất tùy chọn. Không bịa lỗi cho đủ số lượng.
 
-Không sửa production, gửi email, đổi thanh toán hay làm giai đoạn sau. Lỗi giao Claude bằng [FIX_FINDINGS](FIX_FINDINGS.vi.md); nếu đạt chỉ bước lộ trình tiếp theo. Khi nghiệm thu cuối, tách sẵn sàng phần mềm, phép chủ và kết quả pilot thật.
+Không sửa production, gửi email, đổi thanh toán hay làm giai đoạn sau. Lỗi giao coordinator để worker sửa có giới hạn bằng [FIX_FINDINGS](FIX_FINDINGS.vi.md); nếu đạt chỉ bước lộ trình tiếp theo. Khi nghiệm thu cuối, tách sẵn sàng phần mềm, phép chủ và kết quả pilot thật.
 
 Bản dịch của [WP3_REVIEW.md](WP3_REVIEW.md); tiếng Anh là nguồn chuẩn.
+
+Ranh giới audit: đóng băng source; ghi digest trước/sau và tách reviewer/tác giả. Tự chạy gate bắt buộc. Chỉ ghi path review/evidence mới được giao; giữ report cũ, không sửa source đang kiểm.

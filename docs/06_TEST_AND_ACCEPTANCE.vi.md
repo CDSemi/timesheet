@@ -32,7 +32,7 @@ Bằng chứng vận hành gồm container mới chạy thật, migration, backu
 
 ## Review và phát hành
 
-Mỗi bàn giao có baseline/commit, lệnh, exit status, kết quả quan sát, đường dẫn bằng chứng và trường hợp chưa test. ChatGPT trả PASS / FIX REQUIRED / NOT VERIFIED cùng cách tái hiện và ID quy tắc/AC. Chặn đi tiếp nếu sai OT, lộ riêng tư, sổ trùng/mất, sign-off giả, mất revision, gửi lại mù sau chưa rõ hoặc không restore được. Kiểm lại phần ảnh hưởng và gate; không thêm test rộng trùng lặp khi không có rủi ro cụ thể.
+Mỗi bàn giao có baseline/commit, lệnh, exit status, kết quả quan sát, đường dẫn bằng chứng và trường hợp chưa test. Auditor độc lập context mới (nhà cung cấp hỗ trợ bất kỳ, khác tác giả) trả PASS / FIX REQUIRED / NOT VERIFIED cùng cách tái hiện và ID quy tắc/AC. Chặn đi tiếp nếu sai OT, lộ riêng tư, sổ trùng/mất, sign-off giả, mất revision, gửi lại mù sau chưa rõ hoặc không restore được. Kiểm lại phần ảnh hưởng và gate; không thêm test rộng trùng lặp khi không có rủi ro cụ thể.
 
 WP5 chuẩn bị pilot cụ thể: URL/sender/người nhận thật, preview đúng thư/PDF, settings, kết quả backup/restore, điểm rollback. Chủ hệ thống cho phép mới gửi pilot/kích hoạt thật. Sẵn sàng phần mềm, phép của chủ, provider chấp nhận và người nhận thực nhận là các thông tin riêng. Thiếu môi trường thật thì ghi phần mềm sẵn sàng/pilot chờ. Sau pilot theo dõi một kỳ thật, có Excel để so.
 
