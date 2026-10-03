@@ -1,0 +1,73 @@
+# WF-AUDIT3 privacy scan of this audit's own outputs with the 6578df8 rules, plus preflight (captured 2026-10-03T03:22:24Z; node v24.21.0)
+COMMAND: bash handoff/delivery/evidence/WF-AUDIT3/5-range-privacy.sh <project> <scratch> 6578df8 -- <WF-AUDIT3 outputs>
+COMMAND: node scripts/precommit-check.mjs  # uncommitted files (17 staged in the clone)
+PASS: 17 staged file(s), 0 blocking finding(s), 0 warning(s)
+EXIT: 0
+findings per rule and file:
+COMMAND: git diff --cached --check
+EXIT: 0
+scan clone deleted
+EXIT: 0
+
+COMMAND: CR byte count per own evidence file (expect 0)
+0 handoff/delivery/WORKFLOW_RECHECK2.md
+0 handoff/delivery/WORKFLOW_RECHECK2.vi.md
+0 handoff/delivery/evidence/WF-AUDIT3/0-identity-before.txt
+0 handoff/delivery/evidence/WF-AUDIT3/1-validator-recovery.txt
+0 handoff/delivery/evidence/WF-AUDIT3/10-identity-after.txt
+0 handoff/delivery/evidence/WF-AUDIT3/3-probes-output-run1.txt
+0 handoff/delivery/evidence/WF-AUDIT3/3-probes-output.txt
+0 handoff/delivery/evidence/WF-AUDIT3/3-probes.py
+0 handoff/delivery/evidence/WF-AUDIT3/3b-replay-wf-audit2-probes.txt
+0 handoff/delivery/evidence/WF-AUDIT3/4-precommit-output.txt
+0 handoff/delivery/evidence/WF-AUDIT3/4-precommit-probes.sh
+0 handoff/delivery/evidence/WF-AUDIT3/5-range-privacy.sh
+0 handoff/delivery/evidence/WF-AUDIT3/5-range-privacy.txt
+0 handoff/delivery/evidence/WF-AUDIT3/6-lint.txt
+0 handoff/delivery/evidence/WF-AUDIT3/7-clone-and-scope.txt
+0 handoff/delivery/evidence/WF-AUDIT3/8-full-tree-scan.txt
+
+COMMAND: <python> handoff/delivery/validate_package.py --preflight (new report pair and links)
+Traceback (most recent call last):
+  File "<project>\handoff\delivery\validate_package.py", line 247, in <module>
+    main()
+  File "<project>\handoff\delivery\validate_package.py", line 231, in main
+    pairs, links = files(args.preflight)
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "<project>\handoff\delivery\validate_package.py", line 197, in files
+    check((p.parent / target.split("#", 1)[0]).resolve().is_file(), "Broken link: " + str(p) + " -> " + target)
+  File "<project>\handoff\delivery\validate_package.py", line 28, in check
+    raise ValueError(message)
+ValueError: Broken link: <project>\handoff\delivery\WORKFLOW_RECHECK2.md -> evidence/WF-AUDIT3/9-final-scan.txt
+EXIT: 1
+
+# Note: the first preflight ran before this log existed (output was written to a scratch file first), so its own link was broken. Rerun after the log is in place:
+COMMAND: <python> handoff/delivery/validate_package.py --preflight (rerun, 2026-10-03T03:22:38Z)
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 45,
+  "local_links": 622,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+EXIT: 0
+
+# Final rescan after the task record Results and this log were completed (2026-10-03T03:23:14Z)
+COMMAND: node scripts/precommit-check.mjs  # uncommitted files (18 staged in the clone)
+PASS: 18 staged file(s), 0 blocking finding(s), 0 warning(s)
+EXIT: 0
+findings per rule and file:
+COMMAND: git diff --cached --check
+EXIT: 0
+scan clone deleted
+EXIT: 0
+COMMAND: <python> handoff/delivery/validate_orchestration.py (working-tree board at hand-back)
+  "status": "PASS",
+EXIT: 0
+COMMAND: npm run digest (hand-back)
+2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3  (532 files, handoff/ excluded)

@@ -1,7 +1,7 @@
 # Next action: start or resume the coordinator
 
 **Application: WP1 FIX REQUIRED; F-01 unresolved; WP2 not started.**
-**Workflow: revision v2 (adaptive routing, committer role): first audit FIX REQUIRED; fixes done; recheck (freeze commit, gate, fresh audit) in progress. Governance tasks use board package GOV.**
+**Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
 [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP1 handoff](delivery/WP1_HANDOFF.md)
 and [WP1 review](delivery/WP1_REVIEW.md).
@@ -27,8 +27,8 @@ request owner authorization only after preparing the concrete pilot packet.
 Do not change billing or permission settings.
 ~~~
 
-Current route: finish the workflow revision (freeze commit, gate, fresh audit, accept
-commit and push). Then a worker reproduces and fixes F-01 as specified in
+Current route: after the governance accept commit, a worker reproduces and fixes F-01
+as specified in
 [WP1_REVIEW](delivery/WP1_REVIEW.md) under [FIX_FINDINGS](prompts/FIX_FINDINGS.md),
 the committer freezes it, a verifier runs the WP1 gate on that freeze commit (a
 package-final snapshot keeps a separate gate), a fresh auditor runs

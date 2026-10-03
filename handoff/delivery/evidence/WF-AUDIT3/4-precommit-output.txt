@@ -1,0 +1,57 @@
+# WF-AUDIT3 precommit self-test (checkout) and scratch-clone probes (captured 2026-10-03T03:13:41Z)
+COMMAND: node scripts/precommit-check.mjs --self-test (checkout, v24.21.0)
+PASS self-test: 35 path and 74 line samples, 12 rules
+EXIT: 0
+
+COMMAND: bash handoff/delivery/evidence/WF-AUDIT3/4-precommit-probes.sh <project> <scratch> 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7
+node v24.21.0; clone HEAD 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7; expected 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7
+precommit script identical to checkout
+COMMAND: node scripts/precommit-check.mjs --self-test (clone)
+PASS self-test: 35 path and 74 line samples, 12 rules
+EXIT: 0
+
+# S. WF-AUDIT2 5b forms, verbatim (expect exit 1; were exit 0 at c219d79 except the unspaced control)
+ok | S1 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password: <4x4 synthetic> | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S2 | expected exit 1 | exit 1 | plaintext in output: no | line: SMTP_PASSWORD: "<4x4 synthetic>" | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S3 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password = '<4x4 synthetic>' | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S4 | expected exit 1 | exit 1 | plaintext in output: no | line: SMTP_PASS="<4x4 synthetic>" | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S5 | expected exit 1 | exit 1 | plaintext in output: no | line: export SMTP_PASSWORD="<4x4 synthetic>" | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S6 | expected exit 1 | exit 1 | plaintext in output: no | line: {"smtp_password": "<4x4 synthetic>"} | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | S7 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password: qwertyuiopasdfgh | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# N. Auditor's own spaced forms (expect exit 1)
+ok | N1 | expected exit 1 | exit 1 | plaintext in output: no | line: SMTP_PASSWORD="<4x4 synthetic upper>" | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N2 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password = "<4x4 synthetic>" | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N3 | expected exit 1 | exit 1 | plaintext in output: no | line:   smtpPassword: '<4x4 synthetic>', | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N4 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_pass = <4x4 synthetic> | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N5 | expected exit 1 | exit 1 | plaintext in output: no | line: app_password: <4x4 synthetic digits> | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N6 | expected exit 1 | exit 1 | plaintext in output: no | line: {"smtp_password":"<4x4 synthetic>"} | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+warning: in the working copy of 'config/mail.yml', CRLF will be replaced by LF the next time Git touches it
+ok | N7 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password: <4x4 synthetic> | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N8 | expected exit 1 | exit 1 | plaintext in output: no | line: SMTP_PASSWORD=<4x4 synthetic>    | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N9 | expected exit 1 | exit 1 | plaintext in output: no | line:       - SMTP_PASSWORD=<4x4 synthetic> | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N10 | expected exit 1 | exit 1 | plaintext in output: no | line: SMTP_PASSWORD: "<4x4 synthetic>"  # mail app password | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | N11 | expected exit 1 | exit 1 | plaintext in output: no | line: mail_app_password: <4x4 synthetic> # prod | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# P. Prose and placeholder controls (expect exit 0)
+ok | P1 | expected exit 0 | exit 0 | plaintext in output: no | line: password: "two words here" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P2 | expected exit 0 | exit 0 | plaintext in output: no | line: smtp_password: see the vault entry | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P3 | expected exit 0 | exit 0 | plaintext in output: no | line: SMTP_PASSWORD="xxxx xxxx xxxx xxxx" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P4 | expected exit 0 | exit 0 | plaintext in output: no | line: SMTP_PASSWORD: ${SMTP_PASSWORD} | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P5 | expected exit 0 | exit 0 | plaintext in output: no | line: note: <4x4 synthetic> | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P6 | expected exit 0 | exit 0 | plaintext in output: no | line: password = "four word long phrase" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P7 | expected exit 0 | exit 0 | plaintext in output: no | line: token: "rotate every ninety days" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+# L. Documented limits of the heuristic (outcome recorded; not part of WF-R-02's required forms)
+ok | L1 | expected exit 0 | exit 0 | plaintext in output: no | line: smtp_password: <4x4 synthetic double-spaced> | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L2 | expected exit 0 | exit 0 | plaintext in output: no | line: smtp_password: <4x4 synthetic tab-separated> | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L3 | expected exit 0 | exit 0 | plaintext in output: no | line:   auth: { user: 'mailer', pass: '<4x4 synthetic>' }, | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L4 | expected exit 0 | exit 0 | plaintext in output: no | line:   auth: { user: 'mailer', pass: '<12-char synthetic>' }, | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L5 | expected exit 0 | exit 0 | plaintext in output: no | line:       - "SMTP_PASSWORD=<4x4 synthetic>" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L6 | expected exit 0 | exit 0 | plaintext in output: no | line:       - "SMTP_PASSWORD=<12-char synthetic>" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L7 | expected exit 1 | exit 1 | plaintext in output: no | line: smtp_password: when user logs into | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# M. Multi-file staged set: one spaced leak among clean files (expect exit 1, value masked)
+ok | M1 three staged files | expected exit 1 | exit 1 | plaintext in output: no
+BLOCK secret-assignment config/mail.yml:+2 literal secret value qw***(19 chars)
+BLOCK: 3 staged file(s), 1 blocking finding(s), 0 warning(s)
+clone status after probes (expect empty):
+clone deleted
+probe result: all as expected
+EXIT: 0

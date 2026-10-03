@@ -1,0 +1,45 @@
+# Replay of WF-AUDIT2 3-probes.py (unchanged) against the 6578df8 validator and the current working-tree board (captured 2026-10-03T03:12:30Z)
+# Expected drift: the script was written for the c219d79 board (WF-GATE2 running, WF-AUDIT2 running without actual_model, WP1-F01-FIX depending on WF-AUDIT2).
+$ python handoff/delivery/evidence/WF-AUDIT2/3-probes.py
+# A. Real-board controls
+BAD | A1 working-tree board as written (WF-GATE2 still 'running' while WF-AUDIT2 runs) | expected REJECT(Unfinished dependency: WF-AUDIT2) | got ACCEPT
+ok  | A2 same board with only WF-GATE2 status set to done | expected ACCEPT | got ACCEPT
+# B. Audit strength (WF-A-01)
+ok  | B1 running Sonnet auditor, fallback_unavailable, Opus fix author | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+ok  | B2 done Sonnet audit PASS, fallback_unavailable, Opus fix author | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+BAD | B3 Sonnet fallback auditor, Opus documentation author (requested model only) | expected REJECT(Audit model weaker) | got ACCEPT
+ok  | B4 Sonnet fallback auditor when every GOV author is Sonnet (rule's permitted case) | expected ACCEPT | got ACCEPT
+BAD | B5 Haiku auditor over Sonnet authors | expected REJECT(Audit model weaker) | got ACCEPT
+ok  | B6 Opus verifier is not an author (gate kind), Sonnet fallback auditor | expected ACCEPT | got ACCEPT
+# C. Author separation (WF-A-05)
+ok  | C1 documentation author (WF-IMPL-DOCS attempt 2) audits its own change, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C2 documentation author of attempt 1 (previous_agent_ids) audits, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C3 planner (WF-REVIEW) audits the governance change, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C4 done audit without auditor identity | expected REJECT(identity unknown) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+BAD | C5 positive control: done GOV PASS by a non-author Opus auditor | expected ACCEPT | got REJECT(addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: WF-FIX2)
+# D. GOV scope (WF-A-02)
+ok  | D1 done GOV audit without reviewed_commit | expected REJECT(Governance audit needs reviewed_commit) | got REJECT(Governance audit needs reviewed_commit: WF-AUDIT2)
+ok  | D2 done GOV audit with abbreviated reviewed_commit | expected REJECT(reviewed_commit) | got REJECT(Invalid reviewed_commit: WF-AUDIT2)
+BAD | D3 WF-A-02 probe 8 replay: F-01 fix changes current_source_digest; GOV PASS stays valid | expected ACCEPT | got REJECT(addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: WF-FIX2)
+BAD | D4 WP1-F01-FIX runs on its cross-package dependency WF-AUDIT2 PASS | expected ACCEPT | got REJECT(Unfinished dependency: WP1-F01-FIX)
+ok  | D5 WP1-F01-FIX cannot run while WF-AUDIT2 is unfinished | expected REJECT(Unfinished dependency) | got REJECT(Unfinished dependency: WP1-F01-FIX)
+BAD | D6 WP1-F01-FIX cannot run on a FIX REQUIRED governance audit | expected REJECT(Dependency audit not PASS) | got REJECT(Unfinished dependency: WP1-F01-FIX)
+ok  | D7 why addresses_audit exists: a done fix depending on its FIX REQUIRED audit | expected REJECT(Dependency audit not PASS) | got REJECT(Dependency audit not PASS: WF-FIX1)
+BAD | D8 addresses_audit is not validated (dangling reference accepted) | expected ACCEPT | got REJECT(addresses_audit must name an existing audit task: WF-FIX1)
+BAD | D9 GOV gate freeze_commit differs from the audit reviewed_commit (same digest) | expected ACCEPT | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT2 / WF-GATE2)
+# E. Effort max (WF-A-04)
+ok  | E1 pending task requesting effort max | expected REJECT(Requested profile settings differ) | got REJECT(Requested profile settings differ: WP1-F01-FIX)
+ok  | E2 expert profile with effort: max (WF-AUDIT probe 4 replay) | expected REJECT(Unexpected effort) | got REJECT(Unexpected effort: timesheet-expert)
+# 15/24 probes behaved as expected
+exit=1
+
+# Auditor annotation (WF-AUDIT3)
+# D9 (the WF-R-01 probe) and D8 (dangling addresses_audit) flipped from ACCEPT to REJECT: the intended fixes.
+# Every other BAD line is board drift, not a regression:
+# - A1: WF-GATE2 is now done, so the old "unfinished dependency" control no longer applies.
+# - B3, B5: WF-AUDIT2 is now done with actual_model claude-opus-5-5; model_rank prefers actual_model over
+#   requested_model, so the in-memory sonnet/haiku request does not lower its rank. Equivalent probes on the
+#   running WF-AUDIT3 (G2, G5 in 3-probes.py) are rejected.
+# - C5, D3: passed_audit() turns WF-AUDIT2 into PASS while WF-FIX2.addresses_audit = WF-AUDIT2; the new rule
+#   correctly rejects a fix addressing a PASS audit.
+# - D4, D6: WP1-F01-FIX now depends on WF-AUDIT3 (running), so "Unfinished dependency" fires first.

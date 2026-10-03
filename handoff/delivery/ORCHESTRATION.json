@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP1",
-  "phase": "workflow-revision-freeze3",
+  "phase": "governance-accept",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "d4d49149221e45459937d26bdd1258d681341b73712d8564a852c9131c5429d2",
+  "current_source_digest": "2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WF-FREEZE3",
+  "next_task_id": "WF-ACCEPT",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -49,7 +49,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
+    "last_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
     "unpushed": []
   },
   "owner_decisions": [
@@ -95,7 +95,13 @@
     {
       "date": "2026-10-02",
       "basis": "Caps after WF-AUDIT2 FIX REQUIRED (second fix round on GOV; WF-A-10 residual recurred)",
-      "decision": "WF-FIX2 escalates to model opus (worker-high profile, reason escalation). A further FIX REQUIRED on this governance package becomes an owner blocker. WF-AUDIT2 Low items are fixed rather than deferred because WF-R-01 is an integrity gap and WF-R-02 matters for WP4 SMTP configuration."
+      "decision": "WF-FIX2 escalates to model opus (worker-high profile, reason escalation). A further FIX REQUIRED on this governance package becomes an owner blocker. WF-AUDIT2 Low items are fixed rather than deferred because WF-R-01 is an integrity gap and WF-R-02 matters for WP4 SMTP configuration.",
+      "deviation_note": "docs/08 names the expert profile (opus/xhigh) for recurring FIX REQUIRED; the coordinator used worker-high with an opus override because the residual came from its own brief scoping and the root causes were explicit. WF-AUDIT3 noted it; outcome PASS. Future recurring FIX REQUIRED follows the table (expert)."
+    },
+    {
+      "date": "2026-10-03",
+      "basis": "WF-AUDIT3 PASS (fresh opus) on 6578df8 / 2f50be64",
+      "decision": "Governance revision v2 accepted for 1a25275..6578df8. WF-ACCEPT commits the records; WP1-F01-FIX starts after it. The F-01 worker must not add literal password-like values in tests (precommit blocks them); build synthetic values at run time if needed."
     }
   ],
   "auxiliary_lookups": [
@@ -733,9 +739,175 @@
       "id": "WF-FREEZE3",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WF-FIX2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab11d4a97702b2502",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WF-FREEZE3.md",
+        "handoff/delivery/evidence/WF-FREEZE3"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-FREEZE3.md",
+      "report": "handoff/delivery/tasks/WF-FREEZE3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WF-FREEZE3/node-version.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/precommit-1.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/masking.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/precommit-2.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/diffcheck.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/validate.txt",
+        "handoff/delivery/evidence/WF-FREEZE3/commit-message.txt"
+      ],
+      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
+      "branch": "main",
+      "commit_sha": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 69 files; masked 7 profile-path lines in WF-GATE2 system-python log; precommit 1 then 0; diff-check, JSON parse and validator exit 0.",
+      "next_action": "None; WF-GATE3 runs on 6578df8."
+    },
+    {
+      "id": "WF-GATE3",
+      "package": "GOV",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
+      "depends_on": [
+        "WF-FREEZE3"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aff02e33e305449e1",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WF-GATE3.md",
+        "handoff/delivery/evidence/WF-GATE3"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-GATE3.md",
+      "report": "handoff/delivery/tasks/WF-GATE3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WF-GATE3/exits.txt",
+        "handoff/delivery/evidence/WF-GATE3/node-version.txt",
+        "handoff/delivery/evidence/WF-GATE3/digest-before.txt",
+        "handoff/delivery/evidence/WF-GATE3/validate-orch.txt",
+        "handoff/delivery/evidence/WF-GATE3/check-recovery.txt",
+        "handoff/delivery/evidence/WF-GATE3/preflight-workflow-python.txt",
+        "handoff/delivery/evidence/WF-GATE3/selftest.txt",
+        "handoff/delivery/evidence/WF-GATE3/probes.txt",
+        "handoff/delivery/evidence/WF-GATE3/verify.txt",
+        "handoff/delivery/evidence/WF-GATE3/diffcheck.txt",
+        "handoff/delivery/evidence/WF-GATE3/srcdiff.txt",
+        "handoff/delivery/evidence/WF-GATE3/digest-after.txt"
+      ],
+      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
+      "source_digest": "2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "next_action": "None; fresh WF-AUDIT3 on 6578df8 / 2f50be64."
+    },
+    {
+      "id": "WF-AUDIT3",
+      "package": "GOV",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
+      "depends_on": [
+        "WF-GATE3"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ad06b62abaded3ade",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WORKFLOW_RECHECK2.md",
+        "handoff/delivery/WORKFLOW_RECHECK2.vi.md",
+        "handoff/delivery/tasks/WF-AUDIT3.md",
+        "handoff/delivery/evidence/WF-AUDIT3"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-AUDIT3.md",
+      "report": "handoff/delivery/tasks/WF-AUDIT3.md",
+      "evidence": [
+        "handoff/delivery/WORKFLOW_RECHECK2.md",
+        "handoff/delivery/evidence/WF-AUDIT3/0-identity-before.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/1-validator-recovery.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/3-probes.py",
+        "handoff/delivery/evidence/WF-AUDIT3/3-probes-output.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/3b-replay-wf-audit2-probes.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/4-precommit-output.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/5-range-privacy.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/6-lint.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/7-clone-and-scope.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/8-full-tree-scan.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/9-final-scan.txt",
+        "handoff/delivery/evidence/WF-AUDIT3/10-identity-after.txt"
+      ],
+      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
+      "source_digest": "2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3",
+      "reviewed_digest": "2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3",
+      "author_agent_ids": [
+        "a232a5b7f6cdec442",
+        "ae6c446dc434f85d6",
+        "afbd2f9ae6ec1fce3",
+        "ad742f3b42890d674",
+        "a2a9ec20d51be6815",
+        "ac2a1aa382231d48e"
+      ],
+      "decision": "PASS",
+      "accepted_range": "1a25275b7c87bcef1e9099d7adba8f2eb763d698..6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
+      "optional_notes": [
+        "precommit misses a bare 'pass' key and quoted compose list items (documented limits)",
+        "six existing quoted test-password literals in a test file would block a freeze commit if those lines are edited",
+        "WF-FIX2 used worker-high with opus override instead of the expert profile named for recurring FIX REQUIRED"
+      ],
+      "next_action": "None; governance accepted. WF-ACCEPT commits the records; WP1-F01-FIX follows."
+    },
+    {
+      "id": "WF-ACCEPT",
+      "package": "GOV",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WF-AUDIT3"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -753,13 +925,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WF-FREEZE3.md",
-        "handoff/delivery/evidence/WF-FREEZE3"
+        "handoff/delivery/tasks/WF-ACCEPT.md",
+        "handoff/delivery/evidence/WF-ACCEPT"
       ],
-      "prompt": "handoff/delivery/tasks/WF-FREEZE3.md",
-      "report": "handoff/delivery/tasks/WF-FREEZE3.md",
+      "prompt": "handoff/delivery/tasks/WF-ACCEPT.md",
+      "report": "handoff/delivery/tasks/WF-ACCEPT.md",
       "evidence": [],
-      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
+      "baseline_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
       "branch": "main",
       "commit_sha": null,
       "pushed": null,
@@ -767,89 +939,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Freeze-commit WF-FIX2 plus recheck records; mask profile paths in WF-GATE2 system-python log; push."
-    },
-    {
-      "id": "WF-GATE3",
-      "package": "GOV",
-      "kind": "gate",
-      "status": "pending",
-      "depends_on": [
-        "WF-FREEZE3"
-      ],
-      "profile": "timesheet-verifier",
-      "requested_model": "sonnet",
-      "requested_effort": "medium",
-      "model_override_reason": null,
-      "routing": {
-        "size": "S",
-        "risk": "M",
-        "novelty": false
-      },
-      "actual_model": null,
-      "actual_source": null,
-      "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
-      "owned_paths": [
-        "handoff/delivery/tasks/WF-GATE3.md",
-        "handoff/delivery/evidence/WF-GATE3"
-      ],
-      "prompt": "handoff/delivery/tasks/WF-GATE3.md",
-      "report": "handoff/delivery/tasks/WF-GATE3.md",
-      "evidence": [],
-      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
-      "source_digest": null,
-      "reviewed_digest": null,
-      "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Gate the WF-FREEZE3 commit."
-    },
-    {
-      "id": "WF-AUDIT3",
-      "package": "GOV",
-      "kind": "audit",
-      "status": "pending",
-      "depends_on": [
-        "WF-GATE3"
-      ],
-      "profile": "timesheet-auditor",
-      "requested_model": "opus",
-      "requested_effort": "xhigh",
-      "model_override_reason": null,
-      "routing": {
-        "size": "S",
-        "risk": "H",
-        "novelty": false
-      },
-      "actual_model": null,
-      "actual_source": null,
-      "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
-      "owned_paths": [
-        "handoff/delivery/WORKFLOW_RECHECK2.md",
-        "handoff/delivery/WORKFLOW_RECHECK2.vi.md",
-        "handoff/delivery/tasks/WF-AUDIT3.md",
-        "handoff/delivery/evidence/WF-AUDIT3"
-      ],
-      "prompt": "handoff/delivery/tasks/WF-AUDIT3.md",
-      "report": "handoff/delivery/tasks/WF-AUDIT3.md",
-      "evidence": [],
-      "baseline_commit": "c219d79a2c202861b719473cdffb0efb59f14290",
-      "source_digest": null,
-      "reviewed_digest": null,
-      "author_agent_ids": [
-        "a232a5b7f6cdec442",
-        "ae6c446dc434f85d6",
-        "afbd2f9ae6ec1fce3",
-        "ad742f3b42890d674",
-        "a2a9ec20d51be6815"
-      ],
-      "decision": null,
-      "next_action": "Fresh short recheck of WF-A-10 residual, WF-R-01, WF-R-02 and the c219d79..freeze3 diff; PASS accepts governance 1a25275..freeze3. Not any author (incl. WF-FIX2 ac2a1aa382231d48e) nor WF-AUDIT/WF-AUDIT2."
+      "next_action": "Accept commit of governance records (gate/audit evidence, recheck report, handoff, state, entry prompt, checkpoint, F-01 brief); push."
     },
     {
       "id": "WP1-F01-PLAN",
@@ -885,7 +975,7 @@
       "kind": "fix",
       "status": "pending",
       "depends_on": [
-        "WF-AUDIT3"
+        "WF-ACCEPT"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "sonnet",

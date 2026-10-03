@@ -1,0 +1,56 @@
+# WF-AUDIT3 committed-board checks in a scratch clone and scope checks (captured 2026-10-03T03:15:38Z)
+clone <scratch>/wfa3-clone HEAD 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7
+COMMAND: <python> handoff/delivery/validate_orchestration.py (committed board)
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 20,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+EXIT: 0
+COMMAND: <python> handoff/delivery/check_recovery.py (committed board)
+  "status": "PASS",
+  "count": 81,
+EXIT: 0
+clone deleted
+
+COMMAND: git diff --check c219d79 6578df8
+EXIT: 0
+COMMAND: git diff --check 1a25275 6578df8
+EXIT: 0
+COMMAND: git diff --stat 1a25275 6578df8 -- src tests package-lock.json skills-lock.json (expect empty)
+EXIT: 0
+COMMAND: git diff 1a25275 6578df8 -- package.json
+diff --git a/package.json b/package.json
+index d3fa6bf..87f1526 100644
+--- a/package.json
++++ b/package.json
+@@ -12,6 +12,7 @@
+     "lint": "eslint .",
+     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run smoke",
+     "digest": "node scripts/source-digest.mjs",
++    "precommit-check": "node scripts/precommit-check.mjs",
+     "build": "npm run build:server && npm run build:client",
+     "build:server": "tsc -p tsconfig.server.json",
+     "build:client": "vite build",
+COMMAND: git diff --name-only c219d79 6578df8 -- . ':!handoff' (non-handoff paths in the fix commit)
+docs/08_AI_WORKFLOW_AND_BUDGET.md
+docs/08_AI_WORKFLOW_AND_BUDGET.vi.md
+scripts/precommit-check.mjs
+COMMAND: git diff --stat c219d79 6578df8 -- .claude .agents docs/agents AGENTS.md AGENTS.vi.md CLAUDE.md CLAUDE.vi.md handoff/templates (expect empty)
+EXIT: 0
+COMMAND: governance paths changed in c219d79..6578df8
+docs/08_AI_WORKFLOW_AND_BUDGET.md
+docs/08_AI_WORKFLOW_AND_BUDGET.vi.md
+handoff/delivery/check_recovery.py
+handoff/delivery/validate_orchestration.py
+handoff/prompts/FIX_FINDINGS.md
+handoff/prompts/FIX_FINDINGS.vi.md
+handoff/prompts/ORCHESTRATE.md
+handoff/prompts/ORCHESTRATE.vi.md
+scripts/precommit-check.mjs
+COMMAND: git show 6578df8 --format=%B -s | grep -i trailer lines
+Task: WF-FREEZE3 (freeze of WF-FIX2 before WF-GATE3/WF-AUDIT3)
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

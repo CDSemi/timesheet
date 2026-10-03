@@ -1,75 +1,35 @@
 # Checkpoint sửa quy trình
 
-Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Ngày: 2026-10-02.
+Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-03 UTC (2026-10-02
+America/Los_Angeles).
 
-- Package và vai trò: package WP1 trên board, phase workflow-revision-implement;
-  coordinator. Model thật claude-opus-5-5 (chủ dự án chọn; profile yêu cầu
-  sonnet/medium); effort không quan sát được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
-- Repository: HEAD ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed = origin/main. Thiết kế điều
-  phối trước đã được commit và push trong ffbf8f0 (chưa từng audit độc lập). Chưa commit:
-  board, checkpoint này, brief/report task WF.
-- Quyết định chủ dự án 2026-10-02: coordinator tự chọn model/effort theo việc thật; tự
-  commit/push thẳng main đến release đầu, sau đó dùng nhánh.
-- Quyết định coordinator (`coordinator_decisions` trên board): định tuyến lai (profile =
-  vai trò + effort, model chọn từng lần giao có lý do; expert/auditor opus/xhigh,
-  verifier sonnet/medium, coordinator inherit; không fable/best/opusplan);
-  timesheet-committer là người commit duy nhất, commit đóng băng/nghiệm thu và push sau
-  mỗi commit; record task chỉ tiếng Anh; hủy WP1-F01-PLAN; audit sửa cỡ S có thể gộp gate.
-- Đã xong: WF-REVIEW (planner, report A–F); WF-CAPS (tra cứu tài liệu);
-  WF-IMPL-TOOLING (validator, 48 probe khôi phục, script precommit, chín profile; tác
-  giả báo các kiểm tra đạt).
-- BỊ CHẶN: WF-IMPL-DOCS attempt 1 đã sửa quy tắc 1 và 12 trong AGENTS.md/.vi.md, rồi bộ
-  phân loại quyền auto-mode của client từ chối ghi quyền commit/push thường trực vào
-  docs/08 ("Instruction Poisoning"). Task đã dừng; không lách. Chờ chủ dự án xác nhận
-  trực tiếp trong chat (`pending_owner_question` trên board). Không task nào đang chạy;
-  chưa có commit.
-- Còn lại: WF-IMPL-DOCS → WF-GATE → WF-AUDIT (mới; tích lũy 1a25275..hiện tại) →
-  committer commit nghiệm thu + push (khởi động lại trước nếu profile mới chưa được nhận)
-  → WP1-F01-FIX → commit đóng băng → audit (gộp gate) → commit nghiệm thu.
+- Package và vai trò: WP1 (ứng dụng), package quản trị GOV vừa nghiệm thu; coordinator.
+  Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
+  được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
+- Repository: HEAD = origin/main = 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7 (đóng băng quản
+  trị lần 3, đã audit độc lập). Chưa commit: record GOV (kết quả và bằng chứng
+  WF-FREEZE3/WF-GATE3/WF-AUDIT3, WORKFLOW_RECHECK2, WORKFLOW_HANDOFF), board, STATE,
+  NEXT_ACTION, checkpoint này, brief WF-ACCEPT và WP1-F01-FIX.
+- Đã xong: bản sửa quy trình v2 đã nghiệm thu. WF-AUDIT3 cho PASS với `1a25275..6578df8`
+  ([WORKFLOW_RECHECK2](WORKFLOW_RECHECK2.vi.md), [bàn giao](WORKFLOW_HANDOFF.vi.md)). Các
+  vòng trước là FIX REQUIRED (WF-AUDIT, WF-AUDIT2); cả hai đã được WF-FIX1 và WF-FIX2 sửa,
+  trong đó WF-FIX2 nâng lên opus.
+- Kiểm chứng gần nhất: WF-GATE3 PASS, digest
+  2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3; WF-AUDIT3 PASS trên cùng
+  commit/digest.
+- Đang chạy: WF-ACCEPT (committer): commit nghiệm thu chỉ gồm record, rồi push.
+- Còn lại: WP1-F01-FIX → WP1-F01-FREEZE → WP1-F01-GATE (riêng, snapshot cuối package) →
+  WP1-F01-AUDIT (opus mới) → WP1-F01-ACCEPT; chỉ PASS mới mở WP2; sau đó lộ trình WP2–WP5;
+  pilot thật do chủ dự án quyết.
 - Không đổi: WP1 FIX REQUIRED, F-01 chưa sửa, WP2 chưa bắt đầu; không gửi thật, triển
   khai, đổi billing, cài đặt toàn cục hay cài đặt quyền.
-- Chủ dự án đã xác nhận trực tiếp trong chat (nguyên văn ở `owner_decisions` trên board),
-  kèm đồng ý dự phòng cho coordinator tự ghi các dòng quyền commit nếu vẫn bị chặn.
-  WF-IMPL-DOCS attempt 2 đang chạy (writer duy nhất).
-- WF-IMPL-DOCS attempt 2 xong (không bị chặn; kiểm tra của tác giả exit 0). WF-FREEZE
-  (committer) đang chạy: commit đóng băng bản sửa v2 trên main và push; sau đó WF-GATE,
-  WF-AUDIT.
-- WF-FREEZE xong: commit fd77a8717da9a1b2ea9ce13520d59b9df60f4716 đã push lên
-  origin/main (60 path; precommit 0 chặn, 12 cảnh báo path hồ sơ người dùng). WF-GATE đang
-  chạy trên commit này.
-- WF-GATE PASS trên fd77a87: source digest
-  03d4a6f986c93423903ea94ded9f58a7ca127c64dc6bcca1342f38a8b24f491b (trước = sau);
-  verify 174 test, preflight 91 kịch bản, probe precommit chặn sáu đầu vào xấu.
-  WF-AUDIT (auditor mới, profile opus/xhigh) đang chạy trên cùng commit/digest.
-- WF-AUDIT (opus) FIX REQUIRED trên fd77a87: 3 Medium (mâu thuẫn sức mạnh auditor, task
-  quản trị bị "stale" khi nằm dưới WP1, lỗ hổng precommit) và 7 Low; báo cáo
-  [WORKFLOW_REVIEW](WORKFLOW_REVIEW.vi.md). WF-FIX1 (worker-high) đang chạy theo quyết định
-  ràng buộc, gồm package GOV cho việc quản trị quy trình.
-- WF-FIX1 xong (tác giả báo kiểm tra đạt; coordinator quyết định cho phép đúng địa chỉ
-  `noreply@anthropic.com`). Task WF-* đã chuyển nhãn sang package GOV; chuỗi WP1-F01 lập
-  lại (FIX → FREEZE → GATE → AUDIT → ACCEPT, record task tiếng Anh). WF-FREEZE2
-  (committer) đang chạy.
-- WF-FREEZE2 xong: commit c219d79a2c202861b719473cdffb0efb59f14290 đã push (79 file,
-  Node 24, precommit 0 phát hiện). WF-GATE2 đang chạy trên commit này.
-- WF-GATE2 PASS trên c219d79: digest
-  d4d49149221e45459937d26bdd1258d681341b73712d8564a852c9131c5429d2 (trước = sau);
-  67 probe, verify 174 test, các probe của auditor nay bị chặn. WF-AUDIT2 (mới) đang chạy.
-- WF-AUDIT2 (opus mới) FIX REQUIRED, chỉ mức Low: mọi lỗi Medium đã sửa; còn WF-A-10 (câu
-  chữ), WF-R-01 (ràng buộc commit gate/audit GOV), WF-R-02 (secret có dấu cách); báo cáo
-  [WORKFLOW_RECHECK](WORKFLOW_RECHECK.vi.md). Coordinator đã sửa độ trễ board của mình
-  (WF-GATE2 done), câu chữ NEXT_ACTION và đánh dấu quyết định gate đã được thay thế.
-- WF-FIX2 đang chạy: worker-high nâng lên opus (theo giới hạn; FIX REQUIRED tiếp theo
-  trên GOV thành vướng mắc chờ chủ). Sau đó WF-FREEZE3 (che path trong log system-python
-  của WF-GATE2), WF-GATE3, WF-AUDIT3 mới.
-- WF-FIX2 xong (opus; tác giả báo: validator 0, 81 probe, chặn secret có dấu cách, sửa
-  câu chữ prompt). WF-FREEZE3 đang chạy (che path trong log system-python của WF-GATE2).
-- Bước tiếp: ghi SHA WF-FREEZE3; WF-GATE3; WF-AUDIT3 mới (opus).
+- Bước tiếp: ghi SHA WF-ACCEPT, rồi giao WP1-F01-FIX (worker-high, sonnet).
 
 ## Khôi phục điều phối
 
-- Board: [ORCHESTRATION.json](ORCHESTRATION.json); bản khôi phục = board trong ffbf8f0
-  (`git show HEAD:handoff/delivery/ORCHESTRATION.json`) cộng checkpoint này.
+- Board: [ORCHESTRATION.json](ORCHESTRATION.json); board commit cuối trong git là bản khôi
+  phục; checkpoint này.
 - Nếu bị ngắt: đánh dấu task đang chạy là interrupted, kiểm report/bằng chứng và path sở
-  hữu, xác nhận không còn writer chạy, rồi giao lại phần còn lại với attempt kế tiếp.
-  Effort của task pending trên board đã đặt sẵn theo profile mới.
+  hữu, xác nhận không còn writer chạy (giao việc kiểm tra), giao lại phần còn lại với
+  attempt kế tiếp.
 - Không quan sát được usage/reset.

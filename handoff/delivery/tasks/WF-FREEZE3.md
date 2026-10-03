@@ -59,4 +59,6 @@ handoff/delivery/evidence/WF-FREEZE3/. Return at most 200 words.
 
 ## Results
 
-(Committer appends here.)
+- Pre HEAD c219d79a2c202861b719473cdffb0efb59f14290; post HEAD = commit SHA = remote SHA 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7; pushed to origin main.
+- Node v24.21.0; staged 69 (STATE.json unchanged); masked: handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt (7 lines).
+- Checks: precommit 1 then 0 after masking; diff --check 0; JSON parse 0; validator 0; staged-diff read clean. Blockers: none.

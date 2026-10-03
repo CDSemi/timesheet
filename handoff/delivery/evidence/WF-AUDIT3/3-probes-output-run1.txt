@@ -1,0 +1,35 @@
+# python handoff/delivery/evidence/WF-AUDIT3/3-probes.py (captured 2026-10-03T03:11:36Z; HEAD 6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7; validator unchanged vs HEAD: yes)
+# A. Real-board controls
+ok  | A1 working-tree board as written (WF-AUDIT3 running, reviewed_commit = WF-GATE3 freeze_commit) | expected ACCEPT | got ACCEPT
+ok  | A2 positive control: done WF-AUDIT3 PASS bound to WF-GATE3 (same commit, same digest) | expected ACCEPT | got ACCEPT
+ok  | A3 committed history binding: WF-AUDIT/WF-GATE and WF-AUDIT2/WF-GATE2 commits equal | expected ACCEPT | got ACCEPT
+ok  | A4 real board WF-AUDIT.reviewed_commit == WF-GATE.freeze_commit | True
+ok  | A4 real board WF-AUDIT2.reviewed_commit == WF-GATE2.freeze_commit | True
+ok  | A4 real board WF-AUDIT3.reviewed_commit == WF-GATE3.freeze_commit | True
+# D. Gate/audit commit binding (WF-R-01; WF-AUDIT2 probe D9 replay)
+ok  | D9 replay: done GOV audit PASS, gate freeze_commit differs from reviewed_commit (same digest) | expected REJECT(Gate freeze_commit differs from audit reviewed_commit) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT3 / WF-GATE3)
+ok  | D9a WF-R-01 scenario: handoff-only GOV change keeps the digest; new audit reuses the old WF-GATE2 | expected REJECT(Gate freeze_commit differs from audit reviewed_commit) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT3 / WF-GATE2)
+ok  | D9b done GOV audit with gate_included and no gate dependency | expected REJECT(Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit) | got REJECT(Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit: WF-AUDIT3)
+ok  | D9c done GOV audit whose only gate lacks freeze_commit | expected REJECT(Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit) | got REJECT(Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit: WF-AUDIT3)
+ok  | D9d binding also applies to a done GOV FIX REQUIRED audit (gate on the older commit) | expected REJECT(Gate freeze_commit differs) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT3 / WF-GATE3)
+ok  | D9e running GOV audit already rejects a mismatching gate commit (any status) | expected REJECT(Gate freeze_commit differs) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT3 / WF-GATE3)
+BAD | D9f two gate dependencies, one on an older commit | expected REJECT(WF-AUDIT3 / WF-GATE2) | got REJECT(Gate/audit snapshot mismatch: WF-AUDIT3)
+ok  | D9g pending WP1 audit and gate with different recorded commits (any package, any status) | expected REJECT(Gate freeze_commit differs) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WP1-F01-AUDIT / WP1-F01-GATE)
+ok  | D9h known limit: gate freeze_commit is not cross-checked against its freeze task commit_sha | expected ACCEPT | got ACCEPT
+ok  | D9i upper-case SHA is not 40-hex lower case | expected REJECT(Invalid freeze_commit) | got REJECT(Invalid freeze_commit: WF-GATE3)
+# F. addresses_audit
+ok  | F1 done fix addressing the running WF-AUDIT3 | expected REJECT(must name a done FIX REQUIRED or NOT VERIFIED audit) | got REJECT(addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: WF-FIX2)
+ok  | F2 addresses_audit naming a gate | expected REJECT(must name an existing audit task) | got REJECT(addresses_audit must name an existing audit task: WF-FIX2)
+ok  | F3 addresses_audit as a list | expected REJECT(must name an existing audit task) | got REJECT(addresses_audit must name an existing audit task: WF-FIX2)
+ok  | F4 addresses_audit empty string | expected REJECT(must name an existing audit task) | got REJECT(addresses_audit must name an existing audit task: WF-FIX2)
+ok  | F5 addresses_audit on a documentation task | expected REJECT(addresses_audit is only for fix tasks) | got REJECT(addresses_audit is only for fix tasks: WF-IMPL-DOCS)
+ok  | F6 pending fix that also depends on the audit it addresses | expected REJECT(Fix must not depend on its addresses_audit) | got REJECT(Fix must not depend on its addresses_audit: WP1-F01-FIX)
+ok  | F7 cross-package traceability: pending WP1 fix addressing a done GOV FIX REQUIRED audit | expected ACCEPT | got ACCEPT
+ok  | F8 explicit null addresses_audit is treated as absent | expected ACCEPT | got ACCEPT
+# G. Unchanged protections still hold on the new board
+ok  | G1 WF-FIX2 author audits its own fix (author_agent_ids lacks it; package membership catches it) | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT3)
+ok  | G2 Sonnet fallback auditor over the Opus WF-FIX2 author | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT3)
+ok  | G3 WP1-F01-FIX may run on WF-AUDIT3 PASS; the F-01 digest change does not stale the GOV PASS | expected ACCEPT | got ACCEPT
+ok  | G4 WP1-F01-FIX cannot run while WF-AUDIT3 is unfinished | expected REJECT(Unfinished dependency) | got REJECT(Unfinished dependency: WP1-F01-FIX)
+# 27/28 probes behaved as expected
+exit=1
