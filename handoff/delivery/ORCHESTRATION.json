@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-calfix-freeze",
+  "phase": "wp2-t09a-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3",
+  "current_source_digest": "6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-CALFIX-FREEZE",
+  "next_task_id": "WP2-T09A-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -73,7 +73,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "869bc8e5786e827144ef1d2d806725576351c720",
+    "last_commit": "24f192dddbe658246dab020c5bc87c74a02a4310",
     "unpushed": []
   },
   "owner_decisions": [
@@ -2576,9 +2576,113 @@
       "id": "WP2-CALFIX-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-CALFIX"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a9be82135eaec2571",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+        "handoff/delivery/evidence/WP2-CALFIX-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-CALFIX-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-CALFIX-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "869bc8e5786e827144ef1d2d806725576351c720",
+      "branch": "main",
+      "commit_sha": "24f192dddbe658246dab020c5bc87c74a02a4310",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 25 paths (exact expected set); precommit, diff-check, JSON parse, validator and check_recovery (82) exit 0; synthetic data only. Note: bare node still resolved to v26 after a PATH prepend, so the committer called the Node 24 binary by full path.",
+      "next_action": "None; WP2-T09A runs on 24f192d."
+    },
+    {
+      "id": "WP2-T09A",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP2-CALFIX-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab28f632ea02536ef",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/App.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "src/client/components/AppShell.tsx",
+        "package.json",
+        "package-lock.json",
+        "playwright.config.ts",
+        "tsconfig.test.json",
+        "tsconfig.json",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/shell.spec.ts",
+        "handoff/delivery/tasks/WP2-T09A.md",
+        "handoff/delivery/evidence/WP2-T09A"
+      ],
+      "deviations": [
+        "tsconfig.json include gained playwright.config.ts because the ESLint project service reads the root config (accepted; path added to owned_paths after the fact).",
+        ".notice uses --warn instead of --error (accepted; it is a notice).",
+        "TimesheetScreen lost its main wrapper, Sign out button and onSignedOut prop, which moved to the shell (accepted; no feature change).",
+        "The worker killed only its own hung python process (no other process touched)."
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T09A.md",
+      "report": "handoff/delivery/tasks/WP2-T09A.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T09A/commands.txt",
+        "handoff/delivery/evidence/WP2-T09A/login-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T09A/login-mobile-synthetic.png",
+        "handoff/delivery/evidence/WP2-T09A/timesheet-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T09A/timesheet-mobile-synthetic.png"
+      ],
+      "baseline_commit": "24f192dddbe658246dab020c5bc87c74a02a4310",
+      "source_digest": "6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). Playwright 1.63.0 runs on installed Edge 153 (channel msedge; E2E_CHANNEL override; nothing downloaded). A worker-scoped built-server fixture uses a temp DB outside the repo, a free port, run-time seed passwords, process.execPath and an HTTP SeedClient (dates from the API, never today). E-8 tokens include a dark-mode on-accent contrast fix and a reduced-motion guard. Hash-route shell; api.ts types with error.details kept. verify 524 tests; test:e2e 7 passed, 1 skipped (a mobile-only test on desktop), on Node v24.21.0. An e2e test caught a hash-normalization defect during the work, which was fixed. Skill conflicts were resolved in favour of AGENTS/E-8. Not independent acceptance.",
+      "next_action": "None; WP2-T09A-FREEZE."
+    },
+    {
+      "id": "WP2-T09A-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T09A"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -2596,13 +2700,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
-        "handoff/delivery/evidence/WP2-CALFIX-FREEZE"
+        "handoff/delivery/tasks/WP2-T09A-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T09A-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP2-T09A-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T09A-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "869bc8e5786e827144ef1d2d806725576351c720",
+      "baseline_commit": "24f192dddbe658246dab020c5bc87c74a02a4310",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -2610,24 +2714,24 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the CALFIX set with the T09 pre-flight records and the T09A brief; on a permission denial stop without retrying."
+      "next_action": "Commit and push the T09A set (including four synthetic screenshots) with the T09B brief; on a permission denial stop without retrying."
     },
     {
-      "id": "WP2-T09A",
+      "id": "WP2-T09B",
       "package": "WP2",
       "kind": "implement",
       "status": "pending",
       "depends_on": [
-        "WP2-CALFIX-FREEZE"
+        "WP2-T09A-FREEZE"
       ],
-      "profile": "timesheet-worker-high",
+      "profile": "timesheet-worker",
       "requested_model": "sonnet",
-      "requested_effort": "high",
+      "requested_effort": "medium",
       "model_override_reason": null,
       "routing": {
         "size": "M",
         "risk": "M",
-        "novelty": true
+        "novelty": false
       },
       "actual_model": null,
       "actual_source": null,
@@ -2636,29 +2740,25 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/client/App.tsx",
         "src/client/TimesheetScreen.tsx",
-        "src/client/api.ts",
         "src/client/styles.css",
-        "src/client/components/AppShell.tsx",
-        "package.json",
-        "package-lock.json",
-        "playwright.config.ts",
-        "tsconfig.test.json",
+        "src/client/api.ts",
+        "src/client/components",
+        "tests/client/dayModel.test.ts",
+        "tests/e2e/timesheet.spec.ts",
         "tests/e2e/fixtures.ts",
-        "tests/e2e/shell.spec.ts",
-        "handoff/delivery/tasks/WP2-T09A.md",
-        "handoff/delivery/evidence/WP2-T09A"
+        "handoff/delivery/tasks/WP2-T09B.md",
+        "handoff/delivery/evidence/WP2-T09B"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T09A.md",
-      "report": "handoff/delivery/tasks/WP2-T09A.md",
+      "prompt": "handoff/delivery/tasks/WP2-T09B.md",
+      "report": "handoff/delivery/tasks/WP2-T09B.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Browser harness (Playwright 1.63.0, msedge channel, built-server fixture), E-8 CSS tokens with the three design skills, hash-route app shell, api.ts types and error.details; verify and test:e2e on both viewports."
+      "next_action": "Two-week grid, mobile day list, status display and batch edit with conflict dialog, reason prompt and stale reload; dayModel unit tests; e2e on both projects."
     },
     {
       "id": "WP2-INFRA1",

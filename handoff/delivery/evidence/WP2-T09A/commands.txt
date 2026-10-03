@@ -1,0 +1,121 @@
+WP2-T09A verification logs (baseline main 24f192d; date 2026-10-03); paths masked: <project>, <tmp>
+
+runtime: Node v24.21.0 portable (full path), npm 11.18.0; @playwright/test 1.63.0
+browser: Microsoft Edge 153.0.4234.48 via channel msedge (installed; nothing downloaded)
+
+== npm run verify (exit 0) ==
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 <project>
+
+
+ Test Files  26 passed (26)
+      Tests  524 passed (524)
+   Start at  02:11:10
+   Duration  13.58s (tests 91%, transform 6%, import 3%)
+
+
+> timesheet@0.1.0 build
+> npm run build:server && npm run build:client
+
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 24 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:  0.25 kB
+dist/client/assets/index-DRaddpHS.css    4.82 kB │ gzip:  1.66 kB
+dist/client/assets/index-Yeyob8nx.js   230.16 kB │ gzip: 72.20 kB │ map: 1,097.76 kB
+
+✓ built in 78ms
+
+> timesheet@0.1.0 smoke
+> node scripts/smoke-built-server.mjs
+
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3],"version":3}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":3}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid
+PASS  built server starts  Timesheet listening on http://127.0.0.1:3100 (schema v3)
+PASS  GET /api/health has no personal data  {"status":"ok"}
+PASS  GET / serves the built React client with CSP
+PASS  SPA fallback serves index.html
+PASS  employee login sets an HttpOnly SameSite=Strict cookie
+PASS  GET /api/periods/current  today 2026-10-03, current payroll 2026-10-16, due 2026-10-14T00:00:00Z
+PASS  POST 09:00–18:00 on 2026-09-28 with shifted breaks  status 201, R 480, O 0, credited 0
+PASS  admin cannot read the employee session by id (404)  404
+PASS  state change without Origin is rejected (403)  403
+PASS  logout revokes the session  200/401
+SMOKE PASSED
+
+== npm run test:e2e (exit 0) ==
+
+> timesheet@0.1.0 test:e2e
+> npm run build && playwright test
+
+
+> timesheet@0.1.0 build
+> npm run build:server && npm run build:client
+
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 24 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:  0.25 kB
+dist/client/assets/index-DRaddpHS.css    4.82 kB │ gzip:  1.66 kB
+dist/client/assets/index-Yeyob8nx.js   230.16 kB │ gzip: 72.20 kB │ map: 1,097.76 kB
+
+✓ built in 81ms
+
+Running 8 tests using 2 workers
+
+  ok 2 [desktop] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (632ms)
+  ok 1 [mobile] › tests\e2e\shell.spec.ts:22:1 › sign-in form, then the shell on the timesheet route (643ms)
+  ok 4 [mobile] › tests\e2e\shell.spec.ts:37:1 › an unknown hash falls back to the timesheet route (387ms)
+  ok 3 [desktop] › tests\e2e\shell.spec.ts:37:1 › an unknown hash falls back to the timesheet route (399ms)
+  ok 6 [desktop] › tests\e2e\shell.spec.ts:45:1 › the existing timesheet view works inside the shell (477ms)
+  ok 5 [mobile] › tests\e2e\shell.spec.ts:45:1 › the existing timesheet view works inside the shell (502ms)
+  -  7 [desktop] › tests\e2e\shell.spec.ts:61:1 › mobile: no horizontal overflow and tap targets of at least 44px
+  ok 8 [mobile] › tests\e2e\shell.spec.ts:61:1 › mobile: no horizontal overflow and tap targets of at least 44px (406ms)
+
+  1 skipped
+  7 passed (3.1s)
+
+== npm run digest (exit 0) ==
+
+> timesheet@0.1.0 digest
+> node scripts/source-digest.mjs
+
+6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133  (566 files, handoff/ excluded)

@@ -7,15 +7,14 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 869bc8e5786e827144ef1d2d806725576351c720, commit đóng băng
-    WP2-T08.
-  - Digest mã nguồn 95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061
+  - HEAD = origin/main = 24f192dddbe658246dab020c5bc87c74a02a4310, commit đóng băng
+    WP2-CALFIX.
+  - Digest mã nguồn b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3
     (tác giả tự báo).
-  - Chưa commit: WP2-CALFIX (digest mã nguồn
-    b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3, tác giả tự báo;
-    users.ts, test, docs/03 và docs/10 kèm bản .vi), các record của T09-PREP, brief T09A và
-    CALFIX-FREEZE, bằng chứng của T08-FREEZE, bản sửa link trong record WP2-T08, board và
-    checkpoint này. WP2-CALFIX-FREEZE sẽ commit chúng.
+  - Chưa commit: WP2-T09A (digest mã nguồn
+    6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133, tác giả tự báo),
+    bằng chứng của CALFIX-FREEZE, brief T09B và T09A-FREEZE, board và checkpoint này.
+    WP2-T09A-FREEZE sẽ commit chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -122,7 +121,9 @@ America/Los_Angeles).
     billing, cài đặt toàn cục hay cài đặt quyền.
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
-- Bước tiếp: ghi kết quả WP2-CALFIX-FREEZE, rồi giao WP2-T09A (brief sẵn).
+- WP2-T09A đã xong: tác giả tự báo verify 524 test; test:e2e 7 đạt, 1 bỏ qua (test chỉ dành
+  cho điện thoại khi chạy trên desktop), chạy trên Edge 153 có sẵn. Đã chụp 4 ảnh giả lập.
+- Bước tiếp: ghi kết quả WP2-T09A-FREEZE, rồi giao WP2-T09B (brief sẵn).
   - WP2-T09-PREP đã xong. Kết quả chính:
     - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
       duyệt;
@@ -138,8 +139,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-CALFIX-FREEZE (committer). WP2-T09A chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Các worker, committer và
-  planner trước đều báo không còn process nào.
+- Đang chạy: WP2-T09A-FREEZE (committer). WP2-T09B chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Worker T09A đã dừng các
+  server của mình và chỉ dừng đúng process python bị treo do chính nó tạo.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

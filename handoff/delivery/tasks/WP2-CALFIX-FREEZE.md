@@ -85,3 +85,9 @@ Evidence goes in handoff/delivery/evidence/WP2-CALFIX-FREEZE/. Return at most 15
 ## Results
 
 (Committer appends here.)
+
+- Pre-HEAD: 869bc8e5786e827144ef1d2d806725576351c720; post-HEAD: 24f192dddbe658246dab020c5bc87c74a02a4310.
+- Commit 24f192dddbe658246dab020c5bc87c74a02a4310; pushed: yes; remote SHA 24f192dddbe658246dab020c5bc87c74a02a4310.
+- Staged count: 25.
+- Check exits: node v24.21.0 0; precommit 0; diff --check 0; JSON parse 0; validator 0; check_recovery 0; personal-data read clean.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-CALFIX-FREEZE/.

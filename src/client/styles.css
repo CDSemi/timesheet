@@ -1,16 +1,61 @@
+/*
+ * Design tokens (owner decision E-8): plain CSS, a 4px radius, high density, and one shared
+ * 300 ms ease-out transition. Every colour, space and shadow below is a custom property;
+ * rules further down use only these values. Custom properties cannot drive media queries,
+ * so the one layout breakpoint is the documented 768px literal.
+ */
 :root {
   color-scheme: light dark;
+
+  /* Surfaces and text */
   --bg: #f6f7f9;
   --card: #ffffff;
   --text: #1c2430;
   --muted: #5b6675;
   --line: #d9dee5;
-  --accent: #1f5fbf;
-  --error: #b42318;
+  --line-soft: #e8ecf1;
   --off: #eef1f5;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* One accent, plus semantic status colours that are always paired with text */
+  --accent: #1f5fbf;
+  --on-accent: #ffffff;
+  --error: #b42318;
+  --ok: #1a7f4b;
+  --warn: #8a5a00;
+
+  /* Shape and motion */
+  --radius: 4px;
+  --duration: 300ms;
+  --ease: ease-out;
+  --transition: all var(--duration) var(--ease);
+
+  /* Tinted multi-layer shadows (tint is the text colour, never pure black) */
+  --shadow-panel: 0 0 0 1px rgb(28 36 48 / 0.06), 0 1px 2px rgb(28 36 48 / 0.04), 0 4px 12px rgb(28 36 48 / 0.05),
+    0 12px 32px rgb(28 36 48 / 0.04);
+  --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1),
+    0 24px 64px rgb(28 36 48 / 0.08);
+  --focus-ring: 0 0 0 3px rgb(31 95 191 / 0.35);
+
+  /* Spacing, density and layout */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --tap-min: 44px;
+  --page-max: 1200px;
+  --page-narrow: 380px;
+
+  /* Type: the system stack only (the CSP allows no web fonts) */
+  --font-size-xs: 0.8rem;
+  --font-size-sm: 0.9rem;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 15px;
   line-height: 1.45;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,10 +65,31 @@
     --text: #e6e9ee;
     --muted: #9aa5b4;
     --line: #2c3440;
-    --accent: #6ea8ff;
-    --error: #ff8a80;
+    --line-soft: #232a34;
     --off: #202733;
+    --accent: #6ea8ff;
+    --on-accent: #0b1220;
+    --error: #ff8a80;
+    --ok: #5fd29a;
+    --warn: #e3b341;
+    --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3),
+      0 12px 32px rgb(4 8 14 / 0.25);
+    --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
+      0 24px 64px rgb(4 8 14 / 0.4);
+    --focus-ring: 0 0 0 3px rgb(110 168 255 / 0.45);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0.01ms;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 body {
@@ -32,62 +98,151 @@ body {
   color: var(--text);
 }
 
+/* Focus is a ring in box-shadow; the transparent outline stays visible in forced-colors mode. */
+:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ---- Shell ---------------------------------------------------------------- */
+
+.shell-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  background: var(--card);
+  box-shadow: var(--shadow-panel);
+}
+
+.shell-brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.shell-nav {
+  display: flex;
+  flex: 1;
+  gap: var(--space-1);
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.nav-link:hover {
+  background: var(--off);
+  color: var(--text);
+}
+
+.nav-link[aria-current='page'] {
+  background: var(--off);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---- Layout and surfaces -------------------------------------------------- */
+
 .page {
-  max-width: 1200px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 .narrow {
-  max-width: 380px;
+  max-width: var(--page-narrow);
 }
 
 h1 {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-1);
   font-size: 1.4rem;
+  letter-spacing: -0.01em;
 }
 
 .card {
+  min-width: 0;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-4);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
+
+/* ---- Controls ------------------------------------------------------------- */
 
 label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 label.inline {
   flex-direction: row;
   align-items: center;
+  gap: var(--space-2);
 }
 
 input {
   font: inherit;
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
+  transition: var(--transition);
+}
+
+input:hover {
+  border-color: var(--muted);
+}
+
+input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  accent-color: var(--accent);
 }
 
 button {
   font: inherit;
-  padding: 8px 14px;
-  border-radius: 6px;
+  padding: var(--space-2) 14px;
+  border-radius: var(--radius);
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
+  transition: var(--transition);
+}
+
+button:hover:not(:disabled) {
+  box-shadow: var(--shadow-panel);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 button.secondary {
@@ -95,17 +250,43 @@ button.secondary {
   color: var(--accent);
 }
 
+button.secondary:hover:not(:disabled) {
+  background: var(--off);
+}
+
 button:disabled {
   opacity: 0.6;
+  cursor: not-allowed;
 }
+
+/* Touch devices and narrow screens: every control is at least 44px in both directions. */
+@media (max-width: 767px), (pointer: coarse) {
+  button,
+  .nav-link,
+  input:not([type='checkbox']),
+  label.inline {
+    min-height: var(--tap-min);
+  }
+
+  button,
+  .nav-link {
+    min-width: var(--tap-min);
+  }
+
+  label.inline {
+    padding-block: var(--space-2);
+  }
+}
+
+/* ---- Content -------------------------------------------------------------- */
 
 .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .period {
@@ -113,6 +294,7 @@ button:disabled {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  min-width: 0;
   text-align: center;
 }
 
@@ -125,15 +307,25 @@ button:disabled {
 }
 
 .notice {
-  color: var(--error);
-  font-size: 0.9rem;
+  color: var(--warn);
+  font-size: var(--font-size-sm);
 }
 
 .badge {
-  font-size: 0.8rem;
-  padding: 1px 8px;
-  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius);
   border: 1px solid var(--line);
+}
+
+.badge.current {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.badge.old {
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 .table-wrap {
@@ -143,16 +335,29 @@ button:disabled {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 th,
 td {
   text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 6px var(--space-2);
+  border-bottom: 1px solid var(--line-soft);
   vertical-align: top;
   white-space: nowrap;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+tbody tr {
+  transition: var(--transition);
+}
+
+tbody tr:hover {
+  background: var(--off);
 }
 
 tr.nonworking td {

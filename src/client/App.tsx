@@ -1,8 +1,9 @@
 import { type SubmitEvent, useEffect, useState } from 'react';
 import { api, ApiRequestError, type User } from './api.ts';
+import { AppShell, useHashRoute } from './components/AppShell.tsx';
 import { TimesheetScreen } from './TimesheetScreen.tsx';
 
-/** WP1 skeleton: sign-in and a read-only two-week view; the full editor arrives in WP2. */
+/** Auth gate: the sign-in form, or the shell with its hash-routed screens. */
 export function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
@@ -14,7 +15,16 @@ export function App() {
 
   if (user === undefined) return <p className="muted page">Loading…</p>;
   if (user === null) return <LoginForm onSignedIn={setUser} />;
-  return <TimesheetScreen user={user} onSignedOut={() => setUser(null)} />;
+  return <SignedIn user={user} onSignedOut={() => setUser(null)} />;
+}
+
+function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
+  const route = useHashRoute();
+  return (
+    <AppShell user={user} route={route} onSignedOut={onSignedOut}>
+      {route === 'timesheet' && <TimesheetScreen user={user} />}
+    </AppShell>
+  );
 }
 
 function LoginForm({ onSignedIn }: { onSignedIn: (user: User) => void }) {

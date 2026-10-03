@@ -7,14 +7,14 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 869bc8e5786e827144ef1d2d806725576351c720, the WP2-T08 freeze.
-  - Source digest 95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061
+  - HEAD = origin/main = 24f192dddbe658246dab020c5bc87c74a02a4310, the WP2-CALFIX
+    freeze.
+  - Source digest b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3
     (author-reported).
-  - Uncommitted: WP2-CALFIX (source digest
-    b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3, author-reported;
-    users.ts, tests, docs/03 and docs/10 with their .vi pairs), the T09-PREP records, the
-    T09A and CALFIX-FREEZE briefs, the T08-FREEZE evidence, the WP2-T08 record link fix,
-    the board and this checkpoint. WP2-CALFIX-FREEZE commits them.
+  - Uncommitted: WP2-T09A (source digest
+    6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133, author-reported),
+    the CALFIX-FREEZE evidence, the T09B and T09A-FREEZE briefs, the board and this
+    checkpoint. WP2-T09A-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -116,7 +116,10 @@ America/Los_Angeles).
     billing, global settings or permission settings.
   - Commits go only through timesheet-committer, on main until the first release. No
     amend, force-push or tags.
-- Next action: record the WP2-CALFIX-FREEZE result, then dispatch WP2-T09A (brief ready).
+- WP2-T09A is done: author-reported verify 524 tests and test:e2e 7 passed, 1 skipped
+  (a mobile-only test on desktop), on installed Edge 153. Four synthetic screenshots were
+  taken.
+- Next action: record the WP2-T09A-FREEZE result, then dispatch WP2-T09B (brief ready).
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -132,8 +135,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-CALFIX-FREEZE (committer). WP2-T09A is pending on it.
-- Live processes: none known besides the committer. The earlier workers, committers and
-  the planner reported none left.
+- Running: WP2-T09A-FREEZE (committer). WP2-T09B is pending on it.
+- Live processes: none known besides the committer. The T09A worker stopped its servers
+  and killed only its own hung python process.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

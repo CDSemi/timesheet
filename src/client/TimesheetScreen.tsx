@@ -54,7 +54,7 @@ function statusLabel(day: DayView): string {
   }
 }
 
-export function TimesheetScreen({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
+export function TimesheetScreen({ user }: { user: User }) {
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
   const [view, setView] = useState<TimesheetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -121,13 +121,8 @@ export function TimesheetScreen({ user, onSignedOut }: { user: User; onSignedOut
     }
   }
 
-  async function signOut() {
-    await api('POST', '/api/auth/logout', {}).catch(() => undefined);
-    onSignedOut();
-  }
-
   return (
-    <main className="page">
+    <div>
       <header className="toolbar">
         <div>
           <h1>Timesheet</h1>
@@ -135,9 +130,6 @@ export function TimesheetScreen({ user, onSignedOut }: { user: User; onSignedOut
             {user.display_name} · reporting zone {view?.reporting_zone ?? '…'} · display zone {displayZone}
           </p>
         </div>
-        <button type="button" className="secondary" onClick={signOut}>
-          Sign out
-        </button>
       </header>
 
       {view !== null && (
@@ -221,6 +213,6 @@ export function TimesheetScreen({ user, onSignedOut }: { user: User; onSignedOut
           </p>
         </section>
       )}
-    </main>
+    </div>
   );
 }
