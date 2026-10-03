@@ -1,0 +1,14 @@
+# WF-AUDIT runtime observations (auditor's own session)
+date_utc: 2026-10-03T02:05Z
+
+1. Profile application: this auditor's tool set is exactly Read, Glob, Grep, Bash, Write, Edit, Skill
+   (+ the client's hand-back tool), matching .claude/agents/timesheet-auditor.md line 4; the system
+   context names model claude-opus-5-5, matching `model: opus`. Effort is not observable.
+2. Stale project instructions in subagent context: the AGENTS.md text injected into this auditor's
+   context (dispatched after fd77a87) is the ffbf8f0 version: rule 1 lacks the English-only task-record
+   sentence and rule 12 reads "Leave changes uncommitted by default; NEVER create/amend/push a commit
+   unless the user explicitly requests it" (identical to `git show ffbf8f0:AGENTS.md`, line 15), while
+   the working tree and fd77a87 contain the standing-authorization rule 12. The main session started
+   2026-10-03T00:47:56Z, before the revision. All eight shell profiles say "Read AGENTS.md unless it is
+   already in your context", so a subagent holding the stale copy is told not to re-read the file.
+3. A chained `sleep 1; ...` runs in this client (exit 0); the committer's timed retries are feasible.

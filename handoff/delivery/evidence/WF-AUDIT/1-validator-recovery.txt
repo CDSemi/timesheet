@@ -1,0 +1,74 @@
+# WF-AUDIT: validator and recovery checks (auditor-run)
+date_utc: 2026-10-03T01:56:30Z
+python: Python 3.14.6 (system; validator needs no tz data)
+board sha256 at run: 580b4a9f1cacf06d3eb670af8f299cd8d61aab5e879cb8e73da1e78c2bc85fd8 (working board, coordinator-owned, WF-AUDIT running)
+
+$ python handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 10,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+
+$ python handoff/delivery/check_recovery.py
+{
+  "status": "PASS",
+  "synthetic_checks": [
+    "current board is valid",
+    "synthetic pending board",
+    "hard-stop recovery preserves interrupted task identity",
+    "replacement attempt keeps same task ID",
+    "truncated board detected before recovery from the last committed board",
+    "unknown dependency",
+    "dependency cycle",
+    "path traversal",
+    "worker writes shared state",
+    "unconfigured effort",
+    "dispatch before dependency completion",
+    "two source writers",
+    "source changes during gate",
+    "colliding parallel report ownership",
+    "synthetic separate author/auditor and matching evidence identity",
+    "self audit",
+    "stale audit PASS",
+    "failed gate cannot unlock audit",
+    "gate and audit on different snapshots",
+    "audit PASS without execution evidence",
+    "unverified audit cannot unlock dependent task",
+    "WP2 blocked by unresolved WP1",
+    "valid override with reason accepted",
+    "override without reason rejected",
+    "fable model rejected",
+    "reason without override rejected",
+    "effort differing from profile rejected",
+    "invalid routing rejected",
+    "actual model without source rejected",
+    "audit weaker than author rejected",
+    "weaker audit with fallback_unavailable accepted",
+    "requested-model rank also protects audit strength",
+    "audit without gate dependency or gate_included rejected",
+    "audit with gate_included accepted",
+    "malformed reviewed_commit rejected",
+    "running commit beside another running task rejected",
+    "running commit beside a running lookup rejected",
+    "running commit alone accepted",
+    "done commit without 40-hex SHA rejected",
+    "done commit without pushed flag rejected",
+    "commit on main after release_declared rejected",
+    "side-branch commit after release_declared accepted",
+    "commit task with a non-committer profile rejected",
+    "malformed board git state rejected",
+    "one running task plus one running lookup is within the limit",
+    "running lookups exceeding the limit rejected",
+    "coordinator runtime without actual model rejected",
+    "English-only report without a Vietnamese pair accepted"
+  ],
+  "count": 48,
+  "actual_board_modified": false,
+  "claude_dispatch_executed": false
+}
+exit=0

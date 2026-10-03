@@ -34,7 +34,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Ngày: 2026-10-02.
 - WF-IMPL-DOCS attempt 2 xong (không bị chặn; kiểm tra của tác giả exit 0). WF-FREEZE
   (committer) đang chạy: commit đóng băng bản sửa v2 trên main và push; sau đó WF-GATE,
   WF-AUDIT.
-- Bước tiếp: ghi SHA đóng băng/kết quả push; giao WF-GATE trên SHA đó.
+- WF-FREEZE xong: commit fd77a8717da9a1b2ea9ce13520d59b9df60f4716 đã push lên
+  origin/main (60 path; precommit 0 chặn, 12 cảnh báo path hồ sơ người dùng). WF-GATE đang
+  chạy trên commit này.
+- WF-GATE PASS trên fd77a87: source digest
+  03d4a6f986c93423903ea94ded9f58a7ca127c64dc6bcca1342f38a8b24f491b (trước = sau);
+  verify 174 test, preflight 91 kịch bản, probe precommit chặn sáu đầu vào xấu.
+  WF-AUDIT (auditor mới, profile opus/xhigh) đang chạy trên cùng commit/digest.
+- WF-AUDIT (opus) FIX REQUIRED trên fd77a87: 3 Medium (mâu thuẫn sức mạnh auditor, task
+  quản trị bị "stale" khi nằm dưới WP1, lỗ hổng precommit) và 7 Low; báo cáo
+  [WORKFLOW_REVIEW](WORKFLOW_REVIEW.vi.md). WF-FIX1 (worker-high) đang chạy theo quyết định
+  ràng buộc, gồm package GOV cho việc quản trị quy trình.
+- WF-FIX1 xong (tác giả báo kiểm tra đạt; coordinator quyết định cho phép đúng địa chỉ
+  `noreply@anthropic.com`). Task WF-* đã chuyển nhãn sang package GOV; chuỗi WP1-F01 lập
+  lại (FIX → FREEZE → GATE → AUDIT → ACCEPT, record task tiếng Anh). WF-FREEZE2
+  (committer) đang chạy.
+- Bước tiếp: ghi SHA WF-FREEZE2; giao WF-GATE2, rồi WF-AUDIT2 mới.
 
 ## Khôi phục điều phối
 

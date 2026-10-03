@@ -1,0 +1,31 @@
+# WF-AUDIT identity after audit
+date_utc: 2026-10-03T02:07:00Z
+$ git rev-parse HEAD
+fd77a8717da9a1b2ea9ce13520d59b9df60f4716
+$ git rev-parse origin/main
+fd77a8717da9a1b2ea9ce13520d59b9df60f4716
+$ git status --short (outside handoff/)
+(blank = none outside handoff/)
+$ npm run digest  (Node v24.21.0)
+03d4a6f986c93423903ea94ded9f58a7ca127c64dc6bcca1342f38a8b24f491b  (532 files, handoff/ excluded)
+exit=0
+
+$ python handoff/delivery/validate_package.py --preflight  (working tree incl. new WORKFLOW_REVIEW pair; workflow Python)
+  "status": "PASS",
+  "translation_pairs": 43,
+  "local_links": 528,
+exit=0
+
+$ git status --short (handoff/, informational)
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WF-AUDIT.md
+ M handoff/delivery/tasks/WF-FREEZE.md
+ M handoff/delivery/tasks/WF-GATE.md
+?? handoff/delivery/WORKFLOW_REVIEW.md
+?? handoff/delivery/WORKFLOW_REVIEW.vi.md
+?? handoff/delivery/evidence/WF-AUDIT/
+?? handoff/delivery/evidence/WF-FREEZE/
+?? handoff/delivery/evidence/WF-GATE/
+$ rm -rf <scratch>/clone  -> deleted at 2026-10-03T02:07:08Z (test -e exit=1)

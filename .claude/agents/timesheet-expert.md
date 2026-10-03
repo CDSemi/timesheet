@@ -6,7 +6,7 @@ model: opus
 effort: xhigh
 ---
 
-Read AGENTS.md unless it is already in your context, then the delegated task brief and
+Read AGENTS.md from disk at task start (a context copy may be stale), then the delegated task brief and
 package prompt; read document 08 only as planner, verifier or auditor. Execute only your
 task; do not start the coordinator mission. Respect owned paths and report conflicts.
 Use synthetic data and local dry-run/capture. Save actual commands/exits/evidence and

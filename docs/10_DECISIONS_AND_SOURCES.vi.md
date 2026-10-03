@@ -77,3 +77,12 @@ chưa thử client/account Claude thật tại máy. Không cấu hình schedule
 - Quyền commit/push (quyết định thường trực của chủ, xác nhận trực tiếp trong phiên chính): chỉ `timesheet-committer` commit và push; thẳng `main` và push sau mỗi commit đến bản release đầu tiên, sau đó nhánh phụ và PR; không amend, force-push, viết lại lịch sử hay tag; không secret, chữ ký, dữ liệu cá nhân. Quy tắc ở tài liệu 08, mục "Commit và push".
 - Routing thích ứng: chủ ủy quyền coordinator chọn model cho từng lần giao việc theo thang ở tài liệu 08 (size, rủi ro, novelty). Profile cố định vai trò và effort. Fable/best/opusplan, effort max và đổi tốc độ vẫn cần quyết định của chủ.
 - Quyết định của coordinator (đảo ngược được): brief/kết quả task trong `handoff/delivery/tasks/` chỉ bằng tiếng Anh; tiếng Việt dành cho tài liệu cho người đọc, prompt, template, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW và chat.
+
+## Quyết định của coordinator — sửa lỗi workflow sau audit (2026-10-02 America/Los_Angeles, finding WF-A-01..WF-A-10 của WF-AUDIT)
+
+Quyết định đảo ngược được của coordinator cho task WF-FIX1; không quyết định nào đổi quy tắc nghiệp vụ.
+
+- Phạm vi quản trị (WF-A-02): task quy trình dùng giai đoạn `GOV`, ngoài `authorized_scope` (WP1–WP5). Task GOV được miễn kiểm tra đang chạy theo giai đoạn hoạt động, và audit GOV đã xong cần `reviewed_commit`. PASS của GOV được định danh bằng reviewed commit và chỉ bị thay thế khi một path quản trị (liệt kê ở tài liệu 08) đổi. State và hồ sơ (NEXT_ACTION, STATE, bảng, checkpoint, tài liệu này) không phải path quản trị.
+- Cổng riêng tư (WF-A-03, WF-A-09): `scripts/precommit-check.mjs` nay chặn secret YAML/INI không có nháy, file PDF/ảnh/chữ ký mà tên file không chứa `synthetic` (`reference/fixtures/` và `reference/examples/` vẫn được phép) và path hồ sơ người dùng cụ thể. Hoãn: evidence đã commit (một số log chứa tên tài khoản Windows) không bị viết lại; không viết lại lịch sử và không có commit che hồi tố. Evidence mới được che bằng `<user>`; committer được che log evidence đã stage theo quy tắc ở tài liệu 08.
+- Effort `max` (WF-A-04): đã bỏ khỏi các effort validator cho phép. Thêm lại cần quyết định của chủ, khớp tài liệu 08.
+- Snapshot cuối giai đoạn (WF-A-10): tài liệu 08 định nghĩa là snapshot mà audit PASS sẽ nghiệm thu giai đoạn, gồm cả recheck FIX REQUIRED mở khóa giai đoạn kế. Nó giữ gate verifier riêng; `gate_included` chỉ cho sửa S-size trung gian. Coordinator lập lại kế hoạch chuỗi F-01 trên bảng theo đó.

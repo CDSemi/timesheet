@@ -1,0 +1,43 @@
+COMMAND: bash /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WF-FIX1/probes.sh /b/Temp/claude/D--Dropbox-Work-CDSemi-timesheet/44e3451e-da20-4a12-94bb-6b94fc5f531e/scratchpad/wf-fix1/clone scripts/precommit-check.baseline.mjs
+date_utc: 2026-10-03T02:25:57Z; node v24.21.0
+v24.21.0
+script: scripts/precommit-check.baseline.mjs
+## case: YAML unquoted SMTP_PASSWORD (probe 1) (expect exit 1)  [staged: deploy/probe-compose.yml]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 MISMATCH
+## case: YAML unquoted api_token (probe 2) (expect exit 1)  [staged: deploy/probe-token.yml]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 MISMATCH
+## case: signature image in evidence (probe 3) (expect exit 1)  [staged: handoff/delivery/evidence/WP3/employee-signature.png]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 MISMATCH
+## case: PDF in evidence (probe 4) (expect exit 1)  [staged: handoff/delivery/evidence/WP3/timesheet-report.pdf]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 MISMATCH
+## case: POSIX drive profile path (probe 5) (expect exit 1)  [staged: docs/probe-path.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 MISMATCH
+## case: INI unquoted secret (expect exit 1)  [staged: deploy/probe.ini]
+BLOCK secret-assignment deploy/probe.ini:+1 literal secret value Zq***(11 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: Windows profile path (forward slashes) (expect exit 1)  [staged: docs/probe-path2.md]
+WARN profile-path docs/probe-path2.md:+1 Windows user-profile path
+PASS: 1 staged file(s), 0 blocking finding(s), 1 warning(s)
+exit=0 MISMATCH
+## case: synthetic-named evidence image allowed (expect exit 0)  [staged: handoff/delivery/evidence/WP3/ui-synthetic.png]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: synthetic fixture PDF allowed (expect exit 0)  [staged: reference/fixtures/probe-sample.pdf]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: placeholder profile path allowed (expect exit 0)  [staged: docs/probe-ok.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: clean change (probe 6: expect pass) (expect exit 0)  [staged: docs/probe-clean.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+final status:
+ M scripts/precommit-check.mjs
+?? scripts/precommit-check.baseline.mjs
+EXIT: 0

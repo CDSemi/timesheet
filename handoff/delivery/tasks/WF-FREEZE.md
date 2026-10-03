@@ -64,3 +64,10 @@ handoff/delivery/evidence/WF-FREEZE/. Return at most 200 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1 (committer): pre HEAD ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed; commit
+fd77a8717da9a1b2ea9ce13520d59b9df60f4716; pushed to origin main; remote SHA same.
+Staged: 60 paths (59 add/modify plus 1 removal ORCHESTRATION.previous.json). Checks:
+precommit-check 0 (0 blocking, 12 profile-path warnings in evidence/WF-REVIEW docs;
+run under Node v26.10.0), diff --cached --check 0, JSON parse 0, validate_orchestration 0.
+No unstaged extras, no blockers. Evidence: handoff/delivery/evidence/WF-FREEZE/.

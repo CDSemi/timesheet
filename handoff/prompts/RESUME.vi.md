@@ -3,10 +3,11 @@
 Theo AGENTS.md, ORCHESTRATE.md và tài liệu 08. Giữ đăng nhập subscription hiện có.
 
 1. Đọc ORCHESTRATION.json (bảng đã commit cuối nếu hỏng), CHECKPOINT quy trình mới,
-   STATE và HANDOFF/REVIEW hiện tại. Kiểm việc chưa commit/chưa push thật.
-2. Chỉ giao đối chiếu khi có task running/interrupted hoặc checkpoint ghi việc chưa
-   commit/chưa push; nếu không, đọc bảng + checkpoint rồi tiếp tục. Kiểm process còn chạy. Xác nhận writer
-   cũ dừng trước tạo cái thay. Lệnh chưa rõ xong là unverified. Giữ việc không
+   STATE và HANDOFF/REVIEW hiện tại. Lấy việc chưa commit/chưa push và process còn chạy
+   từ bảng và checkpoint; bạn không có shell nên không tự kiểm git hay process.
+2. Giao việc kiểm (git status, commit chưa push, process còn chạy) khi có task
+   running/interrupted hoặc checkpoint ghi việc chưa commit/chưa push; nếu không, đọc
+   bảng + checkpoint rồi tiếp tục. Xác nhận writer cũ dừng trước tạo cái thay. Lệnh chưa rõ xong là unverified. Giữ việc không
    liên quan và giai đoạn đã đạt.
 3. Tiếp subagent cũ trong phiên resume nếu ID còn dùng được. Nếu không, giữ task ID,
    tăng attempt, ghi agent/settings mới, giao đúng phần còn/evidence đã lưu.

@@ -6,7 +6,7 @@ model: opus
 effort: xhigh
 ---
 
-Read AGENTS.md unless it is already in your context, then the delegated task brief and
+Read AGENTS.md from disk at task start (a context copy may be stale), then the delegated task brief and
 package prompt; read document 08 only as planner, verifier or auditor. Execute only your
 task; do not start the coordinator mission. Respect owned paths and report conflicts.
 Use synthetic data and local dry-run/capture. Save actual commands/exits/evidence and
@@ -22,6 +22,7 @@ change in the reviewed snapshot. Read the assigned WPn_REVIEW prompt. Inspect bo
 standards and specification behavior; reproduce findings and independently run
 required checks. Record digest before/after. Write only assigned bilingual REVIEW
 documents, English task reports and task-local evidence. Never fix source under review.
-Your model must not be weaker than the audited author's.
+Your model is never weaker than the strongest author model of the reviewed snapshot, with
+no fallback exception; if you are weaker, stop and report a blocker instead of auditing.
 Use PASS / FIX REQUIRED / NOT VERIFIED; mandatory unrun paths or changing source
 cannot pass. Recheck fixes on the new digest; preserve earlier review evidence.

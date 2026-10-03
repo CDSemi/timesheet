@@ -1,0 +1,48 @@
+COMMAND: bash /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WF-FIX1/probes.sh /b/Temp/claude/D--Dropbox-Work-CDSemi-timesheet/44e3451e-da20-4a12-94bb-6b94fc5f531e/scratchpad/wf-fix1/clone scripts/precommit-check.mjs
+date_utc: 2026-10-03T02:25:52Z; node v24.21.0
+v24.21.0
+script: scripts/precommit-check.mjs
+## case: YAML unquoted SMTP_PASSWORD (probe 1) (expect exit 1)  [staged: deploy/probe-compose.yml]
+BLOCK secret-assignment deploy/probe-compose.yml:+1 literal secret value Zq***(11 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: YAML unquoted api_token (probe 2) (expect exit 1)  [staged: deploy/probe-token.yml]
+BLOCK secret-assignment deploy/probe-token.yml:+1 literal secret value Zq***(11 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: signature image in evidence (probe 3) (expect exit 1)  [staged: handoff/delivery/evidence/WP3/employee-signature.png]
+BLOCK private-media handoff/delivery/evidence/WP3/employee-signature.png PDF, image or signature file (basename must contain "synthetic")
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: PDF in evidence (probe 4) (expect exit 1)  [staged: handoff/delivery/evidence/WP3/timesheet-report.pdf]
+BLOCK private-media handoff/delivery/evidence/WP3/timesheet-report.pdf PDF, image or signature file (basename must contain "synthetic")
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: POSIX drive profile path (probe 5) (expect exit 1)  [staged: docs/probe-path.md]
+BLOCK profile-path docs/probe-path.md:+1 concrete user-profile path (account js***(8 chars)); replace it with <user>
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: INI unquoted secret (expect exit 1)  [staged: deploy/probe.ini]
+BLOCK secret-assignment deploy/probe.ini:+1 literal secret value Zq***(11 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: Windows profile path (forward slashes) (expect exit 1)  [staged: docs/probe-path2.md]
+BLOCK profile-path docs/probe-path2.md:+1 concrete user-profile path (account js***(8 chars)); replace it with <user>
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1 OK
+## case: synthetic-named evidence image allowed (expect exit 0)  [staged: handoff/delivery/evidence/WP3/ui-synthetic.png]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: synthetic fixture PDF allowed (expect exit 0)  [staged: reference/fixtures/probe-sample.pdf]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: placeholder profile path allowed (expect exit 0)  [staged: docs/probe-ok.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+## case: clean change (probe 6: expect pass) (expect exit 0)  [staged: docs/probe-clean.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0 OK
+final status:
+ M scripts/precommit-check.mjs
+?? scripts/precommit-check.baseline.mjs
+EXIT: 0

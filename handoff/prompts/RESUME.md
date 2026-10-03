@@ -3,10 +3,12 @@
 Follow AGENTS.md, ORCHESTRATE.md and document 08. Keep existing subscription sign-in.
 
 1. Read ORCHESTRATION.json (the last committed board if damaged), latest workflow
-   CHECKPOINT, STATE and active HANDOFF/REVIEW. Inspect actual uncommitted/unpushed work.
-2. Delegate reconciliation only when a task is running/interrupted or the checkpoint
-   records uncommitted/unpushed work; otherwise read board + checkpoint and continue.
-   Check live processes.
+   CHECKPOINT, STATE and active HANDOFF/REVIEW. Take uncommitted/unpushed work and live
+   processes from the board and checkpoint; you have no shell, so never inspect git or
+   processes yourself.
+2. Delegate the inspection (git status, unpushed commits, live processes) when a task is
+   running/interrupted or the checkpoint records uncommitted/unpushed work; otherwise
+   read board + checkpoint and continue.
    Confirm old writers stopped before replacements. Unknown command completion
    is unverified. Preserve unrelated work and accepted packages.
 3. Continue the old subagent in the resumed session when its ID remains usable.

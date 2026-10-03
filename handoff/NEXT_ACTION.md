@@ -1,7 +1,7 @@
 # Next action: start or resume the coordinator
 
 **Application: WP1 FIX REQUIRED; F-01 unresolved; WP2 not started.**
-**Workflow: revision v2 (adaptive routing, committer role) awaiting gate and independent audit.**
+**Workflow: revision v2 (adaptive routing, committer role): first audit FIX REQUIRED; fixes done; recheck (freeze commit, gate, fresh audit) in progress. Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
 [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP1 handoff](delivery/WP1_HANDOFF.md)
 and [WP1 review](delivery/WP1_REVIEW.md).

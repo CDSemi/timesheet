@@ -1,7 +1,7 @@
 # Bước tiếp: bắt đầu hoặc resume coordinator
 
 **Ứng dụng: WP1 FIX REQUIRED; F-01 chưa sửa; WP2 chưa bắt đầu.**
-**Quy trình: bản sửa v2 (định tuyến linh hoạt, vai trò committer) chờ gate và audit độc lập.**
+**Quy trình: bản sửa v2 (định tuyến linh hoạt, vai trò committer): audit đầu FIX REQUIRED; đã sửa; đang kiểm lại (commit đóng băng, gate, audit mới). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
 [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP1 handoff](delivery/WP1_HANDOFF.vi.md)
 và [WP1 review](delivery/WP1_REVIEW.vi.md).

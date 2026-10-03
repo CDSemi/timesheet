@@ -13,10 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 STATUSES = {"pending", "running", "interrupted", "blocked", "done", "cancelled"}
 KINDS = {"plan", "diagnose", "implement", "fix", "gate", "audit", "documentation", "commit"}
 PACKAGES = [f"WP{index}" for index in range(1, 6)]
+GOVERNANCE = "GOV"  # governance tasks; not part of authorized_scope
+TASK_PACKAGES = PACKAGES + [GOVERNANCE]
+NON_AUTHOR_KINDS = {"gate", "audit", "commit"}
 WRITERS = {"implement", "fix"}
 MODELS = {"sonnet", "opus", "haiku", "inherit"}
 TASK_MODELS = {"haiku", "sonnet", "opus"}
-EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+EFFORTS = {"low", "medium", "high", "xhigh"}  # max needs an owner decision
 OVERRIDE_REASONS = {"size_risk", "novelty", "escalation", "fallback_unavailable", "owner"}
 ACTUAL_SOURCES = {"self_reported", "tool_result", "unobserved"}
 RANK = {"haiku": 1, "sonnet": 2, "opus": 3}
@@ -60,28 +63,33 @@ def is_sha(value):
     return isinstance(value, str) and re.fullmatch(HEX40, value) is not None
 
 
+def parse_profile(text, filename):
+    front = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    check(front is not None, f"Invalid frontmatter: {filename}")
+    fields = dict(line.split(": ", 1) for line in front[1].splitlines())
+    name = fields.get("name")
+    check(name, f"Missing profile name: {filename}")
+    check(fields.get("description"), f"Description missing: {name}")
+    check(fields.get("model") in MODELS, f"Unexpected model alias: {name}")
+    check(fields.get("effort") in EFFORTS, f"Unexpected effort: {name}")
+    tools = {tool.strip() for tool in fields.get("tools", "").split(",")}
+    if name == "timesheet-coordinator":
+        check("Agent" in tools and "Bash" not in tools, "Coordinator must delegate shell work")
+    elif name == "timesheet-committer":
+        check("Bash" in tools and "Agent" not in tools, "Committer needs shell and no delegation")
+    else:
+        check("Agent" not in tools, f"Nested delegation prohibited: {name}")
+    return fields
+
+
 def profiles():
     settings = json.loads((ROOT / ".claude/settings.json").read_text(encoding="utf-8"))
     check(settings.get("agent") == "timesheet-coordinator", "Default coordinator missing")
     result = {}
     for path in sorted((ROOT / ".claude/agents").glob("timesheet-*.md")):
-        text = path.read_text(encoding="utf-8")
-        front = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
-        check(front is not None, f"Invalid frontmatter: {path.name}")
-        fields = dict(line.split(": ", 1) for line in front[1].splitlines())
-        name = fields.get("name")
-        check(name and name not in result, "Missing or duplicate profile name")
-        check(fields.get("description"), f"Description missing: {name}")
-        check(fields.get("model") in MODELS, f"Unexpected model alias: {name}")
-        check(fields.get("effort") in EFFORTS, f"Unexpected effort: {name}")
-        tools = {tool.strip() for tool in fields.get("tools", "").split(",")}
-        if name == "timesheet-coordinator":
-            check("Agent" in tools and "Bash" not in tools, "Coordinator must delegate shell work")
-        elif name == "timesheet-committer":
-            check("Bash" in tools and "Agent" not in tools, "Committer needs shell and no delegation")
-        else:
-            check("Agent" not in tools, f"Nested delegation prohibited: {name}")
-        result[name] = fields
+        fields = parse_profile(path.read_text(encoding="utf-8"), path.name)
+        check(fields["name"] not in result, "Duplicate profile name")
+        result[fields["name"]] = fields
     check(len(result) == 9, "Expected nine project profiles")
     return result
 
@@ -122,6 +130,23 @@ def validate_model_fields(task, profile):
                   f"Model override needs a permitted model and a reason: {name}")
 
 
+def task_agent_ids(task):
+    return {value for value in [task.get("agent_id"), *task.get("previous_agent_ids", [])] if value}
+
+
+def audit_authors(audit, tasks):
+    """Authors of an audit's snapshot: every task of the package that is not a gate, audit or
+    commit (by agent_id and previous_agent_ids), plus the audit's author_agent_ids."""
+    listed = set(audit.get("author_agent_ids", []))
+    members = [item for item in tasks if item["package"] == audit["package"] and item["id"] != audit["id"]
+               and (item["kind"] not in NON_AUTHOR_KINDS or task_agent_ids(item) & listed)]
+    ids = set(listed)
+    for item in members:
+        if item["kind"] not in NON_AUTHOR_KINDS:
+            ids |= task_agent_ids(item)
+    return members, ids
+
+
 def validate_audits(tasks, by_id):
     for task in tasks:
         if task["kind"] != "audit":
@@ -132,11 +157,9 @@ def validate_audits(tasks, by_id):
               f"Audit needs a gate dependency or gate_included: {name}")
         if task["status"] not in {"running", "done"}:
             continue
-        ids = set(task.get("author_agent_ids", []))
-        authors = [item for item in tasks if item["package"] == task["package"] and item["id"] != name and (
-            (item["kind"] in WRITERS and item["status"] not in {"pending", "cancelled"}) or
-            (item.get("agent_id") and item["agent_id"] in ids))]
-        if authors and task.get("model_override_reason") != "fallback_unavailable":
+        members, _ = audit_authors(task, tasks)
+        authors = [item for item in members if item["status"] not in {"pending", "cancelled"}]
+        if authors:  # one rule, no bypass: never weaker than the strongest author model
             check(model_rank(task) >= max(model_rank(item) for item in authors),
                   f"Audit model weaker than author model: {name}")
 
@@ -194,7 +217,7 @@ def validate(board, state, configured):
         check(isinstance(name, str) and re.fullmatch(r"[A-Z0-9-]+", name), "Invalid task ID")
         check(name not in by_id, f"Duplicate task: {name}")
         by_id[name] = task
-        check(task.get("package") in PACKAGES, f"Invalid package: {name}")
+        check(task.get("package") in TASK_PACKAGES, f"Invalid package: {name}")
         check(task.get("status") in STATUSES and task.get("kind") in KINDS,
               f"Invalid status/kind: {name}")
         check(type(task.get("attempt")) is int and task["attempt"] >= 0, f"Invalid attempt: {name}")
@@ -237,9 +260,9 @@ def validate(board, state, configured):
             check(task.get("decision") in {"PASS", "FAIL", "NOT VERIFIED"}, f"Gate verdict missing: {name}")
         if task["kind"] == "audit" and task["status"] == "done":
             check(task.get("decision") in {"PASS", "FIX REQUIRED", "NOT VERIFIED"}, f"Audit verdict missing: {name}")
-            authors = {item["agent_id"] for item in tasks if item["package"] == task["package"]
-                       and item["kind"] in WRITERS and item.get("agent_id")}
-            authors.update(task.get("author_agent_ids", []))
+            authors = audit_authors(task, tasks)[1]
+            if task["package"] == GOVERNANCE:
+                check(is_sha(task.get("reviewed_commit")), f"Governance audit needs reviewed_commit: {name}")
             check(task.get("agent_id") and task["agent_id"] not in authors, f"Auditor is author or identity unknown: {name}")
             if task["decision"] == "PASS":
                 check(task.get("reviewed_digest") == task["source_digest"], f"PASS digest mismatch: {name}")
@@ -282,7 +305,7 @@ def validate(board, state, configured):
     check(not writers or not any(task["kind"] in {"gate", "audit"} for task in running),
           "Source writer overlaps verification/audit")
     for index, left in enumerate(running):
-        check(left["package"] == active, "Running task outside active package")
+        check(left["package"] in {active, GOVERNANCE}, "Running task outside active package")
         for right in running[index + 1:]:
             check(not any(overlaps(a, b) for a in left["owned_paths"] for b in right["owned_paths"]),
                   f"Concurrent ownership conflict: {left['id']} / {right['id']}")

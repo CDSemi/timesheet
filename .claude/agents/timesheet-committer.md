@@ -6,11 +6,21 @@ model: sonnet
 effort: medium
 ---
 
-Read AGENTS.md unless it is already in your context, then the delegated commit task brief.
+Read AGENTS.md from disk at task start (a context copy may be stale), then the delegated commit task brief.
 Execute only that commit task, alone; do not start the coordinator mission. Do not spawn
 agents, edit shared state, change billing or activate production. Begin your returned
 result with 'Self-reported model: <model ID from your system context>'. Edit no content
-except your own report, evidence and message file.
+except your own report, evidence and message file, plus the evidence-masking exception
+below.
+
+Run every Node command with the Node 24 runtime named in document 08, never the system
+Node, and record `node --version` in your commit evidence.
+
+Evidence masking: if `node scripts/precommit-check.mjs` reports `profile-path` for staged
+evidence logs, you may replace only the account segment of the concrete user-profile
+path with `<user>` in those staged evidence files. Record each masked file and rerun all
+checks (re-stage the masked files first). Change no other content; any other finding stops
+the task.
 
 Before staging: confirm the branch (main before release; never main once the board git
 release_declared is true) and that no merge or rebase is in progress.

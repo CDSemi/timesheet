@@ -1,0 +1,110 @@
+# WF-AUDIT precommit-check probes in scratch clone at fd77a87 (synthetic values only)
+date_utc: 2026-10-03T01:58:37Z; node v24.21.0
+
+$ node scripts/precommit-check.mjs --self-test
+PASS self-test: 27 path and 24 line samples, 12 rules
+exit=0
+
+$ node scripts/precommit-check.mjs   (nothing staged)
+PASS: 0 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: real-looking email (expect BLOCK)  [staged: docs/probe-mail.md]
+BLOCK email docs/probe-mail.md:+1 email address ow***(21 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: quoted secret in JSON (expect BLOCK)  [staged: config/probe.json]
+BLOCK secret-assignment config/probe.json:+1 literal secret value Zq***(13 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: env-style secret (expect BLOCK)  [staged: config/probe.env.sh]
+BLOCK secret-assignment config/probe.env.sh:+1 literal secret value Zq***(11 chars)
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: private key header (expect BLOCK)  [staged: docs/probe-key.md]
+BLOCK private-key docs/probe-key.md:+1 private key header
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: URL credentials (expect BLOCK)  [staged: docs/probe-url.md]
+BLOCK url-credentials docs/probe-url.md:+1 credentials in URL Zq***(9 chars)
+BLOCK email docs/probe-url.md:+1 email address Zq***(27 chars)
+BLOCK: 1 staged file(s), 2 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: GAP? YAML unquoted secret (compose style)  [staged: deploy/probe-compose.yml]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: GAP? YAML unquoted token key  [staged: deploy/probe-app.yml]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: Windows profile path (expect WARN only)  [staged: docs/probe-path.md]
+WARN profile-path docs/probe-path.md:+1 Windows user-profile path
+PASS: 1 staged file(s), 0 blocking finding(s), 1 warning(s)
+exit=0
+
+## case: GAP? Git Bash profile path <userprofile> (expect WARN)  [staged: docs/probe-path2.md]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: signature image outside evidence (expect BLOCK)  [staged: assets/employee-signature.png]
+BLOCK private-media assets/employee-signature.png PDF, image or signature file
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: GAP? signature image under handoff/delivery/evidence (exempt, no warning)  [staged: handoff/delivery/evidence/WP3/employee-signature.png]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: GAP? PDF under handoff/delivery/evidence (exempt, no warning)  [staged: handoff/delivery/evidence/WP3/timesheet-2026-09.pdf]
+PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+
+## case: spreadsheet outside template (expect BLOCK)  [staged: exports/probe.xlsx]
+BLOCK spreadsheet exports/probe.xlsx spreadsheet or CSV outside the template and synthetic fixtures
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+The following paths are ignored by one of your .gitignore files:
+tmp/probe.sqlite
+hint: Use -f if you really want to add them.
+hint: Disable this message with "git config set advice.addIgnoredFile false"
+
+## case: sqlite database (expect BLOCK)  [staged: tmp/probe.sqlite]
+PASS: 0 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+fatal: pathspec 'tmp/probe.sqlite' did not match any files
+The following paths are ignored by one of your .gitignore files:
+.env.local
+hint: Use -f if you really want to add them.
+hint: Disable this message with "git config set advice.addIgnoredFile false"
+
+## case: .env file (expect BLOCK)  [staged: .env.local]
+PASS: 0 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+fatal: pathspec '.env.local' did not match any files
+
+clean after probes: 0 paths
+
+# Re-run of the two ignored-path cases with forced staging (git add -f), since .gitignore already stops a plain add
+
+## case: sqlite database (expect BLOCK)  [force-staged: tmp/probe.sqlite]
+BLOCK database tmp/probe.sqlite database file
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: .env file (expect BLOCK)  [force-staged: .env.local]
+BLOCK env-file .env.local environment file
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+## case: data dir (expect BLOCK)  [force-staged: data/probe.txt]
+BLOCK data-dir data/probe.txt runtime data directory
+BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+exit=1
+
+clean after probes: 0 paths

@@ -1,0 +1,72 @@
+# WF-AUDIT scratch clone at fd77a87: committed-board validation and profile-tampering probes
+date_utc: 2026-10-03T01:58:08Z; clone HEAD fd77a8717da9a1b2ea9ce13520d59b9df60f4716
+
+$ python handoff/delivery/validate_orchestration.py   (committed board, WF-FREEZE running)
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 10,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+
+## probe: coordinator granted Bash (expect reject)
+ValueError: Coordinator must delegate shell work
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: worker granted Agent (nested delegation, expect reject)
+ValueError: Nested delegation prohibited: timesheet-worker
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: committer profile removed (expect reject: nine profiles)
+ValueError: Expected nine project profiles
+exit=1
+ 1 file changed, 40 deletions(-)
+
+## probe: committer without Bash (expect reject)
+ValueError: Committer needs shell and no delegation
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: auditor model fable (expect reject)
+ValueError: Unexpected model alias: timesheet-auditor
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: auditor model opusplan (expect reject)
+ValueError: Unexpected model alias: timesheet-auditor
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: auditor effort ultracode (expect reject)
+ValueError: Unexpected effort: timesheet-auditor
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: GAP: auditor effort max (doc 08 needs owner decision)
+ValueError: Requested profile settings differ: WF-AUDIT
+exit=1
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: INFO: auditor downgraded to haiku/low (no doc 08 table enforcement)
+ValueError: Requested profile settings differ: WF-AUDIT
+exit=1
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+restored: 0 changed paths
+
+## probe: GAP: expert (no pending task uses it) effort max; doc 08 requires an owner decision
+}
+exit=0
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+## probe: INFO: expert downgraded to haiku/low; no doc 08 table enforcement when no pending task uses the profile
+}
+exit=0
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+restored: 0 changed paths

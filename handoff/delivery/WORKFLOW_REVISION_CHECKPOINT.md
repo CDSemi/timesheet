@@ -33,7 +33,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Date: 2026-10-02.
   WF-IMPL-DOCS attempt 2 is running (single writer).
 - WF-IMPL-DOCS attempt 2 done (no denial; author checks exit 0). WF-FREEZE (committer)
   running: freeze commit of revision v2 on main plus push; then WF-GATE, WF-AUDIT.
-- Next action: record the freeze SHA/push result; dispatch WF-GATE on that SHA.
+- WF-FREEZE done: commit fd77a8717da9a1b2ea9ce13520d59b9df60f4716 pushed to origin/main
+  (60 paths; precommit 0 blocking, 12 user-profile-path warnings). WF-GATE running on it.
+- WF-GATE PASS on fd77a87: source digest
+  03d4a6f986c93423903ea94ded9f58a7ca127c64dc6bcca1342f38a8b24f491b (before = after);
+  verify 174 tests, preflight 91 scenarios, precommit probes block six bad inputs.
+  WF-AUDIT (fresh auditor, opus/xhigh profile) running on the same commit/digest.
+- WF-AUDIT (opus) FIX REQUIRED on fd77a87: 3 Medium (audit-strength contradiction,
+  governance tasks going stale under WP1, precommit gaps) and 7 Low; report
+  [WORKFLOW_REVIEW](WORKFLOW_REVIEW.md). WF-FIX1 (worker-high) running with binding
+  decisions, including a GOV package for governance work.
+- WF-FIX1 done (author-reported checks pass; exact `noreply@anthropic.com` allowlist
+  added by coordinator decision). WF-* tasks relabelled to package GOV; WP1-F01 chain
+  re-planned (FIX → FREEZE → GATE → AUDIT → ACCEPT, English task records).
+  WF-FREEZE2 (committer) running.
+- Next action: record the WF-FREEZE2 SHA; dispatch WF-GATE2, then fresh WF-AUDIT2.
 
 ## Orchestration recovery
 

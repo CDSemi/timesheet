@@ -22,7 +22,7 @@ passed = []
 REPORT = "handoff/delivery/WP1_HANDOFF.md"
 EVIDENCE = "handoff/delivery/evidence/WP1-review-codex/typecheck.txt"
 PROFILE_OF = {"plan": "timesheet-planner", "implement": "timesheet-worker-high", "gate": "timesheet-verifier",
-              "audit": "timesheet-auditor", "commit": "timesheet-committer"}
+              "documentation": "timesheet-worker", "audit": "timesheet-auditor", "commit": "timesheet-committer"}
 SHA = "c" * 40
 
 
@@ -42,9 +42,9 @@ def rejects(name, value, expected):
     raise AssertionError(f"{name}: invalid workflow accepted")
 
 
-def make_task(name, kind, depends_on, report=REPORT):
+def make_task(name, kind, depends_on, report=REPORT, package="WP1"):
     profile = configured[PROFILE_OF[kind]]
-    return {"id": name, "package": "WP1", "kind": kind, "status": "pending", "depends_on": depends_on,
+    return {"id": name, "package": package, "kind": kind, "status": "pending", "depends_on": depends_on,
             "profile": profile["name"], "requested_model": profile["model"],
             "requested_effort": profile["effort"], "model_override_reason": None,
             "actual_model": None, "actual_source": None, "actual_effort": None, "agent_id": None,
@@ -194,7 +194,19 @@ task_of(weaker, "S-IMPL").update(actual_model="claude-opus-5-5", actual_source="
 task_of(weaker, "S-AUDIT").update(actual_model="claude-sonnet-5-5", actual_source="self_reported")
 rejects("audit weaker than author rejected", weaker, "Audit model weaker than author model")
 task_of(weaker, "S-AUDIT")["model_override_reason"] = "fallback_unavailable"
-accepts("weaker audit with fallback_unavailable accepted", weaker)
+rejects("fallback_unavailable cannot bypass audit strength for an Opus author", weaker,
+        "Audit model weaker than author model")
+sonnet_audit = finished()
+task_of(sonnet_audit, "S-IMPL").update(actual_model="claude-sonnet-5-5", actual_source="self_reported")
+task_of(sonnet_audit, "S-AUDIT").update(requested_model="sonnet", model_override_reason="fallback_unavailable",
+                                        actual_model="claude-sonnet-5-5", actual_source="self_reported")
+accepts("Sonnet fallback audit accepted when no author used Opus", sonnet_audit)
+doc_opus = finished()
+task_of(doc_opus, "S-PLAN").update(requested_model="opus", model_override_reason="novelty")
+task_of(doc_opus, "S-AUDIT").update(requested_model="sonnet", model_override_reason="fallback_unavailable",
+                                    actual_model="claude-sonnet-5-5", actual_source="self_reported")
+rejects("Opus planner/documentation author also protects audit strength", doc_opus,
+        "Audit model weaker than author model")
 value = finished()
 task_of(value, "S-IMPL").update(requested_model="opus", model_override_reason="novelty")
 task_of(value, "S-AUDIT").update(requested_model="sonnet", model_override_reason="size_risk")
@@ -208,6 +220,76 @@ accepts("audit with gate_included accepted", value)
 value = finished()
 task_of(value, "S-AUDIT")["reviewed_commit"] = "not-a-sha"
 rejects("malformed reviewed_commit rejected", value, "Invalid reviewed_commit")
+
+# Author detection: documentation authors and previous attempts count for separation and strength.
+value = finished()
+extra = make_task("S-DOC", "documentation", ["S-COMMIT"])
+extra.update(status="done", attempt=1, agent_id="synthetic-doc")
+value["tasks"].insert(1, extra)
+task_of(value, "S-DOC")["depends_on"] = []
+value["next_task_id"] = "S-NEXT"
+accepts("documentation author distinct from the auditor accepted", value)
+invalid = copy.deepcopy(value)
+task_of(invalid, "S-AUDIT")["agent_id"] = "synthetic-doc"
+rejects("documentation author auditing its own change rejected without author_agent_ids", invalid,
+        "Auditor is author")
+invalid = copy.deepcopy(value)
+task_of(invalid, "S-IMPL")["previous_agent_ids"] = ["synthetic-audit"]
+rejects("previous-attempt author auditing the package rejected", invalid, "Auditor is author")
+invalid = copy.deepcopy(value)
+task_of(invalid, "S-DOC").update(requested_model="opus", model_override_reason="novelty")
+task_of(invalid, "S-AUDIT").update(requested_model="sonnet", model_override_reason="fallback_unavailable")
+rejects("Opus documentation author raises the audit strength floor", invalid,
+        "Audit model weaker than author model")
+
+# Governance package GOV (outside authorized_scope).
+value = synthetic()
+task_of(value, "S-PLAN").update(package="GOV", status="running", attempt=1, agent_id="synthetic-gov")
+accepts("running GOV task beside a different active package accepted", value)
+value = synthetic()
+task_of(value, "S-PLAN").update(package="WP2", status="running", attempt=1, agent_id="synthetic-wp2")
+rejects("running task of a non-active WP package rejected", value, "Running task outside active package")
+value = synthetic()
+value["authorized_scope"] = module.PACKAGES + ["GOV"]
+rejects("GOV is not part of authorized_scope", value, "Mission scope must preserve WP1")
+value = synthetic()
+task_of(value, "S-PLAN")["package"] = "GOVX"
+rejects("unknown package rejected", value, "Invalid package")
+gov = finished()
+for task in gov["tasks"]:
+    task["package"] = "GOV"
+task_of(gov, "S-AUDIT")["reviewed_commit"] = SHA
+accepts("done GOV audit with reviewed_commit accepted", gov)
+invalid = copy.deepcopy(gov)
+invalid["current_source_digest"] = "b" * 64
+accepts("GOV PASS is not invalidated by a changed source digest", invalid)
+missing = copy.deepcopy(gov)
+task_of(missing, "S-AUDIT").pop("reviewed_commit")
+rejects("done GOV audit without reviewed_commit rejected", missing, "Governance audit needs reviewed_commit")
+cross = synthetic()
+task_of(cross, "S-IMPL").update(package="GOV")
+accepts("dependencies may cross between GOV and a work package", cross)
+
+# Profile validation: effort max needs an owner decision; nested delegation prohibited.
+profile_text = (ROOT / ".claude/agents/timesheet-worker.md").read_text(encoding="utf-8")
+module.parse_profile(profile_text, "timesheet-worker.md")
+passed.append("unmodified worker profile parses")
+for name, edited, expected in [
+        ("profile effort max rejected", profile_text.replace("effort: medium", "effort: max"), "Unexpected effort"),
+        ("profile effort ultracode rejected", profile_text.replace("effort: medium", "effort: ultracode"),
+         "Unexpected effort"),
+        ("profile model opusplan rejected", profile_text.replace("model: sonnet", "model: opusplan"),
+         "Unexpected model alias"),
+        ("worker profile with Agent rejected", profile_text.replace("tools: Read", "tools: Agent, Read"),
+         "Nested delegation prohibited")]:
+    assert edited != profile_text, name
+    try:
+        module.parse_profile(edited, "synthetic.md")
+    except ValueError as error:
+        assert expected in str(error), f"{name}: unexpected failure: {error}"
+        passed.append(name)
+    else:
+        raise AssertionError(f"{name}: invalid profile accepted")
 
 # Commit-task, git and concurrency probes.
 value = finished()

@@ -76,3 +76,12 @@ No automatic reset scheduler is configured.
 - Commit/push authorization (owner standing decision, confirmed directly in the main session): only `timesheet-committer` commits and pushes; directly on `main` with a push after every commit until the first release, then side branches and PRs; no amend, force-push, history rewrite or tags; no secrets, signatures or personal data. Rules in document 08, "Commits and pushes".
 - Adaptive routing: the owner delegated model choice per dispatch to the coordinator under the document 08 rubric (size, risk, novelty). Profiles fix role and effort. Fable/best/opusplan, max effort and speed changes still need an owner decision.
 - Coordinator decision (reversible): task briefs/results under `handoff/delivery/tasks/` are English-only; Vietnamese stays for human-facing documents, prompts, templates, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW and chat.
+
+## Coordinator decisions — workflow audit fixes (2026-10-02 America/Los_Angeles, WF-AUDIT findings WF-A-01..WF-A-10)
+
+Reversible coordinator decisions made for task WF-FIX1; none changes a business rule.
+
+- Governance scope (WF-A-02): workflow tasks use package `GOV`, outside `authorized_scope` (WP1–WP5). GOV tasks are exempt from the active-package running check, and a done GOV audit needs `reviewed_commit`. A GOV PASS is identified by its reviewed commit and is superseded only by a change to a governance path (listed in document 08). State and records (NEXT_ACTION, STATE, board, checkpoints, this document) are not governance paths.
+- Privacy gate (WF-A-03, WF-A-09): `scripts/precommit-check.mjs` now blocks unquoted YAML/INI secrets, PDF/image/signature files whose basename lacks `synthetic` (`reference/fixtures/` and `reference/examples/` stay allowed) and concrete user-profile paths. Deferral: evidence already committed (it contains the Windows account name in some logs) is not rewritten; no history rewrite and no retroactive redaction commit is planned. New evidence is masked with `<user>`; the committer may mask staged evidence logs under the rules in document 08.
+- Effort `max` (WF-A-04): removed from the validator's allowed efforts. Adding it back needs an owner decision, consistent with document 08.
+- Package-final snapshot (WF-A-10): defined in document 08 as the snapshot whose audit PASS would accept the package, including FIX REQUIRED rechecks that unlock the next package. It keeps a separate verifier gate; `gate_included` is for intermediate S-size fixes only. The coordinator re-plans the F-01 chain on the board accordingly.
