@@ -20,7 +20,9 @@ push chỉ qua `timesheet-committer` theo quyền thường trực của chủ (
    source; không writer khi gate/audit. Lưu kết quả sau mỗi bước liền mạch.
 4. Giao implement/sửa, rồi freeze commit (trước gate/audit; định danh được audit là
    reviewed_commit + source_digest), verifier gate, rồi WPn_REVIEW độc lập context mới
-   trên cây sạch. Audit sửa S-size có thể gồm gate (`gate_included`). Ghi digest
+   trên cây sạch. Chỉ audit sửa S-size trung gian mới có thể gồm gate
+   (`gate_included`); snapshot cuối giai đoạn, gồm cả recheck FIX REQUIRED mở khóa
+   giai đoạn kế, và audit GOV giữ gate verifier riêng (tài liệu 08). Ghi digest
    trước/sau. Auditor không được là tác giả thay đổi. Review path mới giữ bằng chứng
    lịch sử.
 5. Sau mỗi kết quả, đối chiếu file/evidence, lưu bảng/checkpoint, báo tiến độ tiếng

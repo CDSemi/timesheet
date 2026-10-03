@@ -30,8 +30,10 @@ Do not change billing or permission settings.
 Current route: finish the workflow revision (freeze commit, gate, fresh audit, accept
 commit and push). Then a worker reproduces and fixes F-01 as specified in
 [WP1_REVIEW](delivery/WP1_REVIEW.md) under [FIX_FINDINGS](prompts/FIX_FINDINGS.md),
-the committer freezes it, and a fresh auditor runs [WP1_REVIEW](prompts/WP1_REVIEW.md)
-with the gate included. Only PASS allows WP2; the coordinator then follows the
+the committer freezes it, a verifier runs the WP1 gate on that freeze commit (a
+package-final snapshot keeps a separate gate), a fresh auditor runs
+[WP1_REVIEW](prompts/WP1_REVIEW.md), and the committer makes the accept commit.
+Only PASS allows WP2; the coordinator then follows the
 [roadmap](../docs/09_IMPLEMENTATION_ROADMAP.md). WP5 starts with independent
 acceptance; the real pilot remains owner-controlled.
 

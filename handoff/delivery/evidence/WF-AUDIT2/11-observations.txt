@@ -1,0 +1,30 @@
+# WF-AUDIT2 runtime and board observations (auditor notes, 2026-10-03 UTC)
+
+1. Self-reported model: claude-opus-5-5 (system context). Effort not observable. Tool set matches the
+   timesheet-auditor profile (Read, Glob, Grep, Bash, Write, Edit, Skill; no Agent).
+2. The profile body this auditor received already contains the c219d79 sentence "Your model is never weaker than
+   the strongest author model of the reviewed snapshot, with no fallback exception" and the "Read AGENTS.md from
+   disk at task start" opening: the edited auditor profile body was loaded mid-session without a client restart.
+3. The AGENTS.md copy injected into this subagent's context (via CLAUDE.md @AGENTS.md) was STALE: rule 1 lacked the
+   English-only task-record sentence and rule 12 still read "Leave changes uncommitted by default; NEVER
+   create/amend/push a commit unless the user explicitly requests it" without the owner standing authorization.
+   The on-disk AGENTS.md (read first, per the profile) has both. This confirms WF-A-07 was real and that the
+   "read from disk" instruction is the effective control.
+4. Working-tree board (coordinator copy during this audit): WF-GATE2 has decision PASS but status "running" while
+   WF-AUDIT2 is "running". validate_orchestration.py and check_recovery.py exit 1 with "Unfinished dependency:
+   WF-AUDIT2" (1-validator-recovery.txt). With only WF-GATE2.status set to "done" in memory the board validates
+   (3-probes-output.txt, probe A2). The committed board at c219d79 validates (2-clone-validator-recovery.txt).
+   Coordinator action: set WF-GATE2 to done.
+5. Board planning: no GOV accept-commit task follows WF-AUDIT2 yet (the checkpoint plans one); WP1-F01-FIX depends
+   directly on WF-AUDIT2, so "accept commit before WP1-F01-FIX" is not encoded. Pending WP1-F01-* tasks still carry
+   baseline_commit fd77a87; refresh at dispatch.
+6. Author separation: this auditor wrote nothing in 1a25275..c219d79. Board-recorded agent ID for WF-AUDIT2 is
+   aace091e55c54c3b0 (not observable from inside the subagent). Excluded IDs a232a5b7f6cdec442, ae6c446dc434f85d6,
+   afbd2f9ae6ec1fce3, ad742f3b42890d674, a2a9ec20d51be6815 (authors) and a80f8351bbd2fd196 (WF-AUDIT) are other
+   agents. Strongest recorded author model in the GOV snapshot: Sonnet 5.5 (coordinator Opus 5.5 wrote records only;
+   the ffbf8f0 Codex author model is unobservable). Opus auditor is not weaker.
+7. Privacy scan of uncommitted evidence (13-identity-after.txt): handoff/delivery/evidence/WF-GATE2/
+   preflight-system-python.txt holds 7 unmasked concrete user-profile paths (Python traceback lines). The accept
+   commit's precommit check will block on them; doc 08 lets the committer mask only the account segment of staged
+   evidence logs. This auditor's own outputs pass the check after 5-precommit-probes.sh was changed to assemble its
+   synthetic account and addresses at run time (the first version tripped profile-path and email on the script file).

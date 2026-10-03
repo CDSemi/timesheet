@@ -61,3 +61,7 @@ handoff/delivery/evidence/WF-FREEZE2/. Return at most 200 words.
 ## Results
 
 (Committer appends here.)
+
+- Pre HEAD fd77a8717da9a1b2ea9ce13520d59b9df60f4716; post HEAD c219d79a2c202861b719473cdffb0efb59f14290 (pushed to origin/main).
+- Staged 79 files, none masked. Node v24.21.0. Exits: precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0. Blockers: none.
+- Evidence: handoff/delivery/evidence/WF-FREEZE2/.

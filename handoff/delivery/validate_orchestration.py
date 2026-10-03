@@ -152,9 +152,17 @@ def validate_audits(tasks, by_id):
         if task["kind"] != "audit":
             continue
         name = task["id"]
-        gated = any(by_id[item]["kind"] == "gate" for item in task["depends_on"])
-        check(gated or task.get("gate_included") is True,
+        gates = [by_id[item] for item in task["depends_on"] if by_id[item]["kind"] == "gate"]
+        check(gates or task.get("gate_included") is True,
               f"Audit needs a gate dependency or gate_included: {name}")
+        reviewed = task.get("reviewed_commit")
+        for gate in gates:  # any package: a gate and its audit name the same commit when both are recorded
+            check(reviewed is None or gate.get("freeze_commit") is None or gate["freeze_commit"] == reviewed,
+                  f"Gate freeze_commit differs from audit reviewed_commit: {name} / {gate['id']}")
+        if task["package"] == GOVERNANCE and task["status"] == "done":
+            # The source digest excludes handoff/, so a GOV snapshot is bound by commit, not digest.
+            check(any(is_sha(gate.get("freeze_commit")) and gate["freeze_commit"] == reviewed for gate in gates),
+                  f"Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit: {name}")
         if task["status"] not in {"running", "done"}:
             continue
         members, _ = audit_authors(task, tasks)
@@ -162,6 +170,23 @@ def validate_audits(tasks, by_id):
         if authors:  # one rule, no bypass: never weaker than the strongest author model
             check(model_rank(task) >= max(model_rank(item) for item in authors),
                   f"Audit model weaker than author model: {name}")
+
+
+def validate_addresses(tasks, by_id):
+    """Optional `addresses_audit` on a fix task: traceability to the audit it answers. The fix does
+    not depend on that audit, because a dependency means the audit passed."""
+    for task in tasks:
+        target = task.get("addresses_audit")
+        if target is None:
+            continue
+        name = task["id"]
+        check(task["kind"] == "fix", f"addresses_audit is only for fix tasks: {name}")
+        audit = by_id.get(target) if isinstance(target, str) else None
+        check(audit is not None and audit["kind"] == "audit",
+              f"addresses_audit must name an existing audit task: {name}")
+        check(audit["status"] == "done" and audit.get("decision") in {"FIX REQUIRED", "NOT VERIFIED"},
+              f"addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: {name}")
+        check(target not in task["depends_on"], f"Fix must not depend on its addresses_audit: {name}")
 
 
 def validate_commits(tasks, lookups, release_declared):
@@ -295,6 +320,7 @@ def validate(board, state, configured):
     for name in by_id:
         visit(name)
     validate_audits(tasks, by_id)
+    validate_addresses(tasks, by_id)
     running = [task for task in tasks if task["status"] == "running"]
     validate_commits(tasks, lookups, release_declared)
     active_lookups = sum(1 for item in lookups if item.get("status") == "running")

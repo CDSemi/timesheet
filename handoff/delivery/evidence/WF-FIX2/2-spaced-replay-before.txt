@@ -1,0 +1,20 @@
+# WF-FIX2 spaced-secret replay BEFORE the fix (precommit-check.mjs at c219d79) - 2026-10-03T02:56:10Z; node v24.21.0
+$ bash handoff/delivery/evidence/WF-FIX2/2-spaced-replay.sh <project> <scratch>
+# spaced app-password layout (expect exit 1)
+BAD | expected exit 1 | exit 0 | line: smtp_password: <4x4 synthetic letters> | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line: SMTP_PASSWORD: "<4x4 synthetic letters>" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line: smtp_password = '<4x4 synthetic letters>' | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line: SMTP_PASS="<4x4 synthetic letters>" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line: export SMTP_PASSWORD="<4x4 synthetic letters>" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line: {"smtp_password": "<4x4 synthetic letters>"} | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+BAD | expected exit 1 | exit 0 | line:   - app_password: <4x4 synthetic mixed> # prod | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | expected exit 1 | exit 1 | line: smtp_password: qwertyuiopasdfgh | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# prose values with spaces and placeholders (expect exit 0)
+ok | expected exit 0 | exit 0 | line: password: "two words here" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | expected exit 0 | exit 0 | line: smtp_password: see the vault entry | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | expected exit 0 | exit 0 | line: token: "use the one from the vault" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | expected exit 0 | exit 0 | line: password = "four word long phrase" | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | expected exit 0 | exit 0 | line: SMTP_PASSWORD: ${SMTP_PASSWORD} | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+clone deleted
+replay result: mismatch
+EXIT: 1

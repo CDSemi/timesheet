@@ -29,7 +29,9 @@ Không đổi billing hay cài đặt quyền.
 Luồng hiện tại: hoàn tất bản sửa quy trình (commit đóng băng, gate, audit mới, commit
 nghiệm thu và push). Sau đó worker tái hiện và sửa F-01 đúng như
 [WP1_REVIEW](delivery/WP1_REVIEW.vi.md) theo [FIX_FINDINGS](prompts/FIX_FINDINGS.vi.md),
-committer đóng băng, auditor mới chạy [WP1_REVIEW](prompts/WP1_REVIEW.vi.md) có gộp gate.
+committer đóng băng, verifier chạy gate WP1 trên commit đóng băng đó (snapshot cuối
+package giữ gate riêng), auditor mới chạy [WP1_REVIEW](prompts/WP1_REVIEW.vi.md), rồi
+committer tạo commit nghiệm thu.
 Chỉ PASS cho phép WP2; coordinator tiếp theo [lộ trình](../docs/09_IMPLEMENTATION_ROADMAP.vi.md).
 WP5 bắt đầu bằng nghiệm thu độc lập; pilot thật do chủ quyết.
 

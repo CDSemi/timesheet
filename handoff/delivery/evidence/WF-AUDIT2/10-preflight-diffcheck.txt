@@ -1,0 +1,38 @@
+# Documentation preflight and whitespace check in the scratch clone at the freeze commit — captured 2026-10-03T02:42:48Z
+$ <workflow-python> --version
+Python 3.12.14
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 43,
+  "local_links": 532,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit=0
+$ git diff --check 1a25275 c219d79
+exit=0
+$ git diff --stat 1a25275 c219d79 -- src tests package-lock.json skills-lock.json package.json (empty = application untouched)
+ package.json | 1 +
+ 1 file changed, 1 insertion(+)
+exit=0
+$ git diff --name-only fd77a87 c219d79 -- . ':!handoff' (non-handoff paths of the fix commit)
+.claude/agents/timesheet-auditor.md
+.claude/agents/timesheet-committer.md
+.claude/agents/timesheet-expert.md
+.claude/agents/timesheet-light.md
+.claude/agents/timesheet-planner.md
+.claude/agents/timesheet-verifier.md
+.claude/agents/timesheet-worker-high.md
+.claude/agents/timesheet-worker.md
+docs/08_AI_WORKFLOW_AND_BUDGET.md
+docs/08_AI_WORKFLOW_AND_BUDGET.vi.md
+docs/10_DECISIONS_AND_SOURCES.md
+docs/10_DECISIONS_AND_SOURCES.vi.md
+scripts/precommit-check.mjs
+$ git status --short

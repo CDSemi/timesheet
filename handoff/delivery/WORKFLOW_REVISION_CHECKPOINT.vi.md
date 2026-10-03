@@ -49,7 +49,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Ngày: 2026-10-02.
   `noreply@anthropic.com`). Task WF-* đã chuyển nhãn sang package GOV; chuỗi WP1-F01 lập
   lại (FIX → FREEZE → GATE → AUDIT → ACCEPT, record task tiếng Anh). WF-FREEZE2
   (committer) đang chạy.
-- Bước tiếp: ghi SHA WF-FREEZE2; giao WF-GATE2, rồi WF-AUDIT2 mới.
+- WF-FREEZE2 xong: commit c219d79a2c202861b719473cdffb0efb59f14290 đã push (79 file,
+  Node 24, precommit 0 phát hiện). WF-GATE2 đang chạy trên commit này.
+- WF-GATE2 PASS trên c219d79: digest
+  d4d49149221e45459937d26bdd1258d681341b73712d8564a852c9131c5429d2 (trước = sau);
+  67 probe, verify 174 test, các probe của auditor nay bị chặn. WF-AUDIT2 (mới) đang chạy.
+- WF-AUDIT2 (opus mới) FIX REQUIRED, chỉ mức Low: mọi lỗi Medium đã sửa; còn WF-A-10 (câu
+  chữ), WF-R-01 (ràng buộc commit gate/audit GOV), WF-R-02 (secret có dấu cách); báo cáo
+  [WORKFLOW_RECHECK](WORKFLOW_RECHECK.vi.md). Coordinator đã sửa độ trễ board của mình
+  (WF-GATE2 done), câu chữ NEXT_ACTION và đánh dấu quyết định gate đã được thay thế.
+- WF-FIX2 đang chạy: worker-high nâng lên opus (theo giới hạn; FIX REQUIRED tiếp theo
+  trên GOV thành vướng mắc chờ chủ). Sau đó WF-FREEZE3 (che path trong log system-python
+  của WF-GATE2), WF-GATE3, WF-AUDIT3 mới.
+- WF-FIX2 xong (opus; tác giả báo: validator 0, 81 probe, chặn secret có dấu cách, sửa
+  câu chữ prompt). WF-FREEZE3 đang chạy (che path trong log system-python của WF-GATE2).
+- Bước tiếp: ghi SHA WF-FREEZE3; WF-GATE3; WF-AUDIT3 mới (opus).
 
 ## Khôi phục điều phối
 

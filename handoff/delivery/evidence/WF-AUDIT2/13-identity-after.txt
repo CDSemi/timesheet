@@ -1,0 +1,56 @@
+# WF-AUDIT2 identity after and final checks (captured 2026-10-03T02:50:48Z)
+## privacy scan with the c219d79 rules
+warning: in the working copy of 'handoff/delivery/evidence/WF-AUDIT2/0-identity-before.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-AUDIT2/12-wording-grep.txt', CRLF will be replaced by LF the next time Git touches it
+$ node scripts/precommit-check.mjs   # staged in scratch clone: this audit's outputs (evidence/WF-AUDIT2 incl. this file's header, WORKFLOW_RECHECK pair, WF-AUDIT2 brief)
+      1 PASS: 21 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit=0
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/check-recovery.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/node-version.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/preflight-workflow-python.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/validate-orch.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-FREEZE2/node-version.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-FREEZE2/validate.txt', CRLF will be replaced by LF the next time Git touches it
+$ node scripts/precommit-check.mjs   # staged in scratch clone: informational: uncommitted WF-GATE2/WF-FREEZE2 evidence and task records
+      7 BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt concrete user-profile path (account hu***(5 chars)); replace it with <user>
+      1 BLOCK: 22 staged file(s), 7 blocking finding(s), 0 warning(s)
+exit=1
+$ (clone) git status --short; git rev-parse HEAD
+c219d79a2c202861b719473cdffb0efb59f14290
+## identity after (Dropbox checkout)
+$ node --version
+v24.21.0
+$ git rev-parse HEAD origin/main
+c219d79a2c202861b719473cdffb0efb59f14290
+c219d79a2c202861b719473cdffb0efb59f14290
+$ git log origin/main..HEAD --oneline (unpushed)
+$ npm run digest
+d4d49149221e45459937d26bdd1258d681341b73712d8564a852c9131c5429d2  (532 files, handoff/ excluded)
+exit=0
+$ git status --short -- . ':!handoff' (empty = nothing changed outside handoff/)
+$ git status --short (handoff/ only; coordinator files plus this audit's outputs)
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WF-AUDIT2.md
+ M handoff/delivery/tasks/WF-FREEZE2.md
+ M handoff/delivery/tasks/WF-GATE2.md
+?? handoff/delivery/WORKFLOW_RECHECK.md
+?? handoff/delivery/WORKFLOW_RECHECK.vi.md
+?? handoff/delivery/evidence/WF-AUDIT2/
+?? handoff/delivery/evidence/WF-FREEZE2/
+?? handoff/delivery/evidence/WF-GATE2/
+$ <workflow-python> handoff/delivery/validate_package.py --preflight (working tree, incl. the new report pair)
+  "status": "PASS",
+  "translation_pairs": 44,
+  "local_links": 578,
+exit=0
+$ NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run lint (working tree incl. this audit's evidence)
+> timesheet@0.1.0 lint
+> eslint .
+
+exit=0
+## scratch clone removal
+$ rm -rf <scratch>/wfa2 (plus scratch temp files); test -e <scratch>/wfa2
+removed

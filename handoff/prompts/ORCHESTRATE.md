@@ -22,8 +22,10 @@ No billing changes. Commits and pushes only through `timesheet-committer` under 
    gates/audit. Persist results after every coherent step.
 4. Delegate implementation/fixes, then a freeze commit (before gate/audit; audited
    identity is reviewed_commit + source_digest), verifier gates, then fresh independent
-   WPn_REVIEW on a clean tree. An S-size fix audit may include the gate
-   (`gate_included`). Record digest before/after. Auditors cannot have authored the
+   WPn_REVIEW on a clean tree. Only an intermediate S-size fix audit may include the
+   gate (`gate_included`); package-final snapshots, including a FIX REQUIRED recheck
+   that unlocks the next package, and GOV audits keep a separate verifier gate
+   (document 08). Record digest before/after. Auditors cannot have authored the
    audited change. New review paths preserve historical evidence.
 5. After every result, reconcile files/evidence, persist board/checkpoint and give
    concise Vietnamese progress. FIX REQUIRED creates bounded fix + gate + audit

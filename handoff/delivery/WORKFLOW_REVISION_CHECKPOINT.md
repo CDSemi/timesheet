@@ -47,7 +47,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Date: 2026-10-02.
   added by coordinator decision). WF-* tasks relabelled to package GOV; WP1-F01 chain
   re-planned (FIX → FREEZE → GATE → AUDIT → ACCEPT, English task records).
   WF-FREEZE2 (committer) running.
-- Next action: record the WF-FREEZE2 SHA; dispatch WF-GATE2, then fresh WF-AUDIT2.
+- WF-FREEZE2 done: commit c219d79a2c202861b719473cdffb0efb59f14290 pushed (79 files,
+  Node 24, precommit 0 findings). WF-GATE2 running on it.
+- WF-GATE2 PASS on c219d79: digest
+  d4d49149221e45459937d26bdd1258d681341b73712d8564a852c9131c5429d2 (before = after);
+  67 probes, verify 174 tests, auditor probes now blocked. WF-AUDIT2 (fresh) running.
+- WF-AUDIT2 (fresh opus) FIX REQUIRED, Low only: all Medium fixed; open WF-A-10 residual
+  wording, WF-R-01 (GOV gate/audit commit binding), WF-R-02 (spaced secrets); report
+  [WORKFLOW_RECHECK](WORKFLOW_RECHECK.md). Coordinator fixed its own board lag (WF-GATE2
+  done), NEXT_ACTION wording and marked the gate decision superseded.
+- WF-FIX2 running: worker-high escalated to opus (caps; next FIX REQUIRED on GOV becomes
+  an owner blocker). Then WF-FREEZE3 (mask WF-GATE2 system-python log), WF-GATE3, fresh
+  WF-AUDIT3.
+- WF-FIX2 done (opus; author-reported: validator 0, 81 probes, spaced secrets blocked,
+  prompt wording fixed). WF-FREEZE3 running (masks WF-GATE2 system-python log paths).
+- Next action: record the WF-FREEZE3 SHA; WF-GATE3; fresh WF-AUDIT3 (opus).
 
 ## Orchestration recovery
 

@@ -18,6 +18,10 @@ const SECRET_QUOTED = new RegExp(String.raw`(?:^|[^\w])${SECRET_NAME}["']?\s*[:=
 const SECRET_ENV = new RegExp(String.raw`^\s*(?:export\s+)?${SECRET_NAME}\s*=\s*([^\s"']{6,})\s*$`, 'i');
 // Unquoted YAML/INI value: `name: value`, `- name: value`, `name = value`, optional trailing comment.
 const SECRET_YAML = new RegExp(String.raw`^\s*(?:-\s+)?${SECRET_NAME}\s*[:=]\s*([\w@%+=/.!$^&*~-]{6,})\s*(?:#.*)?$`, 'i');
+// Spaced app-password layout (four groups of four letters/digits, single spaces), as issued by common SMTP
+// providers: quoted anywhere after the name, or unquoted up to the end of the line or a trailing comment.
+const SPACED = String.raw`[a-z0-9]{4}(?: [a-z0-9]{4}){3}`;
+const SECRET_SPACED = new RegExp(String.raw`(?:^|[^\w])${SECRET_NAME}["']?\s*[:=]\s*(?:"(${SPACED})"|'(${SPACED})'|(${SPACED})\s*(?:#.*)?$)`, 'i');
 const URL_CREDENTIALS = /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:([^\s@/]{3,})@[^\s/]+/i;
 const PRIVATE_KEY = /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/;
 // Exact non-personal address from the mandatory commit-attribution trailer; no domain or wildcard allowance.
@@ -68,8 +72,12 @@ function checkLine(line) {
   const found = [];
   if (PRIVATE_KEY.test(line)) found.push(finding('block', 'private-key', 'private key header'));
   const yamlValue = SECRET_YAML.exec(line)?.[1];
+  const spaced = SECRET_SPACED.exec(line);
+  const spacedValue = spaced?.[1] ?? spaced?.[2] ?? spaced?.[3];
+  // A spaced placeholder such as `xxxx xxxx xxxx xxxx` is judged on its compact form.
   const quoted = SECRET_QUOTED.exec(line)?.[2] ?? SECRET_ENV.exec(line)?.[1] ??
-    (yamlValue !== undefined && looksSecret(yamlValue) ? yamlValue : undefined);
+    (yamlValue !== undefined && looksSecret(yamlValue) ? yamlValue : undefined) ??
+    (spacedValue !== undefined && !PLACEHOLDER.test(spacedValue.replaceAll(' ', '')) ? spacedValue : undefined);
   if (quoted !== undefined && !PLACEHOLDER.test(quoted))
     found.push(finding('block', 'secret-assignment', `literal secret value ${mask(quoted)}`));
   const urlSecret = URL_CREDENTIALS.exec(line)?.[1];
@@ -130,6 +138,11 @@ function selfTest() {
   const LEAK = 'k9Xq27' + 'MzVb41';
   const SEP = String.fromCharCode(92);
   const ACCOUNT = 'jsmith' + '42';
+  // Spaced app-password samples are joined at run time so that this source does not contain the layout.
+  const groups = (...parts) => parts.join(' ');
+  const SPACED_LEAK = groups('qwer', 'tyui', 'opas', 'dfgh');
+  const SPACED_MIXED = groups('Ab12', 'cd34', 'EF56', 'gh78');
+  const SPACED_X = groups('xxxx', 'xxxx', 'xxxx', 'xxxx');
   const assign = (name, value) => `${name} = "${value}"`;
   const mail = (user, domain) => `contact ${user}@${domain}`;
   const pathCases = [
@@ -165,6 +178,14 @@ function selfTest() {
     ['smtp_user: <smtp-user>', null], ['password: abc', null], ['# secret: see the vault', null],
     [assign('password', 'changeme'), null], [assign('token', '<token>'), null], ['SMTP_PASS=${SMTP_PASS}', null],
     ['const token = generateToken();', null], [assign('password', 'two words here'), null],
+    ['smtp_password: ' + SPACED_LEAK, 'secret-assignment'], ['  - app_password: ' + SPACED_MIXED + ' # prod', 'secret-assignment'],
+    [`SMTP_PASSWORD: "${SPACED_LEAK}"`, 'secret-assignment'], [`smtp_password = '${SPACED_LEAK}'`, 'secret-assignment'],
+    [`SMTP_PASS="${SPACED_LEAK}"`, 'secret-assignment'], [`SMTP_PASS=${SPACED_MIXED}`, 'secret-assignment'],
+    [`export SMTP_PASSWORD="${SPACED_LEAK}"`, 'secret-assignment'], [`{"smtp_password": "${SPACED_LEAK}"}`, 'secret-assignment'],
+    ['smtp_password: see the vault entry', null], ['token: "use the one from the vault"', null],
+    [assign('password', 'four word long phrase'), null], [`SMTP_PASSWORD="${SPACED_X}"`, null],
+    [assign('password', groups(SPACED_LEAK, 'more')), null], ['smtp_password: ' + SPACED_LEAK + ' and more words', null],
+    ['note: ' + SPACED_LEAK, null],
     [`url = "smtps://${'mailer'}:${'p4ssw0rd'}@smtp.provider.net/"`, 'url-credentials'],
     ['url = "smtps://mailer:<password>@smtp.provider.net/"', null],
     [mail('jane.doe', 'gmail.com'), 'email'], [mail('boss', 'company.biz'), 'email'],
@@ -194,7 +215,8 @@ function selfTest() {
     if (expected === null ? rules.length > 0 : !rules.includes(expected)) failures.push(`line ${mask(line)}: ${rules}`);
     if (result.some((item) => item.rule === 'profile-path' && item.level !== 'block')) failures.push('profile-path must block');
     if (result.some((item) => item.detail.includes(ACCOUNT))) failures.push(`unmasked account for ${mask(line)}`);
-    if (result.some((item) => item.detail.includes(LEAK))) failures.push(`unmasked output for ${mask(line)}`);
+    if (result.some((item) => [LEAK, SPACED_LEAK, SPACED_MIXED].some((value) => item.detail.includes(value))))
+      failures.push(`unmasked output for ${mask(line)}`);
   }
   for (const rule of RULES) if (!seen.has(rule)) failures.push(`rule not exercised: ${rule}`);
   console.log(failures.length === 0 ? `PASS self-test: ${pathCases.length} path and ${lineCases.length} line samples, ${RULES.length} rules` : `FAIL self-test\n${failures.join('\n')}`);

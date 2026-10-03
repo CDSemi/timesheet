@@ -1,0 +1,20 @@
+# WF-FIX2 reproduction BEFORE the fix (validator at c219d79, working-tree board) - 2026-10-03T02:55:42Z
+$ <python> handoff/delivery/evidence/WF-FIX2/1-repro.py
+# WF-R-01: gate freeze_commit / audit reviewed_commit binding
+ok  | R1 real board | expected ACCEPT | got ACCEPT
+ok  | R2 GOV audit PASS whose gate freeze_commit equals reviewed_commit | expected ACCEPT | got ACCEPT
+BAD | R3 (= D9) GOV audit PASS, gate freeze_commit differs, same digest | expected REJECT(freeze_commit) | got ACCEPT
+BAD | R4 GOV audit FIX REQUIRED, gate freeze_commit differs | expected REJECT(freeze_commit) | got ACCEPT
+BAD | R5 done GOV audit whose gate has no freeze_commit | expected REJECT(freeze_commit) | got ACCEPT
+BAD | R6 WP1 pending audit and gate with different commits | expected REJECT(freeze_commit) | got ACCEPT
+ok  | R7 WP1 pending audit and gate with equal commits | expected ACCEPT | got ACCEPT
+# addresses_audit on fix tasks
+BAD | A1 (= D8) dangling addresses_audit | expected REJECT(addresses_audit) | got ACCEPT
+BAD | A2 addresses_audit names a gate | expected REJECT(addresses_audit) | got ACCEPT
+BAD | A3 addresses_audit names a PASS audit | expected REJECT(addresses_audit) | got ACCEPT
+BAD | A4 addresses_audit on a non-fix task | expected REJECT(addresses_audit) | got ACCEPT
+BAD | A5 pending fix also depending on the audit it addresses | expected REJECT(addresses_audit) | got ACCEPT
+ok  | A6 addresses_audit names a NOT VERIFIED audit | expected ACCEPT | got ACCEPT
+BAD | A7 addresses_audit names an unfinished audit | expected REJECT(addresses_audit) | got ACCEPT
+# 4/14 as expected
+EXIT: 1

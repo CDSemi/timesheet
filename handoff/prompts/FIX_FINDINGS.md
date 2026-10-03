@@ -2,7 +2,7 @@
 
 Operator: assigned fix subagent; coordinator selects profile/model/effort by complexity under document 08. Any supported vendor may execute this role using existing subscription. Provide complete source, reviewed baseline/digest, REVIEW and HANDOFF. Save task-local checkpoints; return to a fresh independent auditor through the coordinator.
 
-When the review names file, function, repro, fix and tests, no separate plan is needed: reproduce first. A fix audit of S size may include the gate (`gate_included`).
+When the review names file, function, repro, fix and tests, no separate plan is needed: reproduce first. Only the audit of an intermediate S-size fix may include the gate (`gate_included`); package-final snapshots, including a FIX REQUIRED recheck that unlocks the next package, and GOV audits keep a separate verifier gate (document 08).
 
 Follow AGENTS.md. Reproduce each accepted finding, link its rule/AC ID, then make the smallest coherent fix. Preserve unrelated work, immutable history, ownership and accepted scope. Add meaningful regression coverage for the defect, not tests that simply mirror implementation.
 

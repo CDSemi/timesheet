@@ -1,0 +1,32 @@
+# run2: python handoff/delivery/evidence/WF-AUDIT2/3-probes.py (captured 2026-10-03T02:39:03Z; HEAD c219d79a2c202861b719473cdffb0efb59f14290; working-tree validator unchanged: yes)
+# A. Real-board controls
+ok  | A1 working-tree board as written (WF-GATE2 still 'running' while WF-AUDIT2 runs) | expected REJECT(Unfinished dependency: WF-AUDIT2) | got REJECT(Unfinished dependency: WF-AUDIT2)
+ok  | A2 same board with only WF-GATE2 status set to done | expected ACCEPT | got ACCEPT
+# B. Audit strength (WF-A-01)
+ok  | B1 running Sonnet auditor, fallback_unavailable, Opus fix author | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+ok  | B2 done Sonnet audit PASS, fallback_unavailable, Opus fix author | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+ok  | B3 Sonnet fallback auditor, Opus documentation author (requested model only) | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+ok  | B4 Sonnet fallback auditor when every GOV author is Sonnet (rule's permitted case) | expected ACCEPT | got ACCEPT
+ok  | B5 Haiku auditor over Sonnet authors | expected REJECT(Audit model weaker) | got REJECT(Audit model weaker than author model: WF-AUDIT2)
+ok  | B6 Opus verifier is not an author (gate kind), Sonnet fallback auditor | expected ACCEPT | got ACCEPT
+# C. Author separation (WF-A-05)
+ok  | C1 documentation author (WF-IMPL-DOCS attempt 2) audits its own change, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C2 documentation author of attempt 1 (previous_agent_ids) audits, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C3 planner (WF-REVIEW) audits the governance change, author_agent_ids empty | expected REJECT(Auditor is author) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C4 done audit without auditor identity | expected REJECT(identity unknown) | got REJECT(Auditor is author or identity unknown: WF-AUDIT2)
+ok  | C5 positive control: done GOV PASS by a non-author Opus auditor | expected ACCEPT | got ACCEPT
+# D. GOV scope (WF-A-02)
+ok  | D1 done GOV audit without reviewed_commit | expected REJECT(Governance audit needs reviewed_commit) | got REJECT(Governance audit needs reviewed_commit: WF-AUDIT2)
+ok  | D2 done GOV audit with abbreviated reviewed_commit | expected REJECT(reviewed_commit) | got REJECT(Invalid reviewed_commit: WF-AUDIT2)
+ok  | D3 WF-A-02 probe 8 replay: F-01 fix changes current_source_digest; GOV PASS stays valid | expected ACCEPT | got ACCEPT
+ok  | D4 WP1-F01-FIX runs on its cross-package dependency WF-AUDIT2 PASS | expected ACCEPT | got ACCEPT
+ok  | D5 WP1-F01-FIX cannot run while WF-AUDIT2 is unfinished | expected REJECT(Unfinished dependency) | got REJECT(Unfinished dependency: WP1-F01-FIX)
+ok  | D6 WP1-F01-FIX cannot run on a FIX REQUIRED governance audit | expected REJECT(Dependency audit not PASS) | got REJECT(Dependency audit not PASS: WP1-F01-FIX)
+ok  | D7 why addresses_audit exists: a done fix depending on its FIX REQUIRED audit | expected REJECT(Dependency audit not PASS) | got REJECT(Dependency audit not PASS: WF-FIX1)
+ok  | D8 addresses_audit is not validated (dangling reference accepted) | expected ACCEPT | got ACCEPT
+ok  | D9 GOV gate freeze_commit differs from the audit reviewed_commit (same digest) | expected ACCEPT | got ACCEPT
+# E. Effort max (WF-A-04)
+ok  | E1 pending task requesting effort max | expected REJECT(Requested profile settings differ) | got REJECT(Requested profile settings differ: WP1-F01-FIX)
+ok  | E2 expert profile with effort: max (WF-AUDIT probe 4 replay) | expected REJECT(Unexpected effort) | got REJECT(Unexpected effort: timesheet-expert)
+# 24/24 probes behaved as expected
+exit=0

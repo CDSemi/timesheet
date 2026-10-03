@@ -1,0 +1,56 @@
+# WF-AUDIT2 validator + check_recovery on the real board (captured 2026-10-03T02:36:55Z); HEAD c219d79a2c202861b719473cdffb0efb59f14290
+$ python --version
+Python 3.14.6
+$ python handoff/delivery/validate_orchestration.py
+Traceback (most recent call last):
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 335, in <module>
+    main()
+    ~~~~^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 331, in main
+    print(json.dumps(validate(board, state, profiles()), indent=2))
+                     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 296, in validate
+    visit(name)
+    ~~~~~^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 284, in visit
+    check(by_id[dependency]["status"] == "done", f"Unfinished dependency: {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 34, in check
+    raise ValueError(message)
+ValueError: Unfinished dependency: WF-AUDIT2
+exit=1
+$ python handoff/delivery/check_recovery.py
+Traceback (most recent call last):
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\check_recovery.py", line 83, in <module>
+    accepts("current board is valid", real_board)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\check_recovery.py", line 30, in accepts
+    module.validate(value, expected_state or state, configured)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 296, in validate
+    visit(name)
+    ~~~~~^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 284, in visit
+    check(by_id[dependency]["status"] == "done", f"Unfinished dependency: {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 34, in check
+    raise ValueError(message)
+ValueError: Unfinished dependency: WF-AUDIT2
+exit=1
+Traceback (most recent call last):
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\check_recovery.py", line 83, in <module>
+    accepts("current board is valid", real_board)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\check_recovery.py", line 30, in accepts
+    module.validate(value, expected_state or state, configured)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 296, in validate
+    visit(name)
+    ~~~~~^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 284, in visit
+    check(by_id[dependency]["status"] == "done", f"Unfinished dependency: {name}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\validate_orchestration.py", line 34, in check
+    raise ValueError(message)
+ValueError: Unfinished dependency: WF-AUDIT2
+exit=1 (check_recovery, full traceback above this line)

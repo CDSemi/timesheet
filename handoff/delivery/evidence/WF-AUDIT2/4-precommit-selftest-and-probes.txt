@@ -1,0 +1,42 @@
+# precommit self-test (Dropbox checkout) and staged-set probes (scratch clone <scratch>/wfa2 at the freeze commit) — captured 2026-10-03T02:50:01Z
+# rerun after 5-precommit-probes.sh was changed to assemble its synthetic account/addresses at run time (the first run, same probes and same results, used literal strings that tripped the privacy check on the script file itself)
+$ node --version
+v24.21.0
+$ (checkout) node scripts/precommit-check.mjs --self-test
+PASS self-test: 35 path and 59 line samples, 12 rules
+exit=0
+$ (clone) node scripts/precommit-check.mjs --self-test
+PASS self-test: 35 path and 59 line samples, 12 rules
+exit=0
+$ (clone) git rev-parse HEAD; git status --short
+c219d79a2c202861b719473cdffb0efb59f14290
+$ bash 5-precommit-probes.sh <scratch>/wfa2
+# original WF-A-03 probes (must block)
+ok | P1 unquoted YAML SMTP_PASSWORD | expected exit 1 | got 1 | BLOCK secret-assignment config/app.yml:+1 literal secret value Zq***(11 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P2 unquoted YAML api_token | expected exit 1 | got 1 | BLOCK secret-assignment config/app.yml:+1 literal secret value Zq***(11 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P3 signature PNG under evidence | expected exit 1 | got 1 | BLOCK private-media handoff/delivery/evidence/WP3/employee-signature.png PDF, image or signature file (basename must contain "synthetic") BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P4 PDF under evidence | expected exit 1 | got 1 | BLOCK private-media handoff/delivery/evidence/WP3/timesheet.pdf PDF, image or signature file (basename must contain "synthetic") BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P5 POSIX drive profile path | expected exit 1 | got 1 | BLOCK profile-path notes.md:+1 concrete user-profile path (account al***(6 chars)); replace it with <user> BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# own probes
+ok | P6 Windows profile path | expected exit 1 | got 1 | BLOCK profile-path notes.md:+1 concrete user-profile path (account al***(6 chars)); replace it with <user> BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P7 YAML list-item secret | expected exit 1 | got 1 | BLOCK secret-assignment deploy/compose.yml:+1 literal secret value Zq***(11 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P8 long letters-only secret (12+) | expected exit 1 | got 1 | BLOCK secret-assignment config/app.yml:+1 literal secret value ab***(16 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P9 profile path inside TypeScript source | expected exit 1 | got 1 | BLOCK profile-path src/server/probeHome.ts:+1 concrete user-profile path (account al***(6 chars)); replace it with <user> BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P10 non-attribution address at anthropic.com | expected exit 1 | got 1 | BLOCK email notes.md:+1 email address su***(21 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P11 attribution address with extra domain suffix | expected exit 1 | got 1 | BLOCK email notes.md:+1 email address no***(29 chars) BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+ok | P12 .env file forced into the index | expected exit 1 | got 1 | BLOCK env-file .env environment file BLOCK secret-assignment .env:+1 literal secret value Zq***(11 chars) BLOCK: 1 staged file(s), 2 blocking finding(s), 0 warning(s)
+ok | P13 attribution trailer (exact allowlist) | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P14 placeholders <user> and $USER | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P15 synthetic-named PDF under evidence | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P16 YAML type word (no secret) | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | P17 clean README edit | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+# heuristic limits (documented, expected to pass the check)
+ok | L1 letters-only YAML password of 8 chars | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L2 letters-only YAML api_key of 11 chars | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L3 YAML secret containing a colon | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+ok | L4 mangled profile path in a project-folder name | expected exit 0 | got 0 | PASS: 1 staged file(s), 0 blocking finding(s), 0 warning(s)
+# real account (detail suppressed; only the summary line is kept)
+ok | R1 real Windows account path | expected exit 1 | got 1 | BLOCK: 1 staged file(s), 1 blocking finding(s), 0 warning(s)
+# 22/22 probes behaved as expected
+exit=0
+$ (clone) git status --short after probes (empty = clean)

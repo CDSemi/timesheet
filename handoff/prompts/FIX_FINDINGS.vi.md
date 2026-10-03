@@ -2,7 +2,7 @@
 
 Thực hiện: subagent sửa được giao; coordinator chọn profile/model/effort theo độ khó ở tài liệu 08. Nhà cung cấp hỗ trợ nào cũng nhận được vai trò này bằng subscription hiện có. Giao source đủ, baseline/digest đã review, REVIEW và HANDOFF. Lưu checkpoint từng task; trả coordinator để auditor độc lập context mới kiểm lại.
 
-Khi review đã nêu file, hàm, repro, cách sửa và test thì không cần plan riêng: tái hiện trước. Audit sửa size S có thể gồm gate (`gate_included`).
+Khi review đã nêu file, hàm, repro, cách sửa và test thì không cần plan riêng: tái hiện trước. Chỉ audit của sửa S-size trung gian mới có thể gồm gate (`gate_included`); snapshot cuối giai đoạn, gồm cả recheck FIX REQUIRED mở khóa giai đoạn kế, và audit GOV giữ gate verifier riêng (tài liệu 08).
 
 Theo AGENTS.md. Tái hiện từng lỗi chấp nhận, gắn ID quy tắc/AC rồi sửa phần liền mạch nhỏ nhất. Giữ việc không liên quan, lịch sử bất biến, quyền và phạm vi đã đạt. Thêm regression có ý nghĩa cho lỗi, không test chỉ lặp cách code.
 

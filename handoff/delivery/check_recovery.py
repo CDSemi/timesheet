@@ -259,7 +259,8 @@ gov = finished()
 for task in gov["tasks"]:
     task["package"] = "GOV"
 task_of(gov, "S-AUDIT")["reviewed_commit"] = SHA
-accepts("done GOV audit with reviewed_commit accepted", gov)
+task_of(gov, "S-GATE")["freeze_commit"] = SHA
+accepts("done GOV audit with reviewed_commit equal to its gate freeze_commit accepted", gov)
 invalid = copy.deepcopy(gov)
 invalid["current_source_digest"] = "b" * 64
 accepts("GOV PASS is not invalidated by a changed source digest", invalid)
@@ -269,6 +270,60 @@ rejects("done GOV audit without reviewed_commit rejected", missing, "Governance 
 cross = synthetic()
 task_of(cross, "S-IMPL").update(package="GOV")
 accepts("dependencies may cross between GOV and a work package", cross)
+
+# Gate/audit commit binding (WF-R-01): the source digest excludes handoff/, so GOV binds by commit.
+invalid = copy.deepcopy(gov)
+task_of(invalid, "S-GATE")["freeze_commit"] = "d" * 40
+rejects("done GOV audit whose gate freeze_commit differs (same digest) rejected", invalid,
+        "Gate freeze_commit differs from audit reviewed_commit")
+invalid = copy.deepcopy(gov)
+task_of(invalid, "S-GATE").pop("freeze_commit")
+rejects("done GOV audit whose gate lacks freeze_commit rejected", invalid,
+        "Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit")
+invalid = copy.deepcopy(gov)
+task_of(invalid, "S-AUDIT").update(depends_on=["S-IMPL"], gate_included=True)
+rejects("done GOV audit with gate_included and no gate dependency rejected", invalid,
+        "Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit")
+value = finished()
+task_of(value, "S-GATE")["freeze_commit"] = SHA
+task_of(value, "S-AUDIT")["reviewed_commit"] = "d" * 40
+rejects("work-package audit and gate with different commits rejected", value,
+        "Gate freeze_commit differs from audit reviewed_commit")
+task_of(value, "S-AUDIT")["reviewed_commit"] = SHA
+accepts("work-package audit and gate with equal commits accepted", value)
+task_of(value, "S-AUDIT").pop("reviewed_commit")
+accepts("work-package audit without reviewed_commit keeps the digest binding", value)
+
+# addresses_audit (optional, fix tasks only): names a done FIX REQUIRED / NOT VERIFIED audit, not a dependency.
+fixed = finished()
+task_of(fixed, "S-AUDIT")["decision"] = "FIX REQUIRED"
+task_of(fixed, "S-COMMIT").update(status="pending", attempt=0, agent_id=None)
+fix = make_task("S-FIX", "implement", [])
+fix.update(kind="fix", addresses_audit="S-AUDIT")
+fixed["tasks"].append(fix)
+fixed["next_task_id"] = "S-FIX"
+accepts("fix addressing a done FIX REQUIRED audit accepted", fixed)
+value = copy.deepcopy(fixed)
+task_of(value, "S-AUDIT")["decision"] = "NOT VERIFIED"
+accepts("fix addressing a done NOT VERIFIED audit accepted", value)
+for label, target in [("dangling", "S-MISSING"), ("gate", "S-GATE")]:
+    value = copy.deepcopy(fixed)
+    task_of(value, "S-FIX")["addresses_audit"] = target
+    rejects(f"addresses_audit naming a {label} task rejected", value, "addresses_audit must name an existing audit task")
+value = copy.deepcopy(fixed)
+task_of(value, "S-AUDIT")["decision"] = "PASS"
+rejects("addresses_audit naming a PASS audit rejected", value, "must name a done FIX REQUIRED or NOT VERIFIED audit")
+value = copy.deepcopy(fixed)
+task_of(value, "S-AUDIT").update(status="interrupted")
+task_of(value, "S-AUDIT").pop("decision")
+rejects("addresses_audit naming an unfinished audit rejected", value,
+        "must name a done FIX REQUIRED or NOT VERIFIED audit")
+value = copy.deepcopy(fixed)
+task_of(value, "S-FIX")["depends_on"] = ["S-AUDIT"]
+rejects("fix depending on the audit it addresses rejected", value, "Fix must not depend on its addresses_audit")
+value = copy.deepcopy(fixed)
+task_of(value, "S-NEXT")["addresses_audit"] = "S-AUDIT"
+rejects("addresses_audit on a non-fix task rejected", value, "addresses_audit is only for fix tasks")
 
 # Profile validation: effort max needs an owner decision; nested delegation prohibited.
 profile_text = (ROOT / ".claude/agents/timesheet-worker.md").read_text(encoding="utf-8")

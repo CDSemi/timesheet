@@ -1,0 +1,181 @@
+# WF-FIX2 checks after the fix - captured 2026-10-03T03:00:54Z; user-profile account segments masked as <user>, scratch dir as <scratch>
+$ bash handoff/delivery/evidence/WF-FIX2/3-checks.sh <project> <scratch> <workflow-python> <node24-bin> <npm-cli.js>
+node v24.21.0; python Python 3.12.14; HEAD c219d79a2c202861b719473cdffb0efb59f14290
+
+COMMAND: /c/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 20,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+EXIT: 0
+
+COMMAND: /c/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe handoff/delivery/check_recovery.py
+{
+  "status": "PASS",
+  "synthetic_checks": [
+    "current board is valid",
+    "synthetic pending board",
+    "hard-stop recovery preserves interrupted task identity",
+    "replacement attempt keeps same task ID",
+    "truncated board detected before recovery from the last committed board",
+    "unknown dependency",
+    "dependency cycle",
+    "path traversal",
+    "worker writes shared state",
+    "unconfigured effort",
+    "dispatch before dependency completion",
+    "two source writers",
+    "source changes during gate",
+    "colliding parallel report ownership",
+    "synthetic separate author/auditor and matching evidence identity",
+    "self audit",
+    "stale audit PASS",
+    "failed gate cannot unlock audit",
+    "gate and audit on different snapshots",
+    "audit PASS without execution evidence",
+    "unverified audit cannot unlock dependent task",
+    "WP2 blocked by unresolved WP1",
+    "valid override with reason accepted",
+    "override without reason rejected",
+    "fable model rejected",
+    "reason without override rejected",
+    "effort differing from profile rejected",
+    "invalid routing rejected",
+    "actual model without source rejected",
+    "audit weaker than author rejected",
+    "fallback_unavailable cannot bypass audit strength for an Opus author",
+    "Sonnet fallback audit accepted when no author used Opus",
+    "Opus planner/documentation author also protects audit strength",
+    "requested-model rank also protects audit strength",
+    "audit without gate dependency or gate_included rejected",
+    "audit with gate_included accepted",
+    "malformed reviewed_commit rejected",
+    "documentation author distinct from the auditor accepted",
+    "documentation author auditing its own change rejected without author_agent_ids",
+    "previous-attempt author auditing the package rejected",
+    "Opus documentation author raises the audit strength floor",
+    "running GOV task beside a different active package accepted",
+    "running task of a non-active WP package rejected",
+    "GOV is not part of authorized_scope",
+    "unknown package rejected",
+    "done GOV audit with reviewed_commit equal to its gate freeze_commit accepted",
+    "GOV PASS is not invalidated by a changed source digest",
+    "done GOV audit without reviewed_commit rejected",
+    "dependencies may cross between GOV and a work package",
+    "done GOV audit whose gate freeze_commit differs (same digest) rejected",
+    "done GOV audit whose gate lacks freeze_commit rejected",
+    "done GOV audit with gate_included and no gate dependency rejected",
+    "work-package audit and gate with different commits rejected",
+    "work-package audit and gate with equal commits accepted",
+    "work-package audit without reviewed_commit keeps the digest binding",
+    "fix addressing a done FIX REQUIRED audit accepted",
+    "fix addressing a done NOT VERIFIED audit accepted",
+    "addresses_audit naming a dangling task rejected",
+    "addresses_audit naming a gate task rejected",
+    "addresses_audit naming a PASS audit rejected",
+    "addresses_audit naming an unfinished audit rejected",
+    "fix depending on the audit it addresses rejected",
+    "addresses_audit on a non-fix task rejected",
+    "unmodified worker profile parses",
+    "profile effort max rejected",
+    "profile effort ultracode rejected",
+    "profile model opusplan rejected",
+    "worker profile with Agent rejected",
+    "running commit beside another running task rejected",
+    "running commit beside a running lookup rejected",
+    "running commit alone accepted",
+    "done commit without 40-hex SHA rejected",
+    "done commit without pushed flag rejected",
+    "commit on main after release_declared rejected",
+    "side-branch commit after release_declared accepted",
+    "commit task with a non-committer profile rejected",
+    "malformed board git state rejected",
+    "one running task plus one running lookup is within the limit",
+    "running lookups exceeding the limit rejected",
+    "coordinator runtime without actual model rejected",
+    "English-only report without a Vietnamese pair accepted"
+  ],
+  "count": 81,
+  "actual_board_modified": false,
+  "claude_dispatch_executed": false
+}
+EXIT: 0
+
+COMMAND: /c/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe handoff/delivery/evidence/WF-FIX2/1-repro.py
+# WF-R-01: gate freeze_commit / audit reviewed_commit binding
+ok  | R1 real board | expected ACCEPT | got ACCEPT
+ok  | R2 GOV audit PASS whose gate freeze_commit equals reviewed_commit | expected ACCEPT | got ACCEPT
+ok  | R3 (= D9) GOV audit PASS, gate freeze_commit differs, same digest | expected REJECT(freeze_commit) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT2 / WF-GATE2)
+ok  | R4 GOV audit FIX REQUIRED, gate freeze_commit differs | expected REJECT(freeze_commit) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WF-AUDIT2 / WF-GATE2)
+ok  | R5 done GOV audit whose gate has no freeze_commit | expected REJECT(freeze_commit) | got REJECT(Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit: WF-AUDIT2)
+ok  | R6 WP1 pending audit and gate with different commits | expected REJECT(freeze_commit) | got REJECT(Gate freeze_commit differs from audit reviewed_commit: WP1-F01-AUDIT / WP1-F01-GATE)
+ok  | R7 WP1 pending audit and gate with equal commits | expected ACCEPT | got ACCEPT
+# addresses_audit on fix tasks
+ok  | A1 (= D8) dangling addresses_audit | expected REJECT(addresses_audit) | got REJECT(addresses_audit must name an existing audit task: WF-FIX2)
+ok  | A2 addresses_audit names a gate | expected REJECT(addresses_audit) | got REJECT(addresses_audit must name an existing audit task: WF-FIX2)
+ok  | A3 addresses_audit names a PASS audit | expected REJECT(addresses_audit) | got REJECT(addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: WF-FIX2)
+ok  | A4 addresses_audit on a non-fix task | expected REJECT(addresses_audit) | got REJECT(addresses_audit is only for fix tasks: WF-AUDIT3)
+ok  | A5 pending fix also depending on the audit it addresses | expected REJECT(addresses_audit) | got REJECT(Fix must not depend on its addresses_audit: WP1-F01-FIX)
+ok  | A6 addresses_audit names a NOT VERIFIED audit | expected ACCEPT | got ACCEPT
+ok  | A7 addresses_audit names an unfinished audit | expected REJECT(addresses_audit) | got REJECT(addresses_audit must name a done FIX REQUIRED or NOT VERIFIED audit: WF-FIX2)
+# 14/14 as expected
+EXIT: 0
+
+COMMAND: node scripts/precommit-check.mjs --self-test
+PASS self-test: 35 path and 74 line samples, 12 rules
+EXIT: 0
+
+COMMAND: node /c/Users/<user>/AppData/Roaming/npm/node_modules/npm/bin/npm-cli.js run lint
+
+> timesheet@0.1.0 lint
+> eslint .
+
+EXIT: 0
+
+COMMAND: /c/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 44,
+  "local_links": 582,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+EXIT: 0
+
+COMMAND: git diff --check
+EXIT: 0
+
+warning: in the working copy of 'handoff/delivery/evidence/WF-FREEZE2/node-version.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-FREEZE2/validate.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/check-recovery.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/node-version.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/preflight-workflow-python.txt', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'handoff/delivery/evidence/WF-GATE2/validate-orch.txt', CRLF will be replaced by LF the next time Git touches it
+COMMAND: node scripts/precommit-check.mjs  # uncommitted evidence of WF-FREEZE2, WF-GATE2 and WF-AUDIT2
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+2 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+5 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+7 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+10 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+13 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+16 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK profile-path handoff/delivery/evidence/WF-GATE2/preflight-system-python.txt:+43 concrete user-profile path (account hu***(5 chars)); replace it with <user>
+BLOCK: 38 staged file(s), 7 blocking finding(s), 0 warning(s)
+EXIT: 1
+scan clone deleted
+
+warning: in the working copy of 'handoff/delivery/evidence/WF-FIX2/1-repro-before.txt', CRLF will be replaced by LF the next time Git touches it
+COMMAND: node scripts/precommit-check.mjs  # WF-FIX2 owned changes and evidence
+PASS: 16 staged file(s), 0 blocking finding(s), 0 warning(s)
+EXIT: 0
+scan clone deleted
+script exit: 0
