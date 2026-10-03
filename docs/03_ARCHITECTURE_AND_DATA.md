@@ -30,7 +30,7 @@ These are project-fit judgments, not a claim that C# or Next.js cannot be lightw
 | attachments/audit_events | Private opaque keys/hash/type/size; actor, UTC, operation, before/after, reason |
 | imports | Source SHA-256, mapping version, owner, preview/commit batch; idempotency key |
 
-Shared pay periods do not contain a single user's signed/sent flag. Names/emails/paths are not identity keys. Admin manages accounts/configuration; access to private employee data requires a separate explicit permission. Future manager access uses employee assignments.
+Shared pay periods do not contain a single user's signed/sent flag. Names/emails/paths are not identity keys. Admin manages accounts/configuration; access to private employee data requires a separate explicit permission. An admin edit may change a user's display name and role at any time, but the user's calendar only while the user has no timesheet, day entry, session, ledger entry or leave request (otherwise 409 `calendar_in_use`, nothing written). Future manager access uses employee assignments.
 
 ## Atomicity and snapshots
 

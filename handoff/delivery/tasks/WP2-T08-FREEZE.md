@@ -89,3 +89,11 @@ Evidence goes in handoff/delivery/evidence/WP2-T08-FREEZE/. Return at most 150 w
 ## Results
 
 (Committer appends here.)
+
+- Pre-HEAD a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6; post-HEAD and commit
+  869bc8e5786e827144ef1d2d806725576351c720.
+- Pushed: yes; remote SHA 869bc8e5786e827144ef1d2d806725576351c720.
+- Staged count: 29 (expected set including this brief).
+- Check exits (Node v24.21.0): precommit, diff --check, JSON parse, validator and
+  check_recovery all 0; staged diff read found only synthetic data.
+- Blockers: none. Results appended after the commit are left uncommitted.

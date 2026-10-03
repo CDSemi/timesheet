@@ -7,14 +7,15 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6, commit đóng băng
-    WP2-T07.
-  - Digest mã nguồn 705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5
+  - HEAD = origin/main = 869bc8e5786e827144ef1d2d806725576351c720, commit đóng băng
+    WP2-T08.
+  - Digest mã nguồn 95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061
     (tác giả tự báo).
-  - Chưa commit: WP2-T08 (digest mã nguồn
-    95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061, tác giả tự báo),
-    bằng chứng của T07-FREEZE, brief CALFIX, board và checkpoint này. WP2-T08-FREEZE sẽ
-    commit chúng.
+  - Chưa commit: WP2-CALFIX (digest mã nguồn
+    b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3, tác giả tự báo;
+    users.ts, test, docs/03 và docs/10 kèm bản .vi), các record của T09-PREP, brief T09A và
+    CALFIX-FREEZE, bằng chứng của T08-FREEZE, bản sửa link trong record WP2-T08, board và
+    checkpoint này. WP2-CALFIX-FREEZE sẽ commit chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -47,12 +48,15 @@ America/Los_Angeles).
 - WP2-T07 (quản trị người dùng) đã xong: tác giả tự báo verify 448 test, 5 mutation đều bị
   test phát hiện. Committer đã đóng băng ở a0f06f5.
 - WP2-T08 (quản trị lịch) đã xong: tác giả tự báo verify 514 test, 11 mutation đều bị test
-  phát hiện. Đang chạy WP2-T08-FREEZE (committer).
+  phát hiện. Committer đã đóng băng ở 869bc8e.
   - Phát hiện: việc admin đổi `calendar_id` (WP2-T07) làm gom lại kỳ nháp của người dùng,
     làm các bảng giờ hiện có bị mồ côi và che mất trạng thái đã chốt.
   - WP2-CALFIX sẽ từ chối việc đổi lịch khi người dùng đã có dữ liệu. Đây là quyết định
     của coordinator, chủ dự án có thể đảo lại; đổi lịch theo hướng chỉ áp dụng về sau là
     phương án để chủ dự án chọn sau.
+  - WP2-CALFIX đã xong: bước kiểm tra tài liệu đạt (không văn bản gốc nào yêu cầu cho đổi
+    lịch), tác giả tự báo verify 524 test, 4/6 mutation bị phát hiện. Hai mutation còn lại
+    bị khóa ngoại che mất.
 - WP2-T05-FREEZE đã xong (hai commit của chủ dự án, e768b71 và a8a5890). Diễn biến của
   commit đóng băng:
   - Attempt 1 bị chặn. Bộ phân loại quyền của auto mode từ chối lệnh stage/kiểm tra với
@@ -82,8 +86,9 @@ America/Los_Angeles).
     - digest khớp;
     - validator và check_recovery exit 0.
 - Còn lại:
-  - WP2-CALFIX, rồi WP2-T09..T13, mỗi task kèm commit đóng băng
-    ([plan](tasks/WP2-PLAN.md)).
+  - WP2-CALFIX, rồi WP2-T09A, T09B và T10..T13, mỗi task kèm commit đóng băng
+    ([plan](tasks/WP2-PLAN.md)). T09 được chia theo WP2-T09-PREP (quyết định của
+    coordinator).
   - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
     trình duyệt.
   - Hai audit bằng opus mới:
@@ -117,7 +122,12 @@ America/Los_Angeles).
     billing, cài đặt toàn cục hay cài đặt quyền.
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
-- Bước tiếp: ghi kết quả WP2-T08-FREEZE, rồi giao WP2-CALFIX (brief sẵn).
+- Bước tiếp: ghi kết quả WP2-CALFIX-FREEZE, rồi giao WP2-T09A (brief sẵn).
+  - WP2-T09-PREP đã xong. Kết quả chính:
+    - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
+      duyệt;
+    - các biến CSS theo E-8, kèm bản sửa một lỗi tương phản ở chế độ tối;
+    - đề xuất chia T09 thành hai phần.
   - Committer chạy quy trình bình thường một lần.
   - Nếu bộ phân loại chặn, coordinator dừng và xin chủ dự án một tin nhắn duyệt nêu rõ
     hành động và rủi ro, hoặc một commit tay. Khi đó Commit description trong chat sẽ
@@ -128,8 +138,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T08-FREEZE (committer). WP2-CALFIX chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Các worker và committer
-  trước đều báo không còn process nào.
+- Đang chạy: WP2-CALFIX-FREEZE (committer). WP2-T09A chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Các worker, committer và
+  planner trước đều báo không còn process nào.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

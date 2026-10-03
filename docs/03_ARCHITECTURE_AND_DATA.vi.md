@@ -30,7 +30,7 @@ Một repo, một ứng dụng Node.js, một DB SQLite cục bộ. Hono phục 
 | attachments/audit_events | Key riêng khó đoán/hash/loại/kích thước; người, UTC, thao tác, trước/sau, lý do |
 | imports | SHA-256 nguồn, phiên bản ánh xạ, chủ, đợt preview/commit; khóa chống trùng |
 
-Kỳ chung không chứa cờ signed/sent của một user. Tên/email/path không phải khóa danh tính. Admin quản tài khoản/cấu hình; xem dữ liệu riêng cần quyền riêng rõ ràng. Manager tương lai dùng gán nhân viên.
+Kỳ chung không chứa cờ signed/sent của một user. Tên/email/path không phải khóa danh tính. Admin quản tài khoản/cấu hình; xem dữ liệu riêng cần quyền riêng rõ ràng. Admin có thể sửa tên hiển thị và vai trò của user bất cứ lúc nào, nhưng chỉ đổi lịch của user khi user chưa có timesheet, ngày, phiên làm việc, dòng sổ cái hay yêu cầu nghỉ nào (nếu có thì trả 409 `calendar_in_use` và không ghi gì). Manager tương lai dùng gán nhân viên.
 
 ## Nguyên tử và snapshot
 

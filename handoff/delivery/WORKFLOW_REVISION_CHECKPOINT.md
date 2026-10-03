@@ -7,13 +7,14 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6, the WP2-T07 freeze.
-  - Source digest 705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5
+  - HEAD = origin/main = 869bc8e5786e827144ef1d2d806725576351c720, the WP2-T08 freeze.
+  - Source digest 95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061
     (author-reported).
-  - Uncommitted: WP2-T08 (source digest
-    95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061, author-reported),
-    the T07-FREEZE evidence, the CALFIX brief, the board and this checkpoint.
-    WP2-T08-FREEZE commits them.
+  - Uncommitted: WP2-CALFIX (source digest
+    b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3, author-reported;
+    users.ts, tests, docs/03 and docs/10 with their .vi pairs), the T09-PREP records, the
+    T09A and CALFIX-FREEZE briefs, the T08-FREEZE evidence, the WP2-T08 record link fix,
+    the board and this checkpoint. WP2-CALFIX-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -42,11 +43,14 @@ America/Los_Angeles).
 - WP2-T07 (user administration) is done: author-reported verify 448 tests and 5 mutations
   caught. Frozen in a0f06f5 by the committer.
 - WP2-T08 (calendar administration) is done: author-reported verify 514 tests and 11
-  mutations caught. WP2-T08-FREEZE (committer) is in progress.
+  mutations caught. Frozen in 869bc8e by the committer.
   - Finding: WP2-T07's admin `calendar_id` change regroups the user's draft period,
     orphans existing timesheets and hides finalized state.
   - WP2-CALFIX refuses the change while the user has data. This is a coordinator decision,
     reversible by the owner; a prospective reassignment is an owner option for later.
+  - WP2-CALFIX is done: the guard passed (no canonical text requires the change),
+    author-reported verify 524 tests and 4 of 6 mutations killed. The two survivors are
+    masked by foreign keys.
 - WP2-T05-FREEZE is done (two owner commits, e768b71 and a8a5890). Freeze history:
   - Attempt 1 is blocked. The auto-mode permission classifier denied the staging/check
     command as "Credential Leakage". Nothing executed and nothing was committed.
@@ -77,7 +81,8 @@ America/Los_Angeles).
     - the digest matches;
     - the validator and check_recovery exit 0.
 - Remaining:
-  - WP2-CALFIX, then WP2-T09..T13, each with its freeze ([plan](tasks/WP2-PLAN.md)).
+  - WP2-CALFIX, then WP2-T09A, T09B and T10..T13, each with its freeze
+    ([plan](tasks/WP2-PLAN.md)). T09 is split per WP2-T09-PREP (coordinator decision).
   - The package-final gate: clean export, WP1→WP2 upgrade, 20 concurrency runs and the
     browser flows.
   - Two fresh opus audits:
@@ -111,7 +116,12 @@ America/Los_Angeles).
     billing, global settings or permission settings.
   - Commits go only through timesheet-committer, on main until the first release. No
     amend, force-push or tags.
-- Next action: record the WP2-T08-FREEZE result, then dispatch WP2-CALFIX (brief ready).
+- Next action: record the WP2-CALFIX-FREEZE result, then dispatch WP2-T09A (brief ready).
+  - WP2-T09-PREP is done. It found the following:
+    - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
+      download;
+    - E-8 tokens, including a fix for a dark-mode contrast defect;
+    - a T09 split.
   - The committer runs the normal procedure once.
   - If the classifier denies it, the coordinator stops and asks the owner for an
     approval message that names the action and its danger, or for a manual commit. The
@@ -122,8 +132,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T08-FREEZE (committer). WP2-CALFIX is pending on it.
-- Live processes: none known besides the committer. The earlier workers and committers
-  reported none left.
+- Running: WP2-CALFIX-FREEZE (committer). WP2-T09A is pending on it.
+- Live processes: none known besides the committer. The earlier workers, committers and
+  the planner reported none left.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t08-freeze",
+  "phase": "wp2-calfix-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "95b5291b0a893312bab01791265739d2e094ffe8b61b0bab5cc423781de0b061",
+  "current_source_digest": "b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T08-FREEZE",
+  "next_task_id": "WP2-CALFIX-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -73,7 +73,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
+    "last_commit": "869bc8e5786e827144ef1d2d806725576351c720",
     "unpushed": []
   },
   "owner_decisions": [
@@ -160,6 +160,11 @@
       "date": "2026-10-03",
       "basis": "WP2-ADV-REVIEW ADV-A-02 (debit-increasing correction overdraws)",
       "decision": "Apply the existing R-05 to corrections: the increase of a deficit debit is checked with canDebit and becomes pending when the available balance is insufficient (no silent overdraft); a correction reducing a spent credit may still go negative and is flagged (LG-08). Recorded in docs/02 and docs/10 by WP2-ADVFIX; reversible by the owner. Advisory findings ADV-A-01..04 are fixed before T05; ADV-A-05 goes to the backlog."
+    },
+    {
+      "date": "2026-10-03",
+      "basis": "WP2-T09-PREP (planner, read-only) found T09 larger than M and recommended a split",
+      "decision": "Split the plan's T09: WP2-T09A (harness, E-8 tokens, shell, api.ts types; worker-high for novelty) and WP2-T09B (grid, mobile list, batch edit; depends on the T09A freeze). Each has its own freeze. tsconfig.test.json joins the T09A owned paths; a tests/client/ unit file for pure display logic joins T09B. The client maps server calculation.status/attendance_expected to display states only; it computes no business minutes."
     },
     {
       "date": "2026-10-03",
@@ -2436,9 +2441,144 @@
       "id": "WP2-T08-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-T08"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab50118680760abbf",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T08-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T08-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-T08-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
+      "branch": "main",
+      "commit_sha": "869bc8e5786e827144ef1d2d806725576351c720",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 29 paths (expected set, no .csv); precommit 0 findings; diff-check, JSON parse, validator and check_recovery (82) exit 0; synthetic data only.",
+      "next_action": "None; WP2-CALFIX runs on 869bc8e."
+    },
+    {
+      "id": "WP2-CALFIX",
+      "package": "WP2",
+      "kind": "fix",
+      "status": "done",
+      "addresses_finding": "WP2-T08 calendar reassignment finding (defect in WP2-T07 code)",
+      "depends_on": [
+        "WP2-T08-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a97bae7f2b63d677a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/users.ts",
+        "src/server/routes/admin.ts",
+        "tests/integration/user-admin.test.ts",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "handoff/delivery/tasks/WP2-CALFIX.md",
+        "handoff/delivery/evidence/WP2-CALFIX"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-CALFIX.md",
+      "report": "handoff/delivery/tasks/WP2-CALFIX.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-CALFIX/01-red-user-admin.log",
+        "handoff/delivery/evidence/WP2-CALFIX/02-green-user-admin.log",
+        "handoff/delivery/evidence/WP2-CALFIX/03-mutation-checks.log",
+        "handoff/delivery/evidence/WP2-CALFIX/04-verify.log",
+        "handoff/delivery/evidence/WP2-CALFIX/05-digest.log",
+        "handoff/delivery/evidence/WP2-CALFIX/06-preflight.log",
+        "handoff/delivery/evidence/WP2-CALFIX/07-preflight-directory-links-allowed.log"
+      ],
+      "baseline_commit": "869bc8e5786e827144ef1d2d806725576351c720",
+      "source_digest": "b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "fixed (author-reported). Rule-8 guard passed: no canonical text (docs 01 FR-01, 02 R-07, 03, 04, 09, 10) requires calendar changes for users with data or for existing periods. users.ts refuses a calendar change with 409 calendar_in_use inside the update transaction; admin.ts is untouched (the existing mapping gives 409). docs/10 (+vi) records the decision; docs/03 (+vi) gains one sentence in the Records paragraph. Red 7 failed, then 39/39; mutations killed 4/6 (day_entries and work_sessions drops are masked by foreign keys implying a timesheet); verify 524 tests. Preflight exit 1 at baseline on a directory link in WP2-T08.md; the coordinator replaced it with plain text (record-only).",
+      "next_action": "None; WP2-CALFIX-FREEZE."
+    },
+    {
+      "id": "WP2-T09-PREP",
+      "package": "WP2",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP2-T08-FREEZE"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2d7bb0ec4711be6e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T09-PREP.md",
+        "handoff/delivery/evidence/WP2-T09-PREP"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T09-PREP.md",
+      "report": "handoff/delivery/tasks/WP2-T09-PREP.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T09-PREP/probes.txt"
+      ],
+      "baseline_commit": "869bc8e5786e827144ef1d2d806725576351c720",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "pre-flight delivered (read-only). The component layout uses a hash-route shell. Playwright 1.63.0 runs with channel msedge (installed Edge 153 and Chrome 154; registry reachable), a worker-scoped built-server fixture on a temp DB with HTTP seeding relative to today, viewports 1280x800 and 390x844, and *-synthetic.png screenshots in temp. E-8 tokens include an --on-accent fix for a 2.4:1 dark-mode contrast defect. API gaps: no per-day completeness or ot_pending field (derive display state from calculation.status and attendance_expected); api.ts drops error.details. Risks: tsconfig.test.json include; no vitest home for dayModel. Recommends splitting T09 into T09A and T09B (adopted).",
+      "next_action": "None; WP2-T09A and WP2-T09B follow the PREP output."
+    },
+    {
+      "id": "WP2-CALFIX-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-CALFIX"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -2456,13 +2596,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-T08-FREEZE.md",
-        "handoff/delivery/evidence/WP2-T08-FREEZE"
+        "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+        "handoff/delivery/evidence/WP2-CALFIX-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP2-T08-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-CALFIX-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "a0f06f5a3c9c6639bcd1ec79519d9bfc139bf8a6",
+      "baseline_commit": "869bc8e5786e827144ef1d2d806725576351c720",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -2470,25 +2610,24 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the T08 set with the CALFIX brief; on a permission denial stop without retrying."
+      "next_action": "Commit and push the CALFIX set with the T09 pre-flight records and the T09A brief; on a permission denial stop without retrying."
     },
     {
-      "id": "WP2-CALFIX",
+      "id": "WP2-T09A",
       "package": "WP2",
-      "kind": "fix",
+      "kind": "implement",
       "status": "pending",
-      "addresses_finding": "WP2-T08 calendar reassignment finding (defect in WP2-T07 code)",
       "depends_on": [
-        "WP2-T08-FREEZE"
+        "WP2-CALFIX-FREEZE"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "sonnet",
       "requested_effort": "high",
       "model_override_reason": null,
       "routing": {
-        "size": "S",
-        "risk": "H",
-        "novelty": false
+        "size": "M",
+        "risk": "M",
+        "novelty": true
       },
       "actual_model": null,
       "actual_source": null,
@@ -2497,23 +2636,29 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/server/services/users.ts",
-        "src/server/routes/admin.ts",
-        "tests/integration/user-admin.test.ts",
-        "docs/10_DECISIONS_AND_SOURCES.md",
-        "docs/10_DECISIONS_AND_SOURCES.vi.md",
-        "handoff/delivery/tasks/WP2-CALFIX.md",
-        "handoff/delivery/evidence/WP2-CALFIX"
+        "src/client/App.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "src/client/components/AppShell.tsx",
+        "package.json",
+        "package-lock.json",
+        "playwright.config.ts",
+        "tsconfig.test.json",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/shell.spec.ts",
+        "handoff/delivery/tasks/WP2-T09A.md",
+        "handoff/delivery/evidence/WP2-T09A"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-CALFIX.md",
-      "report": "handoff/delivery/tasks/WP2-CALFIX.md",
+      "prompt": "handoff/delivery/tasks/WP2-T09A.md",
+      "report": "handoff/delivery/tasks/WP2-T09A.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Refuse calendar reassignment (409 calendar_in_use) while the user has data, after the rule-8 guard on canonical texts; record the decision in docs/10 and one canonical sentence (+vi); red-first; verify."
+      "next_action": "Browser harness (Playwright 1.63.0, msedge channel, built-server fixture), E-8 CSS tokens with the three design skills, hash-route app shell, api.ts types and error.details; verify and test:e2e on both viewports."
     },
     {
       "id": "WP2-INFRA1",

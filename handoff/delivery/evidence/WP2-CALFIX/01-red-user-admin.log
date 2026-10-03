@@ -1,0 +1,82 @@
+COMMAND: node node_modules/vitest/vitest.mjs run tests/integration/user-admin.test.ts (Node v24.21.0, users.ts unchanged at baseline 869bc8e)
+EXIT: 1
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/user-admin.test.ts (39 tests | 7 failed) 9727ms
+   ❯ PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) (10)
+     × refuses a calendar change with 409 calendar_in_use when the user has a timesheet 221ms
+     × refuses a calendar change with 409 calendar_in_use when the user has a day entry 213ms
+     × refuses a calendar change with 409 calendar_in_use when the user has a session 212ms
+     × refuses a calendar change with 409 calendar_in_use when the user has a ledger entry 199ms
+     × refuses a calendar change with 409 calendar_in_use when the user has a leave request 201ms
+     × applies nothing of a combined PATCH that includes a refused calendar change 211ms
+     × refuses the WP2-T08 probe scenario and leaves the finalized timesheet view unchanged 317ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses a calendar change with 409 calendar_in_use when the user has a timesheet
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses a calendar change with 409 calendar_in_use when the user has a day entry
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses a calendar change with 409 calendar_in_use when the user has a session
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses a calendar change with 409 calendar_in_use when the user has a ledger entry
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses a calendar change with 409 calendar_in_use when the user has a leave request
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/user-admin.test.ts:491:29
+    489|     t.clock.advanceSeconds(60);
+    490|     const response = await t.request('PATCH', `/api/admin/users/${empl…
+    491|     expect(response.status).toBe(409);
+       |                             ^
+    492|     expect(response.body.error.code).toBe('calendar_in_use');
+    493|     expect(userRow()).toEqual(rowBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > applies nothing of a combined PATCH that includes a refused calendar change
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/user-admin.test.ts:508:29
+    506|       body: { display_name: 'Should Not Apply', role: 'admin', calenda…
+    507|     });
+    508|     expect(response.status).toBe(409);
+       |                             ^
+    509|     expect(response.body.error.code).toBe('calendar_in_use');
+    510|     expect(userRow()).toEqual(rowBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX) > refuses the WP2-T08 probe scenario and leaves the finalized timesheet view unchanged
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/user-admin.test.ts:610:29
+    608|
+    609|     const response = await t.request('PATCH', `/api/admin/users/${empl…
+    610|     expect(response.status).toBe(409);
+       |                             ^
+    611|     expect(response.body.error.code).toBe('calendar_in_use');
+    612|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 32 passed (39)
+   Start at
+   Duration

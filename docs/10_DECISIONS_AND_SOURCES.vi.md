@@ -113,3 +113,10 @@ Cơ sở: mục E của WP2-PLAN; không quyết định nào đổi yêu cầu 
 ## Quyết định của coordinator — phát hiện ADV-A-02 của WP2-ADV-REVIEW (2026-10-03, đảo ngược được; chủ có thể phủ quyết)
 
 - Áp dụng R-05 cho khoản sửa: sửa làm tăng một khoản trừ thiếu giờ là một khoản trừ mới bằng phần tăng. Phần tăng được kiểm với số dư khả dụng (`canDebit`); nếu số dư không đủ thì phần tăng ở trạng thái chờ, không ghi dòng sổ nào (không âm thầm âm). Sửa giảm một khoản cộng đã bị tiêu vẫn được giữ và đánh dấu đối chiếu (R-06, LG-08) vì nó nêu một sự thật lịch sử. Đây là áp dụng R-05 và R-06 hiện có, không đổi yêu cầu đã xác nhận. Nguồn: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.
+
+## Quyết định của coordinator — phát hiện đổi lịch của WP2-T08 (2026-10-03, đảo ngược được; chủ có thể phủ quyết)
+
+- Đổi lịch qua `PATCH /api/admin/users/:id` bị từ chối bằng 409 `calendar_in_use` khi user có bất kỳ timesheet, ngày, phiên làm việc, dòng sổ cái hay yêu cầu nghỉ nào. Lần sửa bị từ chối không ghi gì (PATCH gộp không áp dụng trường nào) và không tạo audit event. Chỉ đổi lịch được cho tài khoản chưa có dữ liệu đó. Sửa tên hiển thị và vai trò không bị ảnh hưởng.
+- Lý do: probe WP2-T08 cho thấy gán lại lịch cho user đã có dữ liệu làm kỳ nháp bị nhóm lại, nhãn mặc định đổi và tính lại, timesheet đã lưu bị mồ côi, timesheet đã chốt bị che và cho phép tạo timesheet chồng kỳ, trong khi ngày của phiên đã lưu không đổi (AGENTS quy tắc 7, R-07). Không văn bản chuẩn nào yêu cầu đổi lịch của user đã có dữ liệu hay áp dụng đổi lịch cho kỳ đã có.
+- Lựa chọn cho chủ (ngoài WP2): gán lại lịch có hiệu lực từ ngày trong tương lai cần schema và thiết kế tra cứu kỳ riêng.
+- Nguồn: phát hiện chỉ-báo-cáo của WP2-T08, task WP2-CALFIX.

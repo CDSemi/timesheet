@@ -112,3 +112,10 @@ Basis: WP2-PLAN section E; none changes a confirmed requirement.
 ## Coordinator decision — WP2-ADV-REVIEW finding ADV-A-02 (2026-10-03, reversible; the owner may veto)
 
 - R-05 applied to corrections: a correction that raises a deficit debit is a new debit of the increase. The increase is checked against the available balance (`canDebit`); when the balance cannot cover it, the increase stays pending with no ledger entry (no silent overdraft). A correction that lowers a posted credit after it was spent is still kept and flagged for reconciliation (R-06, LG-08), because it states a historical fact. This applies the existing R-05 and R-06 and changes no confirmed requirement. Source: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.
+
+## Coordinator decision — WP2-T08 calendar reassignment finding (2026-10-03, reversible; the owner may veto)
+
+- A calendar change through `PATCH /api/admin/users/:id` is refused with 409 `calendar_in_use` while the user has any timesheet, day entry, session, ledger entry or leave request. A refused edit writes nothing (a combined PATCH applies none of its fields) and creates no audit event. The calendar may change only for an account without such data. Display name and role edits are unaffected.
+- Reason: the WP2-T08 probe showed that reassigning a user who has data regroups the draft period, relabels and recalculates default-labelled days, orphans stored timesheets, hides a finalized timesheet and lets an overlapping timesheet be created, while stored session dates stay put (AGENTS rule 7, R-07). No canonical text requires changing the calendar of a user with data or applying a calendar change to existing periods.
+- Owner option (out of WP2): a prospective, effective-dated calendar reassignment needs its own schema and period-lookup design.
+- Source: WP2-T08 report-only finding, task WP2-CALFIX.

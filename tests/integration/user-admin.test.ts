@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { revokeAllAuthSessions } from '../../src/server/auth/sessions.ts';
-import { createCalendar } from '../../src/server/services/calendars.ts';
+import { createCalendar, createCalendarVersion } from '../../src/server/services/calendars.ts';
 import { deactivateUser, updateUser } from '../../src/server/services/users.ts';
-import { createTestContext, type TestContext } from '../support/testApp.ts';
+import { createTestContext, la, type TestContext } from '../support/testApp.ts';
 
 /*
  * WP2-T07 (FR-01, AC-01, E-11): user administration under /api/admin. The admin sets a
@@ -286,28 +286,28 @@ describe('POST /api/admin/users (E-11: admin-set temporary password, never retur
   });
 });
 
-describe('PATCH /api/admin/users/:id', () => {
-  function secondCalendar(): string {
-    const row = t.db.prepare('SELECT * FROM calendars WHERE id = ?').get(t.calendarId) as Record<string, string | number>;
-    return createCalendar(
-      t.db,
-      t.clock,
-      {
-        name: 'Second calendar (synthetic)',
-        schedule: {
-          reportingZone: row.reporting_zone as string,
-          anchorPayrollDate: row.payroll_anchor_date as string,
-          cycleDays: row.cycle_days as number,
-          periodStartOffsetDays: row.period_start_offset_days as number,
-          periodEndOffsetDays: row.period_end_offset_days as number,
-          dueOffsetDays: row.due_offset_days as number,
-          dueLocalTime: row.due_local_time as string,
-        },
+function secondCalendar(): string {
+  const row = t.db.prepare('SELECT * FROM calendars WHERE id = ?').get(t.calendarId) as Record<string, string | number>;
+  return createCalendar(
+    t.db,
+    t.clock,
+    {
+      name: 'Second calendar (synthetic)',
+      schedule: {
+        reportingZone: row.reporting_zone as string,
+        anchorPayrollDate: row.payroll_anchor_date as string,
+        cycleDays: row.cycle_days as number,
+        periodStartOffsetDays: row.period_start_offset_days as number,
+        periodEndOffsetDays: row.period_end_offset_days as number,
+        dueOffsetDays: row.due_offset_days as number,
+        dueLocalTime: row.due_local_time as string,
       },
-      null,
-    );
-  }
+    },
+    null,
+  );
+}
 
+describe('PATCH /api/admin/users/:id', () => {
   it('edits display name, role and calendar and audits the before and after state', async () => {
     const calendarId = secondCalendar();
     const response = await t.request('PATCH', `/api/admin/users/${t.userIds.employee}`, {
@@ -404,6 +404,219 @@ describe('PATCH /api/admin/users/:id', () => {
     const response = await t.request('PATCH', `/api/admin/users/${t.userIds.admin}`, { cookie: admin, body: { role: 'employee' } });
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('last_active_admin');
+  });
+});
+
+/*
+ * WP2-CALFIX (AGENTS rule 7, R-07): a calendar change would regroup draft periods, orphan stored
+ * timesheets and hide finalized ones (WP2-T08 probe), so it is refused with 409 calendar_in_use
+ * while the user has any timesheet, day entry, session, ledger entry or leave request.
+ */
+describe('PATCH /api/admin/users/:id calendar change guard (WP2-CALFIX)', () => {
+  const employeeId = () => t.userIds.employee;
+  const userRow = () => t.db.prepare('SELECT * FROM users WHERE id = ?').get(employeeId());
+  const auditCount = () => t.db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+
+  function insertTimesheetOnly(): void {
+    const periodId = 'calfix-period-1';
+    t.db
+      .prepare(
+        `INSERT INTO pay_periods (id, calendar_id, period_index, nominal_payroll_date, payroll_date, period_start, period_end,
+           due_local_date, due_local_time, due_at_utc, is_exception, created_at)
+         VALUES (?, ?, 9001, '2026-10-16', '2026-10-16', '2026-09-28', '2026-10-11', '2026-10-13', '17:00',
+           '2026-10-14T00:00:00Z', 0, '2026-10-02T18:00:00Z')`,
+      )
+      .run(periodId, t.calendarId);
+    t.db
+      .prepare(
+        `INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at)
+         VALUES ('calfix-timesheet-1', ?, ?, 1, '2026-10-02T18:00:00Z', '2026-10-02T18:00:00Z')`,
+      )
+      .run(employeeId(), periodId);
+  }
+
+  /** A day entry cannot exist without its timesheet (composite foreign key), so the API creates both. */
+  async function createDayEntry(): Promise<void> {
+    const saved = await t.request('PUT', '/api/days/2026-10-01', {
+      cookie: employee,
+      body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: '' },
+    });
+    expect(saved.status).toBe(200);
+  }
+
+  /** A session needs its day entry and timesheet; all three kinds exist afterwards. */
+  async function createSession(): Promise<void> {
+    const saved = await t.request('POST', '/api/days/2026-10-01/sessions', {
+      cookie: employee,
+      body: { start: la('2026-10-01T09:00'), end: la('2026-10-01T17:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+    });
+    expect(saved.status).toBe(201);
+  }
+
+  function insertLedgerEntryOnly(): void {
+    t.db
+      .prepare(
+        `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, work_date, actor_user_id, origin, posted_at)
+         VALUES ('calfix-ledger-1', ?, 'credit', 60, 'calfix-credit-1', '2026-09-21', NULL, 'system', '2026-10-02T18:00:00Z')`,
+      )
+      .run(employeeId());
+  }
+
+  function insertLeaveRequestOnly(): void {
+    t.db
+      .prepare(
+        `INSERT INTO ot_leave_requests (id, user_id, request_key, leave_date, requested_minutes, approved_minutes,
+           reserved_minutes, approver_name, approval_date, evidence_ref, approval_origin, created_by, created_at, updated_at)
+         VALUES ('calfix-leave-1', ?, 'calfix-key-1', '2026-10-05', 60, 60, 60, 'Example Manager', '2026-10-01',
+           'synthetic chat reference', 'self_recorded', ?, '2026-10-02T18:00:00Z', '2026-10-02T18:00:00Z')`,
+      )
+      .run(employeeId(), employeeId());
+  }
+
+  const dataKinds: Array<[string, () => void | Promise<void>]> = [
+    ['timesheet', insertTimesheetOnly],
+    ['day entry', createDayEntry],
+    ['session', createSession],
+    ['ledger entry', insertLedgerEntryOnly],
+    ['leave request', insertLeaveRequestOnly],
+  ];
+
+  it.each(dataKinds)('refuses a calendar change with 409 calendar_in_use when the user has a %s', async (_kind, seed) => {
+    await seed();
+    const calendarId = secondCalendar();
+    const rowBefore = userRow();
+    const auditBefore = auditCount();
+    t.clock.advanceSeconds(60);
+    const response = await t.request('PATCH', `/api/admin/users/${employeeId()}`, { cookie: admin, body: { calendar_id: calendarId } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('calendar_in_use');
+    expect(userRow()).toEqual(rowBefore);
+    expect(auditCount()).toBe(auditBefore);
+    expect(auditRows(employeeId())).toHaveLength(0);
+  });
+
+  it('applies nothing of a combined PATCH that includes a refused calendar change', async () => {
+    insertLedgerEntryOnly();
+    const calendarId = secondCalendar();
+    const rowBefore = userRow();
+    const auditBefore = auditCount();
+    t.clock.advanceSeconds(60);
+    const response = await t.request('PATCH', `/api/admin/users/${employeeId()}`, {
+      cookie: admin,
+      body: { display_name: 'Should Not Apply', role: 'admin', calendar_id: calendarId },
+    });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('calendar_in_use');
+    expect(userRow()).toEqual(rowBefore);
+    expect(auditCount()).toBe(auditBefore);
+  });
+
+  it('still edits display name and role for a user with data and treats the current calendar id as no change', async () => {
+    await createSession();
+    insertLedgerEntryOnly();
+    insertLeaveRequestOnly();
+    const renamed = await t.request('PATCH', `/api/admin/users/${employeeId()}`, {
+      cookie: admin,
+      body: { display_name: 'Renamed With Data', role: 'admin' },
+    });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.user).toMatchObject({ display_name: 'Renamed With Data', role: 'admin', calendar_id: t.calendarId });
+    expect(auditRows(employeeId())).toHaveLength(1);
+    const same = await t.request('PATCH', `/api/admin/users/${employeeId()}`, {
+      cookie: admin,
+      body: { display_name: 'Renamed Again', calendar_id: t.calendarId },
+    });
+    expect(same.status).toBe(200);
+    expect(same.body.user.calendar_id).toBe(t.calendarId);
+    expect(auditRows(employeeId())).toHaveLength(2);
+  });
+
+  it('changes the calendar of an account without data and writes one audit event', async () => {
+    const colleague = await createColleague();
+    const calendarId = secondCalendar();
+    const response = await t.request('PATCH', `/api/admin/users/${colleague.id}`, { cookie: admin, body: { calendar_id: calendarId } });
+    expect(response.status).toBe(200);
+    expect(response.body.user.calendar_id).toBe(calendarId);
+    const events = auditRows(colleague.id).filter((event) => event.operation === 'user.update');
+    expect(events).toHaveLength(1);
+    expect(JSON.parse(events[0]?.after_json ?? 'null')).toMatchObject({ calendar_id: calendarId });
+  });
+
+  it('is not blocked by another user’s data (owner scoping)', async () => {
+    insertLedgerEntryOnly();
+    const colleague = await createColleague();
+    const response = await t.request('PATCH', `/api/admin/users/${colleague.id}`, { cookie: admin, body: { calendar_id: secondCalendar() } });
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses the WP2-T08 probe scenario and leaves the finalized timesheet view unchanged', async () => {
+    t.clock.set('2026-10-09T20:00:00Z');
+    // Sign-in sessions expire after 12 hours, so sign in again at the new instant.
+    admin = await t.login('admin');
+    employee = await t.login('employee');
+    const calendarB = createCalendar(
+      t.db,
+      t.clock,
+      {
+        name: 'Synthetic calendar B',
+        schedule: {
+          reportingZone: 'Asia/Ho_Chi_Minh',
+          anchorPayrollDate: '2026-10-05',
+          cycleDays: 14,
+          periodStartOffsetDays: -18,
+          periodEndOffsetDays: -5,
+          dueOffsetDays: -3,
+          dueLocalTime: '17:00',
+        },
+      },
+      null,
+    );
+    createCalendarVersion(
+      t.db,
+      t.clock,
+      {
+        calendarId: calendarB,
+        effectiveFrom: '2026-01-01',
+        weekdays: [1, 2, 3, 4, 5],
+        dates: [{ date: '2026-10-07', kind: 'holiday', name: 'Synthetic calendar B holiday' }],
+      },
+      null,
+    );
+    const post = (date: string, extra: Record<string, unknown> = {}) =>
+      t.request('POST', `/api/days/${date}/sessions`, {
+        cookie: employee,
+        body: { start: la(`${date}T09:00`), end: la(`${date}T17:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true, ...extra },
+      });
+    expect((await post('2026-10-07')).status).toBe(201);
+    expect((await post('2026-09-21', { reason: 'Synthetic backfill for the regression' })).status).toBe(201);
+    t.db
+      .prepare(
+        "UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ? AND pay_period_id IN (SELECT id FROM pay_periods WHERE period_start = '2026-09-14')",
+      )
+      .run(employeeId());
+    const view = async () => ({
+      finalized: await t.request('GET', '/api/timesheets/2026-10-02', { cookie: employee }),
+      draft: await t.request('GET', '/api/timesheets/2026-10-16', { cookie: employee }),
+      current: await t.request('GET', '/api/periods/current', { cookie: employee }),
+      day: await t.request('GET', '/api/days/2026-10-07', { cookie: employee }),
+    });
+    const before = await view();
+    expect(before.finalized.status).toBe(200);
+    expect(before.finalized.body.timesheet).not.toBeNull();
+    const rowBefore = userRow();
+    const auditBefore = auditCount();
+
+    const response = await t.request('PATCH', `/api/admin/users/${employeeId()}`, { cookie: admin, body: { calendar_id: calendarB } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('calendar_in_use');
+
+    const after = await view();
+    for (const key of ['finalized', 'draft', 'current', 'day'] as const) {
+      expect(after[key].status, key).toBe(before[key].status);
+      expect(after[key].body, key).toEqual(before[key].body);
+    }
+    expect(userRow()).toEqual(rowBefore);
+    expect(auditCount()).toBe(auditBefore);
   });
 });
 

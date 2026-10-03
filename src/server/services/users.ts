@@ -90,6 +90,15 @@ function otherActiveAdmins(db: Db, userId: string): number {
     .get(userId) as number;
 }
 
+/** Tables whose rows bind a user's history to the pay periods of the user's current calendar. */
+const CALENDAR_BOUND_TABLES = ['timesheets', 'day_entries', 'work_sessions', 'ot_ledger', 'ot_leave_requests'] as const;
+
+function hasCalendarBoundData(db: Db, userId: string): boolean {
+  return CALENDAR_BOUND_TABLES.some(
+    (table) => db.prepare(`SELECT 1 FROM ${table} WHERE user_id = ? LIMIT 1`).get(userId) !== undefined,
+  );
+}
+
 const lastActiveAdmin = (): ApiError =>
   new ApiError(409, 'last_active_admin', 'At least one active administrator must remain');
 
@@ -137,13 +146,26 @@ export interface UserChanges {
   calendarId?: string;
 }
 
-/** Edits display name, role and calendar; an edit that changes nothing writes no audit event. */
+/**
+ * Edits display name, role and calendar; an edit that changes nothing writes no audit event.
+ * The calendar may change only for an account without timesheets, day entries, sessions, ledger
+ * entries or leave requests: a change would regroup draft periods and orphan or hide stored
+ * ones (AGENTS rule 7, R-07). A refusal throws before any write, so nothing in the same edit
+ * applies and no audit event is created.
+ */
 export function updateUser(db: Db, clock: Clock, input: UserChanges): UserAccount {
   const displayName = input.displayName === undefined ? undefined : cleanDisplayName(input.displayName);
   return db
     .transaction(() => {
       const before = requireAccount(db, input.userId);
       if (input.calendarId !== undefined) assertCalendarExists(db, input.calendarId);
+      if (
+        input.calendarId !== undefined &&
+        input.calendarId !== before.calendar_id &&
+        hasCalendarBoundData(db, before.id)
+      ) {
+        throw new ApiError(409, 'calendar_in_use', 'The calendar cannot change while the account has timesheet data');
+      }
       const next = {
         display_name: displayName ?? before.display_name,
         role: input.role ?? before.role,
