@@ -1,0 +1,62 @@
+# P1 double reservation (sequential, same connection; concurrency is probe pb)
+PASS  P1.1 second 80 at 100 is 409 insufficient_balance  {"a":"reserved","b":{"status":409,"code":"insufficient_balance"}}
+PASS  P1.2 nothing created for the loser  1
+PASS  P1.3 exact remainder 20 reserves, then 1 more is refused  {"exact":"reserved","over":{"status":409,"code":"insufficient_balance"}}
+PASS  P1.4 same-key retry after exhaustion is duplicate, not a second reservation  {"postedMinutes":100,"reservedMinutes":100,"availableMinutes":0,"negative":false,"reconciliationRequired":false}
+PASS  P1.5 same key different minutes is 409 request_key_conflict  {"status":409,"code":"request_key_conflict"}
+PASS  P1.6 zero balance cannot reserve 1 minute  {"status":409,"code":"insufficient_balance"}
+PASS  P1.7 negative, fractional and >1440 minutes rejected (422)  {"neg":{"status":null,"code":"invalid_minutes"},"frac":{"status":null,"code":"invalid_minutes"},"big":{"status":null,"code":"invalid_minutes"}}
+# P2 consume beyond reserved
+PASS  P2.1 use 80 then 41 of 120 -> 409 exceeds_reserved  {"u1":"used","u2":{"status":409,"code":"exceeds_reserved"}}
+PASS  P2.2 exact remainder 40 used, then 1 more refused  {"u4":{"status":409,"code":"exceeds_reserved"}}
+PASS  P2.3 ledger has exactly -80 and -40; posted 480, reserved 0  {"ledger":[-80,-40],"bal":{"postedMinutes":480,"reservedMinutes":0,"availableMinutes":480,"negative":false,"reconciliationRequired":false}}
+PASS  P2.4 use after cancel -> 409 exceeds_reserved, no delta  {"status":409,"code":"exceeds_reserved"}
+PASS  P2.5 zero/negative/fractional/huge use minutes rejected without writing  [{"status":null,"code":"invalid_minutes"},{"status":null,"code":"invalid_minutes"},{"status":null,"code":"invalid_minutes"},{"status":409,"code":"exceeds_reserved"}]
+PASS  P2.6 same use key: different minutes 409 source_key_conflict; identical retry (even stale version) is duplicate  {"sameKeyDiff":{"status":409,"code":"source_key_conflict"},"retry":"duplicate"}
+# P3 reversal beyond consumed
+PASS  P3.1 reverse before any use -> 409 exceeds_reversible  {"status":409,"code":"exceeds_reversible"}
+PASS  P3.2 reverse 101 of 100 used -> 409 exceeds_reversible  {"status":409,"code":"exceeds_reversible"}
+PASS  P3.3 partial 60 then 41 more (> 40 left) -> 409  {"status":409,"code":"exceeds_reversible"}
+PASS  P3.4 blank reason -> 422 reason_required  {"status":422,"code":"reason_required"}
+PASS  P3.5 balance: 600 - 100 + 60 = 560 posted, reserved 20  {"postedMinutes":560,"reservedMinutes":20,"availableMinutes":540,"negative":false,"reconciliationRequired":false}
+PASS  P3.6 use/reverse cycle cannot create minutes: posted back to 480, reserved 0, further reversal 409  {"cb":{"postedMinutes":480,"reservedMinutes":0,"availableMinutes":480,"negative":false,"reconciliationRequired":false},"more":{"status":409,"code":"exceeds_reversible"}}
+PASS  P3.7 SQL tamper: reversed > consumed rejected by CHECK; counters backwards rejected by trigger  {"sqlOver":{"status":null,"code":"SQLITE_CONSTRAINT_CHECK"},"sqlBack":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"}}
+# P4 append-only and immutable facts (direct SQL)
+PASS  P4.1 ledger UPDATE/DELETE rejected  {"upd":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"},"del":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"}}
+PASS  P4.2 request facts, no-bump update, delete and reserved increase rejected  {"fact":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"},"nover":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"},"delReq":{"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"},"reserveUp":{"status":null,"code":"SQLITE_CONSTRAINT_CHECK"}}
+PASS  P4.3 a correction linking another owner's entry is rejected by the schema  {"status":null,"code":"SQLITE_CONSTRAINT_TRIGGER"}
+# P5 correction idempotency contract
+OBSERVED  P5.1 same correction key, different corrected value (90 then 120)  {"first":"posted","firstDelta":30,"second":{"status":"duplicate","entry":{"id":"ebb53633-c3ca-4f73-b539-d10d0126589f","userId":"1b5eb06e-349c-452f-bfa1-a7c6198575d6","entryType":"correction","deltaMinutes":30,"sourceKey":"ts1-r2-d1","sourceRef":null,"correctsEntryId":"f3819a4a-6b55-4576-bb94-4488c65bb1dd","leaveRequestId":null,"workDate":"2026-09-21","actorUserId":"1b5eb06e-349c-452f-bfa1-a7c6198575d6","origin":"manual","reason":"probe","reconciliationRequired":false,"postedAt":"2026-10-02T18:00:00Z"},"deltaMinutes":30,"reconciliationRequired":false,"balance":{"postedMinutes":90,"reservedMinutes":0,"availableMinutes":90,"negative":false,"reconciliationRequired":false}},"posted":90}
+PASS  P5.2 no second entry appended for the reused correction key  1
+OBSERVED  P5.3 correcting a debit 60 -> 90 with posted 0  {"status":"posted","delta":-30,"reconciliationRequired":true,"balance":{"postedMinutes":-30,"reservedMinutes":0,"availableMinutes":-30,"negative":true,"reconciliationRequired":true}}
+PASS  P5.4 insufficient balance debit is pending with no entry (R-05)  {"status":"pending"}
+# P6 E-3 leave date in the saved reporting zone (America/Los_Angeles)
+PASS  P6.1 one second before local midnight is 409 before_leave_date; at local midnight use posts -480  {"early":{"status":409,"code":"before_leave_date"},"onTime":"used"}
+# P7 HTTP: ID swap, admin isolation, CSRF, expected_version
+PASS  P7.1 employee2 and admin get 404 not_found on consume/cancel/reverse of employee1 request  {"employee2:consume":"404 not_found","admin:consume":"404 not_found","employee2:cancel":"404 not_found","admin:cancel":"404 not_found","employee2:reverse":"404 not_found","admin:reverse":"404 not_found"}
+PASS  P7.2 swapped id and unknown id answers are byte-identical  {"unknown":{"error":{"code":"not_found","message":"OT leave request not found"}},"swapped":{"error":{"code":"not_found","message":"OT leave request not found"}}}
+PASS  P7.3 no row, ledger or audit change from the swap attempts  {"before":27,"after":27,"auditBefore":58,"auditAfter":58}
+PASS  P7.4 user_id in body rejected 422 (strict schema)  422
+PASS  P7.5 /api/ot/summary for employee2 never contains employee1 id or request id  200
+PASS  P7.5 /api/ot/ledger for employee2 never contains employee1 id or request id  200
+PASS  P7.5 /api/ot/leave for employee2 never contains employee1 id or request id  200
+PASS  P7.5 /api/ot/evidence.csv for employee2 never contains employee1 id or request id  200
+PASS  P7.5 /api/history for employee2 never contains employee1 id or request id  200
+PASS  P7.6 no single-request GET route exists (404 endpoint)  404
+PASS  P7.7 expected_version required (422), stale (409 stale_version), wrong type (422)  {"noVersion":422,"stale":"409 stale_version","strVersion":422}
+PASS  P7.8 Origin "null" 403, text/plain 415, other-port origin 403  {"nullOrigin":403,"textPlain":415,"other":403}
+PASS  P7.9 request unchanged after the rejected calls  {"version":1,"reserved_minutes":300}
+FAIL  P7.10 employee history shows the admin-authored policy event without the admin id  undefined
+PASS  P7.11 employee2 history (user.create by admin) never contains another user id  {"id":"182f425a-de88-45d5-b447-fea48f1efb8f","occurred_at":"2026-10-02T18:00:00Z","operation":"user.create","entity_type":"user","entity_id":"c867d806-6677-4f96-91ea-6ce945221545","reason":null,"actor_is_self":false,"actor_user_id":null,"before":null,"after":{"email":"employee2@example.invalid","display_name":"Second Employee","role":"employee","calendar_id":"d461d87a-8de8-4603-8dd9-e79d2a014616"}}
+# P8 CSV injection and headers (HTTP)
+PASS  P8.1 headers: text/csv, attachment filename from fixed alphabet, no-store, nosniff  {"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=\"ot-evidence_2026-09-14_2026-10-11.csv\"","cache-control":"no-store","x-content-type-options":"nosniff"}
+PASS  P8.2 no parsed cell starts with = + @ tab CR LF, and "-" only for signed integers  []
+PASS  P8.3 hostile permission cells are apostrophe-prefixed and intact  ["'=HYPERLINK(\"http://evil.example.invalid\",\"x\")","'+cmd|' /C calc'!A0","2026-09-30","'-2+3+cmd|' /C calc'!A0","self_recorded","'@SUM(1+1)*cmd|' /C calc'!A0"]
+FAIL  P8.4 reversal reason "=1+2 reversal" exported neutralized  leave_reversal
+PASS  P8.5 every data row has its section header width  {"broken":0}
+OBSERVED  P8.6 csvCell edge variants  {"\"\\tTAB=1+1\"":"'\tTAB=1+1","\"\\rCR=1+1\"":"\"'\rCR=1+1\"","\"\\nLF=1+1\"":"\"'\nLF=1+1\"","\" =1+1\"":" =1+1","\"＝1+1\"":"＝1+1","\"\\\"=1+1\\\"\"":"\"\"\"=1+1\"\"\"","\"a,b\\n=c\"":"\"a,b\n=c\""}
+PASS  P8.7 no session 401, reversed range 422, CRLF in query 422  {"noAuth":401,"badRange":422,"headerInj":422}
+OBSERVED  P8.8 evidence range before any policy/calendar version  {"status":200,"body":"#section,export | from,to,reporting_zone,generated_at_utc,days | 2020-01-01,2020-12-31,America/Los_Angeles,2026-10-02T18:00:00Z,366"}
+# P9 LG-10 day leave change spends nothing
+PASS  P9.1 day label/leave minute edits change no balance, ledger row or reservation  {"put":200,"put2":200,"before":{"posted":{"postedMinutes":580,"reservedMinutes":337,"availableMinutes":243,"negative":false,"reconciliationRequired":false},"ledger":3,"req":9},"after":{"posted":{"postedMinutes":580,"reservedMinutes":337,"availableMinutes":243,"negative":false,"reconciliationRequired":false},"ledger":3,"req":9}}
+# SUMMARY pass=46 fail=2 observations=4

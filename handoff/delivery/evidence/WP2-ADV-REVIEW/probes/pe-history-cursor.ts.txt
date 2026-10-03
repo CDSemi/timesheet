@@ -1,0 +1,37 @@
+// WP2-ADV-REVIEW: does the history cursor reveal other users' activity? Synthetic data.
+// Usage: node pe-history-cursor.ts <clone>
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = process.argv[2];
+if (!root) throw new Error('usage');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { createTestContext } = await imp('tests/support/testApp.ts');
+
+const t = await createTestContext('2026-10-02T18:00:00Z');
+const employee = await t.login('employee'); // employee event 1 (auth.login)
+t.clock.advanceSeconds(60);
+await t.login('employee'); // employee event 2
+const adminLogins = 7;
+for (let i = 0; i < adminLogins; i += 1) {
+  t.clock.advanceSeconds(60);
+  await t.login('admin'); // another person's activity, owner = admin
+}
+t.clock.advanceSeconds(60);
+await t.login('employee'); // employee event 3
+const pages: Array<{ occurred_at: string; operation: string; next_before: string | null }> = [];
+let before: string | null = null;
+for (let i = 0; i < 4; i += 1) {
+  const res = await t.request('GET', `/api/history?limit=1${before === null ? '' : `&before=${before}`}`, { cookie: employee });
+  const event = res.body.audit_events[0];
+  if (event === undefined) break;
+  pages.push({ occurred_at: event.occurred_at, operation: event.operation, next_before: res.body.next_before });
+  before = res.body.next_before;
+  if (before === null) break;
+}
+for (const page of pages) console.log(`page: ${page.occurred_at} ${page.operation} next_before=${page.next_before}`);
+const cursors = pages.map((p) => Number(p.next_before)).filter((n) => Number.isFinite(n) && n > 0);
+const gap = cursors.length >= 2 ? cursors[0] - cursors[1] - 1 : null;
+console.log(`admin events between the employee's 2nd and 3rd login: actual=${adminLogins}; inferable from the cursor gap=${gap}`);
+console.log(gap === adminLogins ? 'OBSERVED  cursor is the global audit rowid: the gap reveals the number of other users\' audit events in between' : 'OBSERVED  cursor gap does not reveal the count');
+t.close();

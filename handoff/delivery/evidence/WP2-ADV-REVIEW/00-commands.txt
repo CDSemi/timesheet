@@ -1,0 +1,33 @@
+WP2-ADV-REVIEW attempt 1 - commands, environment and exits (reviewer claude-opus-5-5)
+
+Target: e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96 (WP2-T04-FREEZE), gate WP2-ADV-GATE digest
+491312dd38382198bc4fae1fcb3352ab349c25e6ada187a46de819031913d945.
+Environment: Windows 11, Git Bash; portable Node v24.21.0 first on PATH; npm run through the
+user-level npm-cli.js on Node 24. All execution in a scratch clone outside Dropbox
+(<clone> = git clone of <project> at e92add0, per-process GIT_CONFIG safe.directory override);
+WP1 baseline export <wp1-export> = git archive f32978fcc7dec9429f0aa544c4ee4ee26c14f798.
+Probe scripts are reviewer-written, stored here as probes/*.ts.txt (the .txt suffix keeps them
+out of the repository lint). Synthetic data only (example.invalid users, temporary SQLite files).
+
+| # | Command (cwd) | Exit | Observed | Log |
+|---|---|---|---|---|
+| 1 | npm run digest (<project>) | 0 | 491312dd...d945, 550 files; HEAD e92add0 | 01-digest-before.txt |
+| 2 | git clone + checkout e92add0; npm ci; node scripts/source-digest.mjs (<clone>) | 0/0/0 | 0 vulnerabilities; digest equal 491312dd...d945 | (console) |
+| 3 | NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify (<clone>) | 0 | typecheck, lint, 19 files / 335 tests, build, smoke 13/13; no deprecation warning | 02-verify.txt |
+| 4 | node node_modules/vitest/vitest.mjs run <9 ledger/privacy test files> (<clone>) | 0 | 9 files / 159 tests | 03-targeted-tests.txt |
+| 5 | node node_modules/vitest/vitest.mjs run tests/integration/ot-leave-concurrency.test.ts --reporter=verbose (<clone>) | 0 | 8/8; every race 20/20 (LG-07 25/25) overlapping windows | 04-authors-concurrency-verbose.txt |
+| 6a | node pa-negative.ts <clone> (run 1) | 1 | 46 pass / 2 fail; both fails were probe selector bugs (wrong audit operation name, cell finder matched 'leave_reversal'); kept for history | 05a-probe-negative-run1-selector-bugs.txt |
+| 6b | node pa-negative.ts <clone> (selectors fixed, source untouched) | 0 | 48 pass / 0 fail, 4 observations | 05-probe-negative.txt |
+| 7a | node pb-race.ts <clone> <work> (run 1) | 1 | all races held; PB6 strict check flagged 1 round 'unchanged + used' (stale cancel answered 200); data consistent | 06a-probe-multiprocess-race-run1.txt |
+| 7b | node pb-race.ts <clone> <work> (PB6 checks data invariant, tallies labels) | 0 | PB1-PB6 pass; control double-books 10/10 with and without a window | 06-probe-multiprocess-race.txt |
+| 8 | node pc-stale-cancel.ts <clone> | 0 | stale cancel after full use -> 200 unchanged; after partial use -> 409 stale_version | 07-probe-stale-cancel.txt |
+| 9a | node pd-wp1-build.ts <wp1-export> <db>; node pd-wp2-upgrade.ts <clone> <db> (run 1) | 0/1 | PD1-PD9 pass; PD10 probe used wrong operation name | 08a-probe-wp1-upgrade-run1-selector-bug.txt |
+| 9b | same, fresh database, operation name fixed | 0/0 | PD1-PD10 pass | 08-probe-wp1-upgrade.txt |
+| 10 | node pe-history-cursor.ts <clone> | 0 | next_before is the global audit rowid; gap 7 = 7 admin events | 09-probe-history-cursor.txt |
+| 11 | npm run digest (<project>) after the review | 0 | see 10-digest-after.txt | 10-digest-after.txt |
+| 12 | GIT_INDEX_FILE=<tmp-index> git read-tree HEAD; git add <this review's 24 files>; node scripts/precommit-check.mjs; git diff --cached --check (<project>, real index untouched) | 0 / 0 | PASS: 24 staged file(s), 0 blocking finding(s), 0 warning(s); no whitespace error | (console) |
+
+Note: the verify log (row 3) was first written to the shared session scratchpad root as
+verify.log and then moved into the reviewer's own work directory; if an earlier task had left a
+scratch file of that name there, it was overwritten. No repository file was affected.
+Scratch clone, WP1 export and probe databases were deleted after the review.

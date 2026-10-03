@@ -1,0 +1,194 @@
+// WP2-ADV-REVIEW multi-PROCESS race probe (independent of the authors' worker_threads harness).
+// Each racer is a separate OS process (child_process.fork) with its own SQLite connection on
+// one WAL file; all are released at one shared wall-clock instant. Synthetic data only.
+// Usage: node pb-race.ts <clone> <workdir>
+import { fork, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, work] = process.argv.slice(2);
+if (!root || !work) throw new Error('usage');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await imp('src/server/db/database.ts');
+const { migrate } = await imp('src/server/db/migrations.ts');
+const { seedSynthetic } = await imp('src/server/seed.ts');
+const { postCredit, getBalance, listLedgerEntries } = await imp('src/server/services/ledger.ts');
+const { reserveOtLeave, recordOtLeaveUse, getOtLeaveRequest } = await imp('src/server/services/otLeave.ts');
+
+const NOW = '2026-10-02T18:00:00Z';
+const dir = mkdtempSync(join(work, 'race-'));
+const dbPath = join(dir, 'race.db');
+const db = openDatabase(dbPath);
+migrate(db);
+const clock = { now: () => new Date(NOW) };
+const ctx = { db, clock };
+const seed = await seedSynthetic(db, clock, { passwords: { admin: 'synthetic-admin-pass-1', employee: 'synthetic-employee-pass-1' } });
+const calendarId = seed.calendarId as string;
+console.log(`journal_mode=${db.pragma('journal_mode', { simple: true })} busy_timeout=${db.pragma('busy_timeout', { simple: true })}`);
+
+function owner(opening: number): string {
+  const id = randomUUID();
+  db.prepare(`INSERT INTO users (id, email, display_name, role, status, password_hash, calendar_id, created_at, updated_at)
+    VALUES (?, ?, 'Synthetic Racer', 'employee', 'active', 'login-disabled-synthetic', ?, ?, ?)`).run(id, `race-${id}@example.invalid`, calendarId, NOW, NOW);
+  postCredit(ctx, { userId: id, sourceKey: 'opening', minutes: opening, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+  return id;
+}
+const permission = { approverName: 'Example Manager', approverIdentity: 'manager@example.invalid', approvalDate: '2026-09-30', evidenceRef: 'Synthetic ref' };
+const reserveInput = (userId: string, requestKey: string, minutes: number) => ({ userId, actorUserId: userId, requestKey, leaveDate: '2026-10-01', requestedMinutes: minutes, permission });
+
+const children: ChildProcess[] = [];
+function nextMsg(child: ChildProcess): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => { child.off('message', onMessage); reject(error); };
+    const onMessage = (message: unknown) => { child.off('error', onError); resolve(message); };
+    child.once('message', onMessage);
+    child.once('error', onError);
+  });
+}
+for (let i = 0; i < 4; i += 1) {
+  const child = fork(join(import.meta.dirname, 'pb-child.ts'), [root, dbPath], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+  children.push(child);
+}
+const ready = await Promise.all(children.map(nextMsg));
+const pids = new Set(ready.map((m) => m.pid));
+console.log(`racer processes: ${pids.size} distinct pids (parent pid ${process.pid})`);
+
+async function race(ops: Array<{ kind: string; input: unknown }>, opts: { blockerMs?: number; unsafeDelayMs?: number } = {}) {
+  const startAt = Date.now() + 120;
+  const racers = children.slice(0, ops.length);
+  const done = racers.map(nextMsg);
+  racers.forEach((child, index) => child.send({ op: ops[index], startAt, nowIso: NOW, unsafeDelayMs: opts.unsafeDelayMs }));
+  if (opts.blockerMs) {
+    // A third writer holds the write lock across the release instant, so every racer queues on
+    // the busy handler and they all contend when it commits.
+    while (Date.now() < startAt - 10) { await new Promise((r) => setTimeout(r, 1)); }
+    db.exec('BEGIN IMMEDIATE');
+    const until = Date.now() + opts.blockerMs;
+    while (Date.now() < until) { /* hold the lock */ }
+    db.exec('COMMIT');
+  }
+  const outcomes = await Promise.all(done);
+  const latestStart = Math.max(...outcomes.map((o) => o.startedAtMs));
+  const earliestFinish = Math.min(...outcomes.map((o) => o.finishedAtMs));
+  return { outcomes, overlap: latestStart < earliestFinish, distinctPids: new Set(outcomes.map((o) => o.pid)).size };
+}
+const label = (o: any) => (o.ok ? o.status : `${o.http ?? '-'} ${o.code}`);
+const newDeltas = (id: string) => listLedgerEntries(db, id).filter((e: any) => e.sourceKey !== 'opening').map((e: any) => e.deltaMinutes);
+
+let failures = 0;
+let cancelUnchangedAfterUse = 0;
+async function scenario(name: string, rounds: number, setup: () => { ops: any[]; verify: (outcomes: any[]) => string | null }, opts = {}) {
+  const dist = new Map<string, number>();
+  let overlap = 0; let bad = 0; let pidsOk = 0;
+  for (let r = 0; r < rounds; r += 1) {
+    const { ops, verify } = setup();
+    const res = await race(ops, opts);
+    if (res.overlap) overlap += 1;
+    if (res.distinctPids === ops.length) pidsOk += 1;
+    const key = res.outcomes.map(label).sort().join(' + ');
+    dist.set(key, (dist.get(key) ?? 0) + 1);
+    const problem = verify(res.outcomes);
+    if (problem !== null) { bad += 1; console.log(`  round ${r}: ${problem}`); }
+  }
+  if (bad > 0) failures += 1;
+  console.log(`${bad === 0 ? 'PASS' : 'FAIL'}  ${name}: ${rounds} rounds, separate processes ${pidsOk}/${rounds}, overlapping call windows ${overlap}/${rounds}, invariant violations ${bad}; outcomes: ${[...dist].map(([k, v]) => `${k} x${v}`).join('; ')}`);
+}
+
+await scenario('PB1 LG-07 reserve 80 vs 80 at 100 (2 processes)', 30, () => {
+  const o = owner(100);
+  return {
+    ops: ['a', 'b'].map((k) => ({ kind: 'reserve', input: reserveInput(o, k, 80) })),
+    verify: (out) => {
+      const b = getBalance(db, o);
+      const n = db.prepare('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?').pluck().get(o);
+      return out.filter((x) => x.ok && x.status === 'reserved').length === 1 && n === 1 && b.reservedMinutes === 80 && b.availableMinutes === 20 && newDeltas(o).length === 0 ? null : JSON.stringify({ out: out.map(label), n, b });
+    },
+  };
+});
+await scenario('PB2 LG-07 with a lock blocker across the release instant', 20, () => {
+  const o = owner(100);
+  return {
+    ops: ['a', 'b'].map((k) => ({ kind: 'reserve', input: reserveInput(o, k, 80) })),
+    verify: (out) => {
+      const b = getBalance(db, o);
+      return out.filter((x) => x.ok).length === 1 && b.reservedMinutes === 80 ? null : JSON.stringify({ out: out.map(label), b });
+    },
+  };
+}, { blockerMs: 60 });
+await scenario('PB3 reserve 4 x 80 at 200 (4 processes)', 20, () => {
+  const o = owner(200);
+  return {
+    ops: ['a', 'b', 'c', 'd'].map((k) => ({ kind: 'reserve', input: reserveInput(o, k, 80) })),
+    verify: (out) => {
+      const b = getBalance(db, o);
+      return out.filter((x) => x.ok).length === 2 && b.reservedMinutes === 160 && b.availableMinutes === 40 ? null : JSON.stringify({ out: out.map(label), b });
+    },
+  };
+});
+await scenario('PB4 double consume: use 80 vs 80 of a 120 reservation', 20, () => {
+  const o = owner(600);
+  const id = reserveOtLeave(ctx, reserveInput(o, 'leave', 120)).request.id;
+  return {
+    ops: ['u1', 'u2'].map((k) => ({ kind: 'use', input: { userId: o, actorUserId: o, requestId: id, useKey: k, minutes: 80 } })),
+    verify: (out) => {
+      const r = getOtLeaveRequest(db, o, id);
+      return JSON.stringify(newDeltas(o)) === '[-80]' && r.consumedMinutes === 80 && r.reservedMinutes === 40 && out.filter((x) => x.ok).length === 1 ? null : JSON.stringify({ out: out.map(label), d: newDeltas(o), r });
+    },
+  };
+}, { blockerMs: 30 });
+await scenario('PB5 double reverse: reverse 120 vs 120 of 120 used', 20, () => {
+  const o = owner(600);
+  const id = reserveOtLeave(ctx, reserveInput(o, 'leave', 120)).request.id;
+  recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: id, useKey: 'u', minutes: 120 });
+  return {
+    ops: ['r1', 'r2'].map((k) => ({ kind: 'reverse', input: { userId: o, actorUserId: o, requestId: id, reversalKey: k, minutes: 120, reason: 'Synthetic reversal' } })),
+    verify: (out) => {
+      const r = getOtLeaveRequest(db, o, id);
+      return JSON.stringify(newDeltas(o)) === '[-120,120]' && r.reversedMinutes === 120 && out.filter((x) => x.ok).length === 1 ? null : JSON.stringify({ out: out.map(label), d: newDeltas(o), r });
+    },
+  };
+});
+await scenario('PB6 cancel vs full use', 20, () => {
+  const o = owner(600);
+  const id = reserveOtLeave(ctx, reserveInput(o, 'leave', 120)).request.id;
+  return {
+    ops: [
+      { kind: 'cancel', input: { userId: o, actorUserId: o, requestId: id, expectedVersion: 1 } },
+      { kind: 'use', input: { userId: o, actorUserId: o, requestId: id, useKey: 'u', minutes: 120, expectedVersion: 1 } },
+    ],
+    verify: (out) => {
+      const r = getOtLeaveRequest(db, o, id);
+      const d = newDeltas(o);
+      const consistent = (r.consumedMinutes === 120 && JSON.stringify(d) === '[-120]' && r.releasedMinutes === 0) || (r.releasedMinutes === 120 && d.length === 0 && r.consumedMinutes === 0);
+      // Data invariant only; outcome labels are tallied. 'unchanged' (cancel after a concurrent full use) is reported separately.
+      if (out.some((x) => x.ok && x.status === 'unchanged')) cancelUnchangedAfterUse += 1;
+      return consistent && r.reservedMinutes === 0 ? null : JSON.stringify({ out: out.map(label), d, r });
+    },
+  };
+});
+console.log(`INFO  PB6 note: cancel carrying a stale expected_version answered 200 'unchanged' (not 409) in ${cancelUnchangedAfterUse}/20 rounds where the use won first`);
+// Sensitivity control: the same process harness MUST observe a race when the protection is absent.
+let controlDouble = 0;
+const controlRounds = 10;
+for (let r = 0; r < controlRounds; r += 1) {
+  const o = owner(100);
+  const res = await race(['a', 'b'].map((k) => ({ kind: 'unsafe', input: { userId: o, requestKey: k, minutes: 80 } })), { unsafeDelayMs: 5 });
+  if (res.outcomes.filter((x) => x.ok && x.status === 'reserved').length === 2) controlDouble += 1;
+}
+console.log(`${controlDouble > 0 ? 'PASS' : 'FAIL'}  PB7 control (unsafe check-then-insert, no transaction, 5 ms window): double-booked ${controlDouble}/${controlRounds} rounds, so the process harness can observe a race`);
+if (controlDouble === 0) failures += 1;
+let controlNoDelay = 0;
+for (let r = 0; r < controlRounds; r += 1) {
+  const o = owner(100);
+  const res = await race(['a', 'b'].map((k) => ({ kind: 'unsafe', input: { userId: o, requestKey: k, minutes: 80 } })));
+  if (res.outcomes.filter((x) => x.ok && x.status === 'reserved').length === 2) controlNoDelay += 1;
+}
+console.log(`INFO  PB8 control without an artificial window: double-booked ${controlNoDelay}/${controlRounds} rounds`);
+
+for (const child of children) child.kill();
+db.close();
+rmSync(dir, { recursive: true, force: true });
+console.log(`# SUMMARY scenario_failures=${failures}`);
+process.exitCode = failures === 0 ? 0 : 1;

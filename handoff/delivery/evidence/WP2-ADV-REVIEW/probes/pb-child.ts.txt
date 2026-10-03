@@ -1,0 +1,62 @@
+// WP2-ADV-REVIEW race child: one OS process, one SQLite connection (production openDatabase),
+// production otLeave service. Receives rounds over IPC, spins until a shared wall-clock start
+// instant, runs the operation and reports the outcome with timings.
+import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [root, dbPath] = process.argv.slice(2);
+if (!root || !dbPath) throw new Error('usage: pb-child.ts <clone> <db>');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await imp('src/server/db/database.ts');
+const { getBalance } = await imp('src/server/services/ledger.ts');
+const svc = await imp('src/server/services/otLeave.ts');
+
+const db = openDatabase(dbPath);
+const wall = () => performance.timeOrigin + performance.now();
+
+function spinUntil(ms: number) {
+  while (wall() < ms) { /* spin */ }
+}
+
+interface Round { op: { kind: string; input: Record<string, unknown> }; startAt: number; nowIso: string; unsafeDelayMs?: number }
+
+process.on('message', (msg: Round) => {
+  const clock = { now: () => new Date(msg.nowIso) };
+  const ctx = { db, clock };
+  db.prepare('SELECT 1').get();
+  spinUntil(msg.startAt);
+  const startedAtMs = wall();
+  let outcome: Record<string, unknown>;
+  try {
+    let status: string;
+    const input = msg.op.input as never;
+    switch (msg.op.kind) {
+      case 'reserve': status = svc.reserveOtLeave(ctx, input).status; break;
+      case 'use': status = svc.recordOtLeaveUse(ctx, input).status; break;
+      case 'cancel': status = svc.cancelOtLeave(ctx, input).status; break;
+      case 'reverse': status = svc.reverseOtLeaveUse(ctx, input).status; break;
+      case 'unsafe': {
+        // Control only: check-then-insert WITHOUT a transaction, as a broken implementation would.
+        const i = msg.op.input as { userId: string; requestKey: string; minutes: number };
+        const available = getBalance(db, i.userId).availableMinutes;
+        if (msg.unsafeDelayMs) spinUntil(wall() + msg.unsafeDelayMs);
+        if (available < i.minutes) { status = 'rejected'; break; }
+        db.prepare(`INSERT INTO ot_leave_requests (id, user_id, request_key, leave_date, requested_minutes, approved_minutes,
+            reserved_minutes, approver_name, approval_date, evidence_ref, approval_origin, created_by, created_at, updated_at)
+          VALUES (?, ?, ?, '2026-10-01', ?, ?, ?, 'Example Manager', '2026-09-30', 'Synthetic control', 'self_recorded', ?, ?, ?)`)
+          .run(randomUUID(), i.userId, i.requestKey, i.minutes, i.minutes, i.minutes, i.userId, msg.nowIso, msg.nowIso);
+        status = 'reserved';
+        break;
+      }
+      default: throw new Error(`unknown op ${msg.op.kind}`);
+    }
+    outcome = { ok: true, status };
+  } catch (error) {
+    const e = error as { status?: number; code?: string; message?: string };
+    outcome = { ok: false, status: 'error', code: e.code ?? e.message, http: e.status ?? null };
+  }
+  process.send?.({ ...outcome, pid: process.pid, startedAtMs, finishedAtMs: wall() });
+});
+process.send?.({ ready: true, pid: process.pid });

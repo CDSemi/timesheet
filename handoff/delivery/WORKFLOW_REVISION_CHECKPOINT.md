@@ -6,12 +6,15 @@ America/Los_Angeles).
 - Active package and role: WP2 (implementation); coordinator. Actual model
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
-- Repository: branch main. Before WP2-T05-FREEZE, HEAD = origin/main =
-  e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96 (the WP2-T04 freeze). The uncommitted
-  WP2-ADVFIX and WP2-T05 changes and the handoff records are committed with this
-  checkpoint by WP2-T05-FREEZE. Working-tree source digest
-  809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0 (author-reported). No
-  unpushed commits.
+- Repository: branch main.
+  - HEAD = origin/main = e768b71c2a5e522bdfece8617599992f8f4a0abc. This is the owner's
+    partial commit, with only the modified tracked paths.
+  - The new WP2-ADVFIX and WP2-T05 files and the handoff records are untracked. The
+    owner's completion commit adds them together with this checkpoint.
+  - Working-tree source digest
+    809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0, confirmed by
+    WP2-T05-RECON.
+  - No unpushed commits.
 - Completed scope:
   - Governance:
     - Revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -49,9 +52,16 @@ America/Los_Angeles).
       classifier block.
     - The classifier reads `autoMode` only from user or managed settings, not from
       project settings.
-  - Owner direction is requested (board `pending_owner_question`). The options are an
-    explicit one-off approval message, a manual commit, or `autoMode` user settings
-    configured by the owner.
+  - The owner committed and pushed manually ("tôi đã commit xong, tiếp tục đi").
+    WP2-T05-RECON found that the commit, e768b71c2a5e522bdfece8617599992f8f4a0abc
+    (parent e92add0), holds only the 23 modified tracked paths.
+    - Its message is the coordinator's chat Commit description.
+    - Every new file is still untracked: migration 0003, dayEntries.ts, the new tests,
+      the advisory review, briefs and evidence.
+    - main therefore references files that are not in git.
+    - The digest matches T05, and the validator and check_recovery exit 0.
+  - A completion commit by the owner is requested: git add -A, the precommit check, then
+    commit with the prepared message and push.
 - Remaining:
   - WP2-T06..T13 with their freezes ([plan](tasks/WP2-PLAN.md)).
   - The package-final gate: clean export, WP1→WP2 upgrade, 20 concurrency runs and the
@@ -62,9 +72,11 @@ America/Los_Angeles).
   - WP2 acceptance.
   - Then WP3, WP4 and WP5 (WP5 starts with independent acceptance), and a concrete pilot
     packet. The real pilot stays owner-controlled.
-- Blocker: the classifier denies the committer's staging command even with the owner's
-  confirmation quoted. The coordinator changes no permission settings and does not route
-  around the denial. Future freeze commits may hit the same block.
+- Blocker: the completion commit (owner). Risk: the classifier may deny the committer's
+  `git add` again in later freezes. The coordinator changes no permission settings and does not route around
+  a denial. The options are an owner approval message naming the action and its danger, a
+  manual commit, or `autoMode` user settings configured by the owner. Freezes may be
+  batched to reduce interruptions.
 - Carry-forward notes:
   - WP3 must handle the `CorrectionResult` 'pending' variant and persist pending debits.
   - Provisional OT is computed only for days with sessions (T04/T05), and WP3
@@ -78,18 +90,18 @@ America/Los_Angeles).
   - Commits go only through timesheet-committer, on main until the first release. No
     amend, force-push or tags.
 - Next action:
-  1. Follow the owner's direction on WP2-T05-FREEZE: a manual commit, or a retry after the
-     owner changes the permission rules.
-  2. Record the commit.
-  3. Then dispatch WP2-T06 (brief ready) on the freeze SHA.
+  1. After the owner's completion commit, run a read-only recheck: SHA, file set, a clean
+     tree and the digest.
+  2. Mark WP2-T05-FREEZE done.
+  3. Dispatch WP2-T06 (brief ready).
 - Matching prompt: handoff/prompts/ORCHESTRATE.md (WP2 per WP2_IMPLEMENT.md).
 
 ## Orchestration recovery
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: nothing. WP2-T05-FREEZE is blocked on the owner, and WP2-T06 is pending on it.
-- Live processes: none known. Neither committer attempt executed a command. Earlier
-  leftover processes were stopped.
+- Running: nothing. WP2-T06 waits so that no in-progress work is swept into the owner's
+  `git add -A`.
+- Live processes: none known. Earlier leftover processes were stopped.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

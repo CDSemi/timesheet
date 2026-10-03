@@ -1,0 +1,62 @@
+// WP2-ADV-REVIEW: upgrade the WP1-built database with the reviewed code (e92add0) and check
+// preservation, integrity and WP2 behaviour on upgraded data. Usage: node pd-wp2-upgrade.ts <clone> <db>
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, dbPath] = process.argv.slice(2);
+if (!root || !dbPath) throw new Error('usage');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await imp('src/server/db/database.ts');
+const { migrate } = await imp('src/server/db/migrations.ts');
+const { createApp } = await imp('src/server/app.ts');
+const { LoginRateLimiter } = await imp('src/server/auth/rateLimit.ts');
+const { postCredit } = await imp('src/server/services/ledger.ts');
+
+let ok = true;
+const check = (id: string, cond: boolean, detail: unknown) => { if (!cond) ok = false; console.log(`${cond ? 'PASS' : 'FAIL'}  ${id}  ${JSON.stringify(detail)}`); };
+const db = openDatabase(dbPath);
+const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all() as string[]);
+const snap = () => Object.fromEntries(tables.filter((n) => n !== 'schema_migrations').map((n) => [n, JSON.stringify(db.prepare(`SELECT * FROM ${n} ORDER BY rowid`).all())]));
+const before = snap();
+const migBefore = JSON.stringify(db.prepare('SELECT * FROM schema_migrations').all());
+const result = migrate(db, undefined, new Date('2026-10-02T18:00:00Z'));
+check('PD1 upgrade applies exactly [2]', JSON.stringify(result) === '{"applied":[2],"version":2}', result);
+const after = snap();
+const changed = Object.keys(before).filter((n) => before[n] !== after[n]);
+check('PD2 every WP1 table byte-identical after upgrade', changed.length === 0, { tables: Object.keys(before).length, changed });
+check('PD3 schema_migrations row 1 unchanged', JSON.stringify((db.prepare('SELECT * FROM schema_migrations WHERE version = 1').all())) === migBefore, null);
+check('PD4 integrity_check ok, foreign_key_check empty', db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0, null);
+check('PD5 second migrate is a no-op', JSON.stringify(migrate(db)) === '{"applied":[],"version":2}', null);
+
+const now = new Date('2026-10-02T18:00:00Z');
+const clock = { now: () => new Date(now.getTime()) };
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: dbPath, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 43200, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function call(method: string, path: string, body?: unknown, cookie?: string) {
+  const headers: Record<string, string> = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const res = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await res.text();
+  let parsed: any = text;
+  try { parsed = JSON.parse(text); } catch { /* csv */ }
+  return { status: res.status, body: parsed, cookie: res.headers.get('set-cookie')?.split(';')[0] };
+}
+const login = await call('POST', '/api/auth/login', { email: 'employee@example.invalid', password: 'synthetic-wp1-employee-pass' });
+check('PD6 WP1 employee can sign in on the upgraded database', login.status === 200, login.status);
+const cookie = login.cookie as string;
+const summary = await call('GET', '/api/ot/summary', undefined, cookie);
+check('PD7 summary on WP1 data: posted 0, provisional = WP1 complete-day credits (90 + 120), one pending day', summary.status === 200 && summary.body.posted_minutes === 0 && summary.body.provisional_minutes === 210 && summary.body.provisional_periods?.[0]?.pending_days === 1, summary.body);
+const employeeId = db.prepare("SELECT id FROM users WHERE email = 'employee@example.invalid'").pluck().get();
+postCredit({ db, clock }, { userId: employeeId, sourceKey: 'upgrade-probe-opening', minutes: 480, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+const reserve = await call('POST', '/api/ot/leave', { request_key: 'up', leave_date: '2026-10-01', requested_minutes: 480, permission: { approver_name: 'Example Manager', approval_date: '2026-09-30', evidence_ref: 'Synthetic' } }, cookie);
+const use = await call('POST', `/api/ot/leave/${reserve.body.request?.id}/consume`, { use_key: 'u', minutes: 480, expected_version: 1 }, cookie);
+check('PD8 reserve 480 and record use on upgraded data: posted 0, reserved 0', reserve.status === 201 && use.status === 200 && use.body.balance.posted_minutes === 0 && use.body.balance.reserved_minutes === 0, { reserve: reserve.status, use: use.status, balance: use.body.balance });
+const csv = await call('GET', '/api/ot/evidence.csv?from=2026-09-14&to=2026-09-27', undefined, cookie);
+const text = String(csv.body);
+check('PD9 evidence CSV on upgraded data lists WP1 intervals, the WP1 leave minutes and credited 90/120', csv.status === 200 && text.includes('2026-09-21,') && /2026-09-22,[^\n]*,Vacation,240,true/.test(text) && /\n2026-09-21,[^\n]*,90,2026-10-02,false/.test(text) && /\n2026-09-26,[^\n]*,120,2026-10-02,false/.test(text), text.split('\n').filter((l) => l.startsWith('2026-09-2')).slice(0, 12));
+const hist = await call('GET', '/api/history', undefined, cookie);
+check('PD10 history lists WP1 audit events of the employee only', hist.status === 200 && hist.body.audit_events.some((e: any) => e.operation === 'work_session.create') && !JSON.stringify(hist.body).includes(String(db.prepare("SELECT id FROM users WHERE email = 'admin@example.invalid'").pluck().get())), hist.body.audit_events.map((e: any) => e.operation));
+db.close();
+console.log(`# SUMMARY ${ok ? 'all PASS' : 'FAILURES'}`);
+process.exitCode = ok ? 0 : 1;

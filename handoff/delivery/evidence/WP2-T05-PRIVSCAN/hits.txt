@@ -1,0 +1,45 @@
+WP2-T05-PRIVSCAN hits (read-only scan with Grep/Glob/Read; no Bash, no git, no precommit run)
+Scope: the WP2-T05-FREEZE expected set (new and modified). Values masked to at most 4 chars.
+Columns: file:line | category | masked value | classification | precommit rule would block?
+Precommit rules were read from scripts/precommit-check.mjs and applied by hand; not executed.
+
+tests/integration/ot-leave.test.ts:79,127 | email | mana… | synthetic test data (example.invalid) | no (email rule, ALLOWED_DOMAINS)
+tests/integration/ot-api.test.ts:38 | email | mana… | synthetic test data (example.invalid) | no (email)
+tests/integration/ledger.test.ts:66 | email | mana… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-GATE/verify.txt:55 | email | admi…, empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADVFIX/02-verify.txt:56 | email | admi…, empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/02-verify.txt:58 | email | admi…, empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-T05/02-verify.txt:56 | email | admi…, empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/05-probe-negative.txt:50 | email | empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/05a-probe-negative-run1-selector-bugs.txt:50 | email | empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/06a-probe-multiprocess-race-run1.txt:13 | email | mana… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/probes/pa-negative.ts.txt:54,198,199 | email | mana…, empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/probes/pb-race.ts.txt:38 | email | mana… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/probes/pd-wp1-build.ts.txt:32 | email | empl… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-ADV-REVIEW/probes/pd-wp2-upgrade.ts.txt:45,50,59 | email | empl…, admi… | synthetic test data (example.invalid) | no (email)
+evidence/WP2-T04-FREEZE/commit-message.txt:10 | email | nore… | allowlisted (attribution trailer address) | no (ALLOWED_ADDRESSES)
+evidence/WP2-ADV-REVIEW/probes/pa-negative.ts.txt:197 | password literal (const pw = '...') | synt… | synthetic test data | no (name pw is not in SECRET_NAME; value also matches PLACEHOLDER synthetic)
+evidence/WP2-ADV-REVIEW/probes/pa-negative.ts.txt:198,199 | password key (password: pw) | (identifier) | synthetic test data | no (no literal value)
+evidence/WP2-ADV-REVIEW/probes/pd-wp2-upgrade.ts.txt:45 | password literal (password: '...') | synt… | synthetic test data | no (secret-assignment matches the name, value exempt by PLACEHOLDER synthetic)
+evidence/WP2-ADV-REVIEW/probes/pd-wp1-build.ts.txt:21 | password literals (passwords = { admin: '...', employee: '...' }) | synt… | synthetic test data | no (plural name does not match; value exempt by PLACEHOLDER)
+evidence/WP2-ADV-REVIEW/probes/pd-wp1-build.ts.txt:32 | password key (password: passwords.employee) | (identifier) | synthetic test data | no
+evidence/WP2-ADV-REVIEW/probes/pb-race.ts.txt:27 | password literals (passwords: { admin: '...' }) | synt… | synthetic test data | no (plural name; value exempt)
+tests/integration/migrations.test.ts:149,216,235 | password literals (passwords: { admin: '...' }) | synt… | synthetic test data | no (plural name; value exempt)
+src/server/http/schemas.ts:31 | password key (z.string().max(256)) | (type, no value) | documentation text (schema) | no
+handoff/delivery/ORCHESTRATION.json:127,937 | password (prose about literals) | n/a | documentation text | no (no literal value)
+handoff/delivery/ORCHESTRATION.json:18,200,237 (and about 50 further session_id lines; 2 null) | session identifier | 44e3… | potentially real (low): internal Claude Code session UUID, not a credential; most lines pre-exist in tracked history | no rule covers it
+handoff/delivery/WP2_ADV_LEDGER_REVIEW.md:60 (and .vi.md) | agent IDs (17 hex) | ac8d…, aec5…, adfa…, a75b…, a6b9…, a4d8…, a7a1… | documentation text (agent ids, not credentials) | no
+evidence/WP2-ADV-REVIEW/05-probe-negative.txt:50 (and 05a:50) | UUIDs (synthetic row ids) | e431… | synthetic test data | no
+evidence/WP2-ADVFIX/04-preflight.txt:1 | profile path | C:/Users/<user>/.cache/codex-runtimes/... | documentation text (already masked with <user>) | no (PROFILE_PLACEHOLDER)
+evidence/WP2-ADVFIX/02-verify.txt:19 | local path | D:/Dropbox/Work.CDSemi/timesheet | documentation text (repo location, no account name) | no (profile-path needs Users or home)
+evidence/WP2-ADV-GATE/{concurrency-1..5,fixtures,migration-isolation,verify}.txt, tasks/WP2-ADV-GATE.md:47 | local path | B:/Temp/advgate | documentation text (scratch dir) | no
+tests/support and tests/integration localhost / 127.0.0.1 / evil.example.invalid URLs (day-entries-batch.test.ts:639, ot-api.test.ts:455; evidence probes, 02-verify smoke lines) | URL | http… | synthetic test data | no (no credentials in URL)
+handoff/delivery/ORCHESTRATION.json (about 90 lines) | 40-hex commit SHAs | e92a…, f32… and others | digest/SHA | no
+handoff/delivery/ORCHESTRATION.json, WORKFLOW_REVISION_CHECKPOINT(.vi).md:13, tasks/WP2-ADV-GATE.md:46, tasks/WP2-ADV-REVIEW.md:60, tasks/WP2-ADVFIX.md:75, tasks/WP2-T05.md:165, WP2_ADV_LEDGER_REVIEW(.vi).md:4,62,64, evidence digest files in WP2-ADV-GATE, WP2-ADV-REVIEW, WP2-ADVFIX, WP2-T05 (about 40 lines) | 64-hex SHA-256 source digests | 4913…, 8092…, fac6… | digest/SHA | no
+handoff/delivery/ORCHESTRATION.json:43,47,53,86,87 | classifier denial and owner decisions (words: classifier, credential, secret, token) | n/a | documentation text | no
+tests, src, docs, task briefs, evidence (words: token, cookie, csrf, set-cookie, authorization, smtp) | keyword only | n/a | documentation text or test code, no values (examples: src/client/api.ts is outside the set; probes read set-cookie header; 01-red.txt:298,890 code excerpts; docs/10:38,76,85,108) | no
+tasks/WP2-T05.md:85 | 4x4 letter blocks | were… | documentation text (prose false positive; no secret name) | no (SECRET_SPACED needs a secret name)
+
+Not found in the set: private-key blocks, .env content, phone numbers, personal names, host or machine names, non-reserved email domains, user-profile paths with a concrete account, image/PDF/signature/key/spreadsheet/database files.
+Note: evidence/WP1/ui-timesheet-synthetic.jpg exists but is outside this expected set (WP1, name contains synthetic).
+Limitation: scanning used Grep globs by file name, not the staged diff; unmodified lines of modified files were also scanned.

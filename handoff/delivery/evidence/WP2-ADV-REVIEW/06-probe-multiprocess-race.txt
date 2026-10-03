@@ -1,0 +1,12 @@
+journal_mode=wal busy_timeout=5000
+racer processes: 4 distinct pids (parent pid 74568)
+PASS  PB1 LG-07 reserve 80 vs 80 at 100 (2 processes): 30 rounds, separate processes 30/30, overlapping call windows 30/30, invariant violations 0; outcomes: 409 insufficient_balance + reserved x30
+PASS  PB2 LG-07 with a lock blocker across the release instant: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 insufficient_balance + reserved x20
+PASS  PB3 reserve 4 x 80 at 200 (4 processes): 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 insufficient_balance + 409 insufficient_balance + reserved + reserved x20
+PASS  PB4 double consume: use 80 vs 80 of a 120 reservation: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 exceeds_reserved + used x20
+PASS  PB5 double reverse: reverse 120 vs 120 of 120 used: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 exceeds_reversible + reversed x20
+PASS  PB6 cancel vs full use: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 stale_version + cancelled x20
+INFO  PB6 note: cancel carrying a stale expected_version answered 200 'unchanged' (not 409) in 0/20 rounds where the use won first
+PASS  PB7 control (unsafe check-then-insert, no transaction, 5 ms window): double-booked 10/10 rounds, so the process harness can observe a race
+INFO  PB8 control without an artificial window: double-booked 10/10 rounds
+# SUMMARY scenario_failures=0

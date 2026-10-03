@@ -1,0 +1,55 @@
+// WP2-ADV-REVIEW: build a populated database with the ACCEPTED WP1 code (commit f32978f),
+// through WP1's own migrations, seed and HTTP API. Synthetic data only.
+// Usage: node pd-wp1-build.ts <wp1-tree> <db-path>
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, dbPath] = process.argv.slice(2);
+if (!root || !dbPath) throw new Error('usage');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await imp('src/server/db/database.ts');
+const { migrate } = await imp('src/server/db/migrations.ts');
+const { seedSynthetic } = await imp('src/server/seed.ts');
+const { createApp } = await imp('src/server/app.ts');
+const { LoginRateLimiter } = await imp('src/server/auth/rateLimit.ts');
+
+const ORIGIN = 'http://localhost:3000';
+let now = new Date('2026-09-29T20:00:00Z');
+const clock = { now: () => new Date(now.getTime()) };
+const db = openDatabase(dbPath);
+console.log('wp1 migrate', JSON.stringify(migrate(db)));
+const passwords = { admin: 'synthetic-wp1-admin-pass', employee: 'synthetic-wp1-employee-pass' };
+await seedSynthetic(db, clock, { passwords });
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: dbPath, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 43200, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function call(method: string, path: string, body?: unknown, cookie?: string) {
+  const headers: Record<string, string> = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const res = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null, cookie: res.headers.get('set-cookie')?.split(';')[0] };
+}
+const login = await call('POST', '/api/auth/login', { email: 'employee@example.invalid', password: passwords.employee });
+const cookie = login.cookie as string;
+const la = (local: string) => ({ local, zone: 'America/Los_Angeles' });
+const breaks = (d: string) => [
+  { start: la(`${d}T11:00`), end: la(`${d}T11:15`), counts_as_work: false },
+  { start: la(`${d}T13:00`), end: la(`${d}T13:30`), counts_as_work: false },
+  { start: la(`${d}T15:30`), end: la(`${d}T15:45`), counts_as_work: false },
+];
+// 2026-09-21 (Mon) 09:00-19:30 complete: R 570 -> excess 90 -> credit 90.
+const s1 = await call('POST', '/api/days/2026-09-21/sessions', { start: la('2026-09-21T09:00'), end: la('2026-09-21T19:30'), input_zone: 'America/Los_Angeles', breaks: breaks('2026-09-21'), breaks_confirmed: true }, cookie);
+// 2026-09-26 (Sat) 10:00-12:00 complete, off-calendar 120 -> credit 120.
+const s2 = await call('POST', '/api/days/2026-09-26/sessions', { start: la('2026-09-26T10:00'), end: la('2026-09-26T12:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true }, cookie);
+// 2026-09-22 day entry with partial leave.
+const d1 = await call('PUT', '/api/days/2026-09-22', { category: 'Vacation', leave_minutes: 240, wfh: true, notes: 'Synthetic WP1 note' }, cookie);
+// Unconfirmed breaks day (pending).
+const s3 = await call('POST', '/api/days/2026-09-23/sessions', { start: la('2026-09-23T08:00'), end: la('2026-09-23T18:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: false }, cookie);
+console.log('wp1 api', JSON.stringify({ login: login.status, s1: s1.status, s2: s2.status, d1: d1.status, s3: s3.status }));
+const view = await call('GET', '/api/timesheets/2026-10-02', undefined, cookie);
+console.log('wp1 view credited', JSON.stringify(view.body?.totals ?? view.body));
+for (const table of ['users', 'work_sessions', 'session_breaks', 'day_entries', 'timesheets', 'audit_events', 'work_policies', 'calendar_versions']) {
+  console.log(`wp1 rows ${table}=${db.prepare(`SELECT count(*) FROM ${table}`).pluck().get()}`);
+}
+console.log('wp1 user_version', db.pragma('user_version', { simple: true }));
+db.close();

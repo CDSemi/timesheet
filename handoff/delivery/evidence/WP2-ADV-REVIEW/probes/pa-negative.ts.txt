@@ -1,0 +1,344 @@
+// WP2-ADV-REVIEW independent negative probes (reviewer-written, synthetic data only).
+// Runs against the scratch clone of e92add0 on a real SQLite WAL file (createTestContext).
+// Usage: node pa-negative.ts <path-to-clone>
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const root = process.argv[2];
+if (!root) throw new Error('clone path required');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+
+const { createTestContext } = await imp('tests/support/testApp.ts');
+const { postCredit, postCorrection, postDeficitDebit, getBalance, listLedgerEntries } = await imp('src/server/services/ledger.ts');
+const { reserveOtLeave, recordOtLeaveUse, cancelOtLeave, reverseOtLeaveUse, getOtLeaveRequest } = await imp('src/server/services/otLeave.ts');
+const { createUser } = await imp('src/server/services/users.ts');
+const { createPolicyVersion } = await imp('src/server/services/policies.ts');
+
+let pass = 0;
+let fail = 0;
+const observations: string[] = [];
+function check(id: string, ok: boolean, detail: unknown) {
+  if (ok) pass += 1; else fail += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${id}  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
+}
+function observe(id: string, detail: unknown) {
+  const line = `OBSERVED  ${id}  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
+  observations.push(line);
+  console.log(line);
+}
+function errOf(fn: () => unknown): { status: number | null; code: string } | null {
+  try {
+    fn();
+    return null;
+  } catch (error) {
+    const e = error as { status?: number; code?: string; message?: string };
+    return { status: e.status ?? null, code: e.code ?? String(e.message) };
+  }
+}
+
+const NOW = '2026-10-02T18:00:00Z'; // 11:00 in America/Los_Angeles
+const t = await createTestContext(NOW);
+const ctx = { db: t.db, clock: t.clock };
+const count = (sql: string, ...args: unknown[]) => t.db.prepare(sql).pluck().get(...args) as number;
+
+function newOwner(opening: number): string {
+  const id = randomUUID();
+  t.db.prepare(
+    `INSERT INTO users (id, email, display_name, role, status, password_hash, calendar_id, created_at, updated_at)
+     VALUES (?, ?, 'Synthetic Probe', 'employee', 'active', 'login-disabled-synthetic', ?, ?, ?)`,
+  ).run(id, `probe-${id}@example.invalid`, t.calendarId, NOW, NOW);
+  if (opening > 0) postCredit(ctx, { userId: id, sourceKey: 'opening', minutes: opening, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+  return id;
+}
+const permission = { approverName: 'Example Manager', approverIdentity: 'manager@example.invalid', approvalDate: '2026-09-30', evidenceRef: 'Synthetic ref' };
+function reserve(owner: string, key: string, minutes: number, leaveDate = '2026-10-01') {
+  return reserveOtLeave(ctx, { userId: owner, actorUserId: owner, requestKey: key, leaveDate, requestedMinutes: minutes, permission });
+}
+
+console.log('# P1 double reservation (sequential, same connection; concurrency is probe pb)');
+{
+  const o = newOwner(100);
+  const a = reserve(o, 'a', 80);
+  const b = errOf(() => reserve(o, 'b', 80));
+  check('P1.1 second 80 at 100 is 409 insufficient_balance', a.status === 'reserved' && b?.status === 409 && b.code === 'insufficient_balance', { a: a.status, b });
+  check('P1.2 nothing created for the loser', count('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?', o) === 1, count('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?', o));
+  const exact = reserve(o, 'c', 20);
+  const over = errOf(() => reserve(o, 'd', 1));
+  check('P1.3 exact remainder 20 reserves, then 1 more is refused', exact.status === 'reserved' && over?.code === 'insufficient_balance', { exact: exact.status, over });
+  const dupAfterExhaust = reserve(o, 'a', 80);
+  check('P1.4 same-key retry after exhaustion is duplicate, not a second reservation', dupAfterExhaust.status === 'duplicate' && getBalance(t.db, o).reservedMinutes === 100, getBalance(t.db, o));
+  const conflict = errOf(() => reserveOtLeave(ctx, { userId: o, actorUserId: o, requestKey: 'a', leaveDate: '2026-10-01', requestedMinutes: 81, permission }));
+  check('P1.5 same key different minutes is 409 request_key_conflict', conflict?.code === 'request_key_conflict', conflict);
+  const zeroBalance = newOwner(0);
+  const z = errOf(() => reserve(zeroBalance, 'z', 1));
+  check('P1.6 zero balance cannot reserve 1 minute', z?.code === 'insufficient_balance', z);
+  const neg = errOf(() => reserve(o, 'neg', -5));
+  const frac = errOf(() => reserve(o, 'frac', 1.5));
+  const big = errOf(() => reserve(o, 'big', 1441));
+  check('P1.7 negative, fractional and >1440 minutes rejected (422)', [neg, frac, big].every((e) => e?.code === 'invalid_minutes'), { neg, frac, big });
+}
+
+console.log('# P2 consume beyond reserved');
+{
+  const o = newOwner(600);
+  const r = reserve(o, 'leave', 120).request;
+  const u1 = recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u1', minutes: 80 });
+  const u2 = errOf(() => recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u2', minutes: 41 }));
+  check('P2.1 use 80 then 41 of 120 -> 409 exceeds_reserved', u1.status === 'used' && u2?.code === 'exceeds_reserved', { u1: u1.status, u2 });
+  const u3 = recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u3', minutes: 40 });
+  const u4 = errOf(() => recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u4', minutes: 1 }));
+  check('P2.2 exact remainder 40 used, then 1 more refused', u3.status === 'used' && u4?.code === 'exceeds_reserved', { u4 });
+  const ledger = listLedgerEntries(t.db, o).filter((e: { sourceKey: string }) => e.sourceKey !== 'opening').map((e: { deltaMinutes: number }) => e.deltaMinutes);
+  check('P2.3 ledger has exactly -80 and -40; posted 480, reserved 0', JSON.stringify(ledger) === '[-80,-40]' && getBalance(t.db, o).postedMinutes === 480 && getBalance(t.db, o).reservedMinutes === 0, { ledger, bal: getBalance(t.db, o) });
+  const o2 = newOwner(600);
+  const r2 = reserve(o2, 'leave', 120).request;
+  cancelOtLeave(ctx, { userId: o2, actorUserId: o2, requestId: r2.id });
+  const afterCancel = errOf(() => recordOtLeaveUse(ctx, { userId: o2, actorUserId: o2, requestId: r2.id, useKey: 'late', minutes: 1 }));
+  check('P2.4 use after cancel -> 409 exceeds_reserved, no delta', afterCancel?.code === 'exceeds_reserved' && getBalance(t.db, o2).postedMinutes === 600, afterCancel);
+  const bad = [0, -10, 2.5, Number.MAX_SAFE_INTEGER].map((m) => errOf(() => recordOtLeaveUse(ctx, { userId: o2, actorUserId: o2, requestId: r2.id, useKey: `bad-${m}`, minutes: m })));
+  check('P2.5 zero/negative/fractional/huge use minutes rejected without writing', bad.every((e) => e !== null && (e.code === 'invalid_minutes' || e.code === 'exceeds_reserved')) && getBalance(t.db, o2).postedMinutes === 600, bad);
+  // Idempotent retry with the same key but different minutes must not append.
+  const o3 = newOwner(600);
+  const r3 = reserve(o3, 'leave', 480).request;
+  recordOtLeaveUse(ctx, { userId: o3, actorUserId: o3, requestId: r3.id, useKey: 'k', minutes: 240 });
+  const sameKeyDiff = errOf(() => recordOtLeaveUse(ctx, { userId: o3, actorUserId: o3, requestId: r3.id, useKey: 'k', minutes: 241 }));
+  const retry = recordOtLeaveUse(ctx, { userId: o3, actorUserId: o3, requestId: r3.id, useKey: 'k', minutes: 240, expectedVersion: 1 });
+  check('P2.6 same use key: different minutes 409 source_key_conflict; identical retry (even stale version) is duplicate', sameKeyDiff?.code === 'source_key_conflict' && retry.status === 'duplicate' && getOtLeaveRequest(t.db, o3, r3.id).consumedMinutes === 240, { sameKeyDiff, retry: retry.status });
+}
+
+console.log('# P3 reversal beyond consumed');
+{
+  const o = newOwner(600);
+  const r = reserve(o, 'leave', 120).request;
+  const noUse = errOf(() => reverseOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, reversalKey: 'r0', minutes: 1, reason: 'probe' }));
+  check('P3.1 reverse before any use -> 409 exceeds_reversible', noUse?.code === 'exceeds_reversible', noUse);
+  recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u', minutes: 100 });
+  const over = errOf(() => reverseOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, reversalKey: 'r1', minutes: 101, reason: 'probe' }));
+  check('P3.2 reverse 101 of 100 used -> 409 exceeds_reversible', over?.code === 'exceeds_reversible', over);
+  reverseOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, reversalKey: 'r2', minutes: 60, reason: 'probe' });
+  const second = errOf(() => reverseOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, reversalKey: 'r3', minutes: 41, reason: 'probe' }));
+  check('P3.3 partial 60 then 41 more (> 40 left) -> 409', second?.code === 'exceeds_reversible', second);
+  const noReason = errOf(() => reverseOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, reversalKey: 'r4', minutes: 1, reason: '   ' }));
+  check('P3.4 blank reason -> 422 reason_required', noReason?.code === 'reason_required', noReason);
+  const bal = getBalance(t.db, o);
+  check('P3.5 balance: 600 - 100 + 60 = 560 posted, reserved 20', bal.postedMinutes === 560 && bal.reservedMinutes === 20, bal);
+  // Cycle attempt: can reversal + re-use generate minutes? (reserve 480, use 240, reverse 240, use 240, reverse 240)
+  const c = newOwner(480);
+  const cr = reserve(c, 'cycle', 480).request;
+  recordOtLeaveUse(ctx, { userId: c, actorUserId: c, requestId: cr.id, useKey: 'u1', minutes: 240 });
+  reverseOtLeaveUse(ctx, { userId: c, actorUserId: c, requestId: cr.id, reversalKey: 'v1', minutes: 240, reason: 'probe' });
+  recordOtLeaveUse(ctx, { userId: c, actorUserId: c, requestId: cr.id, useKey: 'u2', minutes: 240 });
+  reverseOtLeaveUse(ctx, { userId: c, actorUserId: c, requestId: cr.id, reversalKey: 'v2', minutes: 240, reason: 'probe' });
+  const more = errOf(() => reverseOtLeaveUse(ctx, { userId: c, actorUserId: c, requestId: cr.id, reversalKey: 'v3', minutes: 1, reason: 'probe' }));
+  const cb = getBalance(t.db, c);
+  check('P3.6 use/reverse cycle cannot create minutes: posted back to 480, reserved 0, further reversal 409', cb.postedMinutes === 480 && cb.reservedMinutes === 0 && more?.code === 'exceeds_reversible', { cb, more });
+  // Schema backstop: direct SQL cannot push reversed above consumed or move counters back.
+  const sqlOver = errOf(() => t.db.prepare('UPDATE ot_leave_requests SET reversed_minutes = consumed_minutes + 1, version = version + 1 WHERE id = ?').run(r.id));
+  const sqlBack = errOf(() => t.db.prepare('UPDATE ot_leave_requests SET consumed_minutes = 0, reserved_minutes = reserved_minutes + consumed_minutes, reversed_minutes = 0, version = version + 1 WHERE id = ?').run(r.id));
+  check('P3.7 SQL tamper: reversed > consumed rejected by CHECK; counters backwards rejected by trigger', sqlOver !== null && sqlBack !== null, { sqlOver, sqlBack });
+}
+
+console.log('# P4 append-only and immutable facts (direct SQL)');
+{
+  const o = newOwner(60);
+  const id = t.db.prepare("SELECT id FROM ot_ledger WHERE user_id = ?").pluck().get(o) as string;
+  const upd = errOf(() => t.db.prepare('UPDATE ot_ledger SET delta_minutes = 6000 WHERE id = ?').run(id));
+  const del = errOf(() => t.db.prepare('DELETE FROM ot_ledger WHERE id = ?').run(id));
+  const r = reserve(newOwner(100), 'x', 50).request;
+  const fact = errOf(() => t.db.prepare("UPDATE ot_leave_requests SET approver_name = 'Someone Else', version = version + 1 WHERE id = ?").run(r.id));
+  const nover = errOf(() => t.db.prepare('UPDATE ot_leave_requests SET updated_at = updated_at WHERE id = ?').run(r.id));
+  const delReq = errOf(() => t.db.prepare('DELETE FROM ot_leave_requests WHERE id = ?').run(r.id));
+  const reserveUp = errOf(() => t.db.prepare('UPDATE ot_leave_requests SET reserved_minutes = 60, version = version + 1 WHERE id = ?').run(r.id));
+  check('P4.1 ledger UPDATE/DELETE rejected', upd?.code === 'SQLITE_CONSTRAINT_TRIGGER' && del?.code === 'SQLITE_CONSTRAINT_TRIGGER', { upd, del });
+  check('P4.2 request facts, no-bump update, delete and reserved increase rejected', [fact, nover, delReq, reserveUp].every((e) => e !== null), { fact, nover, delReq, reserveUp });
+  const crossOwner = newOwner(0);
+  const crossCorrect = errOf(() => t.db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, corrects_entry_id, work_date, origin, reason, posted_at)
+     VALUES (?, ?, 'correction', 5, 'x', ?, '2026-09-21', 'system', 'probe', '2026-10-02T18:00:00Z')`).run(randomUUID(), crossOwner, id));
+  check('P4.3 a correction linking another owner\'s entry is rejected by the schema', crossCorrect !== null, crossCorrect);
+}
+
+console.log('# P5 correction idempotency contract');
+{
+  const o = newOwner(0);
+  const orig = postCredit(ctx, { userId: o, sourceKey: 'ts1-r1-d1', minutes: 60, workDate: '2026-09-21', actorUserId: o, origin: 'manual' });
+  const c1 = postCorrection(ctx, { userId: o, sourceKey: 'ts1-r2-d1', originalEntryId: orig.entry.id, correctedMinutes: 90, actorUserId: o, origin: 'manual', reason: 'probe' });
+  let c2: { status: string; deltaMinutes: number } | null = null;
+  const c2err = errOf(() => { c2 = postCorrection(ctx, { userId: o, sourceKey: 'ts1-r2-d1', originalEntryId: orig.entry.id, correctedMinutes: 120, actorUserId: o, origin: 'manual', reason: 'probe' }); });
+  observe('P5.1 same correction key, different corrected value (90 then 120)', { first: c1.status, firstDelta: c1.deltaMinutes, second: c2err ?? c2, posted: getBalance(t.db, o).postedMinutes });
+  check('P5.2 no second entry appended for the reused correction key', count("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND entry_type = 'correction'", o) === 1, count("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND entry_type = 'correction'", o));
+  // Increase an authorized debit by correction when available is short.
+  const d = newOwner(60);
+  const debit = postDeficitDebit(ctx, { userId: d, sourceKey: 'debit-1', debitMinutes: 60, workDate: '2026-09-22', actorUserId: d, origin: 'manual' });
+  const raise = postCorrection(ctx, { userId: d, sourceKey: 'debit-1-r2', originalEntryId: debit.entry.id, correctedMinutes: 90, actorUserId: d, origin: 'manual', reason: 'probe' });
+  observe('P5.3 correcting a debit 60 -> 90 with posted 0', { status: raise.status, delta: raise.deltaMinutes, reconciliationRequired: raise.reconciliationRequired, balance: getBalance(t.db, d) });
+  // Pending debit is not persisted.
+  const p = newOwner(30);
+  const pend = postDeficitDebit(ctx, { userId: p, sourceKey: 'debit-p', debitMinutes: 60, workDate: '2026-09-22', actorUserId: p, origin: 'manual' });
+  check('P5.4 insufficient balance debit is pending with no entry (R-05)', pend.status === 'pending' && count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', p) === 1, { status: pend.status });
+}
+
+console.log('# P6 E-3 leave date in the saved reporting zone (America/Los_Angeles)');
+{
+  const o = newOwner(600);
+  const r = reserve(o, 'oct2', 480, '2026-10-02').request;
+  t.clock.set('2026-10-02T06:59:59Z'); // 2026-10-01 23:59:59 PDT; already Oct 2 in UTC
+  const early = errOf(() => recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u', minutes: 480 }));
+  t.clock.set('2026-10-02T07:00:00Z'); // 2026-10-02 00:00:00 PDT
+  const onTime = recordOtLeaveUse(ctx, { userId: o, actorUserId: o, requestId: r.id, useKey: 'u', minutes: 480 });
+  t.clock.set(NOW);
+  check('P6.1 one second before local midnight is 409 before_leave_date; at local midnight use posts -480', early?.code === 'before_leave_date' && onTime.status === 'used' && onTime.entry.deltaMinutes === -480, { early, onTime: onTime.status });
+}
+
+console.log('# P7 HTTP: ID swap, admin isolation, CSRF, expected_version');
+{
+  const emp1 = await t.login('employee');
+  const admin = await t.login('admin');
+  const pw = 'synthetic-second-employee-pass';
+  const emp2Id = await createUser(t.db, t.clock, { email: 'employee2@example.invalid', displayName: 'Second Employee', role: 'employee', password: pw, calendarId: t.calendarId }, t.userIds.admin);
+  const login2 = await t.request('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: pw } });
+  const emp2 = login2.headers.get('set-cookie')?.split(';')[0] ?? '';
+  postCredit(ctx, { userId: t.userIds.employee, sourceKey: 'opening', minutes: 600, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+  postCredit(ctx, { userId: emp2Id, sourceKey: 'opening', minutes: 600, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+  const body = { request_key: 'k1', leave_date: '2026-10-01', requested_minutes: 300, permission: { approver_name: 'Example Manager', approval_date: '2026-09-30', evidence_ref: 'Synthetic' } };
+  const created = await t.request('POST', '/api/ot/leave', { cookie: emp1, body });
+  const id = created.body.request.id as string;
+  const before = { req: JSON.stringify(t.db.prepare('SELECT * FROM ot_leave_requests WHERE id = ?').get(id)), ledger: count('SELECT count(*) FROM ot_ledger'), audit: count('SELECT count(*) FROM audit_events') };
+  const actions: Array<[string, unknown]> = [
+    ['consume', { use_key: 'swap', minutes: 10, expected_version: 1 }],
+    ['cancel', { expected_version: 1 }],
+    ['reverse', { reversal_key: 'swap', minutes: 10, reason: 'swap', expected_version: 1 }],
+  ];
+  const results: Record<string, unknown> = {};
+  for (const [action, b] of actions) {
+    for (const [who, cookie] of [['employee2', emp2], ['admin', admin]] as const) {
+      const res = await t.request('POST', `/api/ot/leave/${id}/${action}`, { cookie, body: b });
+      results[`${who}:${action}`] = `${res.status} ${res.body?.error?.code}`;
+    }
+  }
+  const unknown = await t.request('POST', `/api/ot/leave/${randomUUID()}/cancel`, { cookie: emp2, body: { expected_version: 1 } });
+  const swapped = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie: emp2, body: { expected_version: 1 } });
+  const after = { req: JSON.stringify(t.db.prepare('SELECT * FROM ot_leave_requests WHERE id = ?').get(id)), ledger: count('SELECT count(*) FROM ot_ledger'), audit: count('SELECT count(*) FROM audit_events') };
+  check('P7.1 employee2 and admin get 404 not_found on consume/cancel/reverse of employee1 request', Object.values(results).every((v) => v === '404 not_found'), results);
+  check('P7.2 swapped id and unknown id answers are byte-identical', JSON.stringify(unknown.body) === JSON.stringify(swapped.body), { unknown: unknown.body, swapped: swapped.body });
+  check('P7.3 no row, ledger or audit change from the swap attempts', before.req === after.req && before.ledger === after.ledger && before.audit === after.audit, { before: before.ledger, after: after.ledger, auditBefore: before.audit, auditAfter: after.audit });
+  const injected = await t.request('POST', '/api/ot/leave', { cookie: emp2, body: { ...body, request_key: 'k-inj', user_id: t.userIds.employee } });
+  check('P7.4 user_id in body rejected 422 (strict schema)', injected.status === 422, injected.status);
+  for (const path of ['/api/ot/summary', '/api/ot/ledger', '/api/ot/leave', `/api/ot/evidence.csv?from=2026-09-01&to=2026-10-31`, '/api/history']) {
+    const res = await t.request('GET', `${path}${path.includes('?') ? '&' : '?'}user_id=${t.userIds.employee}`, { cookie: emp2 });
+    const text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
+    check(`P7.5 ${path.split('?')[0]} for employee2 never contains employee1 id or request id`, res.status === 200 && !text.includes(t.userIds.employee) && !text.includes(id), res.status);
+  }
+  const getOne = await t.request('GET', `/api/ot/leave/${id}`, { cookie: emp2 });
+  check('P7.6 no single-request GET route exists (404 endpoint)', getOne.status === 404, getOne.status);
+  const noVersion = await t.request('POST', `/api/ot/leave/${id}/consume`, { cookie: emp1, body: { use_key: 'nv', minutes: 10 } });
+  const stale = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie: emp1, body: { expected_version: 7 } });
+  const strVersion = await t.request('POST', `/api/ot/leave/${id}/reverse`, { cookie: emp1, body: { reversal_key: 'r', minutes: 1, reason: 'x', expected_version: '1' } });
+  check('P7.7 expected_version required (422), stale (409 stale_version), wrong type (422)', noVersion.status === 422 && stale.status === 409 && stale.body.error.code === 'stale_version' && strVersion.status === 422, { noVersion: noVersion.status, stale: `${stale.status} ${stale.body?.error?.code}`, strVersion: strVersion.status });
+  const nullOrigin = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie: emp1, body: { expected_version: 1 }, origin: 'null' });
+  const textPlain = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie: emp1, body: JSON.stringify({ expected_version: 1 }), headers: { 'content-type': 'text/plain' } });
+  const sameSiteOtherPort = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie: emp1, body: { expected_version: 1 }, origin: 'http://localhost:3001' });
+  check('P7.8 Origin "null" 403, text/plain 415, other-port origin 403', nullOrigin.status === 403 && textPlain.status === 415 && sameSiteOtherPort.status === 403, { nullOrigin: nullOrigin.status, textPlain: textPlain.status, other: sameSiteOtherPort.status });
+  const reqAfter = t.db.prepare('SELECT version, reserved_minutes FROM ot_leave_requests WHERE id = ?').get(id);
+  check('P7.9 request unchanged after the rejected calls', JSON.stringify(reqAfter) === JSON.stringify({ version: 1, reserved_minutes: 300 }), reqAfter);
+  // History leakage: an admin-authored event owned by employee1 must not reveal the admin id.
+  createPolicyVersion(t.db, t.clock, { userId: t.userIds.employee, calendarId: t.calendarId, effectiveFrom: '2026-10-17', note: 'probe policy', rules: { requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30, referenceStart: '08:00', referenceEnd: '17:00', deficitMode: 'ignore', breaks: [{ startOffsetMinutes: 120, durationMinutes: 15, countsAsWork: false }, { startOffsetMinutes: 240, durationMinutes: 30, countsAsWork: false }, { startOffsetMinutes: 390, durationMinutes: 15, countsAsWork: false }] } }, t.userIds.admin);
+  const hist = await t.request('GET', '/api/history?limit=500', { cookie: emp1 });
+  const htext = JSON.stringify(hist.body);
+  const adminEvent = (hist.body.audit_events as Array<{ operation: string; actor_is_self: boolean; actor_user_id: string | null }>).find((e) => e.operation === 'work_policy.create' && e.actor_is_self === false);
+  check('P7.10 employee history shows the admin-authored policy event without the admin id', hist.status === 200 && adminEvent !== undefined && adminEvent.actor_is_self === false && adminEvent.actor_user_id === null && !htext.includes(t.userIds.admin) && !htext.includes(emp2Id), adminEvent);
+  const hist2 = await t.request('GET', '/api/history?limit=500', { cookie: emp2 });
+  const h2 = JSON.stringify(hist2.body);
+  const userCreate = (hist2.body.audit_events as Array<{ operation: string; actor_user_id: string | null }>).find((e) => e.operation === 'user.create');
+  check('P7.11 employee2 history (user.create by admin) never contains another user id', !h2.includes(t.userIds.admin) && !h2.includes(t.userIds.employee) && userCreate?.actor_user_id === null, userCreate);
+}
+
+console.log('# P8 CSV injection and headers (HTTP)');
+{
+  const emp1 = await t.login('employee');
+  const hostile = {
+    approver_name: '=HYPERLINK("http://evil.example.invalid","x")',
+    approver_identity: '+cmd|\' /C calc\'!A0',
+    evidence_ref: '-2+3+cmd|\' /C calc\'!A0',
+    note: '@SUM(1+1)*cmd|\' /C calc\'!A0',
+  };
+  const res = await t.request('POST', '/api/ot/leave', { cookie: emp1, body: { request_key: 'csv', leave_date: '2026-10-01', requested_minutes: 60, permission: { approver_name: hostile.approver_name, approver_identity: hostile.approver_identity, approval_date: '2026-09-30', evidence_ref: hostile.evidence_ref }, note: hostile.note } });
+  const rid = res.body.request.id as string;
+  const variants = ['\tTAB=1+1', '\rCR=1+1', '\nLF=1+1', ' =1+1', '＝1+1', '"=1+1"', 'a,b\n=c'];
+  const outcomes: Record<string, string> = {};
+  let k = 0;
+  for (const v of variants) {
+    k += 1;
+    // use leave note through new requests (note is free text, max 2000)
+    const r = await t.request('POST', '/api/ot/leave', { cookie: emp1, body: { request_key: `csv-${k}`, leave_date: '2026-10-01', requested_minutes: 1, permission: { approver_name: 'Example Manager', approval_date: '2026-09-30', evidence_ref: `variant ${k}` }, note: `x${k}` } });
+    outcomes[`create-${k}`] = String(r.status);
+  }
+  // Leave notes are trimmed by the service; leading whitespace variants go through reverse reason (also trimmed) -> use evidence_ref (trimmed). Record what survives.
+  await t.request('POST', `/api/ot/leave/${rid}/consume`, { cookie: emp1, body: { use_key: 'u', minutes: 30, expected_version: 1 } });
+  await t.request('POST', `/api/ot/leave/${rid}/reverse`, { cookie: emp1, body: { reversal_key: 'r', minutes: 10, reason: '=1+2 reversal', expected_version: 2 } });
+  const csv = await t.request('GET', '/api/ot/evidence.csv?from=2026-09-14&to=2026-10-11', { cookie: emp1 });
+  const text = String(csv.body);
+  check('P8.1 headers: text/csv, attachment filename from fixed alphabet, no-store, nosniff', csv.status === 200
+    && (csv.headers.get('content-type') ?? '').startsWith('text/csv')
+    && csv.headers.get('content-disposition') === 'attachment; filename="ot-evidence_2026-09-14_2026-10-11.csv"'
+    && csv.headers.get('cache-control') === 'no-store'
+    && csv.headers.get('x-content-type-options') === 'nosniff', Object.fromEntries(['content-type', 'content-disposition', 'cache-control', 'x-content-type-options'].map((h) => [h, csv.headers.get(h)])));
+  // Strict RFC 4180 parse.
+  function parse(input: string): string[][] {
+    const rows: string[][] = []; let row: string[] = []; let cell = ''; let quoted = false; let i = 0;
+    while (i < input.length) {
+      const ch = input[i];
+      if (quoted) {
+        if (ch === '"') { if (input[i + 1] === '"') { cell += '"'; i += 2; continue; } quoted = false; i += 1; continue; }
+        cell += ch; i += 1; continue;
+      }
+      if (ch === '"' && cell === '') { quoted = true; i += 1; continue; }
+      if (ch === ',') { row.push(cell); cell = ''; i += 1; continue; }
+      if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; i += 1; continue; }
+      cell += ch; i += 1;
+    }
+    if (cell !== '' || row.length > 0) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  const rows = parse(text);
+  const dangerous = rows.flat().filter((cell) => /^[=+@\t\r\n]/.test(cell) || (/^-/.test(cell) && !/^-\d+$/.test(cell)));
+  check('P8.2 no parsed cell starts with = + @ tab CR LF, and "-" only for signed integers', dangerous.length === 0, dangerous);
+  const permRow = rows.find((r) => r[0] === rid);
+  check('P8.3 hostile permission cells are apostrophe-prefixed and intact', permRow !== undefined && permRow[8] === `'${hostile.approver_name}` && permRow[9] === `'${hostile.approver_identity}` && permRow[11] === `'${hostile.evidence_ref}` && permRow[13] === `'${hostile.note}`, permRow?.slice(8, 14));
+  const reasonCell = rows.flat().find((c) => c.includes('1+2 reversal'));
+  check('P8.4 reversal reason "=1+2 reversal" exported neutralized', reasonCell === "'=1+2 reversal", reasonCell);
+  // Section header widths are consistent (no row injection broke columns).
+  let current: number | null = null; let broken = 0; let afterSection = false;
+  for (const r of rows) {
+    if (r.length === 1 && r[0] === '') { current = null; continue; }
+    if (r[0] === '#section') { afterSection = true; continue; }
+    if (afterSection) { current = r.length; afterSection = false; continue; }
+    if (current !== null && r.length !== current) broken += 1;
+  }
+  check('P8.5 every data row has its section header width', broken === 0, { broken });
+  // Direct unit check of the neutralizer on edge variants, recorded as observations.
+  const { csvCell } = await imp('src/server/services/otEvidence.ts');
+  observe('P8.6 csvCell edge variants', Object.fromEntries(variants.map((v) => [JSON.stringify(v), csvCell(v)])));
+  const noAuth = await t.request('GET', '/api/ot/evidence.csv?from=2026-09-14&to=2026-10-11');
+  const badRange = await t.request('GET', '/api/ot/evidence.csv?from=2026-10-11&to=2026-09-14', { cookie: emp1 });
+  const headerInj = await t.request('GET', '/api/ot/evidence.csv?from=2026-09-14%0D%0ASet-Cookie:x=1&to=2026-10-11', { cookie: emp1 });
+  check('P8.7 no session 401, reversed range 422, CRLF in query 422', noAuth.status === 401 && badRange.status === 422 && headerInj.status === 422, { noAuth: noAuth.status, badRange: badRange.status, headerInj: headerInj.status });
+  const ancient = await t.request('GET', '/api/ot/evidence.csv?from=2020-01-01&to=2020-12-31', { cookie: emp1 });
+  observe('P8.8 evidence range before any policy/calendar version', { status: ancient.status, body: typeof ancient.body === 'string' ? ancient.body.split('\n').slice(0, 3).join(' | ') : ancient.body });
+  const ancientSummaryOwner = newOwner(0);
+  void ancientSummaryOwner;
+}
+
+console.log('# P9 LG-10 day leave change spends nothing');
+{
+  const emp1 = await t.login('employee');
+  const before = { posted: getBalance(t.db, t.userIds.employee), ledger: count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', t.userIds.employee), req: count('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?', t.userIds.employee) };
+  const put = await t.request('PUT', '/api/days/2026-10-05', { cookie: emp1, body: { category: 'Vacation', leave_minutes: 480, wfh: false, notes: 'OT leave label probe' } });
+  const put2 = await t.request('PUT', '/api/days/2026-10-05', { cookie: emp1, body: { category: 'Off', leave_minutes: 240, wfh: false, notes: 'changed', expected_version: put.body?.entry?.version ?? 1 } });
+  const after = { posted: getBalance(t.db, t.userIds.employee), ledger: count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', t.userIds.employee), req: count('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?', t.userIds.employee) };
+  check('P9.1 day label/leave minute edits change no balance, ledger row or reservation', [put.status, put2.status].every((s) => s === 200 || s === 201) && JSON.stringify(before) === JSON.stringify(after), { put: put.status, put2: put2.status, before, after });
+}
+
+console.log(`# SUMMARY pass=${pass} fail=${fail} observations=${observations.length}`);
+t.close();
+process.exitCode = fail === 0 ? 0 : 1;

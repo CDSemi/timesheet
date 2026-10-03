@@ -1,0 +1,17 @@
+journal_mode=wal busy_timeout=5000
+racer processes: 4 distinct pids (parent pid 54120)
+(node:54120) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [ChildProcess]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54120) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [ChildProcess]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS  PB1 LG-07 reserve 80 vs 80 at 100 (2 processes): 30 rounds, separate processes 30/30, overlapping call windows 30/30, invariant violations 0; outcomes: 409 insufficient_balance + reserved x30
+PASS  PB2 LG-07 with a lock blocker across the release instant: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 insufficient_balance + reserved x20
+(node:54120) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [ChildProcess]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:54120) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [ChildProcess]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS  PB3 reserve 4 x 80 at 200 (4 processes): 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 insufficient_balance + 409 insufficient_balance + reserved + reserved x20
+PASS  PB4 double consume: use 80 vs 80 of a 120 reservation: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 exceeds_reserved + used x20
+PASS  PB5 double reverse: reverse 120 vs 120 of 120 used: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 0; outcomes: 409 exceeds_reversible + reversed x20
+  round 0: {"out":["unchanged","used"],"d":[-120],"r":{"id":"aba6e669-d266-46ca-b66c-659f6ebaa985","userId":"e08eda9d-e3bd-4710-9032-e06bf78083f9","requestKey":"leave","leaveDate":"2026-10-01","requestedMinutes":120,"approvedMinutes":120,"reservedMinutes":0,"consumedMinutes":120,"releasedMinutes":0,"reversedMinutes":0,"approverName":"Example Manager","approverIdentity":"manager@example.invalid","approvalDate":"2026-09-30","evidenceRef":"Synthetic ref","approvalOrigin":"self_recorded","note":null,"createdBy":"e08eda9d-e3bd-4710-9032-e06bf78083f9","createdAt":"2026-10-02T18:00:00Z","updatedAt":"2026-10-02T18:00:00Z","version":2}}
+FAIL  PB6 cancel vs full use: 20 rounds, separate processes 20/20, overlapping call windows 20/20, invariant violations 1; outcomes: unchanged + used x1; 409 stale_version + cancelled x19
+PASS  PB7 control (unsafe check-then-insert, no transaction, 5 ms window): double-booked 10/10 rounds, so the process harness can observe a race
+INFO  PB8 control without an artificial window: double-booked 10/10 rounds
+# SUMMARY scenario_failures=1

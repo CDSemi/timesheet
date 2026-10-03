@@ -1,0 +1,30 @@
+// WP2-ADV-REVIEW: deterministic reproduction of the cancel no-op path with a stale
+// expected_version over HTTP (synthetic data). Usage: node pc-stale-cancel.ts <clone>
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = process.argv[2];
+if (!root) throw new Error('usage');
+const imp = (rel: string) => import(pathToFileURL(join(root, rel)).href);
+const { createTestContext } = await imp('tests/support/testApp.ts');
+const { postCredit } = await imp('src/server/services/ledger.ts');
+
+const t = await createTestContext('2026-10-02T18:00:00Z');
+postCredit({ db: t.db, clock: t.clock }, { userId: t.userIds.employee, sourceKey: 'opening', minutes: 600, workDate: '2026-09-21', actorUserId: null, origin: 'system' });
+const cookie = await t.login('employee');
+const created = await t.request('POST', '/api/ot/leave', { cookie, body: { request_key: 'k', leave_date: '2026-10-01', requested_minutes: 120, permission: { approver_name: 'Example Manager', approval_date: '2026-09-30', evidence_ref: 'Synthetic' } } });
+const id = created.body.request.id;
+console.log(`reserve: ${created.status} version=${created.body.request.version}`);
+// Device A loaded version 1. Device B records the full use (version 2).
+const used = await t.request('POST', `/api/ot/leave/${id}/consume`, { cookie, body: { use_key: 'b', minutes: 120, expected_version: 1 } });
+console.log(`use (device B): ${used.status} version=${used.body.request.version} reserved=${used.body.request.reserved_minutes}`);
+// Device A now sends cancel with its stale version 1.
+const cancel = await t.request('POST', `/api/ot/leave/${id}/cancel`, { cookie, body: { expected_version: 1 } });
+console.log(`cancel with stale expected_version=1: ${cancel.status} ${JSON.stringify({ status: cancel.body.status, released_minutes: cancel.body.released_minutes, version: cancel.body.request?.version, error: cancel.body.error })}`);
+// Contrast: after a partial use the same stale cancel is refused.
+const created2 = await t.request('POST', '/api/ot/leave', { cookie, body: { request_key: 'k2', leave_date: '2026-10-01', requested_minutes: 120, permission: { approver_name: 'Example Manager', approval_date: '2026-09-30', evidence_ref: 'Synthetic' } } });
+const id2 = created2.body.request.id;
+await t.request('POST', `/api/ot/leave/${id2}/consume`, { cookie, body: { use_key: 'b', minutes: 60, expected_version: 1 } });
+const cancel2 = await t.request('POST', `/api/ot/leave/${id2}/cancel`, { cookie, body: { expected_version: 1 } });
+console.log(`contrast, stale cancel after partial use: ${cancel2.status} ${cancel2.body.error?.code}`);
+t.close();

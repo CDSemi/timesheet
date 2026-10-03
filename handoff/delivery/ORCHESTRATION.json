@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t05-freeze-blocked",
+  "phase": "wp2-t05-recon",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T05-FREEZE",
+  "next_task_id": "WP2-T05-RECON",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -49,13 +49,17 @@
     {
       "date": "2026-10-03",
       "observation": "WP2-T05-FREEZE attempt 2: the classifier denied a standalone 'git add --' of explicit paths ('Credential Leakage') even with the owner's direct confirmation quoted in the brief and the dispatch prompt. A confirmation relayed through coordinator-written text did not change the classifier outcome this time (unlike the earlier 'Instruction Poisoning' case)."
+    },
+    {
+      "date": "2026-10-03",
+      "observation": "The owner's manual commit used the chat 'Commit description' (AGENTS rule 12) as its message and committed only modified tracked files (e768b71); new files stayed untracked. Lesson: when the owner commits manually, the chat Commit description must equal the intended commit message, and the instructions must stress including new (untracked) files."
     }
   ],
   "pending_owner_question": {
     "date": "2026-10-03",
     "task": "WP2-T05-FREEZE",
-    "question": "The auto-mode classifier denied 'git add' of the WP2-T05-FREEZE set again ('Credential Leakage') although the owner's direct confirmation was quoted. The coordinator cannot change permission settings or route around the denial. Owner options: (1) send a message that names the action and its specific danger (documented one-off approval), then attempt 3 runs; (2) commit and push this set manually (commands provided in chat; the precommit check runs first); (3) for later freezes, configure 'autoMode' personally in user settings (the classifier ignores project settings). Future freeze commits may hit the same block.",
-    "context": "WP2-T05-PRIVSCAN found the set clean. WF-CAPS2 documented the classifier and settings behaviour (board auxiliary_lookups)."
+    "question": "The owner's commit e768b71 carried only modified tracked files; the new files (migration 0003, dayEntries.ts, new tests, advisory review, briefs, evidence) are untracked, so main references files missing from git. Please make a completion commit that includes the new files: git add -A, the precommit check, then commit with the prepared message and push. Alternatively, send an approval message that names the action and its danger so the committer can try.",
+    "context": "WP2-T06 waits so that no in-progress work is swept into the owner's git add -A."
   },
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
@@ -70,7 +74,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96",
+    "last_commit": "e768b71c2a5e522bdfece8617599992f8f4a0abc",
     "unpushed": []
   },
   "owner_decisions": [
@@ -101,6 +105,12 @@
       "source": "owner chat, direct reply typed by the owner",
       "verbatim": "ác nhận: cho phép timesheet-committer commit và push bộ file WP2-T05-FREEZE.",
       "decision": "Direct confirmation after the WP2-T05-FREEZE attempt-1 classifier denial ('Credential Leakage'): timesheet-committer may stage, check, commit and push the WP2-T05-FREEZE set. The typed text lacks the leading 'X' of 'Xác nhận'; the meaning is unambiguous. Precommit and the other profile checks still run before the commit."
+    },
+    {
+      "date": "2026-10-03",
+      "source": "owner chat, direct reply typed by the owner",
+      "verbatim": "tôi đã commit xong, tiếp tục đi",
+      "decision": "The owner chose option 2 and committed the WP2-T05-FREEZE set manually after the second classifier denial; continue the mission. WP2-T05-RECON (verifier, read-only) records and checks the commit before WP2-T06."
     }
   ],
   "coordinator_decisions": [
@@ -2005,8 +2015,11 @@
       "status": "blocked",
       "history": [
         "attempt 1 (agent a81ba645becaca031): no commit. HEAD = origin/main = e92add0 and the working tree matched the expected set exactly. The auto-mode permission classifier denied the first combined command (Node 24 PATH, mkdir evidence directory, git add of the explicit path list, node --version, precommit check) with reason 'Credential Leakage'. Which part triggered it is unknown. A denied call does not execute, so nothing was staged or written. The committer did not retry or split the command. The coordinator does not route around the denial: owner direction requested.",
-        "attempt 2 (agent afd6a2b3bf3eee8fc), with the owner's direct confirmation quoted verbatim in the brief and prompt: HEAD = origin/main = e92add0, index empty, working tree equal to the expected set (35 non-evidence paths plus 58 evidence files). The standalone staging command (git add -- with the explicit paths) was denied again, reason 'Credential Leakage'. No check ran and nothing was staged or committed. Not retried, split or rephrased."
+        "attempt 2 (agent afd6a2b3bf3eee8fc), with the owner's direct confirmation quoted verbatim in the brief and prompt: HEAD = origin/main = e92add0, index empty, working tree equal to the expected set (35 non-evidence paths plus 58 evidence files). The standalone staging command (git add -- with the explicit paths) was denied again, reason 'Credential Leakage'. No check ran and nothing was staged or committed. Not retried, split or rephrased.",
+        "owner (2026-10-03): the owner reports committing the set manually ('tôi đã commit xong, tiếp tục đi'), using the commands and commit-message file the coordinator provided. WP2-T05-RECON verifies the SHA, push, file set and privacy before this task is marked done.",
+        "WP2-T05-RECON finding: the owner's commit e768b71c2a5e522bdfece8617599992f8f4a0abc (parent e92add0, pushed) holds only the 23 modified tracked paths. Its message is the coordinator's chat 'Commit description' (WF-CAPS2 findings), not the prepared freeze message. All new files are still untracked: migration 0003, dayEntries.ts, two new tests, the advisory review, briefs and evidence. main therefore references files that are not in git. A completion commit is needed before WP2-T06."
       ],
+      "partial_commit_sha": "e768b71c2a5e522bdfece8617599992f8f4a0abc",
       "depends_on": [
         "WP2-ADVFIX",
         "WP2-T05"
@@ -2043,8 +2056,47 @@
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": "blocked: the classifier denied staging twice ('Credential Leakage'), the second time with the owner's confirmation quoted; no commit.",
-      "next_action": "Owner direction: commit the set manually, or configure their own permission rules (WF-CAPS2 documents the options); the coordinator changes no settings and does not route around the denial. Attempt caps reached for coordinator-initiated retries without a changed condition."
+      "decision": "partial: the owner's manual commit e768b71 carries only the modified tracked paths; the new files remain untracked.",
+      "next_action": "Completion commit (owner, git add -A plus precommit; the message file is in the coordinator scratchpad and in chat) adding every untracked file; then a read-only recheck and mark done with both SHAs."
+    },
+    {
+      "id": "WP2-T05-RECON",
+      "package": "WP2",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP2-T05"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a998596d3c6421f5e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T05-RECON.md",
+        "handoff/delivery/evidence/WP2-T05-RECON"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T05-RECON.md",
+      "report": "handoff/delivery/tasks/WP2-T05-RECON.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T05-RECON/recon.txt"
+      ],
+      "baseline_commit": "e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96",
+      "source_digest": "809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "partial commit found. HEAD = origin/main = e768b71c2a5e522bdfece8617599992f8f4a0abc (parent e92add0, pushed). It holds the 23 modified tracked paths only; its message is the coordinator's chat Commit description, with no 'Task: WP2-T05-FREEZE' line. Every new file is untracked. The committed-file privacy scan was not possible because the precommit tool reads only the index (self-test exit 0). The working-tree digest matches T05. Validator and check_recovery exit 0. Working tree: the board plus the untracked set.",
+      "next_action": "None; the completion commit follows."
     },
     {
       "id": "WP2-T05-PRIVSCAN",

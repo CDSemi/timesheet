@@ -1,0 +1,993 @@
+COMMAND: vitest run attendance/day-entries-batch/migrations/ot-leave (red, before implementation)
+v24.21.0
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/domain/attendance.test.ts (11 tests | 7 failed) 20ms
+   ❯ category source (default | explicit) (3)
+     × a default row takes its label from the calendar at read time, an explicit row keeps its own 2ms
+     × falls back to the stored label when the calendar cannot classify the date 0ms
+     × accepts only the two sources 0ms
+   ❯ leave kinds and validation against the effective B (4)
+     × has the three owner-approved kinds and no OT-funded category (owner decision E-2) 0ms
+     × accepts zero leave without a kind and whole leave up to B with a kind 0ms
+     × rejects leave above the effective B, a missing kind, a kind without minutes and an unknown kind 0ms
+     × rejects fractional or negative minutes as invalid_minutes 3ms
+ ❯ tests/integration/migrations.test.ts (14 tests | 4 failed) 1002ms
+   ❯ fresh SQLite migrations (6)
+     × applies every migration to an empty file database with the required pragmas 14ms
+   ❯ upgrade from a populated WP1 (version 1) database (2)
+     × applies 0002 and 0003, keeps every WP1 row unchanged and leaves a consistent, usable schema 141ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 135ms
+   ❯ schema invariants (5)
+     × constrains the day-entry category source and leave kind (migration 0003) 128ms
+ ❯ tests/integration/ot-leave.test.ts (34 tests | 3 failed) 4326ms
+   ❯ LG-10: a day label or leave change never reserves or spends OT (owner decision E-2) (4)
+     × changing the day to leave minutes (including leave_kind ot) posts nothing and reserves nothing 185ms
+     × a batch relabel to leave_kind ot also posts and reserves nothing 166ms
+     × exposes the OT-kind minutes next to the linked request so the UI can warn; a mismatch never changes a balance 163ms
+ ❯ tests/integration/day-entries-batch.test.ts (28 tests | 28 failed) 4927ms
+   ❯ category source (plan observation 2, AC-05 groundwork) (3)
+     × a session creates a default-source row; the calendar can relabel it later without writing 215ms
+     × an explicit row keeps its label when the calendar later changes 182ms
+     × saving a day over a default row makes it explicit and audits the effective label 181ms
+   ❯ partial leave, leave kind and WFH (R-05, owner decision E-2) (6)
+     × 240 work + 240 leave: no deficit and no OT, and leave never counts as work 192ms
+     × without the leave the same four hours leave a 240-minute deficit 179ms
+     × rejects leave above the effective B, a missing kind and a kind without minutes (422) 219ms
+     × validates against the B effective on the work date, not the default 480 197ms
+     × WFH is a stored location flag: it never changes the attendance or the minutes 182ms
+     × a day without an entry exposes neutral leave, WFH and OT-leave fields 181ms
+   ❯ POST /api/days/batch: preview (4)
+     × previews creates, updates and unchanged entries without writing anything 179ms
+     × reports an identical entry as unchanged 179ms
+     × flags stale versions and invalid entries per date instead of failing the preview 171ms
+     × marks old dates as reason-required in the preview 162ms
+   ❯ POST /api/days/batch: commit (10)
+     × applies a batch across old and current periods with one reason and one audit event per changed entry 166ms
+     × requires a reason when any date is old and writes nothing without it 164ms
+     × needs no reason for current and future dates 169ms
+     × is atomic: one stale date rolls back every date (409 stale_version) 164ms
+     × treats a missing expected_version on an existing entry and a version on a missing entry as stale 166ms
+     × a concurrent edit between preview and commit makes the commit stale 164ms
+     × is atomic for validation errors too (leave above B on one date) 168ms
+     × skips unchanged entries: no version bump and no audit event 164ms
+     × keeps the other fields of an existing entry when a batch entry omits them 165ms
+     × rejects duplicate dates, an empty batch, unknown fields and a mode that is not preview or commit 163ms
+   ❯ POST /api/days/batch: conflicts with recorded work (3)
+     × reports sessions and clock evidence, requires confirmation and never deletes a session 168ms
+     × does not flag a Worked label or an already-effective label on a date with sessions 165ms
+     × an old date with sessions needs both the reason and the confirmation 156ms
+   ❯ POST /api/days/batch: ownership and isolation (2)
+     × works only on the caller's own entries; another user's entries are untouched and invisible 206ms
+     × requires a session and a same-origin JSON request 158ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 42 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > category source (plan observation 2, AC-05 groundwork) > a session creates a default-source row; the calendar can relabel it later without writing
+AssertionError: expected [ { …(11) } ] to match object [ { work_date: '2026-09-22', …(1) } ]
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  [
+    {
+-     "category_source": "default",
+      "work_date": "2026-09-22",
+    },
+  ]
+
+ ❯ tests/integration/day-entries-batch.test.ts:100:25
+     98|   it('a session creates a default-source row; the calendar can relabel…
+     99|     await addSession(CURRENT_B, '09:00', '12:00');
+    100|     expect(entryRows()).toMatchObject([{ work_date: CURRENT_B, categor…
+       |                         ^
+    101|     const before = await getDay(CURRENT_B);
+    102|     expect(before).toMatchObject({ category: 'Worked', category_source…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > category source (plan observation 2, AC-05 groundwork) > an explicit row keeps its label when the calendar later changes
+AssertionError: expected { work_date: '2026-09-23', …(10) } to match object { category: 'Worked', …(1) }
+(36 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "category": "Worked",
+-   "category_source": "explicit",
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:131:24
+    129|     const saved = await t.request('PUT', `/api/days/${CURRENT_C}`, { c…
+    130|     expect(saved.status).toBe(200);
+    131|     expect(saved.body).toMatchObject({ category: 'Worked', category_so…
+       |                        ^
+    132|     const latest = listCalendarVersions(t.db, t.calendarId).at(-1);
+    133|     createCalendarVersion(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > category source (plan observation 2, AC-05 groundwork) > saving a day over a default row makes it explicit and audits the effective label
+AssertionError: expected { work_date: '2026-09-21', …(10) } to match object { category_source: 'explicit' }
+(37 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "category_source": "explicit",
++   "attendance_expected": true,
++   "calculation": {
++     "credited_minutes": 0,
++     "eligible_minutes": 0,
++     "excluded_break_seconds": 0,
++     "gross_seconds": 10800,
++     "nonworking_minutes": 0,
++     "nonworking_seconds": 0,
++     "normal_excess_minutes": 0,
++     "policy_version_id": "78bd11b9-5acd-4111-8633-b3546ea17fb3",
++     "provisional": true,
++     "regular_minutes": 180,
++     "regular_seconds": 10800,
++     "segments": [
++       {
++         "calendar_version_id": "8eef39d0-c43c-441e-b293-5fd3e820ac8c",
++         "day_class": "normal",
++         "local_date": "2026-09-21",
++         "reason": "scheduled_weekday",
++         "seconds": 10800,
++       },
++     ],
++     "status": "complete",
++   },
++   "calculation_error": null,
++   "category": "Worked",
++   "classification": {
++     "calendar_version_id": "8eef39d0-c43c-441e-b293-5fd3e820ac8c",
++     "day_class": "normal",
++     "name": null,
++     "reason": "scheduled_weekday",
++   },
++   "default_category": "Worked",
++   "deficit_minutes": 300,
++   "edit": {
++     "period_relation": "current",
++     "reason_required": false,
++   },
++   "entry": {
++     "category": "Worked",
++     "id": "fe011b3b-c6f7-4579-895f-893fe7d25ded",
++     "leave_minutes": 0,
++     "notes": "",
++     "version": 2,
++     "wfh": false,
++     "work_date": "2026-09-21",
++   },
++   "sessions": [
++     {
++       "breaks": [],
++       "breaks_confirmed": true,
++       "end_utc": "2026-09-21T19:00:00Z",
++       "id": "82d0a097-24bc-42d8-ab05-c9a8d3d61b84",
++       "input_zone": "America/Los_Angeles",
++       "source": "manual",
++       "start_utc": "2026-09-21T16:00:00Z",
++       "version": 1,
++       "work_date": "2026-09-21",
++     },
++   ],
++   "work_date": "2026-09-21",
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:156:24
+    154|     });
+    155|     expect(saved.status).toBe(200);
+    156|     expect(saved.body).toMatchObject({ category_source: 'explicit' });
+       |                        ^
+    157|     const update = dayEntryAudits().find((row) => row.operation === 'd…
+    158|     expect(JSON.parse(update?.before_json ?? '{}')).toMatchObject({ ca…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > 240 work + 240 leave: no deficit and no OT, and leave never counts as work
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/day-entries-batch.test.ts:171:26
+    169|       body: dayBody('Worked', { leave_minutes: 240, leave_kind: 'vacat…
+    170|     });
+    171|     expect(saved.status).toBe(200);
+       |                          ^
+    172|     expect(saved.body).toMatchObject({
+    173|       leave_minutes: 240,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > without the leave the same four hours leave a 240-minute deficit
+AssertionError: expected { work_date: '2026-09-21', …(10) } to match object { leave_minutes: +0, …(2) }
+(36 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "deficit_minutes": 240,
+-   "leave_kind": null,
+-   "leave_minutes": 0,
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:185:18
+    183|     await addSession(CURRENT_A, '09:00', '13:00');
+    184|     const view = await getDay(CURRENT_A);
+    185|     expect(view).toMatchObject({ leave_minutes: 0, leave_kind: null, d…
+       |                  ^
+    186|   });
+    187|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > rejects leave above the effective B, a missing kind and a kind without minutes (422)
+AssertionError: expected { code: 'validation_error', …(2) } to match object { Object (code, details) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": "leave_exceeds_required",
++   "code": "validation_error",
+    "details": {
+-     "leave_minutes": 481,
+-     "required_minutes": 480,
++     "issues": [
++       {
++         "code": "unrecognized_keys",
++         "message": "Unrecognized key: \"leave_kind\"",
++         "path": "",
++       },
++     ],
+    },
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:194:29
+    192|     });
+    193|     expect(over.status).toBe(422);
+    194|     expect(over.body.error).toMatchObject({ code: 'leave_exceeds_requi…
+       |                             ^
+    195|     const noKind = await t.request('PUT', `/api/days/${CURRENT_A}`, { …
+    196|     expect(noKind.status).toBe(422);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > validates against the B effective on the work date, not the default 480
+AssertionError: expected { code: 'validation_error', …(2) } to match object { Object (code, details) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": "leave_exceeds_required",
++   "code": "validation_error",
+    "details": {
+-     "required_minutes": 360,
++     "issues": [
++       {
++         "code": "unrecognized_keys",
++         "message": "Unrecognized key: \"leave_kind\"",
++         "path": "",
++       },
++     ],
+    },
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:235:29
+    233|     });
+    234|     expect(over.status).toBe(422);
+    235|     expect(over.body.error).toMatchObject({ code: 'leave_exceeds_requi…
+       |                             ^
+    236|     const ok = await t.request('PUT', `/api/days/${CURRENT_A}`, {
+    237|       cookie,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > WFH is a stored location flag: it never changes the attendance or the minutes
+AssertionError: expected { work_date: '2026-09-21', …(10) } to match object { wfh: true, category: 'Worked', …(2) }
+(34 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "attendance_expected": true,
+    "category": "Worked",
+    "deficit_minutes": 0,
+-   "wfh": true,
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:251:24
+    249|     });
+    250|     expect(saved.status).toBe(200);
+    251|     expect(saved.body).toMatchObject({ wfh: true, category: 'Worked', …
+       |                        ^
+    252|     expect(saved.body.entry).toMatchObject({ wfh: true, notes: 'Synthe…
+    253|     expect(saved.body.calculation).toEqual(office.calculation);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > partial leave, leave kind and WFH (R-05, owner decision E-2) > a day without an entry exposes neutral leave, WFH and OT-leave fields
+AssertionError: expected { work_date: '2026-09-22', …(10) } to match object { category_source: 'default', …(4) }
+(30 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "category_source": "default",
+-   "leave_kind": null,
+-   "leave_minutes": 0,
+-   "ot_leave": {
+-     "consumed_minutes": 0,
+-     "kind_minutes": 0,
+-     "mismatch": false,
+-     "reversed_minutes": 0,
++   "attendance_expected": true,
++   "calculation": {
++     "credited_minutes": null,
++     "eligible_minutes": null,
++     "excluded_break_seconds": null,
++     "gross_seconds": null,
++     "nonworking_minutes": null,
++     "nonworking_seconds": null,
++     "normal_excess_minutes": null,
++     "policy_version_id": "354eeadc-2a4a-42a5-b304-c6bb144ec8bd",
++     "provisional": true,
++     "regular_minutes": null,
++     "regular_seconds": null,
++     "segments": [],
++     "status": "no_records",
++   },
++   "calculation_error": null,
++   "category": "Worked",
++   "classification": {
++     "calendar_version_id": "6bfaea3a-97c2-44a0-a8fa-88fc7b410999",
++     "day_class": "normal",
++     "name": null,
++     "reason": "scheduled_weekday",
++   },
++   "default_category": "Worked",
++   "deficit_minutes": null,
++   "edit": {
++     "period_relation": "current",
++     "reason_required": false,
+    },
+-   "wfh": false,
++   "entry": null,
++   "sessions": [],
++   "work_date": "2026-09-22",
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:260:18
+    258|   it('a day without an entry exposes neutral leave, WFH and OT-leave f…
+    259|     const view = await getDay(CURRENT_B);
+    260|     expect(view).toMatchObject({
+       |                  ^
+    261|       category_source: 'default',
+    262|       leave_minutes: 0,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: preview > previews creates, updates and unchanged entries without writing anything
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:286:58
+    284|       ],
+    285|     });
+    286|     expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+       |                                                          ^
+    287|     expect(preview.body).toMatchObject({ mode: 'preview', can_commit: …
+    288|     expect(preview.body.entries.map((item: any) => [item.work_date, it…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: preview > reports an identical entry as unchanged
+AssertionError: expected { error: { code: 'not_found', …(1) } } to match object { changed_count: +0 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "changed_count": 0,
++   "error": {
++     "code": "not_found",
++     "message": "Endpoint not found",
++   },
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:309:26
+    307|       entries: [change(CURRENT_B, 'Vacation', { expected_version: save…
+    308|     });
+    309|     expect(preview.body).toMatchObject({ changed_count: 0 });
+       |                          ^
+    310|     expect(preview.body.entries[0].status).toBe('unchanged');
+    311|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: preview > flags stale versions and invalid entries per date instead of failing the preview
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:322:28
+    320|       ],
+    321|     });
+    322|     expect(preview.status).toBe(200);
+       |                            ^
+    323|     expect(preview.body.can_commit).toBe(false);
+    324|     expect(preview.body.entries[0]).toMatchObject({ work_date: CURRENT…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: preview > marks old dates as reason-required in the preview
+AssertionError: expected { error: { code: 'not_found', …(1) } } to match object { reason_required: true, …(1) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "reason_required": true,
+-   "reason_required_dates": [
+-     "2026-09-09",
+-   ],
++   "error": {
++     "code": "not_found",
++     "message": "Endpoint not found",
++   },
+  }
+
+ ❯ tests/integration/day-entries-batch.test.ts:330:26
+    328|   it('marks old dates as reason-required in the preview', async () => {
+    329|     const preview = await batch({ mode: 'preview', entries: [change(OL…
+    330|     expect(preview.body).toMatchObject({ reason_required: true, reason…
+       |                          ^
+    331|     expect(preview.body.entries[0]).toMatchObject({ period_relation: '…
+    332|     expect(preview.body.entries[1]).toMatchObject({ period_relation: '…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > applies a batch across old and current periods with one reason and one audit event per changed entry
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:351:60
+    349|     };
+    350|     const response = await batch(body);
+    351|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    352|     expect(response.body).toMatchObject({ mode: 'commit', changed: [OL…
+    353|     expect(response.body.days.map((day: any) => [day.work_date, day.ca…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > requires a reason when any date is old and writes nothing without it
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:389:29
+    387|       entries: [change(CURRENT_A, 'Vacation', { expected_version: null…
+    388|     });
+    389|     expect(response.status).toBe(422);
+       |                             ^
+    390|     expect(response.body.error).toMatchObject({ code: 'reason_required…
+    391|     const blank = await batch({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > needs no reason for current and future dates
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:407:29
+    405|       entries: [change(CURRENT_A, 'Vacation', { expected_version: null…
+    406|     });
+    407|     expect(response.status).toBe(200);
+       |                             ^
+    408|     expect(dayEntryAudits().map((row) => row.reason)).toEqual([null, n…
+    409|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > is atomic: one stale date rolls back every date (409 stale_version)
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:421:29
+    419|       ],
+    420|     });
+    421|     expect(response.status).toBe(409);
+       |                             ^
+    422|     expect(response.body.error).toMatchObject({ code: 'stale_version',…
+    423|     expect(entryRows()).toEqual(before.rows);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > treats a missing expected_version on an existing entry and a version on a missing entry as stale
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:431:28
+    429|     expect(saved.status).toBe(200);
+    430|     const missing = await batch({ mode: 'commit', entries: [change(CUR…
+    431|     expect(missing.status).toBe(409);
+       |                            ^
+    432|     expect(missing.body.error.code).toBe('stale_version');
+    433|     const phantom = await batch({ mode: 'commit', entries: [change(CUR…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > a concurrent edit between preview and commit makes the commit stale
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ tests/integration/day-entries-batch.test.ts:442:25
+    440|     const version = saved.body.entry.version;
+    441|     const preview = await batch({ mode: 'preview', entries: [change(CU…
+    442|     expect(preview.body.entries[0].status).toBe('update');
+       |                         ^
+    443|     const other = await t.request('PUT', `/api/days/${CURRENT_B}`, { c…
+    444|     expect(other.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > is atomic for validation errors too (leave above B on one date)
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:459:29
+    457|       ],
+    458|     });
+    459|     expect(response.status).toBe(422);
+       |                             ^
+    460|     expect(response.body.error).toMatchObject({ code: 'batch_invalid',…
+    461|     expect(entryRows()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > skips unchanged entries: no version bump and no audit event
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:474:29
+    472|       ],
+    473|     });
+    474|     expect(response.status).toBe(200);
+       |                             ^
+    475|     expect(response.body).toMatchObject({ changed: [CURRENT_A], unchan…
+    476|     expect(dayEntryAudits()).toHaveLength(audits + 1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > keeps the other fields of an existing entry when a batch entry omits them
+TypeError: Cannot read properties of undefined (reading 'version')
+ ❯ tests/integration/day-entries-batch.test.ts:487:84
+    485|     const response = await batch({
+    486|       mode: 'commit',
+    487|       entries: [change(CURRENT_B, 'Vacation', { expected_version: save…
+       |                                                                                    ^
+    488|     });
+    489|     expect(response.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: commit > rejects duplicate dates, an empty batch, unknown fields and a mode that is not preview or commit
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:501:30
+    499|   it('rejects duplicate dates, an empty batch, unknown fields and a mo…
+    500|     const duplicate = await batch({ mode: 'commit', entries: [change(C…
+    501|     expect(duplicate.status).toBe(422);
+       |                              ^
+    502|     expect(duplicate.body.error.code).toBe('duplicate_date');
+    503|     expect((await batch({ mode: 'commit', entries: [] })).status).toBe…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: conflicts with recorded work > reports sessions and clock evidence, requires confirmation and never deletes a session
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:537:28
+    535|     ];
+    536|     const preview = await batch({ mode: 'preview', entries });
+    537|     expect(preview.status).toBe(200);
+       |                            ^
+    538|     expect(preview.body.requires_conflict_confirmation).toBe(true);
+    539|     expect(preview.body.conflicts).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: conflicts with recorded work > does not flag a Worked label or an already-effective label on a date with sessions
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/day-entries-batch.test.ts:578:36
+    576|       entries: [change(CURRENT_A, 'Worked', { expected_version: entry.…
+    577|     });
+    578|     expect(preview.body.conflicts).toEqual([]);
+       |                                    ^
+    579|     expect(preview.body.requires_conflict_confirmation).toBe(false);
+    580|     const commit = await batch({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: conflicts with recorded work > an old date with sessions needs both the reason and the confirmation
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:592:29
+    590|     const entries = [change(OLD, 'Sick', { expected_version: entry.ver…
+    591|     const noReason = await batch({ mode: 'commit', confirm_conflicts: …
+    592|     expect(noReason.status).toBe(422);
+       |                             ^
+    593|     expect(noReason.body.error.code).toBe('reason_required');
+    594|     const noConfirm = await batch({ mode: 'commit', reason: 'Synthetic…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: ownership and isolation > works only on the caller's own entries; another user's entries are untouched and invisible
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:615:26
+    613|     // The employee's expected_version cannot target the admin's entry…
+    614|     const probe = await batch({ mode: 'commit', entries: [change(CURRE…
+    615|     expect(probe.status).toBe(409);
+       |                          ^
+    616|     expect(JSON.stringify(probe.body)).not.toContain('admin private no…
+    617|     const preview = await batch({ mode: 'preview', entries: [change(CU…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/42]⎯
+
+ FAIL  tests/integration/day-entries-batch.test.ts > POST /api/days/batch: ownership and isolation > requires a session and a same-origin JSON request
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/day-entries-batch.test.ts:638:75
+    636|   it('requires a session and a same-origin JSON request', async () => {
+    637|     const body = { mode: 'preview', entries: [change(CURRENT_A, 'Off')…
+    638|     expect((await t.request('POST', '/api/days/batch', { body })).stat…
+       |                                                                           ^
+    639|     const crossOrigin = await t.request('POST', '/api/days/batch', { c…
+    640|     expect(crossOrigin.status).toBe(403);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/42]⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ ❯ tests/integration/migrations.test.ts:53:20
+     51| describe('fresh SQLite migrations', () => {
+     52|   it('applies every migration to an empty file database with the requi…
+     53|     expect(LATEST).toBe(3);
+       |                    ^
+     54|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATE…
+     55|     const tables = db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/42]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002 and 0003, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [ 2 ], version: 2 } to deeply equal { applied: [ 2, 3 ], version: 3 }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      2,
+-     3,
+    ],
+-   "version": 3,
++   "version": 2,
+  }
+
+ ❯ tests/integration/migrations.test.ts:180:71
+    178|     }
+    179|
+    180|     expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).…
+       |                                                                       ^
+    181|
+    182|     const after = snapshot(db);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/42]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { applied: [], version: 2 } to deeply equal { applied: [ 3 ], version: 3 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     3,
+-   ],
+-   "version": 3,
++   "applied": [],
++   "version": 2,
+  }
+
+ ❯ tests/integration/migrations.test.ts:223:37
+    221|       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, wo…
+    222|     );
+    223|     expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3], version: 3…
+       |                                     ^
+    224|     expect(getBalance(db, employee).postedMinutes).toBe(45);
+    225|     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/42]⎯
+
+ FAIL  tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003)
+SqliteError: no such column: category_source
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/migrations.test.ts:298:15
+    296|     // Omitted columns default to the conservative explicit source and…
+    297|     insertDay(ids.employee, sheet, '2026-09-21');
+    298|     expect(db.prepare('SELECT category_source, leave_kind FROM day_ent…
+       |               ^
+    299|       category_source: 'explicit',
+    300|       leave_kind: null,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/42]⎯
+
+ FAIL  tests/integration/ot-leave.test.ts > LG-10: a day label or leave change never reserves or spends OT (owner decision E-2) > changing the day to leave minutes (including leave_kind ot) posts nothing and reserves nothing
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/ot-leave.test.ts:531:24
+    529|       body: { category: 'Vacation', leave_minutes: event?.leave_minute…
+    530|     });
+    531|     expect(put.status).toBe(200);
+       |                        ^
+    532|     expect(put.body).toMatchObject({ leave_kind: 'ot', leave_minutes: …
+    533|     // Relabel the category, then switch the kind to vacation and back…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/42]⎯
+
+ FAIL  tests/integration/ot-leave.test.ts > LG-10: a day label or leave change never reserves or spends OT (owner decision E-2) > a batch relabel to leave_kind ot also posts and reserves nothing
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/ot-leave.test.ts:565:26
+    563|       },
+    564|     });
+    565|     expect(batch.status).toBe(200);
+       |                          ^
+    566|     expect(newDeltas(employee)).toEqual([]);
+    567|     expect(count('SELECT count(*) FROM ot_leave_requests')).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/42]⎯
+
+ FAIL  tests/integration/ot-leave.test.ts > LG-10: a day label or leave change never reserves or spends OT (owner decision E-2) > exposes the OT-kind minutes next to the linked request so the UI can warn; a mismatch never changes a balance
+AssertionError: expected undefined to deeply equal { kind_minutes: +0, …(3) }
+
+- Expected:
+{
+  "consumed_minutes": 0,
+  "kind_minutes": 0,
+  "mismatch": false,
+  "reversed_minutes": 0,
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/ot-leave.test.ts:577:36
+    575|     const day = async () => (await t.request('GET', '/api/days/2026-10…
+    576|     // Reserved but not used: OT-kind minutes (none yet) differ from t…
+    577|     expect((await day()).ot_leave).toEqual({ kind_minutes: 0, consumed…
+       |                                    ^
+    578|     const saved = await t.request('PUT', '/api/days/2026-10-01', {
+    579|       cookie,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > category source (default | explicit) > a default row takes its label from the calendar at read time, an explicit row keeps its own
+TypeError: resolveDayCategory is not a function
+ ❯ tests/domain/attendance.test.ts:44:12
+     42|     const weekday = classifyDate([calendar], '2026-09-21');
+     43|     const holiday = classifyDate([calendar], '2026-09-07');
+     44|     expect(resolveDayCategory('default', 'Worked', defaultCategory(hol…
+       |            ^
+     45|     expect(resolveDayCategory('default', 'Off', defaultCategory(weekda…
+     46|     expect(resolveDayCategory('explicit', 'Vacation', defaultCategory(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > category source (default | explicit) > falls back to the stored label when the calendar cannot classify the date
+TypeError: resolveDayCategory is not a function
+ ❯ tests/domain/attendance.test.ts:52:12
+     50|
+     51|   it('falls back to the stored label when the calendar cannot classify…
+     52|     expect(resolveDayCategory('default', 'Sick', null)).toBe('Sick');
+       |            ^
+     53|     expect(resolveDayCategory('explicit', 'Sick', null)).toBe('Sick');
+     54|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > category source (default | explicit) > accepts only the two sources
+TypeError: resolveDayCategory is not a function
+ ❯ tests/domain/attendance.test.ts:58:36
+     56|   it('accepts only the two sources', () => {
+     57|     const sources: CategorySource[] = ['default', 'explicit'];
+     58|     expect(sources.map((source) => resolveDayCategory(source, 'Off', '…
+       |                                    ^
+     59|   });
+     60| });
+ ❯ tests/domain/attendance.test.ts:58:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > leave kinds and validation against the effective B > has the three owner-approved kinds and no OT-funded category (owner decision E-2)
+TypeError: LEAVE_KINDS is not iterable
+ ❯ tests/domain/attendance.test.ts:64:16
+     62| describe('leave kinds and validation against the effective B', () => {
+     63|   it('has the three owner-approved kinds and no OT-funded category (ow…
+     64|     expect([...LEAVE_KINDS]).toEqual(['vacation', 'sick', 'ot']);
+       |                ^
+     65|     const categories: DayCategory[] = ['Worked', 'Off', 'Vacation', 'S…
+     66|     expect(categories).not.toContain('OT-funded leave');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > leave kinds and validation against the effective B > accepts zero leave without a kind and whole leave up to B with a kind
+TypeError: validateLeave is not a function
+ ❯ tests/domain/attendance.test.ts:70:12
+     68|
+     69|   it('accepts zero leave without a kind and whole leave up to B with a…
+     70|     expect(validateLeave({ leaveMinutes: 0, leaveKind: null, requiredM…
+       |            ^
+     71|     expect(validateLeave({ leaveMinutes: 240, leaveKind: 'vacation', r…
+     72|     expect(validateLeave({ leaveMinutes: 480, leaveKind: 'ot', require…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > leave kinds and validation against the effective B > rejects leave above the effective B, a missing kind, a kind without minutes and an unknown kind
+TypeError: validateLeave is not a function
+ ❯ tests/domain/attendance.test.ts:77:12
+     75|
+     76|   it('rejects leave above the effective B, a missing kind, a kind with…
+     77|     expect(validateLeave({ leaveMinutes: 481, leaveKind: 'vacation', r…
+       |            ^
+     78|       code: 'leave_exceeds_required',
+     79|       details: { leave_minutes: 481, required_minutes: 480 },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/42]⎯
+
+ FAIL  tests/domain/attendance.test.ts > leave kinds and validation against the effective B > rejects fractional or negative minutes as invalid_minutes
+AssertionError: expected a DomainError, got TypeError: (0 , __vite_ssr_import_1__.validateLeave) is not a function: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ expectDomainError tests/support/fixtures.ts:19:82
+     17|   }
+     18|   expect(thrown, `expected DomainError ${code}`).toBeDefined();
+     19|   expect(isDomainError(thrown), `expected a DomainError, got ${String(…
+       |                                                                                  ^
+     20|   if (isDomainError(thrown)) expect(thrown.code).toBe(code);
+     21| }
+ ❯ tests/domain/attendance.test.ts:97:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/42]⎯
+
+
+ Test Files  4 failed (4)
+      Tests  42 failed | 45 passed (87)
+   Start at  23:45:40
+   Duration  5.47s (tests 87%, transform 9%, import 3%)
+
+EXIT: 1

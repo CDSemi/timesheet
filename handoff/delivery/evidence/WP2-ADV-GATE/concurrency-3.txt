@@ -1,0 +1,39 @@
+
+ RUN  v5.0.2 B:/Temp/advgate
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > harness self-check > a deliberately unsafe check-then-insert double-books, so the racers really run concurrently 142ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > exactly one of two 80-minute reservations wins at opening balance 100 (25 rounds)
+[race] LG-07 reserve 80 vs 80 at 100: 25 rounds, overlapping call windows 25/25, outcomes: 409 insufficient_balance + reserved x25
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > exactly one of two 80-minute reservations wins at opening balance 100 (25 rounds) 238ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > four racers reserving 80 at opening balance 200: exactly two win (20 rounds)
+[race] reserve 4 x 80 at 200: 20 rounds, overlapping call windows 20/20, outcomes: 409 insufficient_balance + 409 insufficient_balance + reserved + reserved x20
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > four racers reserving 80 at opening balance 200: exactly two win (20 rounds) 315ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > a concurrent retry of the same request key creates one request (20 rounds)
+[race] reserve same key twice: 20 rounds, overlapping call windows 20/20, outcomes: duplicate + reserved x20
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > LG-07 concurrent reservations (AC-03) > a concurrent retry of the same request key creates one request (20 rounds) 163ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > two uses of 80 against a 120 reservation: exactly one is recorded (20 rounds)
+[race] use 80 vs 80 of 120: 20 rounds, overlapping call windows 20/20, outcomes: 409 exceeds_reserved + used x20
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > two uses of 80 against a 120 reservation: exactly one is recorded (20 rounds) 185ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > a concurrent retry of the same use key posts once (20 rounds)
+[race] use same key twice: 20 rounds, overlapping call windows 20/20, outcomes: duplicate + used x20
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > a concurrent retry of the same use key posts once (20 rounds) 189ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > cancel racing a full use: one wins and the counters and ledger agree (20 rounds)
+[race] cancel vs use 120 of 120: 20 rounds, overlapping call windows 20/20, outcomes: unchanged + used x19; 409 exceeds_reserved + cancelled x1
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > cancel racing a full use: one wins and the counters and ledger agree (20 rounds) 183ms
+stdout | tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > two reversals of 120 used minutes: exactly one posts the compensating delta (20 rounds)
+[race] reverse 120 vs 120 of 120 used: 20 rounds, overlapping call windows 20/20, outcomes: 409 exceeds_reversible + reversed x20
+
+ ✓ tests/integration/ot-leave-concurrency.test.ts > concurrent use, cancel and reverse (AC-03) > two reversals of 120 used minutes: exactly one posts the compensating delta (20 rounds) 211ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  23:09:52
+   Duration  2.55s (tests 73%, transform 21%, import 5%)
+
+EXIT 0

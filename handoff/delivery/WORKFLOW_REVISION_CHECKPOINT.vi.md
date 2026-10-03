@@ -6,12 +6,15 @@ America/Los_Angeles).
 - Package và vai trò: WP2 (đang triển khai); coordinator. Model thật claude-opus-5-5
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
-- Repository: nhánh main. Trước WP2-T05-FREEZE, HEAD = origin/main =
-  e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96 (commit đóng băng WP2-T04). WP2-T05-FREEZE
-  commit các thay đổi chưa commit của WP2-ADVFIX và WP2-T05 cùng các record handoff và
-  checkpoint này. Digest mã nguồn của working tree
-  809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0 (tác giả tự báo).
-  Không có commit chưa push.
+- Repository: nhánh main.
+  - HEAD = origin/main = e768b71c2a5e522bdfece8617599992f8f4a0abc. Đây là commit chưa đủ
+    của chủ dự án, chỉ gồm các đường dẫn đã theo dõi có thay đổi.
+  - Các file mới của WP2-ADVFIX và WP2-T05 cùng các record handoff chưa được theo dõi.
+    Commit bổ sung của chủ dự án sẽ thêm chúng cùng checkpoint này.
+  - Digest mã nguồn của working tree
+    809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0, đã được
+    WP2-T05-RECON xác nhận.
+  - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
     - Bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -51,9 +54,16 @@ America/Los_Angeles).
     - Tin nhắn của người dùng nêu rõ hành động và rủi ro cụ thể có thể gỡ một lần chặn.
     - Bộ phân loại chỉ đọc `autoMode` từ cài đặt người dùng hoặc cài đặt được quản lý,
       không đọc từ cài đặt của dự án.
-  - Đang chờ chủ dự án chỉ đạo (`pending_owner_question` trên board). Các phương án: một
-    tin nhắn duyệt rõ ràng cho lần này, tự commit, hoặc chủ dự án tự cấu hình `autoMode`
-    trong cài đặt người dùng.
+  - Chủ dự án đã tự commit và push ("tôi đã commit xong, tiếp tục đi"). WP2-T05-RECON
+    phát hiện commit e768b71c2a5e522bdfece8617599992f8f4a0abc (cha e92add0) chỉ chứa 23
+    đường dẫn đã theo dõi có thay đổi.
+    - Message của commit là Commit description trong chat của coordinator.
+    - Mọi file mới vẫn chưa được theo dõi: migration 0003, dayEntries.ts, các test mới,
+      báo cáo review tư vấn, brief và bằng chứng.
+    - Vì vậy main đang tham chiếu tới các file chưa có trong git.
+    - Digest khớp T05; validator và check_recovery exit 0.
+  - Cần chủ dự án làm một commit bổ sung: git add -A, kiểm tra precommit, rồi commit với
+    message đã soạn sẵn và push.
 - Còn lại:
   - WP2-T06..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
   - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
@@ -64,9 +74,11 @@ America/Los_Angeles).
   - Nghiệm thu WP2.
   - Sau đó WP3, WP4 và WP5 (WP5 bắt đầu bằng nghiệm thu độc lập), rồi pilot packet cụ
     thể. Pilot thật do chủ dự án quyết.
-- Vướng mắc: bộ phân loại từ chối lệnh stage của committer ngay cả khi đã trích lời xác
-  nhận của chủ dự án. Coordinator không đổi cài đặt quyền và không lách qua lệnh chặn. Các
-  commit đóng băng sau có thể gặp lại tình trạng này.
+- Vướng mắc: commit bổ sung (chủ dự án). Rủi ro: bộ phân loại có thể lại chặn `git add`
+  của committer ở các commit đóng băng sau. Coordinator không đổi cài đặt quyền và không lách qua lệnh
+  chặn. Các phương án: chủ dự án nhắn duyệt nêu rõ hành động và rủi ro, tự commit, hoặc tự
+  cấu hình `autoMode` trong cài đặt người dùng. Có thể gộp các commit đóng băng để giảm số
+  lần gián đoạn.
 - Ghi chú chuyển tiếp:
   - WP3 phải xử lý biến thể 'pending' của `CorrectionResult` và lưu các khoản trừ đang chờ.
   - OT tạm tính chỉ tính cho ngày có phiên làm việc (T04/T05), và bước chốt sổ ở WP3 phải
@@ -80,18 +92,18 @@ America/Los_Angeles).
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
 - Bước tiếp:
-  1. Làm theo chỉ đạo của chủ dự án về WP2-T05-FREEZE: tự commit, hoặc chạy lại sau khi
-     chủ dự án đổi quy tắc quyền.
-  2. Ghi nhận commit.
-  3. Sau đó giao WP2-T06 (brief sẵn) trên SHA đóng băng.
+  1. Sau commit bổ sung của chủ dự án, chạy một lượt kiểm tra lại chỉ đọc: SHA, danh sách
+     file, working tree sạch và digest.
+  2. Đánh dấu WP2-T05-FREEZE là xong.
+  3. Giao WP2-T06 (brief sẵn).
 - Prompt tương ứng: handoff/prompts/ORCHESTRATE.md (WP2 theo WP2_IMPLEMENT.md).
 
 ## Khôi phục điều phối
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: không có. WP2-T05-FREEZE đang chờ chủ dự án, và WP2-T06 chờ task đó.
-- Process còn sống: không biết có process nào. Cả hai lần chạy committer đều không chạy
-  được lệnh nào. Các process sót trước đó đã được dừng.
+- Đang chạy: không có. WP2-T06 chờ để không có thay đổi dở dang nào bị cuốn vào lệnh
+  `git add -A` của chủ dự án.
+- Process còn sống: không biết có process nào. Các process sót trước đó đã được dừng.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

@@ -1,0 +1,27 @@
+$ node pd-wp1-build.ts <wp1-f32978f> <db>
+wp1 migrate {"applied":[1],"version":1}
+wp1 api {"login":200,"s1":201,"s2":201,"d1":200,"s3":201}
+wp1 view credited {"provisional_credited_minutes":210,"pending_days":1}
+wp1 rows users=2
+wp1 rows work_sessions=3
+wp1 rows session_breaks=3
+wp1 rows day_entries=4
+wp1 rows timesheets=1
+wp1 rows audit_events=14
+wp1 rows work_policies=2
+wp1 rows calendar_versions=1
+wp1 user_version 1
+EXIT 0
+$ node pd-wp2-upgrade.ts <clone-e92add0> <db>
+PASS  PD1 upgrade applies exactly [2]  {"applied":[2],"version":2}
+PASS  PD2 every WP1 table byte-identical after upgrade  {"tables":12,"changed":[]}
+PASS  PD3 schema_migrations row 1 unchanged  null
+PASS  PD4 integrity_check ok, foreign_key_check empty  null
+PASS  PD5 second migrate is a no-op  null
+PASS  PD6 WP1 employee can sign in on the upgraded database  200
+PASS  PD7 summary on WP1 data: posted 0, provisional = WP1 complete-day credits (90 + 120), one pending day  {"posted_minutes":0,"reserved_minutes":0,"available_minutes":0,"negative":false,"reconciliation_required":false,"provisional_minutes":210,"provisional_periods":[{"payroll_date":"2026-10-02","period_start":"2026-09-14","period_end":"2026-09-27","credited_minutes":210,"complete_days":2,"pending_days":1}]}
+PASS  PD8 reserve 480 and record use on upgraded data: posted 0, reserved 0  {"reserve":201,"use":200,"balance":{"posted_minutes":0,"reserved_minutes":0,"available_minutes":0,"negative":false,"reconciliation_required":false}}
+PASS  PD9 evidence CSV on upgraded data lists WP1 intervals, the WP1 leave minutes and credited 90/120  ["2026-09-21,bd5ac2ef-4aeb-44e5-a575-6d7a73366db7,manual,America/Los_Angeles,2026-09-21T16:00:00Z,2026-09-22T02:30:00Z,true,1","2026-09-23,43e72fbb-1afb-436a-a5ba-44909ace2199,manual,America/Los_Angeles,2026-09-23T15:00:00Z,2026-09-24T01:00:00Z,false,1","2026-09-26,30267379-91df-456a-9a34-eb6a2c2dc699,manual,America/Los_Angeles,2026-09-26T17:00:00Z,2026-09-26T19:00:00Z,true,1","2026-09-21,bd5ac2ef-4aeb-44e5-a575-6d7a73366db7,5bb7007c-0918-4578-80ea-f7842c676965,2026-09-21T18:00:00Z,2026-09-21T18:15:00Z,false","2026-09-21,bd5ac2ef-4aeb-44e5-a575-6d7a73366db7,4b9aa34e-0c10-4ecc-94ff-95cd3fe0b7b2,2026-09-21T20:00:00Z,2026-09-21T20:30:00Z,false","2026-09-21,bd5ac2ef-4aeb-44e5-a575-6d7a73366db7,652fd27a-d592-4b57-9b6f-f6225fddbae1,2026-09-21T22:30:00Z,2026-09-21T22:45:00Z,false","2026-09-20,nonworking,unscheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Off,0,false,no_records,f49710b1-25bb-4ef7-897e-46a811e95730,,,,,,,,2026-10-02,false","2026-09-21,normal,scheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Worked,0,false,complete,f49710b1-25bb-4ef7-897e-46a811e95730,37800,3600,570,0,90,90,90,2026-10-02,false","2026-09-22,normal,scheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Vacation,240,true,no_records,f49710b1-25bb-4ef7-897e-46a811e95730,,,,,,,,2026-10-02,false","2026-09-23,normal,scheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Worked,0,false,incomplete_breaks,f49710b1-25bb-4ef7-897e-46a811e95730,,,,,,,,2026-10-02,false","2026-09-24,normal,scheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Worked,0,false,no_records,f49710b1-25bb-4ef7-897e-46a811e95730,,,,,,,,2026-10-02,false","2026-09-25,normal,scheduled_weekday,ad1edda2-bb71-4c4b-8bc4-2807db931212,Worked,0,false,no_records,f49710b1-25bb-4ef7-897e-46a811e95730,,,,,,,,2026-10-02,false"]
+PASS  PD10 history lists WP1 audit events of the employee only  ["ot_ledger.leave_consumption","ot_leave.use","ot_leave.reserve","ot_ledger.credit","auth.login","work_session.create","day_entry.create","day_entry.create","work_session.create","day_entry.create","work_session.create","day_entry.create","auth.login","work_policy.create","user.create"]
+# SUMMARY all PASS
+EXIT 0
