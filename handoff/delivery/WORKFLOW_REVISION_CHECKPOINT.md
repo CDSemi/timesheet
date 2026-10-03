@@ -27,7 +27,19 @@ America/Los_Angeles).
   deployment, billing, global-setting or permission-setting changes.
 - WP1-F01-FIX done (author-reported: 6 regressions red→green, verify 180/180, digest
   c6e24381…9c59 pre-commit). WP1-F01-FREEZE (committer) running.
-- Next action: record the freeze SHA; dispatch WP1-F01-GATE, then fresh WP1-F01-AUDIT.
+- WP1-F01-FREEZE done on attempt 2 (attempt 1 blocked by EOF whitespace in evidence,
+  normalized by the author): commit 68bbb31435543329b6c51f29703d9e2e7a4290bf pushed.
+  WP1-F01-GATE (package-final, clean export) running.
+- WP1-F01-GATE PASS on 68bbb31 (clean export): digest
+  c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59 (= worker pre-commit);
+  verify 180/180, fixtures 115/115, migrations/isolation 18/18, own F-01A–D probe pass.
+  WP1-F01-AUDIT (fresh opus) running.
+- WP1-F01-AUDIT (fresh opus) PASS at 68bbb31 / c6e24381: F-01 resolved (own probe 68/68,
+  20 failures on pre-fix baseline); residual unconfirmed Clock out acceptable; three WP2
+  risks carried ([WP1_RECHECK](WP1_RECHECK.md)). WP1 accepted: STATE, NEXT_ACTION and
+  WP1_HANDOFF acceptance record updated; WP1-F01-ACCEPT (committer) running.
+- Next action: record the WP1 accept SHA, switch the active package to WP2 and dispatch
+  the WP2 package plan (planner with opus override, reason size_risk).
 
 ## Orchestration recovery
 

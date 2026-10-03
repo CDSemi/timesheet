@@ -1,10 +1,10 @@
 # Next action: start or resume the coordinator
 
-**Application: WP1 FIX REQUIRED; F-01 unresolved; WP2 not started.**
+**Application: WP1 accepted (independent recheck PASS at 68bbb31, digest c6e24381); WP2 next.**
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
 [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP1 handoff](delivery/WP1_HANDOFF.md)
-and [WP1 review](delivery/WP1_REVIEW.md).
+and [WP1 recheck](delivery/WP1_RECHECK.md).
 
 Open this repository in Claude Code with subscription sign-in. Project configuration
 selects the coordinator; [document 08](../docs/08_AI_WORKFLOW_AND_BUDGET.md) defines
@@ -27,15 +27,13 @@ request owner authorization only after preparing the concrete pilot packet.
 Do not change billing or permission settings.
 ~~~
 
-Current route: after the governance accept commit, a worker reproduces and fixes F-01
-as specified in
-[WP1_REVIEW](delivery/WP1_REVIEW.md) under [FIX_FINDINGS](prompts/FIX_FINDINGS.md),
-the committer freezes it, a verifier runs the WP1 gate on that freeze commit (a
-package-final snapshot keeps a separate gate), a fresh auditor runs
-[WP1_REVIEW](prompts/WP1_REVIEW.md), and the committer makes the accept commit.
-Only PASS allows WP2; the coordinator then follows the
-[roadmap](../docs/09_IMPLEMENTATION_ROADMAP.md). WP5 starts with independent
-acceptance; the real pilot remains owner-controlled.
+Current route: after the WP1 accept commit, an Opus planner decomposes WP2 from the
+[roadmap](../docs/09_IMPLEMENTATION_ROADMAP.md) and [WP2_IMPLEMENT](prompts/WP2_IMPLEMENT.md)
+into bounded tasks (including the risks carried from [WP1_RECHECK](delivery/WP1_RECHECK.md)).
+Workers implement them, the committer freezes each, a verifier runs the package-final
+WP2 gate, and a fresh auditor runs [WP2_REVIEW](prompts/WP2_REVIEW.md). Only PASS
+allows WP3. WP5 starts with independent acceptance; the real pilot remains
+owner-controlled.
 
 After usage reset: Resume/Continue the existing session, for example
 `claude --continue` here or `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`.

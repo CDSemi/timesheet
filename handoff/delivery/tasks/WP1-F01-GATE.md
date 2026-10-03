@@ -37,4 +37,20 @@ self-reported model: decision, digest, HEAD, check exits, blockers.
 
 ## Results
 
-(Verifier appends here.)
+Self-reported model: claude-sonnet-5-5. Decision: **PASS**.
+
+- Target/HEAD: 68bbb31435543329b6c51f29703d9e2e7a4290bf (equals freeze commit). Environment: Node v24.21.0, npm 11.18.0 (portable Node 24 first on PATH). Uncommitted files at start were all under handoff/ (board, WP1-F01-FREEZE brief/evidence, workflow checkpoint edits); nothing outside handoff/. Logs: `handoff/delivery/evidence/WP1-F01-GATE/`.
+- Source digest: c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59 (533 files), before and after (twice) and equal to the worker's pre-commit digest; no difference.
+
+| # | Command | Exit | Observed | Log |
+|---|---|---|---|---|
+| 1 | `npm run digest` before/after | 0/0/0 | identical, as above | digest-before/after/after2.txt |
+| 2 | `git archive` freeze to scratch; `npm ci`; `npm run verify` | 0; 0; 0 | typecheck, lint, 11 files/180 tests, builds, smoke all pass | export.txt, npm-ci.txt, verify.txt |
+| 3 | `npm run test:fixtures`; migrations + isolation tests (fresh migrated SQLite) | 0; 0 | 115/115 fixtures; 18/18 | fixtures.txt, migr-iso.txt |
+| 4 | clock-out-breaks regression test file | 0 | 6/6 | regression.txt |
+| 4 | own API probe (F-01A..D, synthetic) | 0 (run 2) | A: 200, R=541, credit 60, 1 break; B: 200, R=556, credit 90, 0 breaks; C replace by 11:00-11:30: R=526, credit 60; D invalid break: 422, rollback, session open, old break kept. 144180 oracle checks pass | probe.txt, probe-f01.mjs.txt |
+| 5 | validate_orchestration.py | 0 | PASS | validate.txt |
+| 5 | `git diff --check bfdc1a8 HEAD` | 0 | clean | diffcheck.txt |
+| 5 | non-handoff paths since bfdc1a8 | n/a | exactly src/server/services/timesheetCommands.ts and tests/integration/clock-out-breaks.test.ts | paths.txt |
+
+Note: probe run 1 exited 1 because my own F-01C expectation was wrong (excess 46 gives credit 60, not 30, per the 46 -> 60 rule); retained as probe-run1-expectation-error.txt, expectation corrected, rerun exit 0 on a fresh export. No source edits. Scratch dirs deleted.

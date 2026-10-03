@@ -62,7 +62,7 @@ Based on [HANDOFF](../templates/HANDOFF.md). Translation: [WORKFLOW_HANDOFF.vi.m
 | `validate_package.py --preflight` | workflow Python | 0 | PASS, 91 scenarios | [WF-GATE3](evidence/WF-GATE3/preflight-workflow-python.txt) |
 | `node scripts/precommit-check.mjs --self-test` plus scratch-clone probes | Node 24.21.0 | 0 | every bad form blocks; prose, attribution and synthetic media pass | [WF-GATE3](evidence/WF-GATE3/probes.txt) |
 | `npm run verify` | Node 24.21.0 | 0 | 174 tests, build and smoke pass | [WF-GATE3](evidence/WF-GATE3/verify.txt) |
-| Independent audit probes (31/31), lint, privacy range scans | Node 24.21.0, scratch clone | 0 | PASS | [WF-AUDIT3](evidence/WF-AUDIT3/) |
+| Independent audit probes (31/31), lint, privacy range scans | Node 24.21.0, scratch clone | 0 | PASS | [WF-AUDIT3](evidence/WF-AUDIT3/10-identity-after.txt) |
 
 - Unrun or blocked: system Python lacks IANA tzdata, so the preflight runs with the
   workflow Python. The WF-CAPS documentation URLs were not re-fetched by the auditors,

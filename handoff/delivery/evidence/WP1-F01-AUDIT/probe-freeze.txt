@@ -1,0 +1,94 @@
+date_utc: 2026-10-03T03:53:51Z
+NODE_OPTIONS=--trace-deprecation --pending-deprecation PROBE_TMP=<scratch>/tmp
+$ node probe.mjs <export> freeze
+{"probe":"WP1-F01-AUDIT","mode":"freeze","node":"v24.21.0","gross_minutes_0900_1816":556}
+{"kind":"expect","check":"engine vs independent oracle (240300 combinations), failures","expected":0,"actual":0,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 30 credit","expected":0,"actual":0,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 31 credit","expected":30,"actual":30,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 45 credit","expected":30,"actual":30,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 46 credit","expected":60,"actual":60,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 75 credit","expected":60,"actual":60,"result":"PASS"}
+{"kind":"expect","check":"weekday excess 76 credit","expected":90,"actual":90,"result":"PASS"}
+{"kind":"expect","check":"off-day 15 credit","expected":0,"actual":0,"result":"PASS"}
+{"kind":"expect","check":"off-day 16 credit","expected":30,"actual":30,"result":"PASS"}
+{"kind":"expect","check":"off-day 120 credit","expected":120,"actual":120,"result":"PASS"}
+{"kind":"expect","check":"09:00-18:00 shifted breaks [R,O,T,credit]","expected":[480,0,0,0],"actual":[480,0,0,0],"result":"PASS"}
+{"kind":"expect","check":"seconds aggregate then floor once [R,O,T,credit]","expected":[511,0,31,30],"actual":[511,0,31,30],"result":"PASS"}
+{"kind":"expect","check":"mixed overnight Friday->Saturday [R,O,T,credit]","expected":[360,120,120,120],"actual":[360,120,120,120],"result":"PASS"}
+{"kind":"expect","check":"weekday overnight Mon->Tue less 60 [R,O,T,credit]","expected":[480,0,0,0],"actual":[480,0,0,0],"result":"PASS"}
+{"kind":"expect","check":"spring DST 22:00-04:00 [R,O,T,credit]","expected":[0,300,300,300],"actual":[0,300,300,300],"result":"PASS"}
+{"kind":"expect","check":"fall DST 22:00-03:00 [R,O,T,credit]","expected":[0,360,360,360],"actual":[0,360,360,360],"result":"PASS"}
+{"kind":"expect","check":"DST gap 2026-03-08 02:30 rejected","expected":"nonexistent_local_time","actual":"nonexistent_local_time","result":"PASS"}
+{"kind":"expect","check":"DST fold 2026-11-01 01:30 needs fold","expected":"ambiguous_local_time","actual":"ambiguous_local_time","result":"PASS"}
+{"kind":"expect","check":"DST folds 0/1 -> UTC","expected":["2026-11-01T08:30:00Z","2026-11-01T09:30:00Z"],"actual":["2026-11-01T08:30:00Z","2026-11-01T09:30:00Z"],"result":"PASS"}
+{"kind":"expect","check":"F-01A status","expected":200,"actual":200,"result":"PASS"}
+{"kind":"expect","check":"F-01A session","expected":{"end_utc":"2026-09-30T01:16:00Z","breaks_confirmed":true,"version":2,"break_count":1},"actual":{"end_utc":"2026-09-30T01:16:00Z","breaks_confirmed":true,"version":2,"break_count":1},"result":"PASS"}
+{"kind":"expect","check":"F-01A persisted breaks","expected":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:15:00Z","counts_as_work":0}],"actual":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:15:00Z","counts_as_work":0}],"result":"PASS"}
+{"kind":"expect","check":"F-01A calculation","expected":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":900,"regular_minutes":541,"nonworking_minutes":0,"normal_excess_minutes":61,"eligible_minutes":61,"credited_minutes":60},"actual":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":900,"regular_minutes":541,"nonworking_minutes":0,"normal_excess_minutes":61,"eligible_minutes":61,"credited_minutes":60},"result":"PASS"}
+{"kind":"expect","check":"F-01A oracle values (R541,E61,credit60)","expected":{"excess":61,"eligible":61,"credit":60},"actual":{"excess":61,"eligible":61,"credit":60},"result":"PASS"}
+{"kind":"expect","check":"F-01A GET day agrees","expected":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":900,"regular_minutes":541,"nonworking_minutes":0,"normal_excess_minutes":61,"eligible_minutes":61,"credited_minutes":60},"actual":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":900,"regular_minutes":541,"nonworking_minutes":0,"normal_excess_minutes":61,"eligible_minutes":61,"credited_minutes":60},"result":"PASS"}
+{"kind":"expect","check":"F-01A one new clock_out audit event","expected":{"added":1,"operation":"work_session.clock_out","actor":"991f8dff-b208-4ba9-b451-2bc283ddb3b4","owner":"991f8dff-b208-4ba9-b451-2bc283ddb3b4","reason":null},"actual":{"added":1,"operation":"work_session.clock_out","actor":"991f8dff-b208-4ba9-b451-2bc283ddb3b4","owner":"991f8dff-b208-4ba9-b451-2bc283ddb3b4","reason":null},"result":"PASS"}
+{"kind":"expect","check":"F-01A audit before/after","expected":{"before":{"end_utc":null,"breaks_confirmed":false,"version":1,"breaks":1},"after":{"end_utc":"2026-09-30T01:16:00Z","breaks_confirmed":true,"version":2,"breaks":1}},"actual":{"before":{"end_utc":null,"breaks_confirmed":false,"version":1,"breaks":1},"after":{"end_utc":"2026-09-30T01:16:00Z","breaks_confirmed":true,"version":2,"breaks":1}},"result":"PASS"}
+{"kind":"expect","check":"F-01A employee timesheet version +1","expected":[3],"actual":[3],"result":"PASS"}
+{"kind":"expect","check":"F-01B status","expected":200,"actual":200,"result":"PASS"}
+{"kind":"expect","check":"F-01B persisted breaks","expected":[],"actual":[],"result":"PASS"}
+{"kind":"expect","check":"F-01B calculation","expected":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"actual":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"result":"PASS"}
+{"kind":"expect","check":"F-01B oracle values (R556,E76,credit90)","expected":{"excess":76,"eligible":76,"credit":90},"actual":{"excess":76,"eligible":76,"credit":90},"result":"PASS"}
+{"kind":"expect","check":"F-01B GET day agrees","expected":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"actual":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"result":"PASS"}
+{"kind":"expect","check":"F-01B timesheet read agrees","expected":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"actual":{"status":"complete","gross_seconds":33360,"excluded_break_seconds":0,"regular_minutes":556,"nonworking_minutes":0,"normal_excess_minutes":76,"eligible_minutes":76,"credited_minutes":90},"result":"PASS"}
+{"kind":"expect","check":"F-01B audit after has no breaks","expected":[],"actual":[],"result":"PASS"}
+{"kind":"expect","check":"edit actual 11:00-11:20 status","expected":200,"actual":200,"result":"PASS"}
+{"kind":"expect","check":"edit actual persisted","expected":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:20:00Z","counts_as_work":0}],"actual":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:20:00Z","counts_as_work":0}],"result":"PASS"}
+{"kind":"expect","check":"edit actual R/E/credit","expected":{"regular_minutes":536,"eligible_minutes":56,"credited_minutes":60},"actual":{"regular_minutes":536,"eligible_minutes":56,"credited_minutes":60},"result":"PASS"}
+{"kind":"expect","check":"edit actual oracle (E56,credit60)","expected":{"eligible":56,"credit":60},"actual":{"eligible":56,"credit":60},"result":"PASS"}
+{"kind":"expect","check":"multi-session morning created","expected":201,"actual":201,"result":"PASS"}
+{"kind":"expect","check":"multi-session status","expected":200,"actual":200,"result":"PASS"}
+{"kind":"expect","check":"multi-session morning break kept","expected":[{"start_utc":"2026-09-29T14:30:00Z","end_utc":"2026-09-29T14:40:00Z","counts_as_work":0}],"actual":[{"start_utc":"2026-09-29T14:30:00Z","end_utc":"2026-09-29T14:40:00Z","counts_as_work":0}],"result":"PASS"}
+{"kind":"expect","check":"multi-session afternoon breaks cleared","expected":[],"actual":[],"result":"PASS"}
+{"kind":"expect","check":"multi-session one daily B (R606,E126,credit120)","expected":{"regular_minutes":606,"eligible_minutes":126,"credited_minutes":120,"oracle":120},"actual":{"regular_minutes":606,"eligible_minutes":126,"credited_minutes":120,"oracle":120},"result":"PASS"}
+{"kind":"expect","check":"isolation employee clock out","expected":200,"actual":200,"result":"PASS"}
+{"kind":"expect","check":"isolation admin session untouched","expected":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"6a524e0d-edeb-4ebf-863a-1ddfdc5dc636"},"actual":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"6a524e0d-edeb-4ebf-863a-1ddfdc5dc636"},"result":"PASS"}
+{"kind":"expect","check":"isolation admin break rows untouched (same ids)","expected":["d991f958-78eb-4acf-abdb-f5ca0293a33f"],"actual":["d991f958-78eb-4acf-abdb-f5ca0293a33f"],"result":"PASS"}
+{"kind":"expect","check":"isolation admin audit untouched","expected":1,"actual":1,"result":"PASS"}
+{"kind":"expect","check":"isolation admin cannot read employee session","expected":404,"actual":404,"result":"PASS"}
+{"kind":"expect","check":"isolation employee cannot read admin session","expected":404,"actual":404,"result":"PASS"}
+{"kind":"expect","check":"isolation admin own clock out (R511,credit30)","expected":{"status":200,"regular_minutes":511,"credited_minutes":30,"oracle":30},"actual":{"status":200,"regular_minutes":511,"credited_minutes":30,"oracle":30},"result":"PASS"}
+{"kind":"expect","check":"isolation employee rows unchanged by admin clock out","expected":[],"actual":[],"result":"PASS"}
+{"kind":"expect","check":"isolation employee second clock out","expected":409,"actual":409,"result":"PASS"}
+Unhandled request error SqliteError: probe_injected_failure
+    at recordAudit (file:///<scratch>/export/dist/server/services/audit.js:7:46)
+    at audit (file:///<scratch>/export/dist/server/services/timesheetCommands.js:57:5)
+    at sqliteTransaction.<anonymous> (file:///<scratch>/export/dist/server/services/timesheetCommands.js:331:9)
+    at sqliteTransaction (<scratch>\export\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at writeTransaction (file:///<scratch>/export/dist/server/db/database.js:20:33)
+    at clockOut (file:///<scratch>/export/dist/server/services/timesheetCommands.js:302:23)
+    at file:///<scratch>/export/dist/server/routes/api.js:95:54
+    at async dispatch (file:///<scratch>/export/node_modules/hono/dist/compose.js:35:11)
+    at async file:///<scratch>/export/dist/server/http/auth.js:13:9
+    at async dispatch (file:///<scratch>/export/node_modules/hono/dist/compose.js:35:11) {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+{"kind":"expect","check":"late failure rejected","expected":500,"actual":500,"result":"PASS"}
+{"kind":"expect","check":"late failure: session still open","expected":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"d878ad04-6f19-4cf0-a5a5-912ce714de58"},"actual":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"d878ad04-6f19-4cf0-a5a5-912ce714de58"},"result":"PASS"}
+{"kind":"expect","check":"late failure: deleted break restored (same row id)","expected":["4d32c664-ba2c-4935-b27c-9087e6d38062"],"actual":["4d32c664-ba2c-4935-b27c-9087e6d38062"],"result":"PASS"}
+{"kind":"expect","check":"late failure: no audit event","expected":1,"actual":1,"result":"PASS"}
+{"kind":"expect","check":"late failure: timesheet versions unchanged","expected":[{"user_id":"d878ad04-6f19-4cf0-a5a5-912ce714de58","version":2}],"actual":[{"user_id":"d878ad04-6f19-4cf0-a5a5-912ce714de58","version":2}],"result":"PASS"}
+{"kind":"expect","check":"late failure: retry succeeds (R556,credit90)","expected":{"status":200,"regular_minutes":556,"credited_minutes":90},"actual":{"status":200,"regular_minutes":556,"credited_minutes":90},"result":"PASS"}
+{"kind":"expect","check":"zero-row update -> 409 stale_version","expected":{"status":409,"code":"stale_version"},"actual":{"status":409,"code":"stale_version"},"result":"PASS"}
+{"kind":"expect","check":"zero-row update: session unchanged","expected":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"31476f30-5554-4f2c-b80e-b9b1b9dbc3aa"},"actual":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"31476f30-5554-4f2c-b80e-b9b1b9dbc3aa"},"result":"PASS"}
+{"kind":"expect","check":"zero-row update: deleted break restored","expected":["5f2f1671-82e7-49be-8b9b-c909288ef2d5"],"actual":["5f2f1671-82e7-49be-8b9b-c909288ef2d5"],"result":"PASS"}
+{"kind":"expect","check":"zero-row update: no audit, timesheet unchanged","expected":{"audit":1,"ts":[{"user_id":"31476f30-5554-4f2c-b80e-b9b1b9dbc3aa","version":2}]},"actual":{"audit":1,"ts":[{"user_id":"31476f30-5554-4f2c-b80e-b9b1b9dbc3aa","version":2}]},"result":"PASS"}
+{"kind":"expect","check":"break after clock-out instant rejected","expected":{"status":422,"code":"break_outside_session"},"actual":{"status":422,"code":"break_outside_session"},"result":"PASS"}
+{"kind":"expect","check":"invalid set: session open, saved break kept","expected":{"row":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"dd80de20-7a1a-4a0a-8229-93ce5904083e"},"ids":["ad21255b-eceb-4098-be19-0ec79dd9a40e"]},"actual":{"row":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"dd80de20-7a1a-4a0a-8229-93ce5904083e"},"ids":["ad21255b-eceb-4098-be19-0ec79dd9a40e"]},"result":"PASS"}
+{"kind":"expect","check":"unknown, empty set: 200 and pending","expected":{"status":200,"calc_status":"incomplete_breaks","credited":null,"regular":null},"actual":{"status":200,"calc_status":"incomplete_breaks","credited":null,"regular":null},"result":"PASS"}
+{"kind":"expect","check":"unknown, empty set: saved break kept","expected":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:15:00Z","counts_as_work":0}],"actual":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:15:00Z","counts_as_work":0}],"result":"PASS"}
+{"kind":"observe","check":"residual: unknown Clock out echoing the saved break","actual":{"status":422,"code":"overlapping_breaks","session":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"bed11b2d-0508-44b1-9b6a-f922b0003b2d"},"break_ids_unchanged":true,"audit_added":0}}
+{"kind":"observe","check":"residual: same user then clocks out unknown with empty set","actual":{"status":200,"calc_status":"incomplete_breaks"}}
+{"kind":"observe","check":"residual: unknown Clock out with a new non-overlapping break","actual":{"status":200,"stored":[{"start_utc":"2026-09-29T18:00:00Z","end_utc":"2026-09-29T18:15:00Z","counts_as_work":0},{"start_utc":"2026-09-29T20:00:00Z","end_utc":"2026-09-29T20:30:00Z","counts_as_work":0}],"calc":{"status":"incomplete_breaks","gross_seconds":null,"excluded_break_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null}}}
+{"kind":"expect","check":"residual follow-up: confirming via session edit replaces the union","expected":{"status":200,"stored":[{"start_utc":"2026-09-29T20:00:00Z","end_utc":"2026-09-29T20:30:00Z","counts_as_work":0}],"regular_minutes":526,"credited_minutes":60,"oracle":60},"actual":{"status":200,"stored":[{"start_utc":"2026-09-29T20:00:00Z","end_utc":"2026-09-29T20:30:00Z","counts_as_work":0}],"regular_minutes":526,"credited_minutes":60,"oracle":60},"result":"PASS"}
+{"kind":"observe","check":"open session accepted a break after now (13:00 LA)","actual":{"saved":[{"start_utc":"2026-09-29T22:30:00Z","end_utc":"2026-09-29T22:45:00Z","counts_as_work":0}]}}
+{"kind":"observe","check":"unknown Clock out before that saved break","actual":{"status":422,"code":"break_outside_session","session":{"end_utc":null,"breaks_confirmed":0,"version":1,"user_id":"11b99109-51c4-44c0-96db-b6ea65040a67"},"break_ids_unchanged":true}}
+{"kind":"observe","check":"confirmed-none Clock out before that saved break","actual":{"status":200,"regular":360,"credited":0,"stored":[]}}
+{"kind":"observe","check":"confirmed-none Clock out after another client added a break (no expected_version in body)","actual":{"put_status":200,"status":200,"stored":[],"regular":556,"credited":90,"audit_before_breaks":1}}
+{"summary":true,"mode":"freeze","expectations_passed":68,"expectations_failed":0,"observations":7}
+exit 0

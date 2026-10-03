@@ -62,7 +62,7 @@ Theo [HANDOFF](../templates/HANDOFF.vi.md). Bản gốc tiếng Anh: [WORKFLOW_H
 | `validate_package.py --preflight` | Python quy trình | 0 | PASS, 91 kịch bản | [WF-GATE3](evidence/WF-GATE3/preflight-workflow-python.txt) |
 | `node scripts/precommit-check.mjs --self-test` cùng probe trên bản clone tạm | Node 24.21.0 | 0 | mọi dạng xấu bị chặn; câu văn thường, dòng ghi công và media giả lập được qua | [WF-GATE3](evidence/WF-GATE3/probes.txt) |
 | `npm run verify` | Node 24.21.0 | 0 | 174 test, build và smoke đạt | [WF-GATE3](evidence/WF-GATE3/verify.txt) |
-| Probe audit độc lập (31/31), lint, quét quyền riêng tư theo dải commit | Node 24.21.0, bản clone tạm | 0 | PASS | [WF-AUDIT3](evidence/WF-AUDIT3/) |
+| Probe audit độc lập (31/31), lint, quét quyền riêng tư theo dải commit | Node 24.21.0, bản clone tạm | 0 | PASS | [WF-AUDIT3](evidence/WF-AUDIT3/10-identity-after.txt) |
 
 - Chưa chạy hoặc bị chặn: Python hệ thống thiếu dữ liệu múi giờ IANA nên preflight chạy
   bằng Python quy trình. Auditor không mở lại các URL tài liệu của WF-CAPS vì không có

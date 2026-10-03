@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = resolve(process.argv[2]);
+const load = (path) => import(pathToFileURL(resolve(root, path)).href);
+const engine = await load('dist/domain/index.js');
+const { createTestContext, la } = await load('tests/support/testApp.ts');
+const policy = { id: 'review-policy', requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30 };
+const calendar = [{ id: 'review-calendar', seq: 1, effectiveFrom: '1900-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }];
+const zone = 'America/Los_Angeles';
+let checks = 0;
+const equal = (actual, expected, label) => {
+  assert.deepEqual(actual, expected, label);
+  checks += 1;
+  console.log(JSON.stringify({ check: label, expected, actual, result: 'PASS' }));
+};
+// A distance search supplies the oracle, rather than duplicating quotient/remainder rounding.
+let oracleChecks = 0;
+for (const b of [240, 480, 600]) for (const n of [0, 30, 60]) for (const m of [1, 7, 15, 30, 60]) {
+  for (let r = 0; r <= 800; r += 1) for (const o of [0, 15, 16, 120]) {
+    const eligible = o + (r - b > n ? r - b : 0);
+    let expected = 0;
+    for (let candidate = 0; candidate <= eligible + m; candidate += m) {
+      if (Math.abs(candidate - eligible) < Math.abs(expected - eligible)) expected = candidate;
+    }
+    assert.equal(engine.computeDailyOvertime(r, o, { requiredMinutes: b, thresholdMinutes: n, roundingStepMinutes: m }).creditedMinutes, expected);
+    oracleChecks += 1;
+  }
+}
+console.log(JSON.stringify({ check: 'independent distance oracle', oracleChecks, failures: 0 }));
+for (const [excess, expected] of [[30, 0], [31, 30], [45, 30], [46, 60], [75, 60], [76, 90]]) {
+  equal(engine.computeDailyOvertime(480 + excess, 0, policy).creditedMinutes, expected, `weekday excess ${excess}`);
+}
+for (const [o, expected] of [[15, 0], [16, 30], [120, 120]]) equal(engine.computeDailyOvertime(0, o, policy).creditedMinutes, expected, `off-day ${o}`);
+const utc = engine.parseUtcInstant;
+const session = (start, end, breaks = []) => ({ startUtc: utc(start), endUtc: utc(end), breaksConfirmed: true,
+  breaks: breaks.map(([a, b]) => ({ startUtc: utc(a), endUtc: utc(b), confirmed: true, countsAsWork: false })) });
+const day = (workDate, sessions) => engine.computeWorkDay({ workDate, reportingZone: zone, policy, calendarVersions: calendar, sessions });
+const values = (d) => [d.regularMinutes, d.nonworkingMinutes, d.eligibleMinutes, d.creditedMinutes];
+equal(values(day('2026-09-21', [session('2026-09-21T16:00:00Z', '2026-09-22T01:00:00Z', [
+  ['2026-09-21T18:00:00Z', '2026-09-21T18:15:00Z'], ['2026-09-21T20:00:00Z', '2026-09-21T20:30:00Z'], ['2026-09-21T22:30:00Z', '2026-09-21T22:45:00Z']])])), [480, 0, 0, 0], '09:00-18:00 minus 60 breaks');
+equal(values(day('2026-09-21', [session('2026-09-21T16:00:00Z', '2026-09-21T20:15:40Z'), session('2026-09-21T21:00:00Z', '2026-09-22T01:15:40Z')])), [511, 0, 31, 30], 'seconds sum 30680 before floor once');
+equal(values(day('2026-09-25', [session('2026-09-25T15:00:00Z', '2026-09-25T19:00:00Z'), session('2026-09-26T05:00:00Z', '2026-09-26T09:00:00Z')])), [360, 120, 120, 120], 'Friday day plus Friday-Saturday overnight shares B');
+equal(values(day('2026-03-07', [session('2026-03-08T06:00:00Z', '2026-03-08T11:00:00Z')])), [0, 300, 300, 300], 'spring 22:00-04:00 is 5 elapsed hours');
+
+// Independent API-level probe of F-01 against the fixed build: fresh migrated SQLite, synthetic data.
+let failures = 0;
+const scenarios = [
+  { name: 'F-01A confirm saved break at clock out', breaks: 'same', expected: { status: 200, regularMinutes: 541, creditedMinutes: 60, breakCount: 1, endSet: true } },
+  { name: 'F-01B explicitly confirm none at clock out', breaks: 'none', expected: { status: 200, regularMinutes: 556, creditedMinutes: 90, breakCount: 0, endSet: true } },
+  { name: 'F-01C replace saved break by a different one (11:00-11:30; E=46 so credit 60)', breaks: 'other', expected: { status: 200, regularMinutes: 526, creditedMinutes: 60, breakCount: 1, endSet: true } },
+  { name: 'F-01D invalid submitted break rolls back; old break kept, session open', breaks: 'invalid', expected: { status: 422, breakCount: 1, endSet: false } },
+];
+for (const sc of scenarios) {
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  try {
+    const cookie = await t.login('employee');
+    const savedBreak = { start: la('2026-09-29T11:00'), end: la('2026-09-29T11:15'), counts_as_work: false };
+    const created = await t.request('POST', '/api/days/2026-09-29/sessions', { cookie, body: {
+      start: la('2026-09-29T09:00'), end: null, input_zone: zone, breaks: [savedBreak], breaks_confirmed: false } });
+    assert.equal(created.status, 201);
+    t.clock.set('2026-09-30T01:16:00Z');
+    const submitted = sc.breaks === 'same' ? [savedBreak] : sc.breaks === 'none' ? []
+      : sc.breaks === 'other' ? [{ start: la('2026-09-29T11:00'), end: la('2026-09-29T11:30'), counts_as_work: false }]
+      : [{ start: la('2026-09-29T12:00'), end: la('2026-09-29T11:00'), counts_as_work: false }];
+    const result = await t.request('POST', '/api/clock/out', { cookie, body: { breaks: submitted, breaks_confirmed: true } });
+    const row = t.db.prepare('SELECT end_utc FROM work_sessions WHERE id = ?').get(created.body.session.id);
+    const breakCount = t.db.prepare('SELECT count(*) FROM session_breaks WHERE session_id = ?').pluck().get(created.body.session.id);
+    const calc = result.body.day?.calculation;
+    const actual = { status: result.status, breakCount, endSet: row.end_utc !== null };
+    if (sc.expected.status === 200) { actual.regularMinutes = calc?.regular_minutes ?? null; actual.creditedMinutes = calc?.credited_minutes ?? null; }
+    else actual.error = result.body.error?.code ?? null;
+    const ok = JSON.stringify(Object.keys(sc.expected).every((k) => sc.expected[k] === actual[k]));
+    const pass = ok === 'true';
+    if (!pass) failures += 1;
+    console.log(JSON.stringify({ check: sc.name, expected: sc.expected, actual, result: pass ? 'PASS' : 'FAIL' }));
+  } finally { t.close(); }
+}
+console.log(JSON.stringify({ oracleChecks, passedExplicitChecks: checks, scenarios: scenarios.length, failures }));
+process.exitCode = failures === 0 ? 0 : 1;

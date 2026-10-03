@@ -92,3 +92,31 @@ Thêm sau bản bàn giao gốc ở trên (giữ nguyên). Chỉ sửa phát hi�
 
 - **Chưa kiểm chứng/rủi ro còn lại:** lần chạy này ở thư mục dự án, không phải clean export. Clock out chưa xác nhận mà gửi giờ nghỉ khác rỗng vẫn nối thêm mà không đối chiếu với các dòng đã lưu (không thuộc F-01; review chỉ xét giờ nghỉ đã xác nhận). Kiểm tra lại độc lập, cổng WP1 và WP2 vẫn mở.
 - **Một bước review tiếp theo:** đưa kết quả đã commit cho auditor độc lập mới cùng F-01 trong [WP1_REVIEW](WP1_REVIEW.md) và chạy cổng kiểm tra lại WP1 (tài liệu 08) trước WP2.
+
+## Ghi nhận nghiệm thu (coordinator, 2026-10-03)
+
+- **Commit đóng băng và định danh:** `68bbb31435543329b6c51f29703d9e2e7a4290bf` (đã push),
+  source digest `c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59`.
+- **Gate WP1 riêng (WP1-F01-GATE): PASS.** Các kiểm tra chạy trên bản export sạch ngoài
+  Dropbox bằng Node 24:
+  - `npm ci` exit 0;
+  - `npm run verify` exit 0, 180/180 test và smoke 13/13;
+  - fixture 115/115;
+  - migration và cô lập dữ liệu 18/18;
+  - probe F-01A–D riêng của verifier đạt.
+
+  Bằng chứng ở [WP1-F01-GATE](evidence/WP1-F01-GATE/verify.txt).
+- **Kiểm tra lại độc lập mới (WP1-F01-AUDIT, Opus): PASS.** F-01 đã được giải quyết.
+  Probe riêng của auditor đạt 68/68 trên commit đóng băng và fail 20 trên baseline trước
+  khi sửa. Export sạch và `npm run verify` exit 0; digest không đổi trước và sau. Xem
+  [WP1_RECHECK](WP1_RECHECK.vi.md).
+- **Phần còn lại của Clock out chưa xác nhận:** chấp nhận được, không vi phạm hợp đồng.
+  Các dòng chưa xác nhận không bao giờ đi vào OT (R-01, R-02).
+- **Rủi ro chuyển sang WP2:**
+  - ngữ nghĩa của danh sách giờ nghỉ chưa xác nhận một phần;
+  - phiên đang mở nhận giờ nghỉ ở tương lai;
+  - Clock out chưa có `expected_version`.
+
+  Test hồi quy tùy chọn: rollback sau bước xóa, và nhánh update không đổi dòng nào.
+- **Trạng thái:** WP1 đã implement và được nghiệm thu độc lập. Tiếp theo là WP2, bắt đầu
+  bằng plan package.

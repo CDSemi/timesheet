@@ -1,0 +1,86 @@
+$ git diff --stat bfdc1a8bbfd0bcbd06511fd02212e111d300356d..68bbb31435543329b6c51f29703d9e2e7a4290bf -- . ':(exclude)handoff/'
+ src/server/services/timesheetCommands.ts   |  11 +-
+ tests/integration/clock-out-breaks.test.ts | 172 +++++++++++++++++++++++++++++
+ 2 files changed, 182 insertions(+), 1 deletion(-)
+exit 0
+
+$ git diff bfdc1a8bbfd0bcbd06511fd02212e111d300356d..68bbb31435543329b6c51f29703d9e2e7a4290bf -- src/
+diff --git a/src/server/services/timesheetCommands.ts b/src/server/services/timesheetCommands.ts
+index 90fc5a3..d1909f1 100644
+--- a/src/server/services/timesheetCommands.ts
++++ b/src/server/services/timesheetCommands.ts
+@@ -434,7 +434,15 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
+       breaks: input.breaks,
+       breaks_confirmed: input.breaks_confirmed,
+     });
+-    ctx.db
++    // Confirmed actual breaks (including the explicit empty set) are the session's whole
++    // break set, as in updateSession: drop the saved rows before inserting the submitted
++    // ones so they are neither duplicated nor silently kept (R-01, R-02). Unconfirmed
++    // breaks stay unknown and leave the saved rows untouched. Any later failure rolls the
++    // whole transaction back, restoring the deleted rows.
++    if (input.breaks_confirmed) {
++      ctx.db.prepare('DELETE FROM session_breaks WHERE session_id = ? AND user_id = ?').run(open.id, ctx.user.id);
++    }
++    const result = ctx.db
+       .prepare(
+         `UPDATE work_sessions SET end_utc = ?, breaks_confirmed = ?, version = version + 1, updated_at = ?
+           WHERE id = ? AND user_id = ? AND version = ?`,
+@@ -447,6 +455,7 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
+         ctx.user.id,
+         open.version,
+       );
++    if (result.changes !== 1) throw staleVersion();
+     insertBreaks(ctx, open.id, resolved.breaks);
+     const entry = ensureDayEntry(ctx, edit, open.work_date);
+     bumpTimesheet(ctx, entry.timesheet_id);
+exit 0
+
+$ git diff --name-status bfdc1a8bbfd0bcbd06511fd02212e111d300356d..68bbb31435543329b6c51f29703d9e2e7a4290bf -- tests/
+A	tests/integration/clock-out-breaks.test.ts
+exit 0
+
+$ git diff --stat 70e225711331783452b1cba7e8de7851bc041c4e..68bbb31435543329b6c51f29703d9e2e7a4290bf -- src tests reference docs/01_PRODUCT_REQUIREMENTS.md docs/02_TIME_AND_OT_RULES.md docs/03_ARCHITECTURE_AND_DATA.md package-lock.json 'tsconfig*.json' eslint.config.js vite.config.ts vitest.config.ts .npmrc  (WP1 review baseline -> freeze; application, rules, fixtures, lockfile, configs)
+ src/server/services/timesheetCommands.ts   |  11 +-
+ tests/integration/clock-out-breaks.test.ts | 172 +++++++++++++++++++++++++++++
+ 2 files changed, 182 insertions(+), 1 deletion(-)
+exit 0
+
+$ git diff 70e225711331783452b1cba7e8de7851bc041c4e..68bbb31435543329b6c51f29703d9e2e7a4290bf -- package.json
+diff --git a/package.json b/package.json
+index d3fa6bf..87f1526 100644
+--- a/package.json
++++ b/package.json
+@@ -12,6 +12,7 @@
+     "lint": "eslint .",
+     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run smoke",
+     "digest": "node scripts/source-digest.mjs",
++    "precommit-check": "node scripts/precommit-check.mjs",
+     "build": "npm run build:server && npm run build:client",
+     "build:server": "tsc -p tsconfig.server.json",
+     "build:client": "vite build",
+exit 0
+
+$ grep -rn "breaks_confirmed = " src/server  (every write that can set breaks_confirmed)
+src/server/services/timesheetCommands.ts:188:    breaksConfirmed: input.breaks_confirmed,
+src/server/services/timesheetCommands.ts:317:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+src/server/services/timesheetCommands.ts:352:        `UPDATE work_sessions SET start_utc = ?, end_utc = ?, input_zone = ?, breaks_confirmed = ?, version = version + 1,
+src/server/services/timesheetCommands.ts:411:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+src/server/services/timesheetCommands.ts:435:      breaks_confirmed: input.breaks_confirmed,
+src/server/services/timesheetCommands.ts:447:        `UPDATE work_sessions SET end_utc = ?, breaks_confirmed = ?, version = version + 1, updated_at = ?
+317:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+411:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+
+$ grep -rn -E "(UPDATE|INSERT INTO|DELETE FROM) (work_sessions|session_breaks)" src/ | grep -v '^src/server/db/migrations'  (every write path for sessions/breaks)
+src/server/services/timesheetCommands.ts:225:    'INSERT INTO session_breaks (id, session_id, user_id, start_utc, end_utc, counts_as_work) VALUES (?, ?, ?, ?, ?, ?)',
+src/server/services/timesheetCommands.ts:317:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+src/server/services/timesheetCommands.ts:349:    ctx.db.prepare('DELETE FROM session_breaks WHERE session_id = ? AND user_id = ?').run(sessionId, ctx.user.id);
+src/server/services/timesheetCommands.ts:352:        `UPDATE work_sessions SET start_utc = ?, end_utc = ?, input_zone = ?, breaks_confirmed = ?, version = version + 1,
+src/server/services/timesheetCommands.ts:383:      .prepare('DELETE FROM work_sessions WHERE id = ? AND user_id = ? AND version = ?')
+src/server/services/timesheetCommands.ts:411:        `INSERT INTO work_sessions (id, user_id, work_date, start_utc, end_utc, input_zone, source, breaks_confirmed,
+src/server/services/timesheetCommands.ts:443:      ctx.db.prepare('DELETE FROM session_breaks WHERE session_id = ? AND user_id = ?').run(open.id, ctx.user.id);
+src/server/services/timesheetCommands.ts:447:        `UPDATE work_sessions SET end_utc = ?, breaks_confirmed = ?, version = version + 1, updated_at = ?
+exit 0
+
+$ grep -n "breaks: \[\], breaks_confirmed" src/client/TimesheetScreen.tsx  (WP1 client Clock out body)
+93:      const body = action === 'in' ? { input_zone: displayZone } : { breaks: [], breaks_confirmed: noBreaks };

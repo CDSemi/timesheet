@@ -92,3 +92,31 @@ Added after the original handoff above, which is kept unchanged. Fix of finding 
 
 - **Remaining unverified/risks:** this run was in the project folder, not a clean export. Unconfirmed Clock out that submits non-empty breaks still appends them without checking them against the saved rows (not part of F-01; the review treats only confirmed breaks). Independent recheck, the WP1 gate and WP2 remain open.
 - **One next review action:** give a fresh independent auditor the committed result with [WP1_REVIEW](WP1_REVIEW.md) F-01 and run the WP1 recheck gate (document 08) before WP2.
+
+## Acceptance record (coordinator, 2026-10-03)
+
+- **Freeze commit and identity:** `68bbb31435543329b6c51f29703d9e2e7a4290bf` (pushed),
+  source digest `c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59`.
+- **Separate WP1 gate (WP1-F01-GATE): PASS.** The checks ran on a clean export outside
+  Dropbox with Node 24:
+  - `npm ci` exit 0;
+  - `npm run verify` exit 0, 180/180 tests and smoke 13/13;
+  - fixtures 115/115;
+  - migrations and isolation 18/18;
+  - the verifier's own F-01A–D probe passed.
+
+  Evidence is in [WP1-F01-GATE](evidence/WP1-F01-GATE/verify.txt).
+- **Fresh independent recheck (WP1-F01-AUDIT, Opus): PASS.** F-01 is resolved. The
+  auditor's own probe passes 68/68 on the freeze and fails 20 on the pre-fix baseline.
+  Clean export and `npm run verify` exit 0, and the digest was unchanged before and
+  after. See [WP1_RECHECK](WP1_RECHECK.md).
+- **Unconfirmed Clock out residual:** acceptable, not a contract violation. Unconfirmed
+  rows never reach OT (R-01, R-02).
+- **Risks carried into WP2:**
+  - semantics of a partial unconfirmed break list;
+  - future break rows on open sessions;
+  - Clock out has no `expected_version`.
+
+  Optional regressions: rollback after the delete, and the zero-row update branch.
+- **Status:** WP1 implemented and independently accepted. WP2 is next, starting with a
+  package plan.

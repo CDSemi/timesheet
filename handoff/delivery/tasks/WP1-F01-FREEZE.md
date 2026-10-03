@@ -52,3 +52,7 @@ handoff/delivery/evidence/WP1-F01-FREEZE/. Return at most 200 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1 stopped, no commit. HEAD unchanged bfdc1a8. precommit PASS (exit 0), node v24.21.0, JSON ok, validator ok. BLOCK: git diff --cached --check exit 2: new blank line at EOF in handoff/delivery/evidence/WP1-F01-FIX/green-after-fix.txt:11 and red-before-fix.txt:156 (whitespace rule; not maskable). 21 paths remain staged.
+
+Attempt 2: committed 68bbb31435543329b6c51f29703d9e2e7a4290bf and pushed to origin/main (remote SHA equal). Pre HEAD bfdc1a8, 21 staged paths. Node v24.21.0; precommit 0, diff --check 0, JSON 0, validator 0. No masking, no blockers. Evidence: evidence/WP1-F01-FREEZE/*-2.txt, commit-message.txt.

@@ -27,7 +27,20 @@ America/Los_Angeles).
   khai, đổi billing, cài đặt toàn cục hay cài đặt quyền.
 - WP1-F01-FIX xong (tác giả báo: 6 test hồi quy từ fail sang pass, verify 180/180, digest
   c6e24381…9c59 trước commit). WP1-F01-FREEZE (committer) đang chạy.
-- Bước tiếp: ghi SHA đóng băng; giao WP1-F01-GATE, rồi WP1-F01-AUDIT mới.
+- WP1-F01-FREEZE xong ở attempt 2 (attempt 1 bị chặn vì dòng trống cuối file bằng chứng,
+  tác giả đã chuẩn hóa): commit 68bbb31435543329b6c51f29703d9e2e7a4290bf đã push.
+  WP1-F01-GATE (snapshot cuối package, export sạch) đang chạy.
+- WP1-F01-GATE PASS trên 68bbb31 (export sạch): digest
+  c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59 (= số worker trước
+  commit); verify 180/180, fixtures 115/115, migration/cô lập 18/18, probe F-01A–D riêng đạt.
+  WP1-F01-AUDIT (opus mới) đang chạy.
+- WP1-F01-AUDIT (opus mới) PASS tại 68bbb31 / c6e24381: F-01 đã giải quyết (probe riêng
+  68/68, 20 lỗi trên baseline trước khi sửa); phần Clock out chưa xác nhận chấp nhận được;
+  ba rủi ro chuyển sang WP2 ([WP1_RECHECK](WP1_RECHECK.vi.md)). WP1 đã nghiệm thu: đã cập
+  nhật STATE, NEXT_ACTION và ghi nhận nghiệm thu trong WP1_HANDOFF; WP1-F01-ACCEPT
+  (committer) đang chạy.
+- Bước tiếp: ghi SHA nghiệm thu WP1, chuyển package đang hoạt động sang WP2 và giao plan
+  package WP2 (planner với override opus, lý do size_risk).
 
 ## Khôi phục điều phối
 

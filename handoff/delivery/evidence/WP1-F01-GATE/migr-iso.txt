@@ -1,0 +1,32 @@
+
+> timesheet@0.1.0 test
+> vitest run tests/integration/migrations.test.ts tests/integration/isolation.test.ts --reporter=verbose
+
+
+ RUN  v5.0.2 <export>
+
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 17ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 12ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 11ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 12ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 12ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 8ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 115ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > hides another user’s session from direct reads, updates and deletes — also for admins 238ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 102ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 102ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 103ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps timesheet and day views per user 198ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > validates overlap per user, so another user’s times neither block nor leak 192ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > rejects client-supplied owner fields instead of trusting them 192ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps day entries private per user 188ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > keeps policy versions per user 189ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > never lets one user clock out another user’s running session 189ms
+ ✓ tests/integration/isolation.test.ts > two-user isolation (AC-01) > attributes audit events to the acting owner 189ms
+
+ Test Files  2 passed (2)
+      Tests  18 passed (18)
+   Start at  20:39:39
+   Duration  2.01s (tests 75%, transform 17%, import 7%)
+
+EXIT 0

@@ -1,0 +1,516 @@
+// WP1-F01-AUDIT independent probe (auditor-authored; does not use tests/support).
+// Usage: node probe.mjs <built export root> [freeze|baseline]
+// Builds its own fresh migrated synthetic SQLite per scenario, drives the built Hono app
+// in-process with a deterministic clock and checks responses plus persisted rows.
+// "expect" lines are contract expectations (count toward the exit code in freeze mode);
+// "observe" lines record actual behaviour for judgement and never fail the run.
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
+
+const root = resolve(process.argv[2]);
+const mode = process.argv[3] ?? 'freeze';
+const tmpBase = process.env.PROBE_TMP ?? tmpdir();
+const load = (path) => import(pathToFileURL(resolve(root, path)).href);
+const { createApp } = await load('dist/server/app.js');
+const { openDatabase } = await load('dist/server/db/database.js');
+const { migrate } = await load('dist/server/db/migrations.js');
+const { seedSynthetic } = await load('dist/server/seed.js');
+const { LoginRateLimiter } = await load('dist/server/auth/rateLimit.js');
+const engine = await load('dist/domain/index.js');
+
+const ZONE = 'America/Los_Angeles';
+const ORIGIN = 'http://localhost:3000';
+let failures = 0;
+let passes = 0;
+let observations = 0;
+
+function expect(label, expected, actual) {
+  const ok = isDeepStrictEqual(actual, expected);
+  if (ok) passes += 1;
+  else failures += 1;
+  console.log(JSON.stringify({ kind: 'expect', check: label, expected, actual, result: ok ? 'PASS' : 'FAIL' }));
+}
+function observe(label, actual) {
+  observations += 1;
+  console.log(JSON.stringify({ kind: 'observe', check: label, actual }));
+}
+
+// Independent rounding oracle: scan candidate multiples, keep the lower one on a tie.
+function oracleCredit(eligible, step) {
+  let best = 0;
+  for (let candidate = 0; candidate <= eligible + step; candidate += step) {
+    if (Math.abs(candidate - eligible) < Math.abs(best - eligible)) best = candidate;
+  }
+  return best;
+}
+function oracleDay(r, o, b = 480, n = 30, m = 30) {
+  const excess = Math.max(0, r - b);
+  const eligible = (excess > n ? excess : 0) + o;
+  return { excess, eligible, credit: oracleCredit(eligible, m) };
+}
+
+const la = (local) => ({ local, zone: ZONE });
+const brk = (from, to) => ({ start: la(from), end: la(to), counts_as_work: false });
+const minutesBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 60000;
+
+async function fresh(nowIso) {
+  const dir = mkdtempSync(join(tmpBase, 'wp1-f01-audit-'));
+  const db = openDatabase(join(dir, 'probe.db'));
+  const migration = migrate(db);
+  let now = new Date(nowIso);
+  const clock = { now: () => new Date(now.getTime()) };
+  const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+  const seed = await seedSynthetic(db, clock, { passwords });
+  const config = {
+    host: '127.0.0.1',
+    port: 3000,
+    databasePath: join(dir, 'probe.db'),
+    allowedOrigins: [ORIGIN],
+    cookieSecure: false,
+    sessionTtlSeconds: 12 * 3600,
+    production: false,
+  };
+  const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+  const ids = Object.fromEntries(seed.users.map((user) => [user.role, user.id]));
+  const emails = Object.fromEntries(seed.users.map((user) => [user.role, user.email]));
+  async function req(method, path, cookie, body) {
+    const headers = { origin: ORIGIN };
+    if (cookie) headers.cookie = cookie;
+    const init = { method, headers };
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    const response = await app.request(path, init);
+    const text = await response.text();
+    return { status: response.status, body: text === '' ? null : JSON.parse(text), headers: response.headers };
+  }
+  async function login(role) {
+    const response = await req('POST', '/api/auth/login', undefined, { email: emails[role], password: passwords[role] });
+    if (response.status !== 200) throw new Error(`login ${role} failed ${response.status}`);
+    return response.headers.get('set-cookie').split(';')[0];
+  }
+  const breaksOf = (sessionId) =>
+    db
+      .prepare('SELECT id, start_utc, end_utc, counts_as_work, user_id FROM session_breaks WHERE session_id = ? ORDER BY start_utc')
+      .all(sessionId);
+  const sessionRow = (sessionId) =>
+    db.prepare('SELECT end_utc, breaks_confirmed, version, user_id FROM work_sessions WHERE id = ?').get(sessionId);
+  const auditOf = (sessionId) =>
+    db
+      .prepare(
+        'SELECT operation, actor_user_id, owner_user_id, reason, before_json, after_json FROM audit_events WHERE entity_id = ? ORDER BY rowid',
+      )
+      .all(sessionId);
+  const timesheetVersions = () =>
+    db.prepare('SELECT user_id, version FROM timesheets ORDER BY user_id').all();
+  return {
+    db,
+    ids,
+    migration,
+    set(iso) {
+      now = new Date(iso);
+    },
+    req,
+    login,
+    breaksOf,
+    sessionRow,
+    auditOf,
+    timesheetVersions,
+    close() {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+const calc = (day) => {
+  const c = day?.calculation ?? null;
+  if (c === null) return null;
+  return {
+    status: c.status,
+    gross_seconds: c.gross_seconds,
+    excluded_break_seconds: c.excluded_break_seconds,
+    regular_minutes: c.regular_minutes,
+    nonworking_minutes: c.nonworking_minutes,
+    normal_excess_minutes: c.normal_excess_minutes,
+    eligible_minutes: c.eligible_minutes,
+    credited_minutes: c.credited_minutes,
+  };
+};
+const brief = (rows) => rows.map((row) => ({ start_utc: row.start_utc, end_utc: row.end_utc, counts_as_work: row.counts_as_work }));
+
+// Shared F-01 setup: employee, 2026-09-29 (Tuesday, future period: no reason needed),
+// open 09:00 LA session created at 13:00 LA with one saved unconfirmed 11:00-11:15 break.
+const CREATE_AT = '2026-09-29T20:00:00Z';
+const OUT_AT = '2026-09-30T01:16:00Z'; // 18:16 LA
+const START_UTC = '2026-09-29T16:00:00Z'; // 09:00 PDT
+const SAVED = brk('2026-09-29T11:00', '2026-09-29T11:15');
+const SAVED_ROW = { start_utc: '2026-09-29T18:00:00Z', end_utc: '2026-09-29T18:15:00Z', counts_as_work: 0 };
+const GROSS_MIN = minutesBetween(START_UTC, OUT_AT); // independently 556
+
+async function openWithSaved(env, role = 'employee', start = '2026-09-29T09:00', saved = [SAVED]) {
+  const cookie = await env.login(role);
+  const created = await env.req('POST', '/api/days/2026-09-29/sessions', cookie, {
+    start: la(start),
+    end: null,
+    input_zone: ZONE,
+    breaks: saved,
+    breaks_confirmed: false,
+  });
+  if (created.status !== 201) throw new Error(`create failed ${created.status} ${JSON.stringify(created.body)}`);
+  return { cookie, id: created.body.session.id, savedIds: env.breaksOf(created.body.session.id).map((row) => row.id) };
+}
+
+console.log(JSON.stringify({ probe: 'WP1-F01-AUDIT', mode, node: process.version, gross_minutes_0900_1816: GROSS_MIN }));
+
+// ---------- Engine: independent oracle and explicit WP1 gate values ----------
+{
+  let oracleChecks = 0;
+  let oracleFailures = 0;
+  for (const b of [240, 480, 600]) for (const n of [0, 29, 30, 60]) for (const m of [1, 5, 15, 30, 60]) {
+    for (let r = 0; r <= 800; r += 1) for (const o of [0, 15, 16, 45, 120]) {
+      const want = oracleDay(r, o, b, n, m);
+      const got = engine.computeDailyOvertime(r, o, { requiredMinutes: b, thresholdMinutes: n, roundingStepMinutes: m });
+      oracleChecks += 1;
+      if (got.normalExcessMinutes !== want.excess || got.eligibleMinutes !== want.eligible || got.creditedMinutes !== want.credit) oracleFailures += 1;
+    }
+  }
+  expect(`engine vs independent oracle (${oracleChecks} combinations), failures`, 0, oracleFailures);
+  const policy = { id: 'audit-policy', requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30 };
+  for (const [excess, credit] of [[30, 0], [31, 30], [45, 30], [46, 60], [75, 60], [76, 90]]) {
+    expect(`weekday excess ${excess} credit`, credit, engine.computeDailyOvertime(480 + excess, 0, policy).creditedMinutes);
+  }
+  for (const [o, credit] of [[15, 0], [16, 30], [120, 120]]) {
+    expect(`off-day ${o} credit`, credit, engine.computeDailyOvertime(0, o, policy).creditedMinutes);
+  }
+  const calendar = [{ id: 'audit-cal', seq: 1, effectiveFrom: '2000-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }];
+  const u = engine.parseUtcInstant;
+  const ses = (a, b, breaks = []) => ({ startUtc: u(a), endUtc: u(b), breaksConfirmed: true,
+    breaks: breaks.map(([x, y]) => ({ startUtc: u(x), endUtc: u(y), countsAsWork: false, confirmed: true })) });
+  const day = (workDate, sessions) => {
+    const d = engine.computeWorkDay({ workDate, reportingZone: ZONE, policy, calendarVersions: calendar, sessions });
+    return [d.regularMinutes, d.nonworkingMinutes, d.eligibleMinutes, d.creditedMinutes];
+  };
+  // 09:00-18:00 PDT Monday with shifted breaks 11:00/13:00/15:30 (60 min).
+  expect('09:00-18:00 shifted breaks [R,O,T,credit]', [480, 0, 0, 0], day('2026-09-21', [ses('2026-09-21T16:00:00Z', '2026-09-22T01:00:00Z',
+    [['2026-09-21T18:00:00Z', '2026-09-21T18:15:00Z'], ['2026-09-21T20:00:00Z', '2026-09-21T20:30:00Z'], ['2026-09-21T22:30:00Z', '2026-09-21T22:45:00Z']])]));
+  // Two sessions of 4h15m40s: 30680 s -> R 511 once (not 510), E 31 -> credit 30.
+  expect('seconds aggregate then floor once [R,O,T,credit]', [511, 0, 31, 30], day('2026-09-21', [ses('2026-09-21T15:00:00Z', '2026-09-21T19:15:40Z'), ses('2026-09-21T20:00:00Z', '2026-09-22T00:15:40Z')]));
+  // Friday 08:00-12:00 plus Friday 22:00-Saturday 02:00 share one B: R 360, O 120.
+  expect('mixed overnight Friday->Saturday [R,O,T,credit]', [360, 120, 120, 120], day('2026-09-25', [ses('2026-09-25T15:00:00Z', '2026-09-25T19:00:00Z'), ses('2026-09-26T05:00:00Z', '2026-09-26T09:00:00Z')]));
+  // Monday 22:00 - Tuesday 07:00 less 60 min of breaks: R 480, O 0.
+  expect('weekday overnight Mon->Tue less 60 [R,O,T,credit]', [480, 0, 0, 0], day('2026-09-21', [ses('2026-09-22T05:00:00Z', '2026-09-22T14:00:00Z',
+    [['2026-09-22T07:00:00Z', '2026-09-22T07:30:00Z'], ['2026-09-22T10:00:00Z', '2026-09-22T10:30:00Z']])]));
+  // DST: Saturday 2026-03-07 22:00 PST -> Sunday 04:00 PDT = 5 elapsed hours; fall 6 hours.
+  expect('spring DST 22:00-04:00 [R,O,T,credit]', [0, 300, 300, 300], day('2026-03-07', [ses('2026-03-08T06:00:00Z', '2026-03-08T11:00:00Z')]));
+  expect('fall DST 22:00-03:00 [R,O,T,credit]', [0, 360, 360, 360], day('2026-10-31', [ses('2026-11-01T05:00:00Z', '2026-11-01T11:00:00Z')]));
+  const code = (fn) => { try { fn(); return 'no error'; } catch (error) { return error.code ?? String(error); } };
+  expect('DST gap 2026-03-08 02:30 rejected', 'nonexistent_local_time', code(() => engine.resolveLocalDateTime('2026-03-08T02:30', ZONE)));
+  expect('DST fold 2026-11-01 01:30 needs fold', 'ambiguous_local_time', code(() => engine.resolveLocalDateTime('2026-11-01T01:30', ZONE)));
+  expect('DST folds 0/1 -> UTC', ['2026-11-01T08:30:00Z', '2026-11-01T09:30:00Z'],
+    [0, 1].map((fold) => engine.formatUtcInstant(engine.resolveLocalDateTime('2026-11-01T01:30', ZONE, { fold }).utc)));
+}
+
+// ---------- F-01A: confirm the already saved break at Clock out ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id } = await openWithSaved(env);
+    const auditBefore = env.auditOf(id).length;
+    const tsBefore = env.timesheetVersions();
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [SAVED], breaks_confirmed: true });
+    const want = oracleDay(GROSS_MIN - 15, 0);
+    expect('F-01A status', 200, out.status);
+    expect('F-01A session', { end_utc: OUT_AT, breaks_confirmed: true, version: 2, break_count: 1 },
+      out.body.session ? { end_utc: out.body.session.end_utc, breaks_confirmed: out.body.session.breaks_confirmed, version: out.body.session.version, break_count: out.body.session.breaks.length } : out.body);
+    expect('F-01A persisted breaks', [SAVED_ROW], brief(env.breaksOf(id)));
+    expect('F-01A calculation', { status: 'complete', gross_seconds: GROSS_MIN * 60, excluded_break_seconds: 900, regular_minutes: 541,
+      nonworking_minutes: 0, normal_excess_minutes: want.excess, eligible_minutes: want.eligible, credited_minutes: want.credit }, calc(out.body.day));
+    expect('F-01A oracle values (R541,E61,credit60)', { excess: 61, eligible: 61, credit: 60 }, want);
+    const day = await env.req('GET', '/api/days/2026-09-29', cookie);
+    expect('F-01A GET day agrees', calc(out.body.day), calc(day.body));
+    const events = env.auditOf(id);
+    const last = events[events.length - 1];
+    const before = last ? JSON.parse(last.before_json) : null;
+    const after = last ? JSON.parse(last.after_json) : null;
+    expect('F-01A one new clock_out audit event', { added: 1, operation: 'work_session.clock_out', actor: env.ids.employee, owner: env.ids.employee, reason: null },
+      { added: events.length - auditBefore, operation: last?.operation, actor: last?.actor_user_id, owner: last?.owner_user_id, reason: last?.reason });
+    expect('F-01A audit before/after', { before: { end_utc: null, breaks_confirmed: false, version: 1, breaks: 1 }, after: { end_utc: OUT_AT, breaks_confirmed: true, version: 2, breaks: 1 } },
+      { before: { end_utc: before?.end_utc, breaks_confirmed: before?.breaks_confirmed, version: before?.version, breaks: before?.breaks?.length },
+        after: { end_utc: after?.end_utc, breaks_confirmed: after?.breaks_confirmed, version: after?.version, breaks: after?.breaks?.length } });
+    const tsAfter = env.timesheetVersions();
+    expect('F-01A employee timesheet version +1', tsBefore.map((row) => (row.user_id === env.ids.employee ? row.version + 1 : row.version)), tsAfter.map((row) => row.version));
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- F-01B: explicitly confirm none at Clock out ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    const want = oracleDay(GROSS_MIN, 0);
+    expect('F-01B status', 200, out.status);
+    expect('F-01B persisted breaks', [], brief(env.breaksOf(id)));
+    expect('F-01B calculation', { status: 'complete', gross_seconds: GROSS_MIN * 60, excluded_break_seconds: 0, regular_minutes: 556,
+      nonworking_minutes: 0, normal_excess_minutes: 76, eligible_minutes: 76, credited_minutes: 90 }, calc(out.body.day));
+    expect('F-01B oracle values (R556,E76,credit90)', { excess: 76, eligible: 76, credit: 90 }, want);
+    const day = await env.req('GET', '/api/days/2026-09-29', cookie);
+    expect('F-01B GET day agrees', calc(out.body.day), calc(day.body));
+    const ts = await env.req('GET', '/api/timesheets/2026-10-16', cookie);
+    const tsDay = ts.body?.days?.find((d) => d.work_date === '2026-09-29');
+    expect('F-01B timesheet read agrees', calc(out.body.day), calc(tsDay));
+    const events = env.auditOf(id);
+    const after = JSON.parse(events[events.length - 1].after_json);
+    expect('F-01B audit after has no breaks', [], after.breaks);
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Edit actuals at Clock out: a changed break replaces the saved one ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [brk('2026-09-29T11:00', '2026-09-29T11:20')], breaks_confirmed: true });
+    const want = oracleDay(GROSS_MIN - 20, 0);
+    expect('edit actual 11:00-11:20 status', 200, out.status);
+    expect('edit actual persisted', [{ start_utc: '2026-09-29T18:00:00Z', end_utc: '2026-09-29T18:20:00Z', counts_as_work: 0 }], brief(env.breaksOf(id)));
+    expect('edit actual R/E/credit', { regular_minutes: 536, eligible_minutes: want.eligible, credited_minutes: want.credit },
+      { regular_minutes: out.body.day?.calculation?.regular_minutes, eligible_minutes: out.body.day?.calculation?.eligible_minutes, credited_minutes: out.body.day?.calculation?.credited_minutes });
+    expect('edit actual oracle (E56,credit60)', { eligible: 56, credit: 60 }, { eligible: want.eligible, credit: want.credit });
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Same user, two sessions on one date: only the open session's breaks are replaced ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const cookie = await env.login('employee');
+    const morning = await env.req('POST', '/api/days/2026-09-29/sessions', cookie, {
+      start: la('2026-09-29T07:00'), end: la('2026-09-29T08:00'), input_zone: ZONE,
+      breaks: [brk('2026-09-29T07:30', '2026-09-29T07:40')], breaks_confirmed: true,
+    });
+    expect('multi-session morning created', 201, morning.status);
+    const { id } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    const want = oracleDay(50 + GROSS_MIN, 0);
+    expect('multi-session status', 200, out.status);
+    expect('multi-session morning break kept', [{ start_utc: '2026-09-29T14:30:00Z', end_utc: '2026-09-29T14:40:00Z', counts_as_work: 0 }], brief(env.breaksOf(morning.body.session.id)));
+    expect('multi-session afternoon breaks cleared', [], brief(env.breaksOf(id)));
+    expect('multi-session one daily B (R606,E126,credit120)', { regular_minutes: 606, eligible_minutes: 126, credited_minutes: 120, oracle: 120 },
+      { regular_minutes: out.body.day?.calculation?.regular_minutes, eligible_minutes: out.body.day?.calculation?.eligible_minutes, credited_minutes: out.body.day?.calculation?.credited_minutes, oracle: want.credit });
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Two-user isolation of the new DELETE ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const emp = await openWithSaved(env, 'employee');
+    const adm = await openWithSaved(env, 'admin', '2026-09-29T09:30');
+    const admAuditBefore = env.auditOf(adm.id).length;
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', emp.cookie, { breaks: [], breaks_confirmed: true });
+    expect('isolation employee clock out', 200, out.status);
+    expect('isolation admin session untouched', { end_utc: null, breaks_confirmed: 0, version: 1, user_id: env.ids.admin }, env.sessionRow(adm.id));
+    expect('isolation admin break rows untouched (same ids)', adm.savedIds, env.breaksOf(adm.id).map((row) => row.id));
+    expect('isolation admin audit untouched', admAuditBefore, env.auditOf(adm.id).length);
+    expect('isolation admin cannot read employee session', 404, (await env.req('GET', `/api/sessions/${emp.id}`, adm.cookie)).status);
+    expect('isolation employee cannot read admin session', 404, (await env.req('GET', `/api/sessions/${adm.id}`, emp.cookie)).status);
+    const admOut = await env.req('POST', '/api/clock/out', adm.cookie, { breaks: [SAVED], breaks_confirmed: true });
+    const want = oracleDay(minutesBetween('2026-09-29T16:30:00Z', OUT_AT) - 15, 0);
+    expect('isolation admin own clock out (R511,credit30)', { status: 200, regular_minutes: 511, credited_minutes: want.credit, oracle: 30 },
+      { status: admOut.status, regular_minutes: admOut.body.day?.calculation?.regular_minutes, credited_minutes: admOut.body.day?.calculation?.credited_minutes, oracle: want.credit });
+    expect('isolation employee rows unchanged by admin clock out', [], brief(env.breaksOf(emp.id)));
+    expect('isolation employee second clock out', 409, (await env.req('POST', '/api/clock/out', emp.cookie, { breaks: [], breaks_confirmed: true })).status);
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Rollback after the DELETE has run (injected failure on the audit insert) ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id, savedIds } = await openWithSaved(env);
+    const auditBefore = env.auditOf(id).length;
+    const tsBefore = env.timesheetVersions();
+    env.set(OUT_AT);
+    env.db.exec(`CREATE TEMP TRIGGER probe_fail_late BEFORE INSERT ON audit_events
+      WHEN NEW.operation = 'work_session.clock_out' BEGIN SELECT RAISE(ABORT, 'probe_injected_failure'); END;`);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    expect('late failure rejected', 500, out.status);
+    expect('late failure: session still open', { end_utc: null, breaks_confirmed: 0, version: 1, user_id: env.ids.employee }, env.sessionRow(id));
+    expect('late failure: deleted break restored (same row id)', savedIds, env.breaksOf(id).map((row) => row.id));
+    expect('late failure: no audit event', auditBefore, env.auditOf(id).length);
+    expect('late failure: timesheet versions unchanged', tsBefore, env.timesheetVersions());
+    env.db.exec('DROP TRIGGER probe_fail_late');
+    const retry = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    expect('late failure: retry succeeds (R556,credit90)', { status: 200, regular_minutes: 556, credited_minutes: 90 },
+      { status: retry.status, regular_minutes: retry.body.day?.calculation?.regular_minutes, credited_minutes: retry.body.day?.calculation?.credited_minutes });
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- changes !== 1 guard: an UPDATE that changes no row is a stale version ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id, savedIds } = await openWithSaved(env);
+    const auditBefore = env.auditOf(id).length;
+    const tsBefore = env.timesheetVersions();
+    env.set(OUT_AT);
+    env.db.exec(`CREATE TEMP TRIGGER probe_ignore_update BEFORE UPDATE OF end_utc ON work_sessions
+      WHEN NEW.end_utc IS NOT NULL BEGIN SELECT RAISE(IGNORE); END;`);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    expect('zero-row update -> 409 stale_version', { status: 409, code: 'stale_version' }, { status: out.status, code: out.body?.error?.code });
+    expect('zero-row update: session unchanged', { end_utc: null, breaks_confirmed: 0, version: 1, user_id: env.ids.employee }, env.sessionRow(id));
+    expect('zero-row update: deleted break restored', savedIds, env.breaksOf(id).map((row) => row.id));
+    expect('zero-row update: no audit, timesheet unchanged', { audit: auditBefore, ts: tsBefore }, { audit: env.auditOf(id).length, ts: env.timesheetVersions() });
+    env.db.exec('DROP TRIGGER probe_ignore_update');
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Validation failure before the DELETE (invalid submitted set) ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id, savedIds } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [brk('2026-09-29T19:00', '2026-09-29T19:15')], breaks_confirmed: true });
+    expect('break after clock-out instant rejected', { status: 422, code: 'break_outside_session' }, { status: out.status, code: out.body?.error?.code });
+    expect('invalid set: session open, saved break kept', { row: { end_utc: null, breaks_confirmed: 0, version: 1, user_id: env.ids.employee }, ids: savedIds },
+      { row: env.sessionRow(id), ids: env.breaksOf(id).map((row) => row.id) });
+  } finally {
+    env.close();
+  }
+}
+
+// ---------- Unknown (unconfirmed) Clock out paths: residual note ----------
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: false });
+    expect('unknown, empty set: 200 and pending', { status: 200, calc_status: 'incomplete_breaks', credited: null, regular: null },
+      { status: out.status, calc_status: out.body.day?.calculation?.status, credited: out.body.day?.calculation?.credited_minutes, regular: out.body.day?.calculation?.regular_minutes });
+    expect('unknown, empty set: saved break kept', [SAVED_ROW], brief(env.breaksOf(id)));
+  } finally {
+    env.close();
+  }
+}
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id, savedIds } = await openWithSaved(env);
+    const auditBefore = env.auditOf(id).length;
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [SAVED], breaks_confirmed: false });
+    observe('residual: unknown Clock out echoing the saved break', {
+      status: out.status, code: out.body?.error?.code ?? null, session: env.sessionRow(id),
+      break_ids_unchanged: isDeepStrictEqual(savedIds, env.breaksOf(id).map((row) => row.id)), audit_added: env.auditOf(id).length - auditBefore,
+    });
+    const retry = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: false });
+    observe('residual: same user then clocks out unknown with empty set', { status: retry.status, calc_status: retry.body.day?.calculation?.status });
+  } finally {
+    env.close();
+  }
+}
+{
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id } = await openWithSaved(env);
+    env.set(OUT_AT);
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [brk('2026-09-29T13:00', '2026-09-29T13:30')], breaks_confirmed: false });
+    observe('residual: unknown Clock out with a new non-overlapping break', {
+      status: out.status, stored: brief(env.breaksOf(id)), calc: calc(out.body.day),
+    });
+    // The union is never calculated; confirmation replaces it with exactly the confirmed set.
+    const session = out.body.session;
+    const put = await env.req('PUT', `/api/sessions/${id}`, cookie, {
+      start: session.start_utc, end: session.end_utc, input_zone: ZONE,
+      breaks: [brk('2026-09-29T13:00', '2026-09-29T13:30')], breaks_confirmed: true, expected_version: session.version,
+    });
+    const want = oracleDay(GROSS_MIN - 30, 0);
+    expect('residual follow-up: confirming via session edit replaces the union', {
+      status: 200, stored: [{ start_utc: '2026-09-29T20:00:00Z', end_utc: '2026-09-29T20:30:00Z', counts_as_work: 0 }],
+      regular_minutes: 526, credited_minutes: want.credit, oracle: 60,
+    }, { status: put.status, stored: brief(env.breaksOf(id)), regular_minutes: put.body.day?.calculation?.regular_minutes,
+      credited_minutes: put.body.day?.calculation?.credited_minutes, oracle: want.credit });
+  } finally {
+    env.close();
+  }
+}
+{
+  // Saved break that lies after the later Clock out instant (accepted while the session is open).
+  const env = await fresh(CREATE_AT);
+  try {
+    const { cookie, id, savedIds } = await openWithSaved(env, 'employee', '2026-09-29T09:00', [brk('2026-09-29T15:30', '2026-09-29T15:45')]);
+    observe('open session accepted a break after now (13:00 LA)', { saved: brief(env.breaksOf(id)) });
+    env.set('2026-09-29T22:00:00Z'); // 15:00 LA
+    const unknown = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: false });
+    observe('unknown Clock out before that saved break', {
+      status: unknown.status, code: unknown.body?.error?.code ?? null, session: env.sessionRow(id),
+      break_ids_unchanged: isDeepStrictEqual(savedIds, env.breaksOf(id).map((row) => row.id)),
+    });
+    const confirmed = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    observe('confirmed-none Clock out before that saved break', {
+      status: confirmed.status, regular: confirmed.body.day?.calculation?.regular_minutes, credited: confirmed.body.day?.calculation?.credited_minutes,
+      stored: brief(env.breaksOf(id)),
+    });
+  } finally {
+    env.close();
+  }
+}
+
+{
+  // Clock out carries no expected_version: a confirmed set replaces rows the caller may not have seen.
+  const env = await fresh(CREATE_AT);
+  try {
+    const cookie = await env.login('employee');
+    const created = await env.req('POST', '/api/days/2026-09-29/sessions', cookie, {
+      start: la('2026-09-29T09:00'), end: null, input_zone: ZONE, breaks: [], breaks_confirmed: false,
+    });
+    const id = created.body.session.id;
+    // A second client edits the open session and adds a break (version 1 -> 2).
+    const put = await env.req('PUT', `/api/sessions/${id}`, cookie, {
+      start: la('2026-09-29T09:00'), end: null, input_zone: ZONE, breaks: [brk('2026-09-29T12:00', '2026-09-29T12:30')],
+      breaks_confirmed: false, expected_version: 1,
+    });
+    env.set(OUT_AT);
+    // The first client, still showing version 1 with no breaks, confirms none.
+    const out = await env.req('POST', '/api/clock/out', cookie, { breaks: [], breaks_confirmed: true });
+    const events = env.auditOf(id);
+    const last = events[events.length - 1];
+    observe('confirmed-none Clock out after another client added a break (no expected_version in body)', {
+      put_status: put.status, status: out.status, stored: brief(env.breaksOf(id)), regular: out.body.day?.calculation?.regular_minutes,
+      credited: out.body.day?.calculation?.credited_minutes, audit_before_breaks: JSON.parse(last.before_json).breaks.length,
+    });
+  } finally {
+    env.close();
+  }
+}
+
+console.log(JSON.stringify({ summary: true, mode, expectations_passed: passes, expectations_failed: failures, observations }));
+process.exitCode = mode === 'freeze' && failures > 0 ? 1 : 0;

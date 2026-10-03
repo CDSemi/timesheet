@@ -1,0 +1,33 @@
+# HEAD / status / digest before audit
+date_utc: 2026-10-03T03:42:24Z
+$ git rev-parse HEAD
+68bbb31435543329b6c51f29703d9e2e7a4290bf
+exit 0
+$ git rev-parse origin/main
+68bbb31435543329b6c51f29703d9e2e7a4290bf
+exit 0
+$ git status --short
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WP1-F01-FREEZE.md
+ M handoff/delivery/tasks/WP1-F01-GATE.md
+?? handoff/delivery/evidence/WP1-F01-AUDIT/
+?? handoff/delivery/evidence/WP1-F01-FREEZE/
+?? handoff/delivery/evidence/WP1-F01-GATE/
+exit 0
+$ git status --short -- . ':(exclude)handoff/'  (changes outside handoff/)
+exit 0 (empty output = none)
+$ node --version
+v24.21.0
+$ node npm-cli.js --version
+11.18.0
+$ node npm-cli.js run digest
+
+> timesheet@0.1.0 digest
+> node scripts/source-digest.mjs
+
+c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59  (533 files, handoff/ excluded)
+exit 0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59
