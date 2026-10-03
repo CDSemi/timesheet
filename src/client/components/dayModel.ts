@@ -9,7 +9,14 @@ import type { BatchConflict, DayBatchEntry, DayCategory, DayView, Session, Times
 
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
-export type Completeness = 'complete' | 'open_session' | 'confirm_breaks' | 'missing' | 'not_expected' | 'error';
+export type Completeness =
+  | 'complete'
+  | 'open_session'
+  | 'confirm_breaks'
+  | 'missing'
+  | 'upcoming'
+  | 'not_expected'
+  | 'error';
 
 /** Status shapes; each is always drawn next to its text, never alone. */
 export type StatusShape = 'circle' | 'diamond' | 'square' | 'triangle' | 'bar';
@@ -20,8 +27,13 @@ export interface CompletenessDisplay {
   shape: StatusShape;
 }
 
-/** Maps the server's calculation status and attendance expectation to a display state. */
-export function completenessOf(day: DayView): CompletenessDisplay {
+/**
+ * Maps the server's calculation status and attendance expectation to a display state. A day
+ * after the server's current local date (`todayLocal`, from /api/periods/current) that has no
+ * record is `upcoming`, not `missing record`. This is a display mapping only: a date string
+ * comparison against a server-provided date, never the device clock.
+ */
+export function completenessOf(day: DayView, todayLocal: string | null): CompletenessDisplay {
   if (day.calculation_error !== null) {
     return { completeness: 'error', text: day.calculation_error.replace(/_/g, ' '), shape: 'triangle' };
   }
@@ -33,9 +45,11 @@ export function completenessOf(day: DayView): CompletenessDisplay {
     case 'incomplete_breaks':
       return { completeness: 'confirm_breaks', text: 'confirm breaks', shape: 'diamond' };
     default:
-      return day.attendance_expected
-        ? { completeness: 'missing', text: 'missing record', shape: 'square' }
-        : { completeness: 'not_expected', text: 'not expected', shape: 'bar' };
+      if (!day.attendance_expected) return { completeness: 'not_expected', text: 'not expected', shape: 'bar' };
+      if (todayLocal !== null && day.work_date > todayLocal && day.sessions.length === 0) {
+        return { completeness: 'upcoming', text: 'upcoming', shape: 'bar' };
+      }
+      return { completeness: 'missing', text: 'missing record', shape: 'square' };
   }
 }
 
@@ -73,7 +87,7 @@ function calendarLabelOf(day: DayView): string {
   return classification.day_class === 'normal' ? 'Work day' : 'Non-working day';
 }
 
-export function toDayDisplay(day: DayView): DayDisplay {
+export function toDayDisplay(day: DayView, todayLocal: string | null): DayDisplay {
   return {
     workDate: day.work_date,
     weekday: WEEKDAYS[isoWeekday(day.work_date) - 1] ?? '',
@@ -81,7 +95,7 @@ export function toDayDisplay(day: DayView): DayDisplay {
     categoryExplicit: day.category_source === 'explicit',
     calendarLabel: calendarLabelOf(day),
     nonworking: day.classification?.day_class === 'nonworking',
-    status: completenessOf(day),
+    status: completenessOf(day, todayLocal),
     pendingOt: isPendingOt(day),
     sessions: day.sessions,
     regularMinutes: day.calculation?.regular_minutes ?? null,
@@ -98,7 +112,7 @@ export interface WeekGroup {
 }
 
 /** Groups consecutive days into Monday to Sunday weeks (a two-week period gives two groups). */
-export function weekGroups(days: readonly DayView[]): WeekGroup[] {
+export function weekGroups(days: readonly DayView[], todayLocal: string | null): WeekGroup[] {
   const groups: WeekGroup[] = [];
   for (const day of days) {
     const weekStart = addDays(day.work_date, -(isoWeekday(day.work_date) - 1));
@@ -107,7 +121,7 @@ export function weekGroups(days: readonly DayView[]): WeekGroup[] {
       group = { weekStart, days: [] };
       groups.push(group);
     }
-    group.days.push(toDayDisplay(day));
+    group.days.push(toDayDisplay(day, todayLocal));
   }
   return groups;
 }

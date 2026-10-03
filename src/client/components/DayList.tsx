@@ -7,17 +7,21 @@ import { minutesText, sessionText } from './format.ts';
 export function DayList({
   days,
   zone,
+  todayLocal,
   selected,
   onToggle,
+  onEdit,
 }: {
   days: readonly DayView[];
   zone: string;
+  todayLocal: string | null;
   selected: ReadonlySet<string>;
   onToggle: (workDate: string) => void;
+  onEdit: (workDate: string) => void;
 }) {
   return (
     <div className="day-list">
-      {weekGroups(days).map((group) => (
+      {weekGroups(days, todayLocal).map((group) => (
         <section key={group.weekStart} aria-label={`Week of ${group.weekStart}`}>
           <h2 className="week-tag">Week of {group.weekStart}</h2>
           <ul className="plain">
@@ -52,6 +56,11 @@ export function DayList({
                     <span>Regular {minutesText(day.regularMinutes)}</span>
                     <span>Off-calendar {minutesText(day.offCalendarMinutes)}</span>
                     <span>Credit {minutesText(day.creditedMinutes)}</span>
+                  </div>
+                  <div>
+                    <button type="button" className="secondary" onClick={() => onEdit(day.workDate)} aria-label={`Edit ${day.workDate}`}>
+                      Edit day
+                    </button>
                   </div>
                 </div>
               </li>

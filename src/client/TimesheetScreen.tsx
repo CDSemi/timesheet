@@ -4,6 +4,7 @@ import { formatDuration } from '../domain/format.ts';
 import {
   api,
   ApiRequestError,
+  type CurrentPeriods,
   type DayBatchPreview,
   type DayBatchResult,
   type DayCategory,
@@ -15,11 +16,15 @@ import {
 import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
 import { ClockBar } from './components/ClockBar.tsx';
+import { ClockOutDialog } from './components/ClockOutDialog.tsx';
 import { DayList } from './components/DayList.tsx';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
+import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodHeader } from './components/PeriodHeader.tsx';
 import { TimesheetGrid } from './components/TimesheetGrid.tsx';
+import { DayEditor } from './DayEditor.tsx';
 
 /** The documented layout breakpoint: the grid from 768px up, the day list below it. */
 const DESKTOP_QUERY = '(min-width: 768px)';
@@ -36,29 +41,31 @@ function useDesktop(): boolean {
   );
 }
 
-function describe(caught: unknown): string {
-  return caught instanceof ApiRequestError ? `${caught.message} (${caught.code})` : 'Request failed';
-}
-
 export function TimesheetScreen({ user }: { user: User }) {
   const desktop = useDesktop();
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
+  /** The server's current local date and periods; days after that date show as upcoming. */
+  const [periods, setPeriods] = useState<CurrentPeriods | null>(null);
   const [view, setView] = useState<TimesheetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [staleNotice, setStaleNotice] = useState<string | null>(null);
-  const [noBreaks, setNoBreaks] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [category, setCategory] = useState<DayCategory>('Off');
   const [preview, setPreview] = useState<DayBatchPreview | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editDate, setEditDate] = useState<string | null>(null);
+  const [clockOutSession, setClockOutSession] = useState<Session | null>(null);
 
-  const report = (caught: unknown) => setMessage(describe(caught));
+  const report = (caught: unknown) => setMessage(describeError(caught));
 
   useEffect(() => {
-    api<{ current: Period }>('GET', '/api/periods/current')
-      .then((response) => setPayrollDate(response.current.payroll_date))
+    api<CurrentPeriods>('GET', '/api/periods/current')
+      .then((response) => {
+        setPeriods(response);
+        setPayrollDate(response.current.payroll_date);
+      })
       .catch(report);
   }, []);
 
@@ -66,7 +73,11 @@ export function TimesheetScreen({ user }: { user: User }) {
     if (payrollDate === null) return;
     api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`)
       .then(setView)
-      .catch((caught: unknown) => setMessage(describe(caught)));
+      .catch((caught: unknown) => setMessage(describeError(caught)));
+    // The server's date can move on while the page stays open, so it is read again with the period.
+    api<CurrentPeriods>('GET', '/api/periods/current')
+      .then(setPeriods)
+      .catch(() => undefined);
   }, [payrollDate]);
 
   useEffect(load, [load]);
@@ -85,35 +96,38 @@ export function TimesheetScreen({ user }: { user: User }) {
     }
   }
 
-  /** Finds the running session in the loaded period, else in the current period. */
+  /** Finds the running session in the loaded period, else in the current and in-progress periods. */
   async function findRunningSession(): Promise<Session | undefined> {
     const running = (sheet: TimesheetView) =>
       sheet.days.flatMap((day) => day.sessions).find((session) => session.end_utc === null);
     const shown = view === null ? undefined : running(view);
-    if (shown !== undefined || view === null) return shown;
-    const current = await api<TimesheetView>('GET', `/api/timesheets/${view.current_payroll_date}`);
-    return running(current);
+    if (shown !== undefined) return shown;
+    const known = await api<CurrentPeriods>('GET', '/api/periods/current');
+    const payrollDates = [...new Set([known.current.payroll_date, known.in_progress.payroll_date])];
+    for (const date of payrollDates) {
+      if (date === view?.period.payroll_date) continue;
+      const found = running(await api<TimesheetView>('GET', `/api/timesheets/${date}`));
+      if (found !== undefined) return found;
+    }
+    return undefined;
   }
 
-  async function clock(action: 'in' | 'out') {
+  async function clockIn() {
     setMessage(null);
     try {
-      if (action === 'in') {
-        await api('POST', '/api/clock/in', { input_zone: displayZone });
-      } else {
-        const running = await findRunningSession();
-        if (running === undefined) {
-          setMessage('No running session found; reload the page.');
-          return;
-        }
-        // The version makes a stale Clock out fail with 409. Unticked breaks are sent as
-        // unknown by omitting the list, so saved breaks are kept; ticking confirms none.
-        const body = noBreaks
-          ? { breaks: [], breaks_confirmed: true, expected_version: running.version }
-          : { breaks_confirmed: false, expected_version: running.version };
-        await api('POST', '/api/clock/out', body);
-      }
+      await api('POST', '/api/clock/in', { input_zone: displayZone });
       load();
+    } catch (caught) {
+      report(caught);
+    }
+  }
+
+  async function openClockOut() {
+    setMessage(null);
+    try {
+      const running = await findRunningSession();
+      if (running === undefined) setMessage('No running session found; reload the page.');
+      else setClockOutSession(running);
     } catch (caught) {
       report(caught);
     }
@@ -165,7 +179,7 @@ export function TimesheetScreen({ user }: { user: User }) {
         setPreview(null);
         setStaleNotice(staleReloadMessage(staleDates(caught.details)));
       } else {
-        setDialogError(describe(caught));
+        setDialogError(describeError(caught));
       }
     } finally {
       setBusy(false);
@@ -177,6 +191,8 @@ export function TimesheetScreen({ user }: { user: User }) {
     setSelected(new Set());
     load();
   }
+
+  const todayLocal = periods?.today_local ?? null;
 
   return (
     <div>
@@ -190,7 +206,8 @@ export function TimesheetScreen({ user }: { user: User }) {
       {view !== null && (
         <section className="card stack">
           <PeriodHeader view={view} zone={displayZone} onMove={move} />
-          <ClockBar noBreaks={noBreaks} onNoBreaks={setNoBreaks} onClockIn={() => clock('in')} onClockOut={() => clock('out')} />
+          <ClockBar onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />
+          <OpenDay onOpen={setEditDate} />
           {message !== null && <p className="error">{message}</p>}
           {notice !== null && (
             <p className="notice-ok" role="status">
@@ -217,9 +234,23 @@ export function TimesheetScreen({ user }: { user: User }) {
           />
 
           {desktop ? (
-            <TimesheetGrid days={view.days} zone={displayZone} selected={selected} onToggle={toggle} />
+            <TimesheetGrid
+              days={view.days}
+              zone={displayZone}
+              todayLocal={todayLocal}
+              selected={selected}
+              onToggle={toggle}
+              onEdit={setEditDate}
+            />
           ) : (
-            <DayList days={view.days} zone={displayZone} selected={selected} onToggle={toggle} />
+            <DayList
+              days={view.days}
+              zone={displayZone}
+              todayLocal={todayLocal}
+              selected={selected}
+              onToggle={toggle}
+              onEdit={setEditDate}
+            />
           )}
           <p className="muted">
             *Provisional OT credit: {formatDuration(view.totals.provisional_credited_minutes)}; days pending OT evidence:{' '}
@@ -237,6 +268,36 @@ export function TimesheetScreen({ user }: { user: User }) {
           busy={busy}
           onCommit={commitBatch}
           onClose={() => setPreview(null)}
+        />
+      )}
+
+      {editDate !== null && view !== null && (
+        <DayEditor
+          key={editDate}
+          workDate={editDate}
+          displayZone={displayZone}
+          reportingZone={view.reporting_zone}
+          todayLocal={todayLocal}
+          onChanged={load}
+          onClose={() => setEditDate(null)}
+        />
+      )}
+
+      {clockOutSession !== null && (
+        <ClockOutDialog
+          session={clockOutSession}
+          displayZone={displayZone}
+          onDone={() => {
+            setClockOutSession(null);
+            setNotice('Clocked out.');
+            load();
+          }}
+          onStale={() => {
+            setClockOutSession(null);
+            setNotice('The running session changed elsewhere; it was reloaded. Clock out again to review it.');
+            load();
+          }}
+          onClose={() => setClockOutSession(null)}
         />
       )}
     </div>

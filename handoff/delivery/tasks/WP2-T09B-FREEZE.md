@@ -90,3 +90,10 @@ Evidence goes in handoff/delivery/evidence/WP2-T09B-FREEZE/. Return at most 150 
 ## Results
 
 (Committer appends here.)
+
+- Pre-HEAD 717db3ee30057089298a8852438f16d46aa4dc89; post-HEAD and commit
+  9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d; pushed to origin main; remote SHA equal.
+- Staged count 31. Node v24.21.0. Exits: precommit 0, diff --check 0, JSON parse 0,
+  orchestration validator 0, check_recovery 0, personal-data read clean.
+- Screenshots: six synthetic PNGs viewed, synthetic data only.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-T09B-FREEZE/.

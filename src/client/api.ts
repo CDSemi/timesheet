@@ -224,3 +224,72 @@ export interface DayBatchResult {
   unchanged: string[];
   days: DayView[];
 }
+
+/** A local wall time in an explicit IANA zone; the server resolves it (R-07). */
+export interface LocalInstantInput {
+  local: string;
+  zone: string;
+  /** 0 = earlier, 1 = later instant of a repeated (DST fold) local time. */
+  fold?: 0 | 1 | null;
+  /** An explicit UTC offset such as `-07:00`, valid for that local time in the zone. */
+  offset?: string | null;
+}
+
+export interface BreakRequest {
+  start: LocalInstantInput;
+  end: LocalInstantInput;
+  counts_as_work: boolean;
+}
+
+/** Body of POST /api/days/:date/sessions; PUT /api/sessions/:id adds `expected_version`. */
+export interface SessionRequest {
+  start: LocalInstantInput;
+  end: LocalInstantInput | null;
+  input_zone: string;
+  breaks: BreakRequest[];
+  breaks_confirmed: boolean;
+  expected_version?: number;
+  reason?: string;
+}
+
+export interface SessionResponse {
+  session: Session;
+  day: DayView;
+}
+
+/** Body of POST /api/clock/out; an omitted `breaks` keeps the saved rows (unconfirmed only). */
+export interface ClockOutRequest {
+  breaks?: BreakRequest[];
+  breaks_confirmed: boolean;
+  expected_version: number;
+  reason?: string;
+}
+
+/** Body of PUT /api/days/:date; `expected_version` is null for a date without an entry. */
+export interface DayEntryRequest {
+  category: DayCategory;
+  leave_minutes: number;
+  leave_kind: LeaveKind | null;
+  wfh: boolean;
+  notes: string;
+  expected_version: number | null;
+  reason?: string;
+}
+
+export interface PolicyBreak {
+  start_offset_minutes: number;
+  duration_minutes: number;
+  counts_as_work: boolean;
+}
+
+export interface PolicyVersion {
+  id: string;
+  seq: number;
+  effective_from: string;
+  required_minutes: number;
+  threshold_minutes: number;
+  rounding_step_minutes: number;
+  reference_start: string;
+  reference_end: string;
+  breaks: PolicyBreak[];
+}

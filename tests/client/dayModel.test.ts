@@ -82,29 +82,47 @@ function day(workDate: string, overrides: Partial<DayView> = {}): DayView {
 
 describe('completenessOf and isPendingOt', () => {
   it('maps every server calculation status to text plus a shape', () => {
-    expect(completenessOf(day('2026-09-29', { calculation: calculation('complete', 480) }))).toEqual({
+    expect(completenessOf(day('2026-09-29', { calculation: calculation('complete', 480) }), null)).toEqual({
       completeness: 'complete',
       text: 'complete',
       shape: 'circle',
     });
-    expect(completenessOf(day('2026-09-29', { calculation: calculation('incomplete') })).completeness).toBe('open_session');
-    expect(completenessOf(day('2026-09-29', { calculation: calculation('incomplete_breaks') })).completeness).toBe('confirm_breaks');
+    expect(completenessOf(day('2026-09-29', { calculation: calculation('incomplete') }), null).completeness).toBe('open_session');
+    expect(completenessOf(day('2026-09-29', { calculation: calculation('incomplete_breaks') }), null).completeness).toBe('confirm_breaks');
   });
 
   it('shows an expected day without records as missing, not as pending OT', () => {
     const missing = day('2026-09-29', { calculation: calculation('no_records') });
-    expect(completenessOf(missing)).toMatchObject({ completeness: 'missing', shape: 'square' });
+    expect(completenessOf(missing, null)).toMatchObject({ completeness: 'missing', shape: 'square' });
     expect(isPendingOt(missing)).toBe(false);
+  });
+
+  it('shows an expected day after the server date as upcoming, from the server date and never the device clock', () => {
+    const future = day('2026-10-07', { calculation: calculation('no_records') });
+    expect(completenessOf(future, '2026-10-05')).toEqual({ completeness: 'upcoming', text: 'upcoming', shape: 'bar' });
+    expect(isPendingOt(future)).toBe(false);
+    // The server date itself and earlier days are not upcoming.
+    expect(completenessOf(day('2026-10-05', { calculation: calculation('no_records') }), '2026-10-05').completeness).toBe('missing');
+    expect(completenessOf(day('2026-10-04', { calculation: calculation('no_records') }), '2026-10-05').completeness).toBe('missing');
+    // Without a server date nothing is mapped, so no business decision rests on a guess.
+    expect(completenessOf(future, null).completeness).toBe('missing');
+  });
+
+  it('keeps a future day that is not expected, or that already has a session, as the server reports it', () => {
+    const weekend = day('2026-10-10', { attendance_expected: false, calculation: calculation('no_records') });
+    expect(completenessOf(weekend, '2026-10-05').completeness).toBe('not_expected');
+    const started = day('2026-10-06', { sessions: [session('s1', '2026-10-06')], calculation: calculation('incomplete') });
+    expect(completenessOf(started, '2026-10-05').completeness).toBe('open_session');
   });
 
   it('shows a day that is not expected as not expected', () => {
     const off = day('2026-10-03', { attendance_expected: false, calculation: null });
-    expect(completenessOf(off)).toMatchObject({ completeness: 'not_expected', text: 'not expected' });
+    expect(completenessOf(off, null)).toMatchObject({ completeness: 'not_expected', text: 'not expected' });
   });
 
   it('reports a calculation error in words', () => {
     const broken = day('2026-09-29', { calculation_error: 'policy_missing' });
-    expect(completenessOf(broken)).toEqual({ completeness: 'error', text: 'policy missing', shape: 'triangle' });
+    expect(completenessOf(broken, null)).toEqual({ completeness: 'error', text: 'policy missing', shape: 'triangle' });
   });
 
   it('flags pending OT only for an open session or unconfirmed breaks, as the server counts it', () => {
@@ -116,12 +134,12 @@ describe('completenessOf and isPendingOt', () => {
 
 describe('toDayDisplay', () => {
   it('passes server minutes through and never computes them', () => {
-    const display = toDayDisplay(day('2026-09-29', { calculation: calculation('complete', 480) }));
+    const display = toDayDisplay(day('2026-09-29', { calculation: calculation('complete', 480) }), null);
     expect(display).toMatchObject({ weekday: 'Tue', regularMinutes: 480, offCalendarMinutes: null, creditedMinutes: null });
   });
 
   it('uses plain words for missing values and keeps the entry version', () => {
-    const display = toDayDisplay(day('2026-10-03', { category: null, classification: null, entry: entry('2026-10-03', 3) }));
+    const display = toDayDisplay(day('2026-10-03', { category: null, classification: null, entry: entry('2026-10-03', 3) }), null);
     expect(display).toMatchObject({ category: 'none', calendarLabel: 'unclassified', entryVersion: 3 });
   });
 
@@ -131,6 +149,7 @@ describe('toDayDisplay', () => {
         classification: { day_class: 'nonworking', reason: 'holiday', name: 'Founders Day' },
         category_source: 'explicit',
       }),
+      null,
     );
     expect(display).toMatchObject({ nonworking: true, calendarLabel: 'Founders Day', categoryExplicit: true });
   });
@@ -139,7 +158,10 @@ describe('toDayDisplay', () => {
 describe('weekGroups', () => {
   it('splits a two-week period into Monday to Sunday groups', () => {
     const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
-    const groups = weekGroups(dates.map((date) => day(date)));
+    const groups = weekGroups(
+      dates.map((date) => day(date)),
+      null,
+    );
     expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
       ['2026-09-28', 7],
       ['2026-10-05', 7],
@@ -149,7 +171,7 @@ describe('weekGroups', () => {
   });
 
   it('groups a period that starts mid-week into partial weeks', () => {
-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')]);
+    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
     expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
       ['2026-09-28', 2],
       ['2026-10-05', 1],
@@ -157,7 +179,7 @@ describe('weekGroups', () => {
   });
 
   it('returns nothing for no days', () => {
-    expect(weekGroups([])).toEqual([]);
+    expect(weekGroups([], null)).toEqual([]);
   });
 });
 

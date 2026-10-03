@@ -118,8 +118,23 @@ export interface SeededDay {
   work_date: string;
   category: string;
   category_source: string;
-  entry: { version: number } | null;
-  sessions: Array<{ id: string; source: string; start_utc: string; end_utc: string | null; version: number }>;
+  leave_minutes: number;
+  leave_kind: string | null;
+  wfh: boolean;
+  notes?: string;
+  ot_leave: { kind_minutes: number; consumed_minutes: number; reversed_minutes: number; mismatch: boolean };
+  entry: { version: number; notes: string } | null;
+  calculation: { status: string; regular_minutes: number | null; credited_minutes: number | null } | null;
+  sessions: Array<{
+    id: string;
+    source: string;
+    start_utc: string;
+    end_utc: string | null;
+    input_zone: string;
+    breaks_confirmed: boolean;
+    breaks: Array<{ id: string; start_utc: string; end_utc: string }>;
+    version: number;
+  }>;
 }
 
 interface TimesheetResponse {
@@ -198,6 +213,33 @@ export class SeedClient {
 
   async dayView(workDate: string): Promise<SeededDay> {
     return this.call<SeededDay>('GET', `/api/days/${workDate}`);
+  }
+
+  /** Deletes every session of a date (a test's cleanup); the reason covers old periods. */
+  async clearSessions(workDate: string, reason = 'e2e cleanup'): Promise<void> {
+    for (const session of (await this.dayView(workDate)).sessions) {
+      await this.call('DELETE', `/api/sessions/${session.id}`, { expected_version: session.version, reason });
+    }
+  }
+
+  /** Saves a day entry as the employee (a change made behind the UI's back, or a seed). */
+  async putDay(workDate: string, fields: Record<string, unknown>): Promise<void> {
+    const day = await this.dayView(workDate);
+    await this.call('PUT', `/api/days/${workDate}`, {
+      category: 'Worked',
+      leave_minutes: 0,
+      leave_kind: null,
+      wfh: false,
+      notes: '',
+      reason: 'e2e seed',
+      ...fields,
+      expected_version: day.entry?.version ?? null,
+    });
+  }
+
+  /** Puts a day entry back to a plain worked day without leave (a test's cleanup). */
+  async resetDay(workDate: string): Promise<void> {
+    await this.putDay(workDate, {});
   }
 
   /** Clock in and straight out (breaks confirmed none): a clock-source session today. */

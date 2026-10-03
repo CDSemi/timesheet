@@ -1,0 +1,67 @@
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 <project>
+
+
+ Test Files  28 passed (28)
+      Tests  571 passed (571)
+   Start at  02:54:52
+   Duration  13.11s (tests 90%, transform 7%, import 3%)
+
+
+> timesheet@0.1.0 build
+> npm run build:server && npm run build:client
+
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 49 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:  0.25 kB
+dist/client/assets/index-f8gvzw-d.css   10.10 kB │ gzip:  2.88 kB
+dist/client/assets/index-DuV6nS3c.js   268.20 kB │ gzip: 82.13 kB │ map: 1,246.35 kB
+
+✓ built in 89ms
+
+> timesheet@0.1.0 smoke
+> node scripts/smoke-built-server.mjs
+
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3],"version":3}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":3}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid
+PASS  built server starts  Timesheet listening on http://127.0.0.1:3100 (schema v3)
+PASS  GET /api/health has no personal data  {"status":"ok"}
+PASS  GET / serves the built React client with CSP
+PASS  SPA fallback serves index.html
+PASS  employee login sets an HttpOnly SameSite=Strict cookie
+PASS  GET /api/periods/current  today 2026-10-03, current payroll 2026-10-16, due 2026-10-14T00:00:00Z
+PASS  POST 09:00–18:00 on 2026-09-28 with shifted breaks  status 201, R 480, O 0, credited 0
+PASS  admin cannot read the employee session by id (404)  404
+PASS  state change without Origin is rejected (403)  403
+PASS  logout revokes the session  200/401
+SMOKE PASSED
+exit 0

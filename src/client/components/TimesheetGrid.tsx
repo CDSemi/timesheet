@@ -7,13 +7,17 @@ import { minutesText, sessionText } from './format.ts';
 export function TimesheetGrid({
   days,
   zone,
+  todayLocal,
   selected,
   onToggle,
+  onEdit,
 }: {
   days: readonly DayView[];
   zone: string;
+  todayLocal: string | null;
   selected: ReadonlySet<string>;
   onToggle: (workDate: string) => void;
+  onEdit: (workDate: string) => void;
 }) {
   return (
     <div className="table-wrap">
@@ -31,9 +35,12 @@ export function TimesheetGrid({
             <th>Credit*</th>
             <th>Completeness</th>
             <th>Pending OT</th>
+            <th>
+              <span className="sr-only">Edit</span>
+            </th>
           </tr>
         </thead>
-        {weekGroups(days).map((group) => (
+        {weekGroups(days, todayLocal).map((group) => (
           <tbody key={group.weekStart}>
             {group.days.map((day, index) => (
               <tr
@@ -78,6 +85,11 @@ export function TimesheetGrid({
                 </td>
                 <td>
                   <PendingOtBadge day={day} />
+                </td>
+                <td>
+                  <button type="button" className="secondary" onClick={() => onEdit(day.workDate)} aria-label={`Edit ${day.workDate}`}>
+                    Edit
+                  </button>
                 </td>
               </tr>
             ))}

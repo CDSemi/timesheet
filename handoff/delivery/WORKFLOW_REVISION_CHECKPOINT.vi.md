@@ -7,14 +7,14 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 717db3ee30057089298a8852438f16d46aa4dc89, commit đóng băng
-    WP2-T09A.
-  - Digest mã nguồn 6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133
+  - HEAD = origin/main = 9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d, commit đóng băng
+    WP2-T09B.
+  - Digest mã nguồn 4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b
     (tác giả tự báo).
-  - Chưa commit: WP2-T09B (digest mã nguồn
-    4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b, tác giả tự báo),
-    bằng chứng của T09A-FREEZE, brief T10 và T09B-FREEZE, board và checkpoint này.
-    WP2-T09B-FREEZE sẽ commit chúng.
+  - Chưa commit: WP2-T10 (digest mã nguồn
+    84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e, tác giả tự báo),
+    bằng chứng của T09B-FREEZE, brief T11 và T10-FREEZE, board và checkpoint này.
+    WP2-T10-FREEZE sẽ commit chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -127,8 +127,13 @@ America/Los_Angeles).
   các gói Playwright.
 - WP2-T09B đã xong: tác giả tự báo verify 541 test; test:e2e 15 đạt, 1 bỏ qua. Ngày trong
   tương lai đang hiện "missing record"; phần sửa hiển thị nằm trong T10.
-- Bước tiếp: ghi kết quả WP2-T09B-FREEZE, rồi giao WP2-T10 (brief sẵn). T10 chạy bằng
-  worker-high (sonnet/high) vì có các trường hợp khó về nhập giờ.
+- WP2-T09B đã đóng băng ở 9c36a7e: sáu ảnh chụp, tất cả là dữ liệu giả lập.
+- WP2-T10 (màn sửa một ngày) đã xong: tác giả tự báo verify 571 test; test:e2e 42 đạt, 2 bỏ
+  qua (chạy hai lần), có cả trường hợp giờ trùng khi đổi giờ mùa hè ở Sydney và giờ bị nhảy
+  ở Los Angeles.
+  - Ghi chú cho AUDIT-B: client hiển thị giờ dự kiến về và gợi ý giờ nghỉ bằng các hàm
+    domain dùng chung, chỉ để hiển thị.
+- Bước tiếp: ghi kết quả WP2-T10-FREEZE, rồi giao WP2-T11 (brief sẵn).
   - WP2-T09-PREP đã xong. Kết quả chính:
     - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
       duyệt;
@@ -144,8 +149,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T09B-FREEZE (committer). WP2-T10 chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Các worker và committer
-  trước đều báo không còn process nào.
+- Đang chạy: WP2-T10-FREEZE (committer). WP2-T11 chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Worker T10 không để server
+  nào chạy.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

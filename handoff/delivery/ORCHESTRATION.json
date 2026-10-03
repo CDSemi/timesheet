@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t09b-freeze",
+  "phase": "wp2-t10-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b",
+  "current_source_digest": "84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T09B-FREEZE",
+  "next_task_id": "WP2-T10-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -73,7 +73,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "717db3ee30057089298a8852438f16d46aa4dc89",
+    "last_commit": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -2781,9 +2781,106 @@
       "id": "WP2-T09B-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-T09B"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa47e4f1bd2291c41",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T09B-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T09B-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-T09B-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "717db3ee30057089298a8852438f16d46aa4dc89",
+      "branch": "main",
+      "commit_sha": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 31 paths (exact expected set, no Playwright output); precommit, diff-check, JSON parse, validator and check_recovery exit 0; six screenshots synthetic.",
+      "next_action": "None; WP2-T10 runs on 9c36a7e."
+    },
+    {
+      "id": "WP2-T10",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP2-T09B-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a01234ca8aeade428",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/DayEditor.tsx",
+        "src/client/components",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "src/client/TimesheetScreen.tsx",
+        "tests/client",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "handoff/delivery/tasks/WP2-T10.md",
+        "handoff/delivery/evidence/WP2-T10"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T10.md",
+      "report": "handoff/delivery/tasks/WP2-T10.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T10/commands.txt",
+        "handoff/delivery/evidence/WP2-T10/verify.txt",
+        "handoff/delivery/evidence/WP2-T10/e2e.txt",
+        "handoff/delivery/evidence/WP2-T10/digest.txt"
+      ],
+      "deviations": [
+        "An 'Open a day' control was added to reach old periods (accepted).",
+        "The Clock-out break confirmation became a dialog (accepted)."
+      ],
+      "baseline_commit": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
+      "source_digest": "84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). DayEditor and ten components cover:\n- 09:00-18:00 with shifted breaks (pending, then confirmed; R 8h 00m, credit 0);\n- overnight with an explicit end date;\n- a Sydney DST fold (Later stores 2026-04-04T16:30:00Z) and a Los Angeles gap (03:30 shortcut, server-validated);\n- Clock in/out with a stale reload;\n- leave 240 vacation, WFH and the OT mismatch notice (no /api/ot calls);\n- the old-period reason prompt, stale day and session, delete, upcoming days, and mobile 44px targets.\nverify 571 tests; test:e2e 42 passed and 2 skipped, repeated twice; 19 synthetic screenshots.\nContract gaps for AUDIT-B: the server exposes no expected finish or break suggestions, so the client calls the shared domain functions suggestBreaks and expectedFinishUtc for display only (the same module, not a copy); a DST gap is only rejected by the server.\nNot independent acceptance.",
+      "next_action": "None; WP2-T10-FREEZE."
+    },
+    {
+      "id": "WP2-T10-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T10"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -2801,13 +2898,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
-        "handoff/delivery/evidence/WP2-T09B-FREEZE"
+        "handoff/delivery/tasks/WP2-T10-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T10-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP2-T09B-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP2-T10-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T10-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "717db3ee30057089298a8852438f16d46aa4dc89",
+      "baseline_commit": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -2815,23 +2912,23 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the T09B set (including six synthetic screenshots) with the T10 brief; on a permission denial stop without retrying."
+      "next_action": "Commit and push the T10 set (including 19 synthetic screenshots) with the T11 brief; on a permission denial stop without retrying."
     },
     {
-      "id": "WP2-T10",
+      "id": "WP2-T11",
       "package": "WP2",
       "kind": "implement",
       "status": "pending",
       "depends_on": [
-        "WP2-T09B-FREEZE"
+        "WP2-T10-FREEZE"
       ],
-      "profile": "timesheet-worker-high",
+      "profile": "timesheet-worker",
       "requested_model": "sonnet",
-      "requested_effort": "high",
+      "requested_effort": "medium",
       "model_override_reason": null,
       "routing": {
         "size": "M",
-        "risk": "H",
+        "risk": "M",
         "novelty": false
       },
       "actual_model": null,
@@ -2841,26 +2938,27 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/client/DayEditor.tsx",
+        "src/client/OtScreen.tsx",
+        "src/client/HistoryScreen.tsx",
         "src/client/components",
+        "src/client/App.tsx",
         "src/client/api.ts",
         "src/client/styles.css",
-        "src/client/TimesheetScreen.tsx",
         "tests/client",
-        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/ot-leave.spec.ts",
         "tests/e2e/fixtures.ts",
-        "handoff/delivery/tasks/WP2-T10.md",
-        "handoff/delivery/evidence/WP2-T10"
+        "handoff/delivery/tasks/WP2-T11.md",
+        "handoff/delivery/evidence/WP2-T11"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T10.md",
-      "report": "handoff/delivery/tasks/WP2-T10.md",
+      "prompt": "handoff/delivery/tasks/WP2-T11.md",
+      "report": "handoff/delivery/tasks/WP2-T11.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Day editor UI: manual sessions with input zone, DST fold/gap choice and overnight end date; break suggestions; Clock in/out with version; category, partial leave, WFH and the E-2 mismatch warning; server figures; reason prompt; stale reload; future days shown as upcoming."
+      "next_action": "OT screen (balances, flags, evidence, permission and reserve, record use per E-3, cancel and reverse, E-5 message, E-2 warning), history screen, evidence CSV download, navigation; test-only credit seeding; e2e on both projects."
     },
     {
       "id": "WP2-INFRA1",

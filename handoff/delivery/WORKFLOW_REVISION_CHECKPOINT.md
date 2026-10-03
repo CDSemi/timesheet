@@ -7,13 +7,13 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 717db3ee30057089298a8852438f16d46aa4dc89, the WP2-T09A freeze.
-  - Source digest 6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133
+  - HEAD = origin/main = 9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d, the WP2-T09B freeze.
+  - Source digest 4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b
     (author-reported).
-  - Uncommitted: WP2-T09B (source digest
-    4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b, author-reported),
-    the T09A-FREEZE evidence, the T10 and T09B-FREEZE briefs, the board and this
-    checkpoint. WP2-T09B-FREEZE commits them.
+  - Uncommitted: WP2-T10 (source digest
+    84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e, author-reported),
+    the T09B-FREEZE evidence, the T11 and T10-FREEZE briefs, the board and this
+    checkpoint. WP2-T10-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -122,8 +122,12 @@ America/Los_Angeles).
   Playwright packages.
 - WP2-T09B is done: author-reported verify 541 tests and test:e2e 15 passed, 1 skipped.
   Future days currently show "missing record"; the display follow-up is in T10.
-- Next action: record the WP2-T09B-FREEZE result, then dispatch WP2-T10 (brief ready).
-  T10 runs on worker-high (sonnet/high) because of the time-input semantics.
+- WP2-T09B frozen in 9c36a7e: six screenshots, all synthetic.
+- WP2-T10 (day editor) is done: author-reported verify 571 tests and test:e2e 42 passed,
+  2 skipped (run twice), including a Sydney DST fold and a Los Angeles gap.
+  - Note for AUDIT-B: the client shows expected finish and break suggestions through the
+    shared domain functions, for display only.
+- Next action: record the WP2-T10-FREEZE result, then dispatch WP2-T11 (brief ready).
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -139,8 +143,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T09B-FREEZE (committer). WP2-T10 is pending on it.
-- Live processes: none known besides the committer. The earlier workers and committers
-  reported none left.
+- Running: WP2-T10-FREEZE (committer). WP2-T11 is pending on it.
+- Live processes: none known besides the committer. The T10 worker left no servers
+  running.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.
