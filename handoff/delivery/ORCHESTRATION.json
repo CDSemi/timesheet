@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t05-recon",
+  "phase": "wp2-t06-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0",
+  "current_source_digest": "155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T05-RECON",
+  "next_task_id": "WP2-T06-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -55,12 +55,7 @@
       "observation": "The owner's manual commit used the chat 'Commit description' (AGENTS rule 12) as its message and committed only modified tracked files (e768b71); new files stayed untracked. Lesson: when the owner commits manually, the chat Commit description must equal the intended commit message, and the instructions must stress including new (untracked) files."
     }
   ],
-  "pending_owner_question": {
-    "date": "2026-10-03",
-    "task": "WP2-T05-FREEZE",
-    "question": "The owner's commit e768b71 carried only modified tracked files; the new files (migration 0003, dayEntries.ts, new tests, advisory review, briefs, evidence) are untracked, so main references files missing from git. Please make a completion commit that includes the new files: git add -A, the precommit check, then commit with the prepared message and push. Alternatively, send an approval message that names the action and its danger so the committer can try.",
-    "context": "WP2-T06 waits so that no in-progress work is swept into the owner's git add -A."
-  },
+  "pending_owner_question": null,
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -74,7 +69,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "e768b71c2a5e522bdfece8617599992f8f4a0abc",
+    "last_commit": "a8a5890a75361c44ff7730d54bbaadab56c40f3a",
     "unpushed": []
   },
   "owner_decisions": [
@@ -111,6 +106,12 @@
       "source": "owner chat, direct reply typed by the owner",
       "verbatim": "tôi đã commit xong, tiếp tục đi",
       "decision": "The owner chose option 2 and committed the WP2-T05-FREEZE set manually after the second classifier denial; continue the mission. WP2-T05-RECON (verifier, read-only) records and checks the commit before WP2-T06."
+    },
+    {
+      "date": "2026-10-03",
+      "source": "owner chat, direct reply typed by the owner",
+      "verbatim": "đã commit bổ sung xong, tiếp tụ đi",
+      "decision": "The owner made the completion commit that adds the untracked WP2-T05-FREEZE files; continue. WP2-T05-RECON2 (verifier, read-only) checks it before WP2-T06."
     }
   ],
   "coordinator_decisions": [
@@ -2012,12 +2013,14 @@
       "id": "WP2-T05-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "blocked",
+      "status": "done",
       "history": [
         "attempt 1 (agent a81ba645becaca031): no commit. HEAD = origin/main = e92add0 and the working tree matched the expected set exactly. The auto-mode permission classifier denied the first combined command (Node 24 PATH, mkdir evidence directory, git add of the explicit path list, node --version, precommit check) with reason 'Credential Leakage'. Which part triggered it is unknown. A denied call does not execute, so nothing was staged or written. The committer did not retry or split the command. The coordinator does not route around the denial: owner direction requested.",
         "attempt 2 (agent afd6a2b3bf3eee8fc), with the owner's direct confirmation quoted verbatim in the brief and prompt: HEAD = origin/main = e92add0, index empty, working tree equal to the expected set (35 non-evidence paths plus 58 evidence files). The standalone staging command (git add -- with the explicit paths) was denied again, reason 'Credential Leakage'. No check ran and nothing was staged or committed. Not retried, split or rephrased.",
         "owner (2026-10-03): the owner reports committing the set manually ('tôi đã commit xong, tiếp tục đi'), using the commands and commit-message file the coordinator provided. WP2-T05-RECON verifies the SHA, push, file set and privacy before this task is marked done.",
-        "WP2-T05-RECON finding: the owner's commit e768b71c2a5e522bdfece8617599992f8f4a0abc (parent e92add0, pushed) holds only the 23 modified tracked paths. Its message is the coordinator's chat 'Commit description' (WF-CAPS2 findings), not the prepared freeze message. All new files are still untracked: migration 0003, dayEntries.ts, two new tests, the advisory review, briefs and evidence. main therefore references files that are not in git. A completion commit is needed before WP2-T06."
+        "WP2-T05-RECON finding: the owner's commit e768b71c2a5e522bdfece8617599992f8f4a0abc (parent e92add0, pushed) holds only the 23 modified tracked paths. Its message is the coordinator's chat 'Commit description' (WF-CAPS2 findings), not the prepared freeze message. All new files are still untracked: migration 0003, dayEntries.ts, two new tests, the advisory review, briefs and evidence. main therefore references files that are not in git. A completion commit is needed before WP2-T06.",
+        "owner (2026-10-03): the owner reports the completion commit ('đã commit bổ sung xong, tiếp tụ đi'). WP2-T05-RECON2 verifies it.",
+        "WP2-T05-RECON2: the completion commit a8a5890a75361c44ff7730d54bbaadab56c40f3a (parent e768b71) is pushed; the two commits together equal the expected set; digest 8092155 matches."
       ],
       "partial_commit_sha": "e768b71c2a5e522bdfece8617599992f8f4a0abc",
       "depends_on": [
@@ -2051,13 +2054,14 @@
       "evidence": [],
       "baseline_commit": "e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "a8a5890a75361c44ff7730d54bbaadab56c40f3a",
+      "pushed": true,
+      "executed_by": "owner (manual commits e768b71 and a8a5890 after two classifier denials of the committer)",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": "partial: the owner's manual commit e768b71 carries only the modified tracked paths; the new files remain untracked.",
-      "next_action": "Completion commit (owner, git add -A plus precommit; the message file is in the coordinator scratchpad and in chat) adding every untracked file; then a read-only recheck and mark done with both SHAs."
+      "decision": "committed and pushed by the owner in two commits: e768b71 (modified tracked paths) and a8a5890 (completion with the new files). WP2-T05-RECON2 verified that together they equal the expected set and that the digest matches.",
+      "next_action": "None; WP2-T06 runs on a8a5890."
     },
     {
       "id": "WP2-T05-RECON",
@@ -2097,6 +2101,45 @@
       "author_agent_ids": [],
       "decision": "partial commit found. HEAD = origin/main = e768b71c2a5e522bdfece8617599992f8f4a0abc (parent e92add0, pushed). It holds the 23 modified tracked paths only; its message is the coordinator's chat Commit description, with no 'Task: WP2-T05-FREEZE' line. Every new file is untracked. The committed-file privacy scan was not possible because the precommit tool reads only the index (self-test exit 0). The working-tree digest matches T05. Validator and check_recovery exit 0. Working tree: the board plus the untracked set.",
       "next_action": "None; the completion commit follows."
+    },
+    {
+      "id": "WP2-T05-RECON2",
+      "package": "WP2",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP2-T05-RECON"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0c7e0c0f0a2c5afe",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T05-RECON2.md",
+        "handoff/delivery/evidence/WP2-T05-RECON2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T05-RECON2.md",
+      "report": "handoff/delivery/tasks/WP2-T05-RECON2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T05-RECON2/recheck.txt"
+      ],
+      "baseline_commit": "e768b71c2a5e522bdfece8617599992f8f4a0abc",
+      "source_digest": "809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "complete. HEAD = origin/main = a8a5890a75361c44ff7730d54bbaadab56c40f3a (parent e768b71, pushed). The e92add0..HEAD range matches the expected set exactly (35 non-evidence paths, 59 evidence files including RECON). The HEAD tree has migration 0003, dayEntries.ts and both new tests. The subject and Task line are correct. Leftovers: only this brief untracked and the board modified. The digest matches T05 before and after. Validator and check_recovery exit 0 on Node v24.21.0.",
+      "next_action": "None; WP2-T05-FREEZE done; WP2-T06 next."
     },
     {
       "id": "WP2-T05-PRIVSCAN",
@@ -2141,7 +2184,7 @@
       "id": "WP2-T06",
       "package": "WP2",
       "kind": "implement",
-      "status": "pending",
+      "status": "done",
       "depends_on": [
         "WP2-T05-FREEZE"
       ],
@@ -2154,12 +2197,12 @@
         "risk": "H",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
+      "agent_id": "ac249ff9c99e6aa0e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
       "owned_paths": [
         "src/server/services/policies.ts",
         "src/server/routes/api.ts",
@@ -2172,13 +2215,104 @@
       ],
       "prompt": "handoff/delivery/tasks/WP2-T06.md",
       "report": "handoff/delivery/tasks/WP2-T06.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T06/01-red.txt",
+        "handoff/delivery/evidence/WP2-T06/02-green.txt",
+        "handoff/delivery/evidence/WP2-T06/03-verify.txt",
+        "handoff/delivery/evidence/WP2-T06/04-digest.txt"
+      ],
+      "baseline_commit": "a8a5890a75361c44ff7730d54bbaadab56c40f3a",
+      "source_digest": "155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). POST /api/policies/preview reuses creation's validation and boundary (shared validateProposal and assertProposalProspective). calculateDay was extracted unchanged from buildDayView and runs before and after with the proposal appended to a copy of the scope. Finalized timesheets and old periods are skipped; a day is listed only if a minute value changes. Nothing is written. schemas.ts was unchanged (policyBody reused); one ot-api allowlist line. Red 26/1, then 27/27; verify 414 tests on Node v24.21.0. Note for AUDIT-B: function-level import cycle between policies.ts and timesheets.ts. Not independent acceptance.",
+      "next_action": "None; WP2-T06-FREEZE."
+    },
+    {
+      "id": "WP2-T06-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T06"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T06-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "a8a5890a75361c44ff7730d54bbaadab56c40f3a",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Commit and push the T06 set with the reconciliation records and the T07 brief; on a permission denial stop without retrying."
+    },
+    {
+      "id": "WP2-T07",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "pending",
+      "depends_on": [
+        "WP2-T06-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "src/server/routes/admin.ts",
+        "src/server/http/auth.ts",
+        "src/server/services/users.ts",
+        "src/server/auth/sessions.ts",
+        "src/server/app.ts",
+        "src/server/http/schemas.ts",
+        "tests/integration/user-admin.test.ts",
+        "tests/integration/isolation.test.ts",
+        "tests/integration/ot-api.test.ts",
+        "handoff/delivery/tasks/WP2-T07.md",
+        "handoff/delivery/evidence/WP2-T07"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T07.md",
+      "report": "handoff/delivery/tasks/WP2-T07.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Personal policy preview (POST /api/policies/preview, no writes, single engine); red-first; verify."
+      "next_action": "User administration and admin router (E-11): list/create/edit/deactivate/reactivate, session revocation, last-admin and self-deactivation refusals, audit without password material; red-first; verify."
     },
     {
       "id": "WP2-INFRA1",

@@ -7,13 +7,14 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = e768b71c2a5e522bdfece8617599992f8f4a0abc. Đây là commit chưa đủ
-    của chủ dự án, chỉ gồm các đường dẫn đã theo dõi có thay đổi.
-  - Các file mới của WP2-ADVFIX và WP2-T05 cùng các record handoff chưa được theo dõi.
-    Commit bổ sung của chủ dự án sẽ thêm chúng cùng checkpoint này.
-  - Digest mã nguồn của working tree
-    809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0, đã được
-    WP2-T05-RECON xác nhận.
+  - HEAD = origin/main = a8a5890a75361c44ff7730d54bbaadab56c40f3a. Đây là commit bổ sung
+    của WP2-T05-FREEZE, sau commit chưa đủ e768b71 của chủ dự án.
+  - Digest mã nguồn 809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0,
+    đã được WP2-T05-RECON2 xác nhận.
+  - Chưa commit: WP2-T06 (digest mã nguồn
+    155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a, tác giả tự báo),
+    các record của RECON2, brief T07, board và checkpoint này. WP2-T06-FREEZE sẽ commit
+    chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -41,7 +42,10 @@ America/Los_Angeles).
   quả tác giả tự báo, chưa kiểm độc lập.
   - `npm run verify`: exit 0, 387 test.
   - `npm run digest`: exit 0.
-- Đang làm: WP2-T05-FREEZE (committer), commit ADVFIX, T05, các record và brief T06.
+- WP2-T06 (xem trước chính sách cá nhân) đã xong: tác giả tự báo verify 414 test. Đang
+  chạy WP2-T06-FREEZE (committer).
+- WP2-T05-FREEZE đã xong (hai commit của chủ dự án, e768b71 và a8a5890). Diễn biến của
+  commit đóng băng:
   - Attempt 1 bị chặn. Bộ phân loại quyền của auto mode từ chối lệnh stage/kiểm tra với
     lý do "Credential Leakage". Không lệnh nào chạy và chưa có commit.
   - WP2-T05-PRIVSCAN (chỉ đọc) xác nhận bộ file sạch: không có thông tin đăng nhập hay dữ
@@ -62,10 +66,14 @@ America/Los_Angeles).
       báo cáo review tư vấn, brief và bằng chứng.
     - Vì vậy main đang tham chiếu tới các file chưa có trong git.
     - Digest khớp T05; validator và check_recovery exit 0.
-  - Cần chủ dự án làm một commit bổ sung: git add -A, kiểm tra precommit, rồi commit với
-    message đã soạn sẵn và push.
+  - Commit bổ sung a8a5890 của chủ dự án đã thêm các file mới. WP2-T05-RECON2 xác nhận:
+    - hai commit cộng lại đúng bằng bộ file dự kiến;
+    - cây HEAD có đủ các file mã nguồn và test mới;
+    - không còn file nào sót;
+    - digest khớp;
+    - validator và check_recovery exit 0.
 - Còn lại:
-  - WP2-T06..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
+  - WP2-T07..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
   - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
     trình duyệt.
   - Hai audit bằng opus mới:
@@ -74,8 +82,8 @@ America/Los_Angeles).
   - Nghiệm thu WP2.
   - Sau đó WP3, WP4 và WP5 (WP5 bắt đầu bằng nghiệm thu độc lập), rồi pilot packet cụ
     thể. Pilot thật do chủ dự án quyết.
-- Vướng mắc: commit bổ sung (chủ dự án). Rủi ro: bộ phân loại có thể lại chặn `git add`
-  của committer ở các commit đóng băng sau. Coordinator không đổi cài đặt quyền và không lách qua lệnh
+- Vướng mắc: không có. Rủi ro: bộ phân loại có thể lại chặn `git add` của committer ở các
+  commit đóng băng sau. Coordinator không đổi cài đặt quyền và không lách qua lệnh
   chặn. Các phương án: chủ dự án nhắn duyệt nêu rõ hành động và rủi ro, tự commit, hoặc tự
   cấu hình `autoMode` trong cài đặt người dùng. Có thể gộp các commit đóng băng để giảm số
   lần gián đoạn.
@@ -83,6 +91,8 @@ America/Los_Angeles).
   - WP3 phải xử lý biến thể 'pending' của `CorrectionResult` và lưu các khoản trừ đang chờ.
   - OT tạm tính chỉ tính cho ngày có phiên làm việc (T04/T05), và bước chốt sổ ở WP3 phải
     bỏ các số tạm tính.
+  - WP2-T06 tạo một vòng import ở mức hàm giữa policies.ts và timesheets.ts. AUDIT-B nên
+    đánh giá điểm này.
   - Backlog quản trị vẫn để gộp vào một đợt GOV sau: R1 (check_recovery thừa hưởng trạng
     thái thật; sửa trước software_ready), R2 (mục 2 của AGENTS.vi), giới hạn của
     precommit và ADV-A-05.
@@ -91,19 +101,19 @@ America/Los_Angeles).
     billing, cài đặt toàn cục hay cài đặt quyền.
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
-- Bước tiếp:
-  1. Sau commit bổ sung của chủ dự án, chạy một lượt kiểm tra lại chỉ đọc: SHA, danh sách
-     file, working tree sạch và digest.
-  2. Đánh dấu WP2-T05-FREEZE là xong.
-  3. Giao WP2-T06 (brief sẵn).
+- Bước tiếp: ghi kết quả WP2-T06-FREEZE, rồi giao WP2-T07 (brief sẵn).
+  - Committer chạy quy trình bình thường một lần.
+  - Nếu bộ phân loại chặn, coordinator dừng và xin chủ dự án một tin nhắn duyệt nêu rõ
+    hành động và rủi ro, hoặc một commit tay. Khi đó Commit description trong chat sẽ
+    đúng là message dự định và nhấn mạnh các file mới.
 - Prompt tương ứng: handoff/prompts/ORCHESTRATE.md (WP2 theo WP2_IMPLEMENT.md).
 
 ## Khôi phục điều phối
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: không có. WP2-T06 chờ để không có thay đổi dở dang nào bị cuốn vào lệnh
-  `git add -A` của chủ dự án.
-- Process còn sống: không biết có process nào. Các process sót trước đó đã được dừng.
+- Đang chạy: WP2-T06-FREEZE (committer). WP2-T07 chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Worker T06 báo không còn
+  process nào.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

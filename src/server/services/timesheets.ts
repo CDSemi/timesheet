@@ -311,14 +311,17 @@ function otLeaveJson(entry: DayEntryRow | undefined, totals: OtLeaveTotals | und
   };
 }
 
-function buildDayView(
+/**
+ * The one production day calculation for a work date: the policy effective on the date
+ * (from `scope.policies`) and the calendar versions feed the pure engine (computeWorkDay).
+ * Callers may pass a scope whose policy list includes a proposed version to see its effect
+ * without writing it (policy preview).
+ */
+export function calculateDay(
   scope: UserScope,
   workDate: CivilDate,
-  sessions: StoredSession[],
-  entry: DayEntryRow | undefined,
-  requirement: EditReasonRequirement,
-  otLeave: OtLeaveTotals | undefined,
-) {
+  sessions: readonly StoredSession[],
+): { classification: DateClassification | null; result: WorkDayResult | null; calculationError: string | null } {
   let classification: DateClassification | null = null;
   let result: WorkDayResult | null = null;
   let calculationError: string | null = null;
@@ -345,6 +348,18 @@ function buildDayView(
     if (!isDomainError(error)) throw error;
     calculationError = error.code;
   }
+  return { classification, result, calculationError };
+}
+
+function buildDayView(
+  scope: UserScope,
+  workDate: CivilDate,
+  sessions: StoredSession[],
+  entry: DayEntryRow | undefined,
+  requirement: EditReasonRequirement,
+  otLeave: OtLeaveTotals | undefined,
+) {
+  const { classification, result, calculationError } = calculateDay(scope, workDate, sessions);
   const fallbackCategory = classification === null ? null : defaultCategory(classification);
   const category = entry === undefined ? fallbackCategory : resolveDayCategory(entry.category_source, entry.category, fallbackCategory);
   const attendanceExpected = classification !== null && category !== null && isAttendanceExpected(classification, category);

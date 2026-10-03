@@ -11,13 +11,20 @@ import {
   dayEntryBody,
   deleteBody,
   policyBody,
+  type PolicyBody,
   sessionBody,
   sessionUpdateBody,
 } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
 import { commitDayBatch, previewDayBatch } from '../services/dayEntries.ts';
 import { periodJson } from '../services/periods.ts';
-import { createPolicyVersion, listPolicyVersions, policyJson } from '../services/policies.ts';
+import {
+  createPolicyVersion,
+  listPolicyVersions,
+  type PolicyProposal,
+  policyJson,
+  previewPolicyVersion,
+} from '../services/policies.ts';
 import {
   clockIn,
   clockOut,
@@ -151,35 +158,35 @@ export function apiRoutes(deps: AppDeps) {
 
   app.get('/policies', auth, (c) => c.json({ policies: listPolicyVersions(deps.db, c.get('user').id).map(policyJson) }));
 
-  app.post('/policies', auth, async (c) => {
-    const body = await readJson(c, policyBody);
-    const user = c.get('user');
-    const created = createPolicyVersion(
-      deps.db,
-      deps.clock,
-      {
-        userId: user.id,
-        calendarId: user.calendarId,
-        effectiveFrom: body.effective_from,
-        note: body.note,
-        rules: {
-          requiredMinutes: body.required_minutes,
-          thresholdMinutes: body.threshold_minutes,
-          roundingStepMinutes: body.rounding_step_minutes,
-          referenceStart: body.reference_start,
-          referenceEnd: body.reference_end,
-          deficitMode: body.deficit_mode,
-          breaks: body.breaks.map((item) => ({
-            startOffsetMinutes: item.start_offset_minutes,
-            durationMinutes: item.duration_minutes,
-            countsAsWork: item.counts_as_work,
-          })),
-        },
-      },
-      user.id,
-    );
-    return c.json({ policy: policyJson(created) }, 201);
+  const policyProposal = (c: Context<AppEnv>, body: PolicyBody): PolicyProposal => ({
+    userId: c.get('user').id,
+    calendarId: c.get('user').calendarId,
+    effectiveFrom: body.effective_from,
+    note: body.note,
+    rules: {
+      requiredMinutes: body.required_minutes,
+      thresholdMinutes: body.threshold_minutes,
+      roundingStepMinutes: body.rounding_step_minutes,
+      referenceStart: body.reference_start,
+      referenceEnd: body.reference_end,
+      deficitMode: body.deficit_mode,
+      breaks: body.breaks.map((item) => ({
+        startOffsetMinutes: item.start_offset_minutes,
+        durationMinutes: item.duration_minutes,
+        countsAsWork: item.counts_as_work,
+      })),
+    },
   });
+
+  app.post('/policies', auth, async (c) => {
+    const proposal = policyProposal(c, await readJson(c, policyBody));
+    return c.json({ policy: policyJson(createPolicyVersion(deps.db, deps.clock, proposal, c.get('user').id)) }, 201);
+  });
+
+  // Dry run of POST /policies: same body and checks, writes nothing, lists the changed draft days.
+  app.post('/policies/preview', auth, async (c) =>
+    c.json(previewPolicyVersion(deps.db, deps.clock, c.get('user'), policyProposal(c, await readJson(c, policyBody)))),
+  );
 
   return app;
 }

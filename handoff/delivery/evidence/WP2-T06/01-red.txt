@@ -1,0 +1,304 @@
+COMMAND: vitest run tests/integration/policy-preview.test.ts before the implementation (node v24.21.0; route absent)
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/policy-preview.test.ts (27 tests | 26 failed) 7961ms
+   ❯ preview content (6)
+     × lists exactly the changed days and equals the day views after the version is created 471ms
+     × covers a default-labelled day and an explicit-labelled day 431ms
+     × leaves out days before the effective date and days whose values do not change 423ms
+     × returns an empty list when nothing would change 421ms
+     × leaves out finalized timesheets and days of an old period 421ms
+     × keeps a version that changes only the deficit mode from listing any day 425ms
+   ❯ preview writes nothing (2)
+     × leaves every table identical across repeated previews 428ms
+     × writes nothing for a refused proposal either 417ms
+   ❯ validation matches creation (15)
+     × R-02 reference duration: preview and create return the same status and error code 212ms
+     × R-02 break counted as work changes the excluded total: preview and create return the same status and error code 208ms
+     × retroactive effective date: preview and create return the same status and error code 217ms
+     × invalid effective date: preview and create return the same status and error code 216ms
+     × required minutes: preview and create return the same status and error code 213ms
+     × fractional threshold: preview and create return the same status and error code 208ms
+     × rounding step: preview and create return the same status and error code 212ms
+     × overlapping breaks: preview and create return the same status and error code 213ms
+     × break outside the reference: preview and create return the same status and error code 212ms
+     × unknown deficit mode: preview and create return the same status and error code 210ms
+     × unknown field: preview and create return the same status and error code 214ms
+     × user_id field: preview and create return the same status and error code 220ms
+     × missing field: preview and create return the same status and error code 267ms
+     × answers malformed JSON as creation does 216ms
+     × accepts what creation accepts, including an omitted note 211ms
+   ❯ isolation and request rules (4)
+     × never lists another user’s days and leaves them unaffected 631ms
+     × acts for the session user only and rejects any user_id 218ms
+     × requires a session and a same-origin JSON request 209ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 26 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > lists exactly the changed days and equals the day views after the version is created
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:153:60
+    151|
+    152|     const response = await preview(proposal());
+    153|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    154|     expect(response.body.effective_from).toBe(EFFECTIVE);
+    155|     const days: Array<{ work_date: string; before: any; after: any }> …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > covers a default-labelled day and an explicit-labelled day
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ tests/integration/policy-preview.test.ts:194:39
+    192|     expect(views['2026-10-07'].category_source).toBe('explicit');
+    193|     const response = await preview(proposal());
+    194|     const listed = response.body.days.map((day: { work_date: string })…
+       |                                       ^
+    195|     expect(listed).toEqual(expect.arrayContaining(['2026-10-06', '2026…
+    196|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > leaves out days before the effective date and days whose values do not change
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ tests/integration/policy-preview.test.ts:201:39
+    199|     await seedScenario();
+    200|     const response = await preview(proposal());
+    201|     const listed = response.body.days.map((day: { work_date: string })…
+       |                                       ^
+    202|     expect(listed).not.toContain('2026-09-22'); // before effective_fr…
+    203|     expect(listed).not.toContain('2026-10-08'); // R = B, nothing elig…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > returns an empty list when nothing would change
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:210:25
+    208|     await seedScenario();
+    209|     const same = await preview(proposal({ threshold_minutes: 30, round…
+    210|     expect(same.status).toBe(200);
+       |                         ^
+    211|     expect(same.body.days).toEqual([]);
+    212|     const empty = await preview(proposal({ effective_from: '2027-01-04…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > leaves out finalized timesheets and days of an old period
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ tests/integration/policy-preview.test.ts:228:31
+    226|     t.db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHER…
+    227|     const response = await preview(proposal());
+    228|     expect(response.body.days.map((day: { work_date: string }) => day.…
+       |                               ^
+    229|   });
+    230|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview content > keeps a version that changes only the deficit mode from listing any day
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:234:29
+    232|     await seedScenario();
+    233|     const response = await preview(proposal({ threshold_minutes: 30, r…
+    234|     expect(response.status).toBe(200);
+       |                             ^
+    235|     expect(response.body.days).toEqual([]);
+    236|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview writes nothing > leaves every table identical across repeated previews
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:248:31
+    246|     for (let i = 0; i < 3; i += 1) {
+    247|       const response = await preview(proposal());
+    248|       expect(response.status).toBe(200);
+       |                               ^
+    249|       expect(response.body.days.length).toBeGreaterThan(0);
+    250|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > preview writes nothing > writes nothing for a refused proposal either
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:264:29
+    262|     const before = snapshot();
+    263|     const response = await preview(proposal({ reference_end: '18:00' }…
+    264|     expect(response.status).toBe(422);
+       |                             ^
+    265|     expect(snapshot()).toEqual(before);
+    266|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > R-02 reference duration: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > R-02 break counted as work changes the excluded total: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > retroactive effective date: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > invalid effective date: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > required minutes: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > fractional threshold: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > rounding step: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > overlapping breaks: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > break outside the reference: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > unknown deficit mode: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > unknown field: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > user_id field: preview and create return the same status and error code
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > missing field: preview and create return the same status and error code
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:289:30
+    287|     const previewed = await preview(proposal(overrides));
+    288|     const attempted = await create(proposal(overrides));
+    289|     expect(previewed.status).toBe(attempted.status);
+       |                              ^
+    290|     expect(previewed.status).not.toBe(200);
+    291|     expect(previewed.body.error.code).toBe(attempted.body.error.code);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > answers malformed JSON as creation does
+AssertionError: expected [ 404, 'not_found' ] to deeply equal [ 400, 'invalid_json' ]
+
+- Expected
++ Received
+
+  [
+-   400,
+-   "invalid_json",
++   404,
++   "not_found",
+  ]
+
+ ❯ tests/integration/policy-preview.test.ts:299:59
+    297|     const previewed = await t.request('POST', '/api/policies/preview',…
+    298|     const attempted = await t.request('POST', '/api/policies', options…
+    299|     expect([previewed.status, previewed.body.error.code]).toEqual([att…
+       |                                                           ^
+    300|     expect(previewed.status).toBe(400);
+    301|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > validation matches creation > accepts what creation accepts, including an omitted note
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:306:30
+    304|     const { note: _note, ...withoutNote } = proposal();
+    305|     const previewed = await preview(withoutNote);
+    306|     expect(previewed.status).toBe(200);
+       |                              ^
+    307|     expect((await create(withoutNote)).status).toBe(201);
+    308|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > isolation and request rules > never lists another user’s days and leaves them unaffected
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:321:25
+    319|
+    320|     const mine = await preview(proposal());
+    321|     expect(mine.status).toBe(200);
+       |                         ^
+    322|     expect(JSON.stringify(mine.body)).not.toContain(t.userIds.admin);
+    323|     expect(mine.body.days.find((day: { work_date: string }) => day.wor…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > isolation and request rules > acts for the session user only and rejects any user_id
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:337:29
+    335|   it('acts for the session user only and rejects any user_id', async (…
+    336|     const response = await preview(proposal({ user_id: t.userIds.admin…
+    337|     expect(response.status).toBe(422);
+       |                             ^
+    338|     expect(response.body.error.code).toBe('validation_error');
+    339|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/26]⎯
+
+ FAIL  tests/integration/policy-preview.test.ts > isolation and request rules > requires a session and a same-origin JSON request
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/policy-preview.test.ts:343:81
+    341|   it('requires a session and a same-origin JSON request', async () => {
+    342|     const body = proposal();
+    343|     expect((await t.request('POST', '/api/policies/preview', { body })…
+       |                                                                                 ^
+    344|     expect((await t.request('POST', '/api/policies/preview', { body, o…
+    345|     const missing = await t.request('POST', '/api/policies/preview', {…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/26]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  26 failed | 1 passed (27)
+   Start at  01:07:25
+   Duration  8.77s (tests 92%, transform 7%, import 2%)
+EXIT: 1

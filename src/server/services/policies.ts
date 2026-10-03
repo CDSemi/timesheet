@@ -1,10 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { assertCivilDate, type CivilDate } from '../../domain/dates.ts';
 import { type BreakRule, validateWorkPolicyRules, type WorkPolicyRules } from '../../domain/policy.ts';
+import type { WorkDayResult } from '../../domain/workday.ts';
+import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import type { Db } from '../db/database.ts';
 import { recordAudit } from './audit.ts';
 import { assertProspective, getCalendar, listPayrollExceptions, prospectiveBoundary } from './calendars.ts';
+import {
+  calculateDay,
+  editRequirementFor,
+  findTimesheet,
+  loadScope,
+  loadSessions,
+  periodForDate,
+  type StoredSession,
+  type UserScope,
+} from './timesheets.ts';
 
 /** An immutable, effective-dated personal work policy (B/N/M, breaks, deficit mode). */
 export interface PolicyVersion extends WorkPolicyRules {
@@ -88,24 +100,37 @@ export function policyJson(policy: PolicyVersion) {
   };
 }
 
+export interface PolicyProposal {
+  userId: string;
+  calendarId: string;
+  effectiveFrom: CivilDate;
+  rules: WorkPolicyRules;
+  note?: string;
+}
+
+/** Field and rule checks shared by creation and preview, so both refuse the same inputs. */
+function validateProposal(input: PolicyProposal): void {
+  assertCivilDate(input.effectiveFrom, 'effective_from');
+  validateWorkPolicyRules(input.rules);
+}
+
+/** The prospective-boundary rule (R-07), checked against the user's existing versions. */
+function assertProposalProspective(db: Db, clock: Clock, input: PolicyProposal, existing: readonly PolicyVersion[]): void {
+  const calendar = getCalendar(db, input.calendarId);
+  const boundary = prospectiveBoundary(clock, calendar.schedule, listPayrollExceptions(db, input.calendarId));
+  assertProspective(input.effectiveFrom, boundary, existing.length === 0);
+}
+
 /**
  * Appends a policy version for `userId`. Changes apply prospectively: except for a
  * user's first version, the effective date may not precede the current pay period.
  */
-export function createPolicyVersion(
-  db: Db,
-  clock: Clock,
-  input: { userId: string; calendarId: string; effectiveFrom: CivilDate; rules: WorkPolicyRules; note?: string },
-  actorUserId: string,
-): PolicyVersion {
-  assertCivilDate(input.effectiveFrom, 'effective_from');
-  validateWorkPolicyRules(input.rules);
+export function createPolicyVersion(db: Db, clock: Clock, input: PolicyProposal, actorUserId: string): PolicyVersion {
+  validateProposal(input);
   return db
     .transaction(() => {
       const existing = listPolicyVersions(db, input.userId);
-      const calendar = getCalendar(db, input.calendarId);
-      const boundary = prospectiveBoundary(clock, calendar.schedule, listPayrollExceptions(db, input.calendarId));
-      assertProspective(input.effectiveFrom, boundary, existing.length === 0);
+      assertProposalProspective(db, clock, input, existing);
       const id = randomUUID();
       const seq = (existing.at(-1)?.seq ?? 0) + 1;
       const createdAt = nowUtc(clock);
@@ -151,4 +176,66 @@ export function createPolicyVersion(
       return created;
     })
     .immediate();
+}
+
+/** The provisional minutes of one day that a policy version can change (R-03, R-04). */
+function minutesJson(result: WorkDayResult | null) {
+  return {
+    regular_minutes: result?.regularMinutes ?? null,
+    nonworking_minutes: result?.nonworkingMinutes ?? null,
+    normal_excess_minutes: result?.normalExcessMinutes ?? null,
+    eligible_minutes: result?.eligibleMinutes ?? null,
+    credited_minutes: result?.creditedMinutes ?? null,
+  };
+}
+
+type Minutes = ReturnType<typeof minutesJson>;
+
+function changedFields(before: Minutes, after: Minutes): Array<keyof Minutes> {
+  return (Object.keys(before) as Array<keyof Minutes>).filter((field) => before[field] !== after[field]);
+}
+
+/**
+ * Dry run of createPolicyVersion for the session user: the same validation, then the
+ * user's current and future draft days whose provisional minutes would change under the
+ * proposed version. "After" comes from the production day calculation (calculateDay) with
+ * the proposal appended to the user's versions; nothing is written, audited or reserved.
+ * Finalized timesheets and days of an old period are never listed (R-07).
+ */
+export function previewPolicyVersion(
+  db: Db,
+  clock: Clock,
+  user: Pick<SessionUser, 'id' | 'calendarId'>,
+  input: PolicyProposal,
+) {
+  validateProposal(input);
+  const scope = loadScope(db, user);
+  assertProposalProspective(db, clock, input, scope.policies);
+  const proposed: PolicyVersion = {
+    ...input.rules,
+    breaks: [...input.rules.breaks],
+    id: 'proposed',
+    userId: user.id,
+    seq: (scope.policies.at(-1)?.seq ?? 0) + 1,
+    effectiveFrom: input.effectiveFrom,
+    note: input.note ?? null,
+    createdAt: nowUtc(clock),
+  };
+  const proposedScope: UserScope = { ...scope, policies: [...scope.policies, proposed] };
+  const byDate = new Map<CivilDate, StoredSession[]>();
+  for (const session of loadSessions(db, user.id, input.effectiveFrom, '9999-12-31')) {
+    byDate.set(session.work_date, [...(byDate.get(session.work_date) ?? []), session]);
+  }
+  const days = [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .flatMap(([workDate, sessions]) => {
+      const period = periodForDate(scope, workDate);
+      const requirement = editRequirementFor(clock, scope, period, findTimesheet(db, scope, period));
+      if (requirement.reasonRequired) return [];
+      const before = minutesJson(calculateDay(scope, workDate, sessions).result);
+      const after = minutesJson(calculateDay(proposedScope, workDate, sessions).result);
+      const changed = changedFields(before, after);
+      return changed.length === 0 ? [] : [{ work_date: workDate, period_relation: requirement.relation, changed, before, after }];
+    });
+  return { effective_from: input.effectiveFrom, days };
 }
