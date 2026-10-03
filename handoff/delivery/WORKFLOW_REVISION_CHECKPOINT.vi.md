@@ -41,8 +41,9 @@ America/Los_Angeles).
 - GOV-E8 đã nghiệm thu: GOV-E8-GATE2 PASS và GOV-E8-AUDIT mới PASS trên ed92cb7 (digest
   7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.vi.md). Rủi ro thấp R1/R2 ghi trong
   `governance_backlog` trên board. GOV-E8-ACCEPT (record) đang chạy.
-- Bước tiếp: ghi SHA nghiệm thu, rồi giao WP2-T03 (worker-high, override opus novelty;
-  brief [WP2-T03](tasks/WP2-T03.md)).
+- GOV-E8-ACCEPT xong ở attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6 đã push.
+  WP2-T03 (worker-high, override opus novelty) đang chạy.
+- Bước tiếp: đối chiếu WP2-T03, rồi WP2-T03-FREEZE và WP2-T04.
 
 ## Khôi phục điều phối
 

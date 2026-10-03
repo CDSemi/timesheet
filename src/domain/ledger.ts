@@ -92,3 +92,112 @@ export function canDebit(availableMinutes: number, debitMinutes: number): boolea
   assertPositiveMinutes(debitMinutes, 'debitMinutes');
   return availableMinutes >= debitMinutes;
 }
+
+/*
+ * R-06 OT leave lifecycle (owner decisions E-2/E-3). An approved leave request reserves
+ * its approved minutes. Only an explicit "record use" moves reserved minutes to consumed
+ * (a negative ledger delta); partial use keeps the remainder reserved. Cancel releases
+ * the unused reserved minutes. A reversal gives already used minutes back with a
+ * compensating positive delta. Counters only move forward and always satisfy
+ * approved = reserved + consumed + released and reversed <= consumed.
+ */
+
+/** Longest leave on one date, in minutes (one civil day). */
+export const MAX_LEAVE_MINUTES = 1440;
+
+export interface LeaveCounters {
+  approvedMinutes: number;
+  /** Still held against the available balance. */
+  reservedMinutes: number;
+  /** Used through "record use"; posted as negative ledger deltas. */
+  consumedMinutes: number;
+  /** Given back unused by a cancellation. */
+  releasedMinutes: number;
+  /** Consumed minutes given back by compensating positive deltas. */
+  reversedMinutes: number;
+}
+
+export type LeavePlan =
+  | { ok: true; counters: LeaveCounters; deltaMinutes: number }
+  | { ok: false; reason: 'exceeds_reserved' | 'exceeds_reversible'; limitMinutes: number };
+
+function assertLeaveMinutes(value: unknown, field: string): asserts value is number {
+  assertPositiveMinutes(value, field);
+  if (value > MAX_LEAVE_MINUTES) {
+    throw new DomainError('invalid_minutes', `${field} must be at most ${MAX_LEAVE_MINUTES} minutes`, { field });
+  }
+}
+
+function assertLeaveCounters(counters: LeaveCounters): void {
+  assertLeaveMinutes(counters.approvedMinutes, 'approvedMinutes');
+  assertWholeMinutes(counters.reservedMinutes, 'reservedMinutes');
+  assertWholeMinutes(counters.consumedMinutes, 'consumedMinutes');
+  assertWholeMinutes(counters.releasedMinutes, 'releasedMinutes');
+  assertWholeMinutes(counters.reversedMinutes, 'reversedMinutes');
+  if (counters.reservedMinutes + counters.consumedMinutes + counters.releasedMinutes !== counters.approvedMinutes) {
+    throw new DomainError('invalid_minutes', 'Leave counters must satisfy approved = reserved + consumed + released');
+  }
+  if (counters.reversedMinutes > counters.consumedMinutes) {
+    throw new DomainError('invalid_minutes', 'Reversed leave minutes cannot exceed consumed minutes');
+  }
+}
+
+/** OT leave converts 1:1: leave minutes cost the same OT minutes (eight hours = 480, not 510). */
+export function otLeaveCostMinutes(leaveMinutes: number): number {
+  assertLeaveMinutes(leaveMinutes, 'leaveMinutes');
+  return leaveMinutes;
+}
+
+/** A reservation is accepted only when the available balance covers it (E-5: never overdrawn). */
+export function canReserve(availableMinutes: number, minutes: number): boolean {
+  assertSignedMinutes(availableMinutes, 'availableMinutes');
+  assertPositiveMinutes(minutes, 'minutes');
+  return availableMinutes >= minutes;
+}
+
+/** An approved request starts with all approved minutes reserved. */
+export function openLeaveCounters(approvedMinutes: number): LeaveCounters {
+  assertLeaveMinutes(approvedMinutes, 'approvedMinutes');
+  return { approvedMinutes, reservedMinutes: approvedMinutes, consumedMinutes: 0, releasedMinutes: 0, reversedMinutes: 0 };
+}
+
+/** "Record use" of `minutes` reserved minutes: posts −minutes; the remainder stays reserved. */
+export function planLeaveUse(counters: LeaveCounters, minutes: number): LeavePlan {
+  assertLeaveCounters(counters);
+  assertPositiveMinutes(minutes, 'minutes');
+  if (minutes > counters.reservedMinutes) {
+    return { ok: false, reason: 'exceeds_reserved', limitMinutes: counters.reservedMinutes };
+  }
+  return {
+    ok: true,
+    deltaMinutes: -otLeaveCostMinutes(minutes),
+    counters: {
+      ...counters,
+      reservedMinutes: counters.reservedMinutes - minutes,
+      consumedMinutes: counters.consumedMinutes + minutes,
+    },
+  };
+}
+
+/** Cancel releases every still-reserved minute; consumed minutes are unaffected. */
+export function planLeaveCancel(counters: LeaveCounters): { counters: LeaveCounters; releasedMinutes: number } {
+  assertLeaveCounters(counters);
+  const releasedMinutes = counters.reservedMinutes;
+  return {
+    releasedMinutes,
+    counters: { ...counters, reservedMinutes: 0, releasedMinutes: counters.releasedMinutes + releasedMinutes },
+  };
+}
+
+/** Reversal gives back up to consumed − reversed used minutes with a compensating +delta. */
+export function planLeaveReversal(counters: LeaveCounters, minutes: number): LeavePlan {
+  assertLeaveCounters(counters);
+  assertPositiveMinutes(minutes, 'minutes');
+  const reversible = counters.consumedMinutes - counters.reversedMinutes;
+  if (minutes > reversible) return { ok: false, reason: 'exceeds_reversible', limitMinutes: reversible };
+  return {
+    ok: true,
+    deltaMinutes: otLeaveCostMinutes(minutes),
+    counters: { ...counters, reversedMinutes: counters.reversedMinutes + minutes },
+  };
+}

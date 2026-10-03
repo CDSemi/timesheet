@@ -1,0 +1,221 @@
+$ node --version -> v24.21.0; npm exec -- vitest run tests/domain/ledger.fixtures.test.ts tests/integration/ot-leave.test.ts tests/integration/ot-leave-concurrency.test.ts  (exit 1, expected red before implementation)
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/domain/ledger.fixtures.test.ts (24 tests | 13 failed) 12ms
+   ❯ pure OT leave lifecycle (R-06, E-3) (8)
+     × converts leave minutes 1:1: eight hours of leave costs 480 OT minutes, not 510 3ms
+     × a reservation needs available minutes that cover it (E-5) 0ms
+     × an approved request opens fully reserved 0ms
+     × partial use moves minutes from reserved to consumed and keeps the remainder reserved 0ms
+     × use beyond the reserved minutes is refused with the limit 0ms
+     × cancel releases only the unused reserved minutes; consumed minutes stay consumed 0ms
+     × reversal gives back used minutes with a positive delta, never more than consumed minus reversed 0ms
+     × rejects counters that break approved = reserved + consumed + released or reversed <= consumed 2ms
+   ❯ reference/fixtures/ledger_cases.json OT leave arithmetic (5)
+     × LG-03: using the full reservation posts one negative delta and clears the reservation 0ms
+     × LG-04: approval reserves without posting 0ms
+     × LG-05: cancelling an unused reservation releases it without posting 0ms
+     × LG-06: reversing used leave posts a compensating positive delta 0ms
+     × LG-07 (serialized arithmetic): after one 80-minute reservation at 100 the second no longer fits 0ms
+ ❯ tests/integration/ot-leave-concurrency.test.ts (0 test)
+ ❯ tests/integration/ot-leave.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ot-leave-concurrency.test.ts [ tests/integration/ot-leave-concurrency.test.ts ]
+Error: Cannot find module '../../src/server/services/otLeave.ts' imported from <project>/tests/integration/ot-leave-concurrency.test.ts
+ ❯ tests/integration/ot-leave-concurrency.test.ts:4:1
+      2| import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+      3| import { getBalance, type LedgerContext, listLedgerEntries, postCredit…
+      4| import {
+       | ^
+      5|   getOtLeaveRequest,
+      6|   listOtLeaveRequests,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  tests/integration/ot-leave.test.ts [ tests/integration/ot-leave.test.ts ]
+Error: Cannot find module '../../src/server/services/otLeave.ts' imported from <project>/tests/integration/ot-leave.test.ts
+ ❯ tests/integration/ot-leave.test.ts:5:1
+      3| import { ApiError } from '../../src/server/http/errors.ts';
+      4| import { getBalance, listLedgerEntries, postCorrection, postCredit } f…
+      5| import {
+       | ^
+      6|   cancelOtLeave,
+      7|   getOtLeaveRequest,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > converts leave minutes 1:1: eight hours of leave costs 480 OT minutes, not 510
+TypeError: otLeaveCostMinutes is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:134:12
+    132|
+    133|   it('converts leave minutes 1:1: eight hours of leave costs 480 OT mi…
+    134|     expect(otLeaveCostMinutes(8 * 60)).toBe(480);
+       |            ^
+    135|     expect(otLeaveCostMinutes(90)).toBe(90);
+    136|     expectDomainError(() => otLeaveCostMinutes(0), 'invalid_minutes');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > a reservation needs available minutes that cover it (E-5)
+TypeError: canReserve is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:142:12
+    140|
+    141|   it('a reservation needs available minutes that cover it (E-5)', () =…
+    142|     expect(canReserve(100, 80)).toBe(true);
+       |            ^
+    143|     expect(canReserve(80, 80)).toBe(true);
+    144|     expect(canReserve(20, 80)).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > an approved request opens fully reserved
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:150:12
+    148|
+    149|   it('an approved request opens fully reserved', () => {
+    150|     expect(openLeaveCounters(480)).toEqual(counters({ approvedMinutes:…
+       |            ^
+    151|     expectDomainError(() => openLeaveCounters(0), 'invalid_minutes');
+    152|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > partial use moves minutes from reserved to consumed and keeps the remainder reserved
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:155:25
+    153|
+    154|   it('partial use moves minutes from reserved to consumed and keeps th…
+    155|     expect(planLeaveUse(openLeaveCounters(480), 180)).toEqual({
+       |                         ^
+    156|       ok: true,
+    157|       deltaMinutes: -180,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > use beyond the reserved minutes is refused with the limit
+TypeError: planLeaveUse is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:164:12
+    162|   it('use beyond the reserved minutes is refused with the limit', () =…
+    163|     const start = counters({ approvedMinutes: 480, reservedMinutes: 30…
+    164|     expect(planLeaveUse(start, 301)).toEqual({ ok: false, reason: 'exc…
+       |            ^
+    165|     expect(planLeaveUse(counters({ approvedMinutes: 120, releasedMinut…
+    166|       ok: false,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > cancel releases only the unused reserved minutes; consumed minutes stay consumed
+TypeError: planLeaveCancel is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:174:12
+    172|
+    173|   it('cancel releases only the unused reserved minutes; consumed minut…
+    174|     expect(planLeaveCancel(counters({ approvedMinutes: 480, reservedMi…
+       |            ^
+    175|       releasedMinutes: 300,
+    176|       counters: counters({ approvedMinutes: 480, consumedMinutes: 180,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > reversal gives back used minutes with a positive delta, never more than consumed minus reversed
+TypeError: planLeaveReversal is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:182:12
+    180|
+    181|   it('reversal gives back used minutes with a positive delta, never mo…
+    182|     expect(planLeaveReversal(counters({ approvedMinutes: 120, consumed…
+       |            ^
+    183|       ok: true,
+    184|       deltaMinutes: 60,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > pure OT leave lifecycle (R-06, E-3) > rejects counters that break approved = reserved + consumed + released or reversed <= consumed
+AssertionError: expected a DomainError, got TypeError: (0 , __vite_ssr_import_1__.planLeaveUse) is not a function: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ expectDomainError tests/support/fixtures.ts:19:82
+     17|   }
+     18|   expect(thrown, `expected DomainError ${code}`).toBeDefined();
+     19|   expect(isDomainError(thrown), `expected a DomainError, got ${String(…
+       |                                                                                  ^
+     20|   if (isDomainError(thrown)) expect(thrown.code).toBe(code);
+     21| }
+ ❯ tests/domain/ledger.fixtures.test.ts:195:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json OT leave arithmetic > LG-03: using the full reservation posts one negative delta and clears the reservation
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:220:31
+    218|
+    219|   it('LG-03: using the full reservation posts one negative delta and c…
+    220|     const used = planLeaveUse(openLeaveCounters(eventMinutes('LG-03', …
+       |                               ^
+    221|     if (!used.ok) throw new Error('LG-03 use refused');
+    222|     // The retry_consumption event appends nothing; its idempotency is…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json OT leave arithmetic > LG-04: approval reserves without posting
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:227:31
+    225|
+    226|   it('LG-04: approval reserves without posting', () => {
+    227|     expectStated('LG-04', [], openLeaveCounters(eventMinutes('LG-04', …
+       |                               ^
+    228|   });
+    229|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json OT leave arithmetic > LG-05: cancelling an unused reservation releases it without posting
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:231:39
+    229|
+    230|   it('LG-05: cancelling an unused reservation releases it without post…
+    231|     const cancelled = planLeaveCancel(openLeaveCounters(eventMinutes('…
+       |                                       ^
+    232|     expectStated('LG-05', [], cancelled.counters.reservedMinutes);
+    233|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json OT leave arithmetic > LG-06: reversing used leave posts a compensating positive delta
+TypeError: openLeaveCounters is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:236:31
+    234|
+    235|   it('LG-06: reversing used leave posts a compensating positive delta'…
+    236|     const used = planLeaveUse(openLeaveCounters(eventMinutes('LG-06', …
+       |                               ^
+    237|     if (!used.ok) throw new Error('LG-06 use refused');
+    238|     const reversed = planLeaveReversal(used.counters, eventMinutes('LG…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/15]⎯
+
+ FAIL  tests/domain/ledger.fixtures.test.ts > reference/fixtures/ledger_cases.json OT leave arithmetic > LG-07 (serialized arithmetic): after one 80-minute reservation at 100 the second no longer fits
+TypeError: canReserve is not a function
+ ❯ tests/domain/ledger.fixtures.test.ts:251:11
+    249|     const reserved: number[] = [];
+    250|     for (const request of requests) {
+    251|       if (canReserve(available, request.minutes)) {
+       |           ^
+    252|         reserved.push(request.minutes);
+    253|         available -= request.minutes;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  13 failed | 11 passed (24)
+   Start at  22:38:49
+   Duration  268ms (transform 72%, import 11%, tests 10%, worker 7%)

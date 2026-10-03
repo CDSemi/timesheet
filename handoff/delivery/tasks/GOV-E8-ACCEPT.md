@@ -51,3 +51,10 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1: blocked, no commit (`git diff --cached --check` exit 2, trailing whitespace in two audit evidence files).
+
+Attempt 2: pre-HEAD ed92cb7a59d1b26dbea0df7cfb6fb6b870f06ec2; commit and post-HEAD
+30be0b152f9cbcf62c517257b76c52c2493b5ca6; pushed to origin main; remote SHA 30be0b152f9cbcf62c517257b76c52c2493b5ca6;
+staged 41. Node v24.21.0. Check exits: precommit 0, diff --check 0, JSON parse 0,
+validator 0, check_recovery 0. Blockers: none. Evidence: evidence/GOV-E8-ACCEPT/a2-*.

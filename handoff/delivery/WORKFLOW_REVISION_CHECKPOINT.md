@@ -40,8 +40,9 @@ America/Los_Angeles).
 - GOV-E8 accepted: GOV-E8-GATE2 PASS and fresh GOV-E8-AUDIT PASS on ed92cb7 (digest
   7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.md). Low risks R1/R2 recorded in the board
   `governance_backlog`. GOV-E8-ACCEPT (records) running.
-- Next action: record the accept SHA, then dispatch WP2-T03 (worker-high, opus override
-  novelty; brief [WP2-T03](tasks/WP2-T03.md)).
+- GOV-E8-ACCEPT done on attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6
+  pushed. WP2-T03 (worker-high, opus override novelty) running.
+- Next action: reconcile WP2-T03, then WP2-T03-FREEZE and WP2-T04.
 
 ## Orchestration recovery
 
