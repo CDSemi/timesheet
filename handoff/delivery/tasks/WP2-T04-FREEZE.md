@@ -70,4 +70,9 @@ handoff/delivery/evidence/WP2-T04-FREEZE/. Return at most 150 words.
 
 ## Results
 
-(Committer appends here.)
+
+Attempt 1: blocked (git diff --cached --check on an evidence log); see evidence/WP2-T04-FREEZE/attempt1-result.txt.
+Attempt 2: pre-HEAD 67c7e7a, post-HEAD e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96, pushed to
+origin main, remote SHA e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96, staged 40, Node v24.21.0.
+Checks: precommit 0, diff --cached --check 0, JSON 0, validate_orchestration 0, check_recovery 0.
+Staged-diff read: synthetic data only. Blockers: none.

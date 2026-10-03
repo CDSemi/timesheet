@@ -53,7 +53,7 @@ Only complete confirmed actual work on a scheduled work date with attendance exp
 
 A non-worked full-day Off/Holiday/Vacation/Sick/Shutdown creates no credit or debit. Missing records remain incomplete. Four hours work + four hours leave has neither deficit nor OT.
 
-Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit minutes without N/M. Manual review shows the decision; automatic submission in choose mode leaves it pending with no debit. Insufficient available balance leaves the proposed debit pending, not silently negative. Known credits may still post.
+Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit minutes without N/M. Manual review shows the decision; automatic submission in choose mode leaves it pending with no debit. Insufficient available balance leaves the proposed debit pending, not silently negative. Known credits may still post. A correction that raises a posted debit is a new debit of the increase and follows the same rule.
 
 ## R-06 — ledger and OT leave
 
@@ -63,7 +63,7 @@ OT-funded leave is not a day category. A day entry carries leave minutes and a `
 
 Record explicit manager permission: name/identity, date, evidence and self-recorded versus future authenticated approval. Reserve approved minutes. OT leave is consumed only by an explicit, idempotent employee "record use" action, allowed on or after the leave date; no automatic or job-driven consumption exists. Partial use is supported. An unconsumed reservation stays reserved until it is used or cancelled; WP3 review flags it. Release unused cancellations and compensate already-used reversals. Default 1:1, so eight hours costs 480 minutes, not 510.
 
-Posted balance=sum(deltas); available=posted−active reservations. Prevent concurrent double spending transactionally. Unique source-event keys prevent duplicate postings. Correct a posted credit by its difference: old 60 → new 90 adds +30. Link original and correction revisions. A truthful correction may make the balance negative; retain and flag it rather than erase used leave.
+Posted balance=sum(deltas); available=posted−active reservations. Prevent concurrent double spending transactionally. Unique source-event keys prevent duplicate postings. Correct a posted credit by its difference: old 60 → new 90 adds +30. Link original and correction revisions. A truthful correction may make the balance negative; retain and flag it rather than erase used leave. This applies to lowering a posted credit that was already spent; it does not let a debit increase overdraw (R-05).
 
 ## R-07 — history and zones
 

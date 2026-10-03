@@ -505,6 +505,7 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/clock/in',
         'POST /api/clock/out',
         'POST /api/days/:workDate/sessions',
+        'POST /api/days/batch',
         'POST /api/ot/leave',
         'POST /api/ot/leave/:id/cancel',
         'POST /api/ot/leave/:id/consume',

@@ -105,6 +105,20 @@ export type CorrectionResult =
       deltaMinutes: 0;
       reconciliationRequired: boolean;
       balance: LedgerBalance;
+    }
+  | {
+      /**
+       * R-05: raising a deficit debit by more than the available balance stays pending;
+       * nothing is appended and the balance is never silently overdrawn.
+       */
+      status: 'pending';
+      reason: 'insufficient_balance';
+      entry: null;
+      deltaMinutes: 0;
+      debitIncreaseMinutes: number;
+      availableMinutes: number;
+      reconciliationRequired: boolean;
+      balance: LedgerBalance;
     };
 
 export type DeficitDebitResult =
@@ -325,7 +339,10 @@ export function postCredit(ctx: LedgerContext, input: CreditInput): PostResult {
  * Corrects a posted credit or deficit debit by its difference, linked to the original
  * (old 60 → new 90 posts +30, LG-02). The previous value is the original plus all
  * earlier corrections. An unchanged value appends nothing (LG-09). A truthful
- * correction that makes the balance negative is kept and flagged (LG-08).
+ * correction of a spent credit that makes the balance negative is kept and flagged
+ * (LG-08). Raising a deficit debit is a new debit of the increase: when the available
+ * balance cannot cover it the result is `pending` and nothing is appended (R-05).
+ * A retry with the same key must ask for the same corrected value, else `source_key_conflict`.
  */
 export function postCorrection(ctx: LedgerContext, input: CorrectionInput): CorrectionResult {
   const posting = normalizePosting(input);
@@ -344,6 +361,16 @@ export function postCorrection(ctx: LedgerContext, input: CorrectionInput): Corr
     const existing = findByKey(ctx.db, posting.userId, posting.sourceKey);
     if (existing !== undefined) {
       if (existing.entryType !== 'correction' || existing.correctsEntryId !== original.id) throw sourceKeyConflict();
+      // The retry must ask for the value this entry produced: the original plus all corrections up to it.
+      const throughExisting = ctx.db
+        .prepare(
+          `SELECT delta_minutes FROM ot_ledger
+            WHERE user_id = ? AND corrects_entry_id = ? AND rowid <= (SELECT rowid FROM ot_ledger WHERE id = ?)`,
+        )
+        .pluck()
+        .all(posting.userId, original.id, existing.id) as number[];
+      const impliedMinutes = Math.abs(throughExisting.reduce((total, delta) => total + delta, original.delta_minutes));
+      if (impliedMinutes !== input.correctedMinutes) throw sourceKeyConflict();
       return {
         status: 'duplicate',
         entry: existing,
@@ -372,6 +399,22 @@ export function postCorrection(ctx: LedgerContext, input: CorrectionInput): Corr
     if (deltaMinutes === 0) {
       const balance = balanceOf(ctx.db, posting.userId);
       return { status: 'unchanged', entry: null, deltaMinutes: 0, reconciliationRequired: balance.reconciliationRequired, balance };
+    }
+    if (original.entry_type === 'deficit_debit' && deltaMinutes < 0) {
+      // R-05: raising a debit is a new debit of the increase; it needs the available balance.
+      const available = balanceOf(ctx.db, posting.userId);
+      if (!canDebit(available.availableMinutes, -deltaMinutes)) {
+        return {
+          status: 'pending',
+          reason: 'insufficient_balance',
+          entry: null,
+          deltaMinutes: 0,
+          debitIncreaseMinutes: -deltaMinutes,
+          availableMinutes: available.availableMinutes,
+          reconciliationRequired: available.reconciliationRequired,
+          balance: available,
+        };
+      }
     }
     const projected = balanceOf(ctx.db, posting.userId, deltaMinutes);
     const entry = appendEntry(ctx, posting, {

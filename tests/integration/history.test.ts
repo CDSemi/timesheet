@@ -132,6 +132,48 @@ describe('GET /api/history', () => {
     expect(employeeView.body.policy_versions).toHaveLength(1);
   });
 
+  it('ADV-A-04: the page cursor is a per-user ordinal and reveals nothing about other users’ events', async () => {
+    await t.loginResponse('employee');
+    for (let index = 0; index < 7; index += 1) await t.loginResponse('admin');
+    await t.loginResponse('employee');
+    const ownTotal = t.db.prepare('SELECT count(*) FROM audit_events WHERE owner_user_id = ?').pluck().get(t.userIds.employee) as number;
+    const globalTotal = t.db.prepare('SELECT count(*) FROM audit_events').pluck().get() as number;
+    expect(globalTotal).toBeGreaterThanOrEqual(ownTotal + 7);
+
+    const cursors: string[] = [];
+    const seen: string[] = [];
+    let before: string | null = null;
+    for (let page = 0; page < ownTotal + 2; page += 1) {
+      const query: string = before === null ? '?limit=1' : `?limit=1&before=${before}`;
+      const response = await t.request('GET', `/api/history${query}`, { cookie: employee });
+      expect(response.status).toBe(200);
+      const events = response.body.audit_events as Array<{ id: string }>;
+      seen.push(...events.map((event) => event.id));
+      before = response.body.next_before as string | null;
+      if (before === null) break;
+      cursors.push(before);
+    }
+    // Every own event exactly once, newest first, and nothing else.
+    expect(seen).toHaveLength(ownTotal);
+    expect(new Set(seen).size).toBe(ownTotal);
+    // The cursors count only the user’s own events: consecutive ordinals from the newest down to 2.
+    expect(cursors).toHaveLength(ownTotal - 1);
+    const numbers = cursors.map(Number);
+    expect(numbers).toEqual(Array.from({ length: ownTotal - 1 }, (_, index) => ownTotal - index));
+    expect(Math.max(...numbers)).toBe(ownTotal);
+  });
+
+  it('ADV-A-04: a cursor from the global sequence selects nothing of another user’s events', async () => {
+    for (let index = 0; index < 5; index += 1) await t.loginResponse('admin');
+    const own = t.db.prepare('SELECT count(*) FROM audit_events WHERE owner_user_id = ?').pluck().get(t.userIds.employee) as number;
+    const first = await t.request('GET', `/api/history?limit=500&before=${own + 1000}`, { cookie: employee });
+    expect(first.status).toBe(200);
+    expect(first.body.audit_events).toHaveLength(own);
+    expect(first.body.next_before).toBeNull();
+    const none = await t.request('GET', '/api/history?before=1', { cookie: employee });
+    expect(none.body.audit_events).toHaveLength(0);
+  });
+
   it('does not expose shared-calendar audit events that have no owner', async () => {
     const response = await t.request('GET', '/api/history', { cookie: employee });
     const operations = (response.body.audit_events as Array<{ operation: string }>).map((event) => event.operation);

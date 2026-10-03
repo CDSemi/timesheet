@@ -1,4 +1,11 @@
-import { type DayCategory, defaultCategory, isAttendanceExpected } from '../../domain/attendance.ts';
+import {
+  type CategorySource,
+  type DayCategory,
+  defaultCategory,
+  isAttendanceExpected,
+  type LeaveKind,
+  resolveDayCategory,
+} from '../../domain/attendance.ts';
 import { type CalendarVersion, classifyDate, type DateClassification } from '../../domain/calendar.ts';
 import { assertCivilDate, type CivilDate, datesBetween } from '../../domain/dates.ts';
 import { computeDeficitMinutes } from '../../domain/deficit.ts';
@@ -76,8 +83,14 @@ export interface DayEntryRow {
   user_id: string;
   timesheet_id: string;
   work_date: string;
+  /**
+   * The stored label. For a 'default' row it is only the label the calendar gave when the
+   * row was created; readers use the effective label (see effectiveCategory).
+   */
   category: DayCategory;
+  category_source: CategorySource;
   leave_minutes: number;
+  leave_kind: LeaveKind | null;
   wfh: number;
   notes: string;
   version: number;
@@ -89,6 +102,22 @@ export interface TimesheetRow {
   pay_period_id: string;
   version: number;
   finalized_revision_no: number | null;
+}
+
+/** Consumed and reversed minutes of the owner's OT leave requests, by leave date. */
+export interface OtLeaveTotals {
+  consumed: number;
+  reversed: number;
+}
+
+function loadOtLeaveTotals(db: Db, userId: string, from: CivilDate, to: CivilDate): Map<CivilDate, OtLeaveTotals> {
+  const rows = db
+    .prepare(
+      `SELECT leave_date, SUM(consumed_minutes) AS consumed, SUM(reversed_minutes) AS reversed
+         FROM ot_leave_requests WHERE user_id = ? AND leave_date BETWEEN ? AND ? GROUP BY leave_date`,
+    )
+    .all(userId, from, to) as Array<{ leave_date: CivilDate; consumed: number; reversed: number }>;
+  return new Map(rows.map((row) => [row.leave_date, { consumed: row.consumed, reversed: row.reversed }]));
 }
 
 function attachBreaks(db: Db, userId: string, sessions: SessionRow[]): StoredSession[] {
@@ -209,12 +238,28 @@ export function sessionJson(session: StoredSession) {
   };
 }
 
-export function dayEntryJson(entry: DayEntryRow) {
+/**
+ * The label a day entry shows now: an explicit label as saved, a default label from the
+ * calendar version effective on the date (so an import never has to write the row).
+ */
+export function effectiveCategory(scope: Pick<UserScope, 'calendarVersions'>, entry: DayEntryRow): DayCategory {
+  let calendarDefault: DayCategory | null = null;
+  try {
+    calendarDefault = defaultCategory(classifyDate(scope.calendarVersions, entry.work_date));
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+  }
+  return resolveDayCategory(entry.category_source, entry.category, calendarDefault);
+}
+
+export function dayEntryJson(entry: DayEntryRow, category: DayCategory = entry.category) {
   return {
     id: entry.id,
     work_date: entry.work_date,
-    category: entry.category,
+    category,
+    category_source: entry.category_source,
     leave_minutes: entry.leave_minutes,
+    leave_kind: entry.leave_kind,
     wfh: entry.wfh === 1,
     notes: entry.notes,
     version: entry.version,
@@ -254,12 +299,25 @@ function classificationJson(classification: DateClassification) {
   };
 }
 
+function otLeaveJson(entry: DayEntryRow | undefined, totals: OtLeaveTotals | undefined) {
+  const kindMinutes = entry?.leave_kind === 'ot' ? entry.leave_minutes : 0;
+  const consumed = totals?.consumed ?? 0;
+  const reversed = totals?.reversed ?? 0;
+  return {
+    kind_minutes: kindMinutes,
+    consumed_minutes: consumed,
+    reversed_minutes: reversed,
+    mismatch: kindMinutes !== consumed - reversed,
+  };
+}
+
 function buildDayView(
   scope: UserScope,
   workDate: CivilDate,
   sessions: StoredSession[],
   entry: DayEntryRow | undefined,
   requirement: EditReasonRequirement,
+  otLeave: OtLeaveTotals | undefined,
 ) {
   let classification: DateClassification | null = null;
   let result: WorkDayResult | null = null;
@@ -288,7 +346,7 @@ function buildDayView(
     calculationError = error.code;
   }
   const fallbackCategory = classification === null ? null : defaultCategory(classification);
-  const category = entry?.category ?? fallbackCategory;
+  const category = entry === undefined ? fallbackCategory : resolveDayCategory(entry.category_source, entry.category, fallbackCategory);
   const attendanceExpected = classification !== null && category !== null && isAttendanceExpected(classification, category);
   const policy = effectiveVersionOn(scope.policies, workDate);
   const deficitMinutes =
@@ -308,8 +366,14 @@ function buildDayView(
     classification: classification === null ? null : classificationJson(classification),
     default_category: fallbackCategory,
     category,
+    category_source: entry?.category_source ?? 'default',
     attendance_expected: attendanceExpected,
-    entry: entry === undefined ? null : dayEntryJson(entry),
+    leave_minutes: entry?.leave_minutes ?? 0,
+    leave_kind: entry?.leave_kind ?? null,
+    wfh: entry?.wfh === 1,
+    // Owner decision E-2: enough for a non-blocking mismatch warning; it never moves a balance.
+    ot_leave: otLeaveJson(entry, otLeave),
+    entry: entry === undefined ? null : dayEntryJson(entry, category ?? entry.category),
     sessions: sessions.map(sessionJson),
     calculation: result === null ? null : calculationJson(result),
     calculation_error: calculationError,
@@ -331,6 +395,7 @@ export function getDayView(db: Db, clock: Clock, user: SessionUser, workDateInpu
     loadSessions(db, user.id, workDate, workDate),
     findDayEntry(db, user.id, workDate),
     requirement,
+    loadOtLeaveTotals(db, user.id, workDate, workDate).get(workDate),
   );
 }
 
@@ -341,6 +406,7 @@ export function getTimesheetView(db: Db, clock: Clock, user: SessionUser, payrol
   const requirement = editRequirementFor(clock, scope, period, timesheet);
   const sessions = loadSessions(db, user.id, period.periodStart, period.periodEnd);
   const entries = loadDayEntries(db, user.id, period.periodStart, period.periodEnd);
+  const otLeave = loadOtLeaveTotals(db, user.id, period.periodStart, period.periodEnd);
   const days = datesBetween(period.periodStart, period.periodEnd).map((date) =>
     buildDayView(
       scope,
@@ -348,6 +414,7 @@ export function getTimesheetView(db: Db, clock: Clock, user: SessionUser, payrol
       sessions.filter((session) => session.work_date === date),
       entries.find((entry) => entry.work_date === date),
       requirement,
+      otLeave.get(date),
     ),
   );
   const completeDays = days.filter((day) => day.calculation?.status === 'complete');

@@ -58,9 +58,16 @@ export const deleteBody = z.strictObject({
 });
 export type DeleteBody = z.infer<typeof deleteBody>;
 
+/** Labels a day can carry; there is no OT-funded category (owner decision E-2). */
+const dayCategory = z.enum(['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shutdown']);
+/** What the day's leave minutes are; the kind never reserves or spends OT. */
+const leaveKind = z.enum(['vacation', 'sick', 'ot']);
+
 export const dayEntryBody = z.strictObject({
-  category: z.enum(['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shutdown']),
+  category: dayCategory,
   leave_minutes: z.number().int().min(0).max(1440),
+  /** Required when leave_minutes > 0 and absent or null without leave. */
+  leave_kind: leaveKind.nullable().optional(),
   wfh: z.boolean(),
   notes: z.string().max(2000),
   /** Required when the entry exists; omit or null to create it. */
@@ -68,6 +75,35 @@ export const dayEntryBody = z.strictObject({
   reason,
 });
 export type DayEntryBody = z.infer<typeof dayEntryBody>;
+
+/** Maximum dates in one batch: a little more than a full pay period of weeks. */
+export const MAX_DAY_BATCH_ENTRIES = 62;
+
+/**
+ * One date of a batch. Omitted fields keep the existing entry's value (or the neutral
+ * default for a date without an entry); the category is always explicit.
+ */
+export const dayBatchEntry = z.strictObject({
+  work_date: z.string().max(10),
+  category: dayCategory,
+  leave_minutes: z.number().int().min(0).max(1440).optional(),
+  leave_kind: leaveKind.nullable().optional(),
+  wfh: z.boolean().optional(),
+  notes: z.string().max(2000).optional(),
+  /** The entry version the caller saw; omit or null for a date without an entry. */
+  expected_version: z.number().int().positive().nullable().optional(),
+});
+export type DayBatchEntry = z.infer<typeof dayBatchEntry>;
+
+export const dayBatchBody = z.strictObject({
+  mode: z.enum(['preview', 'commit']),
+  entries: z.array(dayBatchEntry).min(1).max(MAX_DAY_BATCH_ENTRIES),
+  /** One reason for the whole commit; required when any date is old or finalized (R-07). */
+  reason,
+  /** Must be true to commit dates whose recorded work conflicts with the new label. */
+  confirm_conflicts: z.boolean().optional(),
+});
+export type DayBatchBody = z.infer<typeof dayBatchBody>;
 
 export const clockInBody = z.strictObject({
   input_zone: z.string().max(64),

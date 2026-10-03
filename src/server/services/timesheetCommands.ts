@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { defaultCategory } from '../../domain/attendance.ts';
+import { type DayCategory, defaultCategory, type LeaveKind, validateLeave } from '../../domain/attendance.ts';
 import { classifyDate } from '../../domain/calendar.ts';
 import { assertCivilDate, type CivilDate, diffDays } from '../../domain/dates.ts';
 import { DomainError } from '../../domain/errors.ts';
 import { type EpochSeconds, formatUtcInstant, parseUtcInstant } from '../../domain/instants.ts';
 import { type BreakInterval, validateSessionShape } from '../../domain/intervals.ts';
 import type { PayPeriod } from '../../domain/periods.ts';
+import { effectiveVersionOn } from '../../domain/versions.ts';
 import { assertTimeZone, localDateOf, resolveLocalDateTime } from '../../domain/zones.ts';
 import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowEpoch, nowUtc } from '../clock.ts';
@@ -28,6 +29,7 @@ import {
   type DayEntryRow,
   dayEntryJson,
   editRequirementFor,
+  effectiveCategory,
   findDayEntry,
   findOpenSession,
   findSession,
@@ -130,7 +132,11 @@ function audit(
   });
 }
 
-/** Returns the day entry, creating it with the calendar's default label when absent. */
+/**
+ * Returns the day entry, creating it when absent. A created row is a 'default' source row:
+ * its stored label is a snapshot of the calendar default, and readers take the label from
+ * the calendar at read time, so the row never pretends the employee chose it.
+ */
 function ensureDayEntry(ctx: CommandContext, edit: EditScope, workDate: CivilDate): DayEntryRow {
   const existing = findDayEntry(ctx.db, ctx.user.id, workDate);
   if (existing !== undefined) return existing;
@@ -142,16 +148,18 @@ function ensureDayEntry(ctx: CommandContext, edit: EditScope, workDate: CivilDat
     timesheet_id: timesheet.id,
     work_date: workDate,
     category: defaultCategory(classifyDate(edit.scope.calendarVersions, workDate)),
+    category_source: 'default',
     leave_minutes: 0,
+    leave_kind: null,
     wfh: 0,
     notes: '',
     version: 1,
   };
   ctx.db
     .prepare(
-      `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, leave_minutes, wfh, notes, version,
-         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, 0, '', 1, ?, ?)`,
+      `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, category_source, leave_minutes, wfh,
+         notes, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'default', 0, 0, '', 1, ?, ?)`,
     )
     .run(entry.id, ctx.user.id, timesheet.id, workDate, entry.category, now, now);
   audit(ctx, edit, 'day_entry.create', 'day_entry', entry.id, null, dayEntryJson(entry));
@@ -261,57 +269,165 @@ function reloadSession(ctx: CommandContext, sessionId: string): StoredSession {
   return requireSession(ctx, sessionId);
 }
 
+/** What a day-entry write needs once defaults for omitted fields are resolved. */
+export interface DayEntryInput {
+  category: DayCategory;
+  leave_minutes: number;
+  leave_kind: LeaveKind | null;
+  wfh: boolean;
+  notes: string;
+  /** The version the caller last saw; null when the caller saw no entry for the date. */
+  expected_version: number | null;
+}
+
+export interface DayEntryIssue {
+  code: string;
+  message: string;
+  details: Record<string, unknown>;
+}
+
+/**
+ * Partial-leave validation against the B effective on the work date (R-05, owner decision
+ * E-2). Leave minutes need a policy to be checked against, so a missing policy is an issue.
+ */
+export function dayEntryIssue(
+  scope: UserScope,
+  workDate: CivilDate,
+  input: Pick<DayEntryInput, 'leave_minutes' | 'leave_kind'>,
+): DayEntryIssue | null {
+  const policy = effectiveVersionOn(scope.policies, workDate);
+  if (input.leave_minutes > 0 && policy === undefined) {
+    return { code: 'policy_missing', message: `No work policy is effective on ${workDate}`, details: { work_date: workDate } };
+  }
+  return validateLeave({
+    leaveMinutes: input.leave_minutes,
+    leaveKind: input.leave_kind,
+    requiredMinutes: policy?.requiredMinutes ?? 0,
+  });
+}
+
+export interface AppliedDayEntry {
+  operation: 'day_entry.create' | 'day_entry.update';
+  entry: DayEntryRow;
+}
+
+/**
+ * Writes one day entry inside the caller's transaction: reason (R-07), leave validation,
+ * optimistic version, an explicit category source, the timesheet version bump and one
+ * audit event with before/after. Shared by PUT /days/:date and the batch commit.
+ */
+export function applyDayEntryChange(
+  ctx: CommandContext,
+  scope: UserScope,
+  workDate: CivilDate,
+  input: DayEntryInput,
+  reasonInput: string | undefined,
+): AppliedDayEntry {
+  const edit = prepareEdit(ctx, scope, workDate, reasonInput);
+  const issue = dayEntryIssue(scope, workDate, input);
+  if (issue !== null) throw new ApiError(422, issue.code, issue.message, issue.details);
+  const existing = findDayEntry(ctx.db, ctx.user.id, workDate);
+  const now = nowUtc(ctx.clock);
+  if (existing === undefined) {
+    if (input.expected_version !== null) throw staleVersion();
+    classifyDate(scope.calendarVersions, workDate);
+    const timesheet = ensureTimesheet(ctx, edit);
+    const entry: DayEntryRow = {
+      id: randomUUID(),
+      user_id: ctx.user.id,
+      timesheet_id: timesheet.id,
+      work_date: workDate,
+      category: input.category,
+      category_source: 'explicit',
+      leave_minutes: input.leave_minutes,
+      leave_kind: input.leave_kind,
+      wfh: input.wfh ? 1 : 0,
+      notes: input.notes,
+      version: 1,
+    };
+    ctx.db
+      .prepare(
+        `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, category_source, leave_minutes,
+           leave_kind, wfh, notes, version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'explicit', ?, ?, ?, ?, 1, ?, ?)`,
+      )
+      .run(
+        entry.id,
+        ctx.user.id,
+        timesheet.id,
+        workDate,
+        entry.category,
+        entry.leave_minutes,
+        entry.leave_kind,
+        entry.wfh,
+        entry.notes,
+        now,
+        now,
+      );
+    bumpTimesheet(ctx, timesheet.id);
+    audit(ctx, edit, 'day_entry.create', 'day_entry', entry.id, null, dayEntryJson(entry));
+    return { operation: 'day_entry.create', entry };
+  }
+  if (input.expected_version !== existing.version) throw staleVersion();
+  const updated: DayEntryRow = {
+    ...existing,
+    category: input.category,
+    category_source: 'explicit',
+    leave_minutes: input.leave_minutes,
+    leave_kind: input.leave_kind,
+    wfh: input.wfh ? 1 : 0,
+    notes: input.notes,
+    version: existing.version + 1,
+  };
+  const result = ctx.db
+    .prepare(
+      `UPDATE day_entries SET category = ?, category_source = 'explicit', leave_minutes = ?, leave_kind = ?, wfh = ?,
+         notes = ?, version = version + 1, updated_at = ?
+        WHERE id = ? AND user_id = ? AND version = ?`,
+    )
+    .run(
+      updated.category,
+      updated.leave_minutes,
+      updated.leave_kind,
+      updated.wfh,
+      updated.notes,
+      now,
+      existing.id,
+      ctx.user.id,
+      existing.version,
+    );
+  if (result.changes !== 1) throw staleVersion();
+  bumpTimesheet(ctx, existing.timesheet_id);
+  audit(
+    ctx,
+    edit,
+    'day_entry.update',
+    'day_entry',
+    existing.id,
+    dayEntryJson(existing, effectiveCategory(scope, existing)),
+    dayEntryJson(updated),
+  );
+  return { operation: 'day_entry.update', entry: updated };
+}
+
 export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input: DayEntryBody) {
   const workDate = assertCivilDate(workDateInput, 'work_date');
   writeTransaction(ctx.db, () => {
     const scope = loadScope(ctx.db, ctx.user);
-    const edit = prepareEdit(ctx, scope, workDate, input.reason);
-    const existing = findDayEntry(ctx.db, ctx.user.id, workDate);
-    const now = nowUtc(ctx.clock);
-    if (existing === undefined) {
-      if (input.expected_version !== undefined && input.expected_version !== null) throw staleVersion();
-      classifyDate(scope.calendarVersions, workDate);
-      const timesheet = ensureTimesheet(ctx, edit);
-      const entry: DayEntryRow = {
-        id: randomUUID(),
-        user_id: ctx.user.id,
-        timesheet_id: timesheet.id,
-        work_date: workDate,
+    applyDayEntryChange(
+      ctx,
+      scope,
+      workDate,
+      {
         category: input.category,
         leave_minutes: input.leave_minutes,
-        wfh: input.wfh ? 1 : 0,
+        leave_kind: input.leave_kind ?? null,
+        wfh: input.wfh,
         notes: input.notes,
-        version: 1,
-      };
-      ctx.db
-        .prepare(
-          `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, leave_minutes, wfh, notes, version,
-             created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-        )
-        .run(entry.id, ctx.user.id, timesheet.id, workDate, entry.category, entry.leave_minutes, entry.wfh, entry.notes, now, now);
-      bumpTimesheet(ctx, timesheet.id);
-      audit(ctx, edit, 'day_entry.create', 'day_entry', entry.id, null, dayEntryJson(entry));
-      return;
-    }
-    if (input.expected_version !== existing.version) throw staleVersion();
-    const updated: DayEntryRow = {
-      ...existing,
-      category: input.category,
-      leave_minutes: input.leave_minutes,
-      wfh: input.wfh ? 1 : 0,
-      notes: input.notes,
-      version: existing.version + 1,
-    };
-    const result = ctx.db
-      .prepare(
-        `UPDATE day_entries SET category = ?, leave_minutes = ?, wfh = ?, notes = ?, version = version + 1, updated_at = ?
-          WHERE id = ? AND user_id = ? AND version = ?`,
-      )
-      .run(updated.category, updated.leave_minutes, updated.wfh, updated.notes, now, existing.id, ctx.user.id, existing.version);
-    if (result.changes !== 1) throw staleVersion();
-    bumpTimesheet(ctx, existing.timesheet_id);
-    audit(ctx, edit, 'day_entry.update', 'day_entry', existing.id, dayEntryJson(existing), dayEntryJson(updated));
+        expected_version: input.expected_version ?? null,
+      },
+      input.reason,
+    );
   });
   return getDayView(ctx.db, ctx.clock, ctx.user, workDate);
 }

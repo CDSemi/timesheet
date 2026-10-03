@@ -55,12 +55,17 @@ function parseSnapshot(json: string | null): unknown {
 export function getHistory(db: Db, user: Pick<SessionUser, 'id' | 'calendarId'>, query: HistoryQuery) {
   const limit = parseLimit(query.limit);
   const before = parseBefore(query.before);
+  // `seq` is the event's 1-based position among the user's own events (audit_events is
+  // append-only), never the global rowid, so a cursor reveals nothing about other users.
   const rows = db
     .prepare(
-      `SELECT rowid AS seq, id, occurred_at, actor_user_id, operation, entity_type, entity_id, reason, before_json, after_json
-         FROM audit_events
-        WHERE owner_user_id = ? AND (? IS NULL OR rowid < ?)
-        ORDER BY rowid DESC
+      `SELECT seq, id, occurred_at, actor_user_id, operation, entity_type, entity_id, reason, before_json, after_json
+         FROM (SELECT row_number() OVER (ORDER BY rowid) AS seq, id, occurred_at, actor_user_id, operation,
+                      entity_type, entity_id, reason, before_json, after_json
+                 FROM audit_events
+                WHERE owner_user_id = ?)
+        WHERE (? IS NULL OR seq < ?)
+        ORDER BY seq DESC
         LIMIT ?`,
     )
     .all(user.id, before, before, limit + 1) as AuditRow[];

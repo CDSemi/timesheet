@@ -53,7 +53,7 @@ Chỉ giờ thực đầy đủ/đã xác nhận trên ngày theo lịch có yê
 
 Off/Holiday/Vacation/Sick/Shutdown cả ngày không làm không cộng/trừ. Thiếu bản ghi vẫn là chưa đủ. Làm bốn giờ + nghỉ bốn giờ không thiếu và không OT.
 
-Chế độ: `ignore` mặc định, `auto_deduct`, `choose_at_signoff`. Trừ đúng phút thiếu, không dùng N/M. Review tay hiện quyết định; tự nộp ở chế độ chọn để chờ, không trừ. Thiếu số dư khả dụng thì đề xuất trừ chờ, không âm thầm âm. Các khoản cộng đã biết vẫn có thể ghi.
+Chế độ: `ignore` mặc định, `auto_deduct`, `choose_at_signoff`. Trừ đúng phút thiếu, không dùng N/M. Review tay hiện quyết định; tự nộp ở chế độ chọn để chờ, không trừ. Thiếu số dư khả dụng thì đề xuất trừ chờ, không âm thầm âm. Các khoản cộng đã biết vẫn có thể ghi. Sửa làm tăng một khoản trừ đã ghi là khoản trừ mới bằng phần tăng và theo cùng quy tắc.
 
 ## R-06 — sổ và nghỉ bằng OT
 
@@ -63,7 +63,7 @@ Nghỉ bằng OT không phải loại ngày. Một ngày mang số phút nghỉ 
 
 Ghi manager cho phép rõ: tên/định danh, ngày, bằng chứng, do user ghi lại hay duyệt xác thực trong tương lai. Giữ chỗ phút đã duyệt. OT nghỉ chỉ được tiêu bằng thao tác "ghi đã dùng" (record use) rõ ràng, idempotent của nhân viên, vào hoặc sau ngày nghỉ; không có tiêu tự động hay theo job. Hỗ trợ dùng một phần. Giữ chỗ chưa tiêu vẫn bị giữ cho đến khi dùng hoặc hủy; review WP3 đánh dấu. Hủy chưa dùng giải phóng, đảo đã dùng tạo khoản bù. Mặc định 1:1, tám giờ trừ 480, không phải 510.
 
-Số dư đã ghi=tổng delta; khả dụng=đã ghi−giữ chỗ hiệu lực. Chống dùng trùng đồng thời bằng transaction. Khóa nguồn duy nhất chống ghi trùng. Sửa khoản cộng bằng chênh lệch: cũ 60 → mới 90 chỉ +30. Liên kết revision gốc/sửa. Sửa đúng lịch sử có thể làm âm; giữ và báo đối chiếu, không xóa phép đã dùng.
+Số dư đã ghi=tổng delta; khả dụng=đã ghi−giữ chỗ hiệu lực. Chống dùng trùng đồng thời bằng transaction. Khóa nguồn duy nhất chống ghi trùng. Sửa khoản cộng bằng chênh lệch: cũ 60 → mới 90 chỉ +30. Liên kết revision gốc/sửa. Sửa đúng lịch sử có thể làm âm; giữ và báo đối chiếu, không xóa phép đã dùng. Điều này áp dụng cho việc giảm khoản cộng đã bị tiêu; không cho phép tăng khoản trừ làm âm số dư (R-05).
 
 ## R-07 — lịch sử và múi giờ
 

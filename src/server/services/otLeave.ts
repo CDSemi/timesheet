@@ -606,11 +606,12 @@ export function cancelOtLeave(ctx: OtLeaveContext, input: CancelOtLeaveInput): C
   assertExpectedVersion(input.expectedVersion);
   return writeTransaction(ctx.db, () => {
     const request = requireRequest(ctx.db, input.userId, input.requestId);
+    // A stale version is refused first, also when nothing is reserved any more.
+    checkVersion(request, input.expectedVersion);
     const plan = planLeaveCancel(countersOf(request));
     if (plan.releasedMinutes === 0) {
       return { status: 'unchanged', releasedMinutes: 0, request, balance: getBalance(ctx.db, input.userId) };
     }
-    checkVersion(request, input.expectedVersion);
     const updated = updateCounters(ctx, request, plan.counters);
     auditRequest(ctx, actorUserId, 'ot_leave.cancel', request, updated, reason);
     return { status: 'cancelled', releasedMinutes: plan.releasedMinutes, request: updated, balance: getBalance(ctx.db, input.userId) };

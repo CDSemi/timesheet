@@ -108,3 +108,7 @@ Basis: WP2-PLAN section E; none changes a confirmed requirement.
 - E-11: the admin sets a temporary password out of band.
 - E-12: warn from 1 October when next-year calendar dates are missing.
 - E-13: WP2 history is the audit trail plus policy/calendar versions.
+
+## Coordinator decision — WP2-ADV-REVIEW finding ADV-A-02 (2026-10-03, reversible; the owner may veto)
+
+- R-05 applied to corrections: a correction that raises a deficit debit is a new debit of the increase. The increase is checked against the available balance (`canDebit`); when the balance cannot cover it, the increase stays pending with no ledger entry (no silent overdraft). A correction that lowers a posted credit after it was spent is still kept and flagged for reconciliation (R-06, LG-08), because it states a historical fact. This applies the existing R-05 and R-06 and changes no confirmed requirement. Source: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.

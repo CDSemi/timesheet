@@ -1,58 +1,97 @@
-# Checkpoint nhiệm vụ (WP2 tạm dừng chờ chủ dự án quyết định)
+# Checkpoint nhiệm vụ (đang triển khai WP2)
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-03 UTC (2026-10-02
 America/Los_Angeles).
 
-- Package và vai trò: WP2 (đang implement, tạm dừng); coordinator. Model thật
-  claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát được. Session
+- Package và vai trò: WP2 (đang triển khai); coordinator. Model thật claude-opus-5-5
+  (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
-- Repository: HEAD = origin/main = 8930efee064ac84256b3f82b87005717a489d1b7 (commit đóng
-  băng WP2-T02). Checkpoint này được commit bởi WP2-CKPT1.
+- Repository: nhánh main. Trước WP2-T05-FREEZE, HEAD = origin/main =
+  e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96 (commit đóng băng WP2-T04). WP2-T05-FREEZE
+  commit các thay đổi chưa commit của WP2-ADVFIX và WP2-T05 cùng các record handoff và
+  checkpoint này. Digest mã nguồn của working tree
+  809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0 (tác giả tự báo).
+  Không có commit chưa push.
 - Đã xong:
-  - Bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
-    [bàn giao](WORKFLOW_HANDOFF.vi.md)).
-  - WP1 đã nghiệm thu (kiểm tra lại độc lập PASS tại 68bbb31 / c6e24381; commit nghiệm thu
+  - Quản trị:
+    - Bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
+      [bàn giao](WORKFLOW_HANDOFF.vi.md)).
+    - GOV-E8 đã nghiệm thu (GOV-E8-AUDIT PASS trên ed92cb7;
+      [báo cáo](GOV_E8_REVIEW.vi.md)).
+  - WP1 đã nghiệm thu (kiểm tra lại PASS tại 68bbb31 / c6e24381; commit nghiệm thu
     f32978f).
-  - WP2-PLAN ([plan](tasks/WP2-PLAN.md), 13 task).
-  - WP2-T01 hợp đồng Clock out (đóng băng 396b399) và WP2-T02 lõi sổ OT (đóng băng
-    8930efe). Cả hai do tác giả tự kiểm; gate cuối package và audit diễn ra sau T13.
-- Commit đã push trong phiên: fd77a87, c219d79, 6578df8, bfdc1a8 (quản trị); 68bbb31,
-  f32978f (WP1); 396b399, 8930efe (WP2).
-- Vướng mắc: chờ chủ dự án quyết E-2 (nghỉ bù OT so với nhãn ngày), E-3 (khi nào trừ quỹ
-  nghỉ bù) và E-8 (mục UI trong AGENTS so với CSS hiện có của repo). Xem
-  `pending_owner_question` trên board. WP2-T03 cần E-2(b) và E-3; T05 cần E-2(a)(c); T09
-  cần E-8. Chủ dự án có thể trả lời từng câu, hoặc nhắn "dùng đề xuất" để áp dụng đề xuất
-  trong plan.
-- Quyết định thường quy đã áp dụng: E-1, E-4..E-7, E-9..E-13 (`coordinator_decisions` trên
-  board).
-- Còn lại: WP2-T03..T13 kèm các commit đóng băng → gate cuối package → hai audit theo mảng
-  bằng opus mới → nghiệm thu; rồi WP3, WP4, WP5 (bắt đầu bằng nghiệm thu độc lập); pilot
-  packet cụ thể; pilot thật do chủ dự án quyết.
-- Ràng buộc không đổi: dữ liệu giả lập, mail dry-run, không gửi hay triển khai thật, không
-  đổi billing, cài đặt toàn cục hay cài đặt quyền.
-- Chủ dự án trả lời "dùng đề xuất" (2026-10-03): áp dụng E-2, E-3 và E-8 theo đề xuất
-  (`owner_decisions` trên board). WP2-DEC (worker) đang ghi các quyết định vào tài liệu
-  02/03/04/10 và fixture.
-- Commit quyết định 393779ddf62b80246d9c52a0d563086a3ffddcbb đã push (tài liệu/fixture của
-  WP2-DEC cùng mục UI trong AGENTS của GOV-E8-FIX). GOV-E8-GATE đang chạy trên commit này.
-- GOV-E8-GATE FAIL: probe giả lập trong check_recovery.py mặc định package WP1 (lỗi tiềm
-  ẩn của harness lộ ra khi chuyển sang WP2; bản thân thay đổi E-8 đạt mọi kiểm tra khác).
-  GOV-E8-FIX2 (worker) đang làm cho các probe tự chứa, không phụ thuộc board thật.
-- GOV-E8 đã nghiệm thu: GOV-E8-GATE2 PASS và GOV-E8-AUDIT mới PASS trên ed92cb7 (digest
-  7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.vi.md). Rủi ro thấp R1/R2 ghi trong
-  `governance_backlog` trên board. GOV-E8-ACCEPT (record) đang chạy.
-- GOV-E8-ACCEPT xong ở attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6 đã push.
-  WP2-T03 (worker-high, override opus novelty) đang chạy.
-- WP2-T03 xong (opus; đã chứng minh xử lý đồng thời) và đóng băng ở
-  67c7e7a6e10779163647f88b84ebd91fcea390d6 (attempt 2 sau lần bị chặn vì khoảng trắng trong
-  bằng chứng). WP2-T04 (worker-high, sonnet) đang chạy.
-- Bước tiếp: đối chiếu WP2-T04 → WP2-T04-FREEZE → quyết định audit sổ OT tư vấn (chỉ đọc,
-  chạy song song với T05) và vòng GOV gộp (chính sách khoảng trắng bằng chứng, R1, R2)
-  trước T05 hoặc T09.
+  - Đã áp dụng quyết định E-2, E-3 và E-8 của chủ dự án ("dùng đề xuất"); commit quyết định
+    393779d.
+  - Các commit đóng băng WP2 đến nay:
+    - T01: 396b399.
+    - T02: 8930efe.
+    - T03: 67c7e7a; đã chứng minh xử lý đồng thời.
+    - T04: e92add0, kèm `.gitattributes` bỏ kiểm tra khoảng trắng cho bằng chứng.
+  - Kiểm tra tư vấn sổ OT:
+    - WP2-ADV-GATE PASS trên e92add0 (export sạch; chạy đồng thời x5).
+    - WP2-ADV-REVIEW (opus mới): FINDINGS ADV-A-01..04 mức Low và ADV-A-05 mức Info
+      ([báo cáo](WP2_ADV_LEDGER_REVIEW.vi.md)).
+    - WP2-ADVFIX đã sửa ADV-A-01..04 (tác giả tự báo; verify 344 test).
+  - WP2-T05 (không gian làm việc theo ngày) xong: migration 0003; tác giả tự báo verify
+    387 test.
+- Lần kiểm tra gần nhất: worker WP2-T05 chạy hai lệnh trên Node v24.21.0; cả hai là kết
+  quả tác giả tự báo, chưa kiểm độc lập.
+  - `npm run verify`: exit 0, 387 test.
+  - `npm run digest`: exit 0.
+- Đang làm: WP2-T05-FREEZE (committer), commit ADVFIX, T05, các record và brief T06.
+  - Attempt 1 bị chặn. Bộ phân loại quyền của auto mode từ chối lệnh stage/kiểm tra với
+    lý do "Credential Leakage". Không lệnh nào chạy và chưa có commit.
+  - WP2-T05-PRIVSCAN (chỉ đọc) xác nhận bộ file sạch: không có thông tin đăng nhập hay dữ
+    liệu cá nhân thật, không có dòng nào bị precommit chặn.
+  - Chủ dự án đã xác nhận trực tiếp ngày 2026-10-03 (`owner_decisions` trên board).
+    Attempt 2 trích nguyên văn lời xác nhận đó, nhưng bộ phân loại vẫn từ chối lệnh
+    `git add` chạy riêng ("Credential Leakage"). Chưa có commit.
+  - WF-CAPS2 (tra tài liệu, chỉ đọc) đã xong; kết quả nằm trong `auxiliary_lookups` trên
+    board.
+    - Tin nhắn của người dùng nêu rõ hành động và rủi ro cụ thể có thể gỡ một lần chặn.
+    - Bộ phân loại chỉ đọc `autoMode` từ cài đặt người dùng hoặc cài đặt được quản lý,
+      không đọc từ cài đặt của dự án.
+  - Đang chờ chủ dự án chỉ đạo (`pending_owner_question` trên board). Các phương án: một
+    tin nhắn duyệt rõ ràng cho lần này, tự commit, hoặc chủ dự án tự cấu hình `autoMode`
+    trong cài đặt người dùng.
+- Còn lại:
+  - WP2-T06..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
+  - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
+    trình duyệt.
+  - Hai audit bằng opus mới:
+    - AUDIT-A: sổ OT và quyền riêng tư, tập trung vào thay đổi từ sau lần review tư vấn.
+    - AUDIT-B: không gian làm việc, quản trị, UI và tích hợp.
+  - Nghiệm thu WP2.
+  - Sau đó WP3, WP4 và WP5 (WP5 bắt đầu bằng nghiệm thu độc lập), rồi pilot packet cụ
+    thể. Pilot thật do chủ dự án quyết.
+- Vướng mắc: bộ phân loại từ chối lệnh stage của committer ngay cả khi đã trích lời xác
+  nhận của chủ dự án. Coordinator không đổi cài đặt quyền và không lách qua lệnh chặn. Các
+  commit đóng băng sau có thể gặp lại tình trạng này.
+- Ghi chú chuyển tiếp:
+  - WP3 phải xử lý biến thể 'pending' của `CorrectionResult` và lưu các khoản trừ đang chờ.
+  - OT tạm tính chỉ tính cho ngày có phiên làm việc (T04/T05), và bước chốt sổ ở WP3 phải
+    bỏ các số tạm tính.
+  - Backlog quản trị vẫn để gộp vào một đợt GOV sau: R1 (check_recovery thừa hưởng trạng
+    thái thật; sửa trước software_ready), R2 (mục 2 của AGENTS.vi), giới hạn của
+    precommit và ADV-A-05.
+- Ràng buộc không đổi:
+  - Chỉ dùng dữ liệu giả lập và mail dry-run. Không gửi hay triển khai thật, không đổi
+    billing, cài đặt toàn cục hay cài đặt quyền.
+  - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
+    amend, force-push hay tạo tag.
+- Bước tiếp:
+  1. Làm theo chỉ đạo của chủ dự án về WP2-T05-FREEZE: tự commit, hoặc chạy lại sau khi
+     chủ dự án đổi quy tắc quyền.
+  2. Ghi nhận commit.
+  3. Sau đó giao WP2-T06 (brief sẵn) trên SHA đóng băng.
+- Prompt tương ứng: handoff/prompts/ORCHESTRATE.md (WP2 theo WP2_IMPLEMENT.md).
 
 ## Khôi phục điều phối
 
-- Board: [ORCHESTRATION.json](ORCHESTRATION.json); board commit cuối trong git là bản khôi
-  phục; checkpoint này.
-- Sau WP2-CKPT1 không task nào chạy. WP2-T03 bị chặn bởi các quyết định của chủ dự án.
-- Không quan sát được usage/reset.
+- Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
+  phục.
+- Đang chạy: không có. WP2-T05-FREEZE đang chờ chủ dự án, và WP2-T06 chờ task đó.
+- Process còn sống: không biết có process nào. Cả hai lần chạy committer đều không chạy
+  được lệnh nào. Các process sót trước đó đã được dừng.
+- Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
+- Usage/reset: không quan sát được.

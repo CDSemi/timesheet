@@ -109,3 +109,7 @@ Cơ sở: mục E của WP2-PLAN; không quyết định nào đổi yêu cầu 
 - E-11: admin đặt mật khẩu tạm ngoài hệ thống.
 - E-12: cảnh báo từ 1 tháng 10 khi thiếu ngày lịch năm tới.
 - E-13: lịch sử WP2 là audit trail cùng phiên bản quy tắc/lịch.
+
+## Quyết định của coordinator — phát hiện ADV-A-02 của WP2-ADV-REVIEW (2026-10-03, đảo ngược được; chủ có thể phủ quyết)
+
+- Áp dụng R-05 cho khoản sửa: sửa làm tăng một khoản trừ thiếu giờ là một khoản trừ mới bằng phần tăng. Phần tăng được kiểm với số dư khả dụng (`canDebit`); nếu số dư không đủ thì phần tăng ở trạng thái chờ, không ghi dòng sổ nào (không âm thầm âm). Sửa giảm một khoản cộng đã bị tiêu vẫn được giữ và đánh dấu đối chiếu (R-06, LG-08) vì nó nêu một sự thật lịch sử. Đây là áp dụng R-05 và R-06 hiện có, không đổi yêu cầu đã xác nhận. Nguồn: WP2-ADV-REVIEW (ADV-A-02), task WP2-ADVFIX.

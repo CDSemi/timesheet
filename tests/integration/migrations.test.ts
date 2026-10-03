@@ -50,7 +50,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(2);
+    expect(LATEST).toBe(3);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -71,7 +71,7 @@ describe('fresh SQLite migrations', () => {
         checksum: createHash('sha256').update(migration.sql).digest('hex'),
       })),
     );
-    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger']);
+    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger', 'day_entry_source']);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
       .pluck()
@@ -128,15 +128,21 @@ describe('committed migrations', () => {
 describe('upgrade from a populated WP1 (version 1) database', () => {
   const WP1_TABLES = EXPECTED_TABLES.filter((name) => !name.startsWith('ot_'));
   const AT = '2026-09-29T20:00:00Z';
+  const WP1_DAY_ENTRY_COLUMNS =
+    'id, user_id, timesheet_id, work_date, category, leave_minutes, wfh, notes, version, created_at, updated_at';
 
   /** Every row of every WP1 table, in storage order, for a before/after comparison. */
   function snapshot(target: Db): Record<string, unknown[]> {
     return Object.fromEntries(
-      WP1_TABLES.map((name) => [name, target.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]),
+      WP1_TABLES.map((name) => [
+        name,
+        // 0003 adds columns to day_entries; the WP1 columns are compared by name below.
+        target.prepare(`SELECT ${name === 'day_entries' ? WP1_DAY_ENTRY_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
+      ]),
     );
   }
 
-  it('applies only 0002, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+  it('applies 0002 and 0003, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
     const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
     expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
     const seed = await seedSynthetic(db, new MutableClock(AT), {
@@ -171,16 +177,21 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2], version: 2 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3], version: 3 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
     expect(after.schema_migrations?.slice(0, 1)).toEqual(before.schema_migrations);
     expect(after.schema_migrations?.slice(1)).toEqual([
       expect.objectContaining({ version: 2, name: 'ot_ledger', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 3, name: 'day_entry_source', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
-    expect(db.pragma('user_version', { simple: true })).toBe(2);
+    // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
+    expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
+      { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
+    ]);
+    expect(db.pragma('user_version', { simple: true })).toBe(3);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -192,7 +203,26 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 2 });
+    expect(migrate(db)).toEqual({ applied: [], version: 3 });
+    // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
+    db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
+    expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
+  });
+
+  it('also upgrades a version 2 database that already holds WP2 ledger rows', async () => {
+    const upToLedger = MIGRATIONS.filter((migration) => migration.version <= 2);
+    expect(migrate(db, upToLedger)).toEqual({ applied: [1, 2], version: 2 });
+    const seed = await seedSynthetic(db, new MutableClock(AT), {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass' },
+    });
+    const employee = seed.users.find((user) => user.role === 'employee')?.id ?? '';
+    postCredit(
+      { db, clock: new MutableClock(AT) },
+      { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
+    );
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3], version: 3 });
+    expect(getBalance(db, employee).postedMinutes).toBe(45);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
 });
 
@@ -250,6 +280,33 @@ describe('schema invariants', () => {
           )
           .run(ids.employee, ids.employee),
       /cannot store REAL value in INTEGER column/,
+    );
+  });
+
+  it('constrains the day-entry category source and leave kind (migration 0003)', () => {
+    const sheet = insertTimesheet(ids.employee);
+    const insert = (id: string, date: string, source: string, leaveMinutes: number, leaveKind: string | null) =>
+      db
+        .prepare(
+          `INSERT INTO day_entries (id, user_id, timesheet_id, work_date, category, leave_minutes, category_source,
+             leave_kind, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'Worked', ?, ?, ?, '2026-09-29T20:00:00Z', '2026-09-29T20:00:00Z')`,
+        )
+        .run(id, ids.employee, sheet, date, leaveMinutes, source, leaveKind);
+    // Omitted columns default to the conservative explicit source and no leave kind.
+    insertDay(ids.employee, sheet, '2026-09-21');
+    expect(db.prepare('SELECT category_source, leave_kind FROM day_entries').get()).toEqual({
+      category_source: 'explicit',
+      leave_kind: null,
+    });
+    insert('d-default', '2026-09-22', 'default', 0, null);
+    insert('d-ot', '2026-09-23', 'explicit', 60, 'ot');
+    expectSqliteError(() => insert('d-source', '2026-09-24', 'imported', 0, null), /CHECK constraint failed/);
+    expectSqliteError(() => insert('d-kind', '2026-09-25', 'explicit', 60, 'ot-funded'), /CHECK constraint failed/);
+    expectSqliteError(() => insert('d-orphan', '2026-09-28', 'explicit', 0, 'vacation'), /leave_kind_without_minutes/);
+    expectSqliteError(
+      () => db.prepare("UPDATE day_entries SET leave_minutes = 0 WHERE id = 'd-ot'").run(),
+      /leave_kind_without_minutes/,
     );
   });
 

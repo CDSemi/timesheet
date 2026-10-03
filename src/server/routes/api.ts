@@ -7,6 +7,7 @@ import { ApiError, notFound } from '../http/errors.ts';
 import {
   clockInBody,
   clockOutBody,
+  dayBatchBody,
   dayEntryBody,
   deleteBody,
   policyBody,
@@ -14,6 +15,7 @@ import {
   sessionUpdateBody,
 } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
+import { commitDayBatch, previewDayBatch } from '../services/dayEntries.ts';
 import { periodJson } from '../services/periods.ts';
 import { createPolicyVersion, listPolicyVersions, policyJson } from '../services/policies.ts';
 import {
@@ -114,6 +116,12 @@ export function apiRoutes(deps: AppDeps) {
   );
 
   app.get('/days/:workDate', auth, (c) => c.json(getDayView(deps.db, deps.clock, c.get('user'), c.req.param('workDate'))));
+
+  // Preview first, then commit with a per-date expected_version (all or nothing).
+  app.post('/days/batch', auth, async (c) => {
+    const body = await readJson(c, dayBatchBody);
+    return c.json(body.mode === 'preview' ? previewDayBatch(command(c), body) : commitDayBatch(command(c), body));
+  });
 
   app.put('/days/:workDate', auth, async (c) =>
     c.json(upsertDayEntry(command(c), c.req.param('workDate'), await readJson(c, dayEntryBody))),

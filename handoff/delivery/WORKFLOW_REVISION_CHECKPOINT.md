@@ -1,56 +1,95 @@
-# Mission checkpoint (WP2 paused for owner decisions)
+# Mission checkpoint (WP2 implementation)
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-03 UTC (2026-10-02
 America/Los_Angeles).
 
-- Active package and role: WP2 (implementation; paused); coordinator. Actual model
+- Active package and role: WP2 (implementation); coordinator. Actual model
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
-- Repository: HEAD = origin/main = 8930efee064ac84256b3f82b87005717a489d1b7 (WP2-T02
-  freeze). This checkpoint is committed by WP2-CKPT1.
-- Completed:
-  - Governance revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
-    [handoff](WORKFLOW_HANDOFF.md)).
-  - WP1 accepted (independent recheck PASS at 68bbb31 / c6e24381; accept commit f32978f).
-  - WP2-PLAN ([plan](tasks/WP2-PLAN.md), 13 tasks).
-  - WP2-T01 Clock-out contract (freeze 396b399) and WP2-T02 OT ledger core (freeze
-    8930efe). Both are author-verified; the package-final gate and audits come after
-    T13.
-- Commits pushed this session: fd77a87, c219d79, 6578df8, bfdc1a8 (governance); 68bbb31,
-  f32978f (WP1); 396b399, 8930efe (WP2).
-- Blocker: owner decisions E-2 (OT-funded leave vs day labels), E-3 (when OT leave is
-  consumed) and E-8 (AGENTS UI section vs repository CSS). See the board
-  `pending_owner_question`. WP2-T03 needs E-2(b) and E-3; T05 needs E-2(a)(c); T09 needs
-  E-8. The owner may answer each, or reply "dùng đề xuất" to adopt the plan
-  recommendations.
-- Routine decisions adopted: E-1, E-4..E-7, E-9..E-13 (board `coordinator_decisions`).
-- Remaining: WP2-T03..T13 with freezes → package-final gate → two fresh opus area audits
-  → accept; then WP3, WP4, WP5 (starts with independent acceptance); concrete pilot
-  packet; the real pilot stays owner-controlled.
-- Unchanged constraints: synthetic data, dry-run mail, no real sending or deployment, no
-  billing, global-setting or permission-setting changes.
-- Owner replied "dùng đề xuất" (2026-10-03): E-2, E-3 and E-8 adopted as recommended
-  (board `owner_decisions`). WP2-DEC (worker) is encoding them in docs 02/03/04/10 and
-  the fixture.
-- Decision commit 393779ddf62b80246d9c52a0d563086a3ffddcbb pushed (WP2-DEC docs/fixture
-  plus GOV-E8-FIX AGENTS UI section). GOV-E8-GATE running on it.
-- GOV-E8-GATE FAIL: check_recovery.py synthetic probes assumed active package WP1 (latent
-  harness defect exposed by the WP2 advance; E-8 change itself passed every other check).
-  GOV-E8-FIX2 (worker) is making the probes self-contained.
-- GOV-E8 accepted: GOV-E8-GATE2 PASS and fresh GOV-E8-AUDIT PASS on ed92cb7 (digest
-  7586ba08); [GOV_E8_REVIEW](GOV_E8_REVIEW.md). Low risks R1/R2 recorded in the board
-  `governance_backlog`. GOV-E8-ACCEPT (records) running.
-- GOV-E8-ACCEPT done on attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6
-  pushed. WP2-T03 (worker-high, opus override novelty) running.
-- WP2-T03 done (opus; concurrency proven) and frozen in 67c7e7a6e10779163647f88b84ebd91fcea390d6
-  (attempt 2 after an evidence-whitespace block). WP2-T04 (worker-high, sonnet) running.
-- Next action: reconcile WP2-T04 → WP2-T04-FREEZE → decide the optional advisory ledger
-  audit (read-only, parallel with T05) and the batched GOV cycle (evidence-whitespace
-  policy, R1, R2) before T05 or T09.
+- Repository: branch main. Before WP2-T05-FREEZE, HEAD = origin/main =
+  e92add0b4c26e203dc5b06841f5a3f5a6bf9eb96 (the WP2-T04 freeze). The uncommitted
+  WP2-ADVFIX and WP2-T05 changes and the handoff records are committed with this
+  checkpoint by WP2-T05-FREEZE. Working-tree source digest
+  809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0 (author-reported). No
+  unpushed commits.
+- Completed scope:
+  - Governance:
+    - Revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
+      [handoff](WORKFLOW_HANDOFF.md)).
+    - GOV-E8 accepted (GOV-E8-AUDIT PASS on ed92cb7; [review](GOV_E8_REVIEW.md)).
+  - WP1 accepted (recheck PASS at 68bbb31 / c6e24381; accept commit f32978f).
+  - Owner decisions E-2, E-3 and E-8 adopted ("dùng đề xuất"); decision commit 393779d.
+  - WP2 freezes so far:
+    - T01: 396b399.
+    - T02: 8930efe.
+    - T03: 67c7e7a; concurrency proven.
+    - T04: e92add0, together with `.gitattributes` evidence -whitespace.
+  - Advisory ledger check:
+    - WP2-ADV-GATE PASS on e92add0 (clean export; concurrency x5).
+    - WP2-ADV-REVIEW (fresh opus): FINDINGS ADV-A-01..04 Low and ADV-A-05 Info
+      ([report](WP2_ADV_LEDGER_REVIEW.md)).
+    - WP2-ADVFIX fixed ADV-A-01..04 (author-reported; verify 344 tests).
+  - WP2-T05 (day-entry workspace) done: migration 0003; author-reported verify 387 tests.
+- Last verification: the WP2-T05 worker ran both commands on Node v24.21.0; both are
+  author-reported, not independent.
+  - `npm run verify`: exit 0, 387 tests.
+  - `npm run digest`: exit 0.
+- In progress: WP2-T05-FREEZE (committer), which commits ADVFIX, T05, the records and the
+  T06 brief.
+  - Attempt 1 is blocked. The auto-mode permission classifier denied the staging/check
+    command as "Credential Leakage". Nothing executed and nothing was committed.
+  - WP2-T05-PRIVSCAN (read-only) found the set clean: no real credential or personal data
+    and no precommit-blocking line.
+  - The owner confirmed directly on 2026-10-03 (board `owner_decisions`). Attempt 2 quoted
+    that confirmation verbatim, but the classifier denied the standalone `git add` again
+    ("Credential Leakage"). No commit was made.
+  - WF-CAPS2 (read-only documentation lookup) is done; its result is in the board
+    `auxiliary_lookups`.
+    - A user message that names the action and its specific danger can clear one
+      classifier block.
+    - The classifier reads `autoMode` only from user or managed settings, not from
+      project settings.
+  - Owner direction is requested (board `pending_owner_question`). The options are an
+    explicit one-off approval message, a manual commit, or `autoMode` user settings
+    configured by the owner.
+- Remaining:
+  - WP2-T06..T13 with their freezes ([plan](tasks/WP2-PLAN.md)).
+  - The package-final gate: clean export, WP1→WP2 upgrade, 20 concurrency runs and the
+    browser flows.
+  - Two fresh opus audits:
+    - AUDIT-A: ledger and privacy, focused on the changes since the advisory review.
+    - AUDIT-B: workspace, admin, UI and integration.
+  - WP2 acceptance.
+  - Then WP3, WP4 and WP5 (WP5 starts with independent acceptance), and a concrete pilot
+    packet. The real pilot stays owner-controlled.
+- Blocker: the classifier denies the committer's staging command even with the owner's
+  confirmation quoted. The coordinator changes no permission settings and does not route
+  around the denial. Future freeze commits may hit the same block.
+- Carry-forward notes:
+  - WP3 must handle the `CorrectionResult` 'pending' variant and persist pending debits.
+  - Provisional OT is computed only for days with sessions (T04/T05), and WP3
+    finalization must drop the provisional figures.
+  - The governance backlog stays batched for one later GOV cycle: R1 (check_recovery
+    inherits the live status; fix before software_ready), R2 (AGENTS.vi item 2),
+    precommit limits and ADV-A-05.
+- Unchanged constraints:
+  - Synthetic data and dry-run mail only. No real sending or deployment, and no changes to
+    billing, global settings or permission settings.
+  - Commits go only through timesheet-committer, on main until the first release. No
+    amend, force-push or tags.
+- Next action:
+  1. Follow the owner's direction on WP2-T05-FREEZE: a manual commit, or a retry after the
+     owner changes the permission rules.
+  2. Record the commit.
+  3. Then dispatch WP2-T06 (brief ready) on the freeze SHA.
+- Matching prompt: handoff/prompts/ORCHESTRATE.md (WP2 per WP2_IMPLEMENT.md).
 
 ## Orchestration recovery
 
-- Board: [ORCHESTRATION.json](ORCHESTRATION.json); the last committed board in git is the
-  recovery copy; this checkpoint.
-- No task is running after WP2-CKPT1. WP2-T03 is blocked by the owner decisions.
-- No usage/reset values observed.
+- Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
+  recovery copy.
+- Running: nothing. WP2-T05-FREEZE is blocked on the owner, and WP2-T06 is pending on it.
+- Live processes: none known. Neither committer attempt executed a command. Earlier
+  leftover processes were stopped.
+- Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
+- Usage/reset: not observable.

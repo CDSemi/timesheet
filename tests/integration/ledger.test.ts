@@ -215,6 +215,46 @@ describe('LG-02 correction by difference (R-06)', () => {
     expect(getBalance(t.db, employee).postedMinutes).toBe(70);
   });
 
+  it('ADV-A-01: the same correction key with a different corrected value is source_key_conflict; an identical retry still returns the entry', () => {
+    const original = credit(employee, 'ts1-r1-day1', 60);
+    const input = {
+      userId: employee,
+      originalEntryId: original.entry.id,
+      correctedMinutes: 90,
+      sourceKey: 'ts1-r2-day1',
+      reason: 'Synthetic correction',
+      ...manual(employee),
+    };
+    const first = postCorrection(ctx, input);
+    expectApiError(() => postCorrection(ctx, { ...input, correctedMinutes: 120 }), 409, 'source_key_conflict');
+    expect(ledgerRows(employee)).toBe(2);
+    // The identical retry is still a duplicate, also after a later correction changed the current value.
+    postCorrection(ctx, { ...input, correctedMinutes: 70, sourceKey: 'ts1-r3-day1' });
+    const retry = postCorrection(ctx, input);
+    expect(retry.status).toBe('duplicate');
+    expect(retry.entry?.id).toBe(first.entry?.id);
+    expectApiError(() => postCorrection(ctx, { ...input, correctedMinutes: 70 }), 409, 'source_key_conflict');
+    expect(ledgerRows(employee)).toBe(3);
+  });
+
+  it('ADV-A-01: a conflicting retry of a deficit-debit correction is also source_key_conflict', () => {
+    credit(employee, 'credit-1', 120);
+    const debit = postDeficitDebit(ctx, { userId: employee, sourceKey: 'debit-1', debitMinutes: 60, workDate: '2026-09-22', ...manual(employee) });
+    if (debit.status === 'pending') throw new Error('debit unexpectedly pending');
+    const input = {
+      userId: employee,
+      originalEntryId: debit.entry.id,
+      correctedMinutes: 15,
+      sourceKey: 'debit-1-r2',
+      reason: 'Synthetic deficit corrected',
+      ...manual(employee),
+    };
+    postCorrection(ctx, input);
+    expect(postCorrection(ctx, input).status).toBe('duplicate');
+    expectApiError(() => postCorrection(ctx, { ...input, correctedMinutes: 20 }), 409, 'source_key_conflict');
+    expect(ledgerRows(employee)).toBe(3);
+  });
+
   it('refuses a stale expected previous value with 409 and appends nothing', () => {
     const original = credit(employee, 'ts1-r1-day1', 60);
     expectApiError(
@@ -356,6 +396,74 @@ describe('LG-09 zero-delta correction', () => {
     expect(ledgerRows(employee) - before).toBe(scenario.expected.new_deltas.length);
     expect(ledgerAudits(employee)).toBe(audits);
     expect(getBalance(t.db, employee).postedMinutes).toBe(scenario.expected.balance_minutes);
+  });
+});
+
+describe('ADV-A-02 correction that increases a deficit debit applies R-05', () => {
+  function debitOf(minutes: number) {
+    const debit = postDeficitDebit(ctx, { userId: employee, sourceKey: 'debit-1', debitMinutes: minutes, workDate: '2026-09-22', ...manual(employee) });
+    if (debit.status === 'pending') throw new Error('debit unexpectedly pending');
+    return debit.entry;
+  }
+  const raise = (originalEntryId: string, correctedMinutes: number, sourceKey = 'debit-1-r2') =>
+    postCorrection(ctx, { userId: employee, originalEntryId, correctedMinutes, sourceKey, reason: 'Synthetic deficit raised', ...manual(employee) });
+
+  it('an increase the available balance cannot cover stays pending: no entry, no negative balance', () => {
+    credit(employee, 'credit-1', 60);
+    const debit = debitOf(60);
+    const before = { rows: ledgerRows(employee), audits: ledgerAudits(employee) };
+    const result = raise(debit.id, 90);
+    expect(result).toMatchObject({
+      status: 'pending',
+      reason: 'insufficient_balance',
+      entry: null,
+      deltaMinutes: 0,
+      debitIncreaseMinutes: 30,
+      availableMinutes: 0,
+    });
+    expect(ledgerRows(employee)).toBe(before.rows);
+    expect(ledgerAudits(employee)).toBe(before.audits);
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 0, negative: false, reconciliationRequired: false });
+  });
+
+  it('only the increase is checked and reservations reduce what it may use', () => {
+    credit(employee, 'credit-1', 100);
+    const debit = debitOf(40);
+    insertReservation(employee, 'leave-a', 50);
+    // posted 60, reserved 50, available 10.
+    expect(raise(debit.id, 60).status).toBe('pending');
+    const exact = raise(debit.id, 50);
+    expect(exact).toMatchObject({ status: 'posted', deltaMinutes: -10 });
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 50, reservedMinutes: 50, availableMinutes: 0, negative: false });
+  });
+
+  it('a pending increase retried after more credit arrives posts once', () => {
+    credit(employee, 'credit-1', 60);
+    const debit = debitOf(60);
+    expect(raise(debit.id, 90).status).toBe('pending');
+    credit(employee, 'credit-2', 30, '2026-09-23');
+    const posted = raise(debit.id, 90);
+    expect(posted).toMatchObject({ status: 'posted', deltaMinutes: -30 });
+    expect(raise(debit.id, 90).status).toBe('duplicate');
+    expect(getBalance(t.db, employee).postedMinutes).toBe(0);
+  });
+
+  it('reducing a debit and reducing a spent credit are not blocked (a truthful credit correction may go negative)', () => {
+    credit(employee, 'credit-1', 60);
+    const debit = debitOf(60);
+    expect(raise(debit.id, 20).status).toBe('posted');
+    const original = listLedgerEntries(t.db, employee)[0];
+    if (original === undefined) throw new Error('credit missing');
+    const lower = postCorrection(ctx, {
+      userId: employee,
+      originalEntryId: original.id,
+      correctedMinutes: 0,
+      sourceKey: 'credit-1-r2',
+      reason: 'Synthetic: day was not worked',
+      ...manual(employee),
+    });
+    expect(lower).toMatchObject({ status: 'posted', deltaMinutes: -60, reconciliationRequired: true });
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: -20, negative: true, reconciliationRequired: true });
   });
 });
 

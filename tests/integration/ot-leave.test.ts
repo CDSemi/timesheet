@@ -346,6 +346,31 @@ describe('cancel and reverse (R-06)', () => {
     });
   });
 
+  it('ADV-A-03: a stale expected version is refused on cancel even when nothing is reserved any more', () => {
+    openBalance(employee, 600);
+    const { request } = reserve(employee, 'leave-stale-cancel', 120);
+    use(employee, request.id, 'use-all', 120);
+    // Fully used: version 2, nothing left to release. A cancel based on version 1 is stale.
+    const audits = count('SELECT count(*) FROM audit_events');
+    expectApiError(
+      () => cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: request.id, expectedVersion: 1 }),
+      409,
+      'stale_version',
+    );
+    expect(count('SELECT count(*) FROM audit_events')).toBe(audits);
+    // The current version and an omitted version still answer unchanged.
+    expect(cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: request.id, expectedVersion: 2 }).status).toBe('unchanged');
+    expect(cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: request.id }).status).toBe('unchanged');
+    // A cancelled request is stale for an old version as well.
+    const second = reserve(employee, 'leave-stale-cancel-2', 60).request;
+    cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: second.id, expectedVersion: 1 });
+    expectApiError(
+      () => cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: second.id, expectedVersion: 1 }),
+      409,
+      'stale_version',
+    );
+  });
+
   it('cancel after partial use releases only the unused remainder', () => {
     openBalance(employee, 600);
     const { request } = reserve(employee, 'leave-cancel-partial', 480);
@@ -492,28 +517,87 @@ describe('ownership, rollback and audit', () => {
 });
 
 describe('LG-10: a day label or leave change never reserves or spends OT (owner decision E-2)', () => {
-  it('changing the day to leave minutes posts nothing and reserves nothing', async () => {
+  it('changing the day to leave minutes (including leave_kind ot) posts nothing and reserves nothing', async () => {
     const scenario = ledgerScenario(fixture, 'LG-10');
     openBalance(employee, scenario.opening_balance_minutes);
-    const event = scenario.events[0] as { leave_minutes?: number; approval_recorded?: boolean } | undefined;
+    const event = scenario.events[0] as { leave_kind?: string; leave_minutes?: number; approval_recorded?: boolean } | undefined;
     expect(event?.approval_recorded).toBe(false);
+    expect(event?.leave_kind).toBe('ot');
     const cookie = await t.login('employee');
     const put = await t.request('PUT', '/api/days/2026-10-01', {
       cookie,
-      body: { category: 'Vacation', leave_minutes: event?.leave_minutes ?? 0, wfh: false, notes: '' },
+      body: { category: 'Vacation', leave_minutes: event?.leave_minutes ?? 0, leave_kind: event?.leave_kind, wfh: false, notes: '' },
     });
     expect(put.status).toBe(200);
-    const relabel = await t.request('PUT', '/api/days/2026-10-01', {
-      cookie,
-      body: { category: 'Off', leave_minutes: event?.leave_minutes ?? 0, wfh: false, notes: '', expected_version: put.body.entry.version },
-    });
-    expect(relabel.status).toBe(200);
+    expect(put.body).toMatchObject({ leave_kind: 'ot', leave_minutes: 480 });
+    // Relabel the category, then switch the kind to vacation and back to ot: nothing moves.
+    let version: number = put.body.entry.version;
+    for (const [category, leaveKind] of [['Off', 'ot'], ['Vacation', 'vacation'], ['Sick', 'sick'], ['Worked', 'ot']] as const) {
+      const response = await t.request('PUT', '/api/days/2026-10-01', {
+        cookie,
+        body: { category, leave_minutes: event?.leave_minutes ?? 0, leave_kind: leaveKind, wfh: false, notes: '', expected_version: version },
+      });
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ category, leave_kind: leaveKind });
+      version = response.body.entry.version;
+    }
     expect(newDeltas(employee)).toEqual(scenario.expected.new_deltas);
     expect(count('SELECT count(*) FROM ot_leave_requests')).toBe(0);
     expect(getBalance(t.db, employee)).toMatchObject({
       postedMinutes: scenario.expected.balance_minutes,
       reservedMinutes: scenario.expected.reserved_minutes,
     });
+  });
+
+  it('a batch relabel to leave_kind ot also posts and reserves nothing', async () => {
+    openBalance(employee, 600);
+    const cookie = await t.login('employee');
+    const batch = await t.request('POST', '/api/days/batch', {
+      cookie,
+      body: {
+        mode: 'commit',
+        entries: [
+          { work_date: '2026-10-01', category: 'Vacation', leave_minutes: 480, leave_kind: 'ot', expected_version: null },
+          { work_date: '2026-10-02', category: 'Off', leave_minutes: 240, leave_kind: 'ot', expected_version: null },
+        ],
+      },
+    });
+    expect(batch.status).toBe(200);
+    expect(newDeltas(employee)).toEqual([]);
+    expect(count('SELECT count(*) FROM ot_leave_requests')).toBe(0);
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 600, reservedMinutes: 0 });
+  });
+
+  it('exposes the OT-kind minutes next to the linked request so the UI can warn; a mismatch never changes a balance', async () => {
+    openBalance(employee, 600);
+    const cookie = await t.login('employee');
+    const { request } = reserve(employee, 'leave-warn', 480);
+    const day = async () => (await t.request('GET', '/api/days/2026-10-01', { cookie })).body;
+    // Reserved but not used: OT-kind minutes (none yet) differ from the consumed 0 only once minutes are entered.
+    expect((await day()).ot_leave).toEqual({ kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false });
+    const saved = await t.request('PUT', '/api/days/2026-10-01', {
+      cookie,
+      body: { category: 'Vacation', leave_minutes: 480, leave_kind: 'ot', wfh: false, notes: '' },
+    });
+    expect(saved.body.ot_leave).toEqual({ kind_minutes: 480, consumed_minutes: 0, reversed_minutes: 0, mismatch: true });
+    use(employee, request.id, 'use-warn', 480);
+    expect((await day()).ot_leave).toEqual({ kind_minutes: 480, consumed_minutes: 480, reversed_minutes: 0, mismatch: false });
+    const lowered = await t.request('PUT', '/api/days/2026-10-01', {
+      cookie,
+      body: { category: 'Vacation', leave_minutes: 240, leave_kind: 'ot', wfh: false, notes: '', expected_version: saved.body.entry.version },
+    });
+    expect(lowered.body.ot_leave).toEqual({ kind_minutes: 240, consumed_minutes: 480, reversed_minutes: 0, mismatch: true });
+    // Other kinds never count as OT-kind minutes.
+    const vacation = await t.request('PUT', '/api/days/2026-10-01', {
+      cookie,
+      body: { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: '', expected_version: lowered.body.entry.version },
+    });
+    expect(vacation.body.ot_leave).toEqual({ kind_minutes: 0, consumed_minutes: 480, reversed_minutes: 0, mismatch: true });
+    // The warning is informational: only the explicit record-use action moved the balance.
+    expect(newDeltas(employee)).toEqual([-480]);
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 120, reservedMinutes: 0 });
+    reverse(employee, request.id, 'rev-warn', 480);
+    expect((await day()).ot_leave).toMatchObject({ consumed_minutes: 480, reversed_minutes: 480 });
   });
 
   it('a reservation on the same date still needs a recorded permission, and reserving never spends', () => {
