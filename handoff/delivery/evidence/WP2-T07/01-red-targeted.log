@@ -1,0 +1,675 @@
+$ node --version -> v24.21.0; npm exec -- vitest run tests/integration/user-admin.test.ts tests/integration/isolation.test.ts tests/integration/ot-api.test.ts  (expected red before implementation)
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/isolation.test.ts (16 tests | 4 failed) 3578ms
+   ❯ admin router is account administration, not private-data access (AC-01, FR-01) (5)
+     × exposes exactly the reviewed account routes 224ms
+     × has an admin router source that reaches only account services and tables 223ms
+     × keeps the user list free of employee sessions, leave and history content 220ms
+     × still answers 404 to an admin swapping identifiers after administering the employee account 223ms
+ ❯ tests/integration/ot-api.test.ts (25 tests | 1 failed) 5447ms
+   ❯ route inventory: no route posts a credit or debit (3)
+     × has no state-changing route outside the reviewed allowlist and none that names a posting 212ms
+ ❯ tests/integration/user-admin.test.ts (29 tests | 27 failed) 6311ms
+   ❯ admin router access (FR-01, AC-01) (3)
+     × answers 401 without a session on every admin route and on unknown admin paths 259ms
+     × answers 403 to an employee on every admin route and changes nothing 215ms
+     × applies CSRF/origin, content-type and body rules to every mutating admin route 219ms
+   ❯ GET /api/admin/users (2)
+     × lists account fields only, never password material or private timesheet data 224ms
+     × shows deactivated accounts with their status 220ms
+   ❯ POST /api/admin/users (E-11: admin-set temporary password, never returned) (5)
+     × creates an active account whose password the admin chose, without echoing it 220ms
+     × audits the creation with the account after-state and no password material 221ms
+     × refuses a duplicate email in any case without a second account or audit event 215ms
+     × applies the existing password policy and never echoes the rejected value 218ms
+     × validates the email, display name, role and calendar and rejects unknown or owner fields 222ms
+   ❯ PATCH /api/admin/users/:id (6)
+     × edits display name, role and calendar and audits the before and after state 220ms
+     × applies a role demotion to existing sessions immediately 225ms
+     × refuses an empty edit, unknown fields and other accounts’ credentials 222ms
+     × writes no audit event for an edit that changes nothing and 404s for an unknown account 225ms
+     × refuses to demote the last active admin and keeps the role 218ms
+     × does not count a deactivated admin as a remaining admin 222ms
+   ❯ deactivation and reactivation (sessions are revoked, history is kept) (10)
+     × revokes every session of the user so existing cookies answer 401, and blocks sign-in 208ms
+     × audits the deactivation with before/after status, the reason and the revoked-session count 206ms
+     × refuses self-deactivation and keeps the admin signed in 205ms
+     × refuses to deactivate the last active admin at the service level and rolls back 210ms
+     × lets one admin deactivate another while a third remains, and refuses when none would remain 211ms
+     × keeps all of the user’s data and history after deactivation 220ms
+     × is a quiet no-op when the user is already deactivated, and 404s for an unknown account 203ms
+     × reactivates the account without reviving any old session, and sign-in works again 208ms
+     × revokes leftover sessions of a deactivated account on reactivation 207ms
+     × is a quiet no-op to reactivate an active account 204ms
+   ❯ transactions and service contracts (3)
+     × counts the sessions that revokeAllAuthSessions revokes 248ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 32 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > exposes exactly the reviewed account routes
+AssertionError: expected [] to deeply equal [ 'GET /api/admin/users', …(4) ]
+
+- Expected
++ Received
+
+- [
+-   "GET /api/admin/users",
+-   "PATCH /api/admin/users/:id",
+-   "POST /api/admin/users",
+-   "POST /api/admin/users/:id/deactivate",
+-   "POST /api/admin/users/:id/reactivate",
+- ]
++ []
+
+ ❯ tests/integration/isolation.test.ts:276:27
+    274|
+    275|   it('exposes exactly the reviewed account routes', () => {
+    276|     expect(adminRoutes()).toEqual(
+       |                           ^
+    277|       [
+    278|         'GET /api/admin/users',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/32]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > has an admin router source that reaches only account services and tables
+Error: ENOENT: no such file or directory, open 'D:\Dropbox\Work.CDSemi\timesheet\src\server\routes\admin.ts'
+ ❯ tests/integration/isolation.test.ts:291:20
+    289|
+    290|   it('has an admin router source that reaches only account services an…
+    291|     const source = readFileSync(join(import.meta.dirname, '../../src/s…
+       |                    ^
+    292|     const imports = [...source.matchAll(/from '([^']+)'/g)].map((match…
+    293|     for (const module of imports) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/32]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > keeps the user list free of employee sessions, leave and history content
+TypeError: list.body.users is not iterable
+ ❯ tests/integration/isolation.test.ts:342:34
+    340|       expect(text).not.toContain(secret);
+    341|     }
+    342|     for (const user of list.body.users) {
+       |                                  ^
+    343|       expect(Object.keys(user).sort()).toEqual([
+    344|         'calendar_id',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/32]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > still answers 404 to an admin swapping identifiers after administering the employee account
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/isolation.test.ts:361:27
+    359|       body: { display_name: 'Edited By Admin' },
+    360|     });
+    361|     expect(edited.status).toBe(200);
+       |                           ^
+    362|     const deactivated = await t.request('POST', `/api/admin/users/${t.…
+    363|     expect(deactivated.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/32]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting
+AssertionError: expected [ 'DELETE /api/sessions/:id', …(14) ] to deeply equal [ 'DELETE /api/sessions/:id', …(18) ]
+
+- Expected
++ Received
+
+@@ -1,11 +1,7 @@
+  [
+    "DELETE /api/sessions/:id",
+-   "PATCH /api/admin/users/:id",
+-   "POST /api/admin/users",
+-   "POST /api/admin/users/:id/deactivate",
+-   "POST /api/admin/users/:id/reactivate",
+    "POST /api/auth/login",
+    "POST /api/auth/logout",
+    "POST /api/clock/in",
+    "POST /api/clock/out",
+    "POST /api/days/:workDate/sessions",
+
+ ❯ tests/integration/ot-api.test.ts:500:22
+    498|   it('has no state-changing route outside the reviewed allowlist and n…
+    499|     const mutating = appRoutes().filter((route) => !route.startsWith('…
+    500|     expect(mutating).toEqual(
+       |                      ^
+    501|       [
+    502|         'DELETE /api/sessions/:id',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > admin router access (FR-01, AC-01) > answers 401 without a session on every admin route and on unknown admin paths
+AssertionError: GET /api/admin/users: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:102:52
+    100|     for (const [method, path, body] of routes) {
+    101|       const response = await t.request(method, path, { body });
+    102|       expect(response.status, `${method} ${path}`).toBe(401);
+       |                                                    ^
+    103|       expect(response.body.error.code).toBe('unauthenticated');
+    104|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > admin router access (FR-01, AC-01) > answers 403 to an employee on every admin route and changes nothing
+AssertionError: GET /api/admin/users: expected 404 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:113:52
+    111|     for (const [method, path, body] of routes) {
+    112|       const response = await t.request(method, path, { cookie: employe…
+    113|       expect(response.status, `${method} ${path}`).toBe(403);
+       |                                                    ^
+    114|       expect(response.body.error.code).toBe('forbidden');
+    115|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > admin router access (FR-01, AC-01) > applies CSRF/origin, content-type and body rules to every mutating admin route
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:126:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > GET /api/admin/users > lists account fields only, never password material or private timesheet data
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:162:29
+    160|   it('lists account fields only, never password material or private ti…
+    161|     const response = await t.request('GET', '/api/admin/users', { cook…
+    162|     expect(response.status).toBe(200);
+       |                             ^
+    163|     expect(response.body.users).toHaveLength(2);
+    164|     for (const user of response.body.users) expect(Object.keys(user).s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > GET /api/admin/users > shows deactivated accounts with their status
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:179:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > POST /api/admin/users (E-11: admin-set temporary password, never returned) > creates an active account whose password the admin chose, without echoing it
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:190:28
+    188|     const { body, password } = newUserBody();
+    189|     const created = await t.request('POST', '/api/admin/users', { cook…
+    190|     expect(created.status).toBe(201);
+       |                            ^
+    191|     expect(Object.keys(created.body.user).sort()).toEqual(ACCOUNT_KEYS…
+    192|     expect(created.body.user).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > POST /api/admin/users (E-11: admin-set temporary password, never returned) > audits the creation with the account after-state and no password material
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/user-admin.test.ts:218:49
+    216|     const { body, password } = newUserBody({ role: 'admin' });
+    217|     const created = await t.request('POST', '/api/admin/users', { cook…
+    218|     const [event] = auditRows(created.body.user.id);
+       |                                                 ^
+    219|     expect(event).toMatchObject({
+    220|       actor_user_id: t.userIds.admin,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > POST /api/admin/users (E-11: admin-set temporary password, never returned) > refuses a duplicate email in any case without a second account or audit event
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:240:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > POST /api/admin/users (E-11: admin-set temporary password, never returned) > applies the existing password policy and never echoes the rejected value
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:257:31
+    255|       const { body } = newUserBody({ password });
+    256|       const response = await t.request('POST', '/api/admin/users', { c…
+    257|       expect(response.status).toBe(422);
+       |                               ^
+    258|       expect(JSON.stringify(response.body)).not.toContain(password);
+    259|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > POST /api/admin/users (E-11: admin-set temporary password, never returned) > validates the email, display name, role and calendar and rejects unknown or owner fields
+AssertionError: {"email":"not-an-email"}: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:279:58
+    277|       const { body, password } = newUserBody(overrides);
+    278|       const response = await t.request('POST', '/api/admin/users', { c…
+    279|       expect(response.status, JSON.stringify(overrides)).toBe(status);
+       |                                                          ^
+    280|       expect(response.body.error.code, JSON.stringify(overrides)).toBe…
+    281|       expect(JSON.stringify(response.body)).not.toContain(password);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > edits display name, role and calendar and audits the before and after state
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:316:29
+    314|       body: { display_name: '  Renamed Employee ', role: 'admin', cale…
+    315|     });
+    316|     expect(response.status).toBe(200);
+       |                             ^
+    317|     expect(Object.keys(response.body.user).sort()).toEqual(ACCOUNT_KEY…
+    318|     expect(response.body.user).toMatchObject({ display_name: 'Renamed …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > applies a role demotion to existing sessions immediately
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:341:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > refuses an empty edit, unknown fields and other accounts’ credentials
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:352:26
+    350|   it('refuses an empty edit, unknown fields and other accounts’ creden…
+    351|     const empty = await t.request('PATCH', `/api/admin/users/${t.userI…
+    352|     expect(empty.status).toBe(422);
+       |                          ^
+    353|     for (const extra of [{ email: 'moved@example.invalid' }, { status:…
+    354|       const response = await t.request('PATCH', `/api/admin/users/${t.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > writes no audit event for an edit that changes nothing and 404s for an unknown account
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:377:25
+    375|       body: { display_name: 'Example Employee', role: 'employee' },
+    376|     });
+    377|     expect(same.status).toBe(200);
+       |                         ^
+    378|     expect(auditRows(t.userIds.employee)).toHaveLength(0);
+    379|     const missing = await t.request('PATCH', '/api/admin/users/0000000…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > refuses to demote the last active admin and keeps the role
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:389:29
+    387|   it('refuses to demote the last active admin and keeps the role', asy…
+    388|     const response = await t.request('PATCH', `/api/admin/users/${t.us…
+    389|     expect(response.status).toBe(409);
+       |                             ^
+    390|     expect(response.body.error.code).toBe('last_active_admin');
+    391|     expect(t.db.prepare('SELECT role FROM users WHERE id = ?').pluck()…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > PATCH /api/admin/users/:id > does not count a deactivated admin as a remaining admin
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:400:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > revokes every session of the user so existing cookies answer 401, and blocks sign-in
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:411:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > audits the deactivation with before/after status, the reason and the revoked-session count
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:442:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > refuses self-deactivation and keeps the admin signed in
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:460:29
+    458|   it('refuses self-deactivation and keeps the admin signed in', async …
+    459|     const response = await t.request('POST', `/api/admin/users/${t.use…
+    460|     expect(response.status).toBe(409);
+       |                             ^
+    461|     expect(response.body.error.code).toBe('cannot_deactivate_self');
+    462|     expect(t.db.prepare('SELECT status FROM users WHERE id = ?').pluck…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > refuses to deactivate the last active admin at the service level and rolls back
+AssertionError: expected error to match asymmetric matcher
+
+- Expected
++ Received
+
+- ObjectContaining {
+-   "code": "last_active_admin",
+-   "status": 409,
++ TypeError {
++   "message": "(0 , __vite_ssr_import_4__.deactivateUser) is not a function",
+  }
+
+ ❯ tests/integration/user-admin.test.ts:476:7
+    474|     expect(() =>
+    475|       deactivateUser(t.db, t.clock, { actorUserId: t.userIds.employee,…
+    476|     ).toThrowError(expect.objectContaining({ status: 409, code: 'last_…
+       |       ^
+    477|     expect(t.db.prepare('SELECT status FROM users WHERE id = ?').pluck…
+    478|     expect(auditRows()).toHaveLength(before.audit);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > lets one admin deactivate another while a third remains, and refuses when none would remain
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:483:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > keeps all of the user’s data and history after deactivation
+AssertionError: expected 5 to be 6 // Object.is equality
+
+- Expected
++ Received
+
+- 6
++ 5
+
+ ❯ tests/integration/user-admin.test.ts:510:119
+    508|     await t.request('POST', `/api/admin/users/${t.userIds.employee}/de…
+    509|     expect(t.db.prepare('SELECT count(*) FROM work_sessions WHERE user…
+    510|     expect(t.db.prepare('SELECT count(*) FROM audit_events WHERE owner…
+       |                                                                                                                       ^
+    511|   });
+    512|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > is a quiet no-op when the user is already deactivated, and 404s for an unknown account
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:514:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > reactivates the account without reviving any old session, and sign-in works again
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:531:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > revokes leftover sessions of a deactivated account on reactivation
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ createColleague tests/integration/user-admin.test.ts:75:26
+     73|   const { body, password } = newUserBody();
+     74|   const created = await t.request('POST', '/api/admin/users', { cookie…
+     75|   expect(created.status).toBe(201);
+       |                          ^
+     76|   return { id: created.body.user.id as string, email: created.body.use…
+     77| }
+ ❯ tests/integration/user-admin.test.ts:554:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > deactivation and reactivation (sessions are revoked, history is kept) > is a quiet no-op to reactivate an active account
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/user-admin.test.ts:566:29
+    564|     const count = auditRows(t.userIds.employee).length;
+    565|     const response = await t.request('POST', `/api/admin/users/${t.use…
+    566|     expect(response.status).toBe(200);
+       |                             ^
+    567|     expect(response.body.user.status).toBe('active');
+    568|     expect(auditRows(t.userIds.employee)).toHaveLength(count);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/32]⎯
+
+ FAIL  tests/integration/user-admin.test.ts > transactions and service contracts > counts the sessions that revokeAllAuthSessions revokes
+AssertionError: expected undefined to be 2 // Object.is equality
+
+- Expected:
+2
+
++ Received:
+undefined
+
+ ❯ tests/integration/user-admin.test.ts:599:70
+    597|   it('counts the sessions that revokeAllAuthSessions revokes', async (…
+    598|     await t.loginResponse('employee');
+    599|     expect(revokeAllAuthSessions(t.db, t.clock, t.userIds.employee)).t…
+       |                                                                      ^
+    600|     expect(revokeAllAuthSessions(t.db, t.clock, t.userIds.employee)).t…
+    601|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/32]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  32 failed | 38 passed (70)
+   Start at  01:18:04
+   Duration  6.96s (tests 90%, transform 8%, import 2%)
+
+(exit 1)

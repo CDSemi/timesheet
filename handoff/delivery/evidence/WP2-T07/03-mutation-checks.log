@@ -1,0 +1,29 @@
+Mutation checks (temporary source edits, reverted; each run: user-admin + isolation tests, node v24.21.0)
+
+## mutation: deactivation does not revoke sessions
+     × revokes every session of the user so existing cookies answer 401, and blocks sign-in 389ms
+     × audits the deactivation with before/after status, the reason and the revoked-session count 370ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 43 passed (45)
+
+## mutation: reactivation does not revoke leftover sessions
+     × revokes leftover sessions of a deactivated account on reactivation 381ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 44 passed (45)
+
+## mutation: no self-deactivation refusal
+     × refuses self-deactivation and keeps the admin signed in 207ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 44 passed (45)
+
+## mutation: no last-admin refusal on deactivate
+     × refuses to deactivate the last active admin at the service level and rolls back 217ms
+     × lets one admin deactivate another while a third remains, and refuses when none would remain 354ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 43 passed (45)
+
+## mutation: requireAdmin allows employees
+     × answers 403 to an employee on every admin route and changes nothing 223ms
+     × applies a role demotion to existing sessions immediately 311ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 43 passed (45)

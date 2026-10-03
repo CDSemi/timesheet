@@ -5,6 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { errorBody, handleError, notFound } from './http/errors.ts';
 import { noStore, requireAllowedOrigin, requireJsonContentType } from './http/security.ts';
+import { adminRoutes } from './routes/admin.ts';
 import { apiRoutes } from './routes/api.ts';
 import { authRoutes } from './routes/auth.ts';
 import { historyRoutes } from './routes/history.ts';
@@ -51,6 +52,7 @@ export function createApp(deps: AppDeps) {
     return c.json({ status: 'ok' });
   });
   app.route('/api/auth', authRoutes(deps));
+  app.route('/api/admin', adminRoutes(deps));
   app.route('/api/ot', otRoutes(deps));
   app.route('/api/history', historyRoutes(deps));
   app.route('/api', apiRoutes(deps));

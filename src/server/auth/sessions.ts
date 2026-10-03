@@ -79,6 +79,9 @@ export function revokeAuthSession(db: Db, clock: Clock, sessionId: string): void
   db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(nowUtc(clock), sessionId);
 }
 
-export function revokeAllAuthSessions(db: Db, clock: Clock, userId: string): void {
-  db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').run(nowUtc(clock), userId);
+/** Revokes every live session of the user and returns how many were revoked. */
+export function revokeAllAuthSessions(db: Db, clock: Clock, userId: string): number {
+  return db
+    .prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
+    .run(nowUtc(clock), userId).changes;
 }

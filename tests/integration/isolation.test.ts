@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createApp } from '../../src/server/app.ts';
+import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
 import { postCredit } from '../../src/server/services/ledger.ts';
 import { createTestContext, DEFAULT_BREAKS_0900, la, type TestContext } from '../support/testApp.ts';
 
@@ -257,5 +261,118 @@ describe('WP2 OT, leave, evidence and history isolation (AC-01)', () => {
       expect(text, path).not.toContain('Synthetic isolation reference');
       expect(text, path).not.toContain(employeeSessionId);
     }
+  });
+});
+
+describe('admin router is account administration, not private-data access (AC-01, FR-01)', () => {
+  function adminRoutes() {
+    const app = createApp({ db: t.db, clock: t.clock, config: t.config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+    return [...new Set(app.routes.filter((route) => route.method !== 'ALL').map((route) => `${route.method} ${route.path}`))]
+      .filter((route) => route.includes('/api/admin'))
+      .sort();
+  }
+
+  it('exposes exactly the reviewed account routes', () => {
+    expect(adminRoutes()).toEqual(
+      [
+        'GET /api/admin/users',
+        'PATCH /api/admin/users/:id',
+        'POST /api/admin/users',
+        'POST /api/admin/users/:id/deactivate',
+        'POST /api/admin/users/:id/reactivate',
+      ].sort(),
+    );
+    for (const route of adminRoutes()) {
+      expect(route, route).not.toMatch(/timesheet|day|session|ledger|leave|history|evidence|export|policy|password/i);
+    }
+  });
+
+  it('has an admin router source that reaches only account services and tables', () => {
+    const source = readFileSync(join(import.meta.dirname, '../../src/server/routes/admin.ts'), 'utf8');
+    const imports = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1]);
+    for (const module of imports) {
+      expect(module, module).not.toMatch(/timesheet|dayEntries|ledger|otLeave|otEvidence|history|periods|policies|attendance/i);
+    }
+    expect(source).not.toMatch(/work_sessions|day_entries|ot_ledger|ot_leave_requests|audit_events|timesheet_/i);
+  });
+
+  it('answers 404 to an admin probing for another user’s private data under /api/admin', async () => {
+    const employeeId = t.userIds.employee;
+    const paths = [
+      `/api/admin/users/${employeeId}/timesheets`,
+      `/api/admin/users/${employeeId}/sessions`,
+      `/api/admin/users/${employeeId}/ledger`,
+      `/api/admin/users/${employeeId}/leave`,
+      `/api/admin/users/${employeeId}/history`,
+      `/api/admin/users/${employeeId}/evidence.csv?from=2026-09-21&to=2026-10-09`,
+      `/api/admin/users/${employeeId}`,
+      '/api/admin/timesheets',
+      '/api/admin/ledger',
+      '/api/admin/leave',
+      '/api/admin/history',
+      '/api/admin/export',
+      '/api/admin/audit',
+    ];
+    for (const path of paths) {
+      const response = await t.request('GET', path, { cookie: admin });
+      expect(response.status, path).toBe(404);
+    }
+  });
+
+  it('keeps the user list free of employee sessions, leave and history content', async () => {
+    postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.employee, sourceKey: 'opening-balance', minutes: 600, workDate: '2026-09-21', actorUserId: null, origin: 'system' },
+    );
+    const leave = await t.request('POST', '/api/ot/leave', {
+      cookie: employee,
+      body: {
+        request_key: 'admin-list-leave',
+        leave_date: '2026-09-25',
+        requested_minutes: 120,
+        permission: { approver_name: 'Synthetic Manager', approval_date: '2026-09-24', evidence_ref: 'Synthetic list reference' },
+      },
+    });
+    expect(leave.status).toBe(201);
+    const list = await t.request('GET', '/api/admin/users', { cookie: admin });
+    const text = JSON.stringify(list.body);
+    for (const secret of [employeeSessionId, 'Synthetic Manager', 'Synthetic list reference', 'admin-list-leave']) {
+      expect(text).not.toContain(secret);
+    }
+    for (const user of list.body.users) {
+      expect(Object.keys(user).sort()).toEqual([
+        'calendar_id',
+        'created_at',
+        'display_name',
+        'email',
+        'id',
+        'role',
+        'status',
+        'updated_at',
+      ]);
+    }
+  });
+
+  it('still answers 404 to an admin swapping identifiers after administering the employee account', async () => {
+    const edited = await t.request('PATCH', `/api/admin/users/${t.userIds.employee}`, {
+      cookie: admin,
+      body: { display_name: 'Edited By Admin' },
+    });
+    expect(edited.status).toBe(200);
+    const deactivated = await t.request('POST', `/api/admin/users/${t.userIds.employee}/deactivate`, { cookie: admin, body: {} });
+    expect(deactivated.status).toBe(200);
+    const before = sessionRow(employeeSessionId);
+    for (const [method, body] of [
+      ['GET', undefined],
+      ['PUT', { ...nineToSix('2026-09-21'), expected_version: 1, reason: 'swap attempt' }],
+      ['DELETE', { expected_version: 1, reason: 'swap attempt' }],
+    ] as const) {
+      const response = await t.request(method, `/api/sessions/${employeeSessionId}`, { cookie: admin, body });
+      expect(response.status, method).toBe(404);
+    }
+    expect(sessionRow(employeeSessionId)).toEqual(before);
+    // The employee's reads for the admin's own routes stay scoped to the admin.
+    const history = await t.request('GET', `/api/history?user_id=${t.userIds.employee}`, { cookie: admin });
+    expect(JSON.stringify(history.body)).not.toContain(employeeSessionId);
   });
 });

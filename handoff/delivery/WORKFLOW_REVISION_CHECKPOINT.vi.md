@@ -7,13 +7,13 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = a8a5890a75361c44ff7730d54bbaadab56c40f3a. Đây là commit bổ sung
-    của WP2-T05-FREEZE, sau commit chưa đủ e768b71 của chủ dự án.
-  - Digest mã nguồn 809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0,
-    đã được WP2-T05-RECON2 xác nhận.
-  - Chưa commit: WP2-T06 (digest mã nguồn
-    155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a, tác giả tự báo),
-    các record của RECON2, brief T07, board và checkpoint này. WP2-T06-FREEZE sẽ commit
+  - HEAD = origin/main = 197053699d9b5c125fa0c3e8ccb8acf0f421011f, commit đóng băng
+    WP2-T06.
+  - Digest mã nguồn 155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a
+    (tác giả tự báo).
+  - Chưa commit: WP2-T07 (digest mã nguồn
+    705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5, tác giả tự báo),
+    bằng chứng của T06-FREEZE, brief T08, board và checkpoint này. WP2-T07-FREEZE sẽ commit
     chúng.
   - Không có commit chưa push.
 - Đã xong:
@@ -42,8 +42,10 @@ America/Los_Angeles).
   quả tác giả tự báo, chưa kiểm độc lập.
   - `npm run verify`: exit 0, 387 test.
   - `npm run digest`: exit 0.
-- WP2-T06 (xem trước chính sách cá nhân) đã xong: tác giả tự báo verify 414 test. Đang
-  chạy WP2-T06-FREEZE (committer).
+- WP2-T06 (xem trước chính sách cá nhân) đã xong: tác giả tự báo verify 414 test.
+  Committer đã đóng băng ở 1970536 mà không bị bộ phân loại chặn.
+- WP2-T07 (quản trị người dùng) đã xong: tác giả tự báo verify 448 test, 5 mutation đều bị
+  test phát hiện. Đang chạy WP2-T07-FREEZE (committer).
 - WP2-T05-FREEZE đã xong (hai commit của chủ dự án, e768b71 và a8a5890). Diễn biến của
   commit đóng băng:
   - Attempt 1 bị chặn. Bộ phân loại quyền của auto mode từ chối lệnh stage/kiểm tra với
@@ -73,7 +75,7 @@ America/Los_Angeles).
     - digest khớp;
     - validator và check_recovery exit 0.
 - Còn lại:
-  - WP2-T07..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
+  - WP2-T08..T13 kèm các commit đóng băng ([plan](tasks/WP2-PLAN.md)).
   - Gate cuối package: export sạch, nâng cấp WP1→WP2, chạy đồng thời 20 lần và các luồng
     trình duyệt.
   - Hai audit bằng opus mới:
@@ -93,6 +95,9 @@ America/Los_Angeles).
     bỏ các số tạm tính.
   - WP2-T06 tạo một vòng import ở mức hàm giữa policies.ts và timesheets.ts. AUDIT-B nên
     đánh giá điểm này.
+  - WP2-T07: admin PATCH `calendar_id` sẽ đổi lịch báo cáo và múi giờ ngày nghỉ của người
+    dùng từ các kỳ sau. WP2-T08 báo cáo việc này có gom lại kỳ nháp hiện tại hay không
+    (rule 7, R-07). AUDIT-B cũng kiểm tra.
   - Backlog quản trị vẫn để gộp vào một đợt GOV sau: R1 (check_recovery thừa hưởng trạng
     thái thật; sửa trước software_ready), R2 (mục 2 của AGENTS.vi), giới hạn của
     precommit và ADV-A-05.
@@ -101,7 +106,7 @@ America/Los_Angeles).
     billing, cài đặt toàn cục hay cài đặt quyền.
   - Commit chỉ qua timesheet-committer, trên main cho đến bản release đầu tiên. Không
     amend, force-push hay tạo tag.
-- Bước tiếp: ghi kết quả WP2-T06-FREEZE, rồi giao WP2-T07 (brief sẵn).
+- Bước tiếp: ghi kết quả WP2-T07-FREEZE, rồi giao WP2-T08 (brief sẵn).
   - Committer chạy quy trình bình thường một lần.
   - Nếu bộ phân loại chặn, coordinator dừng và xin chủ dự án một tin nhắn duyệt nêu rõ
     hành động và rủi ro, hoặc một commit tay. Khi đó Commit description trong chat sẽ
@@ -112,8 +117,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T06-FREEZE (committer). WP2-T07 chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Worker T06 báo không còn
-  process nào.
+- Đang chạy: WP2-T07-FREEZE (committer). WP2-T08 chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Các worker và committer
+  trước đều báo không còn process nào.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

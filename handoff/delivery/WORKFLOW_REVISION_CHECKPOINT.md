@@ -7,14 +7,13 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = a8a5890a75361c44ff7730d54bbaadab56c40f3a. This is the
-    WP2-T05-FREEZE completion commit, after the owner's partial commit e768b71.
-  - Source digest 809215583bb42f398ba288f980dd680219d54b0433c8c977954450f7b5004ac0,
-    verified by WP2-T05-RECON2.
-  - Uncommitted: WP2-T06 (source digest
-    155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a, author-reported), the
-    RECON2 records, the T07 brief, the board and this checkpoint. WP2-T06-FREEZE commits
-    them.
+  - HEAD = origin/main = 197053699d9b5c125fa0c3e8ccb8acf0f421011f, the WP2-T06 freeze.
+  - Source digest 155bafebe6c001e09fb4bf8ad399d1d8a9895229c05b1cdda160b45a1cc2b84a
+    (author-reported).
+  - Uncommitted: WP2-T07 (source digest
+    705d78fd06b9f0db85edb8f3545821cfa5481b745b3c6bd43ebf62994bf954c5, author-reported),
+    the T06-FREEZE evidence, the T08 brief, the board and this checkpoint. WP2-T07-FREEZE
+    commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -38,8 +37,10 @@ America/Los_Angeles).
   author-reported, not independent.
   - `npm run verify`: exit 0, 387 tests.
   - `npm run digest`: exit 0.
-- WP2-T06 (personal policy preview) is done: author-reported verify 414 tests.
-  WP2-T06-FREEZE (committer) is in progress.
+- WP2-T06 (personal policy preview) is done: author-reported verify 414 tests. Frozen in
+  1970536 by the committer, with no classifier denial.
+- WP2-T07 (user administration) is done: author-reported verify 448 tests and 5 mutations
+  caught. WP2-T07-FREEZE (committer) is in progress.
 - WP2-T05-FREEZE is done (two owner commits, e768b71 and a8a5890). Freeze history:
   - Attempt 1 is blocked. The auto-mode permission classifier denied the staging/check
     command as "Credential Leakage". Nothing executed and nothing was committed.
@@ -70,7 +71,7 @@ America/Los_Angeles).
     - the digest matches;
     - the validator and check_recovery exit 0.
 - Remaining:
-  - WP2-T07..T13 with their freezes ([plan](tasks/WP2-PLAN.md)).
+  - WP2-T08..T13 with their freezes ([plan](tasks/WP2-PLAN.md)).
   - The package-final gate: clean export, WP1→WP2 upgrade, 20 concurrency runs and the
     browser flows.
   - Two fresh opus audits:
@@ -90,6 +91,9 @@ America/Los_Angeles).
     finalization must drop the provisional figures.
   - WP2-T06 added a function-level import cycle between policies.ts and timesheets.ts.
     AUDIT-B should judge it.
+  - WP2-T07: an admin PATCH of `calendar_id` changes the user's future reporting calendar
+    and leave-date zone. WP2-T08 reports whether it regroups the current draft period
+    (rule 7, R-07). AUDIT-B checks it as well.
   - The governance backlog stays batched for one later GOV cycle: R1 (check_recovery
     inherits the live status; fix before software_ready), R2 (AGENTS.vi item 2),
     precommit limits and ADV-A-05.
@@ -98,7 +102,7 @@ America/Los_Angeles).
     billing, global settings or permission settings.
   - Commits go only through timesheet-committer, on main until the first release. No
     amend, force-push or tags.
-- Next action: record the WP2-T06-FREEZE result, then dispatch WP2-T07 (brief ready).
+- Next action: record the WP2-T07-FREEZE result, then dispatch WP2-T08 (brief ready).
   - The committer runs the normal procedure once.
   - If the classifier denies it, the coordinator stops and asks the owner for an
     approval message that names the action and its danger, or for a manual commit. The
@@ -109,7 +113,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T06-FREEZE (committer). WP2-T07 is pending on it.
-- Live processes: none known besides the committer. The T06 worker reported none left.
+- Running: WP2-T07-FREEZE (committer). WP2-T08 is pending on it.
+- Live processes: none known besides the committer. The earlier workers and committers
+  reported none left.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

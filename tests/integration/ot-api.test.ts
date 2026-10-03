@@ -500,6 +500,11 @@ describe('route inventory: no route posts a credit or debit', () => {
     expect(mutating).toEqual(
       [
         'DELETE /api/sessions/:id',
+        // Account administration only (WP2-T07); reviewed in isolation.test.ts.
+        'PATCH /api/admin/users/:id',
+        'POST /api/admin/users',
+        'POST /api/admin/users/:id/deactivate',
+        'POST /api/admin/users/:id/reactivate',
         'POST /api/auth/login',
         'POST /api/auth/logout',
         'POST /api/clock/in',

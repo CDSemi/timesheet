@@ -188,3 +188,27 @@ export const otLeaveReverseBody = z.strictObject({
   expected_version: z.number().int().positive(),
 });
 export type OtLeaveReverseBody = z.infer<typeof otLeaveReverseBody>;
+
+/* User administration (WP2-T07, E-11). The password is the admin-set temporary one and is never echoed. */
+const userRole = z.enum(['admin', 'employee']);
+const accountDisplayName = z.string().max(120);
+
+export const adminUserCreateBody = z.strictObject({
+  email: z.string().max(254),
+  display_name: accountDisplayName,
+  role: userRole,
+  password: z.string().max(256),
+  calendar_id: z.string().min(1).max(64),
+});
+
+export const adminUserUpdateBody = z
+  .strictObject({
+    display_name: accountDisplayName.optional(),
+    role: userRole.optional(),
+    calendar_id: z.string().min(1).max(64).optional(),
+  })
+  .refine((body) => body.display_name !== undefined || body.role !== undefined || body.calendar_id !== undefined, {
+    message: 'Provide at least one of display_name, role or calendar_id',
+  });
+
+export const adminUserStatusBody = z.strictObject({ reason: z.string().max(1000).optional() });
