@@ -1,67 +1,60 @@
-import { useCallback, useEffect, useState } from 'react';
-import { addDays, isoWeekday } from '../domain/dates.ts';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { addDays } from '../domain/dates.ts';
 import { formatDuration } from '../domain/format.ts';
-import { parseUtcInstant } from '../domain/instants.ts';
-import { formatInZone } from '../domain/zones.ts';
-import { api, ApiRequestError, type DayView, type Period, type Session, type TimesheetView, type User } from './api.ts';
+import {
+  api,
+  ApiRequestError,
+  type DayBatchPreview,
+  type DayBatchResult,
+  type DayCategory,
+  type Period,
+  type Session,
+  type TimesheetView,
+  type User,
+} from './api.ts';
+import { BatchBar } from './components/BatchBar.tsx';
+import { BatchDialog } from './components/BatchDialog.tsx';
+import { ClockBar } from './components/ClockBar.tsx';
+import { DayList } from './components/DayList.tsx';
+import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+import { displayZone } from './components/format.ts';
+import { PeriodHeader } from './components/PeriodHeader.tsx';
+import { TimesheetGrid } from './components/TimesheetGrid.tsx';
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** The documented layout breakpoint: the grid from 768px up, the day list below it. */
+const DESKTOP_QUERY = '(min-width: 768px)';
 
-/** The viewer's current zone; it changes display only, never the saved accounting date. */
-const displayZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-function localTime(instant: string, zone: string): string {
-  return formatInZone(zone, parseUtcInstant(instant)).slice(11, 19);
+/** True when the grid should render. Exactly one of grid and list is ever in the page. */
+function useDesktop(): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia(DESKTOP_QUERY);
+      query.addEventListener('change', notify);
+      return () => query.removeEventListener('change', notify);
+    },
+    () => window.matchMedia(DESKTOP_QUERY).matches,
+  );
 }
 
-function localDate(instant: string, zone: string): string {
-  return formatInZone(zone, parseUtcInstant(instant)).slice(0, 10);
-}
-
-function minutes(value: number | null | undefined): string {
-  return value === null || value === undefined ? '—' : formatDuration(value);
-}
-
-function sessionLabel(session: Session, workDate: string): string {
-  const start = `${localTime(session.start_utc, displayZone)}`;
-  if (session.end_utc === null) return `${start} → running`;
-  const endDate = localDate(session.end_utc, displayZone);
-  const startDate = localDate(session.start_utc, displayZone);
-  const end = localTime(session.end_utc, displayZone);
-  const dateNote = startDate !== workDate || endDate !== startDate ? ` (${startDate}→${endDate})` : '';
-  const breaks = session.breaks_confirmed ? `${session.breaks.length} break(s)` : 'breaks unconfirmed';
-  return `${start}–${end}${dateNote}, ${breaks}`;
-}
-
-function calendarLabel(day: DayView): string {
-  const classification = day.classification;
-  if (classification === null) return '—';
-  if (classification.name !== null) return classification.name;
-  return classification.day_class === 'normal' ? 'Work day' : 'Non-working day';
-}
-
-function statusLabel(day: DayView): string {
-  if (day.calculation_error !== null) return day.calculation_error.replace(/_/g, ' ');
-  switch (day.calculation?.status) {
-    case 'complete':
-      return 'complete';
-    case 'incomplete':
-      return 'open session';
-    case 'incomplete_breaks':
-      return 'confirm breaks';
-    default:
-      return '';
-  }
+function describe(caught: unknown): string {
+  return caught instanceof ApiRequestError ? `${caught.message} (${caught.code})` : 'Request failed';
 }
 
 export function TimesheetScreen({ user }: { user: User }) {
+  const desktop = useDesktop();
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
   const [view, setView] = useState<TimesheetView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [staleNotice, setStaleNotice] = useState<string | null>(null);
   const [noBreaks, setNoBreaks] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [category, setCategory] = useState<DayCategory>('Off');
+  const [preview, setPreview] = useState<DayBatchPreview | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const report = (caught: unknown) =>
-    setMessage(caught instanceof ApiRequestError ? `${caught.message} (${caught.code})` : 'Request failed');
+  const report = (caught: unknown) => setMessage(describe(caught));
 
   useEffect(() => {
     api<{ current: Period }>('GET', '/api/periods/current')
@@ -71,7 +64,9 @@ export function TimesheetScreen({ user }: { user: User }) {
 
   const load = useCallback(() => {
     if (payrollDate === null) return;
-    api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`).then(setView).catch(report);
+    api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`)
+      .then(setView)
+      .catch((caught: unknown) => setMessage(describe(caught)));
   }, [payrollDate]);
 
   useEffect(load, [load]);
@@ -82,6 +77,9 @@ export function TimesheetScreen({ user }: { user: User }) {
     try {
       const response = await api<{ periods: Period[] }>('GET', `/api/periods?from=${date}&to=${date}`);
       setPayrollDate(response.periods[0]?.payroll_date ?? payrollDate);
+      setSelected(new Set());
+      setStaleNotice(null);
+      setNotice(null);
     } catch (caught) {
       report(caught);
     }
@@ -121,97 +119,125 @@ export function TimesheetScreen({ user }: { user: User }) {
     }
   }
 
+  function toggle(workDate: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(workDate)) next.add(workDate);
+      return next;
+    });
+  }
+
+  async function previewBatch() {
+    if (view === null) return;
+    setMessage(null);
+    setNotice(null);
+    setStaleNotice(null);
+    setDialogError(null);
+    setBusy(true);
+    try {
+      const entries = batchEntries(view.days, selected, category);
+      setPreview(await api<DayBatchPreview>('POST', '/api/days/batch', { mode: 'preview', entries }));
+    } catch (caught) {
+      report(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function commitBatch(input: { reason: string; confirmConflicts: boolean }) {
+    if (view === null) return;
+    setDialogError(null);
+    setBusy(true);
+    try {
+      const entries = batchEntries(view.days, selected, category);
+      const result = await api<DayBatchResult>('POST', '/api/days/batch', {
+        mode: 'commit',
+        entries,
+        ...(input.reason === '' ? {} : { reason: input.reason }),
+        ...(input.confirmConflicts ? { confirm_conflicts: true } : {}),
+      });
+      setPreview(null);
+      setSelected(new Set());
+      setNotice(`Saved ${result.changed.length} ${result.changed.length === 1 ? 'day' : 'days'}.`);
+      load();
+    } catch (caught) {
+      if (caught instanceof ApiRequestError && caught.status === 409 && caught.code === 'stale_version') {
+        setPreview(null);
+        setStaleNotice(staleReloadMessage(staleDates(caught.details)));
+      } else {
+        setDialogError(describe(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function reload() {
+    setStaleNotice(null);
+    setSelected(new Set());
+    load();
+  }
+
   return (
     <div>
       <header className="toolbar">
         <div>
           <h1>Timesheet</h1>
-          <p className="muted">
-            {user.display_name} · reporting zone {view?.reporting_zone ?? '…'} · display zone {displayZone}
-          </p>
+          <p className="muted">{user.display_name}</p>
         </div>
       </header>
 
       {view !== null && (
-        <section className="card">
-          <div className="toolbar">
-            <button type="button" className="secondary" onClick={() => move(-1)} aria-label="Previous period">
-              ◀
-            </button>
-            <div className="period">
-              <strong>
-                {view.period.period_start} – {view.period.period_end}
-              </strong>
-              <span className={`badge ${view.period.relation ?? ''}`}>{view.period.relation}</span>
-              <span className="muted">
-                payroll {view.period.payroll_date} · due {view.period.due_local_date} {view.period.due_local_time} (
-                {view.reporting_zone}) = {formatInZone(displayZone, parseUtcInstant(view.period.due_at_utc)).slice(0, 16).replace('T', ' ')}{' '}
-                your time
-              </span>
-              {view.reason_required && <span className="notice">Edits to this period require a reason.</span>}
-            </div>
-            <button type="button" className="secondary" onClick={() => move(1)} aria-label="Next period">
-              ▶
-            </button>
-          </div>
-
-          <div className="toolbar">
-            <button type="button" onClick={() => clock('in')}>
-              Clock in
-            </button>
-            <label className="inline">
-              <input type="checkbox" checked={noBreaks} onChange={(e) => setNoBreaks(e.target.checked)} />
-              No unpaid breaks taken
-            </label>
-            <button type="button" onClick={() => clock('out')}>
-              Clock out
-            </button>
-          </div>
+        <section className="card stack">
+          <PeriodHeader view={view} zone={displayZone} onMove={move} />
+          <ClockBar noBreaks={noBreaks} onNoBreaks={setNoBreaks} onClockIn={() => clock('in')} onClockOut={() => clock('out')} />
           {message !== null && <p className="error">{message}</p>}
+          {notice !== null && (
+            <p className="notice-ok" role="status">
+              {notice}
+            </p>
+          )}
+          {staleNotice !== null && (
+            <div className="stale" role="alert">
+              <p>{staleNotice}</p>
+              <button type="button" onClick={reload}>
+                Reload period
+              </button>
+            </div>
+          )}
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Calendar</th>
-                  <th>Label</th>
-                  <th>Sessions ({displayZone})</th>
-                  <th>Regular</th>
-                  <th>Off-calendar</th>
-                  <th>Eligible</th>
-                  <th>Credit*</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {view.days.map((day) => (
-                  <tr key={day.work_date} className={day.classification?.day_class === 'nonworking' ? 'nonworking' : ''}>
-                    <td>
-                      {WEEKDAYS[isoWeekday(day.work_date) - 1]} {day.work_date}
-                    </td>
-                    <td>{calendarLabel(day)}</td>
-                    <td>{day.category ?? '—'}</td>
-                    <td>
-                      {day.sessions.length === 0
-                        ? '—'
-                        : day.sessions.map((session) => <div key={session.id}>{sessionLabel(session, day.work_date)}</div>)}
-                    </td>
-                    <td>{minutes(day.calculation?.regular_minutes)}</td>
-                    <td>{minutes(day.calculation?.nonworking_minutes)}</td>
-                    <td>{minutes(day.calculation?.eligible_minutes)}</td>
-                    <td>{minutes(day.calculation?.credited_minutes)}</td>
-                    <td>{statusLabel(day)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <BatchBar
+            selectedCount={selected.size}
+            category={category}
+            busy={busy}
+            onCategory={setCategory}
+            onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
+            onClear={() => setSelected(new Set())}
+            onPreview={previewBatch}
+          />
+
+          {desktop ? (
+            <TimesheetGrid days={view.days} zone={displayZone} selected={selected} onToggle={toggle} />
+          ) : (
+            <DayList days={view.days} zone={displayZone} selected={selected} onToggle={toggle} />
+          )}
           <p className="muted">
-            *Provisional OT credit: {formatDuration(view.totals.provisional_credited_minutes)}; days pending evidence:{' '}
+            *Provisional OT credit: {formatDuration(view.totals.provisional_credited_minutes)}; days pending OT evidence:{' '}
             {view.totals.pending_days}. Credits post only when a revision is finalized (WP3).
           </p>
         </section>
+      )}
+
+      {preview !== null && view !== null && (
+        <BatchDialog
+          preview={preview}
+          days={view.days}
+          zone={displayZone}
+          error={dialogError}
+          busy={busy}
+          onCommit={commitBatch}
+          onClose={() => setPreview(null)}
+        />
       )}
     </div>
   );

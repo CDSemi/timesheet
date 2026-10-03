@@ -7,14 +7,13 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 24f192dddbe658246dab020c5bc87c74a02a4310, the WP2-CALFIX
-    freeze.
-  - Source digest b18c676833bb58518ea526562d7ac8de0d86d225731d19b333c5485ed16fbaf3
+  - HEAD = origin/main = 717db3ee30057089298a8852438f16d46aa4dc89, the WP2-T09A freeze.
+  - Source digest 6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133
     (author-reported).
-  - Uncommitted: WP2-T09A (source digest
-    6c1947e343b45a849c8a23accdbdbe6e4aebb722cfa6af19d4fb5e18ebf94133, author-reported),
-    the CALFIX-FREEZE evidence, the T09B and T09A-FREEZE briefs, the board and this
-    checkpoint. WP2-T09A-FREEZE commits them.
+  - Uncommitted: WP2-T09B (source digest
+    4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b, author-reported),
+    the T09A-FREEZE evidence, the T10 and T09B-FREEZE briefs, the board and this
+    checkpoint. WP2-T09B-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -119,7 +118,12 @@ America/Los_Angeles).
 - WP2-T09A is done: author-reported verify 524 tests and test:e2e 7 passed, 1 skipped
   (a mobile-only test on desktop), on installed Edge 153. Four synthetic screenshots were
   taken.
-- Next action: record the WP2-T09A-FREEZE result, then dispatch WP2-T09B (brief ready).
+- WP2-T09A frozen in 717db3e: screenshots synthetic, and the lockfile adds only
+  Playwright packages.
+- WP2-T09B is done: author-reported verify 541 tests and test:e2e 15 passed, 1 skipped.
+  Future days currently show "missing record"; the display follow-up is in T10.
+- Next action: record the WP2-T09B-FREEZE result, then dispatch WP2-T10 (brief ready).
+  T10 runs on worker-high (sonnet/high) because of the time-input semantics.
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -135,8 +139,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T09A-FREEZE (committer). WP2-T09B is pending on it.
-- Live processes: none known besides the committer. The T09A worker stopped its servers
-  and killed only its own hung python process.
+- Running: WP2-T09B-FREEZE (committer). WP2-T10 is pending on it.
+- Live processes: none known besides the committer. The earlier workers and committers
+  reported none left.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

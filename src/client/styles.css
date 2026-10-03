@@ -35,6 +35,7 @@
   --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1),
     0 24px 64px rgb(28 36 48 / 0.08);
   --focus-ring: 0 0 0 3px rgb(31 95 191 / 0.35);
+  --scrim: rgb(18 22 28 / 0.5);
 
   /* Spacing, density and layout */
   --space-1: 4px;
@@ -205,7 +206,9 @@ label.inline {
   gap: var(--space-2);
 }
 
-input {
+input,
+select,
+textarea {
   font: inherit;
   padding: var(--space-2);
   border: 1px solid var(--line);
@@ -215,7 +218,9 @@ input {
   transition: var(--transition);
 }
 
-input:hover {
+input:hover,
+select:hover,
+textarea:hover {
   border-color: var(--muted);
 }
 
@@ -264,12 +269,15 @@ button:disabled {
   button,
   .nav-link,
   input:not([type='checkbox']),
-  label.inline {
+  select,
+  label.inline,
+  .pick {
     min-height: var(--tap-min);
   }
 
   button,
-  .nav-link {
+  .nav-link,
+  .pick {
     min-width: var(--tap-min);
   }
 
@@ -362,4 +370,295 @@ tbody tr:hover {
 
 tr.nonworking td {
   background: var(--off);
+}
+
+/* ---- Timesheet: period header, status, grid, day list, batch edit ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.period-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.period-head .period {
+  flex: 1;
+  align-items: stretch;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.period-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.facts dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.status-complete {
+  color: var(--ok);
+}
+
+.status-open_session,
+.status-confirm_breaks,
+.status-missing,
+.status-pending {
+  color: var(--warn);
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.status-not_expected {
+  color: var(--muted);
+}
+
+.shape {
+  display: inline-block;
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: var(--space-1);
+  background: currentColor;
+}
+
+.shape-circle {
+  border-radius: 50%;
+}
+
+.shape-diamond {
+  transform: rotate(45deg) scale(0.85);
+}
+
+.shape-square {
+  background: transparent;
+  border: 2px solid currentColor;
+}
+
+.shape-triangle {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.shape-bar {
+  height: 2px;
+}
+
+.pick {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+}
+
+.week-tag {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.cal-note {
+  display: block;
+  font-size: var(--font-size-xs);
+}
+
+.grid td.sessions {
+  white-space: normal;
+}
+
+.grid tbody + tbody tr.week-start td {
+  border-top: 2px solid var(--line);
+}
+
+ul.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.day-item {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.day-item.nonworking {
+  background: var(--off);
+}
+
+.day-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.day-head,
+.day-line,
+.day-minutes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.day-minutes {
+  font-size: var(--font-size-xs);
+}
+
+.batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--off);
+  border-radius: var(--radius);
+}
+
+.batch-count {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 600;
+}
+
+.batch-actions,
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+}
+
+select {
+  min-width: 10rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.notice-ok {
+  margin: 0;
+  color: var(--ok);
+}
+
+.stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  color: var(--warn);
+}
+
+.stale p {
+  flex: 1;
+  margin: 0;
+}
+
+.dialog {
+  width: min(36rem, 92vw);
+  max-height: 90dvh;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-overlay);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.preview-list li,
+.conflict-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.conflict-list > li {
+  flex-direction: column;
+}
+
+@media (max-width: 767px) {
+  .period-head {
+    flex-wrap: wrap;
+  }
+
+  .period-head .period {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .batch-bar label,
+  select {
+    width: 100%;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
 }

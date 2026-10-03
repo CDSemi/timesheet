@@ -89,4 +89,8 @@ Evidence goes in handoff/delivery/evidence/WP2-T09A-FREEZE/. Return at most 150 
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 24f192dddbe658246dab020c5bc87c74a02a4310; commit
+  717db3ee30057089298a8852438f16d46aa4dc89 on main; pushed; remote SHA equal.
+- Staged count 26. All checks exit 0 (Node v24.21.0, precommit, diff --check, JSON,
+  validator, check_recovery). Screenshots synthetic; lockfile limited to Playwright.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-T09A-FREEZE/.

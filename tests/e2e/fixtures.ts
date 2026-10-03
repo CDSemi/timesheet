@@ -107,9 +107,19 @@ async function startBuiltServer(): Promise<{ server: BuiltServer; stop: () => Pr
 /* ---- Seeding over HTTP ----------------------------------------------------- */
 
 interface PeriodsResponse {
+  reporting_zone: string;
   today_local: string;
   current: { payroll_date: string };
   in_progress: { payroll_date: string };
+}
+
+/** The slice of a day view the specs read back through the API. */
+export interface SeededDay {
+  work_date: string;
+  category: string;
+  category_source: string;
+  entry: { version: number } | null;
+  sessions: Array<{ id: string; source: string; start_utc: string; end_utc: string | null; version: number }>;
 }
 
 interface TimesheetResponse {
@@ -164,6 +174,56 @@ export class SeedClient {
       }
     }
     return [...new Set(found)].sort().reverse();
+  }
+
+  /** Today in the reporting zone, the reporting zone itself and the payroll date of the displayed period. */
+  async today(): Promise<{ todayLocal: string; reportingZone: string; currentPayrollDate: string }> {
+    const periods = await this.call<PeriodsResponse>('GET', '/api/periods/current');
+    return { todayLocal: periods.today_local, reportingZone: periods.reporting_zone, currentPayrollDate: periods.current.payroll_date };
+  }
+
+  /**
+   * Past normal workdays without a session in the period the app displays first (the current
+   * payroll period), newest first. Unlike pastFreeWorkdays it never returns another period's days.
+   */
+  async displayedPeriodFreeWorkdays(): Promise<string[]> {
+    const { todayLocal, currentPayrollDate } = await this.today();
+    const sheet = await this.call<TimesheetResponse>('GET', `/api/timesheets/${currentPayrollDate}`);
+    return sheet.days
+      .filter((day) => day.work_date < todayLocal && day.classification?.day_class === 'normal' && day.sessions.length === 0)
+      .map((day) => day.work_date)
+      .sort()
+      .reverse();
+  }
+
+  async dayView(workDate: string): Promise<SeededDay> {
+    return this.call<SeededDay>('GET', `/api/days/${workDate}`);
+  }
+
+  /** Clock in and straight out (breaks confirmed none): a clock-source session today. */
+  async seedClockSessionToday(): Promise<{ workDate: string; sessionId: string }> {
+    const started = await this.call<{ session: { id: string; work_date: string; version: number } }>(
+      'POST',
+      '/api/clock/in',
+      { input_zone: 'America/Los_Angeles' },
+      201,
+    );
+    // A session needs a positive length; wait past one second before ending it.
+    await new Promise((resolveWait) => setTimeout(resolveWait, 1_500));
+    await this.call('POST', '/api/clock/out', {
+      breaks: [],
+      breaks_confirmed: true,
+      expected_version: started.session.version,
+    });
+    return { workDate: started.session.work_date, sessionId: started.session.id };
+  }
+
+  /** Commits a batch category change as the employee (a change made behind the UI's back). */
+  async commitCategory(workDate: string, category: string, expectedVersion: number | null): Promise<void> {
+    await this.call('POST', '/api/days/batch', {
+      mode: 'commit',
+      entries: [{ work_date: workDate, category, expected_version: expectedVersion }],
+    });
   }
 
   /** A manual session in America/Los_Angeles with the given breaks (all unpaid). */

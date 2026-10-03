@@ -19,7 +19,8 @@
 - Load the three design skills with the Skill tool before UI edits:
   `stitch-design-taste`, `design-taste-frontend` and `high-end-visual-design`. Follow the
   T09A resolutions: AGENTS.md and E-8 win.
-- Baseline: main at the WP2-T09A-FREEZE commit. The coordinator gives the SHA at dispatch.
+- Baseline: main at 717db3ee30057089298a8852438f16d46aa4dc89 (the WP2-T09A-FREEZE commit).
+  The working tree differs only in handoff/.
 - Runtime: call the Node 24 portable binary by its full path. The fixture already uses
   `process.execPath`.
 - Do not commit.
@@ -94,4 +95,63 @@ flows covered, verify and e2e exits, digest and deviations.
 
 ## Results
 
-(Worker appends here.)
+Self-reported model: claude-sonnet-5-5 (timesheet-worker, attempt 1). Baseline main 717db3e.
+Nothing was staged, committed or pushed; no shared state was edited. Evidence:
+`handoff/delivery/evidence/WP2-T09B/` (`commands.txt`, six `*-synthetic.png`).
+
+### Files
+
+- Source: `src/client/TimesheetScreen.tsx` (container: period, selection, batch flow, matchMedia
+  768px choice), `src/client/styles.css`; new `src/client/components/` `PeriodHeader.tsx`,
+  `ClockBar.tsx`, `TimesheetGrid.tsx`, `DayList.tsx`, `DayStatus.tsx`, `BatchBar.tsx`,
+  `BatchDialog.tsx` (native `<dialog>`, `showModal()`), `format.ts`, `dayModel.ts` (pure).
+  `src/client/api.ts` needed no change (T09A already added the types and `error.details`).
+- Tests: `tests/client/dayModel.test.ts` (new, 17 tests; runs under the existing vitest include
+  `tests/**/*.test.ts`, no config change), `tests/e2e/timesheet.spec.ts` (new),
+  `tests/e2e/fixtures.ts` (seed helpers only: `today`, `displayedPeriodFreeWorkdays`, `dayView`,
+  `seedClockSessionToday`, `commitCategory`).
+
+### Flows covered (both projects; list reporter, Edge, Playwright 1.63.0)
+
+- Grid (desktop) or list (mobile), exactly one rendered; 14 days; due date in the reporting zone and
+  "your time"; reporting and display zones (display zone is Asia/Saigon vs America/Los_Angeles);
+  accounting dates; Draft from `timesheet.finalized` only; a complete day shows `complete` and
+  `8h 00m`; unconfirmed breaks show `confirm breaks` and `pending OT`; shapes next to text; no en or
+  em dash in the screen text; mobile `scrollWidth <= innerWidth` and every button, link, select, text
+  input, pick label and inline label at least 44x44.
+- Batch: preview (nothing saved), conflict step for a clock session with the joined session text, the
+  confirm checkbox gate, commit; the sessions read back through the API are identical afterwards and
+  the category is Vacation. Previous (old) period: reason prompt, commit disabled until a reason,
+  commit with it. Stale 409: one day changed through the API between preview and commit, the alert
+  names the date and says nothing was saved, "Reload period" shows the new label.
+- Two clean repeats of the full e2e run passed before the final run.
+
+### Checks (actual; `commands.txt`)
+
+- `npm run verify`: exit 0 (typecheck, lint with `no-deprecated`, vitest 27 files and 541 tests,
+  build, smoke SMOKE PASSED; node v24.21.0).
+- `npm run test:e2e`: exit 0; 15 passed, 1 skipped (the mobile-only shell test on `desktop`).
+- `npm run digest`: exit 0, `4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b`
+  (577 files, handoff/ excluded).
+
+### Design notes
+
+- T09A conflict resolutions applied: AGENTS.md and E-8 win (4px radius, tokens only, one transition
+  property, tinted shadows, no pills or double bezel). One new token `--scrim` (dialog backdrop).
+  Status shapes (circle, diamond, square, triangle, bar) are CSS shapes next to words; they are
+  semantic, not decoration. Em-dash placeholders became `none` or `unclassified`; the period range
+  and session ranges use "to".
+- The client maps server fields only: pending OT mirrors how the server counts `totals.pending_days`
+  (open session or unconfirmed breaks); an expected day with no record is `missing record`.
+
+### Deviations and observations
+
+1. `tests/e2e/shell.spec.ts` (T09A file, outside the owned list) was edited in two lines: the
+   third test counted `getByRole('row')` (15) and filtered a row by text; the mobile list has no rows,
+   so it now counts `[data-day]` (14) and selects `[data-day="<date>"]`.
+2. Observation: future days in the displayed period show `missing record` because the server reports
+   `attendance_expected` and `no_records` for them; the client does not compute "future". A server
+   field (or a per-day relation to today) would let the view say "not yet" instead (WP3 or T10 decision).
+3. Observation: e2e seeds need past free workdays in the displayed (current payroll) period; the specs
+   fail with an explicit message if fewer than two exist (possible only near the start of a period).
+4. No background process of mine remains; the fixture removes its temp directories.
