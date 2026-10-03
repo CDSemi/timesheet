@@ -31,9 +31,9 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 ### Unified Frontend & UI/UX Standards (Taste Skills Integration)
 Whenever editing, refactoring, or creating any UI components or views for C&D Semi, you must strictly orchestrate three skills: `stitch-design-taste`, `design-taste-frontend`, and `high-end-visual-design` using the following unified workflow:
 
-1. **Pre-flight Consistency Check (Stitch Taste):** Before generating any code, inspect the existing `tailwind.config.js`, global CSS files, and established components in the repository. Match the exact spacing density (padding/margin), font weights, and corporate color palette. Never introduce arbitrary styling or rogue utility classes.
+1. **Pre-flight Consistency Check (Stitch Taste):** Before generating any code, inspect the existing `src/client/styles.css` (CSS custom properties), global CSS files, and established components in the repository. Match the exact spacing density (padding/margin), font weights, and corporate color palette. Never introduce arbitrary styling; introduce new values only as CSS custom properties.
 2. **Structural & Layout Foundations (Frontend Taste):** Ensure high-density, grid-based layouts with strict typographic hierarchy and a responsive mobile-first default. Every component must have proper "breathing room" (clean padding/gap) and structured data presentation suitable for B2B semiconductor hardware.
 3. **High-End Industrial Polish (High-End Design):** Elevate the visual aesthetic without losing technical seriousness:
-- **Shapes:** Avoid organic or playful shapes. Maintain strict adherence to the sharp, low-radius `4px / rounded` corners defined in the `brandkit`.
-- **Shadows:** For product/platform cards (e.g., P8000, P9000), use ultra-subtle, multi-layered diffuse soft shadows instead of harsh borders to project a premium, high-tech instrument feel.
-- **Transitions:** Implement smooth micro-interactions. All interactive states (`hover`, `active`, `focus`) for buttons and product links must use fluid, non-abrupt CSS transitions (`transition-all duration-300 ease-out`).
+- **Shapes:** Avoid organic or playful shapes. Maintain strict adherence to the sharp, low-radius `4px / rounded` corners set by a radius CSS custom property of `4px`.
+- **Shadows:** For cards and panels, use ultra-subtle, multi-layered diffuse soft shadows instead of harsh borders to project a premium, high-tech instrument feel.
+- **Transitions:** Implement smooth micro-interactions. All interactive states (`hover`, `active`, `focus`) for buttons and links must use fluid, non-abrupt CSS transitions (`transition: all 300ms ease-out`) through a shared CSS custom property.

@@ -30,8 +30,11 @@ America/Los_Angeles).
   packet cụ thể; pilot thật do chủ dự án quyết.
 - Ràng buộc không đổi: dữ liệu giả lập, mail dry-run, không gửi hay triển khai thật, không
   đổi billing, cài đặt toàn cục hay cài đặt quyền.
-- Bước tiếp: khi chủ dự án trả lời, ghi vào `owner_decisions` và brief T03, rồi giao
-  WP2-T03 (worker-high, override opus novelty).
+- Chủ dự án trả lời "dùng đề xuất" (2026-10-03): áp dụng E-2, E-3 và E-8 theo đề xuất
+  (`owner_decisions` trên board). WP2-DEC (worker) đang ghi các quyết định vào tài liệu
+  02/03/04/10 và fixture.
+- Bước tiếp: commit đóng băng WP2-DEC → chuỗi GOV-E8 (mục UI trong AGENTS.md: sửa, đóng
+  băng, gate, audit mới, nghiệm thu) → WP2-T03 (worker-high, override opus novelty).
 
 ## Khôi phục điều phối
 

@@ -21,11 +21,11 @@ Một repo, một ứng dụng Node.js, một DB SQLite cục bộ. Hono phục 
 | calendars/versions/holidays | Múi giờ IANA, thứ làm, ngày/tên lễ/đóng cửa, phiên bản hiệu lực |
 | work_policies | User, ngày hiệu lực, B/N/M, nghỉ, thiếu giờ; phiên bản được tham chiếu bất biến |
 | pay_periods | Lịch, đầu/cuối, payroll, quy tắc hạn và UTC đã giải; duy nhất lịch/payroll |
-| timesheets/day_entries | Duy nhất user+kỳ và user+work_date; loại ngày/phép, ghi chú, xác nhận, phiên bản chống sửa đè |
+| timesheets/day_entries | Duy nhất user+kỳ và user+work_date; loại ngày/phút nghỉ kèm `leave_kind` (vacation, sick hoặc ot; không có loại ngày nghỉ-bằng-OT), ghi chú, xác nhận, phiên bản chống sửa đè |
 | work_sessions/breaks | Chủ sở hữu, UTC vào/ra, múi giờ nguồn, cách nhập, nghỉ đã xác nhận; ca cùng user không trùng |
 | timesheet_revisions/signoffs | Payload/hash chuẩn bất biến; sign-off gắn người/thời gian/hash thật, vắng khi tự nộp chưa ký |
 | ot_ledger | Delta phút nguyên có dấu, loại, sự kiện nguồn, link revision/sửa, người/lý do; khóa duy nhất |
-| ot_leave_requests | Phút xin/duyệt/giữ/tiêu, ngày, bằng chứng, nguồn duyệt, đảo |
+| ot_leave_requests | Phút xin/duyệt/giữ/tiêu, ngày, bằng chứng, nguồn duyệt, đảo; chỉ tiêu qua thao tác record use rõ ràng, idempotent vào hoặc sau ngày nghỉ (cho phép một phần); WP2 không có job runner tiêu hay hết hạn giữ chỗ |
 | jobs/delivery_attempts | Chủ/revision/kênh, hạn/thử lại, trạng thái, số lần, lease, ID đối chiếu/nhà cung cấp |
 | attachments/audit_events | Key riêng khó đoán/hash/loại/kích thước; người, UTC, thao tác, trước/sau, lý do |
 | imports | SHA-256 nguồn, phiên bản ánh xạ, chủ, đợt preview/commit; khóa chống trùng |

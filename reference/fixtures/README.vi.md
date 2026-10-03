@@ -17,7 +17,7 @@ Thời gian trừ nghỉ loại trừ đã xác nhận. Trường hợp đầy �
 
 Mặc định thiếu giờ là ngày thường đầy đủ. Debit là độ lớn dương, ghi delta âm. DF-11 chưa biết và không trừ. DF-12 tính 120 phút thường+120 ngoài lịch vào mốc công 480, vẫn giữ đủ điều kiện OT ngoài lịch.
 
-Tình huống sổ bắt đầu từ số dư đã ghi chỉ định, chưa giữ chỗ. Số dư đầu là setup, ngoài new_deltas. Nguồn trùng có thể trả kết quả có sẵn hoặc lỗi trùng có kiểu, không ghi thêm. LG-07 cần chỉ một giữ chỗ đồng thời thành công, không chọn ai thắng. LG-08 cho phép số dư sửa âm đúng lịch sử, không âm thầm chi mới quá số dư. Duyệt giữ chỗ; dùng ghi sổ; đổi nhãn/gửi lại không làm hai việc đó.
+Tình huống sổ bắt đầu từ số dư đã ghi chỉ định, chưa giữ chỗ. Số dư đầu là setup, ngoài new_deltas. Nguồn trùng có thể trả kết quả có sẵn hoặc lỗi trùng có kiểu, không ghi thêm. LG-07 cần chỉ một giữ chỗ đồng thời thành công, không chọn ai thắng. LG-08 cho phép số dư sửa âm đúng lịch sử, không âm thầm chi mới quá số dư. Duyệt giữ chỗ; dùng ghi sổ; đổi nhãn/leave_kind (LG-10: leave_kind ot không phải loại ngày)/gửi lại không làm hai việc đó.
 
 Kiểm gói xác minh số học/thời gian/nhất quán fixture. Không chạy transaction, quyền, đồng thời hay email của ứng dụng; đó vẫn là gate triển khai.
 

@@ -5,9 +5,9 @@
 | Màn hình | Hành vi |
 |---|---|
 | Timesheet | Hai tuần trên desktop/danh sách ngày mobile; loại/giờ, hạn, độ đầy đủ, xác nhận/gửi, sửa nhiều ngày |
-| Sửa ngày | Ca thực, ngày kết thúc, nghỉ xác nhận, loại/nghỉ một phần, WFH, giờ đủ công, phút gốc/đủ điều kiện/ghi |
+| Sửa ngày | Ca thực, ngày kết thúc, nghỉ xác nhận, loại, phút nghỉ kèm `leave_kind` (vacation, sick, ot), WFH, giờ đủ công, phút gốc/đủ điều kiện/ghi |
 | Review | Nội dung chính xác, OT dự kiến, bằng chứng thiếu, lựa chọn trừ, preview người nhận/thư và chữ ký, Sign off & Submit rõ |
-| Sổ OT/phép | Số dư đã ghi/tạm/giữ/khả dụng, bằng chứng ngày, điều chỉnh; ghi cho phép, dùng một phần/hủy/đảo |
+| Sổ OT/phép | Số dư đã ghi/tạm/giữ/khả dụng, bằng chứng ngày, điều chỉnh; ghi cho phép, giữ chỗ, "ghi đã dùng" (record use: rõ ràng, idempotent, vào hoặc sau ngày nghỉ, cho phép một phần), hủy/đảo |
 | Lịch sử | Revision/PDF bất biến, nguồn tay/tự động, lượt gửi, sửa có lý do và gửi lại rõ |
 | Settings/admin | Quy tắc/template riêng; user, lễ năm, sender và tình trạng vận hành với quyền giới hạn |
 
@@ -38,6 +38,12 @@ Dùng giờ/phút, không dùng 1.30 để chỉ 1h30. Hiện múi giờ xem và
 Clock out/lưu xác nhận gợi ý/nghỉ thật/không nghỉ. Chưa biết nghỉ hoặc ca mở để OT chờ. Hiện rõ ngày ra khi qua đêm. Sửa nhiều loại ngày phải hiện xung đột giờ đã ghi và không âm thầm xóa. Làm ngày lễ giữ cả phân loại lễ và ca thực.
 
 Sửa nháp hiện tại/tương lai tự audit không lý do; cũ/đã chốt cần lý do. Review đánh dấu giả định công, OT chưa đủ và thiếu dự kiến. Nhân viên có thể xác nhận OT tùy chọn còn thiếu và nộp loại ngày. Dữ liệu sai phải sửa hoặc loại bằng thao tác có audit. Tự nộp dùng loại ngày hợp lệ đã lưu và ghi OT chưa giải quyết là chờ.
+
+Nghỉ: màn Sửa ngày hiện cảnh báo không chặn khi số phút nghỉ loại `ot` của ngày khác số phút đã tiêu của yêu cầu nghỉ liên kết. Cảnh báo không bao giờ tiêu hay giải phóng OT. Cách duy nhất để tiêu OT nghỉ đã giữ là thao tác "Record use" của nhân viên; giữ chỗ chưa dùng vẫn hiện là đang giữ.
+
+## Chuẩn hình ảnh
+
+CSS custom properties thuần trong `src/client/styles.css`; bo góc 4px; transition 300 ms ease-out cho trạng thái tương tác (hover, active, focus); bố cục mật độ cao, ưu tiên mobile.
 
 ## Email và PDF
 

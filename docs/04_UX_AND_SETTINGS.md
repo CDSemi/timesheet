@@ -5,9 +5,9 @@
 | Screen | Behavior |
 |---|---|
 | Timesheet | Two-week desktop view/mobile day list; category/time, due date, completeness, review/delivery status, batch edits |
-| Day editor | Actual intervals, end date, confirmed breaks, category/partial leave, WFH, expected finish, raw/eligible/credited minutes |
+| Day editor | Actual intervals, end date, confirmed breaks, category, leave minutes with `leave_kind` (vacation, sick, ot), WFH, expected finish, raw/eligible/credited minutes |
 | Review | Exact content, OT proposals, missing evidence, deficit choices, recipients/email preview, signature preview, explicit Sign off & Submit |
-| OT ledger/leave | Posted/provisional/reserved/available balance, daily evidence, adjustments; record permission, partial use/cancel/reverse |
+| OT ledger/leave | Posted/provisional/reserved/available balance, daily evidence, adjustments; record permission, reserve, "record use" (explicit, idempotent, on or after the leave date, partial allowed), cancel/reverse |
 | History | Immutable revisions/PDFs, manual/auto origin, delivery attempts, reasoned correction and explicit resend |
 | Settings/admin | Personal policy/templates; users, annual holidays, sender and operational status with scoped access |
 
@@ -38,6 +38,12 @@ These are declared design defaults, not claims that every value was user-confirm
 Clock out/save confirms suggested/actual/no breaks. Unknown breaks or open intervals keep OT pending. Show explicit end date for overnight entry. Batch category changes must expose existing work conflicts and never silently delete clock evidence. Holiday work retains holiday classification and actual intervals.
 
 Current/future draft edits audit automatically without a reason; old/finalized edits require one. Review flags attendance assumptions, incomplete OT and proposed deficits. The employee may acknowledge incomplete optional clock evidence and submit attendance. Invalid records require correction or explicit audited exclusion. Automatic submission uses valid saved attendance and marks unresolved OT pending.
+
+Leave: the Day editor shows a non-blocking warning when the day's `ot`-kind leave minutes differ from the linked leave request's consumed minutes. It never spends or releases OT. The only way to consume reserved OT leave is the employee's "Record use" action; reservations not yet used stay visible as reserved.
+
+## Visual standard
+
+Plain CSS custom properties in `src/client/styles.css`; 4px corner radius; 300 ms ease-out transitions on interactive states (hover, active, focus); high-density, mobile-first layout.
 
 ## Email and PDF
 

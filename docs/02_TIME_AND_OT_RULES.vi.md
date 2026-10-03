@@ -49,7 +49,7 @@ Ngày hoàn toàn ngoài lịch: làm 120 cộng 120; 15 đủ điều kiện nh
 
 ## R-05 — thiếu giờ
 
-Chỉ giờ thực đầy đủ/đã xác nhận trên ngày theo lịch có yêu cầu hiện diện mới tạo thiếu. L là phút phép đáp ứng công, tối đa B: cần=max(0,B−L); thiếu=max(0,cần−(R+O)). O qua đêm đáp ứng công đồng thời vẫn đủ điều kiện OT riêng. Phép không là thực làm và không giảm mốc OT thường B.
+Chỉ giờ thực đầy đủ/đã xác nhận trên ngày theo lịch có yêu cầu hiện diện mới tạo thiếu. L là phút nghỉ do nhân viên nhập trong ngày (mọi `leave_kind`: vacation, sick hoặc ot), đáp ứng công, tối đa B: cần=max(0,B−L); thiếu=max(0,cần−(R+O)). O qua đêm đáp ứng công đồng thời vẫn đủ điều kiện OT riêng. Phép không là thực làm và không giảm mốc OT thường B.
 
 Off/Holiday/Vacation/Sick/Shutdown cả ngày không làm không cộng/trừ. Thiếu bản ghi vẫn là chưa đủ. Làm bốn giờ + nghỉ bốn giờ không thiếu và không OT.
 
@@ -59,7 +59,9 @@ Chế độ: `ignore` mặc định, `auto_deduct`, `choose_at_signoff`. Trừ �
 
 OT nháp là tạm tính. Chốt revision bất biến thủ công/tự động ghi khoản cộng tính được và khoản thiếu đã cho phép đúng một lần trong transaction, độc lập dịch vụ chấp nhận email. Nguồn tự động vẫn chưa xác nhận. Ngày chưa đủ không ghi; gửi thử lại không ghi lần nữa.
 
-Đổi nhãn nghỉ không tiêu OT. Ghi manager cho phép rõ: tên/định danh, ngày, bằng chứng, do user ghi lại hay duyệt xác thực trong tương lai. Giữ chỗ phút đã duyệt, tiêu vào ngày nghỉ, hủy chưa dùng giải phóng, đảo đã dùng tạo khoản bù. Hỗ trợ một phần; mặc định 1:1, tám giờ trừ 480, không phải 510.
+Nghỉ bằng OT không phải loại ngày. Một ngày mang số phút nghỉ và `leave_kind` là `vacation`, `sick` hoặc `ot`. Đổi nhãn nghỉ hay `leave_kind` không bao giờ tiêu OT. UI cảnh báo khi số phút nghỉ loại `ot` của ngày khác số phút đã tiêu của yêu cầu nghỉ liên kết; cảnh báo không đổi số dư.
+
+Ghi manager cho phép rõ: tên/định danh, ngày, bằng chứng, do user ghi lại hay duyệt xác thực trong tương lai. Giữ chỗ phút đã duyệt. OT nghỉ chỉ được tiêu bằng thao tác "ghi đã dùng" (record use) rõ ràng, idempotent của nhân viên, vào hoặc sau ngày nghỉ; không có tiêu tự động hay theo job. Hỗ trợ dùng một phần. Giữ chỗ chưa tiêu vẫn bị giữ cho đến khi dùng hoặc hủy; review WP3 đánh dấu. Hủy chưa dùng giải phóng, đảo đã dùng tạo khoản bù. Mặc định 1:1, tám giờ trừ 480, không phải 510.
 
 Số dư đã ghi=tổng delta; khả dụng=đã ghi−giữ chỗ hiệu lực. Chống dùng trùng đồng thời bằng transaction. Khóa nguồn duy nhất chống ghi trùng. Sửa khoản cộng bằng chênh lệch: cũ 60 → mới 90 chỉ +30. Liên kết revision gốc/sửa. Sửa đúng lịch sử có thể làm âm; giữ và báo đối chiếu, không xóa phép đã dùng.
 

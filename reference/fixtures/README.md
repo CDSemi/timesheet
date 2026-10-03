@@ -17,6 +17,6 @@ Time cases subtract confirmed excluded breaks. Complete cases default to confirm
 
 Deficit defaults describe a complete normal day. Debit is a positive magnitude that posts as a negative delta. DF-11 is unknown with no debit. DF-12 counts 120 regular+120 off-calendar toward the 480 attendance target while keeping off-calendar OT eligibility.
 
-Ledger scenarios begin at the given posted opening balance with no reservations. Opening balance is setup, excluded from new_deltas. Duplicate sources may return an existing result or typed duplicate error, but never append again. LG-07 requires only one successful concurrent reservation; it does not choose the winner. LG-08 allows a truthful correcting negative balance, not silent new overdrafts. Approval reserves; consumption posts; category changes and resends do neither.
+Ledger scenarios begin at the given posted opening balance with no reservations. Opening balance is setup, excluded from new_deltas. Duplicate sources may return an existing result or typed duplicate error, but never append again. LG-07 requires only one successful concurrent reservation; it does not choose the winner. LG-08 allows a truthful correcting negative balance, not silent new overdrafts. Approval reserves; consumption posts; label/leave_kind changes (LG-10: leave_kind ot is not a day category) and resends do neither.
 
 Package validation checks fixture arithmetic/time/consistency. It does not execute application transactions, authorization, concurrency or email. Those remain required implementation gates.

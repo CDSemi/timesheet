@@ -85,3 +85,26 @@ Reversible coordinator decisions made for task WF-FIX1; none changes a business 
 - Privacy gate (WF-A-03, WF-A-09): `scripts/precommit-check.mjs` now blocks unquoted YAML/INI secrets, PDF/image/signature files whose basename lacks `synthetic` (`reference/fixtures/` and `reference/examples/` stay allowed) and concrete user-profile paths. Deferral: evidence already committed (it contains the Windows account name in some logs) is not rewritten; no history rewrite and no retroactive redaction commit is planned. New evidence is masked with `<user>`; the committer may mask staged evidence logs under the rules in document 08.
 - Effort `max` (WF-A-04): removed from the validator's allowed efforts. Adding it back needs an owner decision, consistent with document 08.
 - Package-final snapshot (WF-A-10): defined in document 08 as the snapshot whose audit PASS would accept the package, including FIX REQUIRED rechecks that unlock the next package. It keeps a separate verifier gate; `gate_included` is for intermediate S-size fixes only. The coordinator re-plans the F-01 chain on the board accordingly.
+
+## Owner decisions — 2026-10-03 (WP2, reply "dùng đề xuất")
+
+The owner adopted the WP2-PLAN section E recommendations.
+
+- E-2: OT-funded leave is not a day category. Day entries carry leave minutes with `leave_kind` vacation | sick | ot. L for deficits (R-05) is the leave minutes the employee entered. The UI warns when the day's ot-kind leave minutes differ from the leave request's consumed minutes. OT is never auto-spent.
+- E-3: OT leave is consumed only by an explicit, idempotent employee "record use" action on or after the leave date; partial use is allowed. An unconsumed reservation stays reserved until used or cancelled, and WP3 review flags it. WP2 needs no job runner.
+- E-8: keep plain CSS; the visual standard is CSS custom properties, 4px radius and 300 ms ease-out transitions on interactive states (document 04). The AGENTS.md UI section is amended by a separate governance task.
+
+## Coordinator decisions — WP2 routine defaults (2026-10-03, reversible; the owner may veto)
+
+Basis: WP2-PLAN section E; none changes a confirmed requirement.
+
+- E-1: at Clock out the present break list is the complete set and replaces saved rows; an omitted list keeps saved rows (unconfirmed days only).
+- E-4: holiday import preserves explicit labels and manual calendar dates.
+- E-5: insufficient available balance at reservation returns 409 and creates nothing.
+- E-6: provisional balance = credited minutes of complete days in unfinalized periods.
+- E-7: permission evidence is a text reference until the WP3 file store exists.
+- E-9: add `@playwright/test` with a separate `test:e2e` script.
+- E-10: payroll rows of unfinalized periods are refreshed; finalized rows are refused.
+- E-11: the admin sets a temporary password out of band.
+- E-12: warn from 1 October when next-year calendar dates are missing.
+- E-13: WP2 history is the audit trail plus policy/calendar versions.

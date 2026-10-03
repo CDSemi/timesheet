@@ -86,3 +86,26 @@ Quyết định đảo ngược được của coordinator cho task WF-FIX1; kh�
 - Cổng riêng tư (WF-A-03, WF-A-09): `scripts/precommit-check.mjs` nay chặn secret YAML/INI không có nháy, file PDF/ảnh/chữ ký mà tên file không chứa `synthetic` (`reference/fixtures/` và `reference/examples/` vẫn được phép) và path hồ sơ người dùng cụ thể. Hoãn: evidence đã commit (một số log chứa tên tài khoản Windows) không bị viết lại; không viết lại lịch sử và không có commit che hồi tố. Evidence mới được che bằng `<user>`; committer được che log evidence đã stage theo quy tắc ở tài liệu 08.
 - Effort `max` (WF-A-04): đã bỏ khỏi các effort validator cho phép. Thêm lại cần quyết định của chủ, khớp tài liệu 08.
 - Snapshot cuối giai đoạn (WF-A-10): tài liệu 08 định nghĩa là snapshot mà audit PASS sẽ nghiệm thu giai đoạn, gồm cả recheck FIX REQUIRED mở khóa giai đoạn kế. Nó giữ gate verifier riêng; `gate_included` chỉ cho sửa S-size trung gian. Coordinator lập lại kế hoạch chuỗi F-01 trên bảng theo đó.
+
+## Quyết định của chủ — 2026-10-03 (WP2, trả lời "dùng đề xuất")
+
+Chủ chấp nhận các đề xuất ở mục E của WP2-PLAN.
+
+- E-2: nghỉ-bằng-OT không phải loại ngày. Ngày mang số phút nghỉ kèm `leave_kind` vacation | sick | ot. L cho thiếu giờ (R-05) là số phút nghỉ do nhân viên nhập. UI cảnh báo khi số phút nghỉ loại ot của ngày khác số phút đã tiêu của yêu cầu nghỉ. OT không bao giờ tự tiêu.
+- E-3: OT nghỉ chỉ được tiêu bằng thao tác "record use" rõ ràng, idempotent của nhân viên vào hoặc sau ngày nghỉ; cho phép dùng một phần. Giữ chỗ chưa tiêu vẫn bị giữ đến khi dùng hoặc hủy, và review WP3 đánh dấu. WP2 không cần job runner.
+- E-8: giữ CSS thuần; chuẩn hình ảnh là CSS custom properties, bo góc 4px và transition 300 ms ease-out cho trạng thái tương tác (tài liệu 04). Mục UI của AGENTS.md được sửa bởi task quản trị riêng.
+
+## Quyết định của coordinator — mặc định thường lệ WP2 (2026-10-03, đảo ngược được; chủ có thể phủ quyết)
+
+Cơ sở: mục E của WP2-PLAN; không quyết định nào đổi yêu cầu đã xác nhận.
+
+- E-1: tại Clock out, danh sách nghỉ hiện có là tập đầy đủ và thay các dòng đã lưu; bỏ trống thì giữ dòng đã lưu (chỉ ngày chưa xác nhận).
+- E-4: nhập ngày lễ giữ nhãn rõ và ngày lịch nhập tay.
+- E-5: số dư khả dụng không đủ lúc giữ chỗ trả 409 và không tạo gì.
+- E-6: số dư tạm = phút được ghi của ngày đầy đủ trong kỳ chưa chốt.
+- E-7: bằng chứng cho phép là tham chiếu văn bản cho đến khi có kho file WP3.
+- E-9: thêm `@playwright/test` với script `test:e2e` riêng.
+- E-10: làm mới dòng payroll của kỳ chưa chốt; từ chối kỳ đã chốt.
+- E-11: admin đặt mật khẩu tạm ngoài hệ thống.
+- E-12: cảnh báo từ 1 tháng 10 khi thiếu ngày lịch năm tới.
+- E-13: lịch sử WP2 là audit trail cùng phiên bản quy tắc/lịch.

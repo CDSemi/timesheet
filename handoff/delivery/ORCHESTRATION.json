@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-awaiting-owner-decisions",
+  "phase": "gov-e8-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T03",
+  "next_task_id": "GOV-E8-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -43,14 +43,14 @@
       "observation": "Auto-mode permission classifier denied a subagent Bash call writing the standing commit/push authorization into docs/08 ('Instruction Poisoning'). Owner must confirm directly in chat; coordinator will not route around the denial."
     }
   ],
-  "pending_owner_question": "WP2-PLAN E-2 (OT-funded leave vs day labels: category or linked request; L automatic or manual; leave kind on partial leave), E-3 (when OT leave is consumed without a WP2 job runner), E-8 (AGENTS UI section requires Tailwind/4px brandkit; repo uses plain CSS 8px/6px). Needed before T03, T05 and T09; T01/T02 proceed meanwhile.",
+  "pending_owner_question": null,
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
   "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
   "updated_at": "2026-10-02",
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "8930efee064ac84256b3f82b87005717a489d1b7",
+    "last_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
     "unpushed": []
   },
   "owner_decisions": [
@@ -69,6 +69,12 @@
       "source": "owner chat, direct confirmation typed by the owner",
       "verbatim": "Xác nhận: cho phép ghi quyền commit/push thường trực vào AGENTS.md, docs/08, ORCHESTRATE, RESUME và các profile: chỉ qua timesheet-committer, thẳng main đến bản release đầu tiên, sau đó dùng nhánh phụ + PR; cấm amend, force-push, viết lại lịch sử, tạo tag; không commit secret, chữ ký hay dữ liệu cá nhân. Nếu bộ lọc vẫn chặn subagent, tôi đồng ý để bạn tự ghi đúng các dòng về quyền commit",
       "decision": "Standing commit/push authorization may be written into AGENTS.md, docs/08, ORCHESTRATE, RESUME and the profiles: timesheet-committer only; main until the first release, then side branches + PR; no amend, force-push, history rewrite or tags; no secrets, signatures or personal data. Fallback: the coordinator may write exactly the commit-authority lines itself if the classifier still blocks the subagent."
+    },
+    {
+      "date": "2026-10-03",
+      "source": "owner chat, direct reply typed by the owner",
+      "verbatim": "dùng đề xuất",
+      "decision": "Adopt the WP2-PLAN recommendations: E-2 no new day category for OT-funded leave; day entries carry leave minutes with a leave_kind (vacation | sick | ot); L for deficits = the day's leave minutes entered by the employee; the UI warns when the day's OT-kind leave minutes differ from the leave request's consumed minutes; never auto-spend. E-3 OT leave is consumed only by an explicit, idempotent employee 'record use' action on or after the leave date (partial allowed); an unconsumed reservation stays reserved until used or cancelled and WP3 review flags it. E-8 keep plain CSS; adopt 4px radius and 300 ms ease-out transitions through CSS custom properties; amend the AGENTS.md UI section accordingly (governance change)."
     }
   ],
   "coordinator_decisions": [
@@ -1485,7 +1491,8 @@
       "kind": "implement",
       "status": "pending",
       "depends_on": [
-        "WP2-T02-FREEZE"
+        "WP2-T02-FREEZE",
+        "WP2-DEC"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "opus",
@@ -1516,14 +1523,228 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "blocked_by": "owner decisions E-2(b) and E-3 (board pending_owner_question)",
-      "next_action": "On owner answers: write the T03 brief from WP2-PLAN (final owned paths there) and dispatch with opus override novelty."
+      "blocked_by": null,
+      "next_action": "After WP2-DEC and the GOV-E8 chain: write the T03 brief from WP2-PLAN with owner decisions E-2/E-3 and dispatch with opus override novelty."
+    },
+    {
+      "id": "WP2-DEC",
+      "package": "WP2",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP2-CKPT1"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a6b907acae4ca9c63",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "docs/02_TIME_AND_OT_RULES.md",
+        "docs/02_TIME_AND_OT_RULES.vi.md",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/04_UX_AND_SETTINGS.md",
+        "docs/04_UX_AND_SETTINGS.vi.md",
+        "docs/06_TEST_AND_ACCEPTANCE.md",
+        "docs/06_TEST_AND_ACCEPTANCE.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "reference/fixtures/ledger_cases.json",
+        "reference/fixtures/README.md",
+        "reference/fixtures/README.vi.md",
+        "handoff/delivery/tasks/WP2-DEC.md",
+        "handoff/delivery/evidence/WP2-DEC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-DEC.md",
+      "report": "handoff/delivery/tasks/WP2-DEC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-DEC/preflight.txt",
+        "handoff/delivery/evidence/WP2-DEC/verify.txt",
+        "handoff/delivery/evidence/WP2-DEC/diff-check.txt"
+      ],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "documented (author-reported): docs 02/03/04/10 (+vi) encode E-2/E-3 and the E-8 visual standard; fixture LG-10 uses change_leave_label with leave_kind ot (count/IDs/expected unchanged); preflight 91 scenarios, verify and diff-check exit 0. Frozen together with GOV-E8-FIX in GOV-E8-FREEZE (one decision commit).",
+      "next_action": "None; frozen in GOV-E8-FREEZE."
+    },
+    {
+      "id": "GOV-E8-FIX",
+      "package": "GOV",
+      "kind": "fix",
+      "status": "done",
+      "depends_on": [],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa102ee05d1b8af38",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "AGENTS.md",
+        "AGENTS.vi.md",
+        "handoff/delivery/tasks/GOV-E8-FIX.md",
+        "handoff/delivery/evidence/GOV-E8-FIX"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-FIX.md",
+      "report": "handoff/delivery/tasks/GOV-E8-FIX.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-E8-FIX/preflight.txt",
+        "handoff/delivery/evidence/GOV-E8-FIX/diff-check.txt"
+      ],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported): AGENTS.md lines 34, 37-39 and AGENTS.vi.md lines 36, 39-41 now state CSS custom properties, 4px radius, cards and panels, 300 ms ease-out; preflight 91 scenarios and diff-check exit 0; coordinator spot-checked EN/VI equivalence.",
+      "next_action": "None; GOV-E8-FREEZE, gate and fresh audit follow."
+    },
+    {
+      "id": "GOV-E8-FREEZE",
+      "package": "GOV",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "GOV-E8-FIX",
+        "WP2-DEC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+        "handoff/delivery/evidence/GOV-E8-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+      "report": "handoff/delivery/tasks/GOV-E8-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": null,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Decision commit (E-2/E-3/E-8: docs, fixture, AGENTS UI section); push."
+    },
+    {
+      "id": "GOV-E8-GATE",
+      "package": "GOV",
+      "kind": "gate",
+      "status": "pending",
+      "depends_on": [
+        "GOV-E8-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-E8-GATE.md",
+        "handoff/delivery/evidence/GOV-E8-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-GATE.md",
+      "report": "handoff/delivery/tasks/GOV-E8-GATE.md",
+      "evidence": [],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Gate the decision commit."
+    },
+    {
+      "id": "GOV-E8-AUDIT",
+      "package": "GOV",
+      "kind": "audit",
+      "status": "pending",
+      "depends_on": [
+        "GOV-E8-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/GOV_E8_REVIEW.md",
+        "handoff/delivery/GOV_E8_REVIEW.vi.md",
+        "handoff/delivery/tasks/GOV-E8-AUDIT.md",
+        "handoff/delivery/evidence/GOV-E8-AUDIT"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-E8-AUDIT.md",
+      "report": "handoff/delivery/tasks/GOV-E8-AUDIT.md",
+      "evidence": [],
+      "baseline_commit": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "aa102ee05d1b8af38",
+        "a6b907acae4ca9c63"
+      ],
+      "decision": null,
+      "next_action": "Fresh governance audit of the AGENTS UI section change (E-8)."
     },
     {
       "id": "WP2-CKPT1",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "history": [
         "attempt 1 (agent abda48bf27bbb2865): no commit; validator exit 1 'Durable English brief/result missing: WP2-T03' because the coordinator set WP2-T03 to blocked without a report file; coordinator set it to pending (blocked_by kept)."
       ],
@@ -1551,16 +1772,24 @@
       ],
       "prompt": "handoff/delivery/tasks/WP2-CKPT1.md",
       "report": "handoff/delivery/tasks/WP2-CKPT1.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP2-CKPT1/node-version.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/precommit.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/validate.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/a2-node-version.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/a2-precommit.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/a2-validate.txt",
+        "handoff/delivery/evidence/WP2-CKPT1/commit-message.txt"
+      ],
       "baseline_commit": "8930efee064ac84256b3f82b87005717a489d1b7",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": null,
+      "commit_sha": "f7b9f8e3f07b68e636da54ba589b286fa59561b8",
+      "pushed": true,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Checkpoint commit of coordinator state before the pause for owner decisions; push."
+      "decision": "committed and pushed on attempt 2: 8 handoff paths; precommit, diff-check, JSON parse and validator exit 0.",
+      "next_action": "None; mission paused for owner decisions."
     }
   ],
   "future_packages": [

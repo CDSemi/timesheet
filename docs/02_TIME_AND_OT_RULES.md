@@ -49,7 +49,7 @@ On a fully non-working day, 120 worked credits 120; 15 is eligible but rounds to
 
 ## R-05 — deficits
 
-Only complete confirmed actual work on a scheduled work date with attendance expected can create a deficit. With attendance-fulfilling leave L capped at B: required=max(0,B−L); deficit=max(0,required−(R+O)). Overnight O counts toward attendance while separately OT-eligible. Leave neither counts as actual work nor lowers the regular OT target B.
+Only complete confirmed actual work on a scheduled work date with attendance expected can create a deficit. With attendance-fulfilling leave L capped at B, where L is the leave minutes the employee entered on that day (any `leave_kind`: vacation, sick or ot): required=max(0,B−L); deficit=max(0,required−(R+O)). Overnight O counts toward attendance while separately OT-eligible. Leave neither counts as actual work nor lowers the regular OT target B.
 
 A non-worked full-day Off/Holiday/Vacation/Sick/Shutdown creates no credit or debit. Missing records remain incomplete. Four hours work + four hours leave has neither deficit nor OT.
 
@@ -59,7 +59,9 @@ Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit
 
 Draft credits are provisional. Finalizing a manual/automatic immutable revision transactionally posts computable credits and authorized deficits once, independent of email acceptance. Automatic origin remains unconfirmed. Incomplete days post nothing; delivery retries post nothing again.
 
-Changing a leave label never spends OT. Record explicit manager permission: name/identity, date, evidence and self-recorded versus future authenticated approval. Reserve approved minutes, consume on the leave date, release unused cancellations and compensate already-used reversals. Partial use is supported; default 1:1, so eight hours costs 480 minutes, not 510.
+OT-funded leave is not a day category. A day entry carries leave minutes and a `leave_kind` of `vacation`, `sick` or `ot`. Changing a leave label or `leave_kind` never spends OT. The UI warns when the day's `ot`-kind leave minutes differ from the consumed minutes of the linked leave request; the warning never changes a balance.
+
+Record explicit manager permission: name/identity, date, evidence and self-recorded versus future authenticated approval. Reserve approved minutes. OT leave is consumed only by an explicit, idempotent employee "record use" action, allowed on or after the leave date; no automatic or job-driven consumption exists. Partial use is supported. An unconsumed reservation stays reserved until it is used or cancelled; WP3 review flags it. Release unused cancellations and compensate already-used reversals. Default 1:1, so eight hours costs 480 minutes, not 510.
 
 Posted balance=sum(deltas); available=posted−active reservations. Prevent concurrent double spending transactionally. Unique source-event keys prevent duplicate postings. Correct a posted credit by its difference: old 60 → new 90 adds +30. Link original and correction revisions. A truthful correction may make the balance negative; retain and flag it rather than erase used leave.
 

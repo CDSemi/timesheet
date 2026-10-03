@@ -29,8 +29,11 @@ America/Los_Angeles).
   packet; the real pilot stays owner-controlled.
 - Unchanged constraints: synthetic data, dry-run mail, no real sending or deployment, no
   billing, global-setting or permission-setting changes.
-- Next action: on owner answers, record them in `owner_decisions` and the T03 brief, then
-  dispatch WP2-T03 (worker-high, opus override novelty).
+- Owner replied "dùng đề xuất" (2026-10-03): E-2, E-3 and E-8 adopted as recommended
+  (board `owner_decisions`). WP2-DEC (worker) is encoding them in docs 02/03/04/10 and
+  the fixture.
+- Next action: WP2-DEC freeze → GOV-E8 chain (AGENTS.md UI section: fix, freeze, gate,
+  fresh audit, accept) → WP2-T03 (worker-high, opus override novelty).
 
 ## Orchestration recovery
 

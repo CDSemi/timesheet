@@ -21,11 +21,11 @@ These are project-fit judgments, not a claim that C# or Next.js cannot be lightw
 | calendars/versions/holidays | Reporting IANA zone, weekdays, holiday/closure dates/names, effective versions |
 | work_policies | User, effective date, B/N/M, breaks, deficit mode; immutable referenced versions |
 | pay_periods | Calendar, start/end, payroll date, due rule and resolved UTC; unique calendar/payroll |
-| timesheets/day_entries | User+period and user+work_date uniqueness; attendance/leave, notes, confirmation, optimistic version |
+| timesheets/day_entries | User+period and user+work_date uniqueness; attendance/leave minutes with `leave_kind` (vacation, sick or ot; no OT-leave day category), notes, confirmation, optimistic version |
 | work_sessions/breaks | Ownership, UTC start/end, originating zone, source, confirmed breaks; no overlapping user intervals |
 | timesheet_revisions/signoffs | Immutable canonical payload/hash; real actor/time/hash-bound sign-off, absent on unsigned automation |
 | ot_ledger | Integer signed delta, type, source event, revision/correction links, actor/reason; unique event key |
-| ot_leave_requests | Requested/approved/reserved/consumed minutes, date, evidence, approval origin, reversals |
+| ot_leave_requests | Requested/approved/reserved/consumed minutes, date, evidence, approval origin, reversals; consumption only through an explicit idempotent record-use action on or after the leave date (partial allowed); no WP2 job runner consumes or expires reservations |
 | jobs/delivery_attempts | Owner/revision/channel, due/retry time, state, attempts, lease, correlation/provider identifiers |
 | attachments/audit_events | Private opaque keys/hash/type/size; actor, UTC, operation, before/after, reason |
 | imports | Source SHA-256, mapping version, owner, preview/commit batch; idempotency key |
