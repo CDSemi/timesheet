@@ -67,3 +67,17 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1: NOT COMMITTED. Pre/post HEAD 30be0b152f9cbcf62c517257b76c52c2493b5ca6 (unchanged);
+31 paths staged (expected set, no extras). Node v24.21.0. precommit-check exit 0; JSON parse 0;
+validate_orchestration 0; check_recovery 0; `git diff --cached --check` exit 2 (blocker):
+handoff/delivery/evidence/GOV-E8-ACCEPT/diff-check.txt line 2 and line 4, rule: trailing
+whitespace (the file records a `git diff --check` output that itself contains whitespace-only
+lines). Staged paths remain staged; no push.
+
+Attempt 2: COMMITTED AND PUSHED. Pre HEAD 30be0b152f9cbcf62c517257b76c52c2493b5ca6; post HEAD
+and commit 67c7e7a6e10779163647f88b84ebd91fcea390d6; remote SHA identical; branch main;
+31 staged paths. Node v24.21.0. precommit 0, diff --cached --check 0, JSON parse 0,
+validate_orchestration 0, check_recovery 0. Staged-diff read: only synthetic @example.invalid
+addresses. The staged brief holds the attempt-1 note; attempt-2 results are not committed.
+Evidence: handoff/delivery/evidence/WP2-T03-FREEZE/a2-*. Blockers: none.

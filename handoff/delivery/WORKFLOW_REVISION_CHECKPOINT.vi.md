@@ -43,7 +43,12 @@ America/Los_Angeles).
   `governance_backlog` trên board. GOV-E8-ACCEPT (record) đang chạy.
 - GOV-E8-ACCEPT xong ở attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6 đã push.
   WP2-T03 (worker-high, override opus novelty) đang chạy.
-- Bước tiếp: đối chiếu WP2-T03, rồi WP2-T03-FREEZE và WP2-T04.
+- WP2-T03 xong (opus; đã chứng minh xử lý đồng thời) và đóng băng ở
+  67c7e7a6e10779163647f88b84ebd91fcea390d6 (attempt 2 sau lần bị chặn vì khoảng trắng trong
+  bằng chứng). WP2-T04 (worker-high, sonnet) đang chạy.
+- Bước tiếp: đối chiếu WP2-T04 → WP2-T04-FREEZE → quyết định audit sổ OT tư vấn (chỉ đọc,
+  chạy song song với T05) và vòng GOV gộp (chính sách khoảng trắng bằng chứng, R1, R2)
+  trước T05 hoặc T09.
 
 ## Khôi phục điều phối
 

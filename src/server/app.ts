@@ -7,6 +7,8 @@ import { errorBody, handleError, notFound } from './http/errors.ts';
 import { noStore, requireAllowedOrigin, requireJsonContentType } from './http/security.ts';
 import { apiRoutes } from './routes/api.ts';
 import { authRoutes } from './routes/auth.ts';
+import { historyRoutes } from './routes/history.ts';
+import { otRoutes } from './routes/ot.ts';
 import type { AppDeps, AppEnv } from './types.ts';
 
 /** One origin: JSON API under /api and the built React client for everything else. */
@@ -49,6 +51,8 @@ export function createApp(deps: AppDeps) {
     return c.json({ status: 'ok' });
   });
   app.route('/api/auth', authRoutes(deps));
+  app.route('/api/ot', otRoutes(deps));
+  app.route('/api/history', historyRoutes(deps));
   app.route('/api', apiRoutes(deps));
   app.all('/api/*', () => {
     throw notFound('Endpoint');

@@ -110,3 +110,45 @@ export const policyBody = z.strictObject({
   note: z.string().max(500).optional(),
 });
 export type PolicyBody = z.infer<typeof policyBody>;
+
+/*
+ * OT leave contracts. The owner is never a field: it is always the session user.
+ * Numeric semantics (whole minutes 1–1440) are checked by the domain for exact codes.
+ */
+
+export const otLeaveCreateBody = z.strictObject({
+  request_key: z.string().max(200),
+  leave_date: z.string().max(10),
+  requested_minutes: z.number(),
+  approved_minutes: z.number().optional(),
+  permission: z.strictObject({
+    approver_name: z.string().max(200),
+    approver_identity: z.string().max(320).nullable().optional(),
+    approval_date: z.string().max(10),
+    /** E-7: a text reference to the permission evidence. */
+    evidence_ref: z.string().max(2000),
+  }),
+  note: z.string().max(2000).nullable().optional(),
+});
+export type OtLeaveCreateBody = z.infer<typeof otLeaveCreateBody>;
+
+export const otLeaveConsumeBody = z.strictObject({
+  use_key: z.string().max(200),
+  minutes: z.number(),
+  expected_version: z.number().int().positive(),
+});
+export type OtLeaveConsumeBody = z.infer<typeof otLeaveConsumeBody>;
+
+export const otLeaveCancelBody = z.strictObject({
+  expected_version: z.number().int().positive(),
+  reason: z.string().max(2000).optional(),
+});
+export type OtLeaveCancelBody = z.infer<typeof otLeaveCancelBody>;
+
+export const otLeaveReverseBody = z.strictObject({
+  reversal_key: z.string().max(200),
+  minutes: z.number(),
+  reason: z.string().max(2000),
+  expected_version: z.number().int().positive(),
+});
+export type OtLeaveReverseBody = z.infer<typeof otLeaveReverseBody>;

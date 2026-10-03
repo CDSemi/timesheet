@@ -1,0 +1,171 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { postCredit } from '../../src/server/services/ledger.ts';
+import { createTestContext, la, ORIGIN, type TestContext } from '../support/testApp.ts';
+
+/*
+ * E-13: WP2 history is the user's own audit trail plus the policy and calendar versions
+ * (AC-04, FR-14). Revisions, PDFs and delivery attempts belong to WP3.
+ */
+
+let t: TestContext;
+let employee: string;
+let admin: string;
+
+beforeEach(async () => {
+  t = await createTestContext('2026-10-02T18:00:00Z');
+  employee = await t.login('employee');
+  admin = await t.login('admin');
+});
+
+afterEach(() => t.close());
+
+async function createSession(cookie: string, date: string) {
+  const response = await t.request('POST', `/api/days/${date}/sessions`, {
+    cookie,
+    body: { start: la(`${date}T09:00`), end: la(`${date}T17:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+  });
+  expect(response.status).toBe(201);
+  return response.body.session.id as string;
+}
+
+describe('GET /api/history', () => {
+  it('returns the caller’s audit events newest first with parsed before/after snapshots', async () => {
+    const sessionId = await createSession(employee, '2026-09-22');
+    postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.employee, sourceKey: 'opening', minutes: 200, workDate: '2026-09-21', actorUserId: null, origin: 'system' },
+    );
+    const reserved = await t.request('POST', '/api/ot/leave', {
+      cookie: employee,
+      body: {
+        request_key: 'history-leave',
+        leave_date: '2026-10-01',
+        requested_minutes: 60,
+        permission: { approver_name: 'Synthetic Manager', approval_date: '2026-09-30', evidence_ref: 'Synthetic reference' },
+      },
+    });
+    expect(reserved.status).toBe(201);
+
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const events = response.body.audit_events as Array<Record<string, any>>;
+    const operations = events.map((event) => event.operation);
+    expect(operations).toContain('auth.login');
+    expect(operations).toContain('ot_leave.reserve');
+    expect(operations.some((operation) => operation.startsWith('work_session.') || operation.includes('session'))).toBe(true);
+    expect(operations).toContain('ot_ledger.credit');
+    // Newest first.
+    const times = events.map((event) => event.occurred_at as string);
+    expect(times).toEqual([...times].sort().reverse());
+    const reserve = events.find((event) => event.operation === 'ot_leave.reserve');
+    expect(reserve).toMatchObject({
+      entity_type: 'ot_leave_request',
+      entity_id: reserved.body.request.id,
+      actor_is_self: true,
+      before: null,
+    });
+    expect(reserve?.after).toMatchObject({ approved_minutes: 60, reserved_minutes: 60, evidence_ref: 'Synthetic reference' });
+    expect(events.some((event) => event.entity_id === sessionId)).toBe(true);
+    // Every event belongs to the caller.
+    for (const event of events) {
+      expect(event.actor_is_self === true || event.actor_user_id === null).toBe(true);
+    }
+    expect(JSON.stringify(response.body)).not.toContain(t.userIds.admin);
+  });
+
+  it('includes the policy and calendar versions of the caller', async () => {
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    expect(response.body.policy_versions).toHaveLength(1);
+    expect(response.body.policy_versions[0]).toMatchObject({ seq: 1, required_minutes: expect.any(Number), effective_from: expect.any(String) });
+    expect(response.body.calendar_versions.length).toBeGreaterThanOrEqual(1);
+    expect(response.body.calendar_versions[0]).toMatchObject({ seq: 1, effective_from: expect.any(String), weekdays: expect.any(Array) });
+    const created = await t.request('POST', '/api/policies', {
+      cookie: employee,
+      body: {
+        effective_from: '2026-10-12',
+        required_minutes: 450,
+        threshold_minutes: 0,
+        rounding_step_minutes: 15,
+        reference_start: '08:00',
+        reference_end: '15:30',
+        breaks: [],
+        deficit_mode: 'ignore',
+        note: 'Synthetic change',
+      },
+    });
+    expect(created.status).toBe(201);
+    const after = await t.request('GET', '/api/history', { cookie: employee });
+    expect(after.body.policy_versions.map((policy: { seq: number }) => policy.seq)).toEqual([1, 2]);
+    expect(after.body.audit_events.map((event: { operation: string }) => event.operation)).toContain('work_policy.create');
+    expect(JSON.stringify(after.body)).not.toContain(t.userIds.admin);
+  });
+
+  it('never shows another user’s events or versions, admin included', async () => {
+    const employeeSession = await createSession(employee, '2026-09-22');
+    await createSession(admin, '2026-09-23');
+    const adminPolicy = await t.request('POST', '/api/policies', {
+      cookie: admin,
+      body: {
+        effective_from: '2026-10-12',
+        required_minutes: 300,
+        threshold_minutes: 0,
+        rounding_step_minutes: 15,
+        reference_start: '08:00',
+        reference_end: '13:00',
+        breaks: [],
+        deficit_mode: 'ignore',
+        note: 'Admin private policy note',
+      },
+    });
+    expect(adminPolicy.status).toBe(201);
+
+    const adminView = await t.request('GET', `/api/history?user_id=${t.userIds.employee}`, { cookie: admin });
+    expect(adminView.status).toBe(200);
+    expect(JSON.stringify(adminView.body)).not.toContain(employeeSession);
+    expect(JSON.stringify(adminView.body)).not.toContain(t.userIds.employee);
+    for (const event of adminView.body.audit_events as Array<{ actor_user_id: string | null }>) {
+      expect([t.userIds.admin, null]).toContain(event.actor_user_id);
+    }
+    const employeeView = await t.request('GET', '/api/history', { cookie: employee });
+    expect(JSON.stringify(employeeView.body)).not.toContain('Admin private policy note');
+    expect(employeeView.body.policy_versions).toHaveLength(1);
+  });
+
+  it('does not expose shared-calendar audit events that have no owner', async () => {
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    const operations = (response.body.audit_events as Array<{ operation: string }>).map((event) => event.operation);
+    expect(operations).not.toContain('calendar.create');
+    expect(operations).not.toContain('calendar_version.create');
+  });
+
+  it('pages with limit and before, and validates both', async () => {
+    for (const date of ['2026-09-22', '2026-09-23', '2026-09-24']) await createSession(employee, date);
+    const first = await t.request('GET', '/api/history?limit=2', { cookie: employee });
+    expect(first.status).toBe(200);
+    expect(first.body.audit_events).toHaveLength(2);
+    expect(typeof first.body.next_before).toBe('string');
+    const second = await t.request('GET', `/api/history?limit=2&before=${encodeURIComponent(first.body.next_before)}`, { cookie: employee });
+    expect(second.status).toBe(200);
+    const firstIds = first.body.audit_events.map((event: { id: string }) => event.id);
+    const secondIds = second.body.audit_events.map((event: { id: string }) => event.id);
+    expect(secondIds.length).toBeGreaterThan(0);
+    expect(secondIds.filter((id: string) => firstIds.includes(id))).toEqual([]);
+    for (const query of ['limit=0', 'limit=501', 'limit=abc', 'before=zzz']) {
+      const bad = await t.request('GET', `/api/history?${query}`, { cookie: employee });
+      expect(bad.status, query).toBe(422);
+    }
+  });
+
+  it('is read-only, immutable and requires a session', async () => {
+    const anonymous = await t.request('GET', '/api/history');
+    expect(anonymous.status).toBe(401);
+    const before = t.db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+    await t.request('GET', '/api/history', { cookie: employee });
+    expect(t.db.prepare('SELECT count(*) FROM audit_events').pluck().get()).toBe(before);
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      const response = await t.request(method, '/api/history', { cookie: employee, body: {}, origin: ORIGIN });
+      expect(response.status, method).toBe(404);
+    }
+  });
+});

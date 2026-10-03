@@ -1,0 +1,30 @@
+Mutation checks (temporary edits, reverted; diff -q identical afterwards). Tests must fail on each:
+
+== neutralizeCsvText-returns-text-unchanged (vitest exit 1)
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("=1+1") -> "'=1+1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("+1") -> "'+1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("-1") -> "'-1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("@SUM(A1)") -> "'@SUM(A1)"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("\t=1") -> "'\t=1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("\r=1") -> "'\r=1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > neutralizeCsvText("\n=1") -> "'\n=1"
+ FAIL  tests/integration/evidence-export.test.ts > CSV cell neutralization > quotes cells with separators, quotes and line breaks after neutralizing
+ FAIL  tests/integration/evidence-export.test.ts > GET /api/ot/evidence.csv > exports raw intervals, breaks, policies, daily raw/eligible/credited, adjustments and leave permission
+ FAIL  tests/integration/evidence-export.test.ts > GET /api/ot/evidence.csv > neutralizes every text cell that starts with = + - @, a tab or a CR
+ Test Files  1 failed (1)
+      Tests  10 failed | 10 passed (20)
+
+== history-owner-filter-disabled (vitest exit 1)
+ FAIL  tests/integration/history.test.ts > GET /api/history > returns the caller’s audit events newest first with parsed before/after snapshots
+ FAIL  tests/integration/history.test.ts > GET /api/history > includes the policy and calendar versions of the caller
+ FAIL  tests/integration/history.test.ts > GET /api/history > never shows another user’s events or versions, admin included
+ FAIL  tests/integration/history.test.ts > GET /api/history > does not expose shared-calendar audit events that have no owner
+ FAIL  tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > keeps summary, ledger, leave list, evidence export and history private per user
+ Test Files  2 failed (2)
+      Tests  5 failed | 12 passed (17)
+
+== evidence-leave-rows-taken-from-another-user (vitest exit 1)
+ FAIL  tests/integration/evidence-export.test.ts > GET /api/ot/evidence.csv > exports raw intervals, breaks, policies, daily raw/eligible/credited, adjustments and leave permission
+ FAIL  tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > keeps summary, ledger, leave list, evidence export and history private per user
+ Test Files  2 failed (2)
+      Tests  2 failed | 29 passed (31)

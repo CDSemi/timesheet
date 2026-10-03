@@ -1,0 +1,693 @@
+$ node --version -> v24.21.0; npm exec -- vitest run tests/integration/ot-api.test.ts tests/integration/evidence-export.test.ts tests/integration/history.test.ts tests/integration/isolation.test.ts  (exit 1, expected red before implementation)
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/evidence-export.test.ts (0 test)
+ ❯ tests/integration/history.test.ts (6 tests | 6 failed) 1675ms
+   ❯ GET /api/history (6)
+     × returns the caller’s audit events newest first with parsed before/after snapshots 345ms
+     × includes the policy and calendar versions of the caller 274ms
+     × never shows another user’s events or versions, admin included 277ms
+     × does not expose shared-calendar audit events that have no owner 267ms
+     × pages with limit and before, and validates both 262ms
+     × is read-only, immutable and requires a session 248ms
+ ❯ tests/integration/isolation.test.ts (11 tests | 3 failed) 3026ms
+   ❯ WP2 OT, leave, evidence and history isolation (AC-01) (3)
+     × answers 404 to an admin swapping the identifier of an employee leave request 263ms
+     × answers 404 to an employee swapping the identifier of an admin leave request 280ms
+     × keeps summary, ledger, leave list, evidence export and history private per user 295ms
+ ❯ tests/integration/ot-api.test.ts (25 tests | 25 failed) 6367ms
+   ❯ GET /api/ot/summary (4)
+     × starts at zero 314ms
+     × keeps posted, provisional (E-6), reserved and available apart 295ms
+     × raises the negative flag for a truthful correction below zero (LG-08) 272ms
+     × requires a session 269ms
+   ❯ GET /api/ot/ledger (2)
+     × lists only the caller’s entries in posting order, with the balance 254ms
+     × ignores a client-supplied owner parameter 252ms
+   ❯ POST/GET /api/ot/leave (5)
+     × records the permission and reserves 1:1 minutes (201), then lists it 241ms
+     × is idempotent per request key (200 duplicate) and refuses a changed payload (409) 239ms
+     × rejects insufficient balance with 409 and creates nothing (E-5) 254ms
+     × needs the recorded permission and rejects owner or unknown fields 260ms
+     × records the session user as both actor and owner 297ms
+   ❯ POST /api/ot/leave/:id/consume (record use, E-3) (2)
+     × posts a partial linked debit and keeps the remainder reserved 254ms
+     × refuses stale versions, over-use and use before the leave date 242ms
+   ❯ POST /api/ot/leave/:id/cancel and /reverse (3)
+     × cancel releases the unused reservation and retries are unchanged 248ms
+     × cancel with a stale version is refused while minutes are still reserved 245ms
+     × reverse gives used minutes back with a reason and a linked positive delta 240ms
+   ❯ two-user ID swap on every OT route (AC-01) (2)
+     × returns 404 for another user’s request on consume, cancel and reverse, also for admins 237ms
+     × shows an admin only the admin’s own summary, ledger and requests 229ms
+   ❯ CSRF and origin checks on every OT POST (4)
+     × /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies 237ms
+     × /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies 230ms
+     × /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies 243ms
+     × /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies 237ms
+   ❯ route inventory: no route posts a credit or debit (3)
+     × exposes exactly the reviewed OT, history and evidence routes 281ms
+     × has no state-changing route outside the reviewed allowlist and none that names a posting 251ms
+     × never imports a ledger posting function into an HTTP router 245ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/evidence-export.test.ts [ tests/integration/evidence-export.test.ts ]
+Error: Cannot find module '../../src/server/services/otEvidence.ts' imported from <project>/tests/integration/evidence-export.test.ts
+ ❯ tests/integration/evidence-export.test.ts:2:1
+      1| import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+      2| import { csvCell, evidenceFilename, neutralizeCsvText } from '../../sr…
+       | ^
+      3| import { postCorrection, postCredit } from '../../src/server/services/…
+      4| import { createTestContext, DEFAULT_BREAKS_0900, la, type TestContext …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/35]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 34 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > returns the caller’s audit events newest first with parsed before/after snapshots
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/history.test.ts:47:29
+     45|       },
+     46|     });
+     47|     expect(reserved.status).toBe(201);
+       |                             ^
+     48|
+     49|     const response = await t.request('GET', '/api/history', { cookie: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/35]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > includes the policy and calendar versions of the caller
+AssertionError: Target cannot be null or undefined.
+ ❯ tests/integration/history.test.ts:79:43
+     77|   it('includes the policy and calendar versions of the caller', async …
+     78|     const response = await t.request('GET', '/api/history', { cookie: …
+     79|     expect(response.body.policy_versions).toHaveLength(1);
+       |                                           ^
+     80|     expect(response.body.policy_versions[0]).toMatchObject({ seq: 1, r…
+     81|     expect(response.body.calendar_versions.length).toBeGreaterThanOrEq…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/35]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > never shows another user’s events or versions, admin included
+AssertionError: expected 422 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 422
+
+ ❯ tests/integration/history.test.ts:121:32
+    119|       },
+    120|     });
+    121|     expect(adminPolicy.status).toBe(201);
+       |                                ^
+    122|
+    123|     const adminView = await t.request('GET', `/api/history?user_id=${t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/35]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > does not expose shared-calendar audit events that have no owner
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ tests/integration/history.test.ts:137:85
+    135|   it('does not expose shared-calendar audit events that have no owner'…
+    136|     const response = await t.request('GET', '/api/history', { cookie: …
+    137|     const operations = (response.body.audit_events as Array<{ operatio…
+       |                                                                                     ^
+    138|     expect(operations).not.toContain('calendar.create');
+    139|     expect(operations).not.toContain('calendar_version.create');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/35]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > pages with limit and before, and validates both
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/history.test.ts:145:26
+    143|     for (const date of ['2026-09-22', '2026-09-23', '2026-09-24']) awa…
+    144|     const first = await t.request('GET', '/api/history?limit=2', { coo…
+    145|     expect(first.status).toBe(200);
+       |                          ^
+    146|     expect(first.body.audit_events).toHaveLength(2);
+    147|     expect(typeof first.body.next_before).toBe('string');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/35]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > is read-only, immutable and requires a session
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/history.test.ts:162:30
+    160|   it('is read-only, immutable and requires a session', async () => {
+    161|     const anonymous = await t.request('GET', '/api/history');
+    162|     expect(anonymous.status).toBe(401);
+       |                              ^
+    163|     const before = t.db.prepare('SELECT count(*) FROM audit_events').p…
+    164|     await t.request('GET', '/api/history', { cookie: employee });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/35]⎯
+
+ FAIL  tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > answers 404 to an admin swapping the identifier of an employee leave request
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ employeeLeave tests/integration/isolation.test.ts:186:28
+    184|       },
+    185|     });
+    186|     expect(created.status).toBe(201);
+       |                            ^
+    187|     return created.body.request as { id: string; version: number };
+    188|   }
+ ❯ tests/integration/isolation.test.ts:199:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/35]⎯
+
+ FAIL  tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > answers 404 to an employee swapping the identifier of an admin leave request
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/isolation.test.ts:228:28
+    226|       },
+    227|     });
+    228|     expect(created.status).toBe(201);
+       |                            ^
+    229|     const id = created.body.request.id as string;
+    230|     const before = t.db.prepare('SELECT * FROM ot_leave_requests WHERE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/35]⎯
+
+ FAIL  tests/integration/isolation.test.ts > WP2 OT, leave, evidence and history isolation (AC-01) > keeps summary, ledger, leave list, evidence export and history private per user
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ employeeLeave tests/integration/isolation.test.ts:186:28
+    184|       },
+    185|     });
+    186|     expect(created.status).toBe(201);
+       |                            ^
+    187|     return created.body.request as { id: string; version: number };
+    188|   }
+ ❯ tests/integration/isolation.test.ts:243:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/summary > starts at zero
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:62:29
+     60|   it('starts at zero', async () => {
+     61|     const response = await t.request('GET', '/api/ot/summary', { cooki…
+     62|     expect(response.status).toBe(200);
+       |                             ^
+     63|     expect(response.body).toEqual({
+     64|       posted_minutes: 0,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/summary > keeps posted, provisional (E-6), reserved and available apart
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:77:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/summary > raises the negative flag for a truthful correction below zero (LG-08)
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:112:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/summary > requires a session
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:134:29
+    132|   it('requires a session', async () => {
+    133|     const response = await t.request('GET', '/api/ot/summary');
+    134|     expect(response.status).toBe(401);
+       |                             ^
+    135|   });
+    136| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/ledger > lists only the caller’s entries in posting order, with the balance
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:142:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > GET /api/ot/ledger > ignores a client-supplied owner parameter
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:164:29
+    162|     credit(t.userIds.employee, 300);
+    163|     const response = await t.request('GET', `/api/ot/ledger?user_id=${…
+    164|     expect(response.status).toBe(200);
+       |                             ^
+    165|     expect(response.body.entries).toEqual([]);
+    166|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the permission and reserves 1:1 minutes (201), then lists it
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:176:29
+    174|       body: reserveBody('leave-1', 480, '2026-10-01', { note: 'Synthet…
+    175|     });
+    176|     expect(response.status).toBe(201);
+       |                             ^
+    177|     expect(response.body.status).toBe('reserved');
+    178|     expect(response.body.request).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > is idempotent per request key (200 duplicate) and refuses a changed payload (409)
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:205:26
+    203|     const first = await t.request('POST', '/api/ot/leave', { cookie: e…
+    204|     const again = await t.request('POST', '/api/ot/leave', { cookie: e…
+    205|     expect(again.status).toBe(200);
+       |                          ^
+    206|     expect(again.body.status).toBe('duplicate');
+    207|     expect(again.body.request.id).toBe(first.body.request.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > rejects insufficient balance with 409 and creates nothing (E-5)
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:217:29
+    215|     credit(t.userIds.employee, 100);
+    216|     const response = await t.request('POST', '/api/ot/leave', { cookie…
+    217|     expect(response.status).toBe(409);
+       |                             ^
+    218|     expect(response.body.error).toMatchObject({ code: 'insufficient_ba…
+    219|     expect(count('SELECT count(*) FROM ot_leave_requests')).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > needs the recorded permission and rejects owner or unknown fields
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:228:31
+    226|       body: reserveBody('leave-4', 60, '2026-10-01', { permission: per…
+    227|     });
+    228|     expect(noEvidence.status).toBe(422);
+       |                               ^
+    229|     expect(noEvidence.body.error.code).toBe('approval_required');
+    230|     const noPermission = await t.request('POST', '/api/ot/leave', {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the session user as both actor and owner
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:253:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > posts a partial linked debit and keeps the remainder reserved
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:270:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > refuses stale versions, over-use and use before the leave date
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:292:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel releases the unused reservation and retries are unchanged
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:324:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel with a stale version is refused while minutes are still reserved
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:347:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > reverse gives used minutes back with a reason and a linked positive delta
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:355:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > returns 404 for another user’s request on consume, cancel and reverse, also for admins
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:386:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > shows an admin only the admin’s own summary, ledger and requests
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ reserve tests/integration/ot-api.test.ts:51:58
+     49| async function reserve(cookie: string, requestKey: string, minutes: nu…
+     50|   const response = await t.request('POST', '/api/ot/leave', { cookie, …
+     51|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     52|   return response.body.request as { id: string; version: number };
+     53| }
+ ❯ tests/integration/ot-api.test.ts:429:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies
+ FAIL  tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies
+ FAIL  tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies
+ FAIL  tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/ot-api.test.ts:466:30
+    464|     expect(form.status).toBe(415);
+    465|     const anonymous = await t.request('POST', path, { body, origin: OR…
+    466|     expect(anonymous.status).toBe(401);
+       |                              ^
+    467|     expect(count('SELECT count(*) FROM ot_leave_requests')).toBe(0);
+    468|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > exposes exactly the reviewed OT, history and evidence routes
+AssertionError: expected [] to deeply equal [ 'GET /api/history', …(8) ]
+
+- Expected
++ Received
+
+- [
+-   "GET /api/history",
+-   "GET /api/ot/evidence.csv",
+-   "GET /api/ot/leave",
+-   "GET /api/ot/ledger",
+-   "GET /api/ot/summary",
+-   "POST /api/ot/leave",
+-   "POST /api/ot/leave/:id/cancel",
+-   "POST /api/ot/leave/:id/consume",
+-   "POST /api/ot/leave/:id/reverse",
+- ]
++ []
+
+ ❯ tests/integration/ot-api.test.ts:483:20
+    481|   it('exposes exactly the reviewed OT, history and evidence routes', (…
+    482|     const routes = appRoutes().filter((route) => /\/api\/(ot|history)/…
+    483|     expect(routes).toEqual(
+       |                    ^
+    484|       [
+    485|         'GET /api/history',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting
+AssertionError: expected [ 'DELETE /api/sessions/:id', …(8) ] to deeply equal [ 'DELETE /api/sessions/:id', …(12) ]
+
+- Expected
++ Received
+
+@@ -3,13 +3,9 @@
+    "POST /api/auth/login",
+    "POST /api/auth/logout",
+    "POST /api/clock/in",
+    "POST /api/clock/out",
+    "POST /api/days/:workDate/sessions",
+-   "POST /api/ot/leave",
+-   "POST /api/ot/leave/:id/cancel",
+-   "POST /api/ot/leave/:id/consume",
+-   "POST /api/ot/leave/:id/reverse",
+    "POST /api/policies",
+    "PUT /api/days/:workDate",
+    "PUT /api/sessions/:id",
+  ]
+
+ ❯ tests/integration/ot-api.test.ts:500:22
+    498|   it('has no state-changing route outside the reviewed allowlist and n…
+    499|     const mutating = appRoutes().filter((route) => !route.startsWith('…
+    500|     expect(mutating).toEqual(
+       |                      ^
+    501|       [
+    502|         'DELETE /api/sessions/:id',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/35]⎯
+
+ FAIL  tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > never imports a ledger posting function into an HTTP router
+AssertionError: expected [ 'api.ts', 'auth.ts' ] to deeply equal ArrayContaining ["ot.ts", "history.ts"]
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "ot.ts",
+-   "history.ts",
++ [
++   "api.ts",
++   "auth.ts",
+  ]
+
+ ❯ tests/integration/ot-api.test.ts:528:19
+    526|     const dir = join(import.meta.dirname, '../../src/server/routes');
+    527|     const files = readdirSync(dir).filter((name) => name.endsWith('.ts…
+    528|     expect(files).toEqual(expect.arrayContaining(['ot.ts', 'history.ts…
+       |                   ^
+    529|     for (const name of files) {
+    530|       const source = readFileSync(join(dir, name), 'utf8');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/35]⎯
+
+
+ Test Files  4 failed (4)
+      Tests  34 failed | 8 passed (42)
+   Start at  22:53:44
+   Duration  7.08s (tests 87%, transform 10%, import 4%)

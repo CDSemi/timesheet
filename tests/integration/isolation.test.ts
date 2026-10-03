@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { postCredit } from '../../src/server/services/ledger.ts';
 import { createTestContext, DEFAULT_BREAKS_0900, la, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -164,5 +165,97 @@ describe('two-user isolation (AC-01)', () => {
       .prepare('SELECT DISTINCT actor_user_id, owner_user_id FROM audit_events WHERE entity_id = ?')
       .all(employeeSessionId);
     expect(rows).toEqual([{ actor_user_id: t.userIds.employee, owner_user_id: t.userIds.employee }]);
+  });
+});
+
+describe('WP2 OT, leave, evidence and history isolation (AC-01)', () => {
+  async function employeeLeave() {
+    postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.employee, sourceKey: 'opening-balance', minutes: 600, workDate: '2026-09-21', actorUserId: null, origin: 'system' },
+    );
+    const created = await t.request('POST', '/api/ot/leave', {
+      cookie: employee,
+      body: {
+        request_key: 'iso-leave',
+        leave_date: '2026-09-25',
+        requested_minutes: 240,
+        permission: { approver_name: 'Synthetic Manager', approval_date: '2026-09-24', evidence_ref: 'Synthetic isolation reference' },
+      },
+    });
+    expect(created.status).toBe(201);
+    return created.body.request as { id: string; version: number };
+  }
+
+  function leaveState(requestId: string) {
+    return {
+      request: t.db.prepare('SELECT * FROM ot_leave_requests WHERE id = ?').get(requestId),
+      ledger: t.db.prepare('SELECT * FROM ot_ledger WHERE user_id = ?').all(t.userIds.employee),
+      audit: t.db.prepare('SELECT count(*) FROM audit_events').pluck().get(),
+    };
+  }
+
+  it('answers 404 to an admin swapping the identifier of an employee leave request', async () => {
+    const leave = await employeeLeave();
+    const before = leaveState(leave.id);
+    const attempts: Array<[string, unknown]> = [
+      ['consume', { use_key: 'swap', minutes: 60, expected_version: 1 }],
+      ['cancel', { expected_version: 1, reason: 'swap attempt' }],
+      ['reverse', { reversal_key: 'swap', minutes: 60, reason: 'swap attempt', expected_version: 1 }],
+    ];
+    for (const [action, body] of attempts) {
+      const response = await t.request('POST', `/api/ot/leave/${leave.id}/${action}`, { cookie: admin, body });
+      expect(response.status, action).toBe(404);
+      expect(response.body.error.code).toBe('not_found');
+    }
+    expect(leaveState(leave.id)).toEqual(before);
+  });
+
+  it('answers 404 to an employee swapping the identifier of an admin leave request', async () => {
+    postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.admin, sourceKey: 'opening-balance', minutes: 300, workDate: '2026-09-21', actorUserId: null, origin: 'system' },
+    );
+    const created = await t.request('POST', '/api/ot/leave', {
+      cookie: admin,
+      body: {
+        request_key: 'admin-leave',
+        leave_date: '2026-09-25',
+        requested_minutes: 120,
+        permission: { approver_name: 'Synthetic Manager', approval_date: '2026-09-24', evidence_ref: 'Synthetic admin reference' },
+      },
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.request.id as string;
+    const before = t.db.prepare('SELECT * FROM ot_leave_requests WHERE id = ?').get(id);
+    for (const [action, body] of [
+      ['consume', { use_key: 'swap', minutes: 60, expected_version: 1 }],
+      ['cancel', { expected_version: 1 }],
+      ['reverse', { reversal_key: 'swap', minutes: 60, reason: 'swap attempt', expected_version: 1 }],
+    ] as const) {
+      const response = await t.request('POST', `/api/ot/leave/${id}/${action}`, { cookie: employee, body });
+      expect(response.status, action).toBe(404);
+    }
+    expect(t.db.prepare('SELECT * FROM ot_leave_requests WHERE id = ?').get(id)).toEqual(before);
+  });
+
+  it('keeps summary, ledger, leave list, evidence export and history private per user', async () => {
+    await employeeLeave();
+    const adminReads = await Promise.all(
+      [
+        '/api/ot/summary',
+        '/api/ot/ledger',
+        '/api/ot/leave',
+        '/api/ot/evidence.csv?from=2026-09-21&to=2026-10-09',
+        `/api/history?user_id=${t.userIds.employee}`,
+      ].map(async (path) => ({ path, response: await t.request('GET', path, { cookie: admin }) })),
+    );
+    for (const { path, response } of adminReads) {
+      expect(response.status, path).toBe(200);
+      const text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);
+      expect(text, path).not.toContain('Synthetic Manager');
+      expect(text, path).not.toContain('Synthetic isolation reference');
+      expect(text, path).not.toContain(employeeSessionId);
+    }
   });
 });

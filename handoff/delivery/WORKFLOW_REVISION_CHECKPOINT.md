@@ -42,7 +42,11 @@ America/Los_Angeles).
   `governance_backlog`. GOV-E8-ACCEPT (records) running.
 - GOV-E8-ACCEPT done on attempt 2: commit 30be0b152f9cbcf62c517257b76c52c2493b5ca6
   pushed. WP2-T03 (worker-high, opus override novelty) running.
-- Next action: reconcile WP2-T03, then WP2-T03-FREEZE and WP2-T04.
+- WP2-T03 done (opus; concurrency proven) and frozen in 67c7e7a6e10779163647f88b84ebd91fcea390d6
+  (attempt 2 after an evidence-whitespace block). WP2-T04 (worker-high, sonnet) running.
+- Next action: reconcile WP2-T04 → WP2-T04-FREEZE → decide the optional advisory ledger
+  audit (read-only, parallel with T05) and the batched GOV cycle (evidence-whitespace
+  policy, R1, R2) before T05 or T09.
 
 ## Orchestration recovery
 
