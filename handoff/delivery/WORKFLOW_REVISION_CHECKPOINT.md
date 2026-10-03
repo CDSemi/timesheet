@@ -17,13 +17,17 @@ America/Los_Angeles).
 - Last verification: WF-GATE3 PASS, digest
   2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3; WF-AUDIT3 PASS on the
   same commit/digest.
-- In progress: WF-ACCEPT (committer): records-only accept commit and push.
+- WF-ACCEPT done: records-only accept commit bfdc1a8bbfd0bcbd06511fd02212e111d300356d
+  pushed (49 handoff paths). In progress: WP1-F01-FIX (worker-high, sonnet/high) on that
+  baseline.
 - Remaining: WP1-F01-FIX → WP1-F01-FREEZE → WP1-F01-GATE (separate, package-final) →
   WP1-F01-AUDIT (fresh opus) → WP1-F01-ACCEPT; only PASS unlocks WP2; then roadmap
   WP2–WP5; real pilot stays owner-controlled.
 - Unchanged: WP1 FIX REQUIRED, F-01 unresolved, WP2 not started; no real sending,
   deployment, billing, global-setting or permission-setting changes.
-- Next action: record the WF-ACCEPT SHA, then dispatch WP1-F01-FIX (worker-high, sonnet).
+- WP1-F01-FIX done (author-reported: 6 regressions red→green, verify 180/180, digest
+  c6e24381…9c59 pre-commit). WP1-F01-FREEZE (committer) running.
+- Next action: record the freeze SHA; dispatch WP1-F01-GATE, then fresh WP1-F01-AUDIT.
 
 ## Orchestration recovery
 

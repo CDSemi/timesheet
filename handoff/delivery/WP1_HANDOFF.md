@@ -71,3 +71,24 @@ Completed from [HANDOFF](../templates/HANDOFF.md) with actual evidence. Translat
 - **Usage/credits only if actually observable:** not observable in this session.
 
 - **One next action and matching prompt:** after the layout commit is pushed, give ChatGPT Work/Codex the repository at that commit (or a source archive without `node_modules/`, `dist/` and databases) with this handoff, and run [WP1_REVIEW](../prompts/WP1_REVIEW.md) as described in [NEXT_ACTION](../NEXT_ACTION.md) section 5.
+
+## Fix section: F-01 (WP1-F01-FIX, attempt 1)
+
+Added after the original handoff above, which is kept unchanged. Fix of finding F-01 in [WP1_REVIEW](WP1_REVIEW.md) only; no other finding, business rule or the OT engine was touched. Not independently accepted: the reviewer must recheck it.
+
+- **Finding disposition:** F-01 (R-01 confirmed excluded breaks, R-02 confirm actual/none at Clock out, R-04 daily OT, FR-06, AC-02) reproduced and fixed. Cause: `clockOut` inserted the submitted breaks without removing the saved ones. Confirming a saved break therefore duplicated it and failed with 422 `overlapping_breaks` (F-01A), and confirming none kept the old row and deducted it (F-01B: R 541 / credit 60 instead of R 556 / credit 90).
+- **Reproduction first:** `tests/integration/clock-out-breaks.test.ts` on fresh migrated synthetic SQLite failed before the fix with 5 failed / 1 passed (F-01A, F-01B, replace-not-append, audit after-state, rollback-then-clock-out). Log: `handoff/delivery/evidence/WP1-F01-FIX/red-before-fix.txt`.
+- **Changed files:** `src/server/services/timesheetCommands.ts` (`clockOut` only); new `tests/integration/clock-out-breaks.test.ts`; this handoff and its translation; the task report `handoff/delivery/tasks/WP1-F01-FIX.md`; evidence in `handoff/delivery/evidence/WP1-F01-FIX/`. No commit by the fix worker.
+- **Fix:** inside the existing owner-scoped IMMEDIATE transaction, when `breaks_confirmed` is true the saved `session_breaks` rows of the open session are deleted after validation and before the session update, and the submitted set (possibly empty) is inserted, as `updateSession` does. The session UPDATE now also checks `changes === 1` and throws the stale-version error otherwise. The single before/after `work_session.clock_out` audit event and the rollback on any validation failure are unchanged. Unconfirmed Clock out (`breaks_confirmed:false`) keeps the saved rows and stays `incomplete_breaks`, as before.
+- **Regression tests (6):** F-01A (200, closed, one break, R 541, E 61, credit 60); F-01B (explicit empty set: breaks cleared, R 556, E 76, credit 90, day read agrees); a different submitted break replaces rather than appends (R 526); one `clock_out` audit event with the old break in `before` and the new set in `after`; unconfirmed Clock out keeps the saved break and `incomplete_breaks`; invalid submitted sets (`break_outside_session`, `overlapping_breaks`) return 422 with the session still open, saved break, version, timesheet version and audit count unchanged, and a later correct Clock out succeeds.
+- **Commands (Node v24.21.0, project folder):**
+
+  | Command | Exit | Result | Evidence |
+  |---|---:|---|---|
+  | `npm exec -- vitest run tests/integration/clock-out-breaks.test.ts` before the fix | 1 | 5 failed, 1 passed | `…/WP1-F01-FIX/red-before-fix.txt` |
+  | same command after the fix | 0 | 6/6 passed | `…/green-after-fix.txt` |
+  | `npm run verify` (typecheck, lint with `no-deprecated`, tests, build, smoke) | 0 | 11 files, 180/180 tests (174 earlier + 6 new); build clean; smoke 13/13 | `…/verify.txt` |
+  | `npm run digest` | 0 | `c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59` (533 files, `handoff/` excluded; includes the uncommitted fix and test) | `…/digest.txt` |
+
+- **Remaining unverified/risks:** this run was in the project folder, not a clean export. Unconfirmed Clock out that submits non-empty breaks still appends them without checking them against the saved rows (not part of F-01; the review treats only confirmed breaks). Independent recheck, the WP1 gate and WP2 remain open.
+- **One next review action:** give a fresh independent auditor the committed result with [WP1_REVIEW](WP1_REVIEW.md) F-01 and run the WP1 recheck gate (document 08) before WP2.

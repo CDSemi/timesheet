@@ -1,0 +1,155 @@
+$ npm exec -- vitest run tests/integration/clock-out-breaks.test.ts   (Node v24.21.0, before the fix)
+exit=1
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/clock-out-breaks.test.ts (6 tests | 5 failed) 875ms
+   ❯ Clock out replaces the stored break set when breaks are confirmed (F-01) (6)
+     × F-01A: confirming the already saved break closes the session with exactly one break (R 541, credit 60) 175ms
+     × F-01B: confirming zero breaks clears the saved break (R 556, E 76, credit 90) 140ms
+     × replaces rather than appends: a different submitted break becomes the only stored break 139ms
+     × records one clock_out audit event whose before/after show the replaced break set 138ms
+     × rolls back completely when the submitted set is invalid: still open, saved break intact, no audit event 143ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01A: confirming the already saved break closes the session with exactly one break (R 541, credit 60)
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/clock-out-breaks.test.ts:57:24
+     55|       body: { breaks: [SAVED_BREAK], breaks_confirmed: true },
+     56|     });
+     57|     expect(out.status).toBe(200);
+       |                        ^
+     58|     expect(out.body.session).toMatchObject({
+     59|       id: sessionId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > F-01B: confirming zero breaks clears the saved break (R 556, E 76, credit 90)
+AssertionError: expected { …(9) } to match object { …(3) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "breaks": [],
++   "breaks": [
++     {
++       "counts_as_work": false,
++       "end_utc": "2026-09-29T18:15:00Z",
++       "id": "88ba9303-cf14-4a05-96e7-cbb45e6fe2d3",
++       "start_utc": "2026-09-29T18:00:00Z",
++     },
++   ],
+    "breaks_confirmed": true,
+    "end_utc": "2026-09-30T01:16:00Z",
+  }
+
+ ❯ tests/integration/clock-out-breaks.test.ts:84:30
+     82|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+     83|     expect(out.status).toBe(200);
+     84|     expect(out.body.session).toMatchObject({ end_utc: '2026-09-30T01:1…
+       |                              ^
+     85|     expect(out.body.day.calculation).toMatchObject({
+     86|       status: 'complete',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > replaces rather than appends: a different submitted break becomes the only stored break
+AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "counts_as_work": 0,
++     "end_utc": "2026-09-29T18:15:00Z",
++     "start_utc": "2026-09-29T18:00:00Z",
++   },
++   {
++     "counts_as_work": 0,
+      "end_utc": "2026-09-29T20:30:00Z",
+      "start_utc": "2026-09-29T20:00:00Z",
+    },
+  ]
+
+ ❯ tests/integration/clock-out-breaks.test.ts:108:43
+    106|     });
+    107|     expect(out.status).toBe(200);
+    108|     expect(storedBreaks(t.db, sessionId)).toEqual([
+       |                                           ^
+    109|       { start_utc: '2026-09-29T20:00:00Z', end_utc: '2026-09-29T20:30:…
+    110|     ]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > records one clock_out audit event whose before/after show the replaced break set
+AssertionError: expected { …(9) } to match object { …(4) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "breaks": [],
++   "breaks": [
++     {
++       "counts_as_work": false,
++       "end_utc": "2026-09-29T18:15:00Z",
++       "id": "fdfbfc92-e950-47c4-bc70-171b26516e40",
++       "start_utc": "2026-09-29T18:00:00Z",
++     },
++   ],
+    "breaks_confirmed": true,
+    "end_utc": "2026-09-30T01:16:00Z",
+    "version": 2,
+  }
+
+ ❯ tests/integration/clock-out-breaks.test.ts:127:23
+    125|     expect(beforeJson).toMatchObject({ end_utc: null, breaks_confirmed…
+    126|     expect(beforeJson.breaks).toHaveLength(1);
+    127|     expect(afterJson).toMatchObject({ end_utc: '2026-09-30T01:16:00Z',…
+       |                       ^
+    128|   });
+    129|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/clock-out-breaks.test.ts > Clock out replaces the stored break set when breaks are confirmed (F-01) > rolls back completely when the submitted set is invalid: still open, saved break intact, no audit event
+AssertionError: expected { status: 'complete', …(12) } to match object { regular_minutes: 556, …(1) }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "credited_minutes": 90,
+-   "regular_minutes": 556,
++   "credited_minutes": 60,
++   "regular_minutes": 541,
+  }
+
+ ❯ tests/integration/clock-out-breaks.test.ts:170:38
+    168|     const out = await t.request('POST', '/api/clock/out', { cookie, bo…
+    169|     expect(out.status).toBe(200);
+    170|     expect(out.body.day.calculation).toMatchObject({ regular_minutes: …
+       |                                      ^
+    171|   });
+    172| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  20:31:10
+   Duration  1.37s (tests 68%, transform 25%, import 7%)

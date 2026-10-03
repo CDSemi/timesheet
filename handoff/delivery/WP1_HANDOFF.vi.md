@@ -71,3 +71,24 @@
 - **Usage/credits chỉ khi quan sát thật:** không quan sát được trong phiên này.
 
 - **Một bước tiếp và prompt tương ứng:** sau khi push commit bố cục, đưa ChatGPT Work/Codex repo tại commit đó (hoặc source archive không gồm `node_modules/`, `dist/` và CSDL) cùng bàn giao này, rồi chạy [WP1_REVIEW](../prompts/WP1_REVIEW.vi.md) như mô tả ở mục 5 của [NEXT_ACTION](../NEXT_ACTION.vi.md).
+
+## Phần sửa lỗi: F-01 (WP1-F01-FIX, lần 1)
+
+Thêm sau bản bàn giao gốc ở trên (giữ nguyên). Chỉ sửa phát hiện F-01 trong [WP1_REVIEW](WP1_REVIEW.md); không đụng phát hiện nào khác, quy tắc nghiệp vụ hay engine OT. Chưa được chấp nhận độc lập: reviewer phải kiểm tra lại.
+
+- **Xử lý phát hiện:** F-01 (R-01 giờ nghỉ loại trừ đã xác nhận, R-02 xác nhận thực tế/không có giờ nghỉ khi Clock out, R-04 OT ngày, FR-06, AC-02) đã tái hiện và sửa. Nguyên nhân: `clockOut` chèn giờ nghỉ gửi lên mà không xóa giờ nghỉ đã lưu. Xác nhận lại giờ nghỉ đã lưu bị nhân đôi và lỗi 422 `overlapping_breaks` (F-01A); xác nhận không có giờ nghỉ vẫn giữ dòng cũ và trừ nó (F-01B: R 541 / credit 60 thay vì R 556 / credit 90).
+- **Tái hiện trước:** `tests/integration/clock-out-breaks.test.ts` trên SQLite synthetic migrate mới thất bại trước khi sửa: 5 fail / 1 pass. Log: `handoff/delivery/evidence/WP1-F01-FIX/red-before-fix.txt`.
+- **File thay đổi:** `src/server/services/timesheetCommands.ts` (chỉ `clockOut`); thêm `tests/integration/clock-out-breaks.test.ts`; bàn giao này và bản dịch; báo cáo task `handoff/delivery/tasks/WP1-F01-FIX.md`; bằng chứng trong `handoff/delivery/evidence/WP1-F01-FIX/`. Worker sửa lỗi không commit.
+- **Cách sửa:** trong transaction IMMEDIATE có phạm vi chủ sở hữu hiện có, khi `breaks_confirmed` là true, các dòng `session_breaks` đã lưu của phiên đang mở bị xóa sau bước validate và trước khi cập nhật phiên, rồi chèn tập gửi lên (có thể rỗng), giống `updateSession`. UPDATE phiên nay còn kiểm tra `changes === 1`, nếu không thì ném lỗi stale-version. Một sự kiện audit `work_session.clock_out` có before/after và rollback khi validate lỗi giữ nguyên. Clock out chưa xác nhận (`breaks_confirmed:false`) vẫn giữ các dòng đã lưu và ở `incomplete_breaks` như trước.
+- **Test hồi quy (6):** F-01A (200, đóng phiên, một giờ nghỉ, R 541, E 61, credit 60); F-01B (tập rỗng tường minh: xóa giờ nghỉ, R 556, E 76, credit 90, đọc lại ngày khớp); giờ nghỉ khác thay thế chứ không nối thêm (R 526); một sự kiện audit `clock_out` với giờ nghỉ cũ ở `before` và tập mới ở `after`; Clock out chưa xác nhận giữ giờ nghỉ đã lưu và `incomplete_breaks`; tập gửi lên không hợp lệ (`break_outside_session`, `overlapping_breaks`) trả 422, phiên vẫn mở, giờ nghỉ đã lưu, version, version timesheet và số audit không đổi, và Clock out đúng sau đó thành công.
+- **Lệnh (Node v24.21.0, thư mục dự án):**
+
+  | Lệnh | Exit | Kết quả | Bằng chứng |
+  |---|---:|---|---|
+  | `npm exec -- vitest run tests/integration/clock-out-breaks.test.ts` trước khi sửa | 1 | 5 fail, 1 pass | `…/WP1-F01-FIX/red-before-fix.txt` |
+  | cùng lệnh sau khi sửa | 0 | 6/6 pass | `…/green-after-fix.txt` |
+  | `npm run verify` (typecheck, lint có `no-deprecated`, test, build, smoke) | 0 | 11 file, 180/180 test (174 trước + 6 mới); build sạch; smoke 13/13 | `…/verify.txt` |
+  | `npm run digest` | 0 | `c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59` (533 file, loại trừ `handoff/`; gồm bản sửa và test chưa commit) | `…/digest.txt` |
+
+- **Chưa kiểm chứng/rủi ro còn lại:** lần chạy này ở thư mục dự án, không phải clean export. Clock out chưa xác nhận mà gửi giờ nghỉ khác rỗng vẫn nối thêm mà không đối chiếu với các dòng đã lưu (không thuộc F-01; review chỉ xét giờ nghỉ đã xác nhận). Kiểm tra lại độc lập, cổng WP1 và WP2 vẫn mở.
+- **Một bước review tiếp theo:** đưa kết quả đã commit cho auditor độc lập mới cùng F-01 trong [WP1_REVIEW](WP1_REVIEW.md) và chạy cổng kiểm tra lại WP1 (tài liệu 08) trước WP2.

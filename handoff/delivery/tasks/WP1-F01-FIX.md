@@ -50,3 +50,12 @@ added, failing-then-passing evidence, verify exits, digest, deviations.
 ## Results
 
 (Worker appends here.)
+
+### Worker result (attempt 1)
+
+- Reproduced first: new `tests/integration/clock-out-breaks.test.ts` (6 tests) failed 5/6 before the fix (F-01A, F-01B, replace-not-append, audit after-state, rollback-then-clock-out); log `evidence/WP1-F01-FIX/red-before-fix.txt`.
+- Fix in `clockOut` only: if `breaks_confirmed`, DELETE the open session's `session_breaks` (owner-scoped) inside the existing IMMEDIATE transaction before the session UPDATE, then insert the submitted set; UPDATE now asserts `changes === 1` (stale version otherwise), as `updateSession`. Audit and rollback unchanged; unconfirmed Clock out leaves saved rows untouched.
+- After: new test file 6/6 (exit 0, `green-after-fix.txt`); `npm run verify` exit 0 on Node v24.21.0: 11 files, 180/180 tests, typecheck/lint/build clean, smoke 13/13 (`verify.txt`); `npm run digest` exit 0: `c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59` (533 files, includes uncommitted fix and test; `digest.txt`).
+- WP1_HANDOFF.md/.vi.md: fix section appended, original kept.
+- Deviation/risk: ran in the project folder (not a clean export). Unconfirmed Clock out with non-empty submitted breaks still appends without checking saved rows; outside F-01, noted in the handoff.
+- Normalized evidence logs (green-after-fix, red-before-fix) to a single final LF, no trailing whitespace; the other evidence files, brief and WP1_HANDOFF.md/.vi.md checked clean.

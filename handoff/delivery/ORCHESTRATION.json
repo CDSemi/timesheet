@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP1",
-  "phase": "governance-accept",
+  "phase": "wp1-f01-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WF-ACCEPT",
+  "next_task_id": "WP1-F01-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -49,7 +49,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
+    "last_commit": "bfdc1a8bbfd0bcbd06511fd02212e111d300356d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -905,7 +905,7 @@
       "id": "WF-ACCEPT",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WF-AUDIT3"
       ],
@@ -918,10 +918,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "afdbb5d5a4f205b5f",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -930,16 +930,22 @@
       ],
       "prompt": "handoff/delivery/tasks/WF-ACCEPT.md",
       "report": "handoff/delivery/tasks/WF-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WF-ACCEPT/node-version.txt",
+        "handoff/delivery/evidence/WF-ACCEPT/precommit-1.txt",
+        "handoff/delivery/evidence/WF-ACCEPT/diffcheck.txt",
+        "handoff/delivery/evidence/WF-ACCEPT/validate.txt",
+        "handoff/delivery/evidence/WF-ACCEPT/commit-message.txt"
+      ],
       "baseline_commit": "6578df8f81e8c0ead5ec09444b7bd8fa081d1ff7",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": null,
+      "commit_sha": "bfdc1a8bbfd0bcbd06511fd02212e111d300356d",
+      "pushed": true,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Accept commit of governance records (gate/audit evidence, recheck report, handoff, state, entry prompt, checkpoint, F-01 brief); push."
+      "decision": "committed and pushed: 49 handoff paths; precommit 0 blocking/0 warnings; diff-check, JSON parse and validator exit 0.",
+      "next_action": "None; governance accepted and committed."
     },
     {
       "id": "WP1-F01-PLAN",
@@ -973,7 +979,8 @@
       "id": "WP1-F01-FIX",
       "package": "WP1",
       "kind": "fix",
-      "status": "pending",
+      "status": "done",
+      "followup": "Done: normalized EOF of green-after-fix.txt and red-before-fix.txt (single LF, no trailing blank line); other owned files already clean; git diff --check 0 on tracked paths.",
       "depends_on": [
         "WF-ACCEPT"
       ],
@@ -986,12 +993,12 @@
         "risk": "H",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
+      "agent_id": "aaa3e81ab96efd11e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
       "owned_paths": [
         "src/server/services/timesheetCommands.ts",
         "tests/integration",
@@ -1002,19 +1009,27 @@
       ],
       "prompt": "handoff/prompts/FIX_FINDINGS.md",
       "report": "handoff/delivery/tasks/WP1-F01-FIX.md",
-      "evidence": [],
-      "baseline_commit": "fd77a8717da9a1b2ea9ce13520d59b9df60f4716",
-      "source_digest": null,
+      "evidence": [
+        "handoff/delivery/evidence/WP1-F01-FIX/red-before-fix.txt",
+        "handoff/delivery/evidence/WP1-F01-FIX/green-after-fix.txt",
+        "handoff/delivery/evidence/WP1-F01-FIX/verify.txt",
+        "handoff/delivery/evidence/WP1-F01-FIX/digest.txt"
+      ],
+      "baseline_commit": "bfdc1a8bbfd0bcbd06511fd02212e111d300356d",
+      "source_digest": "c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "After governance PASS and accept commit: reproduce F-01A/F-01B from WP1_REVIEW, fix F-01 only with regression coverage, update WP1_HANDOFF (EN/VI); English task record."
+      "decision": "implemented (author-reported): clockOut replaces saved breaks when confirmed; 6 new regression tests failed 5/6 before and pass 6/6 after; verify 180/180, lint/typecheck/build/smoke pass on Node 24; residual risk noted (unconfirmed non-empty breaks append). Not independent acceptance.",
+      "next_action": "None; WP1-F01-FREEZE, separate gate and fresh recheck follow."
     },
     {
       "id": "WP1-F01-FREEZE",
       "package": "WP1",
       "kind": "commit",
-      "status": "pending",
+      "status": "running",
+      "history": [
+        "attempt 1 (agent ad0f6c89481d7cf75): no commit; git diff --cached --check exit 2 (new blank line at EOF in WP1-F01-FIX evidence green-after-fix.txt and red-before-fix.txt); 21 paths left staged; precommit 0, validator ok."
+      ],
       "depends_on": [
         "WP1-F01-FIX"
       ],
@@ -1027,20 +1042,20 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
+      "agent_id": "ad0f6c89481d7cf75",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
       "owned_paths": [
         "handoff/delivery/tasks/WP1-F01-FREEZE.md",
         "handoff/delivery/evidence/WP1-F01-FREEZE"
       ],
-      "prompt": "handoff/prompts/FIX_FINDINGS.md",
+      "prompt": "handoff/delivery/tasks/WP1-F01-FREEZE.md",
       "report": "handoff/delivery/tasks/WP1-F01-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "fd77a8717da9a1b2ea9ce13520d59b9df60f4716",
+      "baseline_commit": "bfdc1a8bbfd0bcbd06511fd02212e111d300356d",
       "branch": "main",
       "commit_sha": null,
       "pushed": null,
@@ -1077,7 +1092,7 @@
         "handoff/delivery/tasks/WP1-F01-GATE.md",
         "handoff/delivery/evidence/WP1-F01-GATE"
       ],
-      "prompt": "handoff/prompts/WP1_REVIEW.md",
+      "prompt": "handoff/delivery/tasks/WP1-F01-GATE.md",
       "report": "handoff/delivery/tasks/WP1-F01-GATE.md",
       "evidence": [],
       "baseline_commit": "fd77a8717da9a1b2ea9ce13520d59b9df60f4716",
@@ -1116,7 +1131,7 @@
         "handoff/delivery/tasks/WP1-F01-AUDIT.md",
         "handoff/delivery/evidence/WP1-F01-AUDIT"
       ],
-      "prompt": "handoff/prompts/WP1_REVIEW.md",
+      "prompt": "handoff/delivery/tasks/WP1-F01-AUDIT.md",
       "report": "handoff/delivery/tasks/WP1-F01-AUDIT.md",
       "evidence": [],
       "baseline_commit": "fd77a8717da9a1b2ea9ce13520d59b9df60f4716",

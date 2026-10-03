@@ -17,13 +17,17 @@ America/Los_Angeles).
 - Kiểm chứng gần nhất: WF-GATE3 PASS, digest
   2f50be649666c785f9fd3db99f67c6d9115ad75b3dda089c36fbfb8d460af7b3; WF-AUDIT3 PASS trên cùng
   commit/digest.
-- Đang chạy: WF-ACCEPT (committer): commit nghiệm thu chỉ gồm record, rồi push.
+- WF-ACCEPT xong: commit nghiệm thu chỉ gồm record bfdc1a8bbfd0bcbd06511fd02212e111d300356d
+  đã push (49 path trong handoff). Đang chạy: WP1-F01-FIX (worker-high, sonnet/high) trên
+  baseline đó.
 - Còn lại: WP1-F01-FIX → WP1-F01-FREEZE → WP1-F01-GATE (riêng, snapshot cuối package) →
   WP1-F01-AUDIT (opus mới) → WP1-F01-ACCEPT; chỉ PASS mới mở WP2; sau đó lộ trình WP2–WP5;
   pilot thật do chủ dự án quyết.
 - Không đổi: WP1 FIX REQUIRED, F-01 chưa sửa, WP2 chưa bắt đầu; không gửi thật, triển
   khai, đổi billing, cài đặt toàn cục hay cài đặt quyền.
-- Bước tiếp: ghi SHA WF-ACCEPT, rồi giao WP1-F01-FIX (worker-high, sonnet).
+- WP1-F01-FIX xong (tác giả báo: 6 test hồi quy từ fail sang pass, verify 180/180, digest
+  c6e24381…9c59 trước commit). WP1-F01-FREEZE (committer) đang chạy.
+- Bước tiếp: ghi SHA đóng băng; giao WP1-F01-GATE, rồi WP1-F01-AUDIT mới.
 
 ## Khôi phục điều phối
 

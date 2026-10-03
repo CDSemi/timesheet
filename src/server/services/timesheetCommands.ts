@@ -434,7 +434,15 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
       breaks: input.breaks,
       breaks_confirmed: input.breaks_confirmed,
     });
-    ctx.db
+    // Confirmed actual breaks (including the explicit empty set) are the session's whole
+    // break set, as in updateSession: drop the saved rows before inserting the submitted
+    // ones so they are neither duplicated nor silently kept (R-01, R-02). Unconfirmed
+    // breaks stay unknown and leave the saved rows untouched. Any later failure rolls the
+    // whole transaction back, restoring the deleted rows.
+    if (input.breaks_confirmed) {
+      ctx.db.prepare('DELETE FROM session_breaks WHERE session_id = ? AND user_id = ?').run(open.id, ctx.user.id);
+    }
+    const result = ctx.db
       .prepare(
         `UPDATE work_sessions SET end_utc = ?, breaks_confirmed = ?, version = version + 1, updated_at = ?
           WHERE id = ? AND user_id = ? AND version = ?`,
@@ -447,6 +455,7 @@ export function clockOut(ctx: CommandContext, input: ClockOutBody) {
         ctx.user.id,
         open.version,
       );
+    if (result.changes !== 1) throw staleVersion();
     insertBreaks(ctx, open.id, resolved.breaks);
     const entry = ensureDayEntry(ctx, edit, open.work_date);
     bumpTimesheet(ctx, entry.timesheet_id);
