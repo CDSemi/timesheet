@@ -51,4 +51,8 @@ handoff/delivery/evidence/WP2-T02-FREEZE/. Return at most 200 words.
 
 ## Results
 
-(Committer appends here.)
+- Pre HEAD 396b399b2d58ccc7ea90dc78be9e7c2f9a832be2; post HEAD 8930efee064ac84256b3f82b87005717a489d1b7.
+- Commit 8930efee064ac84256b3f82b87005717a489d1b7; pushed to origin main; remote SHA identical.
+- Staged count 26; masked files none; Node v24.21.0.
+- Checks: precommit exit 0; diff --check exit 0; JSON parse exit 0; orchestration validator exit 0 (PASS).
+- Staged-diff personal-data read: synthetic values only. Blockers: none.
