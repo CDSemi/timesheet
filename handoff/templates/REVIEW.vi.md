@@ -1,7 +1,7 @@
 # Review độc lập
 
 - Giai đoạn/ngày/reviewer và model/effort quan sát được:
-- Baseline/commit đã kiểm chính xác; source đủ hay không:
+- Commit SHA và source digest đã kiểm chính xác; commit chưa push; source đủ hay không:
 - Quyết định: PASS / FIX REQUIRED / NOT VERIFIED:
 - Phạm vi thật đã xem/chạy:
 - Bảng bằng chứng: lệnh | kết quả/exit | bằng chứng:

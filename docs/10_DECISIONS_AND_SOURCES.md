@@ -70,3 +70,9 @@ and executed current-source evidence, not necessarily a different vendor.
 Official subagent/model/resume/checkpoint capabilities were checked on 2026-10-02;
 the actual local Claude client/account has not been exercised by this documentation change.
 No automatic reset scheduler is configured.
+
+## Owner decisions — 2026-10-02 (commits and routing)
+
+- Commit/push authorization (owner standing decision, confirmed directly in the main session): only `timesheet-committer` commits and pushes; directly on `main` with a push after every commit until the first release, then side branches and PRs; no amend, force-push, history rewrite or tags; no secrets, signatures or personal data. Rules in document 08, "Commits and pushes".
+- Adaptive routing: the owner delegated model choice per dispatch to the coordinator under the document 08 rubric (size, risk, novelty). Profiles fix role and effort. Fable/best/opusplan, max effort and speed changes still need an owner decision.
+- Coordinator decision (reversible): task briefs/results under `handoff/delivery/tasks/` are English-only; Vietnamese stays for human-facing documents, prompts, templates, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW and chat.

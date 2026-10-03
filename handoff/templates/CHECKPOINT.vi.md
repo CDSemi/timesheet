@@ -1,7 +1,7 @@
 # Checkpoint có thể tiếp tục
 
 - Giai đoạn/vai trò hiện tại; model/effort thật nếu thấy:
-- Path repo/archive; baseline/commit; file chưa commit:
+- Path repo/archive; commit SHA; source digest; file chưa commit; commit chưa push:
 - Phần đã xong:
 - Lệnh/kết quả kiểm đã chạy cuối:
 - Sửa đang làm và trạng thái file:
@@ -18,7 +18,7 @@ Bản dịch của [CHECKPOINT.md](CHECKPOINT.md); tiếng Anh là nguồn chu�
 
 ## Phục hồi điều phối
 
-- Mission/task ID, trạng thái dependency, ORCHESTRATION.json/bảng previous:
+- Mission/task ID, trạng thái dependency, ORCHESTRATION.json (bảng đã commit cuối là bản phục hồi):
 - Session ID coordinator/subagent, settings yêu cầu/thật và attempt:
 - File sở hữu, brief/kết quả/evidence từng task:
 - Process còn hoặc lệnh chưa rõ xong; xác nhận writer cũ dừng:

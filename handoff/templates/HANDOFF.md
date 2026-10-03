@@ -4,7 +4,7 @@ Copy and complete with actual evidence. Keep matching .vi.md; machine logs need 
 
 - Package/scope, date and author:
 - Actual model/effort/speed, or not observable:
-- Baseline and resulting commit, or complete source archive:
+- Commit SHA, source digest and unpushed commits, or complete source archive:
 - Implementation status; independent review status:
 - Implemented behavior and changed files:
 - Migrations/schema compatibility:

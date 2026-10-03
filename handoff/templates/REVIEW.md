@@ -1,7 +1,7 @@
 # Independent review
 
 - Package/date/reviewer and observable model/effort:
-- Exact reviewed baseline/commit; source completeness:
+- Exact reviewed commit SHA and source digest; unpushed commits; source completeness:
 - Decision: PASS / FIX REQUIRED / NOT VERIFIED:
 - Scope actually inspected/executed:
 - Evidence table: command | result/exit | evidence:

@@ -1,7 +1,7 @@
 # Recoverable checkpoint
 
 - Active package and role; actual model/effort if observable:
-- Repository/archive path; baseline/commit; uncommitted files:
+- Repository/archive path; commit SHA; source digest; uncommitted files; unpushed commits:
 - Completed scope:
 - Last executed verification command/result:
 - In-progress edit and current file state:
@@ -16,7 +16,7 @@ Preserve source and evidence before stopping. Do not mark incomplete work passed
 
 ## Orchestration recovery
 
-- Mission/task IDs, dependency status and ORCHESTRATION.json/previous board:
+- Mission/task IDs, dependency status and ORCHESTRATION.json (last committed board is the recovery copy):
 - Coordinator/subagent session IDs, requested/actual settings and attempts:
 - Owned files, task-local brief/results/evidence:
 - Live processes or unknown command completion; confirm old writer stopped:

@@ -71,3 +71,9 @@ thật của chủ. Độc lập nghĩa context tác giả/reviewer riêng và b
 hiện tại, không nhất thiết khác nhà cung cấp.
 Khả năng subagent/model/resume/checkpoint chính thức kiểm ngày 2026-10-02; sửa docs này
 chưa thử client/account Claude thật tại máy. Không cấu hình scheduler reset tự động.
+
+## Quyết định của chủ — 2026-10-02 (commit và routing)
+
+- Quyền commit/push (quyết định thường trực của chủ, xác nhận trực tiếp trong phiên chính): chỉ `timesheet-committer` commit và push; thẳng `main` và push sau mỗi commit đến bản release đầu tiên, sau đó nhánh phụ và PR; không amend, force-push, viết lại lịch sử hay tag; không secret, chữ ký, dữ liệu cá nhân. Quy tắc ở tài liệu 08, mục "Commit và push".
+- Routing thích ứng: chủ ủy quyền coordinator chọn model cho từng lần giao việc theo thang ở tài liệu 08 (size, rủi ro, novelty). Profile cố định vai trò và effort. Fable/best/opusplan, effort max và đổi tốc độ vẫn cần quyết định của chủ.
+- Quyết định của coordinator (đảo ngược được): brief/kết quả task trong `handoff/delivery/tasks/` chỉ bằng tiếng Anh; tiếng Việt dành cho tài liệu cho người đọc, prompt, template, NEXT_ACTION, CHECKPOINT/HANDOFF/REVIEW và chat.

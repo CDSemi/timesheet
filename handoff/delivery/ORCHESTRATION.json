@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "ready",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,20 +14,397 @@
     "production_activation"
   ],
   "active_package": "WP1",
-  "phase": "plan",
-  "coordinator_session_id": null,
+  "phase": "workflow-revision-freeze",
+  "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+  "coordinator_runtime": {
+    "profile": "timesheet-coordinator",
+    "requested_model": "inherit",
+    "requested_effort": "medium",
+    "actual_model": "claude-opus-5-5",
+    "actual_effort": null,
+    "observed_at": "2026-10-02",
+    "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
+  },
   "current_source_digest": null,
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP1-F01-PLAN",
-  "checkpoint": "handoff/delivery/ORCHESTRATION_HANDOFF.md",
+  "next_task_id": "WF-FREEZE",
+  "runtime_observations": [
+    {
+      "date": "2026-10-02",
+      "observation": "Claude Code 2.1.285 picked up the new timesheet-committer profile mid-session (harness notice after WF-IMPL-TOOLING); no restart was needed for a new profile. Reload of edited profile bodies/efforts is checked through the next dispatch's self-report behaviour."
+    },
+    {
+      "date": "2026-10-02",
+      "observation": "WF-IMPL-DOCS opened its result with the new profile line 'Self-reported model: ...' that its dispatch prompt did not request: suggestive (not conclusive) that edited profile bodies reload mid-session."
+    },
+    {
+      "date": "2026-10-02",
+      "observation": "Auto-mode permission classifier denied a subagent Bash call writing the standing commit/push authorization into docs/08 ('Instruction Poisoning'). Owner must confirm directly in chat; coordinator will not route around the denial."
+    }
+  ],
+  "pending_owner_question": null,
+  "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
   "updated_at": "2026-10-02",
+  "git": {
+    "branch": "main",
+    "release_declared": false,
+    "last_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+    "unpushed": []
+  },
+  "owner_decisions": [
+    {
+      "date": "2026-10-02",
+      "source": "owner chat",
+      "decision": "Review end-to-end workflow practicality and efficiency; the coordinator chooses the model/effort routing approach with the best accuracy and token efficiency for the actual task size."
+    },
+    {
+      "date": "2026-10-02",
+      "source": "owner chat",
+      "decision": "Autonomous commit and push authorized during development directly on the main branch until the first release; after the first release, fixes and upgrades use side branches."
+    },
+    {
+      "date": "2026-10-02",
+      "source": "owner chat, direct confirmation typed by the owner",
+      "verbatim": "Xác nhận: cho phép ghi quyền commit/push thường trực vào AGENTS.md, docs/08, ORCHESTRATE, RESUME và các profile: chỉ qua timesheet-committer, thẳng main đến bản release đầu tiên, sau đó dùng nhánh phụ + PR; cấm amend, force-push, viết lại lịch sử, tạo tag; không commit secret, chữ ký hay dữ liệu cá nhân. Nếu bộ lọc vẫn chặn subagent, tôi đồng ý để bạn tự ghi đúng các dòng về quyền commit",
+      "decision": "Standing commit/push authorization may be written into AGENTS.md, docs/08, ORCHESTRATE, RESUME and the profiles: timesheet-committer only; main until the first release, then side branches + PR; no amend, force-push, history rewrite or tags; no secrets, signatures or personal data. Fallback: the coordinator may write exactly the commit-authority lines itself if the classifier still blocks the subagent."
+    }
+  ],
+  "coordinator_decisions": [
+    {
+      "date": "2026-10-02",
+      "basis": "WF-REVIEW report and WF-CAPS lookup",
+      "decision": "Hybrid routing: profiles fix role and effort; the coordinator picks haiku/sonnet/opus per dispatch by size, risk and novelty with a recorded reason. Expert and auditor become opus/xhigh, verifier sonnet/medium, coordinator inherit. fable, best and opusplan excluded (possible usage-credit billing)."
+    },
+    {
+      "date": "2026-10-02",
+      "basis": "Owner commit authorization; profiles forbade commit/push",
+      "decision": "New timesheet-committer profile is the only committer; freeze commit before gate/audit, accept commit after PASS, push after every commit; deterministic precommit privacy check; permission settings stay owner-controlled."
+    },
+    {
+      "date": "2026-10-02",
+      "basis": "Owner delegated token efficiency; reversible",
+      "decision": "Task briefs/results under handoff/delivery/tasks/ are English-only; human-facing documents stay bilingual."
+    },
+    {
+      "date": "2026-10-02",
+      "basis": "WP1_REVIEW F-01 already names file, function, reproduction, fix and tests",
+      "decision": "Cancel WP1-F01-PLAN; the worker reproduces first. S-size fix audits may include the gate."
+    }
+  ],
+  "auxiliary_lookups": [
+    {
+      "id": "WF-CAPS",
+      "agent_type": "claude-code-guide",
+      "agent_id": "aadcfd19858221346",
+      "status": "done",
+      "writes": [],
+      "purpose": "Read-only documentation check: subagent model aliases, effort levels per model, per-dispatch overrides, profile reload behaviour, subscription usage weighting and git attribution/permission settings.",
+      "result": {
+        "sources": [
+          "https://code.claude.com/docs/en/model-config.md",
+          "https://code.claude.com/docs/en/sub-agents.md",
+          "https://code.claude.com/docs/en/costs.md",
+          "https://code.claude.com/docs/en/hooks.md"
+        ],
+        "documented": [
+          "Model aliases: sonnet=Sonnet 5.5, opus=Opus 5.5, haiku, fable=Fable 5.1 (explicit selection only), best (Fable where available else Opus), inherit, opusplan, default; full model IDs accepted.",
+          "Effort values: low, medium, high, xhigh, max, ultracode; Opus 5.5, Sonnet 5.5 and Fable support all; agent-frontmatter effort needs Claude Code 2.1.200+ (installed 2.1.285 per WF-REVIEW).",
+          "Per-dispatch model override precedes frontmatter, then CLAUDE_CODE_SUBAGENT_MODEL, then main-session model; CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 forces one model. No per-dispatch effort override: vary effort through separate profiles.",
+          "Official guidance: Sonnet for routine work, Opus for complex decisions, Haiku to reduce subagent cost; higher effort raises thinking tokens.",
+          "Fable usage may bill to usage credits on some plans."
+        ],
+        "inferred_or_unknown": [
+          "Main-session user-selected model outranks the settings agent frontmatter (inferred; matches observed Opus 5.5).",
+          "Profile hot reload without restart: not documented; verify empirically after profile edits.",
+          "Opus versus Sonnet subscription weighting: not published.",
+          "Git commit/push by subagents follows the client's Bash permission rules; permission settings remain owner-controlled and are not changed by this mission."
+        ],
+        "coordinator_constraints": [
+          "Do not route to fable or best (possible usage-credit billing) without explicit owner approval.",
+          "Effort tiers require profiles; model may vary per dispatch only with a recorded reason."
+        ]
+      }
+    }
+  ],
   "tasks": [
+    {
+      "id": "WF-REVIEW",
+      "package": "WP1",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [],
+      "profile": "timesheet-planner",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a232a5b7f6cdec442",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WF-REVIEW.md",
+        "handoff/delivery/tasks/WF-REVIEW.vi.md"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-REVIEW.md",
+      "report": "handoff/delivery/tasks/WF-REVIEW.md",
+      "evidence": [],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered (sections A-F); coordinator decisions recorded on the board",
+      "next_action": "None; design consumed by WF-IMPL-TOOLING and WF-IMPL-DOCS."
+    },
+    {
+      "id": "WF-IMPL-TOOLING",
+      "package": "WP1",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WF-REVIEW"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae6c446dc434f85d6",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/validate_orchestration.py",
+        "handoff/delivery/check_recovery.py",
+        "handoff/delivery/validate_package.py",
+        "scripts/precommit-check.mjs",
+        "package.json",
+        ".claude/agents",
+        "handoff/delivery/tasks/WF-IMPL-TOOLING.md",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-IMPL-TOOLING.md",
+      "report": "handoff/delivery/tasks/WF-IMPL-TOOLING.md",
+      "evidence": [
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/1-validate-orchestration.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/2-check-recovery.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/3a-validate-package-system-python.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/3b-validate-package-runtime-python.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/4-precommit-self-test.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/4b-precommit-scratch-repo.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/5a-lint.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/5b-git-diff-check.txt",
+        "handoff/delivery/evidence/WF-IMPL-TOOLING/6-no-src-tests-lock-change.txt"
+      ],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported): validator PASS 9 profiles; check_recovery 48 probes PASS; preflight PASS on recorded runtime Python (system Python lacks tzdata); precommit self-test PASS; lint and diff-check exit 0; no src/tests/lock change. Not independent acceptance.",
+      "next_action": "None; covered by WF-GATE and WF-AUDIT."
+    },
+    {
+      "id": "WF-IMPL-DOCS",
+      "package": "WP1",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WF-IMPL-TOOLING"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ad742f3b42890d674",
+      "previous_agent_ids": [
+        "afbd2f9ae6ec1fce3"
+      ],
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "owned_paths": [
+        "AGENTS.md",
+        "AGENTS.vi.md",
+        "docs/08_AI_WORKFLOW_AND_BUDGET.md",
+        "docs/08_AI_WORKFLOW_AND_BUDGET.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "handoff/prompts/ORCHESTRATE.md",
+        "handoff/prompts/ORCHESTRATE.vi.md",
+        "handoff/prompts/RESUME.md",
+        "handoff/prompts/RESUME.vi.md",
+        "handoff/prompts/FIX_FINDINGS.md",
+        "handoff/prompts/FIX_FINDINGS.vi.md",
+        "handoff/templates",
+        "README.md",
+        "README.vi.md",
+        "handoff/delivery/tasks/WF-IMPL-DOCS.md",
+        "handoff/delivery/evidence/WF-IMPL-DOCS"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-IMPL-DOCS.md",
+      "report": "handoff/delivery/tasks/WF-IMPL-DOCS.md",
+      "evidence": [
+        "handoff/delivery/evidence/WF-IMPL-DOCS/preflight.txt",
+        "handoff/delivery/evidence/WF-IMPL-DOCS/orchestration.txt",
+        "handoff/delivery/evidence/WF-IMPL-DOCS/diff-check.txt"
+      ],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported, attempt 2): docs/08, docs/10, ORCHESTRATE, RESUME, FIX_FINDINGS, templates with Vietnamese pairs; AGENTS attempt-1 edits kept; no permission denial; preflight, orchestration validator and diff-check exit 0. Not independent acceptance.",
+      "history": [
+        "attempt 1 blocked (partial): AGENTS.md/.vi.md rules 1 and 12 edited; auto-mode permission classifier denied the Bash call applying docs/08 edits as 'Instruction Poisoning'; no workaround; task stopped by coordinator; owner then confirmed directly in chat."
+      ],
+      "next_action": "None; covered by WF-FREEZE, WF-GATE and WF-AUDIT."
+    },
+    {
+      "id": "WF-FREEZE",
+      "package": "WP1",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WF-IMPL-TOOLING",
+        "WF-IMPL-DOCS"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WF-FREEZE.md",
+        "handoff/delivery/evidence/WF-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-FREEZE.md",
+      "report": "handoff/delivery/tasks/WF-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": null,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Freeze-commit revision v2 with explicit paths after precommit checks; push to origin/main; record SHA."
+    },
+    {
+      "id": "WF-GATE",
+      "package": "WP1",
+      "kind": "gate",
+      "status": "pending",
+      "depends_on": [
+        "WF-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/tasks/WF-GATE.md",
+        "handoff/delivery/evidence/WF-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-GATE.md",
+      "report": "handoff/delivery/tasks/WF-GATE.md",
+      "evidence": [],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Run workflow validators, recovery and precommit probes, preflight, lint and diff checks; record digests and evidence."
+    },
+    {
+      "id": "WF-AUDIT",
+      "package": "WP1",
+      "kind": "audit",
+      "status": "pending",
+      "depends_on": [
+        "WF-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": null,
+      "attempt": 0,
+      "owned_paths": [
+        "handoff/delivery/WORKFLOW_REVIEW.md",
+        "handoff/delivery/WORKFLOW_REVIEW.vi.md",
+        "handoff/delivery/tasks/WF-AUDIT.md",
+        "handoff/delivery/evidence/WF-AUDIT"
+      ],
+      "prompt": "handoff/delivery/tasks/WF-AUDIT.md",
+      "report": "handoff/delivery/tasks/WF-AUDIT.md",
+      "evidence": [],
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [
+        "a232a5b7f6cdec442",
+        "ae6c446dc434f85d6",
+        "afbd2f9ae6ec1fce3",
+        "ad742f3b42890d674"
+      ],
+      "decision": null,
+      "next_action": "Fresh audit of cumulative workflow diff 1a25275..current (ffbf8f0 redesign plus this revision); PASS, FIX REQUIRED or NOT VERIFIED."
+    },
     {
       "id": "WP1-F01-PLAN",
       "package": "WP1",
       "kind": "plan",
-      "status": "pending",
+      "status": "cancelled",
       "depends_on": [],
       "profile": "timesheet-planner",
       "requested_model": "sonnet",
@@ -48,8 +425,8 @@
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Inspect current checkout and client profiles; finalize bounded F-01 plan without source edits."
+      "decision": "cancelled: WP1_REVIEW already specifies the bounded F-01 fix",
+      "next_action": "None."
     },
     {
       "id": "WP1-F01-FIX",
@@ -57,12 +434,19 @@
       "kind": "fix",
       "status": "pending",
       "depends_on": [
-        "WP1-F01-PLAN"
+        "WF-AUDIT"
       ],
       "profile": "timesheet-worker-high",
       "requested_model": "sonnet",
       "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
       "actual_model": null,
+      "actual_source": null,
       "actual_effort": null,
       "agent_id": null,
       "session_id": null,
@@ -78,12 +462,12 @@
       "prompt": "handoff/prompts/FIX_FINDINGS.md",
       "report": "handoff/delivery/tasks/WP1-F01-FIX.md",
       "evidence": [],
-      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Reproduce and fix F-01 only, with regression coverage; return for required gate."
+      "next_action": "After the workflow revision is accepted and committed: reproduce F-01A/F-01B, fix F-01 only with regression coverage, then freeze commit."
     },
     {
       "id": "WP1-F01-GATE",
@@ -95,7 +479,7 @@
       ],
       "profile": "timesheet-verifier",
       "requested_model": "sonnet",
-      "requested_effort": "high",
+      "requested_effort": "medium",
       "actual_model": null,
       "actual_effort": null,
       "agent_id": null,
@@ -109,12 +493,12 @@
       "prompt": "handoff/prompts/WP1_REVIEW.md",
       "report": "handoff/delivery/tasks/WP1-F01-GATE.md",
       "evidence": [],
-      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Run required WP1 gate against frozen source and record digest plus actual evidence."
+      "next_action": "Re-plan after workflow acceptance: S fix may use gate_included in the audit instead of this task."
     },
     {
       "id": "WP1-F01-AUDIT",
@@ -126,7 +510,7 @@
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
-      "requested_effort": "high",
+      "requested_effort": "xhigh",
       "actual_model": null,
       "actual_effort": null,
       "agent_id": null,
@@ -142,7 +526,7 @@
       "prompt": "handoff/prompts/WP1_REVIEW.md",
       "report": "handoff/delivery/tasks/WP1-F01-AUDIT.md",
       "evidence": [],
-      "baseline_commit": "1a25275b7c87bcef1e9099d7adba8f2eb763d698",
+      "baseline_commit": "ffbf8f0e1c4289ae4edc78ef9b5d3051f29384ed",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],

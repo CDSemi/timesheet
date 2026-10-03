@@ -4,7 +4,7 @@ Sao chép và điền bằng chứng thật. Giữ bản .vi.md tương ứng; l
 
 - Giai đoạn/phạm vi, ngày, người làm:
 - Model/effort/tốc độ thật hoặc không quan sát được:
-- Baseline và commit sau, hoặc source archive đủ:
+- Commit SHA, source digest và commit chưa push, hoặc source archive đủ:
 - Trạng thái triển khai; trạng thái review độc lập:
 - Hành vi đã làm và file đổi:
 - Migration/tương thích schema:

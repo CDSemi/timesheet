@@ -196,6 +196,8 @@ def files(preflight):
                 continue
             check((p.parent / target.split("#", 1)[0]).resolve().is_file(), "Broken link: " + str(p) + " -> " + target)
             links += 1
+        if p.relative_to(ROOT).parts[:3] == ("handoff", "delivery", "tasks"):
+            continue  # task records are English only; historical pairs there stay valid
         if not p.name.endswith(".vi.md"):
             vi = p.with_name(p.stem + ".vi.md")
             check(vi.is_file(), "Missing translation: " + str(p))

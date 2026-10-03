@@ -11,9 +11,16 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 STATUSES = {"pending", "running", "interrupted", "blocked", "done", "cancelled"}
-KINDS = {"plan", "diagnose", "implement", "fix", "gate", "audit", "documentation"}
+KINDS = {"plan", "diagnose", "implement", "fix", "gate", "audit", "documentation", "commit"}
 PACKAGES = [f"WP{index}" for index in range(1, 6)]
 WRITERS = {"implement", "fix"}
+MODELS = {"sonnet", "opus", "haiku", "inherit"}
+TASK_MODELS = {"haiku", "sonnet", "opus"}
+EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+OVERRIDE_REASONS = {"size_risk", "novelty", "escalation", "fallback_unavailable", "owner"}
+ACTUAL_SOURCES = {"self_reported", "tool_result", "unobserved"}
+RANK = {"haiku": 1, "sonnet": 2, "opus": 3}
+HEX40 = r"[a-f0-9]{40}"
 SHARED = {"handoff/delivery/STATE.json", "handoff/delivery/ORCHESTRATION.json",
           "handoff/delivery/ORCHESTRATION.previous.json", "handoff/NEXT_ACTION.md",
           "handoff/NEXT_ACTION.vi.md"}
@@ -38,6 +45,21 @@ def overlaps(left, right):
     return left == right or left.startswith(right + "/") or right.startswith(left + "/")
 
 
+def family(value):
+    text = str(value or "").lower()
+    return next((name for name in RANK if name in text), None)
+
+
+def model_rank(task):
+    name = family(task.get("actual_model")) or family(task.get("requested_model"))
+    check(name, f"Unknown model family: {task['id']}")
+    return RANK[name]
+
+
+def is_sha(value):
+    return isinstance(value, str) and re.fullmatch(HEX40, value) is not None
+
+
 def profiles():
     settings = json.loads((ROOT / ".claude/settings.json").read_text(encoding="utf-8"))
     check(settings.get("agent") == "timesheet-coordinator", "Default coordinator missing")
@@ -50,18 +72,91 @@ def profiles():
         name = fields.get("name")
         check(name and name not in result, "Missing or duplicate profile name")
         check(fields.get("description"), f"Description missing: {name}")
-        check(fields.get("model") in {"sonnet", "opus", "haiku", "inherit"},
-              f"Unexpected model alias: {name}")
-        check(fields.get("effort") in {"low", "medium", "high", "xhigh", "max"},
-              f"Unexpected effort: {name}")
+        check(fields.get("model") in MODELS, f"Unexpected model alias: {name}")
+        check(fields.get("effort") in EFFORTS, f"Unexpected effort: {name}")
         tools = {tool.strip() for tool in fields.get("tools", "").split(",")}
         if name == "timesheet-coordinator":
             check("Agent" in tools and "Bash" not in tools, "Coordinator must delegate shell work")
+        elif name == "timesheet-committer":
+            check("Bash" in tools and "Agent" not in tools, "Committer needs shell and no delegation")
         else:
             check("Agent" not in tools, f"Nested delegation prohibited: {name}")
         result[name] = fields
-    check(len(result) == 8, "Expected eight project profiles")
+    check(len(result) == 9, "Expected nine project profiles")
     return result
+
+
+def validate_git(board):
+    git = board.get("git")
+    if git is None:
+        return False
+    check(isinstance(git, dict) and isinstance(git.get("branch"), str) and git["branch"],
+          "Board git branch missing")
+    check(isinstance(git.get("release_declared"), bool), "Board git release_declared must be boolean")
+    check(git.get("last_commit") is None or is_sha(git["last_commit"]), "Board git last_commit invalid")
+    check(isinstance(git.get("unpushed"), list) and all(is_sha(item) for item in git["unpushed"]),
+          "Board git unpushed list invalid")
+    return git["release_declared"]
+
+
+def validate_model_fields(task, profile):
+    name = task["id"]
+    reason = task.get("model_override_reason")
+    check(reason is None or reason in OVERRIDE_REASONS, f"Invalid override reason: {name}")
+    routing = task.get("routing")
+    if routing is not None:
+        check(isinstance(routing, dict) and routing.get("size") in {"S", "M", "L", "XL"} and
+              routing.get("risk") in {"L", "M", "H"} and isinstance(routing.get("novelty"), bool),
+              f"Invalid routing: {name}")
+    check(task.get("actual_source") is None or task["actual_source"] in ACTUAL_SOURCES,
+          f"Invalid actual_source: {name}")
+    if task.get("actual_model") is not None:
+        check(task.get("actual_source") is not None, f"Actual model needs a source: {name}")
+    if task["status"] in {"pending", "running"}:
+        check(task.get("requested_effort") == profile["effort"], f"Requested profile settings differ: {name}")
+        requested = task.get("requested_model")
+        if requested == profile["model"]:
+            check(reason is None, f"Override reason without override: {name}")
+        else:
+            check(requested in TASK_MODELS and reason is not None,
+                  f"Model override needs a permitted model and a reason: {name}")
+
+
+def validate_audits(tasks, by_id):
+    for task in tasks:
+        if task["kind"] != "audit":
+            continue
+        name = task["id"]
+        gated = any(by_id[item]["kind"] == "gate" for item in task["depends_on"])
+        check(gated or task.get("gate_included") is True,
+              f"Audit needs a gate dependency or gate_included: {name}")
+        if task["status"] not in {"running", "done"}:
+            continue
+        ids = set(task.get("author_agent_ids", []))
+        authors = [item for item in tasks if item["package"] == task["package"] and item["id"] != name and (
+            (item["kind"] in WRITERS and item["status"] not in {"pending", "cancelled"}) or
+            (item.get("agent_id") and item["agent_id"] in ids))]
+        if authors and task.get("model_override_reason") != "fallback_unavailable":
+            check(model_rank(task) >= max(model_rank(item) for item in authors),
+                  f"Audit model weaker than author model: {name}")
+
+
+def validate_commits(tasks, lookups, release_declared):
+    running = [task for task in tasks if task["status"] == "running"]
+    for task in tasks:
+        check((task["kind"] == "commit") == (task["profile"] == "timesheet-committer"),
+              f"Commit kind and committer profile must match: {task['id']}")
+    for task in running:
+        if task["kind"] == "commit":
+            check(len(running) == 1 and not any(item.get("status") == "running" for item in lookups),
+                  f"Commit task must run alone: {task['id']}")
+    for task in tasks:
+        if task["kind"] == "commit" and task["status"] == "done":
+            check(is_sha(task.get("commit_sha")) and isinstance(task.get("pushed"), bool) and
+                  isinstance(task.get("branch"), str) and task["branch"],
+                  f"Commit result incomplete: {task['id']}")
+            check(not (release_declared and task["branch"] == "main"),
+                  f"Direct commit to main after release: {task['id']}")
 
 
 def validate(board, state, configured):
@@ -84,6 +179,13 @@ def validate(board, state, configured):
         check(phases[previous].get("independent_review") == "passed",
               f"Prior package not independently passed: {previous}")
     check(local_path(board["checkpoint"]).is_file(), "Workflow checkpoint/handoff missing")
+    release_declared = validate_git(board)
+    runtime = board.get("coordinator_runtime")
+    check(runtime is None or (isinstance(runtime, dict) and "requested_model" in runtime and
+                              "actual_model" in runtime), "Coordinator runtime needs requested/actual model")
+    lookups = board.get("auxiliary_lookups", [])
+    check(isinstance(lookups, list) and all(isinstance(item, dict) for item in lookups),
+          "Invalid auxiliary lookups")
     tasks = board.get("tasks")
     check(isinstance(tasks, list) and tasks, "Task list missing")
     by_id = {}
@@ -98,13 +200,13 @@ def validate(board, state, configured):
         check(type(task.get("attempt")) is int and task["attempt"] >= 0, f"Invalid attempt: {name}")
         profile = configured.get(task.get("profile"))
         check(profile and profile["name"] != "timesheet-coordinator", f"Invalid task profile: {name}")
-        if task["status"] in {"pending", "running"}:
-            check(task.get("requested_model") == profile["model"] and
-                  task.get("requested_effort") == profile["effort"], f"Requested profile settings differ: {name}")
+        validate_model_fields(task, profile)
         if task["kind"] == "audit":
             check(task["profile"] == "timesheet-auditor", f"Audit requires audit profile: {name}")
         if task["kind"] == "gate":
             check(task["profile"] == "timesheet-verifier", f"Gate requires verifier profile: {name}")
+        if task["kind"] == "commit":
+            check(task["profile"] == "timesheet-committer", f"Commit requires committer profile: {name}")
         if task["kind"] in WRITERS:
             check(task["profile"] in {"timesheet-worker", "timesheet-worker-high", "timesheet-expert"},
                   f"Source task requires worker profile: {name}")
@@ -112,8 +214,7 @@ def validate(board, state, configured):
         check(local_path(task["prompt"]).is_file(), f"Prompt missing: {name}")
         report = local_path(task["report"])
         if task["status"] not in {"pending", "cancelled"}:
-            check(report.is_file() and report.with_name(report.stem + ".vi.md").is_file(),
-                  f"Durable bilingual brief/result missing: {name}")
+            check(report.is_file(), f"Durable English brief/result missing: {name}")
         paths = task.get("owned_paths")
         check(isinstance(paths, list) and paths and len(paths) == len(set(paths)), f"Owned paths missing/duplicated: {name}")
         check(any(overlaps(task["report"], value) for value in paths), f"Report outside owned paths: {name}")
@@ -125,6 +226,10 @@ def validate(board, state, configured):
         for value in evidence:
             check(local_path(value).is_file(), f"Evidence file missing: {name}: {value}")
         check(isinstance(task.get("depends_on"), list), f"Dependencies missing: {name}")
+        if task["kind"] in {"gate", "audit"}:
+            for key in ("freeze_commit", "reviewed_commit"):
+                check(task.get(key) is None or is_sha(task[key]), f"Invalid {key}: {name}")
+            check(task.get("gate_included") in (None, True, False), f"Invalid gate_included: {name}")
         if task["status"] == "done" and task["kind"] in {"gate", "audit"}:
             check(evidence and re.fullmatch(r"[a-f0-9]{64}", task.get("source_digest") or ""),
                   f"Gate/audit lacks digest/execution evidence: {name}")
@@ -166,8 +271,11 @@ def validate(board, state, configured):
 
     for name in by_id:
         visit(name)
+    validate_audits(tasks, by_id)
     running = [task for task in tasks if task["status"] == "running"]
-    check(len(running) <= 2, "Too many active subagents")
+    validate_commits(tasks, lookups, release_declared)
+    active_lookups = sum(1 for item in lookups if item.get("status") == "running")
+    check(len(running) + active_lookups <= 2, "Too many active subagents")
     writers = [task for task in running if task["kind"] in WRITERS or
                any(not value.startswith("handoff/delivery/") for value in task["owned_paths"])]
     check(len(writers) <= 1, "More than one source writer")

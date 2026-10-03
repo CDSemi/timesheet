@@ -1,12 +1,13 @@
 # Durable task brief and result
 
 Coordinator writes the brief before dispatch; worker appends results after each
-coherent step. Keep .vi.md; machine logs need no translation.
+coherent step. Task briefs/results under handoff/delivery/tasks/ are English-only (no .vi.md).
 
 - Mission/task ID; package/kind; dependencies; attempt:
 - Prompt and necessary English reading list:
-- Baseline/commit, digest and unrelated changes to preserve:
-- Profile; requested/observable model/effort; agent/session IDs:
+- Baseline/commit, digest and unrelated changes to preserve; freeze/reviewed commit:
+- Routing {size S/M/L/XL, risk L/M/H, novelty}:
+- Profile (fixed effort); requested model; model_override_reason (size_risk|novelty|escalation|fallback_unavailable|owner|none); self-reported actual model/effort and source; agent/session IDs:
 - Exact writable paths; read-only scope; separate report/evidence paths:
 - Acceptance criteria, rule/AC coverage and executable gate:
 - Completed edits/checks and current file state:
