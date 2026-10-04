@@ -1,0 +1,175 @@
+# Red-first run before 0004 and loadDeliveryConfig existed (tests written first). Command: node.exe node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts tests/integration/config.test.ts; exit 1. Failure summary lines only.
+
+ ❯ tests/integration/config.test.ts (40 tests | 39 failed) 15ms
+     × uses a private data directory beside the default database, capture mode and a local deep-link base 2ms
+     × follows an overridden database path and port 0ms
+     × accepts an absolute DATA_DIR override 0ms
+     × refuses a relative DATA_DIR 2ms
+     × refuses a data directory inside a Dropbox folder, explicit or derived from the database path 0ms
+     × normalizes an override and keeps a path prefix 0ms
+     × refuses ftp://example.invalid 1ms
+     × refuses https://user:pw@example.invalid 0ms
+     × refuses https://example.invalid/?token=x 0ms
+     × refuses https://example.invalid/#x 0ms
+     × refuses not a url 0ms
+     × requires an explicit HTTPS base URL in production 0ms
+     × is capture by default and when named explicitly 0ms
+     × refuses the unknown mode "dry_run" 0ms
+     × refuses the unknown mode "SMTP" 0ms
+     × refuses the unknown mode "live" 0ms
+     × refuses the unknown mode "" 0ms
+     × ignores SMTP settings in capture mode, so no credential is held or rendered 0ms
+     × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag undefined) 0ms
+     × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "false") 0ms
+     × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "1") 0ms
+     × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "TRUE") 0ms
+     × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "yes") 0ms
+     × reads SMTP settings from the environment and never renders the credentials 0ms
+     × defaults to STARTTLS on port 587 and allows no authentication 0ms
+     × refuses invalid SMTP settings 0 without echoing a credential 1ms
+     × refuses invalid SMTP settings 1 without echoing a credential 0ms
+     × refuses invalid SMTP settings 2 without echoing a credential 0ms
+     × refuses invalid SMTP settings 3 without echoing a credential 0ms
+     × refuses invalid SMTP settings 4 without echoing a credential 0ms
+     × refuses invalid SMTP settings 5 without echoing a credential 0ms
+     × refuses invalid SMTP settings 6 without echoing a credential 0ms
+     × refuses invalid SMTP settings 7 without echoing a credential 0ms
+     × refuses invalid SMTP settings 8 without echoing a credential 0ms
+     × refuses the sender address 0 0ms
+     × refuses the sender address 1 0ms
+     × refuses the sender address 2 0ms
+     × writes nothing to the console while loading, valid or invalid 1ms
+     × reveals only on request and renders as [redacted] everywhere else 0ms
+ ❯ tests/integration/migrations.test.ts (29 tests | 16 failed) 2469ms
+     × applies every migration to an empty file database with the required pragmas 14ms
+     × applies 0002-0004, keeps every WP1 row unchanged and leaves a consistent, usable schema 129ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 120ms
+     × applies only 0004 with unchanged rows and counts, a consistent schema and safe defaults 165ms
+     × creates STRICT tables whose columns hold no secret, credential or image body 117ms
+     × keeps timesheets.imported_unverified a 0/1 flag defaulting to 0 118ms
+     × refuses UPDATE and DELETE on every immutable table 109ms
+     × refuses DELETE on the mutable delivery history and the operations row 127ms
+     × enforces the unique business keys 146ms
+     × binds every row to one owner through composite foreign keys 122ms
+     × persists every revision ledger outcome, including the R4 pending variants 117ms
+     × keeps revisions, sign-offs and their links consistent 113ms
+     × constrains attachments, revision files and the auto-image authorization 110ms
+     × keeps job identity fixed, leases explicit and closed jobs closed 109ms
+     × moves delivery attempts only forward and records an uncertain decision once 115ms
+     × holds exactly one operations row with automation inactive by default 113ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 55 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/config.test.ts > delivery configuration defaults > uses a private data directory beside the default database, capture mode and a local deep-link base
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:64:12
+ FAIL  tests/integration/config.test.ts > delivery configuration defaults > follows an overridden database path and port
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:74:20
+ FAIL  tests/integration/config.test.ts > private data directory > accepts an absolute DATA_DIR override
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:83:12
+ FAIL  tests/integration/config.test.ts > private data directory > refuses a relative DATA_DIR
+AssertionError: expected [Function] to throw error matching /DATA_DIR must be an absolute path/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:87:93
+ FAIL  tests/integration/config.test.ts > private data directory > refuses a data directory inside a Dropbox folder, explicit or derived from the database path
+AssertionError: expected [Function] to throw error matching /outside a Dropbox folder/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:91:110
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > normalizes an override and keeps a path prefix
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:103:12
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > refuses ftp://example.invalid
+AssertionError: expected [Function] to throw error matching /http or https/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:118:87
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > refuses https://user:pw@example.invalid
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > refuses https://example.invalid/?token=x
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > refuses https://example.invalid/#x
+AssertionError: expected [Function] to throw error matching /credentials, query or fragment/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:118:87
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > refuses not a url
+AssertionError: expected [Function] to throw error matching /PUBLIC_BASE_URL must be an absolute U…/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:118:87
+ FAIL  tests/integration/config.test.ts > public base URL for deep links > requires an explicit HTTPS base URL in production
+AssertionError: expected [Function] to throw error matching /PUBLIC_BASE_URL is required in produc…/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:123:50
+ FAIL  tests/integration/config.test.ts > outbound mode > is capture by default and when named explicitly
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:135:12
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses the unknown mode "dry_run"
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses the unknown mode "SMTP"
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses the unknown mode "live"
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses the unknown mode ""
+AssertionError: expected [Function] to throw error matching /OUTBOUND_MODE must be capture or smtp/ but got '(0 , __vite_ssr_import_3__.loadDelive…'
+ ❯ tests/integration/config.test.ts:140:84
+ FAIL  tests/integration/config.test.ts > outbound mode > ignores SMTP settings in capture mode, so no credential is held or rendered
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:144:20
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag undefined)
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "false")
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "1")
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "TRUE")
+ FAIL  tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "yes")
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /OUTBOUND_MODE=smtp requires the owner…/
+ ❯ tests/integration/config.test.ts:156:7
+ FAIL  tests/integration/config.test.ts > SMTP settings > reads SMTP settings from the environment and never renders the credentials
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:163:20
+ FAIL  tests/integration/config.test.ts > SMTP settings > defaults to STARTTLS on port 587 and allows no authentication
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:178:20
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 0 without echoing a credential
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /SMTP_HOST is required/
+ ❯ tests/integration/config.test.ts:194:5
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 1 without echoing a credential
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /SMTP_HOST must be a host name/
+ ❯ tests/integration/config.test.ts:194:5
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 2 without echoing a credential
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 3 without echoing a credential
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /SMTP_PORT must be an integer from 1 t…/
+ ❯ tests/integration/config.test.ts:194:5
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 4 without echoing a credential
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 5 without echoing a credential
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /SMTP_SECURITY must be starttls or tls/
+ ❯ tests/integration/config.test.ts:194:5
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 6 without echoing a credential
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 7 without echoing a credential
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 8 without echoing a credential
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /SMTP_USER and SMTP_PASSWORD must be s…/
+ ❯ tests/integration/config.test.ts:194:5
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses the sender address 0
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses the sender address 1
+ FAIL  tests/integration/config.test.ts > SMTP settings > refuses the sender address 2
+AssertionError: expected '(0 , __vite_ssr_import_3__.loadDelive…' to match /MAIL_FROM must be a single email addr…/
+ ❯ tests/integration/config.test.ts:200:7
+ FAIL  tests/integration/config.test.ts > SMTP settings > writes nothing to the console while loading, valid or invalid
+TypeError: loadDeliveryConfig is not a function
+ ❯ tests/integration/config.test.ts:208:5
+ FAIL  tests/integration/config.test.ts > SecretValue > reveals only on request and renders as [redacted] everywhere else
+TypeError: SecretValue is not a constructor
+ ❯ tests/integration/config.test.ts:217:20
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 3 to be 4 // Object.is equality
+ ❯ tests/integration/migrations.test.ts:85:20
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0004, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [ 2, 3 ], version: 3 } to deeply equal { applied: [ 2, 3, 4 ], version: 4 }
+ ❯ tests/integration/migrations.test.ts:222:71
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { applied: [ 3 ], version: 3 } to deeply equal { applied: [ 3, 4 ], version: 4 }
+ ❯ tests/integration/migrations.test.ts:266:37
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies only 0004 with unchanged rows and counts, a consistent schema and safe defaults
+AssertionError: expected { applied: [], version: 3 } to deeply equal { applied: [ 4 ], version: 4 }
+ ❯ tests/integration/migrations.test.ts:455:71
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > creates STRICT tables whose columns hold no secret, credential or image body
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > keeps timesheets.imported_unverified a 0/1 flag defaulting to 0
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > refuses UPDATE and DELETE on every immutable table
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > refuses DELETE on the mutable delivery history and the operations row
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > enforces the unique business keys
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > binds every row to one owner through composite foreign keys
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > persists every revision ledger outcome, including the R4 pending variants
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > keeps revisions, sign-offs and their links consistent
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > constrains attachments, revision files and the auto-image authorization
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > keeps job identity fixed, leases explicit and closed jobs closed
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > moves delivery attempts only forward and records an uncertain decision once
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > holds exactly one operations row with automation inactive by default
+SqliteError: no such table: attachments
+ ❯ tests/integration/migrations.test.ts:693:5
+ Test Files  2 failed (2)
+      Tests  55 failed | 14 passed (69)

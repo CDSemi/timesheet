@@ -1,0 +1,209 @@
+# Upgrade of a real schema v3 database created by the accepted WP2 source 5fafeae.
+# Commands (Node 24 portable by full path, scratch folder outside the repository):
+#   git archive 5fafeaee72509c6110a907458643bf7582dad81a src package.json reference/examples | tar -x -C <scratch>/v3/export
+#   copy node_modules/{better-sqlite3,hono,zod,node-addon-api} into <scratch>/v3/export/node_modules (no junction on the scratch volume)
+#   node.exe create-v3-db.mjs <scratch>/v3/export <scratch>/v3/v3.db   (code at 5fafeae; synthetic seed with sample data, one credit, one deficit debit)
+#   node.exe upgrade-v3-db.mjs <project> <scratch>/v3/v3.db            (current code)
+# Scripts: create-v3-db.mjs.txt and upgrade-v3-db.mjs.txt in this folder. Row digests are the first 16 hex of SHA-256 over the JSON rows
+# (timesheets compared on its v3 columns).
+
+## create-v3-db at 5fafeae
+create exit 0
+{
+  "migrations": [
+    "1:initial",
+    "2:ot_ledger",
+    "3:day_entry_source"
+  ],
+  "applied": [
+    1,
+    2,
+    3
+  ],
+  "user_version": 3,
+  "counts": {
+    "audit_events": 18,
+    "auth_sessions": 0,
+    "calendar_versions": 1,
+    "calendars": 1,
+    "day_entries": 3,
+    "ot_leave_requests": 1,
+    "ot_ledger": 3,
+    "pay_periods": 2,
+    "payroll_exceptions": 0,
+    "schema_migrations": 3,
+    "session_breaks": 3,
+    "timesheets": 2,
+    "users": 3,
+    "work_policies": 3,
+    "work_sessions": 3
+  }
+}
+
+## upgrade-v3-db with migration 0004
+upgrade exit 0
+{
+  "recorded_checksums_match_current": true,
+  "user_version_before": 3,
+  "applied": [
+    4
+  ],
+  "user_version_after": 4,
+  "v3_tables_with_changed_rows": [],
+  "v3_rows_before": {
+    "audit_events": {
+      "count": 18,
+      "sha256": "c58c123db96fa242"
+    },
+    "auth_sessions": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c"
+    },
+    "calendar_versions": {
+      "count": 1,
+      "sha256": "8d18a715dabc46a2"
+    },
+    "calendars": {
+      "count": 1,
+      "sha256": "4ba35c62f2877a1a"
+    },
+    "day_entries": {
+      "count": 3,
+      "sha256": "e186c7347b8bedea"
+    },
+    "ot_leave_requests": {
+      "count": 1,
+      "sha256": "5b6e49bd39269b48"
+    },
+    "ot_ledger": {
+      "count": 3,
+      "sha256": "9741381ef5796563"
+    },
+    "pay_periods": {
+      "count": 2,
+      "sha256": "aabdf58a8a448758"
+    },
+    "payroll_exceptions": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c"
+    },
+    "schema_migrations": {
+      "count": 3,
+      "sha256": "e7bc9d8552e77fe4"
+    },
+    "session_breaks": {
+      "count": 3,
+      "sha256": "30a9fceecb2c8ad3"
+    },
+    "timesheets": {
+      "count": 2,
+      "sha256": "2b728d7284dcdc07"
+    },
+    "users": {
+      "count": 3,
+      "sha256": "2fc26a5bf40bcc6a"
+    },
+    "work_policies": {
+      "count": 3,
+      "sha256": "6e74b5bb73f5c47a"
+    },
+    "work_sessions": {
+      "count": 3,
+      "sha256": "d5021bde34040d7c"
+    }
+  },
+  "v3_rows_after": {
+    "audit_events": {
+      "count": 18,
+      "sha256": "c58c123db96fa242"
+    },
+    "auth_sessions": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c"
+    },
+    "calendar_versions": {
+      "count": 1,
+      "sha256": "8d18a715dabc46a2"
+    },
+    "calendars": {
+      "count": 1,
+      "sha256": "4ba35c62f2877a1a"
+    },
+    "day_entries": {
+      "count": 3,
+      "sha256": "e186c7347b8bedea"
+    },
+    "ot_leave_requests": {
+      "count": 1,
+      "sha256": "5b6e49bd39269b48"
+    },
+    "ot_ledger": {
+      "count": 3,
+      "sha256": "9741381ef5796563"
+    },
+    "pay_periods": {
+      "count": 2,
+      "sha256": "aabdf58a8a448758"
+    },
+    "payroll_exceptions": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c"
+    },
+    "schema_migrations": {
+      "count": 4,
+      "sha256": "e3957007bef4303e"
+    },
+    "session_breaks": {
+      "count": 3,
+      "sha256": "30a9fceecb2c8ad3"
+    },
+    "timesheets": {
+      "count": 2,
+      "sha256": "2b728d7284dcdc07"
+    },
+    "users": {
+      "count": 3,
+      "sha256": "2fc26a5bf40bcc6a"
+    },
+    "work_policies": {
+      "count": 3,
+      "sha256": "6e74b5bb73f5c47a"
+    },
+    "work_sessions": {
+      "count": 3,
+      "sha256": "d5021bde34040d7c"
+    }
+  },
+  "balances_unchanged": true,
+  "integrity_check": "ok",
+  "foreign_key_check": [],
+  "imported_unverified_values": [
+    0
+  ],
+  "operations_state": [
+    {
+      "id": 1,
+      "automation_active_from": null,
+      "automation_recorded_at": null,
+      "automation_recorded_by": null,
+      "runner_heartbeat_at": null,
+      "runner_instance": null
+    }
+  ],
+  "new_tables": [
+    "attachments",
+    "delivery_attempts",
+    "jobs",
+    "operations_state",
+    "reminder_occurrences",
+    "revision_files",
+    "revision_ledger_lines",
+    "signoffs",
+    "submission_settings",
+    "timesheet_revisions"
+  ],
+  "second_run": {
+    "applied": [],
+    "version": 4
+  }
+}

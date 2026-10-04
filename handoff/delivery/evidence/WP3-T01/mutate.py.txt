@@ -1,0 +1,62 @@
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.environ['PROJECT_ROOT']  # the repository root (<project>)
+NODE = os.path.join(os.environ['LOCALAPPDATA'], 'timesheet-dev', 'node-24.21.0', 'node_modules', 'node', 'bin', 'node.exe')
+
+MUTATIONS = [
+    ('M1 drop the signoffs no-update trigger', 'src/server/db/migrations/0004_submission.ts',
+     "CREATE TRIGGER signoffs_no_update BEFORE UPDATE ON signoffs\nBEGIN SELECT RAISE(ABORT, 'immutable_signoff'); END;\n", '',
+     'tests/integration/migrations.test.ts'),
+    ('M2 drop the revision-number-per-timesheet unique key', 'src/server/db/migrations/0004_submission.ts',
+     '  UNIQUE (timesheet_id, revision_no),\n', '',
+     'tests/integration/migrations.test.ts'),
+    ('M3 drop the pending_choice outcome (R4)', 'src/server/db/migrations/0004_submission.ts',
+     "'pending_insufficient_balance', 'pending_choice', 'waived')),\n  ledger_entry_id",
+     "'pending_insufficient_balance', 'waived')),\n  ledger_entry_id",
+     'tests/integration/migrations.test.ts'),
+    ('M4 drop the one-open-attempt-per-revision index', 'src/server/db/migrations/0004_submission.ts',
+     "CREATE UNIQUE INDEX delivery_attempts_one_open_per_revision ON delivery_attempts(revision_id)\n"
+     "WHERE revision_id IS NOT NULL AND (state IN ('preparing', 'sending') OR (state = 'uncertain' AND decision IS NULL));\n", '',
+     'tests/integration/migrations.test.ts'),
+    ('M5 allow SMTP without the owner-only flag', 'src/server/config.ts',
+     "if (env.PRODUCTION_SENDING_ENABLED !== 'true') {", 'if (false as boolean) {',
+     'tests/integration/config.test.ts'),
+    ('M6 echo the SMTP port value in its error', 'src/server/config.ts',
+     "throw new Error('SMTP_PORT must be an integer from 1 to 65535');",
+     "throw new Error(`SMTP_PORT must be an integer from 1 to 65535 (got ${portText})`);",
+     'tests/integration/config.test.ts'),
+]
+
+
+def sha(path):
+    return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+
+
+out = []
+for name, rel, old, new, test in MUTATIONS:
+    path = os.path.join(ROOT, rel)
+    original = open(path, 'rb').read()
+    before = sha(path)
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, name
+    open(path, 'wb').write(text.replace(old, new).encode('utf-8'))
+    try:
+        result = subprocess.run([NODE, 'node_modules/vitest/vitest.mjs', 'run', test], cwd=ROOT,
+                                capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        open(path, 'wb').write(original)
+    restored = sha(path) == before
+    log = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', result.stdout + result.stderr)
+    failed = [line.strip() for line in log.splitlines() if line.strip().startswith('×')]
+    summary = [line.strip() for line in log.splitlines() if re.match(r'\s*Tests\s', line)]
+    out.append(f'## {name}')
+    out.append(f'file: {rel}; test: {test}')
+    out.append(f'exit: {result.returncode} (expected non-zero); restored byte-identical: {restored}')
+    out.extend(f'  {line}' for line in failed)
+    out.extend(f'  {line}' for line in summary)
+    out.append('')
+sys.stdout.write('\n'.join(out))

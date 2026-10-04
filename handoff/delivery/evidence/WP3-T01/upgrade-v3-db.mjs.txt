@@ -1,0 +1,49 @@
+// Evidence script (stored as .mjs.txt so lint ignores it). Run with Node 24:
+// node upgrade-v3-db.mjs <repo-root> <db-path>. Upgrades the schema v3 database created by
+// create-v3-db at 5fafeae with the current migrations and compares every v3 row.
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [root, dbPath] = process.argv.slice(2);
+const load = (rel) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await load('src/server/db/database.ts');
+const { migrate, MIGRATIONS, migrationChecksum } = await load('src/server/db/migrations.ts');
+const { getBalance } = await load('src/server/services/ledger.ts');
+
+const V3_TIMESHEET_COLUMNS = 'id, user_id, pay_period_id, version, finalized_revision_no, created_at, updated_at';
+const db = openDatabase(dbPath);
+const listTables = () => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+const v3Tables = listTables();
+const rowsDigest = () => Object.fromEntries(v3Tables.map((name) => {
+  const columns = name === 'timesheets' ? V3_TIMESHEET_COLUMNS : '*';
+  const rows = db.prepare(`SELECT ${columns} FROM ${name} ORDER BY rowid`).all();
+  return [name, { count: rows.length, sha256: createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16) }];
+}));
+const users = db.prepare('SELECT id FROM users ORDER BY id').pluck().all();
+const balances = () => users.map((id) => getBalance(db, id));
+
+const recorded = db.prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version').all();
+const before = rowsDigest();
+const balancesBefore = JSON.stringify(balances());
+const versionBefore = db.pragma('user_version', { simple: true });
+const result = migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'));
+const after = rowsDigest();
+const changed = v3Tables.filter((name) => name !== 'schema_migrations' && JSON.stringify(before[name]) !== JSON.stringify(after[name]));
+console.log(JSON.stringify({
+  recorded_checksums_match_current: recorded.every((row) => migrationChecksum(MIGRATIONS[row.version - 1]) === row.checksum),
+  user_version_before: versionBefore,
+  applied: result.applied,
+  user_version_after: db.pragma('user_version', { simple: true }),
+  v3_tables_with_changed_rows: changed,
+  v3_rows_before: before,
+  v3_rows_after: after,
+  balances_unchanged: JSON.stringify(balances()) === balancesBefore,
+  integrity_check: db.pragma('integrity_check', { simple: true }),
+  foreign_key_check: db.pragma('foreign_key_check'),
+  imported_unverified_values: db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all(),
+  operations_state: db.prepare('SELECT * FROM operations_state').all(),
+  new_tables: listTables().filter((name) => !v3Tables.includes(name)),
+  second_run: migrate(db),
+}, null, 2));
+db.close();

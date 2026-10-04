@@ -18,3 +18,36 @@ export interface AppEnv {
     user: SessionUser;
   };
 }
+
+/** How outbound mail leaves the process: written to the private capture folder, or real SMTP. */
+export type OutboundMode = 'capture' | 'smtp';
+
+/** SMTP transport security; plaintext SMTP is not offered. */
+export type SmtpSecurity = 'starttls' | 'tls';
+
+/** A value that is only readable through `reveal()` and renders as `[redacted]` elsewhere. */
+export interface RedactedText {
+  reveal(): string;
+}
+
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  /** Credentials read from the environment only; never persisted, logged or echoed. */
+  auth: { user: RedactedText; password: RedactedText } | null;
+}
+
+/** Real SMTP is present only when the owner-only sending flag was set (docs/07, docs/08). */
+export type OutboundConfig = { mode: 'capture' } | { mode: 'smtp'; smtp: SmtpSettings };
+
+/** Submission, file-store and delivery settings (WP3). */
+export interface DeliveryConfig {
+  /** Private directory for signatures, PDFs and captured mail; outside Dropbox and the static root. */
+  dataDir: string;
+  /** Origin plus optional path prefix for login-required deep links, without a trailing slash. */
+  publicBaseUrl: string;
+  /** Sender address, or null when unset (delivery then blocks with a visible fault). */
+  senderAddress: string | null;
+  outbound: OutboundConfig;
+}

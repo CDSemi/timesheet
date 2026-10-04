@@ -1,0 +1,44 @@
+# Mutation checks: each mutation applied to one guard, the owning test file run, the file restored byte-identical.
+# Command: python mutate.py (stored as mutate.py.txt); Node 24 portable by full path runs vitest. Script exit 0.
+
+## M1 drop the signoffs no-update trigger
+file: src/server/db/migrations/0004_submission.ts; test: tests/integration/migrations.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses UPDATE and DELETE on every immutable table 107ms
+  Tests  1 failed | 28 passed (29)
+
+## M2 drop the revision-number-per-timesheet unique key
+file: src/server/db/migrations/0004_submission.ts; test: tests/integration/migrations.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × enforces the unique business keys 111ms
+  Tests  1 failed | 28 passed (29)
+
+## M3 drop the pending_choice outcome (R4)
+file: src/server/db/migrations/0004_submission.ts; test: tests/integration/migrations.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × persists every revision ledger outcome, including the R4 pending variants 103ms
+  Tests  1 failed | 28 passed (29)
+
+## M4 drop the one-open-attempt-per-revision index
+file: src/server/db/migrations/0004_submission.ts; test: tests/integration/migrations.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × enforces the unique business keys 118ms
+  × moves delivery attempts only forward and records an uncertain decision once 114ms
+  Tests  2 failed | 27 passed (29)
+
+## M5 allow SMTP without the owner-only flag
+file: src/server/config.ts; test: tests/integration/config.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag undefined) 2ms
+  × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "false") 0ms
+  × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "1") 0ms
+  × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "TRUE") 0ms
+  × refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "yes") 0ms
+  × writes nothing to the console while loading, valid or invalid 1ms
+  Tests  6 failed | 34 passed (40)
+
+## M6 echo the SMTP port value in its error
+file: src/server/config.ts; test: tests/integration/config.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses invalid SMTP settings 3 without echoing a credential 2ms
+  Tests  1 failed | 39 passed (40)

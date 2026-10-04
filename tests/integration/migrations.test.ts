@@ -10,6 +10,35 @@ import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
 import { MutableClock } from '../support/testApp.ts';
 
 const EXPECTED_TABLES = [
+  'attachments',
+  'audit_events',
+  'auth_sessions',
+  'calendar_versions',
+  'calendars',
+  'day_entries',
+  'delivery_attempts',
+  'jobs',
+  'operations_state',
+  'ot_leave_requests',
+  'ot_ledger',
+  'pay_periods',
+  'payroll_exceptions',
+  'reminder_occurrences',
+  'revision_files',
+  'revision_ledger_lines',
+  'schema_migrations',
+  'session_breaks',
+  'signoffs',
+  'submission_settings',
+  'timesheet_revisions',
+  'timesheets',
+  'users',
+  'work_policies',
+  'work_sessions',
+];
+
+/** Tables created by migrations 0001-0003 (the schema of the accepted WP2 source 5fafeae). */
+const V3_TABLES = [
   'audit_events',
   'auth_sessions',
   'calendar_versions',
@@ -26,6 +55,9 @@ const EXPECTED_TABLES = [
   'work_policies',
   'work_sessions',
 ];
+
+/** Columns of timesheets before migration 0004 adds imported_unverified. */
+const V3_TIMESHEET_COLUMNS = 'id, user_id, pay_period_id, version, finalized_revision_no, created_at, updated_at';
 
 /** Latest schema version; every migration is applied in order from 1. */
 const LATEST = MIGRATIONS.length;
@@ -50,7 +82,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(3);
+    expect(LATEST).toBe(4);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -71,7 +103,7 @@ describe('fresh SQLite migrations', () => {
         checksum: createHash('sha256').update(migration.sql).digest('hex'),
       })),
     );
-    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger', 'day_entry_source']);
+    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger', 'day_entry_source', 'submission']);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
       .pluck()
@@ -118,15 +150,21 @@ describe('fresh SQLite migrations', () => {
 });
 
 describe('committed migrations', () => {
-  it('never edits migration 0001: its checksum equals the one applied by WP1 databases', () => {
-    const initial = MIGRATIONS[0];
-    if (initial === undefined) throw new Error('migration 0001 missing');
-    expect(migrationChecksum(initial)).toBe('1c0b248d74c4d83a11282dee28aaf056ae083fb12e0d5b5534cfebd7f2f0c9b5');
+  // Checksums recorded by databases created at WP1 (0001) and at the accepted WP2 source 5fafeae (0002, 0003).
+  it.each([
+    [1, 'initial', '1c0b248d74c4d83a11282dee28aaf056ae083fb12e0d5b5534cfebd7f2f0c9b5'],
+    [2, 'ot_ledger', 'e9a6b285ba8fa97883e6481c700b2c0ac4d0bd9b9ee4f75acfd93b551d9da0c3'],
+    [3, 'day_entry_source', '773cbb3dd33936b276353f12296cf679729188bd2bebd4b8c8f34e10c0bace06'],
+  ])('never edits migration %i (%s): its checksum stays pinned', (version, name, checksum) => {
+    const migration = MIGRATIONS.find((item) => item.version === version);
+    if (migration === undefined) throw new Error(`migration ${version} missing`);
+    expect(migration.name).toBe(name);
+    expect(migrationChecksum(migration)).toBe(checksum);
   });
 });
 
 describe('upgrade from a populated WP1 (version 1) database', () => {
-  const WP1_TABLES = EXPECTED_TABLES.filter((name) => !name.startsWith('ot_'));
+  const WP1_TABLES = V3_TABLES.filter((name) => !name.startsWith('ot_'));
   const AT = '2026-09-29T20:00:00Z';
   const WP1_DAY_ENTRY_COLUMNS =
     'id, user_id, timesheet_id, work_date, category, leave_minutes, wfh, notes, version, created_at, updated_at';
@@ -136,13 +174,17 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
     return Object.fromEntries(
       WP1_TABLES.map((name) => [
         name,
-        // 0003 adds columns to day_entries; the WP1 columns are compared by name below.
-        target.prepare(`SELECT ${name === 'day_entries' ? WP1_DAY_ENTRY_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
+        // 0003 adds columns to day_entries and 0004 to timesheets; the WP1 columns are compared by name.
+        target
+          .prepare(
+            `SELECT ${name === 'day_entries' ? WP1_DAY_ENTRY_COLUMNS : name === 'timesheets' ? V3_TIMESHEET_COLUMNS : '*'} FROM ${name} ORDER BY rowid`,
+          )
+          .all(),
       ]),
     );
   }
 
-  it('applies 0002 and 0003, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+  it('applies 0002-0004, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
     const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
     expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
     const seed = await seedSynthetic(db, new MutableClock(AT), {
@@ -177,7 +219,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3], version: 3 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4], version: 4 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -185,13 +227,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
     expect(after.schema_migrations?.slice(1)).toEqual([
       expect.objectContaining({ version: 2, name: 'ot_ledger', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 3, name: 'day_entry_source', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 4, name: 'submission', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(3);
+    expect(db.pragma('user_version', { simple: true })).toBe(4);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -203,7 +246,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 3 });
+    expect(migrate(db)).toEqual({ applied: [], version: 4 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -220,7 +263,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3], version: 3 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4], version: 4 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -373,5 +416,565 @@ describe('schema invariants', () => {
     ).run(employeeSheet, ids.employee);
     insertDay(ids.employee, employeeSheet, '2026-09-21');
     insertSession('e1', ids.employee, '2026-09-21', '2026-09-21T15:00:00Z', '2026-09-21T17:00:00Z');
+  });
+});
+
+describe('upgrade from a populated version 3 database (accepted WP2 source 5fafeae)', () => {
+  const AT = '2026-09-29T20:00:00Z';
+
+  /** Every row of every version 3 table, in storage order, for a before/after comparison. */
+  function snapshotV3(target: Db): Record<string, unknown[]> {
+    return Object.fromEntries(
+      V3_TABLES.filter((name) => name !== 'schema_migrations').map((name) => [
+        name,
+        target.prepare(`SELECT ${name === 'timesheets' ? V3_TIMESHEET_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
+      ]),
+    );
+  }
+
+  it('applies only 0004 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
+    // 0001-0003 are byte-identical to 5fafeae (checksums pinned above), so this builds the same schema.
+    const v3 = MIGRATIONS.filter((migration) => migration.version <= 3);
+    expect(migrate(db, v3)).toEqual({ applied: [1, 2, 3], version: 3 });
+    const clock = new MutableClock(AT);
+    const seed = await seedSynthetic(db, clock, {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+      sampleData: true,
+    });
+    const employee = seed.users.find((user) => user.role === 'employee')?.id ?? '';
+    postCredit(
+      { db, clock },
+      { userId: employee, sourceKey: 'v3-credit', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
+    );
+    const before = snapshotV3(db);
+    for (const name of ['users', 'timesheets', 'day_entries', 'work_sessions', 'session_breaks', 'ot_ledger', 'ot_leave_requests']) {
+      expect(before[name]?.length, name).toBeGreaterThan(0);
+    }
+    const balances = seed.users.map((user) => getBalance(db, user.id));
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4], version: 4 });
+
+    expect(snapshotV3(db)).toEqual(before);
+    expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    // Existing timesheets are not imported history; automation stays inactive until the owner records it.
+    expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
+    expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
+      {
+        id: 1,
+        automation_active_from: null,
+        automation_recorded_at: null,
+        automation_recorded_by: null,
+        runner_heartbeat_at: null,
+        runner_instance: null,
+      },
+    ]);
+    for (const name of EXPECTED_TABLES.filter((table) => !V3_TABLES.includes(table) && table !== 'operations_state')) {
+      expect(db.prepare(`SELECT count(*) FROM ${name}`).pluck().get(), name).toBe(0);
+    }
+    expect(migrate(db)).toEqual({ applied: [], version: 4 });
+  });
+});
+
+describe('migration 0004 submission schema', () => {
+  const AT = '2026-10-02T18:00:00Z';
+  const HASH_A = 'a'.repeat(64);
+  const HASH_B = 'b'.repeat(64);
+  let employee: string;
+  let admin: string;
+  let ledgerEntryId: string;
+
+  type Row = Record<string, string | number | null>;
+
+  function insert(table: string, row: Row): void {
+    const columns = Object.keys(row);
+    db.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(
+      ...Object.values(row),
+    );
+  }
+
+  function attachment(id: string, userId: string, overrides: Row = {}): void {
+    insert('attachments', {
+      id,
+      user_id: userId,
+      kind: 'signature',
+      storage_key: `key_${id}_0123456789abcdef`,
+      sha256: HASH_A,
+      mime_type: 'image/png',
+      size_bytes: 2048,
+      width_px: 600,
+      height_px: 200,
+      created_at: AT,
+      ...overrides,
+    });
+  }
+
+  function pdfAttachment(id: string, userId: string, overrides: Row = {}): void {
+    attachment(id, userId, { kind: 'pdf', mime_type: 'application/pdf', width_px: null, height_px: null, ...overrides });
+  }
+
+  function revision(id: string, userId: string, timesheetId: string, overrides: Row = {}): void {
+    insert('timesheet_revisions', {
+      id,
+      user_id: userId,
+      timesheet_id: timesheetId,
+      revision_no: 1,
+      revision_kind: 'original',
+      origin: 'employee',
+      review_state: 'signed',
+      supersedes_revision_id: null,
+      correction_reason: null,
+      timesheet_version: 3,
+      payload_json: '{"days":[]}',
+      payload_sha256: HASH_A,
+      reviewed_sha256: HASH_A,
+      send_requested: 1,
+      actor_user_id: userId,
+      created_at: AT,
+      ...overrides,
+    });
+  }
+
+  function correction(id: string, userId: string, timesheetId: string, overrides: Row = {}): void {
+    revision(id, userId, timesheetId, {
+      revision_no: 2,
+      revision_kind: 'correction',
+      supersedes_revision_id: 'rev-emp-1',
+      correction_reason: 'Synthetic correction',
+      ...overrides,
+    });
+  }
+
+  function signoff(id: string, revisionId: string, overrides: Row = {}): void {
+    insert('signoffs', {
+      id,
+      user_id: employee,
+      revision_id: revisionId,
+      signer_name: 'Example Employee',
+      signed_at: AT,
+      reviewed_sha256: HASH_A,
+      signature_attachment_id: 'sig-emp',
+      ...overrides,
+    });
+  }
+
+  function job(id: string, userId: string | null, overrides: Row = {}): void {
+    insert('jobs', {
+      id,
+      user_id: userId,
+      revision_id: null,
+      kind: 'send_submission',
+      business_key: `business:${id}`,
+      payload_json: '{}',
+      state: 'queued',
+      attempts: 0,
+      next_run_at: AT,
+      lease_owner: null,
+      lease_expires_at: null,
+      last_error: null,
+      created_at: AT,
+      updated_at: AT,
+      ...overrides,
+    });
+  }
+
+  function attempt(id: string, jobId: string, userId: string, overrides: Row = {}): void {
+    insert('delivery_attempts', {
+      id,
+      job_id: jobId,
+      user_id: userId,
+      revision_id: 'rev-emp-1',
+      attempt_no: 1,
+      channel: 'email',
+      envelope_json: '{"to":["manager@example.invalid"]}',
+      attachment_id: 'pdf-emp',
+      message_id: '<rev-emp-1.1@example.invalid>',
+      provider_message_id: null,
+      state: 'preparing',
+      provider_response: null,
+      accepted_at: null,
+      decision: null,
+      decision_actor_user_id: null,
+      decided_at: null,
+      started_at: AT,
+      updated_at: AT,
+      ...overrides,
+    });
+  }
+
+  function settings(id: string, userId: string, seq: number, overrides: Row = {}): void {
+    insert('submission_settings', {
+      id,
+      user_id: userId,
+      seq,
+      recipients_to: '["manager@example.invalid"]',
+      recipients_cc: '[]',
+      subject_template: 'Timesheet {EmployeeName} {PayrollDate} r{Revision}',
+      body_template: 'Hello,\n\nAttached.\n{EmployeeName}',
+      template_version: 1,
+      auto_submit: 1,
+      auto_submit_effective_from: AT,
+      auto_image_authorized: 0,
+      auto_image_attachment_id: null,
+      auto_image_authorized_at: null,
+      show_ot_on_pdf: 1,
+      reminder_offsets_minutes: '[1440,120]',
+      created_by: userId,
+      created_at: AT,
+      ...overrides,
+    });
+  }
+
+  function ledgerLine(id: string, overrides: Row = {}): void {
+    insert('revision_ledger_lines', {
+      id,
+      user_id: employee,
+      revision_id: 'rev-emp-1',
+      work_date: '2026-09-21',
+      line_kind: 'credit',
+      proposed_minutes: 30,
+      outcome: 'posted',
+      ledger_entry_id: ledgerEntryId,
+      created_at: AT,
+      ...overrides,
+    });
+  }
+
+  function revisionFile(id: string, userId: string, overrides: Row = {}): void {
+    insert('revision_files', {
+      id,
+      user_id: userId,
+      revision_id: 'rev-emp-1',
+      kind: 'pdf',
+      state: 'pending',
+      attachment_id: null,
+      last_error: null,
+      created_at: AT,
+      updated_at: AT,
+      ...overrides,
+    });
+  }
+
+  function occurrence(id: string, userId: string, overrides: Row = {}): void {
+    insert('reminder_occurrences', {
+      id,
+      user_id: userId,
+      pay_period_id: 'p1',
+      kind: 'before_due',
+      occurrence_key: 'before_due:120',
+      disposition: 'collapsed',
+      job_id: null,
+      decided_at: AT,
+      ...overrides,
+    });
+  }
+
+  beforeEach(async () => {
+    migrate(db);
+    const clock = new MutableClock(AT);
+    const seed = await seedSynthetic(db, clock, {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass' },
+    });
+    employee = seed.users.find((user) => user.role === 'employee')?.id ?? '';
+    admin = seed.users.find((user) => user.role === 'admin')?.id ?? '';
+    const period = db.prepare(
+      `INSERT INTO pay_periods VALUES (?, ?, ?, ?, ?, ?, ?, ?, '17:00', ?, 0, ?)`,
+    );
+    period.run('p1', seed.calendarId, 0, '2026-10-02', '2026-10-02', '2026-09-14', '2026-09-27', '2026-09-29', '2026-09-30T00:00:00Z', AT);
+    period.run('p2', seed.calendarId, 1, '2026-10-16', '2026-10-16', '2026-09-28', '2026-10-11', '2026-10-13', '2026-10-14T00:00:00Z', AT);
+    const sheet = db.prepare(
+      `INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at) VALUES (?, ?, ?, 3, ?, ?)`,
+    );
+    sheet.run('ts-emp', employee, 'p1', AT, AT);
+    sheet.run('ts-emp-p2', employee, 'p2', AT, AT);
+    sheet.run('ts-adm', admin, 'p1', AT, AT);
+    sheet.run('ts-adm-p2', admin, 'p2', AT, AT);
+    attachment('sig-emp', employee);
+    attachment('sig-adm', admin);
+    pdfAttachment('pdf-emp', employee, { sha256: HASH_B });
+    revision('rev-emp-1', employee, 'ts-emp');
+    revision('rev-adm-1', admin, 'ts-adm');
+    const credit = postCredit(
+      { db, clock },
+      { userId: employee, sourceKey: 'orig:ts-emp:2026-09-21:credit', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
+    );
+    ledgerEntryId = credit.entry.id;
+  });
+
+  it('creates STRICT tables whose columns hold no secret, credential or image body', () => {
+    const added = EXPECTED_TABLES.filter((name) => !V3_TABLES.includes(name));
+    expect(added).toHaveLength(10);
+    for (const table of added) {
+      const columns = db.prepare('SELECT name, type FROM pragma_table_info(?)').all(table) as Array<{ name: string; type: string }>;
+      expect(columns.length, table).toBeGreaterThan(0);
+      for (const column of columns) {
+        expect(['TEXT', 'INTEGER'], `${table}.${column.name}`).toContain(column.type);
+        expect(column.name, `${table}.${column.name}`).not.toMatch(/pass|secret|token|credential|smtp|blob|image_data|bytes_b64/);
+      }
+    }
+    expect(db.prepare("SELECT name FROM pragma_table_info('timesheets')").pluck().all()).toContain('imported_unverified');
+  });
+
+  it('keeps timesheets.imported_unverified a 0/1 flag defaulting to 0', () => {
+    expect(db.prepare("SELECT imported_unverified FROM timesheets WHERE id = 'ts-emp'").pluck().get()).toBe(0);
+    expectSqliteError(
+      () => db.prepare("UPDATE timesheets SET imported_unverified = 2 WHERE id = 'ts-emp'").run(),
+      /CHECK constraint failed/,
+    );
+    db.prepare("UPDATE timesheets SET imported_unverified = 1 WHERE id = 'ts-adm'").run();
+  });
+
+  it('refuses UPDATE and DELETE on every immutable table', () => {
+    settings('set-emp-1', employee, 1);
+    signoff('so-emp-1', 'rev-emp-1');
+    ledgerLine('line-1');
+    job('job-rem', employee, { kind: 'send_reminder', business_key: 'reminder:emp:p1:before_due:1440' });
+    occurrence('rem-1', employee, { occurrence_key: 'before_due:1440', disposition: 'enqueued', job_id: 'job-rem' });
+    const cases: Array<[string, string, RegExp]> = [
+      ['attachments', 'size_bytes = 1', /immutable_attachment/],
+      ['submission_settings', 'auto_submit = 0', /immutable_submission_settings/],
+      ['timesheet_revisions', "correction_reason = 'x'", /immutable_revision/],
+      ['signoffs', "signer_name = 'Other'", /immutable_signoff/],
+      ['revision_ledger_lines', 'proposed_minutes = 99', /immutable_revision_ledger_line/],
+      ['reminder_occurrences', "disposition = 'suppressed'", /immutable_reminder_occurrence/],
+    ];
+    for (const [table, assignment, pattern] of cases) {
+      expect(db.prepare(`SELECT count(*) FROM ${table}`).pluck().get(), table).toBeGreaterThan(0);
+      expectSqliteError(() => db.prepare(`UPDATE ${table} SET ${assignment}`).run(), pattern);
+      expectSqliteError(() => db.prepare(`DELETE FROM ${table}`).run(), pattern);
+    }
+  });
+
+  it('refuses DELETE on the mutable delivery history and the operations row', () => {
+    revisionFile('rf-1', employee);
+    job('job-1', employee, { revision_id: 'rev-emp-1' });
+    attempt('att-1', 'job-1', employee);
+    expectSqliteError(() => db.prepare('DELETE FROM revision_files').run(), /immutable_revision_file/);
+    expectSqliteError(() => db.prepare('DELETE FROM jobs').run(), /immutable_job/);
+    expectSqliteError(() => db.prepare('DELETE FROM delivery_attempts').run(), /immutable_delivery_attempt/);
+    expectSqliteError(() => db.prepare('DELETE FROM operations_state').run(), /immutable_operations_state/);
+  });
+
+  it('enforces the unique business keys', () => {
+    // Revision number per timesheet.
+    expectSqliteError(
+      () => revision('rev-emp-dup', employee, 'ts-emp'),
+      /UNIQUE constraint failed: timesheet_revisions.timesheet_id, timesheet_revisions.revision_no/,
+    );
+    // One sign-off per revision.
+    signoff('so-1', 'rev-emp-1');
+    expectSqliteError(() => signoff('so-2', 'rev-emp-1'), /UNIQUE constraint failed: signoffs.revision_id/);
+    // Job business key.
+    job('job-a', employee, { business_key: 'send:rev-emp-1:1' });
+    expectSqliteError(() => job('job-b', employee, { business_key: 'send:rev-emp-1:1' }), /UNIQUE constraint failed: jobs.business_key/);
+    // Reminder occurrence per user, period, kind and occurrence key.
+    occurrence('rem-a', employee);
+    expectSqliteError(() => occurrence('rem-b', employee), /UNIQUE constraint failed: reminder_occurrences.user_id/);
+    occurrence('rem-c', employee, { occurrence_key: 'before_due:1440' });
+    // One ledger line per revision, date and kind.
+    ledgerLine('line-a');
+    expectSqliteError(() => ledgerLine('line-b'), /UNIQUE constraint failed: revision_ledger_lines.revision_id/);
+    // One file per revision and kind; one settings version number per user.
+    revisionFile('rf-a', employee);
+    expectSqliteError(() => revisionFile('rf-b', employee), /UNIQUE constraint failed: revision_files.revision_id/);
+    settings('set-a', employee, 1);
+    expectSqliteError(() => settings('set-b', employee, 1), /UNIQUE constraint failed: submission_settings.user_id, submission_settings.seq/);
+    // Opaque storage keys are unique and cannot carry path characters.
+    expectSqliteError(
+      () => attachment('sig-dup', employee, { storage_key: 'key_sig-emp_0123456789abcdef' }),
+      /UNIQUE constraint failed: attachments.storage_key/,
+    );
+    expectSqliteError(() => attachment('sig-path', employee, { storage_key: '../escape/0123456789abcdef' }), /CHECK constraint failed/);
+    expectSqliteError(() => attachment('sig-short', employee, { storage_key: 'short' }), /CHECK constraint failed/);
+    // Attempt number per job, and only one open attempt per revision.
+    job('job-send', employee, { revision_id: 'rev-emp-1', business_key: 'send:rev-emp-1:2' });
+    attempt('att-1', 'job-send', employee);
+    expectSqliteError(
+      () => attempt('att-dup', 'job-send', employee, { revision_id: null }),
+      /UNIQUE constraint failed: delivery_attempts.job_id, delivery_attempts.attempt_no/,
+    );
+    expectSqliteError(
+      () => attempt('att-2', 'job-send', employee, { attempt_no: 2 }),
+      /UNIQUE constraint failed: delivery_attempts.revision_id/,
+    );
+  });
+
+  it('binds every row to one owner through composite foreign keys', () => {
+    const fk = /FOREIGN KEY constraint failed/;
+    // A revision cannot point at another user's timesheet; a sign-off cannot use another user's image or revision.
+    expectSqliteError(() => revision('rev-x', employee, 'ts-adm-p2'), fk);
+    expectSqliteError(() => signoff('so-x', 'rev-emp-1', { signature_attachment_id: 'sig-adm' }), fk);
+    expectSqliteError(() => signoff('so-y', 'rev-adm-1'), fk);
+    expectSqliteError(
+      () => settings('set-x', employee, 1, { auto_image_authorized: 1, auto_image_attachment_id: 'sig-adm', auto_image_authorized_at: AT }),
+      fk,
+    );
+    expectSqliteError(() => ledgerLine('line-x', { user_id: admin, revision_id: 'rev-adm-1' }), fk);
+    expectSqliteError(() => job('job-x', admin, { revision_id: 'rev-emp-1' }), fk);
+    job('job-emp', employee, { revision_id: 'rev-emp-1' });
+    expectSqliteError(() => attempt('att-x', 'job-emp', admin, { revision_id: null, attachment_id: null }), fk);
+    pdfAttachment('pdf-adm', admin);
+    expectSqliteError(() => attempt('att-y', 'job-emp', employee, { attachment_id: 'pdf-adm' }), fk);
+    expectSqliteError(() => revisionFile('rf-x', admin), fk);
+    expectSqliteError(() => occurrence('rem-x', admin, { kind: 'overdue', occurrence_key: 'overdue', disposition: 'enqueued', job_id: 'job-emp' }), fk);
+    // A revision-linked job needs its owner, so the composite key is always enforced.
+    expectSqliteError(() => job('job-orphan', null, { revision_id: 'rev-emp-1' }), /CHECK constraint failed/);
+    // System jobs without an owner are allowed.
+    job('job-system', null, { kind: 'deadline_scan' });
+  });
+
+  it('persists every revision ledger outcome, including the R4 pending variants', () => {
+    correction('rev-emp-2', employee, 'ts-emp');
+    ledgerLine('l-posted');
+    ledgerLine('l-pending-balance', { work_date: '2026-09-22', line_kind: 'deficit_debit', proposed_minutes: -45, outcome: 'pending_insufficient_balance', ledger_entry_id: null });
+    ledgerLine('l-pending-choice', { work_date: '2026-09-23', line_kind: 'deficit_debit', proposed_minutes: -15, outcome: 'pending_choice', ledger_entry_id: null });
+    ledgerLine('l-waived', { work_date: '2026-09-24', line_kind: 'deficit_debit', proposed_minutes: -20, outcome: 'waived', ledger_entry_id: null });
+    ledgerLine('l-unchanged', { revision_id: 'rev-emp-2', line_kind: 'correction', proposed_minutes: 0, outcome: 'unchanged', ledger_entry_id: null });
+    ledgerLine('l-correction-pending', { revision_id: 'rev-emp-2', work_date: '2026-09-22', line_kind: 'correction', proposed_minutes: -10, outcome: 'pending_insufficient_balance', ledger_entry_id: null });
+    expect(db.prepare('SELECT outcome FROM revision_ledger_lines ORDER BY rowid').pluck().all()).toEqual([
+      'posted',
+      'pending_insufficient_balance',
+      'pending_choice',
+      'waived',
+      'unchanged',
+      'pending_insufficient_balance',
+    ]);
+    // Outcome shape rules.
+    const check = /CHECK constraint failed/;
+    expectSqliteError(() => ledgerLine('l-bad-outcome', { work_date: '2026-09-25', outcome: 'duplicate' }), check);
+    expectSqliteError(() => ledgerLine('l-posted-unlinked', { work_date: '2026-09-25', ledger_entry_id: null }), check);
+    expectSqliteError(
+      () => ledgerLine('l-pending-linked', { work_date: '2026-09-25', line_kind: 'deficit_debit', proposed_minutes: -5, outcome: 'pending_choice' }),
+      check,
+    );
+    expectSqliteError(() => ledgerLine('l-waived-credit', { work_date: '2026-09-25', outcome: 'waived', ledger_entry_id: null }), check);
+    expectSqliteError(() => ledgerLine('l-choice-credit', { work_date: '2026-09-25', outcome: 'pending_choice', ledger_entry_id: null }), check);
+    expectSqliteError(() => ledgerLine('l-negative-credit', { work_date: '2026-09-25', proposed_minutes: -5 }), check);
+    expectSqliteError(() => ledgerLine('l-positive-debit', { work_date: '2026-09-25', line_kind: 'deficit_debit', proposed_minutes: 5, outcome: 'waived', ledger_entry_id: null }), check);
+  });
+
+  it('keeps revisions, sign-offs and their links consistent', () => {
+    const check = /CHECK constraint failed/;
+    const automatic = { origin: 'deadline', review_state: 'pending', reviewed_sha256: null, actor_user_id: null } as const;
+    // An automatic (deadline) revision is unsigned, actorless and original.
+    expectSqliteError(() => revision('rev-auto-signed', employee, 'ts-emp-p2', { ...automatic, review_state: 'signed', reviewed_sha256: HASH_A }), check);
+    expectSqliteError(() => revision('rev-auto-actor', employee, 'ts-emp-p2', { ...automatic, actor_user_id: employee }), check);
+    expectSqliteError(() => correction('rev-auto-corr', employee, 'ts-emp', automatic), check);
+    revision('rev-auto', employee, 'ts-emp-p2', automatic);
+    // A sign-off cannot attach to the automatic revision; a late review is a new signed revision.
+    expectSqliteError(() => signoff('so-auto', 'rev-auto'), /signoff_revision_mismatch/);
+    expectSqliteError(
+      () => revision('rev-late-pending', employee, 'ts-emp-p2', { revision_no: 2, revision_kind: 'late_review', supersedes_revision_id: 'rev-auto', review_state: 'pending', reviewed_sha256: null }),
+      check,
+    );
+    revision('rev-late', employee, 'ts-emp-p2', { revision_no: 2, revision_kind: 'late_review', supersedes_revision_id: 'rev-auto', send_requested: 0 });
+    signoff('so-late', 'rev-late');
+    // A correction needs a reason; a signed revision binds the reviewed hash to the payload hash.
+    expectSqliteError(() => correction('rev-no-reason', employee, 'ts-emp', { correction_reason: ' ' }), check);
+    expectSqliteError(() => correction('rev-hash', employee, 'ts-emp', { reviewed_sha256: HASH_B }), check);
+    expectSqliteError(() => revision('rev-orig-2', employee, 'ts-emp', { revision_no: 2 }), check);
+    expectSqliteError(() => revision('rev-bad-json', employee, 'ts-emp-p2', { revision_no: 3, revision_kind: 'correction', supersedes_revision_id: 'rev-late', correction_reason: 'x', payload_json: 'not json' }), check);
+    // Supersedes must be the immediate predecessor of the same timesheet.
+    expectSqliteError(() => correction('rev-cross', employee, 'ts-emp-p2', { revision_no: 3, supersedes_revision_id: 'rev-emp-1' }), /invalid_revision_supersedes/);
+    correction('rev-emp-2', employee, 'ts-emp');
+    expectSqliteError(() => correction('rev-emp-gap', employee, 'ts-emp', { revision_no: 4, supersedes_revision_id: 'rev-emp-2' }), /invalid_revision_supersedes/);
+    // Sign-off: only on a signed revision with the same reviewed hash, a signature image and a real name.
+    expectSqliteError(() => signoff('so-hash', 'rev-emp-1', { reviewed_sha256: HASH_B }), /signoff_revision_mismatch/);
+    expectSqliteError(() => signoff('so-pdf', 'rev-emp-1', { signature_attachment_id: 'pdf-emp' }), /attachment_kind_mismatch/);
+    expectSqliteError(() => signoff('so-blank', 'rev-emp-1', { signer_name: '  ' }), check);
+    expectSqliteError(() => signoff('so-time', 'rev-emp-1', { signed_at: '2026-10-02 18:00' }), check);
+    signoff('so-ok', 'rev-emp-1');
+  });
+
+  it('constrains attachments, revision files and the auto-image authorization', () => {
+    const check = /CHECK constraint failed/;
+    expectSqliteError(() => attachment('sig-gif', employee, { mime_type: 'image/gif' }), check);
+    expectSqliteError(() => attachment('sig-nosize', employee, { width_px: null }), check);
+    expectSqliteError(() => attachment('sig-hash', employee, { sha256: 'Z'.repeat(64) }), check);
+    expectSqliteError(() => attachment('sig-empty', employee, { size_bytes: 0 }), check);
+    expectSqliteError(() => pdfAttachment('pdf-png', employee, { mime_type: 'image/png' }), check);
+    expectSqliteError(() => pdfAttachment('pdf-sized', employee, { width_px: 10, height_px: 10 }), check);
+    // Auto-image authorization: all three fields together, and only a signature image.
+    expectSqliteError(() => settings('set-half', employee, 1, { auto_image_authorized: 1 }), check);
+    expectSqliteError(
+      () => settings('set-pdf', employee, 1, { auto_image_authorized: 1, auto_image_attachment_id: 'pdf-emp', auto_image_authorized_at: AT }),
+      /attachment_kind_mismatch/,
+    );
+    expectSqliteError(() => settings('set-crlf', employee, 1, { subject_template: 'Subject\r\nBcc: x@example.invalid' }), check);
+    expectSqliteError(() => settings('set-to', employee, 1, { recipients_to: '"manager@example.invalid"' }), check);
+    settings('set-ok', employee, 1, { auto_image_authorized: 1, auto_image_attachment_id: 'sig-emp', auto_image_authorized_at: AT });
+    // Revision files: ready needs a PDF attachment and is final.
+    expectSqliteError(() => revisionFile('rf-ready-null', employee, { state: 'ready' }), check);
+    expectSqliteError(() => revisionFile('rf-ready-sig', employee, { state: 'ready', attachment_id: 'sig-emp' }), /attachment_kind_mismatch/);
+    revisionFile('rf-1', employee);
+    db.prepare("UPDATE revision_files SET state = 'failed', last_error = 'render_failed' WHERE id = 'rf-1'").run();
+    db.prepare("UPDATE revision_files SET state = 'pending', last_error = NULL WHERE id = 'rf-1'").run();
+    expectSqliteError(
+      () => db.prepare("UPDATE revision_files SET state = 'ready', attachment_id = 'sig-emp' WHERE id = 'rf-1'").run(),
+      /attachment_kind_mismatch/,
+    );
+    expectSqliteError(() => db.prepare("UPDATE revision_files SET revision_id = 'rev-adm-1' WHERE id = 'rf-1'").run(), /immutable_revision_file/);
+    db.prepare("UPDATE revision_files SET state = 'ready', attachment_id = 'pdf-emp' WHERE id = 'rf-1'").run();
+    expectSqliteError(() => db.prepare("UPDATE revision_files SET state = 'failed' WHERE id = 'rf-1'").run(), /immutable_revision_file/);
+  });
+
+  it('keeps job identity fixed, leases explicit and closed jobs closed', () => {
+    const check = /CHECK constraint failed/;
+    job('job-1', employee, { revision_id: 'rev-emp-1' });
+    expectSqliteError(() => db.prepare("UPDATE jobs SET business_key = 'other' WHERE id = 'job-1'").run(), /immutable_job/);
+    expectSqliteError(() => db.prepare("UPDATE jobs SET state = 'leased' WHERE id = 'job-1'").run(), check);
+    db.prepare("UPDATE jobs SET state = 'leased', lease_owner = 'runner-a', lease_expires_at = ?, attempts = 1 WHERE id = 'job-1'").run(AT);
+    expectSqliteError(() => db.prepare("UPDATE jobs SET attempts = 0 WHERE id = 'job-1'").run(), /job_attempts_regression/);
+    db.prepare("UPDATE jobs SET state = 'intervention', lease_owner = NULL, lease_expires_at = NULL, last_error = 'smtp_auth_rejected' WHERE id = 'job-1'").run();
+    db.prepare("UPDATE jobs SET state = 'queued', last_error = NULL WHERE id = 'job-1'").run();
+    db.prepare("UPDATE jobs SET state = 'succeeded' WHERE id = 'job-1'").run();
+    expectSqliteError(() => db.prepare("UPDATE jobs SET state = 'queued' WHERE id = 'job-1'").run(), /job_closed/);
+    expectSqliteError(() => job('job-bad-state', employee, { state: 'sent' }), check);
+    expectSqliteError(() => job('job-bad-kind', employee, { kind: 'Send Mail' }), check);
+    expectSqliteError(() => job('job-bad-payload', employee, { payload_json: '[]' }), check);
+    expectSqliteError(() => job('job-bad-time', employee, { next_run_at: '2026-10-02' }), check);
+  });
+
+  it('moves delivery attempts only forward and records an uncertain decision once', () => {
+    const check = /CHECK constraint failed/;
+    job('job-1', employee, { revision_id: 'rev-emp-1' });
+    attempt('att-1', 'job-1', employee);
+    expectSqliteError(
+      () => db.prepare("UPDATE delivery_attempts SET state = 'accepted', accepted_at = ? WHERE id = 'att-1'").run(AT),
+      /invalid_delivery_transition/,
+    );
+    db.prepare("UPDATE delivery_attempts SET state = 'sending' WHERE id = 'att-1'").run();
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET state = 'preparing' WHERE id = 'att-1'").run(), /invalid_delivery_transition/);
+    expectSqliteError(
+      () => db.prepare("UPDATE delivery_attempts SET message_id = '<other@example.invalid>' WHERE id = 'att-1'").run(),
+      /immutable_delivery_attempt/,
+    );
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET state = 'accepted' WHERE id = 'att-1'").run(), check);
+    db.prepare("UPDATE delivery_attempts SET state = 'uncertain', provider_response = 'connection_lost_after_data' WHERE id = 'att-1'").run();
+    // An uncertain attempt still blocks another open attempt until a decision is recorded.
+    expectSqliteError(() => attempt('att-2', 'job-1', employee, { attempt_no: 2 }), /UNIQUE constraint failed: delivery_attempts.revision_id/);
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET decision = 'resend' WHERE id = 'att-1'").run(), check);
+    db.prepare("UPDATE delivery_attempts SET decision = 'resend', decision_actor_user_id = ?, decided_at = ? WHERE id = 'att-1'").run(employee, AT);
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET decision = 'abandon' WHERE id = 'att-1'").run(), /immutable_delivery_decision/);
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET state = 'failed_permanent' WHERE id = 'att-1'").run(), /invalid_delivery_transition/);
+    attempt('att-2', 'job-1', employee, { attempt_no: 2 });
+    db.prepare("UPDATE delivery_attempts SET state = 'sending' WHERE id = 'att-2'").run();
+    db.prepare("UPDATE delivery_attempts SET state = 'accepted', accepted_at = ?, provider_message_id = 'capture-1' WHERE id = 'att-2'").run(AT);
+    expectSqliteError(() => db.prepare("UPDATE delivery_attempts SET state = 'uncertain' WHERE id = 'att-2'").run(), /invalid_delivery_transition/);
+    expectSqliteError(() => attempt('att-bad', 'job-1', employee, { attempt_no: 3, state: 'queued' }), check);
+    expectSqliteError(() => attempt('att-crlf', 'job-1', employee, { attempt_no: 3, message_id: '<a@example.invalid>\r\nBcc: y' }), check);
+    expectSqliteError(() => attempt('att-env', 'job-1', employee, { attempt_no: 3, envelope_json: '[]' }), check);
+  });
+
+  it('holds exactly one operations row with automation inactive by default', () => {
+    const check = /CHECK constraint failed/;
+    expect(db.prepare('SELECT id, automation_active_from FROM operations_state').all()).toEqual([{ id: 1, automation_active_from: null }]);
+    expectSqliteError(() => db.prepare('INSERT INTO operations_state (id) VALUES (2)').run(), check);
+    expectSqliteError(() => db.prepare('UPDATE operations_state SET automation_active_from = ?').run(AT), check);
+    db.prepare('UPDATE operations_state SET automation_active_from = ?, automation_recorded_at = ?, automation_recorded_by = ?').run(AT, AT, admin);
+    db.prepare('UPDATE operations_state SET runner_heartbeat_at = ?, runner_instance = ?').run(AT, 'runner-a');
+    expectSqliteError(() => db.prepare("UPDATE operations_state SET runner_heartbeat_at = 'now'").run(), check);
   });
 });

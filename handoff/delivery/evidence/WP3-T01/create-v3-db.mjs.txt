@@ -1,0 +1,31 @@
+// Evidence script (stored as .mjs.txt so lint ignores it). Run with Node 24 from a scratch
+// export of the accepted WP2 source 5fafeae: node create-v3-db.mjs <export-root> <db-path>.
+// Creates a schema v3 database with synthetic data only (example.invalid accounts).
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [root, dbPath] = process.argv.slice(2);
+const load = (rel) => import(pathToFileURL(join(root, rel)).href);
+const { openDatabase } = await load('src/server/db/database.ts');
+const { migrate, MIGRATIONS } = await load('src/server/db/migrations.ts');
+const { seedSynthetic } = await load('src/server/seed.ts');
+const { postCredit, postDeficitDebit } = await load('src/server/services/ledger.ts');
+
+const clock = { now: () => new Date('2026-09-29T20:00:00Z') };
+const db = openDatabase(dbPath);
+const result = migrate(db, MIGRATIONS, clock.now());
+const seed = await seedSynthetic(db, clock, {
+  passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+  sampleData: true,
+});
+const employee = seed.users.find((user) => user.role === 'employee').id;
+postCredit({ db, clock }, { userId: employee, sourceKey: 'v3-credit', minutes: 90, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' });
+postDeficitDebit({ db, clock }, { userId: employee, sourceKey: 'v3-debit', debitMinutes: 30, workDate: '2026-09-22', actorUserId: employee, origin: 'manual' });
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+console.log(JSON.stringify({
+  migrations: MIGRATIONS.map((m) => `${m.version}:${m.name}`),
+  applied: result.applied,
+  user_version: db.pragma('user_version', { simple: true }),
+  counts: Object.fromEntries(tables.map((name) => [name, db.prepare(`SELECT count(*) FROM ${name}`).pluck().get()])),
+}, null, 2));
+db.close();

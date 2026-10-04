@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T00-FREEZE",
+  "next_task_id": "WP3-T01-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -61,6 +61,14 @@
     {
       "date": "2026-10-03",
       "observation": "WP2-T11-FREEZE: the classifier denied a combined call that staged the set and printed a CSV sample and the staged fixtures diff with test-only credit seeding ('Credential Leakage'). The coordinator's brief had asked the committer to read those files, which led it to print them beside staging. Future briefs should rely on the precommit scan and avoid printing seeding or secret-like test content in the committer transcript; this is hygiene for later commits, not a retry of this one."
+    },
+    {
+      "date": "2026-10-04",
+      "observation": "WP3-T00-FREEZE attempt 1: validate_orchestration.py (validate_commits) refused a done commit task recorded without 'branch' and 'pushed' (WP2-ACCEPT). Every done commit task needs branch, commit_sha and pushed: true; the coordinator records them at hand-back."
+    },
+    {
+      "date": "2026-10-04",
+      "observation": "WP3-T01-FREEZE attempt 1: the precommit check blocks user-profile path literals (a Windows Users-folder pattern) in source and test files, even synthetic ones; only evidence logs may be masked. Worker briefs must ask for neutral synthetic roots or paths built at run time."
     }
   ],
   "pending_owner_question": "WP3-PLAN section F (asked 2026-10-04): F-1 should the deadline auto-submit a period with no saved entries (recommended yes, with default labels, OT pending, review-pending banner, no deficit)? F-2 a pending deficit debit is re-evaluated only by a later finalized revision, no background posting (recommended)? F-3 admin operations status shows only configuration, heartbeat, activation and system-wide job-state totals, without user, period or recipient (recommended)? F-4 one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant (recommended)? F-5 PDF total = credited OT total in h:mm over 14 days, hidden when Show OT is off (proceeds unless the owner objects). Needed before T05 (F-2), T10 (F-1, F-4), T13 (F-3); T00-T04 continue.",
@@ -78,7 +86,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3ead61edb1316fe926fe969988f595792590cd41",
+    "last_commit": "db753466bbb40386ea1e1f178548b88686872cf7",
     "unpushed": []
   },
   "owner_decisions": [
@@ -4433,7 +4441,7 @@
       "id": "WP3-T00-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T00"
       ],
@@ -4446,8 +4454,8 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "a8247f03feb975598",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
@@ -4465,16 +4473,123 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T00-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T00-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T00-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T00-FREEZE/digest.txt",
+        "handoff/delivery/evidence/WP3-T00-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "3ead61edb1316fe926fe969988f595792590cd41",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "db753466bbb40386ea1e1f178548b88686872cf7",
+      "pushed": true,
       "source_digest": "81567e5370367a07f90ade63f7c41a029d0ec9c677bcafb09365cd0dee1966e2",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): 23 paths, parent 3ead61e, remote SHA identical; digest 81567e53 matches (scripts/source-digest.mjs run directly with Node 24); precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T01 starts on db75346."
+    },
+    {
+      "id": "WP3-T01",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T00-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8163c3bada84f73e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a8163c3bada84f73e",
+          "outcome": "done (digest 995e68c9); the freeze precommit blocked two synthetic user-profile path literals in tests/integration/config.test.ts. Attempt 2 (same author, resumed) replaces them without a profile-path literal and reruns verify and digest."
+        }
+      ],
+      "owned_paths": [
+        "src/server/db/migrations/0004_submission.ts",
+        "src/server/db/migrations.ts",
+        "src/server/config.ts",
+        "src/server/types.ts",
+        "tests/integration/migrations.test.ts",
+        "tests/integration/config.test.ts",
+        "handoff/delivery/tasks/WP3-T01.md",
+        "handoff/delivery/evidence/WP3-T01"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T01.md",
+      "report": "handoff/delivery/tasks/WP3-T01.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T01/01-red.txt",
+        "handoff/delivery/evidence/WP3-T01/02-green.txt",
+        "handoff/delivery/evidence/WP3-T01/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T01/04-upgrade-5fafeae.txt",
+        "handoff/delivery/evidence/WP3-T01/05-verify.txt"
+      ],
+      "baseline_commit": "db753466bbb40386ea1e1f178548b88686872cf7",
+      "source_digest": "3c6a10c19bc863eb5a38ffeb54f109ae9dda38a2c1cf22177e24e96a15901f38",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Attempt 2 (author-reported): config.test.ts lines 91/94 use a neutral synthetic root; the Dropbox refusal is still proven per path segment; only that file changed; no profile-path match in changed files; verify exit 0, 674 tests, 0 deprecation lines; digest 3c6a10c1 (615 files). Attempt 1 (author-reported): migration 0004 adds attachments, submission_settings, timesheet_revisions, signoffs, revision_ledger_lines, revision_files, jobs, delivery_attempts, reminder_occurrences, operations_state and timesheets.imported_unverified; unique keys for revision number per timesheet, one sign-off per revision, job business key, reminder occurrence; partial index allows one open delivery attempt per revision; six tables refuse UPDATE/DELETE; outcomes include both R4 pending variants; 0001-0003 checksums pinned. A real v3 database from 5fafeae upgraded through 0004 only with rows, counts and balances unchanged, integrity_check ok, foreign_key_check empty. Config: capture by default; smtp refused unless PRODUCTION_SENDING_ENABLED=true (owner-only, never set by tasks); no secret in errors/logs. Tests 55 red, 69/69 green; 6/6 mutations caught. verify exit 0, 674 tests, 0 deprecation lines. F-4 dependency: system automation_active_from plus per-user auto_submit_effective_from. F-2 dependency: pending lines immutable, no resolution column; another decision needs a 0005 table. No deviations.",
+      "next_action": "None; WP3-T01-FREEZE."
+    },
+    {
+      "id": "WP3-T01-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a83b872e315841168",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a83b872e315841168",
+          "outcome": "not committed: precommit-check exit 1, two user-profile-path blocks in tests/integration/config.test.ts (+91, +94; synthetic one-character account name). HEAD db75346, set matched, 25 paths staged, digest 995e68c9 matched, diff --check 0; later checks not run. Evidence handoff/delivery/evidence/WP3-T01-FREEZE/stop.txt. Fix routed to the WP3-T01 author (attempt 2)."
+        }
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T01-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "db753466bbb40386ea1e1f178548b88686872cf7",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "3c6a10c19bc863eb5a38ffeb54f109ae9dda38a2c1cf22177e24e96a15901f38",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Re-stage the set (the board changed) and rerun every check from the validator on; commit and push."
+      "next_action": "Commit and push the WP3-T01 set with the pending handoff records."
     },
     {
       "id": "WP2-AUDIT-B",

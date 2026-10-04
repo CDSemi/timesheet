@@ -60,10 +60,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - WP3-T00 is done (author-reported): R2 CSV hardening (red 4, green 26/26, mutation
   caught) and the A4-01 smoke-port fix (free port when unset; FAIL line on every non-zero
   exit); verify 619 tests, 0 deprecation lines; digest 81567e53….
-- Running: WP3-T00-FREEZE (committer), which also commits the pending handoff records.
+- WP3-T00-FREEZE is committed and pushed as db75346 (attempt 2, 23 paths, all checks 0).
+  Attempt 1 stopped at the validator because the coordinator's WP2-ACCEPT board record
+  lacked `branch`/`pushed`; nothing was committed then.
+- WP3-T01 is done (author-reported): migration 0004 with 10 tables and
+  `timesheets.imported_unverified`; a real 5fafeae database upgrades cleanly; capture by
+  default, SMTP only with an owner-only flag; 69 tests green, 6/6 mutations caught; verify
+  674 tests; digest 995e68c9…. The schema follows the F-2/F-4 recommendations; another
+  owner choice needs a migration 0005.
+- WP3-T01-FREEZE attempt 1 stopped: the precommit check blocked two synthetic
+  user-profile path literals in tests/integration/config.test.ts. Nothing was committed.
+- WP3-T01 attempt 2 is done (author-reported): a neutral synthetic root replaces the two
+  literals; verify 674 tests; digest 3c6a10c1….
+- Running: WP3-T01-FREEZE attempt 2 (committer).
 - Next action:
-  1. Record the T00 freeze, then dispatch WP3-T01 (migration 0004 and configuration,
-     worker-high, opus).
+  1. Record the T01 freeze; then WP3-T02 (private file store and signatures; brief ready).
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -80,5 +91,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T00-FREEZE only.
+- Live processes: WP3-T01-FREEZE attempt 2 only.
 - Usage/reset: not observable.

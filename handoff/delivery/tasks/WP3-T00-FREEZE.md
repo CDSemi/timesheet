@@ -122,3 +122,11 @@ Attempt 1 (timesheet-committer, claude-sonnet-5-5): NOT committed.
   (validate_commits, line 203): the board task WP2-ACCEPT lacks commit_sha/pushed.
   check_recovery.py and validate_package.py --preflight not run (stopped at first failure).
 - Evidence: handoff/delivery/evidence/WP3-T00-FREEZE/ (untracked, unstaged).
+
+Attempt 2 (timesheet-committer, claude-sonnet-5-5): committed and pushed.
+- Pre-HEAD = origin/main = 3ead61edb1316fe926fe969988f595792590cd41; commit SHA
+  db753466bbb40386ea1e1f178548b88686872cf7; pushed; remote SHA = same; branch main.
+- Digest 81567e5370367a07f90ade63f7c41a029d0ec9c677bcafb09365cd0dee1966e2; staged 23.
+- Exits (Node v24.21.0): precommit 0; diff --cached --check 0; JSON parse 0;
+  validate_orchestration 0; check_recovery 0; validate_package --preflight 0; push 0.
+- Blockers: none. The brief's attempt-2 results text is a post-commit edit, unstaged.

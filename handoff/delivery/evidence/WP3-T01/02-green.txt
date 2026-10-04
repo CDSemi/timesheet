@@ -1,0 +1,73 @@
+# Green run after migration 0004 and loadDeliveryConfig. Command: node.exe node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/migrations.test.ts tests/integration/config.test.ts; exit 0.
+
+ ✓ tests/integration/config.test.ts > application configuration (unchanged by WP3) > keeps the loopback host, port and database defaults 1ms
+ ✓ tests/integration/config.test.ts > delivery configuration defaults > uses a private data directory beside the default database, capture mode and a local deep-link base 1ms
+ ✓ tests/integration/config.test.ts > delivery configuration defaults > follows an overridden database path and port 0ms
+ ✓ tests/integration/config.test.ts > private data directory > accepts an absolute DATA_DIR override 0ms
+ ✓ tests/integration/config.test.ts > private data directory > refuses a relative DATA_DIR 0ms
+ ✓ tests/integration/config.test.ts > private data directory > refuses a data directory inside a Dropbox folder, explicit or derived from the database path 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > normalizes an override and keeps a path prefix 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > refuses ftp://example.invalid 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > refuses https://user:pw@example.invalid 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > refuses https://example.invalid/?token=x 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > refuses https://example.invalid/#x 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > refuses not a url 0ms
+ ✓ tests/integration/config.test.ts > public base URL for deep links > requires an explicit HTTPS base URL in production 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > is capture by default and when named explicitly 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses the unknown mode "dry_run" 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses the unknown mode "SMTP" 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses the unknown mode "live" 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses the unknown mode "" 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > ignores SMTP settings in capture mode, so no credential is held or rendered 1ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag undefined) 2ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "false") 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "1") 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "TRUE") 0ms
+ ✓ tests/integration/config.test.ts > outbound mode > refuses real SMTP sending unless the owner-only flag is exactly "true" (flag "yes") 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > reads SMTP settings from the environment and never renders the credentials 1ms
+ ✓ tests/integration/config.test.ts > SMTP settings > defaults to STARTTLS on port 587 and allows no authentication 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 0 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 1 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 2 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 3 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 4 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 5 without echoing a credential 1ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 6 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 7 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses invalid SMTP settings 8 without echoing a credential 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses the sender address 0 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses the sender address 1 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > refuses the sender address 2 0ms
+ ✓ tests/integration/config.test.ts > SMTP settings > writes nothing to the console while loading, valid or invalid 1ms
+ ✓ tests/integration/config.test.ts > SecretValue > reveals only on request and renders as [redacted] everywhere else 0ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 19ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 13ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 13ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 13ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 13ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 7ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 1 (initial): its checksum stays pinned 4ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 2 (ot_ledger): its checksum stays pinned 4ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 3 (day_entry_source): its checksum stays pinned 4ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0004, keeps every WP1 row unchanged and leaves a consistent, usable schema 113ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows 99ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 98ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003) 99ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 104ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 103ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 105ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies only 0004 with unchanged rows and counts, a consistent schema and safe defaults 171ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > creates STRICT tables whose columns hold no secret, credential or image body 112ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps timesheets.imported_unverified a 0/1 flag defaulting to 0 104ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > refuses UPDATE and DELETE on every immutable table 105ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > refuses DELETE on the mutable delivery history and the operations row 107ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > enforces the unique business keys 106ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > binds every row to one owner through composite foreign keys 104ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > persists every revision ledger outcome, including the R4 pending variants 104ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps revisions, sign-offs and their links consistent 106ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > constrains attachments, revision files and the auto-image authorization 105ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps job identity fixed, leases explicit and closed jobs closed 105ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > moves delivery attempts only forward and records an uncertain decision once 103ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > holds exactly one operations row with automation inactive by default 100ms
+ Test Files  2 passed (2)
+      Tests  69 passed (69)

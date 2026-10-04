@@ -68,10 +68,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   đối chứng bị phát hiện) và sửa cổng smoke (A4-01; tự chọn cổng trống khi không đặt
   `SMOKE_PORT`; mọi lần thoát lỗi đều in dòng FAIL); verify 619 test, không có cảnh báo API
   lỗi thời; digest 81567e53….
-- Đang chạy: WP3-T00-FREEZE (committer), commit luôn các record handoff đang chờ.
+- WP3-T00-FREEZE đã commit và push, SHA db75346 (attempt 2, 23 đường dẫn, mọi kiểm tra
+  0). Attempt 1 dừng ở validator vì record WP2-ACCEPT trên board do coordinator ghi thiếu
+  `branch`/`pushed`; lần đó chưa có commit.
+- WP3-T01 đã xong (tác giả tự báo): migration 0004 với 10 bảng và
+  `timesheets.imported_unverified`; database thật tạo từ 5fafeae nâng cấp sạch; mặc định
+  gửi kiểu capture, SMTP chỉ chạy khi có cờ riêng của chủ dự án; 69 test xanh, 6/6 bản đối
+  chứng bị phát hiện; verify 674 test; digest 995e68c9…. Schema theo đề xuất F-2/F-4; nếu
+  chủ dự án chọn khác thì cần migration 0005.
+- Attempt 1 của WP3-T01-FREEZE dừng: precommit chặn hai đường dẫn thư mục người dùng giả
+  lập trong tests/integration/config.test.ts. Chưa có commit.
+- WP3-T01 attempt 2 đã xong (tác giả tự báo): thay hai chuỗi bằng một thư mục gốc giả lập
+  trung tính; verify 674 test; digest 3c6a10c1….
+- Đang chạy: WP3-T01-FREEZE attempt 2 (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T00, rồi giao WP3-T01 (migration 0004 và cấu hình,
-     worker-high, opus).
+  1. Ghi kết quả commit đóng băng T01; sau đó WP3-T02 (kho file riêng tư và chữ ký; brief
+     đã sẵn).
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -89,5 +101,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T00-FREEZE.
+- Process còn sống: chỉ WP3-T01-FREEZE attempt 2.
 - Usage/reset: không quan sát được.
