@@ -11,6 +11,7 @@ import { apiRoutes } from './routes/api.ts';
 import { authRoutes } from './routes/auth.ts';
 import { historyRoutes } from './routes/history.ts';
 import { otRoutes } from './routes/ot.ts';
+import { settingsRoutes } from './routes/settings.ts';
 import { DEFAULT_SIGNATURE_MAX_BYTES, isSignatureUpload, signatureRoutes } from './routes/signatures.ts';
 import type { AppDeps, AppEnv } from './types.ts';
 
@@ -87,6 +88,7 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.route('/api/admin', adminRoutes(deps));
   app.route('/api/ot', otRoutes(deps));
   app.route('/api/history', historyRoutes(deps));
+  app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
   app.route('/api', apiRoutes(deps));
   app.all('/api/*', () => {

@@ -1,0 +1,129 @@
+# Mutation checks: 18 of 18 caught (each mutation made the named tests fail; each file restored byte-identical). Script: mutate.py.txt.
+
+## M1 accept unknown template variables
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � rejects the unknown variable {Unknown} 3ms
+  � rejects the unknown variable {employeename} 0ms
+  � rejects the unknown variable { EmployeeName } 0ms
+  � rejects the unknown variable {} 0ms
+  � rejects the unknown variable {EmployeeName } 0ms
+  � rejects the unknown variable Hi {Name} 1ms
+  ... 2 more failing tests
+  Tests  8 failed | 55 passed (63)
+
+## M2 do not escape variable values in the HTML body
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � escapes every value in the HTML body 4ms
+  Tests  1 failed | 62 passed (63)
+
+## M3 do not escape the template text in the HTML body
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � escapes the template text itself and turns line breaks into <br> 4ms
+  Tests  1 failed | 62 passed (63)
+
+## M4 let CR/LF and separators through in rendered values (subject injection)
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � never renders a CR or LF, whatever a value contains 3ms
+  � keeps a body value on one line as well 1ms
+  Tests  2 failed | 61 passed (63)
+
+## M5 accept a line break in the subject template
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � refuses a line break in the subject template 4ms
+  Tests  1 failed | 62 passed (63)
+
+## M6 skip recipient address validation
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � rejects "" 3ms
+  � rejects "plain" 0ms
+  � rejects "a@" 0ms
+  � rejects "@example.invalid" 0ms
+  � rejects "a@b" 0ms
+  � rejects "a b@example.invalid" 0ms
+  ... 27 more failing tests
+  Tests  33 failed | 30 passed (63)
+
+## M7 de-duplicate case-sensitively
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � de-duplicates case-insensitively, keeps the first spelling and drops a cc already in to 4ms
+  Tests  1 failed | 62 passed (63)
+
+## M8 drop the per-list recipient bound
+file: src/domain/emailTemplate.ts; tests: tests/domain/email-template.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � bounds the number of addresses per list after de-duplication 3ms
+  Tests  1 failed | 62 passed (63)
+
+## M9 drop owner scoping from the version lookup (ID swap)
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � gives another user their own defaults and 404 for the first user's version ids 183ms
+  Tests  1 failed | 46 passed (47)
+
+## M10 drop owner scoping from the signature lookup of the image authorization
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � refuses another user's signature, a missing id, a non-signature attachment and a bad id (404) without writing 187ms
+  Tests  1 failed | 46 passed (47)
+
+## M11 accept a non-signature attachment for the image authorization
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � refuses another user's signature, a missing id, a non-signature attachment and a bad id (404) without writing 187ms
+  Tests  1 failed | 46 passed (47)
+
+## M12 move the effective instant to now on every save
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � records now when the switch changes and carries it while the switch stays the same 228ms
+  Tests  1 failed | 46 passed (47)
+
+## M13 let an auto-submit change reach back to overdue drafts by default
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � appends version 1 with normalized recipients, defaults and an effective instant of now 191ms
+  � records now when the switch changes and carries it while the switch stays the same 182ms
+  � never reaches back to already-overdue drafts unless that is chosen explicitly 226ms
+  Tests  3 failed | 44 passed (47)
+
+## M14 put the recipient list into the audit record
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � audits the change with flags and counts only: no address and no template text 184ms
+  � is an explicit audited act that references one own signature and survives plain saves 188ms
+  Tests  2 failed | 45 passed (47)
+
+## M15 let the preview write an audit event
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � renders the stored templates with sample values and writes nothing 187ms
+  � previews an unsaved draft and the review-pending status without storing it 181ms
+  � unknown variable in the draft subject gives 422 and writes nothing 198ms
+  � unknown variable in the draft body gives 422 and writes nothing 198ms
+  � line break in the draft subject gives 422 and writes nothing 190ms
+  Tests  5 failed | 42 passed (47)
+
+## M16 skip the stale-version check on a save
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � refuses a stale expected_seq with 409 and writes nothing 194ms
+  Tests  1 failed | 46 passed (47)
+
+## M17 record the revocation under the update operation (not separately audited)
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � revoking is audited, appends a version and refuses a no-op revocation 186ms
+  Tests  1 failed | 46 passed (47)
+
+## M18 allow applying to overdue drafts without a switch change
+file: src/server/services/submissionSettings.ts; tests: tests/integration/submission-settings.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  � refuses applying to overdue drafts when the switch does not change 186ms
+  Tests  1 failed | 46 passed (47)

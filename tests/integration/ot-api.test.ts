@@ -522,6 +522,11 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/policies',
         // Dry run: validates like POST /api/policies but writes nothing (WP2-T06).
         'POST /api/policies/preview',
+        // Personal submission settings (WP3-T03): append-only versions and audited image authorization; the preview writes nothing; none posts a ledger entry.
+        'POST /api/settings/submission',
+        'POST /api/settings/submission/auto-image/authorize',
+        'POST /api/settings/submission/auto-image/revoke',
+        'POST /api/settings/submission/preview',
         // Raw PNG/JPEG signature upload (WP3-T02): stores a private image, posts nothing.
         'POST /api/signatures',
         'PUT /api/days/:workDate',

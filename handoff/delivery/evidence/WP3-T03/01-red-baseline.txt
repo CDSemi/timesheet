@@ -1,0 +1,150 @@
+# Red. The two new test files run against an export of main at b060d33 (no emailTemplate module, no settings route, no service). Node 24.21.0 by full path, exit 1. The domain suite fails to load (module absent). Integration: 42 failed, 5 passed; the 5 passing tests assert 404/403/415 or 'nothing stored', which an absent route also satisfies, so they are covered by the mutation checks instead (04-mutations.txt).
+
+ × tests/integration/submission-settings.test.ts > defaults before the first save > shows the defaults (seq 0) and stores nothing 226ms
+ × tests/integration/submission-settings.test.ts > saving settings > appends version 1 with normalized recipients, defaults and an effective instant of now 189ms
+ × tests/integration/submission-settings.test.ts > saving settings > audits the change with flags and counts only: no address and no template text 180ms
+ × tests/integration/submission-settings.test.ts > saving settings > keeps unspecified optional fields and does not change the authorization on a plain save 183ms
+ × tests/integration/submission-settings.test.ts > saving settings > refuses a stale expected_seq with 409 and writes nothing 184ms
+ × tests/integration/submission-settings.test.ts > saving settings > rejects unknown fields (the owner is never a field) 179ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > missing to gives 422 { to: undefined } 181ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > empty to gives 422 { to: [] } 184ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > header injection in to gives 422 { to: [Array] } 185ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > header injection in cc gives 422 { cc: [Array] } 182ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > comma list in one entry gives 422 { to: [Array] } 181ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > display name form gives 422 { to: [ 'Name <a@example.invalid>' ] } 180ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > malformed address gives 422 { to: [ 'not-an-address' ] } 183ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > too many to gives 422 { to: [Array] } 178ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the subject gives 422 { subject_template: 'Hello {Nope}' } 179ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the body gives 422 { …(1) } 180ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > line break in the subject gives 422 { …(1) } 181ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > unmatched brace gives 422 { body_template: 'Hello {EmployeeName' } 182ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > empty subject gives 422 { subject_template: '   ' } 180ms
+ × tests/integration/submission-settings.test.ts > validation writes nothing > bad reminder offset gives 422 { reminder_offsets_minutes: [ 0 ] } 180ms
+ ✓ tests/integration/submission-settings.test.ts > validation writes nothing > does not echo the rejected address in the error body 183ms
+ × tests/integration/submission-settings.test.ts > append-only versions > keeps every earlier version byte-for-byte and lists them newest first 185ms
+ × tests/integration/submission-settings.test.ts > append-only versions > refuses UPDATE and DELETE of a stored version at the schema level 182ms
+ × tests/integration/submission-settings.test.ts > append-only versions > increments the template version only when subject or body text changes 181ms
+ × tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > records now when the switch changes and carries it while the switch stays the same 180ms
+ × tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > never reaches back to already-overdue drafts unless that is chosen explicitly 221ms
+ × tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > refuses applying to overdue drafts when the switch does not change 183ms
+ ✓ tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > stores only the per-user instant and implements no system activation 181ms
+ × tests/integration/submission-settings.test.ts > automatic signature image authorization > is off by default 186ms
+ × tests/integration/submission-settings.test.ts > automatic signature image authorization > is an explicit audited act that references one own signature and survives plain saves 179ms
+ ✓ tests/integration/submission-settings.test.ts > automatic signature image authorization > refuses another user's signature, a missing id, a non-signature attachment and a bad id (404) without writing 183ms
+ × tests/integration/submission-settings.test.ts > automatic signature image authorization > needs saved settings first, a fresh expected_seq, and refuses the same image twice 182ms
+ × tests/integration/submission-settings.test.ts > automatic signature image authorization > can switch to a newer signature; the earlier image stays referenced by the older version 182ms
+ × tests/integration/submission-settings.test.ts > automatic signature image authorization > revoking is audited, appends a version and refuses a no-op revocation 182ms
+ × tests/integration/submission-settings.test.ts > preview > renders the stored templates with sample values and writes nothing 181ms
+ × tests/integration/submission-settings.test.ts > preview > previews an unsaved draft and the review-pending status without storing it 178ms
+ × tests/integration/submission-settings.test.ts > preview > escapes hostile values in the HTML body and keeps the subject on one line 179ms
+ × tests/integration/submission-settings.test.ts > preview > unknown variable in the draft subject gives 422 and writes nothing 181ms
+ × tests/integration/submission-settings.test.ts > preview > unknown variable in the draft body gives 422 and writes nothing 180ms
+ × tests/integration/submission-settings.test.ts > preview > line break in the draft subject gives 422 and writes nothing 182ms
+ × tests/integration/submission-settings.test.ts > preview > unknown field gives 422 and writes nothing 180ms
+ × tests/integration/submission-settings.test.ts > preview > shows only the caller's own recipients 181ms
+ × tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > gives another user their own defaults and 404 for the first user's version ids 179ms
+ × tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > keeps each user's versions and sequence independent 183ms
+ × tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > requires a session on every route 181ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > rejects a missing, foreign or cross-site origin and non-JSON bodies on every POST 180ms
+ ✓ tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > stores nothing but the version rows and audit events (no job, mail or file side effect) 182ms
+ FAIL  tests/domain/email-template.test.ts [ tests/domain/email-template.test.ts ]
+Error: Cannot find module '../../src/domain/emailTemplate.ts' imported from <baseline-export>/tests/domain/email-template.test.ts
+ ❯ tests/domain/email-template.test.ts:2:1
+Serialized Error: { code: 'ERR_MODULE_NOT_FOUND' }
+⎯⎯⎯⎯⎯⎯ Failed Tests 42 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/submission-settings.test.ts > defaults before the first save > shows the defaults (seq 0) and stores nothing
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:99:29
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > appends version 1 with normalized recipients, defaults and an effective instant of now
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:132:29
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > audits the change with flags and counts only: no address and no template text
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:156:29
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > keeps unspecified optional fields and does not change the authorization on a plain save
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:183:27
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > refuses a stale expected_seq with 409 and writes nothing
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:195:26
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > rejects unknown fields (the owner is never a field)
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:205:29
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > missing to gives 422 { to: undefined }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > empty to gives 422 { to: [] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > header injection in to gives 422 { to: [Array] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > header injection in cc gives 422 { cc: [Array] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > comma list in one entry gives 422 { to: [Array] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > display name form gives 422 { to: [ 'Name <a@example.invalid>' ] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > malformed address gives 422 { to: [ 'not-an-address' ] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > too many to gives 422 { to: [Array] }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the subject gives 422 { subject_template: 'Hello {Nope}' }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > unknown variable in the body gives 422 { …(1) }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > line break in the subject gives 422 { …(1) }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > unmatched brace gives 422 { body_template: 'Hello {EmployeeName' }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > empty subject gives 422 { subject_template: '   ' }
+ FAIL  tests/integration/submission-settings.test.ts > validation writes nothing > bad reminder offset gives 422 { reminder_offsets_minutes: [ 0 ] }
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:233:29
+ FAIL  tests/integration/submission-settings.test.ts > append-only versions > keeps every earlier version byte-for-byte and lists them newest first
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/submission-settings.test.ts:249:109
+ FAIL  tests/integration/submission-settings.test.ts > append-only versions > refuses UPDATE and DELETE of a stored version at the schema level
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/submission-settings.test.ts:264:39
+ FAIL  tests/integration/submission-settings.test.ts > append-only versions > increments the template version only when subject or body text changes
+TypeError: Cannot read properties of undefined (reading 'template_version')
+ ❯ tests/integration/submission-settings.test.ts:272:31
+ FAIL  tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > records now when the switch changes and carries it while the switch stays the same
+TypeError: Cannot read properties of undefined (reading 'auto_submit_effective_from')
+ ❯ tests/integration/submission-settings.test.ts:285:32
+ FAIL  tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > never reaches back to already-overdue drafts unless that is chosen explicitly
+TypeError: Cannot read properties of undefined (reading 'auto_submit_effective_from')
+ ❯ tests/integration/submission-settings.test.ts:306:29
+ FAIL  tests/integration/submission-settings.test.ts > auto-submit effective instant (docs/05: changes default to future periods) > refuses applying to overdue drafts when the switch does not change
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:319:29
+ FAIL  tests/integration/submission-settings.test.ts > automatic signature image authorization > is off by default
+TypeError: Cannot read properties of undefined (reading 'auto_image')
+ ❯ tests/integration/submission-settings.test.ts:336:32
+ FAIL  tests/integration/submission-settings.test.ts > automatic signature image authorization > is an explicit audited act that references one own signature and survives plain saves
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:347:29
+ FAIL  tests/integration/submission-settings.test.ts > automatic signature image authorization > needs saved settings first, a fresh expected_seq, and refuses the same image twice
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:390:26
+ FAIL  tests/integration/submission-settings.test.ts > automatic signature image authorization > can switch to a newer signature; the earlier image stays referenced by the older version
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:412:29
+ FAIL  tests/integration/submission-settings.test.ts > automatic signature image authorization > revoking is audited, appends a version and refuses a no-op revocation
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:427:25
+ FAIL  tests/integration/submission-settings.test.ts > preview > renders the stored templates with sample values and writes nothing
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:459:29
+ FAIL  tests/integration/submission-settings.test.ts > preview > previews an unsaved draft and the review-pending status without storing it
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:480:29
+ FAIL  tests/integration/submission-settings.test.ts > preview > escapes hostile values in the HTML body and keeps the subject on one line
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:495:29
+ FAIL  tests/integration/submission-settings.test.ts > preview > unknown variable in the draft subject gives 422 and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > preview > unknown variable in the draft body gives 422 and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > preview > line break in the draft subject gives 422 and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > preview > unknown field gives 422 and writes nothing
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:512:29
+ FAIL  tests/integration/submission-settings.test.ts > preview > shows only the caller's own recipients
+TypeError: Cannot read properties of undefined (reading 'recipients')
+ ❯ tests/integration/submission-settings.test.ts:521:30
+ FAIL  tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > gives another user their own defaults and 404 for the first user's version ids
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/submission-settings.test.ts:530:35
+ FAIL  tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > keeps each user's versions and sequence independent
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:551:30
+ FAIL  tests/integration/submission-settings.test.ts > owner scoping (ID swap) and access control > requires a session on every route
+AssertionError: GET /api/settings/submission: expected 404 to be 401 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:571:52
+ Test Files  2 failed (2)
+      Tests  42 failed | 5 passed (47)

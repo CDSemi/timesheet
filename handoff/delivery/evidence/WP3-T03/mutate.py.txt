@@ -1,0 +1,108 @@
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.environ['PROJECT_ROOT']  # the repository root (<project>)
+NODE = os.path.join(os.environ['LOCALAPPDATA'], 'timesheet-dev', 'node-24.21.0', 'node_modules', 'node', 'bin', 'node.exe')
+
+DOMAIN = ['tests/domain/email-template.test.ts']
+INTEGRATION = ['tests/integration/submission-settings.test.ts']
+BOTH = DOMAIN + INTEGRATION
+
+TPL = 'src/domain/emailTemplate.ts'
+SVC = 'src/server/services/submissionSettings.ts'
+
+
+def sub(old, new):
+    def apply(text):
+        assert text.count(old) == 1, old
+        return text.replace(old, new)
+    return apply
+
+
+def regex(pattern, new):
+    def apply(text):
+        result, count = re.subn(pattern, new, text)
+        assert count == 1, pattern
+        return result
+    return apply
+
+
+MUTATIONS = [
+    ('M1 accept unknown template variables', TPL, sub('if (!KNOWN.has(name)) {', 'if (false as boolean) {'), DOMAIN),
+    ('M2 do not escape variable values in the HTML body', TPL,
+     sub("escapeHtml(token.kind === 'text' ? normalizeNewlines(token.text) : singleLine(values[token.name]))",
+         "token.kind === 'text' ? escapeHtml(normalizeNewlines(token.text)) : singleLine(values[token.name])"), DOMAIN),
+    ('M3 do not escape the template text in the HTML body', TPL,
+     sub("escapeHtml(token.kind === 'text' ? normalizeNewlines(token.text) : singleLine(values[token.name]))",
+         "token.kind === 'text' ? normalizeNewlines(token.text) : escapeHtml(singleLine(values[token.name]))"), DOMAIN),
+    ('M4 let CR/LF and separators through in rendered values (subject injection)', TPL,
+     regex(r'  return value[.]replace[(]/[[].u0000[^\n]*\n', '  return value;\n'), DOMAIN),
+    ('M5 accept a line break in the subject template', TPL,
+     regex(r'if [(]/[[].r.n.u0085.u2028.u2029[]]/[.]test[(]template[)][)] [{]', 'if (false as boolean) {'), DOMAIN),
+    ('M6 skip recipient address validation', TPL, sub('if (!isValidEmailAddress(address)) {', 'if (false as boolean) {'), DOMAIN),
+    ('M7 de-duplicate case-sensitively', TPL, sub('const key = address.toLowerCase();', 'const key = address;'), DOMAIN),
+    ('M8 drop the per-list recipient bound', TPL, sub('if (result.length > MAX_RECIPIENTS_PER_LIST) {', 'if (false as boolean) {'), DOMAIN),
+    ('M9 drop owner scoping from the version lookup (ID swap)', SVC,
+     sub("'SELECT * FROM submission_settings WHERE id = ? AND user_id = ?').get(id, userId)",
+         "'SELECT * FROM submission_settings WHERE id = ? AND (user_id = ? OR 1 = 1)').get(id, userId)"), INTEGRATION),
+    ('M10 drop owner scoping from the signature lookup of the image authorization', SVC,
+     sub("\"SELECT id, sha256 FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'\"",
+         "\"SELECT id, sha256 FROM attachments WHERE id = ? AND (user_id = ? OR 1 = 1) AND kind = 'signature'\""), INTEGRATION),
+    ('M11 accept a non-signature attachment for the image authorization', SVC,
+     sub("\"SELECT id, sha256 FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'\"",
+         "\"SELECT id, sha256 FROM attachments WHERE id = ? AND user_id = ?\""), INTEGRATION),
+    ('M12 move the effective instant to now on every save', SVC,
+     sub(': (previous.autoSubmitEffectiveFrom ?? nowUtc(clock));', ': nowUtc(clock);'), INTEGRATION),
+    ('M13 let an auto-submit change reach back to overdue drafts by default', SVC,
+     sub('? APPLY_TO_OVERDUE_EFFECTIVE_FROM\n        : nowUtc(clock)', '? APPLY_TO_OVERDUE_EFFECTIVE_FROM\n        : APPLY_TO_OVERDUE_EFFECTIVE_FROM'), INTEGRATION),
+    ('M14 put the recipient list into the audit record', SVC,
+     sub('    recipients_to_count: settings.recipientsTo.length,', '    recipients_to: settings.recipientsTo,\n    recipients_to_count: settings.recipientsTo.length,'), INTEGRATION),
+    ('M15 let the preview write an audit event', SVC,
+     sub('  const settings = submissionSettingsOrDefault(db, user.id);\n  const scope',
+         "  recordAudit(db, clock, { actorUserId: user.id, ownerUserId: user.id, operation: 'submission_settings.preview', entityType: 'submission_settings', entityId: null });\n  const settings = submissionSettingsOrDefault(db, user.id);\n  const scope"), INTEGRATION),
+    ('M16 skip the stale-version check on a save', SVC,
+     sub('    if ((previous?.seq ?? 0) !== input.expectedSeq) throw staleVersion();\n    const base', '    const base'), INTEGRATION),
+    ('M17 record the revocation under the update operation (not separately audited)', SVC,
+     sub("'submission_settings.auto_image_revoke',", "'submission_settings.update',"), INTEGRATION),
+    ('M18 allow applying to overdue drafts without a switch change', SVC,
+     sub('if (input.applyToOverdueDrafts === true && !autoChanged) {', 'if (false as boolean) {'), INTEGRATION),
+]
+
+
+def sha(path):
+    return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+
+
+out = []
+caught = 0
+for name, rel, mutate, tests in MUTATIONS:
+    path = os.path.join(ROOT, rel)
+    original = open(path, 'rb').read()
+    before = sha(path)
+    text = original.decode('utf-8')
+    mutated = mutate(text).encode('utf-8')  # computed first: a failing mutation never touches the file
+    try:
+        open(path, 'wb').write(mutated)
+        result = subprocess.run([NODE, 'node_modules/vitest/vitest.mjs', 'run', *tests], cwd=ROOT,
+                                capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        open(path, 'wb').write(original)
+    restored = sha(path) == before
+    log = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', result.stdout + result.stderr)
+    failed = [line.strip() for line in log.splitlines() if line.strip().startswith('×')]
+    summary = [line.strip() for line in log.splitlines() if re.match(r'\s*Tests\s', line)]
+    if result.returncode != 0 and restored:
+        caught += 1
+    out.append(f'## {name}')
+    out.append(f'file: {rel}; tests: {", ".join(tests)}')
+    out.append(f'exit: {result.returncode} (expected non-zero); restored byte-identical: {restored}')
+    out.extend(f'  {line}' for line in failed[:6])
+    if len(failed) > 6:
+        out.append(f'  ... {len(failed) - 6} more failing tests')
+    out.extend(f'  {line}' for line in summary)
+    out.append('')
+sys.stdout.write(f'# Mutation checks: {caught} of {len(MUTATIONS)} caught (each mutation made the named tests fail; each file restored byte-identical). Script: mutate.py.txt.\n\n')
+sys.stdout.write('\n'.join(out))

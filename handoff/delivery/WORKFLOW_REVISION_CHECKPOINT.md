@@ -6,12 +6,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = ac5d0babf4e10d823f54a74db9248ddb84994958 (WP3-T01-FREEZE).
+  - HEAD = origin/main = b060d330960bddaa2b98a80444775e67c55eac01 (WP3-T02-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 3c6a10c1… (T01, author-reported; no WP3
+    (WP2-GATE4). Current WP3 working digest 629e7d9d… (T02, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T01-FREEZE results and
+  - Uncommitted (handoff only): the board, this checkpoint, the T02-FREEZE results and
     evidence. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
@@ -78,10 +78,16 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (raw PNG/JPEG, 256 KiB route limit) and owner-only download; the JSON-only rule holds
   elsewhere; 14/14 mutations caught; verify 711 tests; digest 629e7d9d…. Carry to T08:
   `index.ts` must pass `dataDir` from the delivery config.
-- Running: WP3-T02-FREEZE (committer).
+- WP3-T02-FREEZE is committed and pushed as b060d33 (28 paths, all checks 0).
+- WP3-T03 is done (author-reported): email template engine, validated recipients,
+  append-only submission settings with a per-user auto-submit effective instant, audited
+  auto-image authorization, write-free preview; 18/18 mutations caught; verify 821 tests;
+  digest 22acf6c4…. A mutation-script incident (one file truncated, rewritten, all runs
+  repeated) is disclosed.
+- Running: WP3-T03-FREEZE (committer).
 - Next action:
-  1. Record the T02 freeze; then WP3-T03 (submission settings, recipients, templates;
-     brief ready).
+  1. Record the T03 freeze; then WP3-T04 (canonical snapshot, review payload and hash;
+     brief ready). T05 needs the owner's F-2 answer.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -98,5 +104,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T02-FREEZE only.
+- Live processes: WP3-T03-FREEZE only.
 - Usage/reset: not observable.

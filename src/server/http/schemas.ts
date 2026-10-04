@@ -246,3 +246,39 @@ export const adminPayrollExceptionBody = z.strictObject({
   /** Required and non-blank; checked by the service for a precise error code. */
   reason: z.string().max(1000),
 });
+
+/*
+ * Submission settings (WP3-T03). The owner is never a field. Address and template
+ * semantics (syntax, bounds, unknown variables) are checked by the domain for exact codes.
+ */
+const addressList = z.array(z.string().max(320)).max(40);
+
+export const submissionSettingsBody = z.strictObject({
+  /** The seq of the version the caller saw (0 before the first save); a mismatch is 409 stale_version. */
+  expected_seq: z.number().int().min(0),
+  to: addressList,
+  cc: addressList.optional(),
+  subject_template: z.string().max(600).optional(),
+  body_template: z.string().max(12_000).optional(),
+  auto_submit: z.boolean(),
+  /** Explicit choice: let an auto-submit change also cover already-overdue drafts. */
+  apply_to_overdue_drafts: z.boolean().optional(),
+  show_ot_on_pdf: z.boolean().optional(),
+  reminder_offsets_minutes: z.array(z.number().int().min(1).max(20_160)).max(5).optional(),
+});
+export type SubmissionSettingsBody = z.infer<typeof submissionSettingsBody>;
+
+export const submissionPreviewBody = z.strictObject({
+  subject_template: z.string().max(600).optional(),
+  body_template: z.string().max(12_000).optional(),
+  sign_off: z.enum(['signed', 'review_pending']).optional(),
+});
+
+export const autoImageAuthorizeBody = z.strictObject({
+  expected_seq: z.number().int().min(0),
+  signature_attachment_id: z.string().min(1).max(64),
+});
+
+export const autoImageRevokeBody = z.strictObject({
+  expected_seq: z.number().int().min(0),
+});

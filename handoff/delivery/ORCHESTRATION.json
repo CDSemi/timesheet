@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T02-FREEZE",
+  "next_task_id": "WP3-T03-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -86,7 +86,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+    "last_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
     "unpushed": []
   },
   "owner_decisions": [
@@ -4654,9 +4654,106 @@
       "id": "WP3-T02-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8c195aef24cb9353",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T02-FREEZE/02-digest.txt",
+        "handoff/delivery/evidence/WP3-T02-FREEZE/03-precommit.txt",
+        "handoff/delivery/evidence/WP3-T02-FREEZE/05-validate-orch.txt",
+        "handoff/delivery/evidence/WP3-T02-FREEZE/07-preflight.txt",
+        "handoff/delivery/evidence/WP3-T02-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+      "branch": "main",
+      "commit_sha": "b060d330960bddaa2b98a80444775e67c55eac01",
+      "pushed": true,
+      "source_digest": "629e7d9d12f4a38b3c9389a16cba15a331284417c0b1cc1566514bd29d6ceafe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 28 paths, parent ac5d0ba, remote SHA identical; digest 629e7d9d matches; precommit (no findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0; no masking or EOF fix.",
+      "next_action": "None; WP3-T03 starts on b060d33."
+    },
+    {
+      "id": "WP3-T03",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T02-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa4f21041197f52ab",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/domain/emailTemplate.ts",
+        "src/server/services/submissionSettings.ts",
+        "src/server/routes/settings.ts",
+        "src/server/http/schemas.ts",
+        "src/server/app.ts",
+        "tests/domain/email-template.test.ts",
+        "tests/integration/submission-settings.test.ts",
+        "handoff/delivery/tasks/WP3-T03.md",
+        "handoff/delivery/evidence/WP3-T03"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T03.md",
+      "report": "handoff/delivery/tasks/WP3-T03.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T03/01-red-baseline.txt",
+        "handoff/delivery/evidence/WP3-T03/03-green.txt",
+        "handoff/delivery/evidence/WP3-T03/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-T03/05-verify.txt",
+        "handoff/delivery/evidence/WP3-T03/06-digest.txt",
+        "handoff/delivery/evidence/WP3-T03/07-precommit-check.txt"
+      ],
+      "baseline_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
+      "source_digest": "22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: pure email template engine (closed variable set, 422 unknown variable, HTML escaping, single-line subject values); bare ASCII recipients, case-insensitive de-duplication, at most 10 per list; append-only submission settings with expected_seq 409, audit without addresses or template text; per-user auto-submit effective instant (now on change; explicit apply_to_overdue_drafts option stored as a 1970 sentinel and audited); audited auto-image authorize/revoke referencing an own signature attachment; write-free preview; seven owner-only routes under /api/settings/submission. Red: domain suite absent, integration 42 failed/5 passed (covered by mutations); green 110; 18/18 mutations caught; verify exit 0, 37 files/821 tests, 0 deprecation lines. Deviation: ot-api.test.ts allowlist gained the four POST routes. Incident disclosed: a mutation-script bug truncated emailTemplate.ts once; rewritten, script fixed, all runs repeated. F-4: only the per-user instant; no system activation. Audit notes: the 1970 sentinel and the cc-in-to drop are worker choices within the contract.",
+      "next_action": "None; WP3-T03-FREEZE."
+    },
+    {
+      "id": "WP3-T03-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T03"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -4674,21 +4771,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T02-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T02-FREEZE"
+        "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T03-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+      "baseline_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "629e7d9d12f4a38b3c9389a16cba15a331284417c0b1cc1566514bd29d6ceafe",
+      "source_digest": "22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T02 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T03 set with the pending handoff records."
     },
     {
       "id": "WP2-AUDIT-B",
