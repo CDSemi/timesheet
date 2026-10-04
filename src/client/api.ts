@@ -282,6 +282,8 @@ export interface PolicyBreak {
   counts_as_work: boolean;
 }
 
+export type DeficitMode = 'ignore' | 'auto_deduct' | 'choose_at_signoff';
+
 export interface PolicyVersion {
   id: string;
   seq: number;
@@ -292,6 +294,143 @@ export interface PolicyVersion {
   reference_start: string;
   reference_end: string;
   breaks: PolicyBreak[];
+  deficit_mode?: DeficitMode;
+  note?: string | null;
+  created_at?: string;
+}
+
+/** Body of POST /api/policies and POST /api/policies/preview (the same checks, the preview writes nothing). */
+export interface PolicyRequest {
+  effective_from: string;
+  required_minutes: number;
+  threshold_minutes: number;
+  rounding_step_minutes: number;
+  reference_start: string;
+  reference_end: string;
+  breaks: PolicyBreak[];
+  deficit_mode: DeficitMode;
+  note?: string;
+}
+
+export type PolicyMinuteField = 'regular_minutes' | 'nonworking_minutes' | 'normal_excess_minutes' | 'eligible_minutes' | 'credited_minutes';
+export type PolicyMinutes = Record<PolicyMinuteField, number | null>;
+
+/** The draft days a proposed policy version would change; the server computes before and after. */
+export interface PolicyPreview {
+  effective_from: string;
+  days: Array<{
+    work_date: string;
+    period_relation: PeriodRelation;
+    changed: PolicyMinuteField[];
+    before: PolicyMinutes;
+    after: PolicyMinutes;
+  }>;
+}
+
+/** An account as the admin routes return it: account fields only, never a password or personal data. */
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: 'admin' | 'employee';
+  status: 'active' | 'deactivated';
+  calendar_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminUserCreateRequest {
+  email: string;
+  display_name: string;
+  role: 'admin' | 'employee';
+  password: string;
+  calendar_id: string;
+}
+
+export interface AdminUserUpdateRequest {
+  display_name?: string;
+  role?: 'admin' | 'employee';
+  calendar_id?: string;
+}
+
+export interface CalendarInfo {
+  id: string;
+  name: string;
+  reporting_zone: string;
+  payroll: { cycle_days: number; anchor_payroll_date: string };
+  payroll_exceptions: Array<{
+    nominal_payroll_date: string;
+    payroll_date: string;
+    due_local_date: string | null;
+    due_local_time: string | null;
+  }>;
+  /** E-12: the server decides when next year's calendar dates are missing. */
+  warnings: CalendarWarning[];
+}
+
+export interface HolidayImportRequest {
+  calendar_id: string;
+  year: number;
+  effective_from: string;
+  csv: string;
+  remove_dates: string[];
+}
+
+export interface HolidayRule {
+  date: string;
+  kind: string;
+  name: string;
+}
+
+export interface HolidayChange {
+  date: string;
+  before: { name: string; kind: string };
+  after: { name: string; kind: string };
+}
+
+export interface HolidayImportPreview {
+  can_commit: boolean;
+  preview_hash: string | null;
+  no_change: boolean;
+  earliest_effective_from: string;
+  issues: Array<{ line: number; code: string; message: string; field?: string; value?: string }>;
+  issue_count: number;
+  removal_problems: unknown[];
+  effective_from_problem: { code: string; message: string } | null;
+  finalized_conflicts: Array<{ date: string; finalized_timesheets: number }>;
+  diff: {
+    added: HolidayRule[];
+    renamed: HolidayChange[];
+    kind_changed: HolidayChange[];
+    removed: HolidayRule[];
+    unchanged_count: number;
+    kept: HolidayRule[];
+    ignored_past: HolidayRule[];
+  };
+  result_date_count: number;
+  affected_days: Array<{
+    date: string;
+    label_before: string | null;
+    label_after: string | null;
+    default_labelled_entries: number;
+    explicit_overrides_preserved: number;
+  }>;
+}
+
+export interface HolidayImportResult {
+  committed: boolean;
+  unchanged: boolean;
+  version: { id: string; seq: number; effective_from: string };
+  preview_hash: string;
+}
+
+export interface PayrollExceptionRequest {
+  calendar_id: string;
+  nominal_payroll_date: string;
+  payroll_date: string;
+  due_local_date?: string | null;
+  due_local_time?: string | null;
+  reason: string;
 }
 
 /** The balance block of every OT response; the server computes it, the client never does. */

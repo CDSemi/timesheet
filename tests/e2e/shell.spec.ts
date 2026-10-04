@@ -28,7 +28,7 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
   await signInThroughUi();
 
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('link')).toHaveCount(3);
+  await expect(nav.getByRole('link')).toHaveCount(4);
   await expect(nav.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
   await expect(page).toHaveURL(/#\/timesheet$/);
   await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();

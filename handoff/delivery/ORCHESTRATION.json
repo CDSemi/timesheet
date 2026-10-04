@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t11-freeze-blocked",
+  "phase": "wp2-t12-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba",
+  "current_source_digest": "321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T11-FREEZE",
+  "next_task_id": "WP2-T12-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -63,12 +63,7 @@
       "observation": "WP2-T11-FREEZE: the classifier denied a combined call that staged the set and printed a CSV sample and the staged fixtures diff with test-only credit seeding ('Credential Leakage'). The coordinator's brief had asked the committer to read those files, which led it to print them beside staging. Future briefs should rely on the precommit scan and avoid printing seeding or secret-like test content in the committer transcript; this is hygiene for later commits, not a retry of this one."
     }
   ],
-  "pending_owner_question": {
-    "date": "2026-10-03",
-    "task": "WP2-T11-FREEZE",
-    "question": "The auto-mode classifier denied the committer's call that staged the T11 set and printed the CSV sample and the fixtures diff (test-only credit seeding) as 'Credential Leakage'. The coordinator will not route around it. Options: (1) an owner message naming the action and its specific danger, then attempt 2; (2) a manual commit by the owner with git add -A (commands and message file provided in chat).",
-    "context": "The working tree matched the expected set; screenshots were synthetic. The WP2-T13 brief was written after the dispatch and is now part of the set."
-  },
+  "pending_owner_question": null,
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -82,7 +77,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
+    "last_commit": "55d3bb808836a0217de45470f5b743f9e5b9a667",
     "unpushed": []
   },
   "owner_decisions": [
@@ -125,6 +120,12 @@
       "source": "owner chat, direct reply typed by the owner",
       "verbatim": "đã commit bổ sung xong, tiếp tụ đi",
       "decision": "The owner made the completion commit that adds the untracked WP2-T05-FREEZE files; continue. WP2-T05-RECON2 (verifier, read-only) checks it before WP2-T06."
+    },
+    {
+      "date": "2026-10-04",
+      "source": "owner chat, direct reply typed by the owner (after an IDE commit-dialog screenshot)",
+      "verbatim": "đã commit xong và push, tiếp tục đi",
+      "decision": "The owner committed and pushed the WP2-T11-FREEZE set manually from the IDE after the classifier denial (option 2), having been told the two IDE font-family warnings were false positives and to run git add -A and the precommit check first; continue. WP2-T11-RECON (verifier, read-only) checks the commit before WP2-T12."
     }
   ],
   "coordinator_decisions": [
@@ -2989,9 +2990,10 @@
       "id": "WP2-T11-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "blocked",
+      "status": "done",
       "history": [
-        "attempt 1 (agent aea403dc3c989ee0d): no commit. HEAD = origin/main = 26fa7c9, index empty, working tree equal to the expected set (11 modified, 16 untracked), screenshots synthetic. The auto-mode classifier denied one combined call ('Credential Leakage'): git add of the paths, printing the CSV sample, printing the fixtures.ts staged diff (test-only credit seeding with a synthetic setup key) and listing staged names. Nothing ran. Not retried, split or rephrased. Owner direction requested."
+        "attempt 1 (agent aea403dc3c989ee0d): no commit. HEAD = origin/main = 26fa7c9, index empty, working tree equal to the expected set (11 modified, 16 untracked), screenshots synthetic. The auto-mode classifier denied one combined call ('Credential Leakage'): git add of the paths, printing the CSV sample, printing the fixtures.ts staged diff (test-only credit seeding with a synthetic setup key) and listing staged names. Nothing ran. Not retried, split or rephrased. Owner direction requested.",
+        "owner (2026-10-04): the owner committed and pushed the set manually from the IDE ('đã commit xong và push, tiếp tục đi'). WP2-T11-RECON verifies the SHA, push, file set, leftovers and digest before this task is marked done."
       ],
       "depends_on": [
         "WP2-T11"
@@ -3020,21 +3022,161 @@
       "evidence": [],
       "baseline_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "55d3bb808836a0217de45470f5b743f9e5b9a667",
+      "pushed": true,
+      "executed_by": "owner (manual IDE commit after a classifier denial of the committer; precommit run beforehand on the owner's side)",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": "blocked: classifier denial 'Credential Leakage' on the staging/inspection call; no commit.",
-      "next_action": "Owner direction: an approval message naming the action and its specific danger (then attempt 2), or a manual commit with git add -A (the set now also includes the new WP2-T13 brief). The coordinator does not route around the denial."
+      "decision": "committed and pushed by the owner: 55d3bb8 (35 paths, exact expected set incl. the T13 brief). WP2-T11-RECON verified the parent, push, set, leftovers, privacy, digest and validators.",
+      "next_action": "None; WP2-T12 runs on 55d3bb8."
+    },
+    {
+      "id": "WP2-T11-RECON",
+      "package": "WP2",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP2-T11"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5b5d3ddc1c2296b6",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T11-RECON.md",
+        "handoff/delivery/evidence/WP2-T11-RECON"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T11-RECON.md",
+      "report": "handoff/delivery/tasks/WP2-T11-RECON.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T11-RECON/checks.txt"
+      ],
+      "baseline_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
+      "source_digest": "afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "complete. HEAD = origin/main = 55d3bb808836a0217de45470f5b743f9e5b9a667, parent 26fa7c9 (not an amend; one commit). The 35 paths match the expected set with no extras. The HEAD tree has OtScreen.tsx, HistoryScreen.tsx and ot-leave.spec.ts; no .csv, Playwright output or server file. The subject and Task line are correct. Leftovers are only post-commit coordinator edits (board, checkpoint, the T12 brief font item). The Grep-only privacy scan found nothing actionable (example.invalid only). The digest matches T11. Validator and check_recovery exit 0 on Node v24.21.0.",
+      "next_action": "None; WP2-T11-FREEZE done; WP2-T12 next."
     },
     {
       "id": "WP2-T12",
       "package": "WP2",
       "kind": "implement",
-      "status": "pending",
+      "status": "done",
       "depends_on": [
         "WP2-T11-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a1e278f365dfc23f0",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/SettingsScreen.tsx",
+        "src/client/AdminScreen.tsx",
+        "src/client/components",
+        "src/client/App.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "tests/client",
+        "tests/e2e/admin.spec.ts",
+        "tests/e2e/isolation.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/shell.spec.ts",
+        "handoff/delivery/tasks/WP2-T12.md",
+        "handoff/delivery/evidence/WP2-T12"
+      ],
+      "deviations": [
+        "tests/e2e/shell.spec.ts: navigation count 3 to 4 (accepted; path added to owned_paths after the fact).",
+        "tests/e2e/fixtures.ts adds a test-only seedSecondCalendar child process to exercise calendar_in_use (accepted; within the fixtures helpers scope)."
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T12.md",
+      "report": "handoff/delivery/tasks/WP2-T12.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T12/verify.log.txt",
+        "handoff/delivery/evidence/WP2-T12/e2e.log.txt",
+        "handoff/delivery/evidence/WP2-T12/digest.txt",
+        "handoff/delivery/evidence/WP2-T12/settings-preview-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T12/admin-accounts-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T12/holiday-preview-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T12/isolation-employee2-mobile-synthetic.png"
+      ],
+      "baseline_commit": "55d3bb808836a0217de45470f5b743f9e5b9a667",
+      "source_digest": "321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). Settings screen (policy preview, then create; figures equal the preview) and admin-only Admin screen:\n- users: create, rename; refusals for self-deactivation, last admin and 409 calendar_in_use; deactivate, then the old session gets 401; reactivate;\n- holiday CSV: invalid row, boundary, stale hash, diff, commit, no-change re-commit;\n- payroll exception with a reason; the E-12 warning from server data.\nIsolation: employee 2 and admin get 404 on employee 1's IDs; the employee gets 403 on admin routes and sees no Admin link; hash swaps fall back to the user's own timesheet; admin screens show no employee data. Font-family fallback added. verify 599 tests; test:e2e 66 passed, 2 skipped; 14 screenshots. Not independent acceptance.",
+      "next_action": "None; WP2-T12-FREEZE."
+    },
+    {
+      "id": "WP2-T12-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-T12"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T12-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T12-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T12-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T12-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "55d3bb808836a0217de45470f5b743f9e5b9a667",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Commit and push the T12 set with the T11 reconciliation records, relying on the precommit scan without printing test content; on a permission denial stop without retrying."
+    },
+    {
+      "id": "WP2-T13",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "pending",
+      "depends_on": [
+        "WP2-T12-FREEZE"
       ],
       "profile": "timesheet-worker",
       "requested_model": "sonnet",
@@ -3052,28 +3194,28 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/client/SettingsScreen.tsx",
-        "src/client/AdminScreen.tsx",
-        "src/client/components",
-        "src/client/App.tsx",
-        "src/client/api.ts",
-        "src/client/styles.css",
-        "tests/client",
-        "tests/e2e/admin.spec.ts",
-        "tests/e2e/isolation.spec.ts",
+        "src/server/seed.ts",
+        "scripts/smoke-built-server.mjs",
+        "DEVELOPMENT.md",
+        "DEVELOPMENT.vi.md",
+        "README.md",
+        "README.vi.md",
+        "package.json",
         "tests/e2e/fixtures.ts",
-        "handoff/delivery/tasks/WP2-T12.md",
-        "handoff/delivery/evidence/WP2-T12"
+        "handoff/delivery/WP2_HANDOFF.md",
+        "handoff/delivery/WP2_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP2-T13.md",
+        "handoff/delivery/evidence/WP2-T13"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T12.md",
-      "report": "handoff/delivery/tasks/WP2-T12.md",
+      "prompt": "handoff/delivery/tasks/WP2-T13.md",
+      "report": "handoff/delivery/tasks/WP2-T13.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Settings (policy form with preview) and admin UI (users, holiday CSV preview/commit, payroll exceptions, calendar warning); isolation e2e."
+      "next_action": "Package-final source: synthetic seed (employee2, sessions, leave, keyed ledger entries), smoke additions, docs, and WP2_HANDOFF (+vi); clean-export verify and e2e; preflight."
     },
     {
       "id": "WP2-INFRA1",

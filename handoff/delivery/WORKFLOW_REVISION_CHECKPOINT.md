@@ -7,13 +7,14 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 26fa7c9f5a2dda1c2b9ab73122934ede04cf186f, the WP2-T10 freeze.
-  - Source digest 84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e
-    (author-reported).
-  - Uncommitted: WP2-T11 (source digest
-    afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba, author-reported),
-    the T10-FREEZE evidence, the T12 and T11-FREEZE briefs, the board and this
-    checkpoint. WP2-T11-FREEZE commits them.
+  - HEAD = origin/main = 55d3bb808836a0217de45470f5b743f9e5b9a667, the WP2-T11 freeze
+    (a manual owner commit, verified by WP2-T11-RECON).
+  - Source digest afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba,
+    verified.
+  - Uncommitted: WP2-T12 (source digest
+    321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54, author-reported),
+    the T11-RECON records, the T12-FREEZE brief, the board and this checkpoint.
+    WP2-T12-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -136,8 +137,21 @@ America/Los_Angeles).
   - The owner's direction is requested: an approval message naming the action and its
     danger, or a manual commit with `git add -A`.
   - The WP2-T13 brief is written and is now part of the set.
-- Next action: follow the owner's direction on WP2-T11-FREEZE, verify the commit, then
-  dispatch WP2-T12 (brief ready).
+  - The owner committed and pushed the set from the IDE on 2026-10-04. The two IDE
+    font-family warnings were false positives (`var(--font-mono)` ends in `monospace`);
+    T12 adds an explicit fallback.
+  - WP2-T11-RECON verified 55d3bb8:
+    - its parent is 26fa7c9 (not an amend);
+    - it is pushed;
+    - its 35 paths match the expected set exactly;
+    - the privacy scan is clean;
+    - the digest matches.
+- WP2-T12 (settings and admin UI) is done: author-reported verify 599 tests and
+  test:e2e 66 passed, 2 skipped. Isolation e2e: other users' IDs give 404, admin routes
+  give employees 403, and admin screens show no employee data.
+- Next action: record the WP2-T12-FREEZE result, then dispatch WP2-T13 (brief ready; the
+  package-final source task). The T12 committer brief relies on the precommit scan and
+  prints no test content.
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -153,8 +167,7 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: nothing. WP2-T11-FREEZE is blocked on the owner, and WP2-T12 waits for it so
-  that no in-progress work is swept into a manual `git add -A`.
-- Live processes: none known.
+- Running: WP2-T12-FREEZE (committer). WP2-T13 is pending on it.
+- Live processes: none known besides the committer.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

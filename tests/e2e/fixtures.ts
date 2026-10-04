@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { test as base, expect } from '@playwright/test';
+import { type Page, test as base, expect } from '@playwright/test';
 
 /*
  * Browser-test harness. One worker gets one BUILT server (dist/) on a free loopback port and a
@@ -163,6 +163,60 @@ export function seedCredit(server: BuiltServer, minutes: number, workDate = '202
   );
   if (result.status !== 0) throw new Error(`credit seeding failed with ${result.status}: ${result.stderr}`);
   expect(result.stdout, 'credit seeding status').toBe('posted');
+}
+
+/* ---- Test-only second calendar ------------------------------------------------ */
+
+/*
+ * No public route creates a calendar (the admin API configures the existing one), yet the
+ * calendar_in_use refusal needs a second calendar to move an account to. As with the credit
+ * seeding above, a child process (process.execPath) calls the internal service of the BUILT server
+ * code, here createCalendar, with a copy of the existing schedule. Test code only.
+ */
+const SEED_CALENDAR_SCRIPT = `
+const [dbUrl, calendarsUrl, clockUrl] = process.argv.slice(1, 4);
+const { openDatabase } = await import(dbUrl);
+const { createCalendar } = await import(calendarsUrl);
+const { systemClock } = await import(clockUrl);
+const env = process.env;
+const db = openDatabase(env.SEED_DB_PATH);
+try {
+  process.stdout.write(createCalendar(db, systemClock, { name: env.SEED_CALENDAR_NAME, schedule: JSON.parse(env.SEED_SCHEDULE) }, null));
+} finally {
+  db.close();
+}
+`;
+
+export interface CalendarSchedule {
+  reportingZone: string;
+  anchorPayrollDate: string;
+  cycleDays: number;
+  periodStartOffsetDays: number;
+  periodEndOffsetDays: number;
+  dueOffsetDays: number;
+  dueLocalTime: string;
+}
+
+/** Creates a second calendar with the given schedule in the temporary database and returns its id. */
+export function seedSecondCalendar(server: BuiltServer, schedule: CalendarSchedule): string {
+  const dist = (file: string) => pathToFileURL(join(REPO_ROOT, 'dist', 'server', file)).href;
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', SEED_CALENDAR_SCRIPT, dist('db/database.js'), dist('services/calendars.js'), dist('clock.js')],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SEED_DB_PATH: server.databasePath,
+        SEED_CALENDAR_NAME: 'Second calendar (synthetic)',
+        SEED_SCHEDULE: JSON.stringify(schedule),
+      },
+    },
+  );
+  if (result.status !== 0) throw new Error(`calendar seeding failed with ${result.status}: ${result.stderr}`);
+  expect(result.stdout, 'calendar seeding id').not.toBe('');
+  return result.stdout;
 }
 
 /* ---- Seeding over HTTP ----------------------------------------------------- */
@@ -366,6 +420,68 @@ export class SeedClient {
   }
 }
 
+/* ---- Admin-created accounts and in-page requests ------------------------------- */
+
+export interface CreatedAccount {
+  id: string;
+  email: string;
+  displayName: string;
+  /** Generated at run time; it lives only in this process. */
+  password: string;
+}
+
+/** The synthetic starting policy of the Settings screen (8 h required, three unpaid breaks, 9 h reference day). */
+export function starterPolicyBody(effectiveFrom: string): Record<string, unknown> {
+  return {
+    effective_from: effectiveFrom,
+    required_minutes: 480,
+    threshold_minutes: 30,
+    rounding_step_minutes: 30,
+    reference_start: '08:00',
+    reference_end: '17:00',
+    breaks: [
+      { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+      { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+      { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+    ],
+    deficit_mode: 'ignore',
+  };
+}
+
+/** Creates an account through the admin API with a run-time generated temporary password. */
+export async function createAccountByAdminApi(
+  admin: SeedClient,
+  options: { role?: 'employee' | 'admin'; calendarId?: string; displayName?: string } = {},
+): Promise<CreatedAccount> {
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const email = `synthetic-${randomBytes(5).toString('hex')}@example.invalid`;
+  const password = randomBytes(18).toString('base64url');
+  const displayName = options.displayName ?? 'Synthetic Person';
+  const created = await admin.call<{ user: { id: string } }>(
+    'POST',
+    '/api/admin/users',
+    {
+      email,
+      display_name: displayName,
+      role: options.role ?? 'employee',
+      password,
+      calendar_id: options.calendarId ?? calendar.id,
+    },
+    201,
+  );
+  return { id: created.user.id, email, displayName, password };
+}
+
+/** The HTTP status of a same-origin request made by the page itself, with the page's own session cookie. */
+export async function statusInPage(page: Page, method: string, path: string, body?: unknown): Promise<number> {
+  const init = {
+    method,
+    credentials: 'same-origin',
+    ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  };
+  return page.evaluate<number>(`fetch(${JSON.stringify(path)}, ${JSON.stringify(init)}).then((response) => response.status)`);
+}
+
 /* ---- Fixtures --------------------------------------------------------------- */
 
 interface WorkerFixtures {
@@ -375,8 +491,12 @@ interface WorkerFixtures {
 interface TestFixtures {
   /** Seeds data as the synthetic employee, over HTTP. */
   employeeSeed: SeedClient;
+  /** Seeds data as the synthetic admin, over HTTP. */
+  adminSeed: SeedClient;
   /** Signs the page in through the real login form. */
   signInThroughUi: () => Promise<void>;
+  /** Signs the page in through the real login form as any account; an optional hash (`#/settings`) is the first screen. */
+  signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>;
 }
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -398,6 +518,19 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   employeeSeed: async ({ builtServer }, use) => {
     const { email, password } = builtServer.credentials.employee;
     await use(await new SeedClient(builtServer.origin).signIn(email, password));
+  },
+  adminSeed: async ({ builtServer }, use) => {
+    const { email, password } = builtServer.credentials.admin;
+    await use(await new SeedClient(builtServer.origin).signIn(email, password));
+  },
+  signInPageAs: async ({ page }, use) => {
+    await use(async ({ email, password }, startHash = '') => {
+      // The hash survives the sign-in, so a screen can be the first one the app renders.
+      await page.goto(`/${startHash}`);
+      await page.getByLabel('Email').fill(email);
+      await page.getByLabel('Password').fill(password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+    });
   },
   signInThroughUi: async ({ page, builtServer }, use) => {
     await use(async () => {
