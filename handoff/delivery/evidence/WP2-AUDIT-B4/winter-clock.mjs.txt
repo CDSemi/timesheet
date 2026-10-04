@@ -1,0 +1,18 @@
+// WP2-AUDIT-B4 test-only preload (auditor-owned, outside the clones), loaded through NODE_OPTIONS --import.
+// Only in the built server and its CLI (dist/server/index.js, dist/server/cli.js) the wall clock is moved
+// so that "now" is AUDIT_B4_NOW; Playwright and the browser keep the real clock. Product code is untouched.
+const target = process.env.AUDIT_B4_NOW;
+const entry = (process.argv[1] ?? '').split(String.fromCharCode(92)).join('/');
+if (target && /dist\/server\/(index|cli)\.js$/.test(entry)) {
+  const NativeDate = Date;
+  const shift = NativeDate.parse(target) - NativeDate.now();
+  globalThis.Date = class extends NativeDate {
+    constructor(...args) {
+      if (args.length === 0) super(NativeDate.now() + shift);
+      else super(...args);
+    }
+    static now() {
+      return NativeDate.now() + shift;
+    }
+  };
+}

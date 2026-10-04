@@ -1,0 +1,40 @@
+# WP2-AUDIT-A2 attempt 3 command index (auditor, fresh context; reviewed commit 5fafeaee72509c6110a907458643bf7582dad81a)
+# Delta re-audit of area A (ledger and privacy) after WP2-FIXB3. All runs in a scratch clone <clone> on the C: drive
+# outside Dropbox (git clone --no-hardlinks of the project folder, detached at 5fafeae). Node v24.21.0 called by full
+# path (<node24>); npm via <node24> npm-cli.js; TEMP/TMP pointed at <scratch>/tmp. Synthetic data only; run-time
+# passwords are never printed. Times are UTC (2026-10-04). Evidence files are masked (<clone>, <scratch>, <project>,
+# <home>, <user>), LF, no trailing whitespace, ANSI codes stripped. WP2-AUDIT-B4 ran at the same time in its own clone.
+
+| # | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 1 | git rev-parse HEAD / origin/main; git ls-tree digest (workflow Python sha256); <node24> scripts/source-digest.mjs (project folder, read-only) | 0 | 5fafeae = origin/main; e61fa914...14df (613 files) = gate digest; no non-handoff change in the project working tree | 01-digest-before.txt |
+| 2 | npm ci --no-audit --no-fund (clone) | 0 | 144 packages | 02-npm-ci.txt |
+| 3a | NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify (run 1) | 13 | typecheck, lint, 32 files / 613 tests and build passed; the smoke stopped at "built server starts" with "unsettled top-level await" (exit 13). Right afterwards netstat showed a TIME_WAIT connection to 127.0.0.1:3100, the smoke's default port (observed in the session; not saved as a file): another process, most likely the concurrent WP2-AUDIT-B4 smoke, held the port. Kept as run 1. | 03a-verify-run1-smoke-port-collision.txt |
+| 3b | node <scratch>/occupy.mjs 3198 & then SMOKE_PORT=3198 node scripts/smoke-built-server.mjs (reproduction) | 13 | identical signature when another listener holds the smoke port: four PASS lines, then the unsettled await at line 112, exit 13. Cause of 3a confirmed as environmental; scripts/ is unchanged since a3d1b65 | 03b-smoke-port-collision-repro.txt, probes/occupy-port.mjs.txt |
+| 3 | SMOKE_PORT=3197 NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify (run 2, free port) | 0 | typecheck, lint, 32 files / 613 tests, build, SMOKE PASSED; the only 'deprecat' match is the echoed command line | 03-verify.txt |
+| 4 | vitest run on 13 area-A files (ledger, ot-leave, ot-leave-concurrency, history, evidence-export, isolation, migrations, ot-api, ledger.fixtures, user-admin, holiday-import, payroll-exceptions, adminModel); concurrency x3 more; payroll-exceptions, holiday-import and zoneOracle verbose | 0 | 13 files / 267 tests; 8/8 three times; payroll-exceptions 13/13 incl. the WP2-A2-02 differential test; holiday-import 29/29 incl. the WP2-A-01 regression test; zoneOracle 6/6 | 04-targeted-tests.txt |
+| 5 | playwright test admin.spec.ts isolation.spec.ts ot-leave.spec.ts (Edge channel, built dist from step 3) | 0 | 24 passed (desktop + mobile), incl. "an admin cannot open employee data through any admin screen" and "payroll exception needs a reason and is recorded once" | 05-e2e-admin-isolation-ot-leave.txt |
+| 6 | node probes/pr-race.mjs <clone> <work>/race 10 (attempt-1 probe unchanged; 4 OS processes, one WAL file) | 0 | 22 combinations x 10 = 220 production rounds, 0 violations; unsafe control double-booked 10/10; integrity ok | 06-probe-multiprocess-race.txt |
+| 7 | node probes/pa-ledger-privacy.mjs <clone> <work>/pa (attempt-1 probe unchanged) | 0 | 119 pass / 0 fail | 07-probe-ledger-privacy.txt |
+| 9 | node probes/pf-supplement.mjs <clone> <work>/pf (attempt-1 probe unchanged) | 0 | 6 / 0; S6 (R1) and S7 (R2) unchanged; S8 counts undefined; output identical to attempt 2 apart from the timestamp line | 09-probe-supplement.txt |
+| 10 | node probes/pg-holiday-preview-privacy.mjs <clone> <work>/pg (attempt-1 probe unchanged) | 0 | nothing inferable ("none"); preview wrote nothing (audit 12 -> 12, versions 1 -> 1); identical to attempt 2 apart from the command line | 10-probe-holiday-preview-privacy.txt |
+| 13 | node probes/pg2-admin-differential.mjs <clone> <work>/pg2 (attempt-1 A2 probe unchanged) | 0 | 25 / 0: S0 vs S1 27/27 identical; finalized_conflicts {date} only; S2 vs S3 27/27; commit path C1-C6 unchanged; OBS W3 undefined/undefined. Versus attempt 2 only the preview_hash values differ (calendar IDs are random per database) | 13-probe-admin-differential.txt |
+| 16 | node probes/pe-payroll-differential.mjs <clone> <work>/pe (attempt-2 probe unchanged) | 0 | 20 / 0: W0 vs W1 30/30 identical; every 201 has only payroll_exception; stored rows really refreshed in W1; refreshed flag only in the owner-less audit event; 409 period_finalized kept, writes nothing, period dates only, identical for one vs two finalized timesheets | 16-probe-payroll-differential.txt |
+| 11 | git diff / git grep static scans (clone) | 0 | range a3d1b65..5fafeae is one commit; outside handoff/ only src/client/styles.css, tests/client/zoneOracle.ts, tests/client/zoneOracle.test.ts; src/server (incl. db/migrations), src/domain, scripts, docs, api.ts, components, tests/integration, tests/domain and tests/e2e unchanged (section 11 lists only existing paths); zoneOracle imported only by tests and imports nothing; styles.css changes are token substitutions with no url()/@import/content construct; cited lines of WP2-A2-02, WP2-A3-01 and R1-R4 unchanged | 11-static-scans.txt |
+| 12 | git rev-parse HEAD; digest; scripts/source-digest.mjs (clone and project folder) | 0 | unchanged 5fafeae / e61fa914...14df; clone tracked tree clean | 12-digest-after.txt |
+| 14 | <workflow-python> validate_package.py --preflight; validate_orchestration.py (project folder, read-only) | 0 / 0 | PASS (56 pairs, 935 links) / PASS (89 tasks) | 14-preflight.txt |
+
+Probe sources: copies of the tracked probes, unchanged; sha256 prefixes of the copies run here:
+  pa-ledger-privacy e0f70f8c, pf-supplement 93345c4e, pg-holiday-preview-privacy 009d9ebf, pr-race 07fefbe9,
+  pr-race-worker 206ca1ab (handoff/delivery/evidence/WP2-AUDIT-A/probes/), pg2-admin-differential a507c79f
+  (handoff/delivery/evidence/WP2-AUDIT-A2/probes/), pe-payroll-differential 53af6666
+  (handoff/delivery/evidence/WP2-AUDIT-A2-a2/probes/). The first five and pg2 equal the prefixes recorded in attempt 2.
+No probe failed on a probe bug in this attempt; every run is kept, including verify run 1.
+
+Rows added after the report was written:
+
+| # | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 14b | the same two validators plus check_recovery.py after writing the report pair, the brief result and this folder (project folder) | 0 / 0 / 0 | PASS (translation pairs 57, local links 944) / PASS / PASS | 14b-preflight-after-writes.txt |
+| 15 | node scripts/precommit-check.mjs in <clone> with only this task's outputs staged (clone index; the project index was not touched); run 2 after the final index update | 0 / 0 | PASS: 22 staged files, 0 blocking, 0 warnings (run 1); PASS: 23 staged files (run 2) | 15-precommit-check.txt |
+| 17 | rm -rf <scratch> (clone, work databases, e2e output, smoke temp, probe copies, raw logs); project folder HEAD and digest re-checked | 0 | scratch removed; 5fafeae = origin/main and e61fa914...14df unchanged; no non-handoff change | 17-cleanup.txt (written after the clone was gone, so it and the final edit of this index were scanned with grep instead of the precommit gate) |

@@ -1,0 +1,28 @@
+// WP2-AUDIT-B4 evidence export (auditor-owned): node mask.mjs <src> <dest>
+// Strips ANSI codes, masks local paths and the account name, converts to LF, trims trailing whitespace
+// and writes a single final newline.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [, , src, dest] = process.argv;
+let text = readFileSync(src, 'utf8');
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const bs = String.fromCharCode(92);
+const work = ['C:', 'Users', '<user>', 'AppData', 'Local', 'Temp', 'wp2-audit-b4'];
+const project = ['D:', 'Dropbox', 'Work.CDSemi', 'timesheet'];
+const rules = [
+  [new RegExp(esc(work.join(bs + bs)), 'gi'), '<work>'],
+  [new RegExp(esc(work.join(bs)), 'gi'), '<work>'],
+  [new RegExp(esc(work.join('/')), 'gi'), '<work>'],
+  [new RegExp(esc('<work>'), 'gi'), '<work>'],
+  [new RegExp(esc('file:///<work>'), 'gi'), 'file:///<work>'],
+  [new RegExp(esc(project.join(bs)), 'gi'), '<project>'],
+  [new RegExp(esc(project.join('/')), 'gi'), '<project>'],
+  [new RegExp(esc('<project>'), 'gi'), '<project>'],
+  [/<user>/gi, '<user>'],
+  [/B:\\Temp\\claude[^\s'"]*/gi, '<scratch>'],
+];
+text = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+for (const [re, to] of rules) text = text.replace(re, to);
+text = text.replace(/\r\n?/g, '\n').split('\n').map((line) => line.replace(/[ \t]+$/, '')).join('\n');
+text = `${text.replace(/\n+$/, '')}\n`;
+writeFileSync(dest, text);

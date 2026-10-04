@@ -1,0 +1,88 @@
+// WP2-AUDIT-B4 comparison (auditor-owned): node compare-b4.mjs <dir> <labelA> <labelB>
+// Diffs the real-screen captures of the two labels: element count, DOM path, own text, bounding box and
+// every computed property. Differences are split into
+//   - STYLE: a computed property that does not depend on content (everything except width/height/box and
+//     grid track sizes) differs on an element whose path matches;
+//   - GEOMETRY: box, width/height or grid track sizes differ;
+//   - CONTENT: own text or element structure differs (content-driven, e.g. a clock time).
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [, , dir, labelA = 'base', labelB = 'reviewed'] = process.argv;
+const GEOMETRY = new Set(['width', 'height', 'grid-template-columns', 'grid-template-rows', 'top', 'left', 'min-height', 'max-height']);
+const files = readdirSync(dir).filter((name) => name.startsWith(`${labelB}__`) && name.endsWith('.json')).sort();
+const missing = readdirSync(dir).filter((name) => name.startsWith(`${labelA}__`) && !files.includes(name.replace(`${labelA}__`, `${labelB}__`)));
+let screens = 0;
+let elements = 0;
+let values = 0;
+const totals = { style: 0, geometry: 0, content: 0, structure: 0 };
+const out = [];
+const byProp = new Map();
+for (const name of files) {
+  const key = name.slice(labelB.length + 2, -5);
+  const otherPath = join(dir, `${labelA}__${key}.json`);
+  let a;
+  try {
+    a = JSON.parse(readFileSync(otherPath, 'utf8'));
+  } catch {
+    out.push(`${key}: MISSING in ${labelA}`);
+    totals.structure++;
+    continue;
+  }
+  const b = JSON.parse(readFileSync(join(dir, name), 'utf8'));
+  screens++;
+  const lines = [];
+  const counts = { style: 0, geometry: 0, content: 0, structure: 0 };
+  if (a.elements.length !== b.elements.length) {
+    lines.push(`  STRUCTURE element count ${labelA} ${a.elements.length} ${labelB} ${b.elements.length}`);
+    counts.structure++;
+  }
+  if (a.url !== b.url) {
+    lines.push(`  STRUCTURE url ${a.url} vs ${b.url}`);
+    counts.structure++;
+  }
+  // Align by path (paths are unique per index chain).
+  const mapA = new Map(a.elements.map((e) => [e.path, e]));
+  for (const eb of b.elements) {
+    const ea = mapA.get(eb.path);
+    if (!ea) {
+      lines.push(`  STRUCTURE only in ${labelB}: ${eb.path}`);
+      counts.structure++;
+      continue;
+    }
+    elements++;
+    values += eb.values.length + 2;
+    if (ea.text !== eb.text) {
+      lines.push(`  CONTENT ${eb.path}: "${ea.text}" -> "${eb.text}"`);
+      counts.content++;
+    }
+    if (ea.box !== eb.box) {
+      lines.push(`  GEOMETRY box ${eb.path}: ${ea.box} -> ${eb.box}`);
+      counts.geometry++;
+    }
+    for (let i = 0; i < eb.values.length; i++) {
+      if (ea.values[i] === eb.values[i]) continue;
+      const prop = eb.values[i].split('=')[0];
+      const kind = GEOMETRY.has(prop) ? 'geometry' : 'style';
+      counts[kind]++;
+      byProp.set(`${kind} ${prop}`, (byProp.get(`${kind} ${prop}`) ?? 0) + 1);
+      lines.push(`  ${kind.toUpperCase()} ${eb.path}: ${ea.values[i]} -> ${eb.values[i]}`);
+    }
+  }
+  for (const ea of a.elements) {
+    if (!b.elements.some((e) => e.path === ea.path)) {
+      lines.push(`  STRUCTURE only in ${labelA}: ${ea.path}`);
+      counts.structure++;
+    }
+  }
+  for (const k of Object.keys(totals)) totals[k] += counts[k];
+  out.push(`${key}: ${b.elements.length} elements; style ${counts.style}, geometry ${counts.geometry}, content ${counts.content}, structure ${counts.structure}`);
+  out.push(...lines.slice(0, 60));
+  if (lines.length > 60) out.push(`  ... ${lines.length - 60} more`);
+}
+for (const m of missing) out.push(`${m}: MISSING in ${labelB}`);
+out.push(
+  `SUMMARY ${labelA} vs ${labelB}: screens ${screens}; elements compared ${elements}; values compared ${values}; style differences ${totals.style}; geometry differences ${totals.geometry}; content differences ${totals.content}; structure differences ${totals.structure + missing.length}`,
+);
+out.push(`differences by kind and property (all lines, not truncated): ${[...byProp].sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join('; ') || 'none'}`);
+process.stdout.write(`${out.join('\n')}\n`);

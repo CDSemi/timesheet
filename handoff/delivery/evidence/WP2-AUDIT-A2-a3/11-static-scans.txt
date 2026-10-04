@@ -1,0 +1,278 @@
+# 11 static scans (clone at 5fafeae)
+## 1. Diff scope a3d1b65..5fafeae
+$ git log --oneline a3d1b65..5fafeae
+5fafeae Tokenize every WP2 style literal and make the zone oracle throw on DST folds
+$ git diff --stat a3d1b65 5fafeae
+ handoff/delivery/ORCHESTRATION.json                |  331 +-
+ handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md   |   25 +-
+ .../delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md    |   25 +-
+ handoff/delivery/WP2_RECHECK_A3.md                 |  148 +
+ handoff/delivery/WP2_RECHECK_A3.vi.md              |  148 +
+ handoff/delivery/WP2_RECHECK_B3.md                 |  146 +
+ handoff/delivery/WP2_RECHECK_B3.vi.md              |  146 +
+ .../evidence/WP2-AUDIT-A2-a2/00-commands.txt       |   41 +
+ .../evidence/WP2-AUDIT-A2-a2/01-digest-before.txt  |   17 +
+ .../evidence/WP2-AUDIT-A2-a2/02-npm-ci.txt         |    4 +
+ .../evidence/WP2-AUDIT-A2-a2/03-verify.txt         |   83 +
+ .../evidence/WP2-AUDIT-A2-a2/04-targeted-tests.txt |   39 +
+ .../WP2-AUDIT-A2-a2/04b-red-payroll-on-f79413b.txt |   38 +
+ .../05-e2e-admin-isolation-ot-leave.txt            |   31 +
+ .../WP2-AUDIT-A2-a2/06-probe-multiprocess-race.txt |   33 +
+ .../06b-probe-multiprocess-race-25.txt             |   33 +
+ .../WP2-AUDIT-A2-a2/07-probe-ledger-privacy.txt    |  125 +
+ .../WP2-AUDIT-A2-a2/09-probe-supplement.txt        |   12 +
+ .../10-probe-holiday-preview-privacy.txt           |   13 +
+ ...-probe-holiday-preview-privacy-base-control.txt |   13 +
+ .../evidence/WP2-AUDIT-A2-a2/11-static-scans.txt   |  138 +
+ .../evidence/WP2-AUDIT-A2-a2/12-digest-after.txt   |   23 +
+ .../13-probe-admin-differential.txt                |  142 +
+ .../evidence/WP2-AUDIT-A2-a2/14-preflight.txt      |   27 +
+ .../WP2-AUDIT-A2-a2/14b-preflight-after-writes.txt |   43 +
+ .../WP2-AUDIT-A2-a2/15-precommit-check.txt         |   13 +
+ .../16-probe-payroll-differential.txt              |   73 +
+ ...16b-probe-payroll-differential-base-control.txt |   73 +
+ .../evidence/WP2-AUDIT-A2-a2/17-cleanup.txt        |   24 +
+ .../probes/pe-payroll-differential.mjs.txt         |  232 +
+ .../delivery/evidence/WP2-AUDIT-B3/00-commands.txt |   40 +
+ .../WP2-AUDIT-B3/audit-b3-dst-desktop.json         |   19 +
+ .../evidence/WP2-AUDIT-B3/audit-b3-dst-mobile.json |   19 +
+ .../evidence/WP2-AUDIT-B3/audit-b3-f1-desktop.json |   27 +
+ .../evidence/WP2-AUDIT-B3/audit-b3-f1-mobile.json  |   27 +
+ .../audit-b3-gap-reask-desktop-synthetic.png       |  Bin 0 -> 101403 bytes
+ .../audit-b3-gap-reask-mobile-synthetic.png        |  Bin 0 -> 145071 bytes
+ ...t-b3-insufficient-balance-desktop-synthetic.png |  Bin 0 -> 47098 bytes
+ ...it-b3-insufficient-balance-mobile-synthetic.png |  Bin 0 -> 114687 bytes
+ .../WP2-AUDIT-B3/audit-b3-payroll-desktop.json     |   12 +
+ ...udit-b3-payroll-finalized-desktop-synthetic.png |  Bin 0 -> 147860 bytes
+ ...audit-b3-payroll-finalized-mobile-synthetic.png |  Bin 0 -> 451395 bytes
+ .../WP2-AUDIT-B3/audit-b3-payroll-mobile.json      |   12 +
+ .../audit-b3-reviewed-admin-desktop-synthetic.png  |  Bin 0 -> 137733 bytes
+ ...udit-b3-reviewed-clock-out-mobile-synthetic.png |  Bin 0 -> 607993 bytes
+ ...it-b3-reviewed-day-editor-desktop-synthetic.png |  Bin 0 -> 191339 bytes
+ .../audit-b3-reviewed-ot-mobile-synthetic.png      |  Bin 0 -> 235790 bytes
+ ...udit-b3-reviewed-timesheet-mobile-synthetic.png |  Bin 0 -> 577401 bytes
+ .../audit-b3-zone-change-desktop-synthetic.png     |  Bin 0 -> 104774 bytes
+ .../audit-b3-zone-change-mobile-synthetic.png      |  Bin 0 -> 140989 bytes
+ .../WP2-AUDIT-B3/audit-b3-zone-desktop.json        |   51 +
+ .../WP2-AUDIT-B3/audit-b3-zone-mobile.json         |   51 +
+ .../delivery/evidence/WP2-AUDIT-B3/base-build.txt  |    5 +
+ .../delivery/evidence/WP2-AUDIT-B3/compare.mjs.txt |   53 +
+ .../evidence/WP2-AUDIT-B3/digest-after.txt         |   13 +
+ .../evidence/WP2-AUDIT-B3/digest-before.txt        |   13 +
+ handoff/delivery/evidence/WP2-AUDIT-B3/e2e.txt     |  111 +
+ .../delivery/evidence/WP2-AUDIT-B3/export.mjs.txt  |   26 +
+ .../evidence/WP2-AUDIT-B3/fake-clock.mjs.txt       |   20 +
+ .../evidence/WP2-AUDIT-B3/literal-scan.mjs.txt     |   37 +
+ .../evidence/WP2-AUDIT-B3/literal-scan.txt         |   80 +
+ handoff/delivery/evidence/WP2-AUDIT-B3/npm-ci.txt  |    8 +
+ .../evidence/WP2-AUDIT-B3/oracle-check.mjs.txt     |   61 +
+ .../evidence/WP2-AUDIT-B3/oracle-check.txt         |   14 +
+ .../evidence/WP2-AUDIT-B3/preflight-privacy.txt    |   32 +
+ .../delivery/evidence/WP2-AUDIT-B3/probes-run1.txt |   15 +
+ .../evidence/WP2-AUDIT-B3/style-compare.txt        |   28 +
+ .../evidence/WP2-AUDIT-B3/style-mutant.txt         |   40 +
+ .../delivery/evidence/WP2-AUDIT-B3/style-runs.txt  |   59 +
+ handoff/delivery/evidence/WP2-AUDIT-B3/verify.txt  |   84 +
+ .../evidence/WP2-AUDIT-B3/vitest-targeted.txt      |   77 +
+ .../evidence/WP2-AUDIT-B3/winter-control.txt       |   80 +
+ .../delivery/evidence/WP2-AUDIT-B3/winter-run.txt  |   26 +
+ .../WP2-AUDIT-B3/zz-audit-b3-date.spec.ts.txt      |   14 +
+ .../WP2-AUDIT-B3/zz-audit-b3-f1.spec.ts.txt        |   41 +
+ .../WP2-AUDIT-B3/zz-audit-b3-payroll.spec.ts.txt   |  108 +
+ .../WP2-AUDIT-B3/zz-audit-b3-style.spec.ts.txt     |  190 +
+ .../WP2-AUDIT-B3/zz-audit-b3-zone.spec.ts.txt      |  208 +
+ .../delivery/evidence/WP2-FIXB2-FREEZE/checks.txt  |   11 +
+ .../evidence/WP2-FIXB2-FREEZE/commit-message.txt   |   16 +
+ .../delivery/evidence/WP2-FIXB3/00-commands.txt    |   22 +
+ .../delivery/evidence/WP2-FIXB3/compare.mjs.txt    |   53 +
+ handoff/delivery/evidence/WP2-FIXB3/digest.txt     |    6 +
+ handoff/delivery/evidence/WP2-FIXB3/e2e.txt        |  109 +
+ handoff/delivery/evidence/WP2-FIXB3/final-list.txt |    5 +
+ .../evidence/WP2-FIXB3/inventory-after.txt         |    1 +
+ .../evidence/WP2-FIXB3/inventory-before.txt        |   61 +
+ .../evidence/WP2-FIXB3/literal-inventory.mjs.txt   |   78 +
+ handoff/delivery/evidence/WP2-FIXB3/mask.mjs.txt   |   16 +
+ .../evidence/WP2-FIXB3/style-compare-after.txt     |   29 +
+ .../evidence/WP2-FIXB3/style-compare-mutant.txt    | 7239 ++++++++++++++++++++
+ .../evidence/WP2-FIXB3/style-probe.spec.ts.txt     |  196 +
+ handoff/delivery/evidence/WP2-FIXB3/style-runs.txt |   22 +
+ handoff/delivery/evidence/WP2-FIXB3/verify.txt     |   82 +
+ .../evidence/WP2-FIXB3/vitest-red-first.txt        |   41 +
+ .../evidence/WP2-FIXB3/vitest-zoneoracle.txt       |   16 +
+ .../delivery/evidence/WP2-GATE3/00-commands.txt    |   11 +
+ .../WP2-GATE3/admin-accounts-desktop-synthetic.png |  Bin 0 -> 183351 bytes
+ .../WP2-GATE3/admin-payroll-desktop-synthetic.png  |  Bin 0 -> 183897 bytes
+ .../WP2-GATE3/batch-conflict-desktop-synthetic.png |  Bin 0 -> 118223 bytes
+ .../WP2-GATE3/batch-reason-desktop-synthetic.png   |  Bin 0 -> 93019 bytes
+ .../delivery/evidence/WP2-GATE3/check_recovery.txt |   90 +
+ .../clock-out-dialog-desktop-synthetic.png         |  Bin 0 -> 110777 bytes
+ .../delivery/evidence/WP2-GATE3/concurrency.txt    |   20 +
+ .../day-editor-09-18-breaks-desktop-synthetic.png  |  Bin 0 -> 118232 bytes
+ ...itor-display-zone-default-desktop-synthetic.png |  Bin 0 -> 95131 bytes
+ .../day-editor-dst-fold-desktop-synthetic.png      |  Bin 0 -> 101855 bytes
+ .../day-editor-dst-gap-desktop-synthetic.png       |  Bin 0 -> 97005 bytes
+ .../day-editor-ot-mismatch-desktop-synthetic.png   |  Bin 0 -> 98803 bytes
+ .../day-editor-overnight-desktop-synthetic.png     |  Bin 0 -> 96781 bytes
+ .../day-editor-partial-leave-desktop-synthetic.png |  Bin 0 -> 90246 bytes
+ .../day-editor-reason-prompt-desktop-synthetic.png |  Bin 0 -> 93897 bytes
+ .../day-editor-zone-change-desktop-synthetic.png   |  Bin 0 -> 108719 bytes
+ .../delivery/evidence/WP2-GATE3/digest-after.txt   |    1 +
+ .../delivery/evidence/WP2-GATE3/digest-before.txt  |    1 +
+ .../delivery/evidence/WP2-GATE3/digest-lstree.txt  |    1 +
+ handoff/delivery/evidence/WP2-GATE3/e2e-list.txt   |   82 +
+ handoff/delivery/evidence/WP2-GATE3/e2e-regr.txt   |   10 +
+ .../WP2-GATE3/evidence-export-synthetic.csv.txt    |  102 +
+ handoff/delivery/evidence/WP2-GATE3/flowmap.txt    |   14 +
+ handoff/delivery/evidence/WP2-GATE3/head-after.txt |    2 +
+ .../delivery/evidence/WP2-GATE3/head-before.txt    |    2 +
+ .../WP2-GATE3/history-desktop-synthetic.png        |  Bin 0 -> 618336 bytes
+ .../WP2-GATE3/holiday-issue-desktop-synthetic.png  |  Bin 0 -> 237327 bytes
+ .../holiday-preview-desktop-synthetic.png          |  Bin 0 -> 228657 bytes
+ .../isolation-admin-desktop-synthetic.png          |  Bin 0 -> 194854 bytes
+ .../isolation-employee2-desktop-synthetic.png      |  Bin 0 -> 161733 bytes
+ .../evidence/WP2-GATE3/login-desktop-synthetic.png |  Bin 0 -> 11903 bytes
+ handoff/delivery/evidence/WP2-GATE3/migrations.txt |   19 +
+ .../delivery/evidence/WP2-GATE3/node-version.txt   |    1 +
+ handoff/delivery/evidence/WP2-GATE3/npm-ci.txt     |    7 +
+ .../WP2-GATE3/ot-after-use-desktop-synthetic.png   |  Bin 0 -> 98282 bytes
+ handoff/delivery/evidence/WP2-GATE3/preflight.txt  |   12 +
+ .../settings-preview-desktop-synthetic.png         |  Bin 0 -> 83612 bytes
+ .../WP2-GATE3/timesheet-desktop-synthetic.png      |  Bin 0 -> 155872 bytes
+ .../WP2-GATE3/timesheet-view-desktop-synthetic.png |  Bin 0 -> 165873 bytes
+ .../WP2-GATE3/upcoming-days-desktop-synthetic.png  |  Bin 0 -> 103950 bytes
+ handoff/delivery/evidence/WP2-GATE3/validator.txt  |    8 +
+ handoff/delivery/evidence/WP2-GATE3/verify.txt     |   81 +
+ .../evidence/WP2-GATE3/vitest-per-file.txt         |   32 +
+ .../delivery/evidence/WP2-GATE3/vitest-verbose.txt |  613 ++
+ handoff/delivery/tasks/WP2-AUDIT-A2.md             |   65 +-
+ handoff/delivery/tasks/WP2-AUDIT-B3.md             |   37 +-
+ handoff/delivery/tasks/WP2-AUDIT-B4.md             |   62 +
+ handoff/delivery/tasks/WP2-FIXB2-FREEZE.md         |    8 +-
+ handoff/delivery/tasks/WP2-FIXB3-FREEZE.md         |  107 +
+ handoff/delivery/tasks/WP2-FIXB3.md                |   87 +
+ handoff/delivery/tasks/WP2-GATE3.md                |   36 +-
+ handoff/delivery/tasks/WP2-GATE4.md                |   50 +
+ src/client/styles.css                              |  141 +-
+ tests/client/zoneOracle.test.ts                    |   33 +
+ tests/client/zoneOracle.ts                         |   21 +-
+ 152 files changed, 13575 insertions(+), 124 deletions(-)
+$ git diff --name-status a3d1b65 5fafeae -- . ':(exclude)handoff/'
+M	src/client/styles.css
+M	tests/client/zoneOracle.test.ts
+M	tests/client/zoneOracle.ts
+$ git diff --name-status a3d1b65 5fafeae -- handoff/ | wc -l
+149
+## 2. Area-A paths unchanged in the range (empty diff = unchanged)
+src/server: 0 changed files
+src/shared: 0 changed files
+migrations: 0 changed files
+src/client/api.ts: 0 changed files
+src/client/components: 0 changed files
+src/client/screens: 0 changed files
+src/client/main.tsx: 0 changed files
+package.json: 0 changed files
+package-lock.json: 0 changed files
+scripts: 0 changed files
+tests/integration: 0 changed files
+tests/unit: 0 changed files
+tests/e2e: 0 changed files
+docs: 0 changed files
+## 3. Every changed path outside handoff/ classified
+src/client/styles.css: client stylesheet (area B)
+tests/client/zoneOracle.test.ts: test-only helper (area B)
+tests/client/zoneOracle.ts: test-only helper (area B)
+## 4. Who imports zoneOracle (must be tests only)
+  tests/client/zoneOracle.test.ts:2:import { dateTimeIn, instantOfWallTime, legacyPdtWallTime, wallTimeIn } from './zoneOracle.ts';
+  tests/e2e/day-editor.spec.ts:3:import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
+## 5. styles.css diff: any url(), @import, content: attr( or non-style construct introduced?
+  none
+## 6. zoneOracle.ts imports
+  no imports
+## 7. styles.css diff size
+81	60	src/client/styles.css
+33	0	tests/client/zoneOracle.test.ts
+16	5	tests/client/zoneOracle.ts
+## 8. Cited lines of earlier findings at 5fafeae (files unchanged since a3d1b65, so the lines are the same)
+src/server/routes/admin.ts: unchanged
+src/server/services/calendars.ts: unchanged
+src/server/services/holidayImport.ts: unchanged
+src/server/services/ledger.ts: unchanged
+src/server/services/otEvidence.ts: unchanged
+src/server/services/users.ts: unchanged
+src/server/services/history.ts: unchanged
+src/server/services/timesheets.ts: unchanged
+$ sed -n '166,172p' src/server/routes/admin.ts   (WP2-A2-02: 201 body)
+      },
+      actor.id,
+    );
+    // The answer is the exception alone: whether a stored period was refreshed would reveal whether
+    // anyone on the calendar has a timesheet there (WP2-A2-02).
+    return c.json({ payroll_exception: result.exception }, 201);
+  });
+$ sed -n '333,345p' src/server/services/calendars.ts   (WP2-A3-01: audit payload)
+        created_at: createdAt,
+      };
+      recordAudit(db, clock, {
+        actorUserId,
+        ownerUserId: null,
+        operation: 'payroll_exception.create',
+        entityType: 'payroll_exception',
+        entityId: `${input.calendarId}:${input.nominalPayrollDate}`,
+        reason,
+        before: stored ?? null,
+        after: { ...exception, refreshed_pay_period: refreshed !== undefined, pay_period: refreshed ?? null },
+      });
+      return { exception };
+$ git grep -n 'refreshed_pay_period' -- src tests
+src/server/services/calendars.ts:343:        after: { ...exception, refreshed_pay_period: refreshed !== undefined, pay_period: refreshed ?? null },
+tests/integration/payroll-exceptions.test.ts:111:    expect(JSON.parse(audits[0]?.after_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-15', refreshed_pay_period: false });
+tests/integration/payroll-exceptions.test.ts:195:    expect(JSON.parse(audit?.after_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-15', refreshed_pay_period: true });
+$ git grep -n -i 'aggregate count' -- src tests docs
+  none
+$ git grep -n 'finalized_conflicts' -- src/server
+src/server/services/holidayImport.ts:232:    finalized_conflicts: plan.finalizedConflicts,
+$ sed -n '160,170p' src/server/services/users.ts  (R3 calendar_in_use)
+167:        throw new ApiError(409, 'calendar_in_use', 'The calendar cannot change while the account has timesheet data');
+$ grep -n 'owner_user_id = ?' src/server/services/history.ts
+66:                WHERE owner_user_id = ?)
+## 9. styles.css: added/removed lines touching display, visibility, content, clip or hidden-text rules
+  7:+  --opacity-disabled: 0.6;
+  15:+  --shape-triangle-clip: polygon(50% 0, 100% 100%, 0 100%);
+  16:+  --clip-hidden: inset(50%);
+  48:-  opacity: 0.6;
+  49:+  opacity: var(--opacity-disabled);
+  66:-  clip-path: inset(50%);
+  67:+  clip-path: var(--clip-hidden);
+  76:-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  77:+  clip-path: var(--shape-triangle-clip);
+## 10. selectors whose rule set changed (context lines of each hunk)
+     26   textarea {
+     10   tr.nonworking td {
+      5
+      4   button:disabled {
+      3   body {
+      2   ul.plain {
+      2   button {
+      1   th {
+      1   td {
+      1   h1 {
+      1   button:active:not(:disabled) {
+## 11. Supplement: directories that exist at 5fafeae, each with its changed-file count in the range
+src/domain: 0 changed
+src/server: 0 changed
+src/client: 1 changed
+tests/domain: 0 changed
+tests/integration: 0 changed
+tests/e2e: 0 changed
+tests/support: 0 changed
+tests/client: 2 changed
+migrations: (no such path)
+scripts: 0 changed
+docs: 0 changed
+reference: 0 changed
+note: src/shared, tests/unit and a top-level migrations/ do not exist in this tree, so their 0 in section 2 is vacuous; the migrations live under src/server/db (covered by src/server: 0). Section 1 name-status is the authoritative scope.
+src/server/db/database.ts
+src/server/db/migrations.ts
+src/server/db/migrations/0001_initial.ts
+src/server/db/migrations/0002_ot_ledger.ts
+src/server/db/migrations/0003_day_entry_source.ts

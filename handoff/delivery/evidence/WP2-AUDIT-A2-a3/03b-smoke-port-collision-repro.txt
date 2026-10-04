@@ -1,0 +1,15 @@
+# 03b reproduction of verify run 1 (smoke exit 13): another process already listens on the smoke port
+$ node <scratch>/occupy.mjs 3198 &   (a plain HTTP listener answering {"status":"ok"})
+$ SMOKE_PORT=3198 node scripts/smoke-built-server.mjs
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3],"version":3}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":3}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid |   employee employee2@example.invalid |   sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes
+PASS  cli seed lists employee2@example.invalid and its sample data
+Warning: Detected unsettled top-level await at file:///<clone>/scripts/smoke-built-server.mjs:112
+  check('built server starts', healthy, hideWorkDir(String(await firstLine)));
+                                                           ^
+
+
+
+exit 13

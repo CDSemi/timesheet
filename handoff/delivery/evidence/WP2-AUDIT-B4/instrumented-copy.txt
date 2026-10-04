@@ -1,0 +1,13 @@
+WP2-AUDIT-B4 instrumented copy (scratch clones only, removed before the after-digest):
+  cp -r tests/e2e tests/e2e-audit-b4 (committed specs unchanged; tests/e2e is identical at a3d1b65 and 5fafeae)
+  fixtures.ts copy: "export const test = base.extend<TestFixtures, WorkerFixtures>({" renamed to "const innerTest = ...", and appended:
+    import { auditWrapPage } from './audit-b4-capture.ts';
+    export const test = innerTest.extend({
+      page: async ({ page }, use, testInfo) => {
+        auditWrapPage(page, testInfo);
+        await use(page);
+      },
+    });
+  added audit-b4-capture.ts and zz-audit-b4-states.spec.ts (see the .txt copies)
+  playwright.audit-b4.config.ts: import base from './playwright.config.ts'; export default { ...base, testDir: 'tests/e2e-audit-b4' };
+Every committed page.screenshot call (26 named screens per project) and every probe state (20 per project) is a style-capture point after a 1.2 s settle.

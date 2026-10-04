@@ -1,0 +1,192 @@
+// WP2-AUDIT-B4 independent check of tests/client/zoneOracle.ts (auditor-written).
+// Usage: node oracle-check-b4.mjs <clone>
+// 1. Static: the oracle file imports nothing (no product code, no other module).
+// 2. Exhaustive reference by a different algorithm: for each DST zone, find every offset transition in
+//    2026-2027 by an hourly scan, build a map wall-text -> UTC minutes over a +-2 day window, and for every
+//    minute of the local transition day compare instantOfWallTime with the reference:
+//    0 instants -> must throw "(DST gap)"; 1 -> must return that instant; 2 -> must throw "(DST fold)".
+// 3. A sample of ordinary days (every 7th day, 4 times per day) in each zone must return the single instant.
+// 4. A no-Intl arithmetic check for America/Los_Angeles (US rule) and Europe/Berlin (EU rule) over the
+//    fold/gap minutes of 2026-2027.
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+
+const clone = process.argv[2];
+const file = path.join(clone, 'tests/client/zoneOracle.ts');
+const src = readFileSync(file, 'utf8');
+const imports = src.match(/^\s*import\b.*$/gm) ?? [];
+const dynamic = src.match(/\bimport\s*\(|\brequire\s*\(/g) ?? [];
+console.log(`static: import statements ${imports.length}; dynamic import/require ${dynamic.length}; mentions of src/ ${(src.match(/src\//g) ?? []).length}`);
+
+const oracle = await import(pathToFileURL(file).href);
+const { instantOfWallTime } = oracle;
+
+const fmtCache = new Map();
+function wall(ms, zone) {
+  let f = fmtCache.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    fmtCache.set(zone, f);
+  }
+  const p = Object.fromEntries(f.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+function offsetMin(ms, zone) {
+  const w = wall(ms, zone);
+  return Math.round((Date.parse(`${w.replace(' ', 'T')}:00Z`) - Math.floor(ms / 60000) * 60000) / 60000);
+}
+function classify(fn) {
+  try {
+    return { ok: fn() };
+  } catch (e) {
+    return { err: String(e.message) };
+  }
+}
+
+const zones = [
+  'America/Los_Angeles',
+  'America/New_York',
+  'Europe/Berlin',
+  'Europe/London',
+  'Australia/Sydney',
+  'Australia/Lord_Howe', // 30-minute DST
+  'Pacific/Auckland',
+  'America/Santiago', // southern hemisphere, midnight transitions
+  'Asia/Ho_Chi_Minh',
+  'Asia/Saigon',
+];
+const H = 3_600_000;
+const M = 60_000;
+const from = Date.parse('2026-01-01T00:00:00Z');
+const to = Date.parse('2028-01-01T00:00:00Z');
+let totals = { transitions: 0, minutes: 0, gaps: 0, folds: 0, single: 0, mismatches: 0, ordinary: 0 };
+const mismatchLines = [];
+for (const zone of zones) {
+  const transitions = [];
+  let prev = offsetMin(from, zone);
+  for (let t = from + H; t < to; t += H) {
+    const o = offsetMin(t, zone);
+    if (o !== prev) transitions.push({ at: t, before: prev, after: o });
+    prev = o;
+  }
+  const zoneStats = { gaps: 0, folds: 0, single: 0, mismatches: 0 };
+  for (const tr of transitions) {
+    totals.transitions++;
+    // the local calendar days around the transition (day of, and the day before/after for midnight transitions)
+    const localDays = new Set([-1, 0, 1].map((d) => wall(tr.at + d * 24 * H, zone).slice(0, 10)));
+    const map = new Map();
+    for (let t = tr.at - 72 * H; t < tr.at + 72 * H; t += M) {
+      const w = wall(t, zone);
+      if (!map.has(w)) map.set(w, []);
+      map.get(w).push(t);
+    }
+    for (const day of localDays) {
+      for (let m = 0; m < 1440; m++) {
+        const time = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        const ref = map.get(`${day} ${time}`) ?? [];
+        const got = classify(() => instantOfWallTime(day, time, zone));
+        totals.minutes++;
+        let good;
+        if (ref.length === 0) {
+          zoneStats.gaps++;
+          good = got.err && /not an unambiguous wall time/.test(got.err) && /\(DST gap\)/.test(got.err);
+        } else if (ref.length === 1) {
+          zoneStats.single++;
+          good = got.ok === new Date(ref[0]).toISOString();
+        } else {
+          zoneStats.folds++;
+          good = got.err && /not an unambiguous wall time/.test(got.err) && /\(DST fold\)/.test(got.err);
+        }
+        if (!good) {
+          zoneStats.mismatches++;
+          if (mismatchLines.length < 20) mismatchLines.push(`${zone} ${day} ${time}: reference ${ref.length} instant(s), oracle ${JSON.stringify(got)}`);
+        }
+      }
+    }
+  }
+  // ordinary days: must give exactly the instant that reads back to the wall time
+  let ordinaryMismatch = 0;
+  for (let d = from; d < to; d += 7 * 24 * H) {
+    const day = new Date(d).toISOString().slice(0, 10);
+    for (const time of ['00:00', '06:15', '12:30', '22:45']) {
+      const got = classify(() => instantOfWallTime(day, time, zone));
+      totals.ordinary++;
+      if (got.err) {
+        // allowed only if the minute really is a gap/fold (already covered above)
+        const near = transitions.some((tr) => Math.abs(tr.at - Date.parse(`${day}T${time}:00Z`)) < 30 * H);
+        if (!near) ordinaryMismatch++;
+      } else if (wall(Date.parse(got.ok), zone) !== `${day} ${time}`) ordinaryMismatch++;
+    }
+  }
+  zoneStats.mismatches += ordinaryMismatch;
+  totals.gaps += zoneStats.gaps;
+  totals.folds += zoneStats.folds;
+  totals.single += zoneStats.single;
+  totals.mismatches += zoneStats.mismatches;
+  console.log(
+    `${zone}: transitions ${transitions.length} (${transitions.map((t) => `${new Date(t.at).toISOString().slice(0, 16)}Z ${t.before}->${t.after}`).join(', ') || 'none'}); gap minutes ${zoneStats.gaps}, fold minutes ${zoneStats.folds}, single minutes ${zoneStats.single}; ordinary-day mismatches ${ordinaryMismatch}; mismatches ${zoneStats.mismatches}`,
+  );
+}
+
+// No-Intl arithmetic: US rule (2nd Sunday March 02:00 -> 03:00, 1st Sunday November 02:00 -> 01:00) and
+// EU rule (last Sunday March 01:00Z, last Sunday October 01:00Z) for 2026 and 2027.
+function nthSunday(y, mo, n) {
+  const first = new Date(Date.UTC(y, mo, 1)).getUTCDay();
+  return 1 + ((7 - first) % 7) + (n - 1) * 7;
+}
+function lastSunday(y, mo) {
+  const last = new Date(Date.UTC(y, mo + 1, 0));
+  return last.getUTCDate() - last.getUTCDay();
+}
+const pad = (n) => String(n).padStart(2, '0');
+let arith = 0;
+let arithBad = 0;
+for (const y of [2026, 2027]) {
+  const laGap = `${y}-03-${pad(nthSunday(y, 2, 2))}`;
+  const laFold = `${y}-11-${pad(nthSunday(y, 10, 1))}`;
+  const euGap = `${y}-03-${pad(lastSunday(y, 2))}`;
+  const euFold = `${y}-10-${pad(lastSunday(y, 9))}`;
+  const cases = [];
+  for (let m = 0; m < 60; m++) {
+    cases.push([laGap, `02:${pad(m)}`, 'America/Los_Angeles', 'gap']);
+    cases.push([laFold, `01:${pad(m)}`, 'America/Los_Angeles', 'fold']);
+    cases.push([euGap, `02:${pad(m)}`, 'Europe/Berlin', 'gap']);
+    cases.push([euFold, `02:${pad(m)}`, 'Europe/Berlin', 'fold']);
+  }
+  // boundary minutes with the arithmetic instant
+  cases.push([laGap, '03:00', 'America/Los_Angeles', Date.UTC(y, 2, nthSunday(y, 2, 2), 10, 0)]);
+  cases.push([laGap, '01:59', 'America/Los_Angeles', Date.UTC(y, 2, nthSunday(y, 2, 2), 9, 59)]);
+  cases.push([laFold, '02:00', 'America/Los_Angeles', Date.UTC(y, 10, nthSunday(y, 10, 1), 10, 0)]);
+  cases.push([laFold, '00:59', 'America/Los_Angeles', Date.UTC(y, 10, nthSunday(y, 10, 1), 7, 59)]);
+  cases.push([euGap, '03:00', 'Europe/Berlin', Date.UTC(y, 2, lastSunday(y, 2), 1, 0)]);
+  cases.push([euGap, '01:59', 'Europe/Berlin', Date.UTC(y, 2, lastSunday(y, 2), 0, 59)]);
+  cases.push([euFold, '03:00', 'Europe/Berlin', Date.UTC(y, 9, lastSunday(y, 9), 2, 0)]);
+  cases.push([euFold, '01:59', 'Europe/Berlin', Date.UTC(y, 9, lastSunday(y, 9), -1, 59)]); // still CEST (+2): previous UTC day 23:59
+  for (const [date, time, zone, expect] of cases) {
+    arith++;
+    const got = classify(() => instantOfWallTime(date, time, zone));
+    const ok =
+      typeof expect === 'number'
+        ? got.ok === new Date(expect).toISOString()
+        : got.err && new RegExp(`\\(DST ${expect}\\)`).test(got.err);
+    if (!ok) {
+      arithBad++;
+      if (mismatchLines.length < 40) mismatchLines.push(`arith ${zone} ${date} ${time}: expected ${typeof expect === 'number' ? new Date(expect).toISOString() : expect}, oracle ${JSON.stringify(got)}`);
+    }
+  }
+}
+console.log(`no-Intl arithmetic (US and EU rules, 2026-2027): ${arith} cases, ${arithBad} mismatches`);
+console.log(
+  `TOTAL: transitions ${totals.transitions}; transition-day minutes ${totals.minutes} (gap ${totals.gaps}, fold ${totals.folds}, single ${totals.single}); ordinary samples ${totals.ordinary}; mismatches ${totals.mismatches + arithBad}`,
+);
+for (const l of mismatchLines) console.log(`  MISMATCH ${l}`);
+// Show the three B3 reproduction folds and the gap explicitly.
+for (const [d, t, z] of [
+  ['2026-11-01', '01:30', 'America/Los_Angeles'],
+  ['2026-04-05', '02:30', 'Australia/Sydney'],
+  ['2026-10-25', '02:30', 'Europe/Berlin'],
+  ['2026-03-08', '02:30', 'America/Los_Angeles'],
+]) {
+  console.log(`B3 reproduction ${z} ${d} ${t}: ${JSON.stringify(classify(() => instantOfWallTime(d, t, z)))}`);
+}

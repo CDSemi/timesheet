@@ -1,0 +1,46 @@
+WP2-AUDIT-B4 commands and exits (Node v24.21.0 portable by full path; npm through the user-level npm-cli.js on that Node;
+Edge channel msedge, no browser download; TEMP/TMP, clones, e2e output and screenshots in the auditor's own C: work folder
+<work>, outside Dropbox). Reviewed commit 5fafeaee72509c6110a907458643bf7582dad81a (clone <work>/clone); base
+a3d1b6555c352afa68b3d61ddc67f0c596742698 (clone <work>/base, used for the computed-style comparison and the oracle control).
+
+1. git rev-parse HEAD / origin/main; node scripts/source-digest.mjs; git ls-tree ... | sha256sum (project, clone, base):
+   exit 0; e61fa914...14df (613 files) three ways; base 5b370621...8581 (digest-before.txt)
+2. git clone --no-hardlinks <project> clone|base; git checkout <sha>: exit 0. git diff --name-status a3d1b65 5fafeae:
+   outside handoff/ only src/client/styles.css, tests/client/zoneOracle.test.ts, tests/client/zoneOracle.ts (diff-scope*.txt)
+3. npm ci --no-audit --no-fund (clone, base): 144 packages each; exit 0 / 0 (npm-ci.txt)
+4. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (clone): typecheck, lint, 32 files / 613 tests,
+   build, SMOKE PASSED; 0 deprecation lines; exit 0 (verify.txt)
+5. node literal-scan-b4.mjs <5fafeae styles.css> <f32978f styles.css>: 431 declarations, 0 with a literal, 0 occurrences,
+   0 WP2-introduced; 0 var() fallbacks; 6 @media preludes; 0 undefined tokens; exit 0 (literal-scan-5fafeae.txt).
+   Control on a3d1b65: 60 declarations / 67 occurrences / 37 absent from WP1; exit 0 (literal-scan-a3d1b65-control.txt)
+6. node resolve-equiv.mjs <a3d1b65 css> <5fafeae css>: 431 declarations x 3 contexts (light, dark, reduced motion),
+   1293 resolved values, 0 differences; mutant copy (--font-weight-strong 700): 24 differences; exit 0 (static-equivalence.txt)
+7. NODE_OPTIONS same, npm run test:e2e (clone, desktop and mobile): 74 passed, 2 skipped; exit 0 (e2e.txt)
+8. npm run build (base): exit 0 (base-build.txt); built JS identical to the clone's except the source-map file name;
+   built CSS sha256 prefixes base 9b9bffe5e0127f07, reviewed 957a13dd28eb9741
+9. instrumented suite (instrumented-copy.txt): playwright test --config playwright.audit-b4.config.ts with
+   AUDIT_B4_LABEL=base (base clone) then =reviewed (clone): 78 passed, 2 skipped each; exit 0 / 0 (style-runs.txt)
+10. node compare-b4.mjs <style> base reviewed: 91 screens, 26377 elements, 2162914 values; style differences 0;
+    geometry 48 and content 314, all content-driven (style-compare.txt); exit 0
+11. mutant: built CSS of the clone edited (5 tokens), instrumented suite rerun (78 passed, 2 skipped, exit 0), CSS restored
+    (sha256 prefix 957a13dd28eb9741); compare base vs mutant: 10978 style differences (style-compare-mutant.txt)
+12. node target-values.mjs (base and reviewed): identical distinct-value tables (target-values.txt)
+13. node oracle-check-b4.mjs <clone>: imports 0; 10 zones, 32 transitions, 135360 transition-day minutes (900 gap, 900 fold),
+    4200 ordinary samples, 496 no-Intl cases: 0 mismatches; exit 0 (oracle-check-b4.txt). First run: 2 mismatches from an
+    auditor expectation error (Berlin 01:59 on the fold day is still CEST), fixed in the checker and rerun
+    (oracle-check-b4-run1-auditor-expectation-error.txt). Control on a3d1b65: folds return an instant, 2280 mismatches
+    (oracle-check-b4-control-a3d1b65.txt)
+14. node season-check.mjs <clone>: 8768 conversions 2026-2028 (Asia/Ho_Chi_Minh and Asia/Saigon to LA, US-rule arithmetic),
+    0 mismatches, 382 PST days; exit 0 (season-check.txt)
+15. vitest run tests/client/zoneOracle.test.ts --reporter=verbose: 6 passed; exit 0 (vitest-zoneoracle.txt);
+    vitest run zoneOracle, payroll-exceptions, sessionModel --reporter=verbose: 3 files, 53 tests passed; exit 0
+    (vitest-targeted.txt)
+16. AUDIT_B4_NOW unset / 2026-11-03T20:00:00Z / 2027-01-14T20:00:00Z, NODE_OPTIONS=--import=<work>/tools/winter-clock.mjs
+    (server and CLI clock only), playwright test zz-audit-b4-date day-editor.spec.ts -g "R-07|zz-audit-b4": picked
+    2026-10-02 / 2026-11-02 / 2027-01-13; 4 passed each; exit 0 x3 (winter-run.txt). First attempt: the preload written
+    through a shell heredoc lost a backslash and Node raised a SyntaxError before any test ran, exit 1 for both winter
+    dates (winter-run-attempt1-preload-syntax.txt); rewritten with the file tool and rerun
+17. probe files removed from both clones; after digests: clones clean, project HEAD 5fafeae, e61fa914...14df two ways,
+    nothing outside handoff/ (digest-after.txt)
+18. precommit-check and workflow preflight: see preflight-privacy.txt
+19. work folder (clones, temporary databases, e2e output, screenshots) deleted: see preflight-privacy.txt

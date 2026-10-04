@@ -1,0 +1,150 @@
+// WP2-AUDIT-B4 probe (auditor-owned, temporary; copied into the scratch clones only, removed after the run).
+// Interactive and media states that the committed screenshot points do not cover: keyboard focus,
+// hover, active (pressed), disabled, dark colour scheme, reduced motion, the batch bar, the OT export link,
+// and the status shapes (the error triangle is injected, because only a calculation error renders it).
+// Every page.screenshot call below is also a style-capture point (fixtures wrapper). Synthetic data only.
+import { expect, screenshotPath, seedCredit, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const shot = (name: string, project: string) => ({ path: screenshotPath(`${name}-${project}-synthetic.png`), fullPage: true });
+
+test('zz-audit-b4 states: employee', async ({ page, builtServer, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  expect(days.length).toBeGreaterThanOrEqual(3);
+  const [free = '', complete = '', pending = ''] = days;
+  await employeeSeed.seedCompleteDay(complete);
+  await employeeSeed.seedUnconfirmedBreaksDay(pending);
+  const { todayLocal } = await employeeSeed.today();
+  seedCredit(builtServer, 600);
+  await employeeSeed.call('POST', '/api/ot/leave', {
+    request_key: 'audit-b4-states-leave',
+    leave_date: todayLocal,
+    requested_minutes: 120,
+    permission: { approver_name: 'Synthetic Manager', approval_date: todayLocal, evidence_ref: 'SYN-B4-STATES' },
+  }, 201);
+  try {
+    // Login: keyboard focus ring, button hover, button pressed.
+    await page.goto('/');
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel('Email')).toBeFocused();
+    await page.screenshot(shot('zz-login-focus', project));
+    const signIn = page.getByRole('button', { name: 'Sign in' });
+    await signIn.hover();
+    await page.screenshot(shot('zz-login-button-hover', project));
+    await page.mouse.down();
+    await page.screenshot(shot('zz-login-button-active', project));
+    await page.mouse.move(1, 1);
+    await page.mouse.up();
+
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // Status shapes: inject the calculation-error triangle and one of each shape next to the real ones.
+    await page.evaluate(() => {
+      const host = document.createElement('p');
+      host.setAttribute('data-audit-b4', 'shapes');
+      for (const [status, shape] of [['complete', 'circle'], ['pending', 'diamond'], ['missing', 'square'], ['upcoming', 'bar'], ['error', 'triangle']]) {
+        const wrap = document.createElement('span');
+        wrap.className = `status status-${status}`;
+        const span = document.createElement('span');
+        span.className = `shape shape-${shape}`;
+        wrap.append(span, document.createTextNode(` ${status}`));
+        host.append(wrap);
+      }
+      const badge = document.createElement('span');
+      badge.className = 'badge old';
+      badge.textContent = 'old';
+      host.append(badge);
+      document.querySelector('main, .page, body')?.prepend(host);
+    });
+    await page.mouse.move(1, 1);
+    await page.screenshot(shot('zz-timesheet-shapes', project));
+
+    // Hover a navigation link and a row (grid on desktop, day list on mobile).
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).hover();
+    await page.screenshot(shot('zz-nav-hover', project));
+    await page.locator(`[data-day="${complete}"]`).hover();
+    await page.screenshot(shot('zz-row-hover', project));
+
+    // Batch bar with a selection (batch count, enabled and disabled buttons).
+    await page.mouse.move(1, 1);
+    await page.getByLabel(`Select ${free}`).check();
+    await page.screenshot(shot('zz-batch-bar', project));
+    await page.getByLabel(`Select ${free}`).uncheck();
+    await page.screenshot(shot('zz-batch-bar-disabled', project));
+
+    // Dark colour scheme and reduced motion on the timesheet.
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot(shot('zz-timesheet-dark', project));
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.screenshot(shot('zz-timesheet-reduced-motion', project));
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+
+    // Day editor (dark): session form with suggested breaks.
+    await page.getByLabel('Open a day').fill(complete);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await form.getByLabel('Start time', { exact: true }).fill('19:00');
+    await form.getByLabel('End time', { exact: true }).fill('20:00');
+    await form.getByRole('button', { name: 'Suggest breaks' }).click();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot(shot('zz-day-editor-dark', project));
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // OT screen: balances, leave row, actions, export link hover, dark.
+    await page.goto('/#/ot');
+    await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
+    await expect(page.locator('li.ot-leave', { hasText: 'SYN-B4-STATES' })).toBeVisible();
+    await page.mouse.move(1, 1);
+    await page.screenshot(shot('zz-ot', project));
+    const exportLink = page.locator('a.button-link').first();
+    await exportLink.scrollIntoViewIfNeeded();
+    await exportLink.hover();
+    await page.screenshot(shot('zz-ot-export-hover', project));
+    await page.mouse.move(1, 1);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot(shot('zz-ot-dark', project));
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    await page.goto('/#/history');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot(shot('zz-history-dark', project));
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    await page.goto('/#/settings');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.screenshot(shot('zz-settings', project));
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot(shot('zz-settings-dark', project));
+    await page.emulateMedia({ colorScheme: 'light' });
+  } finally {
+    await employeeSeed.clearSessions(complete, 'audit cleanup');
+    await employeeSeed.clearSessions(pending, 'audit cleanup');
+  }
+});
+
+test('zz-audit-b4 states: admin', async ({ page, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(90_000);
+  const project = testInfo.project.name;
+  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  await page.mouse.move(1, 1);
+  await page.screenshot(shot('zz-admin', project));
+  const form = page.getByRole('form', { name: 'Payroll exception' });
+  await form.getByLabel('Scheduled payroll date').fill('2027-03-01');
+  await form.getByLabel('Actual payroll date').fill('2027-03-02');
+  await expect(form.getByRole('button', { name: 'Record exception' })).toBeDisabled();
+  await page.screenshot(shot('zz-admin-payroll-disabled', project));
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot(shot('zz-admin-dark', project));
+  await page.emulateMedia({ colorScheme: 'light' });
+});

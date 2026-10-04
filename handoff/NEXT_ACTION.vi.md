@@ -1,10 +1,10 @@
 # Bước tiếp: bắt đầu hoặc resume coordinator
 
-**Ứng dụng: WP1 đã nghiệm thu (kiểm tra lại độc lập PASS tại 68bbb31, digest c6e24381); tiếp theo WP2.**
+**Ứng dụng: WP1 đã nghiệm thu (68bbb31, digest c6e24381). WP2 đã nghiệm thu (WP2-GATE4 PASS và hai audit độc lập cuối WP2-AUDIT-A2 lần 3, WP2-AUDIT-B4 PASS tại 5fafeae, digest e61fa914); tiếp theo WP3.**
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
-[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP1 handoff](delivery/WP1_HANDOFF.vi.md)
-và [WP1 recheck](delivery/WP1_RECHECK.vi.md).
+[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP2 handoff](delivery/WP2_HANDOFF.vi.md),
+[WP2 recheck A4](delivery/WP2_RECHECK_A4.vi.md) và [WP2 recheck B4](delivery/WP2_RECHECK_B4.vi.md).
 
 Mở repo này trong Claude Code bằng đăng nhập subscription. Cấu hình dự án chọn
 coordinator; [tài liệu 08](../docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) quy định định tuyến
@@ -26,12 +26,13 @@ thật; chỉ xin phép chủ sau khi chuẩn bị pilot packet cụ thể.
 Không đổi billing hay cài đặt quyền.
 ~~~
 
-Luồng hiện tại: sau commit nghiệm thu WP1, planner Opus chia WP2 từ
-[lộ trình](../docs/09_IMPLEMENTATION_ROADMAP.vi.md) và [WP2_IMPLEMENT](prompts/WP2_IMPLEMENT.vi.md)
-thành các task có giới hạn (gồm rủi ro chuyển từ [WP1_RECHECK](delivery/WP1_RECHECK.vi.md)).
-Worker implement, committer đóng băng từng phần, verifier chạy gate cuối package WP2, và
-auditor mới chạy [WP2_REVIEW](prompts/WP2_REVIEW.vi.md). Chỉ PASS cho phép WP3. WP5 bắt
-đầu bằng nghiệm thu độc lập; pilot thật do chủ quyết.
+Luồng hiện tại: sau commit nghiệm thu WP2, planner Opus chia WP3 từ
+[lộ trình](../docs/09_IMPLEMENTATION_ROADMAP.vi.md) và [WP3_IMPLEMENT](prompts/WP3_IMPLEMENT.vi.md)
+thành các task có giới hạn, gồm các mục chuyển tiếp trong [WP2_HANDOFF](delivery/WP2_HANDOFF.vi.md)
+(biến thể pending CorrectionResult/DeficitDebitResult, bỏ phút tạm tính khi chốt, khóa
+correction theo revision). Worker implement, committer đóng băng từng phần, verifier chạy
+gate cuối package WP3, và auditor mới chạy [WP3_REVIEW](prompts/WP3_REVIEW.vi.md). Chỉ PASS
+cho phép WP4. WP5 bắt đầu bằng nghiệm thu độc lập; pilot thật do chủ quyết.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
 `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới

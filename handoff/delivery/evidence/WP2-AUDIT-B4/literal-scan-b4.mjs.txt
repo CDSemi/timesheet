@@ -1,0 +1,216 @@
+// WP2-AUDIT-B4 independent literal scanner (auditor-written; not derived from the FIXB3 inventory script).
+// Usage: node literal-scan-b4.mjs <reviewed.css> <wp1.css> [label]
+// Parses every rule (nested @media included), and for every declaration that is not a custom-property
+// definition, lists every raw literal in the value after removing var(--x) references:
+//   - numbers with or without a unit (lengths, sizes, %, fr, deg, durations, unitless weights/opacities/z-index ...)
+//   - hex colours, colour functions (rgb/rgba/hsl/hsla/hwb/lab/lch/oklab/oklch/color), named colours
+// Exclusions (per the brief): bare 0, unitless 1, 100%, keywords; custom-property definitions are listed separately.
+// Also reports @media/@supports preludes with literals, var() fallbacks, and a property-class summary.
+import { readFileSync } from 'node:fs';
+
+const [, , reviewedPath, wp1Path, label = 'reviewed'] = process.argv;
+
+const NAMED_COLOURS = new Set(
+  (
+    'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood ' +
+    'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray ' +
+    'darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen ' +
+    'darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue ' +
+    'firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew ' +
+    'hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan ' +
+    'lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray ' +
+    'lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue ' +
+    'mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred ' +
+    'midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple ' +
+    'rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue ' +
+    'slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white ' +
+    'whitesmoke yellow yellowgreen'
+  ).split(' '),
+);
+
+function stripComments(css) {
+  return css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+}
+
+// Returns [{ at: '@media ...' | null, selector, prop, value, line }]
+function parse(css) {
+  const src = stripComments(css);
+  const out = [];
+  const preludes = [];
+  let i = 0;
+  const stack = []; // { kind: 'at'|'rule', prelude }
+  let buf = '';
+  let bufStart = 0;
+  const lineOf = (pos) => src.slice(0, pos).split('\n').length;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "'" || c === '"') {
+      const q = c;
+      let j = i + 1;
+      while (j < src.length && src[j] !== q) j += src[j] === '\\' ? 2 : 1;
+      buf += src.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    if (c === '{') {
+      const prelude = buf.trim();
+      if (prelude.startsWith('@')) {
+        preludes.push({ prelude, line: lineOf(bufStart + buf.indexOf(prelude[0])) });
+        stack.push({ kind: 'at', prelude });
+      } else {
+        stack.push({ kind: 'rule', prelude });
+      }
+      buf = '';
+      bufStart = i + 1;
+      i++;
+      continue;
+    }
+    if (c === ';' || c === '}') {
+      const top = stack[stack.length - 1];
+      if (top && top.kind === 'rule' && buf.trim()) {
+        const decl = buf.trim();
+        const colon = decl.indexOf(':');
+        const lead = buf.length - buf.trimStart().length;
+        out.push({
+          at: stack.filter((s) => s.kind === 'at').map((s) => s.prelude).join(' > ') || null,
+          selector: top.prelude.replace(/\s+/g, ' '),
+          prop: decl.slice(0, colon).trim(),
+          value: decl.slice(colon + 1).trim().replace(/\s+/g, ' '),
+          line: lineOf(bufStart + lead),
+        });
+      }
+      if (c === '}') stack.pop();
+      buf = '';
+      bufStart = i + 1;
+      i++;
+      continue;
+    }
+    buf += c;
+    i++;
+  }
+  return { decls: out, preludes };
+}
+
+// Remove var(--name) references; report a var() with a fallback separately.
+function removeVars(value, fallbacks) {
+  let v = value;
+  let guard = 0;
+  while (/var\(/.test(v) && guard++ < 50) {
+    v = v.replace(/var\(\s*(--[\w-]+)\s*(?:,([^()]*(?:\([^()]*\))*[^()]*))?\)/g, (m, name, fb) => {
+      if (fb !== undefined) fallbacks.push(m);
+      return ' ';
+    });
+  }
+  return v;
+}
+
+function literalsOf(value) {
+  const fallbacks = [];
+  let v = removeVars(value, fallbacks);
+  const found = [];
+  // strings are font names / content, not literals of the class
+  v = v.replace(/'[^']*'|"[^"]*"/g, ' ');
+  // colour functions
+  v = v.replace(/\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)/gi, (m) => {
+    found.push({ lit: m, kind: 'colour' });
+    return ' ';
+  });
+  v = v.replace(/#[0-9a-f]{3,8}\b/gi, (m) => {
+    found.push({ lit: m, kind: 'colour' });
+    return ' ';
+  });
+  for (const word of v.match(/[a-z-]+/gi) ?? []) {
+    if (NAMED_COLOURS.has(word.toLowerCase())) found.push({ lit: word, kind: 'colour' });
+  }
+  // numbers (with optional unit); identifiers containing digits are not numbers
+  const numRe = /(^|[^\w.-])(-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?)([a-z%]*)/gi;
+  let m;
+  while ((m = numRe.exec(v))) {
+    const lit = m[2] + m[3];
+    const num = Number(m[2]);
+    const unit = m[3].toLowerCase();
+    if (num === 0 && unit === '') continue; // bare 0
+    if (num === 1 && unit === '') continue; // unitless 1
+    if (num === 100 && unit === '%') continue; // 100%
+    found.push({ lit, kind: num === 0 ? 'zero-with-unit' : unit ? `number-${unit}` : 'unitless' });
+  }
+  return { found, fallbacks };
+}
+
+function propClass(prop) {
+  if (/^(font-weight)$/.test(prop)) return 'font-weight';
+  if (/^letter-spacing$/.test(prop)) return 'letter-spacing';
+  if (/^line-height$/.test(prop)) return 'line-height';
+  if (/color|background|fill|stroke|accent|caret|outline-color|border-color/.test(prop)) return 'colour';
+  if (/transition|animation|duration|delay/.test(prop)) return 'duration';
+  if (/^opacity$/.test(prop)) return 'opacity';
+  if (/^z-index$/.test(prop)) return 'z-index';
+  if (/shadow/.test(prop)) return 'shadow';
+  return 'length/size/other';
+}
+
+const reviewed = parse(readFileSync(reviewedPath, 'utf8'));
+const wp1 = parse(readFileSync(wp1Path, 'utf8'));
+
+// Literal multiset of WP1 declarations (non-custom-property) for the "absent from WP1" mark.
+const wp1Lits = new Set();
+for (const d of wp1.decls) {
+  for (const f of literalsOf(d.value).found) wp1Lits.add(f.lit.toLowerCase());
+}
+const wp1Tokens = new Map(wp1.decls.filter((d) => d.prop.startsWith('--')).map((d) => [`${d.at ?? ''}|${d.prop}`, d.value]));
+
+const lines = [];
+const p = (s) => lines.push(s);
+p(`WP2-AUDIT-B4 literal scan (${label}); exclusions: bare 0, unitless 1, 100%, keywords; custom-property definitions listed separately`);
+let declCount = 0;
+let litDecls = 0;
+let litOcc = 0;
+let wp2Occ = 0;
+const allFallbacks = [];
+const nonCustom = reviewed.decls.filter((d) => !d.prop.startsWith('--'));
+const custom = reviewed.decls.filter((d) => d.prop.startsWith('--'));
+p('');
+p('A. Declarations (outside custom-property definitions) that contain a raw literal:');
+for (const d of nonCustom) {
+  declCount++;
+  const { found, fallbacks } = literalsOf(d.value);
+  allFallbacks.push(...fallbacks.map((f) => `${d.line} ${d.selector} | ${d.prop}: ${f}`));
+  if (!found.length) continue;
+  litDecls++;
+  litOcc += found.length;
+  const marks = found.map((f) => {
+    const isNew = !wp1Lits.has(f.lit.toLowerCase());
+    if (isNew) wp2Occ++;
+    return `${f.lit}(${f.kind}${isNew ? ', absent from WP1' : ', in WP1'})`;
+  });
+  p(`  line ${d.line}${d.at ? ` [${d.at}]` : ''} ${d.selector} | ${d.prop}: ${d.value} | ${propClass(d.prop)} | ${marks.join(' ')}`);
+}
+if (!litDecls) p('  none');
+p('');
+p(`declarations scanned (non-custom): ${declCount}; declarations with a literal: ${litDecls}; literal occurrences: ${litOcc}; occurrences absent from WP1 (WP2-introduced): ${wp2Occ}`);
+p('');
+p('B. var() references with a fallback value (a fallback literal would bypass the token):');
+p(allFallbacks.length ? allFallbacks.map((s) => `  ${s}`).join('\n') : '  none');
+p('');
+p('C. At-rule preludes with literals (custom properties cannot drive media queries):');
+for (const pr of reviewed.preludes) p(`  line ${pr.line} ${pr.prelude}`);
+p('');
+p('D. Every var(--x) used in declarations resolves to a defined custom property:');
+const defined = new Set(custom.map((d) => d.prop));
+const used = new Map();
+for (const d of reviewed.decls) {
+  for (const m of d.value.matchAll(/var\(\s*(--[\w-]+)/g)) used.set(m[1], (used.get(m[1]) ?? 0) + 1);
+}
+const undefinedUse = [...used.keys()].filter((k) => !defined.has(k));
+p(`  defined custom properties: ${defined.size}; distinct referenced: ${used.size}; referenced but undefined: ${undefinedUse.length ? undefinedUse.join(', ') : 'none'}`);
+const unused = [...defined].filter((k) => !used.has(k));
+p(`  defined but never referenced: ${unused.length ? unused.join(', ') : 'none'}`);
+p('');
+p('E. Custom-property definitions (token values; excluded from the class by the brief), with WP1 status:');
+for (const d of custom) {
+  const w = wp1Tokens.get(`${d.at ?? ''}|${d.prop}`);
+  const status = w === undefined ? 'new in WP2' : w === d.value ? 'same as WP1' : `changed from WP1 (${w})`;
+  p(`  line ${d.line}${d.at ? ` [${d.at}]` : ''} ${d.prop}: ${d.value} | ${status}`);
+}
+process.stdout.write(lines.join('\n') + '\n');

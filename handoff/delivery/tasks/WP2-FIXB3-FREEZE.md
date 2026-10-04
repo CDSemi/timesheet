@@ -104,4 +104,8 @@ Evidence goes in handoff/delivery/evidence/WP2-FIXB3-FREEZE/. Return at most 150
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD a3d1b6555c352afa68b3d61ddc67f0c596742698; post-HEAD 5fafeaee72509c6110a907458643bf7582dad81a.
+- Commit 5fafeaee72509c6110a907458643bf7582dad81a pushed to origin main; remote SHA identical.
+- Staged count 152. Node v24.21.0. Check exits: precommit, diff --check, JSON parse, validator, check_recovery, preflight all 0.
+- Six screenshots viewed, no findings. No masking, no EOF edits, no blockers.
+- Evidence: handoff/delivery/evidence/WP2-FIXB3-FREEZE/.

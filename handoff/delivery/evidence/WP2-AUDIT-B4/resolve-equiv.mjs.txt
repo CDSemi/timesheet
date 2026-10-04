@@ -1,0 +1,88 @@
+// WP2-AUDIT-B4 static equivalence check (auditor-written).
+// Usage: node resolve-equiv.mjs <base.css> <reviewed.css>
+// Resolves every var(--x) in every non-custom declaration against the :root definitions of the same file
+// (light context, then the dark and reduced-motion overrides), and compares the ordered lists of
+// (at-rule context, selector, property, resolved value) between the two files.
+import { readFileSync } from 'node:fs';
+
+function parse(css) {
+  const src = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const out = [];
+  const stack = [];
+  let buf = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) j++;
+      buf += src.slice(i, j + 1);
+      i = j;
+      continue;
+    }
+    if (c === '{') {
+      stack.push(buf.trim().replace(/\s+/g, ' '));
+      buf = '';
+    } else if (c === ';' || c === '}') {
+      const d = buf.trim();
+      if (d && stack.length && !stack[stack.length - 1].startsWith('@')) {
+        const k = d.indexOf(':');
+        out.push({
+          at: stack.filter((s) => s.startsWith('@')).join(' > '),
+          sel: stack[stack.length - 1],
+          prop: d.slice(0, k).trim(),
+          value: d.slice(k + 1).trim().replace(/\s+/g, ' '),
+        });
+      }
+      if (c === '}') stack.pop();
+      buf = '';
+    } else buf += c;
+  }
+  return out;
+}
+
+function tokens(decls, context) {
+  const t = new Map();
+  for (const d of decls) {
+    if (!d.prop.startsWith('--') || d.sel !== ':root') continue;
+    if (d.at === '' || d.at === context) t.set(d.prop, d.value);
+  }
+  return t;
+}
+
+function resolve(value, t, depth = 0) {
+  if (depth > 20) throw new Error('cycle');
+  return value.replace(/var\(\s*(--[\w-]+)\s*\)/g, (m, n) => {
+    if (!t.has(n)) return `UNDEFINED(${n})`;
+    return resolve(t.get(n), t, depth + 1);
+  });
+}
+
+const [, , basePath, revPath] = process.argv;
+const base = parse(readFileSync(basePath, 'utf8'));
+const rev = parse(readFileSync(revPath, 'utf8'));
+const contexts = ['', '@media (prefers-color-scheme: dark)', '@media (prefers-reduced-motion: reduce)'];
+let total = 0;
+let diffs = 0;
+for (const ctx of contexts) {
+  const tb = tokens(base, ctx);
+  const tr = tokens(rev, ctx);
+  const lb = base.filter((d) => !d.prop.startsWith('--')).map((d) => `${d.at} | ${d.sel} | ${d.prop}: ${resolve(d.value, tb)}`);
+  const lr = rev.filter((d) => !d.prop.startsWith('--')).map((d) => `${d.at} | ${d.sel} | ${d.prop}: ${resolve(d.value, tr)}`);
+  const n = Math.max(lb.length, lr.length);
+  let ctxDiffs = 0;
+  for (let i = 0; i < n; i++) {
+    total++;
+    const norm = (s) => (s ?? '<missing>').replace(/\s+/g, ' ').replace(/\b0\.(\d)/g, '.$1').trim();
+    if (norm(lb[i]) !== norm(lr[i])) {
+      ctxDiffs++;
+      console.log(`[${ctx || 'light'}] #${i}\n  base: ${lb[i]}\n  rev:  ${lr[i]}`);
+    }
+  }
+  // token value changes for tokens that exist in both files
+  const changed = [...tb.keys()].filter((k) => tr.has(k) && resolve(tb.get(k), tb) !== resolve(tr.get(k), tr));
+  console.log(
+    `context ${ctx || 'light (:root)'}: base declarations ${lb.length}, reviewed declarations ${lr.length}, resolved differences ${ctxDiffs}; shared tokens with a changed resolved value: ${changed.length ? changed.join(', ') : 'none'}`,
+  );
+  diffs += ctxDiffs;
+}
+console.log(`TOTAL compared ${total}, differences ${diffs}`);

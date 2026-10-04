@@ -1,0 +1,23 @@
+// WP2-AUDIT-B4: distinct computed values of the tokenized properties in one label's captures.
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const [, , dir, label] = process.argv;
+const props = ['font-weight', 'letter-spacing', 'line-height', 'transition-duration', 'opacity', 'transform', 'outline-width', 'outline-offset', 'clip-path', 'order', 'border-top-left-radius', 'z-index'];
+const seen = new Map(props.map((p) => [p, new Map()]));
+for (const f of readdirSync(dir).filter((n) => n.startsWith(`${label}__`))) {
+  const screen = f.slice(label.length + 2, -5);
+  for (const e of JSON.parse(readFileSync(join(dir, f), 'utf8')).elements) {
+    for (const v of e.values) {
+      const [p, ...rest] = v.split('=');
+      if (!seen.has(p)) continue;
+      const val = rest.join('=');
+      const m = seen.get(p);
+      if (!m.has(val)) m.set(val, { count: 0, screens: new Set() });
+      const s = m.get(val); s.count++; s.screens.add(screen.split('__').pop());
+    }
+  }
+}
+for (const [p, m] of seen) {
+  console.log(`${p}:`);
+  for (const [val, s] of [...m].sort((a, b) => b[1].count - a[1].count)) console.log(`  ${val} | ${s.count} element captures | e.g. ${[...s.screens].slice(0, 3).join(', ')}`);
+}

@@ -1,0 +1,9 @@
+// WP2-AUDIT-B4 probe (temporary in the scratch clone): the server "today" and the day the R-07 e2e picks.
+import { expect, test } from './fixtures.ts';
+
+test('zz-audit-b4: server today and the R-07 day', async ({ employeeSeed }, testInfo) => {
+  const today = await employeeSeed.today();
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  console.log(JSON.stringify({ project: testInfo.project.name, now: process.env.AUDIT_B4_NOW ?? 'real', today: today.todayLocal, picked: days[0] ?? null }));
+  expect(days.length).toBeGreaterThan(0);
+});

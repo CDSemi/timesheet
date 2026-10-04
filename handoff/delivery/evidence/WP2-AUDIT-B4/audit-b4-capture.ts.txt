@@ -1,0 +1,96 @@
+// WP2-AUDIT-B4 probe helper (auditor-owned, temporary; copied into the scratch clones only).
+// Records, for every visible element of the page (and the dialog ::backdrop), a DOM path, the bounding
+// box, its own text, and a broad set of computed properties. The same probe runs on a3d1b65 ("base")
+// and 5fafeae ("reviewed"); compare-b4.mjs diffs the JSON files. Synthetic data only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import type { Page, TestInfo } from '@playwright/test';
+
+const LABEL = process.env.AUDIT_B4_LABEL ?? 'unlabelled';
+const OUT = process.env.AUDIT_B4_OUT ?? 'audit-b4-style';
+
+export const PROPS = [
+  'display', 'position', 'box-sizing', 'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+  'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'font-variant-numeric',
+  'text-align', 'vertical-align', 'white-space', 'overflow-x', 'overflow-y', 'overflow-wrap', 'text-decoration-line',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'row-gap', 'column-gap', 'grid-template-columns', 'grid-template-rows',
+  'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis', 'order', 'align-items', 'justify-content',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
+  'box-shadow', 'color', 'background-color', 'accent-color', 'opacity', 'z-index', 'cursor', 'resize',
+  'outline-width', 'outline-style', 'outline-color', 'outline-offset',
+  'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
+  'transform', 'clip-path', 'list-style-type', 'top', 'left', 'color-scheme',
+];
+
+interface Capture {
+  url: string;
+  active: string;
+  elements: Array<{ path: string; box: string; text: string; values: string[] }>;
+}
+
+export async function captureStyles(page: Page, screen: string, project: string, settleMs = 1_200): Promise<void> {
+  await page.waitForTimeout(settleMs);
+  const result = await page.evaluate<Capture, string[]>((props) => {
+    const visible = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
+    };
+    const pathOf = (element: Element): string => {
+      const parts: string[] = [];
+      let node: Element | null = element;
+      while (node !== null && node !== document.documentElement) {
+        const parent: Element | null = node.parentElement;
+        const index = parent === null ? 0 : Array.from(parent.children).indexOf(node);
+        const classes = typeof node.className === 'string' && node.className.trim() !== '' ? `.${node.className.trim().split(/\s+/).join('.')}` : '';
+        parts.unshift(`${node.tagName.toLowerCase()}${classes}:${index}`);
+        node = parent;
+      }
+      return parts.join('>');
+    };
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const ownText = (element: Element) =>
+      Array.from(element.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? '')
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60);
+    const elements = [document.documentElement, document.body, ...Array.from(document.querySelectorAll('body *'))]
+      .filter(visible)
+      .map((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          path: pathOf(element) || element.tagName.toLowerCase(),
+          box: [rect.x, rect.y, rect.width, rect.height].map(round).join(','),
+          text: ownText(element),
+          values: props.map((name) => `${name}=${style.getPropertyValue(name)}`),
+        };
+      });
+    for (const dialog of Array.from(document.querySelectorAll('dialog[open]'))) {
+      const style = getComputedStyle(dialog, '::backdrop');
+      elements.push({ path: `${pathOf(dialog)}::backdrop`, box: '', text: '', values: props.map((name) => `${name}=${style.getPropertyValue(name)}`) });
+    }
+    const active = document.activeElement === null ? '' : pathOf(document.activeElement);
+    return { url: location.hash, active, elements };
+  }, PROPS);
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `${LABEL}__${project}__${screen}.json`), `${JSON.stringify(result)}\n`);
+}
+
+/** Wraps page.screenshot so that every committed screenshot point is also a style capture point. */
+export function auditWrapPage(page: Page, testInfo: TestInfo): void {
+  const original = page.screenshot.bind(page);
+  let unnamed = 0;
+  page.screenshot = async (options) => {
+    const name = options?.path ? basename(options.path).replace(/-(desktop|mobile)-synthetic\.png$/, '').replace(/\.png$/, '') : `unnamed-${(unnamed += 1)}`;
+    await captureStyles(page, name, testInfo.project.name);
+    return original(options);
+  };
+}

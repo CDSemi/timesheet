@@ -1,0 +1,77 @@
+$ <node24> node_modules/vitest/vitest.mjs run <13 area-A files>  (2026-10-04T12:02:08Z)
+files: tests/integration/ledger.test.ts tests/integration/ot-leave.test.ts tests/integration/ot-leave-concurrency.test.ts tests/integration/history.test.ts tests/integration/evidence-export.test.ts tests/integration/isolation.test.ts tests/integration/migrations.test.ts tests/integration/ot-api.test.ts tests/domain/ledger.fixtures.test.ts tests/integration/user-admin.test.ts tests/integration/holiday-import.test.ts tests/integration/payroll-exceptions.test.ts tests/client/adminModel.test.ts
+ Test Files  13 passed (13)
+      Tests  267 passed (267)
+exit 0
+$ <node24> vitest run tests/integration/ot-leave-concurrency.test.ts (repeat 1)
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit 0
+$ <node24> vitest run tests/integration/ot-leave-concurrency.test.ts (repeat 2)
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit 0
+$ <node24> vitest run tests/integration/ot-leave-concurrency.test.ts (repeat 3)
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit 0
+$ <node24> vitest run tests/integration/payroll-exceptions.test.ts --reporter=verbose
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > answers 401 without a session and 403 to an employee, changing nothing 269ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > rejects a missing Origin, unknown fields and an unknown calendar 226ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read 236ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > requires a reason and validates the exception without writing 239ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > refuses a second exception for the same payroll date 231ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > uses the exception when the period row is first created later 225ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period 234ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > answers the same success body whether or not employees have timesheets in the period (WP2-A2-02) 469ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes the due date alone when only the deadline moves 239ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when a finalized timesheet references the row and changes nothing 247ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when any user’s finalized timesheet references the row, even if the others are drafts 237ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period 241ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written 251ms
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+exit 0
+$ <node24> vitest run tests/integration/holiday-import.test.ts --reporter=verbose
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/preview, changing nothing 282ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/commit, changing nothing 240ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar 249ms
+ ✓ tests/integration/holiday-import.test.ts > preview > writes nothing: no version, no audit event, no employee row 260ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash 256ms
+ ✓ tests/integration/holiday-import.test.ts > preview > diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4) 234ms
+ ✓ tests/integration/holiday-import.test.ts > preview > keeps every manual date when the CSV lists none of them and nothing is marked for removal 230ms
+ ✓ tests/integration/holiday-import.test.ts > preview > flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit 239ms
+ ✓ tests/integration/holiday-import.test.ts > preview > ignores CSV rows before the effective date and says so 244ms
+ ✓ tests/integration/holiday-import.test.ts > preview > refuses an effective date before the prospective boundary in the preview and names the earliest 233ms
+ ✓ tests/integration/holiday-import.test.ts > preview > lists the days whose default label changes from the calendar alone, with no employee-derived counts 242ms
+ ✓ tests/integration/holiday-import.test.ts > preview > answers identically whether or not employees have day entries on the affected dates (WP2-A-01) 266ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports a finalized period as a date-only signal and blocks the commit, without counts 246ms
+ ✓ tests/integration/holiday-import.test.ts > commit > creates one immutable version and one audit event from a matching preview 243ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a missing, malformed, stale or mismatched preview hash and writes nothing 238ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date before the prospective boundary 235ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date earlier than the latest version 271ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a CSV with issues or removal problems and writes nothing 243ms
+ ✓ tests/integration/holiday-import.test.ts > commit > treats an identical re-commit as a no-op: no new version, no audit event 247ms
+ ✓ tests/integration/holiday-import.test.ts > commit > removes a manual date only when the commit lists it explicitly 248ms
+ ✓ tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written 241ms
+ ✓ tests/integration/holiday-import.test.ts > commit > keeps the classification of past dates and old finalized periods unchanged 258ms
+ ✓ tests/integration/holiday-import.test.ts > commit > preserves explicit labels and relabels default rows at read time (E-4) 263ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a change that would alter a finalized timesheet, then accepts a later date 238ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty before 1 October in the reporting zone and appears from then 440ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty in the new year until the next 1 October 397ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > disappears once a committed version holds next-year dates 296ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > does not count a version that is not in force for next year 235ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > keeps the existing calendar fields 237ms
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+exit 0
+$ <node24> vitest run tests/client/zoneOracle.test.ts --reporter=verbose (changed test-only helper; area B, run for completeness)
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > follows the Los Angeles season for a time typed at +07:00 13ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > keeps the Los Angeles calendar date for every day of a year 157ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > resolves the instant of a wall time and refuses a DST gap 2ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > refuses a DST fold, where one wall time is two instants 2ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > refuses a DST gap in every zone and accepts the minutes next to a gap or a fold 2ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > shows that the old fixed 08:00 expectation is wrong in winter and right only in summer 1ms
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+exit 0

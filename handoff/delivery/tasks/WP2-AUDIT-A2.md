@@ -30,7 +30,8 @@
 - WP2-FIXB3 changed only src/client/styles.css (CSS tokens) and tests/client/zoneOracle.ts
   plus its unit test, outside handoff/.
 - Attempt 3 is a fresh auditor, not an earlier A2 auditor. Target: `reviewed_commit` =
-  the WP2-GATE4 `freeze_commit`, given at dispatch, and the gate digest.
+  5fafeaee72509c6110a907458643bf7582dad81a (the WP2-GATE4 `freeze_commit`). The gate
+  digest is e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df.
 - Scope:
   - confirm that the diff since a3d1b65 is limited to those files and touches no
     server, ledger, privacy or admin code;
@@ -185,3 +186,36 @@ and its .vi.md. Evidence: handoff/delivery/evidence/WP2-AUDIT-A2-a2/ (index 00-c
   unreadable today; any future admin audit view must redact it.
 - Writes: only WP2_RECHECK_A3.md/.vi.md, this Results section and the evidence folder. No source edit, no commit, and
   no ORCHESTRATION.json, STATE.json or NEXT_ACTION edit. WP2_RECHECK_A.md is unchanged.
+
+### Auditor result (attempt 3)
+
+Self-reported model: claude-opus-5-5 (not weaker than the strongest author model of the reviewed snapshot, opus;
+WP2-FIXB3 ran on sonnet). Fresh context; not an earlier A2 auditor. Report: [WP2_RECHECK_A4](../WP2_RECHECK_A4.md)
+and its .vi.md. Evidence: handoff/delivery/evidence/WP2-AUDIT-A2-a3/ (index 00-commands.txt; masked, LF).
+
+- Target: HEAD 5fafeaee72509c6110a907458643bf7582dad81a = origin/main before and after. Source digest
+  e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (613 files) before and after, in the project folder
+  and in the scratch clone; it equals the gate digest. All checks ran in a scratch clone on C: outside Dropbox, with
+  Node v24.21.0 by full path.
+- Verdict: **PASS**. No blocking finding and no area-A defect.
+- Delta scope: a3d1b65..5fafeae is one commit. Outside handoff/ it changes only src/client/styles.css (token
+  substitutions with the same values), tests/client/zoneOracle.ts and tests/client/zoneOracle.test.ts. No server, ledger,
+  privacy or admin code changed; zoneOracle is imported only by tests and imports nothing.
+- Checks:
+  - `npm run verify`: run 1 exit 13, because the smoke's default port 3100 was held by another process (reproduced in
+    03b). Run 2 with SMOKE_PORT=3197: exit 0, 32 files / 613 tests, SMOKE PASSED, no deprecation output.
+  - 13 targeted files / 267 tests; concurrency 8/8 three more times.
+  - Admin, isolation and OT-leave e2e: 24 passed.
+- Regression smoke, all with unchanged probes:
+  - Holiday preview: nothing inferable.
+  - A2 differential: 27/27 identical.
+  - Payroll differential: 20/0, 30/30 identical.
+  - Ledger/privacy 119/0 and supplement 6/0.
+  - Race: 220 production rounds, 0 violations; the control double-booked 10/10.
+  - Preflight PASS.
+- WP2-A-01 and WP2-A2-02: stay resolved. R1–R4, WP2-A3-01 and ADV-A-05: remain non-blocking (code unchanged).
+- New observation WP2-A4-01 (Info, optional tooling): scripts/smoke-built-server.mjs:11,102-112. When the smoke port is
+  taken, the script accepts the foreign health answer and then ends with exit 13 and no FAIL line. It could pick a free
+  port or fail fast on the child's exit. Required change: none for WP2.
+- Writes: only WP2_RECHECK_A4.md/.vi.md, this Results section and the evidence folder. No source edit, no commit, and
+  no ORCHESTRATION.json, STATE.json or NEXT_ACTION edit. Earlier reports are unchanged.
