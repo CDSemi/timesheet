@@ -7,14 +7,15 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 55d3bb808836a0217de45470f5b743f9e5b9a667, commit đóng băng
-    WP2-T11 (chủ dự án commit tay, WP2-T11-RECON đã kiểm tra).
-  - Digest mã nguồn afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba, đã
-    xác nhận.
-  - Chưa commit: WP2-T12 (digest mã nguồn
-    321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54, tác giả tự báo),
-    các record của T11-RECON, brief T12-FREEZE, board và checkpoint này. WP2-T12-FREEZE sẽ
-    commit chúng.
+  - HEAD = origin/main = da0ffc492b608f1108e3c455e55aa01cca118b45, commit đóng băng
+    WP2-T12.
+  - Digest mã nguồn 321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54
+    (tác giả tự báo).
+  - Chưa commit: WP2-T13 (digest mã nguồn
+    8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2, tác giả tự báo, chạy
+    trên bản xuất sạch), WP2_HANDOFF (+vi), bằng chứng của T12-FREEZE, các brief
+    T13-FREEZE, GATE, AUDIT-A và AUDIT-B, board và checkpoint này. WP2-T13-FREEZE sẽ commit
+    chúng làm commit đóng băng cuối package.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -157,8 +158,14 @@ America/Los_Angeles).
   - mã của người dùng khác trả 404;
   - nhân viên gọi route admin nhận 403;
   - màn quản trị không hiện dữ liệu của nhân viên.
-- Bước tiếp: ghi kết quả WP2-T12-FREEZE, rồi giao WP2-T13 (brief sẵn; đây là task mã nguồn
-  cuối của package). Brief commit T12 dựa vào bước quét precommit và không in nội dung test.
+- WP2-T12 đã được committer đóng băng ở da0ffc4, không bị bộ phân loại chặn nhờ quy tắc
+  không in nội dung test.
+- WP2-T13 (dữ liệu mẫu, smoke, tài liệu, bàn giao WP2) đã xong. Chạy trên bản xuất sạch:
+  verify 599 test, smoke 28; test:e2e 66 đạt, 2 bỏ qua; preflight 0.
+- Bước tiếp:
+  1. Ghi kết quả WP2-T13-FREEZE.
+  2. Giao WP2-GATE trên SHA đóng băng (brief sẵn).
+  3. Khi gate PASS, chạy song song WP2-AUDIT-A và WP2-AUDIT-B (brief sẵn).
   - WP2-T09-PREP đã xong. Kết quả chính:
     - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
       duyệt;
@@ -174,7 +181,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T12-FREEZE (committer). WP2-T13 chờ task này.
-- Process còn sống: không biết có process nào ngoài committer.
+- Đang chạy: WP2-T13-FREEZE (committer). WP2-GATE chờ task này.
+- Process còn sống: không biết có process nào ngoài committer. Worker T13 đã xóa bản xuất
+  tạm của mình.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

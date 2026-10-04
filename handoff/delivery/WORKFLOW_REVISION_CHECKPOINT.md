@@ -7,14 +7,14 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 55d3bb808836a0217de45470f5b743f9e5b9a667, the WP2-T11 freeze
-    (a manual owner commit, verified by WP2-T11-RECON).
-  - Source digest afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba,
-    verified.
-  - Uncommitted: WP2-T12 (source digest
-    321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54, author-reported),
-    the T11-RECON records, the T12-FREEZE brief, the board and this checkpoint.
-    WP2-T12-FREEZE commits them.
+  - HEAD = origin/main = da0ffc492b608f1108e3c455e55aa01cca118b45, the WP2-T12 freeze.
+  - Source digest 321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54
+    (author-reported).
+  - Uncommitted: WP2-T13 (source digest
+    8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2, author-reported in
+    a clean export), WP2_HANDOFF (+vi), the T12-FREEZE evidence, the T13-FREEZE, GATE,
+    AUDIT-A and AUDIT-B briefs, the board and this checkpoint. WP2-T13-FREEZE commits them
+    as the package-final freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -149,9 +149,14 @@ America/Los_Angeles).
 - WP2-T12 (settings and admin UI) is done: author-reported verify 599 tests and
   test:e2e 66 passed, 2 skipped. Isolation e2e: other users' IDs give 404, admin routes
   give employees 403, and admin screens show no employee data.
-- Next action: record the WP2-T12-FREEZE result, then dispatch WP2-T13 (brief ready; the
-  package-final source task). The T12 committer brief relies on the precommit scan and
-  prints no test content.
+- WP2-T12 frozen in da0ffc4 by the committer, with no classifier denial under the
+  no-print hygiene.
+- WP2-T13 (seed, smoke, docs, WP2 HANDOFF) is done. In a clean export: verify 599 tests
+  and smoke 28, test:e2e 66 passed and 2 skipped, preflight 0.
+- Next action:
+  1. Record the WP2-T13-FREEZE result.
+  2. Dispatch WP2-GATE on the freeze SHA (brief ready).
+  3. After a gate PASS, run WP2-AUDIT-A and WP2-AUDIT-B in parallel (briefs ready).
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -167,7 +172,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T12-FREEZE (committer). WP2-T13 is pending on it.
-- Live processes: none known besides the committer.
+- Running: WP2-T13-FREEZE (committer). WP2-GATE is pending on it.
+- Live processes: none known besides the committer. The T13 worker removed its temporary
+  export.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

@@ -97,3 +97,11 @@ Evidence goes in handoff/delivery/evidence/WP2-T12-FREEZE/. Return at most 150 w
 ## Results
 
 (Committer appends here.)
+
+- Pre-HEAD 55d3bb808836a0217de45470f5b743f9e5b9a667; post-HEAD and commit
+  da0ffc492b608f1108e3c455e55aa01cca118b45.
+- Pushed to origin main; remote SHA da0ffc492b608f1108e3c455e55aa01cca118b45.
+- Staged count 43. Node v24.21.0.
+- Check exits: precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0,
+  check_recovery 0. Six screenshots viewed, all synthetic.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-T12-FREEZE/.

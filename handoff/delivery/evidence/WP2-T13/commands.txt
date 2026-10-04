@@ -1,0 +1,16 @@
+# WP2-T13 commands and exits (Node v24.21.0 portable first on PATH for every command)
+# "export" = working-tree files from `git ls-files -co --exclude-standard` copied to a directory under the
+# OS temp folder outside Dropbox (the B: temp drive ran out of space once, so the export used the C: user temp folder).
+
+export: git ls-files -co --exclude-standard -z, copy files
+npm-ci.txt:           npm ci --no-audit --no-fund (export)             exit 0
+verify.txt:           NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (export)   exit 0
+                      typecheck, lint (no-deprecated), vitest 31 files / 599 tests, build, smoke 28 PASS / SMOKE PASSED
+vitest-per-file.txt:  node node_modules/vitest/vitest.mjs run --reporter=json (export)   exit 0, 599/599
+e2e.txt:              npm run test:e2e (export)                       exit 0, 66 passed, 2 skipped
+digest.txt:           npm run digest (project folder)                 exit 0
+preflight.txt:        validate_package.py --preflight (workflow Python, project folder)   exit 0
+extra:                GIT_INDEX_FILE=<temporary index> git add -- <T13 paths>; node scripts/precommit-check.mjs   exit 0, 16 staged files, 0 findings
+                      git diff --cached --check on the same temporary index  exit 0 (the real index was not touched)
+discarded:            first clean-export npm run verify failed 2 tests in tests/integration/user-admin.test.ts
+                      (employee2 created by default); the seed was changed and every logged run is a rerun on the final source.

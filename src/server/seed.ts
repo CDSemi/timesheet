@@ -1,15 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { UserRole } from './auth/sessions.ts';
+import type { SessionUser, UserRole } from './auth/sessions.ts';
 import type { Clock } from './clock.ts';
 import type { Db } from './db/database.ts';
 import { createCalendar, createCalendarVersion } from './services/calendars.ts';
+import { postCredit } from './services/ledger.ts';
+import { reserveOtLeave } from './services/otLeave.ts';
 import { createPolicyVersion } from './services/policies.ts';
+import { createSession } from './services/timesheetCommands.ts';
 import { createUser, findUserByEmail } from './services/users.ts';
 
 /*
- * Synthetic development/test data only: one company calendar from the example files
- * and two isolated example.invalid accounts. Never used for production bootstrap.
+ * Synthetic development/test data only: one company calendar from the example files and
+ * three isolated example.invalid accounts (one admin, two employees). Optional sample data
+ * (CLI seed only) gives the second employee a few sessions, one recorded OT leave request
+ * and one setup credit posted through the internal ledger service with an explicit
+ * synthetic setup key and reason. No opening balance is inferred. Never used for
+ * production bootstrap.
  */
 
 const POLICY_EXAMPLE = new URL('../../reference/examples/policy.example.json', import.meta.url);
@@ -41,19 +48,113 @@ interface HolidaysExample {
   holidays: Array<{ date: string; name: string }>;
 }
 
-export const SEED_ACCOUNTS: ReadonlyArray<{ key: 'admin' | 'employee'; email: string; displayName: string; role: UserRole }> = [
+export type SeedAccountKey = 'admin' | 'employee' | 'employee2';
+
+export const SEED_ACCOUNTS: ReadonlyArray<{ key: SeedAccountKey; email: string; displayName: string; role: UserRole }> = [
   { key: 'admin', email: 'admin@example.invalid', displayName: 'Example Admin', role: 'admin' },
   { key: 'employee', email: 'employee@example.invalid', displayName: 'Example Employee', role: 'employee' },
+  { key: 'employee2', email: 'employee2@example.invalid', displayName: 'Example Employee Two', role: 'employee' },
 ];
 
 export interface SeedOptions {
-  passwords?: Partial<Record<'admin' | 'employee', string>>;
+  /** Passwords come from the environment; an account without one gets a random one-time password. */
+  passwords?: Partial<Record<SeedAccountKey, string>>;
+  /**
+   * Development dataset (CLI seed): also create employee2@example.invalid with sample sessions, a
+   * leave request and a setup credit. Off by default so the integration tests keep two accounts.
+   */
+  sampleData?: boolean;
 }
 
 export interface SeedResult {
   created: boolean;
   calendarId: string | null;
   users: Array<{ id: string; email: string; role: UserRole; generatedPassword: string | null }>;
+  /** Present only when sample data was written. */
+  sample?: { sessions: number; leaveRequests: number; creditMinutes: number };
+}
+
+/** Setup credit and leave sizes of the sample data, in minutes. */
+const SAMPLE_CREDIT_MINUTES = 600;
+const SAMPLE_LEAVE_MINUTES = 240;
+
+function civilDateIn(zone: string, instant: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function isWeekday(date: string): boolean {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return day >= 1 && day <= 5;
+}
+
+const SAMPLE_SHAPES: ReadonlyArray<{ start: string; end: string }> = [
+  { start: '09:00', end: '17:30' },
+  { start: '08:30', end: '19:00' },
+  { start: '09:00', end: '17:30' },
+];
+
+/**
+ * Sample data for one employee, all through the production services: up to three recent
+ * weekday sessions (relative to the clock), one setup credit posted with an explicit
+ * synthetic key and reason, and one OT leave request for a weekday about two weeks ahead.
+ */
+function seedSampleData(db: Db, clock: Clock, zone: string, employee: SessionUser): NonNullable<SeedResult['sample']> {
+  const now = clock.now();
+  const today = civilDateIn(zone, now);
+  const recent: string[] = [];
+  for (let back = 1; back <= 14 && recent.length < SAMPLE_SHAPES.length; back += 1) {
+    const date = civilDateIn(zone, new Date(now.getTime() - back * 86_400_000));
+    if (isWeekday(date)) recent.push(date);
+  }
+  const at = (date: string, time: string) => ({ local: `${date}T${time}`, zone });
+  recent.forEach((date, index) => {
+    const shape = SAMPLE_SHAPES[index] ?? SAMPLE_SHAPES[0];
+    if (shape === undefined) return;
+    createSession({ db, clock, user: employee }, date, {
+      start: at(date, shape.start),
+      end: at(date, shape.end),
+      input_zone: zone,
+      breaks_confirmed: true,
+      breaks: [{ start: at(date, '12:00'), end: at(date, '12:30'), counts_as_work: false }],
+      reason: 'Synthetic seed sample session (development data only)',
+    });
+  });
+  postCredit(
+    { db, clock },
+    {
+      userId: employee.id,
+      sourceKey: 'seed-setup-credit-employee2',
+      actorUserId: null,
+      origin: 'system',
+      reason: 'Synthetic seed setup credit (development data only; not inferred from any timesheet)',
+      workDate: recent[recent.length - 1] ?? today,
+      minutes: SAMPLE_CREDIT_MINUTES,
+    },
+  );
+  let leaveDate = today;
+  for (let ahead = 14; ahead <= 20; ahead += 1) {
+    leaveDate = civilDateIn(zone, new Date(now.getTime() + ahead * 86_400_000));
+    if (isWeekday(leaveDate)) break;
+  }
+  reserveOtLeave(
+    { db, clock },
+    {
+      userId: employee.id,
+      actorUserId: employee.id,
+      requestKey: 'seed-leave-employee2',
+      leaveDate,
+      requestedMinutes: SAMPLE_LEAVE_MINUTES,
+      permission: {
+        approverName: 'Example Manager',
+        approvalDate: today,
+        evidenceRef: 'Synthetic permission reference (seed only)',
+      },
+      note: 'Synthetic seed leave request',
+    },
+  );
+  return { sessions: recent.length, leaveRequests: 1, creditMinutes: SAMPLE_CREDIT_MINUTES };
 }
 
 export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions = {}): Promise<SeedResult> {
@@ -99,7 +200,9 @@ export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions =
     null,
   );
   const users: SeedResult['users'] = [];
+  const sessionUsers = new Map<SeedAccountKey, SessionUser>();
   for (const account of SEED_ACCOUNTS) {
+    if (account.key === 'employee2' && options.sampleData !== true) continue;
     const supplied = options.passwords?.[account.key];
     const password = supplied ?? randomBytes(18).toString('base64url');
     const id = await createUser(
@@ -134,6 +237,18 @@ export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions =
       id,
     );
     users.push({ id, email: account.email, role: account.role, generatedPassword: supplied === undefined ? password : null });
+    sessionUsers.set(account.key, {
+      id,
+      email: account.email,
+      displayName: account.displayName,
+      role: account.role,
+      calendarId,
+      sessionId: 'seed',
+    });
+  }
+  const sampleOwner = sessionUsers.get('employee2');
+  if (options.sampleData === true && sampleOwner !== undefined) {
+    return { created: true, calendarId, users, sample: seedSampleData(db, clock, example.calendar.reporting_zone, sampleOwner) };
   }
   return { created: true, calendarId, users };
 }

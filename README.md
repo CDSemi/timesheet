@@ -1,6 +1,6 @@
 # Timesheet Web — implementation package
 
-Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1 independently reviewed — FIX REQUIRED; F-01 unresolved; WP2 not started**.
+Original documentation revision: **2026-09-30-r1.1**. Repository status: **WP1 independently accepted; WP2 implemented (T01–T13), awaiting the package-final gate and independent audits; not accepted**.
 
 English `.md` files are authoritative. Every `.vi.md` is a translation of the corresponding English file. JSON keys and enum values stay in English. The manifests in `handoff/delivery/` are historical snapshots of the r1.1 documentation package, not certification of the current repository; see [VALIDATION](handoff/delivery/VALIDATION.md).
 
@@ -8,8 +8,8 @@ English `.md` files are authoritative. Every `.vi.md` is a translation of the co
 
 1. Read [NEXT_ACTION](handoff/NEXT_ACTION.md).
 2. Read [requirements](docs/01_PRODUCT_REQUIREMENTS.md), [time/OT rules](docs/02_TIME_AND_OT_RULES.md) and [roadmap](docs/09_IMPLEMENTATION_ROADMAP.md).
-3. Read [DEVELOPMENT](DEVELOPMENT.md) and the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md); they describe the complete source in this repository and how to verify it.
-4. Read the [independent WP1 review](handoff/delivery/WP1_REVIEW.md). The next action is the bounded F-01 fix with [FIX_FINDINGS](handoff/prompts/FIX_FINDINGS.md), then independent WP1 recheck. Do not restart WP1 implementation or begin WP2 before that recheck passes.
+3. Read [DEVELOPMENT](DEVELOPMENT.md), the [WP1 handoff](handoff/delivery/WP1_HANDOFF.md) and the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md); they describe the complete source in this repository and how to verify it.
+4. WP1 was accepted after the F-01 recheck ([WP1 review](handoff/delivery/WP1_REVIEW.md), [recheck](handoff/delivery/WP1_RECHECK.md)). The next step is the WP2 package-final gate and the two independent audits; do not begin WP3 before they pass.
 
 Give Claude the single entry prompt in NEXT_ACTION; the coordinator resumes [saved tasks](handoff/delivery/ORCHESTRATION.json) and advances only after independent gates. Project profiles live in `.claude/agents/`, with the default coordinator in `.claude/settings.json`.
 
@@ -49,4 +49,4 @@ Each prompt names its reading scope. Do not paste every document into every sess
 
 The [Excel template](reference/inputs/Timesheet_Rev8_2026.xlsx) is a public sample: the form, working-info and holiday sheets of the original workbook with all personal data removed (dated attendance sheets, employee name, signature images, author metadata and local path). The personal original is not retained. Keep the workbook out of production images; use synthetic demo data.
 
-WP1 foundation source and implementer verification evidence are present; see DEVELOPMENT and the handoff. No production deployment or real email has occurred. Bilingual documentation does not require a bilingual initial application UI. Model information was rechecked on 2026-09-30; actual account availability and usage must be checked in the client.
+WP1 foundation and WP2 source with implementer verification evidence are present (WP2 is not yet independently accepted); see DEVELOPMENT and the handoffs. No production deployment or real email has occurred. Bilingual documentation does not require a bilingual initial application UI. Model information was rechecked on 2026-09-30; actual account availability and usage must be checked in the client.

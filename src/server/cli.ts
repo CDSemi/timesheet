@@ -24,12 +24,22 @@ async function main(command: string | undefined): Promise<number> {
         if (config.production) throw new Error('Refusing to seed synthetic data when NODE_ENV=production');
         migrate(db);
         const result = await seedSynthetic(db, systemClock, {
-          passwords: { admin: process.env.SEED_ADMIN_PASSWORD, employee: process.env.SEED_EMPLOYEE_PASSWORD },
+          passwords: {
+            admin: process.env.SEED_ADMIN_PASSWORD,
+            employee: process.env.SEED_EMPLOYEE_PASSWORD,
+            employee2: process.env.SEED_EMPLOYEE2_PASSWORD,
+          },
+          sampleData: true,
         });
         console.log(result.created ? 'Created synthetic seed data:' : 'Synthetic seed data already present:');
         for (const user of result.users) {
           const secret = user.generatedPassword === null ? '' : `  generated dev password: ${user.generatedPassword}`;
           console.log(`  ${user.role.padEnd(8)} ${user.email}${secret}`);
+        }
+        if (result.sample !== undefined) {
+          console.log(
+            `  sample data for employee2@example.invalid: ${result.sample.sessions} sessions, ${result.sample.leaveRequests} leave request, setup credit ${result.sample.creditMinutes} minutes`,
+          );
         }
         return 0;
       }
