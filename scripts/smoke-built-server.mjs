@@ -2,13 +2,36 @@
 // Smoke-tests the BUILT production server (dist/) end to end over real HTTP with a
 // throwaway SQLite file, synthetic example.invalid users and random per-run passwords.
 // Usage: npm run build && node scripts/smoke-built-server.mjs
+// Port: SMOKE_PORT when set; otherwise a free loopback port chosen by the OS per run.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const port = Number(process.env.SMOKE_PORT ?? 3100);
+/** Asks the OS for a free loopback port (bound, read, released). */
+function freeLoopbackPort() {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close(() => (address && typeof address === 'object' ? resolve(address.port) : reject(new Error('no port assigned'))));
+    });
+  });
+}
+
+const explicitPort = process.env.SMOKE_PORT;
+let port;
+try {
+  port = explicitPort === undefined || explicitPort === '' ? await freeLoopbackPort() : Number(explicitPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`invalid SMOKE_PORT "${explicitPort}"`);
+} catch (error) {
+  console.log(`FAIL  port selection: ${error instanceof Error ? error.message : String(error)}`);
+  console.log('SMOKE FAILED (1)');
+  process.exit(1);
+}
 const base = `http://127.0.0.1:${port}`;
 const origin = `http://localhost:${port}`;
 const work = mkdtempSync(join(tmpdir(), 'timesheet-smoke-'));
@@ -100,16 +123,25 @@ try {
   );
 
   server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
-  const firstLine = new Promise((resolve) => server.stdout.once('data', (chunk) => resolve(String(chunk).trim())));
+  let serverOutput = '';
+  let serverExit = null;
+  server.stdout.on('data', (chunk) => (serverOutput += String(chunk)));
+  server.stderr.on('data', (chunk) => (serverOutput += String(chunk)));
+  server.once('exit', (code, signal) => (serverExit = `exit ${code ?? signal}`));
   let healthy = false;
-  for (let attempt = 0; attempt < 50 && !healthy; attempt += 1) {
+  for (let attempt = 0; attempt < 50 && !healthy && serverExit === null; attempt += 1) {
     try {
-      healthy = (await fetch(`${base}/api/health`)).ok;
+      const response = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2000) });
+      // Only our own child counts: a foreign listener on the port must not pass as healthy.
+      healthy = response.ok && (await response.text()) === '{"status":"ok"}' && serverExit === null;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
+    if (!healthy) await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  check('built server starts', healthy, hideWorkDir(String(await firstLine)));
+  const startNote = serverExit === null ? '' : `server process ended early (${serverExit}); port ${port} may be in use`;
+  check('built server starts', healthy, hideWorkDir(`${startNote} ${serverOutput.trim().split(String.fromCharCode(10))[0] ?? ''}`.trim()));
+  if (!healthy) throw new Error(`built server did not become healthy on port ${port}${serverExit === null ? ' within the wait' : `: ${serverExit}`}`);
 
   const health = await call('GET', '/api/health');
   check('GET /api/health has no personal data', health.status === 200 && health.text === '{"status":"ok"}', health.text);

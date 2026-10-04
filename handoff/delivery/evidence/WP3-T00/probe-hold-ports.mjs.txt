@@ -1,0 +1,26 @@
+// Holds loopback ports 3100 and 3198 (the old default and a chosen port), then runs the smoke twice:
+// once with SMOKE_PORT unset (must pass on a free port) and once with SMOKE_PORT=3100 (must FAIL naming the cause).
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+const holders = await Promise.all([3100, 3198].map((port) => new Promise((resolve, reject) => {
+  const s = createServer((c) => c.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nno'));
+  s.once('error', reject);
+  s.listen(port, '127.0.0.1', () => resolve(s));
+})));
+const run = (label, env) => new Promise((resolve) => {
+  const child = spawn(process.execPath, ['scripts/smoke-built-server.mjs'], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  child.stdout.on('data', (c) => (out += c));
+  child.stderr.on('data', (c) => (out += c));
+  child.on('exit', (status) => {
+    const lines = out.split(String.fromCharCode(10)).filter((l) => /^(FAIL|SMOKE|PASS  built server)/.test(l));
+    console.log(`## ${label}: exit ${status}`);
+    console.log(lines.join(String.fromCharCode(10)));
+    resolve();
+  });
+});
+delete process.env.SMOKE_PORT;
+await run('ports 3100 and 3198 held, SMOKE_PORT unset', {});
+await run('port 3100 held, SMOKE_PORT=3100', { SMOKE_PORT: '3100' });
+await run('SMOKE_PORT=abc', { SMOKE_PORT: 'abc' });
+for (const s of holders) s.close();

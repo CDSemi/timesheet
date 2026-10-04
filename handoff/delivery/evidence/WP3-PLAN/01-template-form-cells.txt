@@ -1,0 +1,33 @@
+# Timesheet sheet of reference/inputs/Timesheet_Rev8_2026.xlsx (public sanitized template), read-only.
+# Unzipped into the session scratchpad (outside the repository); cells printed by a throwaway reader run with NODE24 (ref, formula, cached value).
+# Purpose: the PDF layout contract (docs/04 'Email and PDF') and the meaning of 'total' (N24/X24 = Overtime Total, Sunday Z16/Z23 omitted).
+$ NODE24 dump.mjs | filtered to labels, date rows of week 1, the OT total and signature rows
+A1  "C&D Semiconductor Services, Inc."
+A3  "TIME SHEET FOR SALARIED EXEMPT EMPLOYEES"
+C5  "Instructions: Please fill each day with either \"Worked\", \"Sick\", \"Vacation
+C6  "Please turn in by the Tuesday before the payroll date."
+E8  "Employee:"
+E10  "Payroll Date:"
+I10 =INDEX(Payrolls[Payroll Date],MATCH(TODAY(),Payrolls[Payroll Date],1)+1) "46297"
+A12 =_xlfn.ISOWEEKNUM(I10-14) "38"
+B12  "Monday"
+Z12  "Sunday"
+B13 =$I$10-18 "46279"
+Z13 =$I$10-12 "46285"
+A14  "WEEK"
+A15  "OT"
+B16 =IF(OR(ISBLANK(B15), ISBLANK(D15)), "", MAX(0, (VLOOKUP(D15,OvertimeData[],2)-VLOOKUP(B15,OvertimeData[],2))/60-8.5)) ""
+Z16 =IF(OR(ISBLANK(Z15), ISBLANK(AB15)), "", MAX(0, (VLOOKUP(AB15,OvertimeData[],2)-VLOOKUP(Z15,OvertimeData[],2))/60-8.5)) ""
+A19 =_xlfn.ISOWEEKNUM(I10-7) "39"
+A21  "WEEK"
+A22  "OT"
+Z23 =IF(OR(ISBLANK(Z22), ISBLANK(AB22)), "", MAX(0, (VLOOKUP(AB22,OvertimeData[],2)-VLOOKUP(Z22,OvertimeData[],2))/60-8.5)) ""
+N24  "Overtime Total :"
+X24 =SUM($B$16:$Y$16)+SUM($B$23:$Y$23) "0"
+Z24  "hours"
+W26 =TODAY() "46295"
+B27  "Employee Signature"
+W27  "Date"
+B30  "Manager Signature"
+W30  "Date"
+exit 0

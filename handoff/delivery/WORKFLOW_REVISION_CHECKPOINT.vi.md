@@ -1,19 +1,17 @@
-# Checkpoint nhiệm vụ (nghiệm thu WP2, tiếp theo WP3)
+# Checkpoint nhiệm vụ (WP2 đã nghiệm thu, đang lập plan WP3)
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
-- Package và vai trò: WP2 (nghiệm thu); coordinator. Model thật claude-opus-5-5 (chủ dự án
+- Package và vai trò: WP3 (lập plan); coordinator. Model thật claude-opus-5-5 (chủ dự án
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 5fafeaee72509c6110a907458643bf7582dad81a (WP2-FIXB3-FREEZE, mã
-    nguồn WP2 được nghiệm thu).
+  - HEAD = origin/main = 3ead61edb1316fe926fe969988f595792590cd41 (WP2-ACCEPT, chỉ có
+    record). Mã nguồn WP2 được nghiệm thu là 5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest mã nguồn chính thức e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4).
-  - Chưa commit (chỉ trong handoff): board, STATE, NEXT_ACTION, checkpoint này, các record
-    WP2-GATE4, WP2-AUDIT-A2 (lần 3), WP2-AUDIT-B4 và WP2-ACCREC, báo cáo
-    WP2_RECHECK_A4/B4 cùng bằng chứng, và record nghiệm thu trong WP2_HANDOFF. Task commit
-    WP2-ACCEPT sẽ đóng băng các file này.
+    (WP2-GATE4; commit nghiệm thu không làm đổi).
+  - Chưa commit (chỉ trong handoff): board, STATE, checkpoint này, kết quả và bằng chứng
+    của WP2-ACCEPT. Các file này vào commit kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -55,13 +53,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chat phải đúng là message dự định.
 - WP2-ACCREC (light) đã xong: record nghiệm thu trong WP2_HANDOFF (EN/VI), sửa dòng FR-13
   về bản xem trước và cập nhật số liệu; preflight 0 (tác giả tự báo).
-- Đang chạy: WP2-ACCEPT (committer) commit các record nghiệm thu.
+- WP2-ACCEPT đã xong: commit 3ead61e đã push (137 đường dẫn, chỉ trong handoff, mọi kiểm
+  tra 0). WP2 đã nghiệm thu; package đang hoạt động trên board là WP3.
+- WP3-PLAN (planner opus) đã xong ([plan](tasks/WP3-PLAN.md)): 16 task T00–T15 trong ba
+  checkpoint, mỗi task có commit đóng băng; WP3-GATE; hai audit theo mảng bằng opus mới;
+  commit nghiệm thu. Coordinator đã áp dụng plan và các lựa chọn mặc định thông thường
+  (`coordinator_decisions` trên board).
+- Câu hỏi đang chờ chủ dự án (`pending_owner_question` trên board): F-1 tự nộp khi đến hạn
+  cho kỳ không có dữ liệu đã lưu; F-2 vòng đời của khoản trừ thiếu giờ đang chờ; F-3 màn
+  trạng thái vận hành của admin so với ranh giới quyền riêng tư; F-4 phạm vi của
+  `automation_active_from`; F-5 tổng trên PDF (chỉ làm rõ, cứ làm theo đề xuất trừ khi chủ
+  dự án phản đối). Cần trước T05 (F-2), T10 (F-1, F-4) và T13 (F-3); T00–T04 vẫn tiếp tục.
+- WP3-T00 đã xong (tác giả tự báo): chống chèn công thức CSV (R2; đỏ 4, xanh 26/26, bản
+  đối chứng bị phát hiện) và sửa cổng smoke (A4-01; tự chọn cổng trống khi không đặt
+  `SMOKE_PORT`; mọi lần thoát lỗi đều in dòng FAIL); verify 619 test, không có cảnh báo API
+  lỗi thời; digest 81567e53….
+- Đang chạy: WP3-T00-FREEZE (committer), commit luôn các record handoff đang chờ.
 - Bước tiếp:
-  1. Ghi kết quả WP2-ACCEPT (SHA commit, push).
-  2. Chuyển board sang WP3 và giao lập plan package WP3 (planner opus) từ
-     [lộ trình](../../docs/09_IMPLEMENTATION_ROADMAP.vi.md) và
-     [WP3_IMPLEMENT](../prompts/WP3_IMPLEMENT.vi.md), kèm các mục chuyển tiếp ở trên.
-  3. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
+  1. Ghi kết quả commit đóng băng T00, rồi giao WP3-T01 (migration 0004 và cấu hình,
+     worker-high, opus).
+  2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
 - Vướng mắc: không có. Rủi ro: bộ phân loại có thể chặn `git add` của committer;
@@ -78,5 +89,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP2-ACCEPT.
+- Process còn sống: chỉ WP3-T00-FREEZE.
 - Usage/reset: không quan sát được.

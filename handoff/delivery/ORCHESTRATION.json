@@ -13,8 +13,8 @@
     "real_sending",
     "production_activation"
   ],
-  "active_package": "WP2",
-  "phase": "wp2-acceptance",
+  "active_package": "WP3",
+  "phase": "wp3-implementation",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-ACCEPT",
+  "next_task_id": "WP3-T00-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -63,7 +63,7 @@
       "observation": "WP2-T11-FREEZE: the classifier denied a combined call that staged the set and printed a CSV sample and the staged fixtures diff with test-only credit seeding ('Credential Leakage'). The coordinator's brief had asked the committer to read those files, which led it to print them beside staging. Future briefs should rely on the precommit scan and avoid printing seeding or secret-like test content in the committer transcript; this is hygiene for later commits, not a retry of this one."
     }
   ],
-  "pending_owner_question": null,
+  "pending_owner_question": "WP3-PLAN section F (asked 2026-10-04): F-1 should the deadline auto-submit a period with no saved entries (recommended yes, with default labels, OT pending, review-pending banner, no deficit)? F-2 a pending deficit debit is re-evaluated only by a later finalized revision, no background posting (recommended)? F-3 admin operations status shows only configuration, heartbeat, activation and system-wide job-state totals, without user, period or recipient (recommended)? F-4 one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant (recommended)? F-5 PDF total = credited OT total in h:mm over 14 days, hidden when Show OT is off (proceeds unless the owner objects). Needed before T05 (F-2), T10 (F-1, F-4), T13 (F-3); T00-T04 continue.",
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -72,12 +72,13 @@
     "WP2-ADV-REVIEW ADV-A-05 (Info, not governance): otLeave duplicates the ledger append path; optional consolidation in a later WP2 task."
   ],
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
+  "wp3_plan": "handoff/delivery/tasks/WP3-PLAN.md",
   "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
   "updated_at": "2026-10-04",
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "5fafeaee72509c6110a907458643bf7582dad81a",
+    "last_commit": "3ead61edb1316fe926fe969988f595792590cd41",
     "unpushed": []
   },
   "owner_decisions": [
@@ -129,6 +130,16 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "WP3-PLAN (opus planner) sections B, C, E and the routine defaults after section F",
+      "decision": "Adopt the WP3 plan: T00-T15 in order with one writer and a freeze after each, the plan's routing (opus for T01, T05, T08, T09; worker-high for integrity tasks), the common acceptance checks 1-7, the new dependencies and the package-final gate. Adopt the routine defaults within the contracts: raw-image signature upload with a route-scoped limit; private data directory outside Dropbox; capture adapter as the default; SMTP adapter tested only against a loopback sink; CLI run-jobs --once --now refused in production; h:mm on the PDF; per-day deficit choice deduct|waive. R2 hardening (leading whitespace before a CSV trigger character) is a security hardening of the WP2 export, not a business-rule change. F-1..F-4 go to the owner with the planner's recommendations; T00-T04 proceed meanwhile; F-2 is required before T05, F-1/F-4 before T10, F-3 before T13; F-5 proceeds as recommended unless the owner objects."
+    },
+    {
+      "date": "2026-10-04",
+      "basis": "WP2-GATE4 PASS and final fresh audits WP2-AUDIT-A2 attempt 3 PASS and WP2-AUDIT-B4 PASS (no findings) on 5fafeae / e61fa914; WP2-ACCEPT commit 3ead61e",
+      "decision": "WP2 accepted. STATE marks WP2 implemented/passed with carried risks R1-R4, A3-01, A4-01, ADV-A-05, F1 and the prospective calendar reassignment owner option. The board advances to WP3; WP3-PLAN (opus planner) decomposes the package and must address the WP2 carry-forward and build the WP2 audit lessons (UI tokens, season-independent tests, privacy boundary, red-first and mutation checks) into each task's acceptance checks."
+    },
     {
       "date": "2026-10-02",
       "basis": "WF-REVIEW report and WF-CAPS lookup",
@@ -4292,9 +4303,139 @@
       "id": "WP2-ACCEPT",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-ACCREC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0f1ea7ec5fe4da4a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-ACCEPT.md",
+        "handoff/delivery/evidence/WP2-ACCEPT"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-ACCEPT.md",
+      "report": "handoff/delivery/tasks/WP2-ACCEPT.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-ACCEPT/checks.txt",
+        "handoff/delivery/evidence/WP2-ACCEPT/commit-message.txt"
+      ],
+      "baseline_commit": "5fafeaee72509c6110a907458643bf7582dad81a",
+      "branch": "main",
+      "commit_sha": "3ead61edb1316fe926fe969988f595792590cd41",
+      "pushed": true,
+      "source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Committed and pushed 3ead61edb1316fe926fe969988f595792590cd41 on main (parent 5fafeae; remote SHA identical). 137 handoff-only paths; digest e61fa914 unchanged; node, digest, precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight all exit 0; 6 screenshots viewed; no EOF fix, no blockers. The brief Results and the WP2-ACCEPT evidence stay uncommitted for the next commit.",
+      "next_action": "None; WP2 accepted. The coordinator advances the board to WP3 (WP3-PLAN)."
+    },
+    {
+      "id": "WP3-PLAN",
+      "package": "WP3",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP2-ACCEPT"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a1159063dac713d97",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-PLAN.md",
+        "handoff/delivery/evidence/WP3-PLAN"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-PLAN.md",
+      "report": "handoff/delivery/tasks/WP3-PLAN.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-PLAN/00-commands.txt",
+        "handoff/delivery/evidence/WP3-PLAN/01-template-form-cells.txt"
+      ],
+      "baseline_commit": "3ead61edb1316fe926fe969988f595792590cd41",
+      "source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered: 16 tasks T00-T15 in three checkpoints, each with a freeze commit; package-final WP3-GATE (verifier) on the T15 freeze; two fresh opus area audits (A finalization/ledger/revisions/files/PDF/privacy; B jobs/delivery/deadline/reminders/GET/UI/visual); accept commit. New dependencies pdf-lib 1.17.1, @pdf-lib/fontkit 1.1.1, dejavu-fonts-ttf 2.37.3, nodemailer 10.0.14; dev pdfjs-dist 6.4.299, smtp-server 3.19.17, @types/smtp-server 3.5.13 (none deprecated). Carry-forward: R2 and A4-01 in T00, R4 in T05/T06, R1 in T06, A3-01 in T13; ADV-A-05, B4 optional, magic links, ntfy deferred; calendar reassignment not planned. Owner decisions F-1 (T10), F-2 (T05), F-3 (T13), F-4 (T10); F-5 clarification proceeds unless the owner objects. T00-T04 can start now.",
+      "next_action": "None; tasks registered incrementally from the plan."
+    },
+    {
+      "id": "WP3-T00",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-PLAN"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a631cff0abb66d572",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/otEvidence.ts",
+        "tests/integration/evidence-export.test.ts",
+        "scripts/smoke-built-server.mjs",
+        "handoff/delivery/tasks/WP3-T00.md",
+        "handoff/delivery/evidence/WP3-T00"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T00.md",
+      "report": "handoff/delivery/tasks/WP3-T00.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T00/01-r2-red.txt",
+        "handoff/delivery/evidence/WP3-T00/02-r2-green.txt",
+        "handoff/delivery/evidence/WP3-T00/03-r2-mutation-red.txt",
+        "handoff/delivery/evidence/WP3-T00/04-r2-restored-green.txt",
+        "handoff/delivery/evidence/WP3-T00/05-smoke-port-probe.txt",
+        "handoff/delivery/evidence/WP3-T00/06-verify.txt"
+      ],
+      "baseline_commit": "3ead61edb1316fe926fe969988f595792590cd41",
+      "source_digest": "81567e5370367a07f90ade63f7c41a029d0ec9c677bcafb09365cd0dee1966e2",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: R2 FORMULA_TRIGGER now neutralizes a first non-whitespace =,+,-,@ or a leading tab/CR/LF; other cells byte-identical; red 4 failed/22 passed, green 26/26, mutation 4 failed, restored 26/26. A4-01: smoke picks an OS-assigned free loopback port when SMOKE_PORT is unset, uses an explicit SMOKE_PORT as given, health wait needs status ok with a 2 s fetch timeout, every non-zero exit prints a FAIL line; probe with 3100/3198 held: unset exit 0, SMOKE_PORT=3100 exit 1 with FAIL, invalid exit 1. verify with deprecation tracing exit 0, 32 files/619 tests, 0 deprecation lines. No deviations.",
+      "next_action": "None; WP3-T00-FREEZE."
+    },
+    {
+      "id": "WP3-T00-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T00"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -4308,22 +4449,32 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a8247f03feb975598",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP2-ACCEPT.md",
-        "handoff/delivery/evidence/WP2-ACCEPT"
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a8247f03feb975598",
+          "outcome": "not committed: validate_orchestration.py exit 1 'Commit result incomplete: WP2-ACCEPT' (the coordinator had recorded commit_sha without branch/pushed). Digest, precommit, diff --check and JSON parse exit 0; 23 paths staged. The coordinator fixed the board record."
+        }
       ],
-      "prompt": "handoff/delivery/tasks/WP2-ACCEPT.md",
-      "report": "handoff/delivery/tasks/WP2-ACCEPT.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T00-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T00-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T00-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T00-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "5fafeaee72509c6110a907458643bf7582dad81a",
-      "source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
+      "baseline_commit": "3ead61edb1316fe926fe969988f595792590cd41",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "81567e5370367a07f90ade63f7c41a029d0ec9c677bcafb09365cd0dee1966e2",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP2 acceptance records (handoff only), then the coordinator advances the board to WP3."
+      "next_action": "Re-stage the set (the board changed) and rerun every check from the validator on; commit and push."
     },
     {
       "id": "WP2-AUDIT-B",

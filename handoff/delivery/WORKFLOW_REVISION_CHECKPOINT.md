@@ -1,19 +1,17 @@
-# Mission checkpoint (WP2 acceptance, WP3 next)
+# Mission checkpoint (WP2 accepted, WP3 planning)
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
-- Active package and role: WP2 (acceptance); coordinator. Actual model claude-opus-5-5
+- Active package and role: WP3 (planning); coordinator. Actual model claude-opus-5-5
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 5fafeaee72509c6110a907458643bf7582dad81a (WP2-FIXB3-FREEZE, the
-    accepted WP2 source).
+  - HEAD = origin/main = 3ead61edb1316fe926fe969988f595792590cd41 (WP2-ACCEPT, records
+    only). The accepted WP2 source is 5fafeaee72509c6110a907458643bf7582dad81a.
   - Source digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4).
-  - Uncommitted (handoff only): the board, STATE, NEXT_ACTION, this checkpoint, the
-    WP2-GATE4, WP2-AUDIT-A2 (attempt 3), WP2-AUDIT-B4 and WP2-ACCREC records, the
-    WP2_RECHECK_A4/B4 reports with their evidence, and the WP2_HANDOFF acceptance record.
-    The WP2-ACCEPT commit task freezes them.
+    (WP2-GATE4; unchanged by the accept commit).
+  - Uncommitted (handoff only): the board, STATE, this checkpoint, the WP2-ACCEPT results
+    and evidence. They go into the next commit.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -49,13 +47,24 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   must use `git add -A` and the chat Commit description must equal the intended message.
 - WP2-ACCREC (light) is done: the WP2_HANDOFF acceptance record (EN/VI), the corrected
   FR-13 preview line and updated figures; preflight 0 (author-reported).
-- Running: WP2-ACCEPT (committer) commits the acceptance records.
+- WP2-ACCEPT is done: commit 3ead61e pushed (137 handoff-only paths, all checks 0). WP2
+  is accepted; the board's active package is WP3.
+- WP3-PLAN (opus planner) is done ([plan](tasks/WP3-PLAN.md)): 16 tasks T00–T15 in three
+  checkpoints, each frozen; WP3-GATE; two fresh opus area audits; accept commit. The
+  coordinator adopted the plan and its routine defaults (board `coordinator_decisions`).
+- Owner question pending (board `pending_owner_question`): F-1 deadline auto-submit of a
+  period with no saved entries; F-2 pending deficit-debit lifecycle; F-3 admin operations
+  status versus privacy; F-4 scope of `automation_active_from`; F-5 PDF total
+  (clarification, proceeds unless the owner objects). Needed before T05 (F-2), T10 (F-1,
+  F-4) and T13 (F-3); T00–T04 continue.
+- WP3-T00 is done (author-reported): R2 CSV hardening (red 4, green 26/26, mutation
+  caught) and the A4-01 smoke-port fix (free port when unset; FAIL line on every non-zero
+  exit); verify 619 tests, 0 deprecation lines; digest 81567e53….
+- Running: WP3-T00-FREEZE (committer), which also commits the pending handoff records.
 - Next action:
-  1. Record WP2-ACCEPT (commit SHA, push).
-  2. Advance the board to WP3 and dispatch the WP3 package plan (opus planner) from the
-     [roadmap](../../docs/09_IMPLEMENTATION_ROADMAP.md) and
-     [WP3_IMPLEMENT](../prompts/WP3_IMPLEMENT.md), with the carry-forward items above.
-  3. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
+  1. Record the T00 freeze, then dispatch WP3-T01 (migration 0004 and configuration,
+     worker-high, opus).
+  2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
 - Blocker: none. Risk: the classifier may deny a committer `git add`; the coordinator does
@@ -71,5 +80,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP2-ACCEPT only.
+- Live processes: WP3-T00-FREEZE only.
 - Usage/reset: not observable.

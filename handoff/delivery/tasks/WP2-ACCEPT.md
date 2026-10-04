@@ -107,5 +107,9 @@ Push per the profile. Append these results here:
 Evidence goes in handoff/delivery/evidence/WP2-ACCEPT/. Return at most 150 words.
 
 ## Results
-
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5
+- Pre-HEAD 5fafeaee72509c6110a907458643bf7582dad81a; post-HEAD 3ead61edb1316fe926fe969988f595792590cd41.
+- Commit 3ead61e, pushed to origin/main; remote SHA 3ead61edb1316fe926fe969988f595792590cd41.
+- Digest e61fa914... unchanged; staged 137 (all handoff/).
+- Checks: node v24.21.0, digest, precommit, diff --check, JSON, orchestration, recovery, preflight all exit 0; 6 screenshots viewed.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP2-ACCEPT/.

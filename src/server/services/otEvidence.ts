@@ -84,8 +84,11 @@ export function provisionalSummary(db: Db, clock: Clock, user: SessionUser): Pro
 
 export type CsvValue = string | number | boolean | null | undefined;
 
-/** Cells that a spreadsheet may read as a formula: = + - @, a tab, a CR (and LF). */
-const FORMULA_TRIGGER = /^[=+\-@\t\r\n]/;
+/**
+ * Cells that a spreadsheet may read as a formula: a first non-whitespace character of
+ * = + - @, or a leading tab, CR or LF.
+ */
+const FORMULA_TRIGGER = /^(?:\s*[=+\-@]|[\t\r\n])/;
 
 /** Text starting with a formula trigger is prefixed with an apostrophe so it stays text. */
 export function neutralizeCsvText(text: string): string {
