@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = b89f8a8122781b0e8c7cf1a0086089b96713b17b (WP3-T04-FREEZE).
+  - HEAD = origin/main = c289375a8d80c78ea9f3a9e54ff55a795f99ec7b (WP3-T07-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 69e790e0… (T04, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T04-FREEZE, brief WP3-T07. Các file này vào commit đóng băng kế tiếp.
+    hiện tại của WP3 là 3f4a016d… (T07, committer đã đối chiếu; WP3 chưa có gate).
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả attempt 2 của
+    T07-FREEZE, brief WP3-T05. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -117,10 +117,33 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 - WP3-T07-RECON đã xong: worker sửa một file test sau khi tính digest; digest của cây file
   hiện tại là 3f4a016d…, ổn định; các file thay đổi đúng bằng bộ file của T07; verify đạt
   (906 test) và precommit sạch.
-- Đang chạy: WP3-T07-FREEZE attempt 2 (committer) với digest 3f4a016d….
+- WP3-T07-FREEZE đã commit và push, SHA c289375 (attempt 2; file lock thêm 20 gói, không
+  gỡ gói nào; mọi kiểm tra 0).
+- Chủ dự án đã trả lời F-1..F-5 ngày 2026-10-04 (nguyên văn trong `owner_decisions` trên
+  board): F-2, F-4 và F-5 theo đề xuất; F-1 có điều chỉnh (kỳ trống vẫn tự nộp theo nhãn
+  mặc định, không tính OT, dòng "nhân viên chưa duyệt" mặc định tắt và có tùy chọn bật trong
+  settings, không tính thiếu giờ); F-3 có điều chỉnh (admin xem được mọi thứ trừ chi tiết
+  timesheet của từng người; mỗi người có thể chia sẻ quyền chỉ xem hoặc được sửa timesheet
+  của mình). F-1 và F-3 làm thay đổi quy tắc trong tài liệu gốc; F-3 thêm tính năng chia
+  sẻ.
+- WP3-REQ (planner opus) đã xong ([báo cáo](tasks/WP3-REQ.md)): bản soạn EN/VI cho tài
+  liệu gốc, bảng định nghĩa "chi tiết timesheet", đặc tả tính năng chia sẻ (FR-17/AC-16,
+  bảng cấp quyền ở migration 0006, đường dẫn `/api/shared/:ownerId` chỉ mở các route được
+  phép, bảng quyền), ảnh hưởng (task bù T07B cho tùy chọn hiện dòng "chưa duyệt"; T06 phải
+  ghi khoản OT đầu tiên cho ngày chưa có bút toán gốc) và plan sửa đổi (WP3-DOC, T07B,
+  T13D, T13A, T13B, T13C nằm trong WP3; thêm mục 13–16 vào gate). Coordinator đã áp dụng,
+  tùy theo câu trả lời của chủ dự án.
+- Câu hỏi đang chờ chủ dự án (`pending_owner_question` trên board): F-Q1..F-Q6, cần trước
+  WP3-DOC (sau khi T06 đóng băng).
+- WP3-T05 đã xong (tác giả tự báo): giao dịch ký trong một transaction IMMEDIATE (lệch
+  hash/phiên bản trả 409, thiếu dữ liệu trả 422, tạo bản nộp đã ký với thời điểm ký thật,
+  ghi sổ OT chỉ qua ledger.ts, lưu mọi kết quả kể cả dòng "chờ" theo F-2, đặt
+  finalized_revision_no, tạo dòng job, ghi audit; gửi lại y hệt thì trả kết quả cũ); race
+  20/20; 13/13 bản đối chứng bị phát hiện; verify 930 test; digest c380f302….
+- Đang chạy: WP3-T05-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T07. Mọi task còn lại đều phụ thuộc T05, mà T05 cần câu
-     trả lời F-2 của chủ dự án: sau commit này coordinator chờ chủ dự án.
+  1. Ghi kết quả commit đóng băng T05; sau đó WP3-T06 (brief đã sẵn: bản sửa với quy tắc
+     ghi OT lần đầu, R1, duyệt muộn, gửi lại); WP3-DOC sau khi chủ dự án trả lời F-Q.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -138,5 +161,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T07-FREEZE attempt 2.
+- Process còn sống: chỉ WP3-T05-FREEZE.
 - Usage/reset: không quan sát được.

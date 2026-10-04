@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = b89f8a8122781b0e8c7cf1a0086089b96713b17b (WP3-T04-FREEZE).
+  - HEAD = origin/main = c289375a8d80c78ea9f3a9e54ff55a795f99ec7b (WP3-T07-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 69e790e0… (T04, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest 3f4a016d… (T07, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T04-FREEZE results and
-    evidence, the WP3-T07 brief. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T07-FREEZE attempt-2
+    results, the WP3-T05 brief. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -106,10 +106,31 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - WP3-T07-RECON is done: the worker edited a test after its digest; the current tree's
   digest 3f4a016d… is stable, the changed set is exactly T07's, verify passes (906 tests)
   and the precommit check is clean.
-- Running: WP3-T07-FREEZE attempt 2 (committer) with digest 3f4a016d….
+- WP3-T07-FREEZE is committed and pushed as c289375 (attempt 2; lockfile +20 packages,
+  none removed; all checks 0).
+- The owner answered F-1..F-5 on 2026-10-04 (verbatim in board `owner_decisions`): F-2,
+  F-4 and F-5 as recommended; F-1 modified (empty periods auto-submit with default labels,
+  OT not counted, the "employee review pending" notice off by default with a settings
+  option, no deficit); F-3 modified (the admin sees everything except each person's
+  timesheet details; individuals may share view-only or edit access to their timesheets).
+  F-1 and F-3 change canonical rules; F-3 adds a sharing feature.
+- WP3-REQ (opus planner) is done ([report](tasks/WP3-REQ.md)): exact EN/VI canonical
+  drafts, a "timesheet details" table, the sharing specification (FR-17/AC-16, grants in
+  migration 0006, an allowlisted `/api/shared/:ownerId` mount, an authorization matrix),
+  the impact (delta task T07B for the notice setting; T06 posts a first credit for a day
+  without an original) and a revised plan (WP3-DOC, T07B, T13D, T13A, T13B, T13C inside
+  WP3; gate items 13–16). The coordinator adopted it subject to the owner's answers.
+- Owner question pending (board `pending_owner_question`): F-Q1..F-Q6, needed before
+  WP3-DOC (after the T06 freeze).
+- WP3-T05 is done (author-reported): one IMMEDIATE sign-off transaction (hash/version
+  409, input 422, signed revision with real signed_at, ledger posting through ledger.ts,
+  every outcome persisted incl. F-2 pending lines, finalized_revision_no, job rows,
+  audit; identical retry replays); race 20/20; 13/13 mutations caught; verify 930 tests;
+  digest c380f302….
+- Running: WP3-T05-FREEZE (committer).
 - Next action:
-  1. Record the T07 freeze. Every remaining task now depends on T05, which needs the
-     owner's F-2 answer: the coordinator waits for the owner after this freeze.
+  1. Record the T05 freeze; then WP3-T06 (brief ready: corrections with the first-credit
+     rule, R1, late review, resend); WP3-DOC after the owner's F-Q answers.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -126,5 +147,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T07-FREEZE attempt 2 only.
+- Live processes: WP3-T05-FREEZE only.
 - Usage/reset: not observable.

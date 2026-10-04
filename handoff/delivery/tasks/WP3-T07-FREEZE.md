@@ -137,3 +137,9 @@ Self-reported model: claude-sonnet-5-5. Attempt 1: STOPPED, no commit, no push.
 - Digest (scripts/source-digest.mjs, exit 0): 3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6 (637 files); expected 971e7843469a9829e45fc608232daf56bbab64e66904809c7de52d800037b8aa. Mismatch stops the commit per the brief.
 - Not run: git add, precommit, diff check, JSON parse, validators, push.
 - Evidence: handoff/delivery/evidence/WP3-T07-FREEZE/01-node-version.txt, 02-digest.txt.
+
+### Attempt 2
+
+- Pre-HEAD = origin/main = b89f8a8122781b0e8c7cf1a0086089b96713b17b; post-HEAD = c289375a8d80c78ea9f3a9e54ff55a795f99ec7b; pushed; remote SHA c289375a8d80c78ea9f3a9e54ff55a795f99ec7b.
+- Digest 3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6; staged 41 files; lockfile +20 packages, 0 removed, none downgraded.
+- Exits: node v24.21.0, digest, precommit, diff check, JSON parse, validate_orchestration, check_recovery, preflight all 0. No blockers.

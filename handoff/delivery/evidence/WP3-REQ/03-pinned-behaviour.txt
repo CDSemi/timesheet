@@ -1,0 +1,61 @@
+# Source and tests that pin current behaviour
+$ grep -n Employee review pending / review_pending / banner
+src/server/http/schemas.ts:274:  sign_off: z.enum(['signed', 'review_pending']).optional(),
+src/server/pdf/timesheetPdf.ts:274:    canvas.text('Employee review pending', MARGIN + 12, y + 5, 11, true);
+src/server/services/submissionSettings.ts:444:export type PreviewSignOff = 'signed' | 'review_pending';
+src/server/services/submissionSettings.ts:448:  review_pending: 'Automatic submission - employee review pending',
+tests/integration/pdf-render.test.ts:284:    expect(content.text).not.toContain('Employee review pending');
+tests/integration/pdf-render.test.ts:302:    expect(content.text).toContain('Employee review pending');
+tests/integration/submission-settings.test.ts:478:      sign_off: 'review_pending',
+exit 0
+$ grep -n origin === 'automatic' src/server/pdf/timesheetPdf.ts
+232:  if (input.origin === 'automatic' && input.signedAt !== null) {
+261:  const originLabel = input.origin === 'manual' ? 'manual sign-off' : 'automatic submission';
+263:  const revisionLine = `Revision ${input.revisionNo} (${originLabel})`;
+271:  if (input.origin === 'automatic') {
+330:  const footer = `${input.submissionId}  |  Revision ${input.revisionNo}  |  ${originLabel}`;
+exit 0
+$ grep -n SNAPSHOT_VERSION/schema_version tests
+tests/domain/canonical.test.ts:19:  SNAPSHOT_VERSION,
+tests/domain/canonical.test.ts:205:    schema_version: SNAPSHOT_VERSION,
+tests/domain/canonical.test.ts:274:    expect(() => normalizeReviewSnapshot(snapshot({ schema_version: 2 }))).toThrow(CanonicalError);
+tests/integration/pdf-render.test.ts:88:    schema_version: 1,
+tests/integration/review-payload.test.ts:173:    expect(payload.schema_version).toBe(1);
+tests/support/fixtures.ts:115:  schema_version: number;
+src/domain/snapshot.ts:13:export const SNAPSHOT_VERSION = 1;
+src/domain/snapshot.ts:91:  schema_version: number;
+src/domain/snapshot.ts:188:  if (input.schema !== SNAPSHOT_SCHEMA || input.schema_version !== SNAPSHOT_VERSION) {
+exit 0
+$ grep -n actor_is_self src tests
+src/client/api.ts:497:  actor_is_self: boolean;
+src/client/HistoryScreen.tsx:16:        {!event.actor_is_self && <span className="badge">by someone else</span>}
+src/server/services/history.ts:82:      actor_is_self: row.actor_user_id === user.id,
+tests/integration/history.test.ts:65:      actor_is_self: true,
+tests/integration/history.test.ts:72:      expect(event.actor_is_self === true || event.actor_user_id === null).toBe(true);
+exit 0
+$ grep -n audit actor=owner in timesheetCommands
+124:    actorUserId: ctx.user.id,
+125:    ownerUserId: ctx.user.id,
+exit 0
+$ grep -n admin inventory pins tests/integration/isolation.test.ts
+275:  it('exposes exactly the reviewed account and company-calendar routes', () => {
+290:      expect(route, route).not.toMatch(/timesheet|day|session|ledger|leave|history|evidence|export|policy|password/i);
+294:  it('has an admin router source that reaches only account services and tables', () => {
+298:      expect(module, module).not.toMatch(/timesheet|dayEntries|ledger|otLeave|otEvidence|history|periods|policies|attendance/i);
+exit 0
+$ grep -n pending_days source
+449:      pending_days: days.filter((day) => day.calculation !== null && ['incomplete', 'incomplete_breaks'].includes(day.calculation.status)).length,
+exit 0
+$ grep -n postCorrection original requirement
+359:    if (original === undefined) throw notFound('Ledger entry');
+exit 0
+$ grep -n created_by / actor columns in 0004
+85:  created_by TEXT NOT NULL REFERENCES users(id),
+123:  actor_user_id TEXT REFERENCES users(id),
+133:  CHECK (origin <> 'deadline' OR (revision_kind = 'original' AND review_state = 'pending' AND actor_user_id IS NULL)),
+134:  CHECK (origin <> 'employee' OR actor_user_id IS NOT NULL),
+305:  decision_actor_user_id TEXT REFERENCES users(id),
+315:  CHECK ((decision IS NULL) = (decision_actor_user_id IS NULL)),
+340:CREATE TRIGGER delivery_attempts_decision_once BEFORE UPDATE OF decision, decision_actor_user_id, decided_at ON delivery_attempts
+342:  OR NEW.decision_actor_user_id IS NOT OLD.decision_actor_user_id OR NEW.decided_at IS NOT OLD.decided_at)
+exit 0

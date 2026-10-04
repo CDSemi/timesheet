@@ -1,0 +1,71 @@
+# Mutation checks: NODE_EXE=<node24> python handoff/delivery/evidence/WP3-T05/mutate.py.txt <out> (exit=0).
+# Each mutation is computed in memory before the file is opened for writing; the original bytes are restored and compared by SHA-256.
+
+baseline sha256 src/server/services/finalization.ts d589457d0f95565dc0702f036b8b7f7f2a0485074cc5af07cd4b22dea27d413c
+baseline sha256 src/server/services/revisionLedger.ts 255b8844537eee0dba279868e55fdd6c5b2555d4596da82a2f1af6e1d59eb918
+baseline exit=0 Test Files  2 passed (2) | Tests  24 passed (24)
+M1 the reviewed hash is not compared (stale content signs): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 22 passed (24)
+    failing: answers 409 when a day was edited after the review, and writes nothing
+    failing: answers 409 when the signature changed after the review (same timesheet version)
+M2 a finalized period is not detected (no idempotent replay, no already_finalized): exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  3 failed | 21 passed (24)
+    failing: an identical retry returns the same revision and writes nothing; a different one is a conflict
+    failing: two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+    failing: two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds)
+M3 a pending debit is not persisted as a revision line (R4): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 22 passed (24)
+    failing: binds each debit to the balance the review showed: credits of the same period post after the debits
+    failing: keeps a debit the balance cannot cover pending, persists the line and never posts it in the background
+M4 finalized_revision_no is not set (provisional minutes stay): exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  8 failed | 16 passed (24)
+    failing: a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the review
+    failing: an identical retry returns the same revision and writes nothing; a different one is a conflict
+    failing: creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step
+    failing: finalizes a period with no saved entries, creating its timesheet row
+    failing: keeps a debit the balance cannot cover pending, persists the line and never posts it in the background
+    failing: posted plus provisional minutes never double count
+M5 original credit keys depend on the revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  5 failed | 19 passed (24)
+    failing: a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the review
+    failing: creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step
+    failing: rolls everything back when a posting fails inside the transaction
+    failing: two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+    failing: two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds)
+M6 the transaction is DEFERRED instead of IMMEDIATE: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  3 failed | 21 passed (24)
+    failing: a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the review
+    failing: two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+    failing: two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds)
+M7 the audit event carries the signer name: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 23 passed (24)
+    failing: creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step
+M8 incomplete evidence needs no acknowledgement: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 23 passed (24)
+    failing: requires the explicit acknowledgement when evidence is incomplete
+M9 deficit choices are not checked: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 22 passed (24)
+    failing: choose mode: a chosen debit posts, a waived one is recorded as waived, and every choose day needs a choice
+    failing: refuses a choice in a mode without choices
+M10 credits post before debits (a debit meets a balance the review did not show): exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  5 failed | 19 passed (24)
+    failing: a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the review
+    failing: binds each debit to the balance the review showed: credits of the same period post after the debits
+    failing: keeps a debit the balance cannot cover pending, persists the line and never posts it in the background
+    failing: two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+    failing: two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds)
+M11 a retry with another signer name replays: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  2 failed | 22 passed (24)
+    failing: an identical retry returns the same revision and writes nothing; a different one is a conflict
+    failing: two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+M12 the signature image is not required: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 23 passed (24)
+    failing: refuses a sign-off without a signature image with 422 and writes nothing
+M13 the pending variant is recorded as waived: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 22 passed (24)
+    failing: binds each debit to the balance the review showed: credits of the same period post after the debits
+    failing: keeps a debit the balance cannot cover pending, persists the line and never posts it in the background
+after restore exit=0 Test Files  2 passed (2) | Tests  24 passed (24)
+caught 13 of 13
+final sha256 src/server/services/finalization.ts d589457d0f95565dc0702f036b8b7f7f2a0485074cc5af07cd4b22dea27d413c
+final sha256 src/server/services/revisionLedger.ts 255b8844537eee0dba279868e55fdd6c5b2555d4596da82a2f1af6e1d59eb918

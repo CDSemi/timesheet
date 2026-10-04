@@ -1,0 +1,37 @@
+# Canonical statements contradicted or refined by F-1..F-5 (EN)
+--- docs/04_UX_AND_SETTINGS.md:40
+Current/future draft edits audit automatically without a reason; old/finalized edits require one. Review flags attendance assumptions, incomplete OT and proposed deficits. The employee may acknowledge incomplete optional clock evidence and submit attendance. Invalid records require correction or explicit audited exclusion. Automatic submission uses valid saved attendance and marks unresolved OT pending.
+--- docs/04_UX_AND_SETTINGS.md:52
+PDF: company header, salaried-exempt timesheet title, employee, payroll date, two Monday–Sunday blocks, dates/categories, optional time/OT rows, total including both Sundays, employee name/image/date and blank manager signature/date unless a real future approval exists. Use US Letter portrait, embedded Unicode fonts, readable long labels and bounded signature image. Remove stale year headers. Add submission/revision identifiers and sanitized filenames.
+--- docs/04_UX_AND_SETTINGS.md:56
+Automatic PDF/email visibly says employee review is pending. Even a preauthorized signature image creates no signed_at or real sign-off. A separate OT evidence report can be exported when the user chooses.
+--- docs/05_SUBMISSION_AND_NOTIFICATIONS.md:19
+- Unsigned draft + enabled switch: finalize valid attendance as **automatic; employee review pending**; post only computable credits/authorized deficits; enqueue PDF/email.
+--- docs/05_SUBMISSION_AND_NOTIFICATIONS.md:24
+Automatic image inclusion is separately off by default. Explicit prior authorization may enable it, but signed_at stays empty and pending review remains visible.
+--- docs/05_SUBMISSION_AND_NOTIFICATIONS.md:26
+Record automation_active_from. By default only periods with due_at on/after activation are eligible; imported history is excluded. Recover missed eligible deadlines chronologically in bounded batches after downtime. Changes default to future periods; applying them to already-overdue drafts requires an explicit choice. Missing sender/recipient blocks delivery and shows a fault, never “sent.”
+--- docs/05_SUBMISSION_AND_NOTIFICATIONS.md:56
+Archived downloads require ownership. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+--- docs/06_TEST_AND_ACCEPTANCE.md:9
+| AC-01 | Two users cannot read/edit each other's times, ledger, PDFs, signatures or tokens by swapping IDs | WP1–WP3 |
+--- docs/06_TEST_AND_ACCEPTANCE.md:15
+| AC-07 | Auto-submit on/off, pending-review disclosure and image settings behave correctly | WP3 |
+--- docs/06_TEST_AND_ACCEPTANCE.md:18
+| AC-10 | PDF has 14 dates, both Sundays in total, real sign date, Unicode, long labels, bounded image and revision IDs | WP3 |
+--- docs/01_PRODUCT_REQUIREMENTS.md:36
+Two isolated test users must work throughout the first release. Administrator status does not automatically grant private timesheet/signature access. Future manager access needs explicit assignment.
+--- docs/03_ARCHITECTURE_AND_DATA.md:33
+Shared pay periods do not contain a single user's signed/sent flag. Names/emails/paths are not identity keys. Admin manages accounts/configuration; access to private employee data requires a separate explicit permission. An admin edit may change a user's display name and role at any time, but the user's calendar only while the user has no timesheet, day entry, session, ledger entry or leave request (otherwise 409 `calendar_in_use`, nothing written). Future manager access uses employee assignments.
+--- docs/03_ARCHITECTURE_AND_DATA.md:37
+Enable foreign keys, WAL, busy timeout and short transactions. Validate ownership/version on each action. Reserve/consume balances atomically. Claim jobs with an atomic update and renewable lease. No network call inside a DB write transaction.
+--- docs/04_UX_AND_SETTINGS.md:12
+| Settings/admin | Personal policy/templates; users, annual holidays, sender and operational status with scoped access |
+--- docs/07_DEPLOYMENT_AND_OPERATIONS.md:36
+Health/readiness expose no private data. An authenticated status view shows runner heartbeat, backup success, disk capacity, delivery backlog/faults/uncertainty and sender setup. Use an independent host alert where available; broken SMTP cannot reliably report itself over that same SMTP.
+--- docs/02_TIME_AND_OT_RULES.md:56
+Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit minutes without N/M. Manual review shows the decision; automatic submission in choose mode leaves it pending with no debit. Insufficient available balance leaves the proposed debit pending, not silently negative. Known credits may still post. A correction that raises a posted debit is a new debit of the increase and follows the same rule.
+--- docs/09_IMPLEMENTATION_ROADMAP.md:25
+Gate: Core browser flows; AC-01/03/04/05 for implemented services; concurrent reservations; partial leave; correction deltas; safe evidence export; admin is not blanket private-data access.
+--- docs/09_IMPLEMENTATION_ROADMAP.md:37
+Gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays. All sending stays dry-run/capture.

@@ -529,6 +529,8 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/settings/submission/preview',
         // Raw PNG/JPEG signature upload (WP3-T02): stores a private image, posts nothing.
         'POST /api/signatures',
+        // Manual sign-off finalization (WP3-T05): posts only through the ledger service inside its transaction.
+        'POST /api/timesheets/:payrollDate/signoff',
         'PUT /api/days/:workDate',
         'PUT /api/sessions/:id',
       ].sort(),

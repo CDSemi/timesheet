@@ -1,0 +1,132 @@
+"""Mutation checks for WP3-T05.
+
+Each mutation is computed in memory first (every pattern must match exactly once); only then
+is the file opened for writing. The two new test files are run, and the original bytes are
+restored in a finally block and compared with the saved SHA-256. Usage (repository root,
+NODE_EXE pointing at the Node 24 binary):
+python mutate.py.txt <out-file>
+"""
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+TESTS = ['tests/integration/finalization.test.ts', 'tests/integration/finalization-concurrency.test.ts']
+SERVICE = 'src/server/services/finalization.ts'
+LINES = 'src/server/services/revisionLedger.ts'
+
+MUTATIONS = [
+    ('M1 the reviewed hash is not compared (stale content signs)', SERVICE, [
+        ('    if (review.payloadHash !== input.reviewedHash) {', '    if (false && review.payloadHash !== input.reviewedHash) {'),
+    ]),
+    ('M2 a finalized period is not detected (no idempotent replay, no already_finalized)', SERVICE, [
+        ('    if (existing !== undefined && existing.finalized_revision_no !== null) {', '    if (false && existing !== undefined && existing.finalized_revision_no !== null) {'),
+    ]),
+    ('M3 a pending debit is not persisted as a revision line (R4)', SERVICE, [
+        ('        lines.push(recordRevisionLine(ledger.db, ledger.clock, { ...base, result: deficitDebitOutcome(result) }));',
+         "        if (result.status !== 'pending') lines.push(recordRevisionLine(ledger.db, ledger.clock, { ...base, result: deficitDebitOutcome(result) }));"),
+    ]),
+    ('M4 finalized_revision_no is not set (provisional minutes stay)', SERVICE, [
+        ('`UPDATE timesheets SET finalized_revision_no = ?, version = version + 1, updated_at = ?', '`UPDATE timesheets SET finalized_revision_no = NULLIF(?, 1), version = version + 1, updated_at = ?'),
+    ]),
+    ('M5 original credit keys depend on the revision', SERVICE, [
+        ('      sourceKey: creditSourceKey(proposal.work_date),', '      sourceKey: `${revisionId}:${creditSourceKey(proposal.work_date)}`,'),
+    ]),
+    ('M6 the transaction is DEFERRED instead of IMMEDIATE', SERVICE, [
+        ('  return writeTransaction(db, (): SignOffResult => {', '  return db.transaction((): SignOffResult => {'),
+        ("    return { status: 'created', finalizedRevisionNo: revisionNo, ...loaded.view };\n  });\n}", "    return { status: 'created', finalizedRevisionNo: revisionNo, ...loaded.view };\n  }).deferred();\n}"),
+    ]),
+    ('M7 the audit event carries the signer name', SERVICE, [
+        ('        signature_sha256: signature.sha256,\n', '        signature_sha256: signature.sha256,\n        signer_name: signer.name,\n'),
+    ]),
+    ('M8 incomplete evidence needs no acknowledgement', SERVICE, [
+        ('    if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) {', '    if (false && payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) {'),
+    ]),
+    ('M9 deficit choices are not checked', SERVICE, [
+        ('    checkChoices(payload.deficit_proposals, choices);\n', ''),
+    ]),
+    ('M10 credits post before debits (a debit meets a balance the review did not show)', SERVICE, [
+        ('    const lines = [...postDeficits(posting, choices), ...postCredits(posting)];', '    const credited = postCredits(posting);\n    const lines = [...postDeficits(posting, choices), ...credited];'),
+    ]),
+    ('M11 a retry with another signer name replays', SERVICE, [
+        ('view.revision.reviewedSha256 !== input.reviewedHash || view.signoff.signerName !== signer.name', 'view.revision.reviewedSha256 !== input.reviewedHash'),
+    ]),
+    ('M12 the signature image is not required', SERVICE, [
+        ("    if (payload.signature === null) {\n      throw new ApiError(422, 'signature_required', 'Upload a signature image before signing off');\n    }\n    const signature = currentSignature(db, user.id);\n    if (signature?.id !== payload.signature.attachment_id || signature.sha256 !== payload.signature.sha256) {",
+         "    const signature = currentSignature(db, user.id) ?? { id: 'missing', sha256: 'missing' };\n    if (payload.signature !== null && (signature.id !== payload.signature.attachment_id || signature.sha256 !== payload.signature.sha256)) {"),
+    ]),
+    ('M13 the pending variant is recorded as waived', LINES, [
+        ("  if (result.status === 'pending') return { outcome: 'pending_insufficient_balance', ledgerEntryId: null };", "  if (result.status === 'pending') return { outcome: 'waived', ledgerEntryId: null };"),
+    ]),
+]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run_tests() -> tuple[int, str]:
+    node = os.environ.get('NODE_EXE', 'node')
+    result = subprocess.run([node, 'node_modules/vitest/vitest.mjs', 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=ROOT)
+    out = result.stdout + result.stderr
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests ', 'Test Files'))]
+    failing = sorted({line.strip().split(' > ')[-1][:110] for line in out.splitlines() if line.strip().startswith('FAIL ') and ' > ' in line})
+    detail = ' | '.join(summary)
+    if failing:
+        detail += '\n    failing: ' + '\n    failing: '.join(failing[:6])
+    return result.returncode, detail
+
+
+def main() -> int:
+    out_path = Path(sys.argv[1])
+    lines = []
+    caught_total = 0
+    names = sorted({name for _, name, _ in MUTATIONS})
+    originals = {name: (ROOT / name).read_bytes() for name in names}
+    baseline = {name: sha(data) for name, data in originals.items()}
+    for name in names:
+        lines.append(f'baseline sha256 {name} {baseline[name]}')
+    code, summary = run_tests()
+    lines.append(f'baseline exit={code} {summary}')
+    if code != 0:
+        out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+        return 1
+    for label, name, edits in MUTATIONS:
+        original = originals[name].decode('utf-8')
+        mutated = original
+        ok = True
+        for old, new in edits:
+            if mutated.count(old) != 1:
+                lines.append(f'{label}: PATTERN COUNT {mutated.count(old)} (not run)')
+                ok = False
+                break
+            mutated = mutated.replace(old, new)
+        if not ok:
+            continue
+        mutated_bytes = mutated.encode('utf-8')
+        target = ROOT / name
+        try:
+            target.write_bytes(mutated_bytes)
+            code, summary = run_tests()
+        finally:
+            target.write_bytes(originals[name])
+        restored = sha(target.read_bytes()) == baseline[name]
+        caught = code != 0
+        caught_total += 1 if caught else 0
+        lines.append(f'{label}: exit={code} {"CAUGHT" if caught else "SURVIVED"} restored={"byte-identical" if restored else "MISMATCH"}\n    {summary}')
+        if not restored:
+            out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+            return 2
+    code, summary = run_tests()
+    lines.append(f'after restore exit={code} {summary}')
+    lines.append(f'caught {caught_total} of {len(MUTATIONS)}')
+    for name in names:
+        lines.append(f'final sha256 {name} {sha((ROOT / name).read_bytes())}')
+    out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+    return 0 if caught_total == len(MUTATIONS) and code == 0 else 3
+
+
+if __name__ == '__main__':
+    sys.exit(main())

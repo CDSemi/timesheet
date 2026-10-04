@@ -1,0 +1,94 @@
+# Red: the two new test files run before any implementation (finalization.ts, revisionLedger.ts and the routes absent).
+# node node_modules/vitest/vitest.mjs run tests/integration/finalization.test.ts tests/integration/finalization-concurrency.test.ts
+# exit=1: finalization.test.ts 20 failed of 20 (route 404); finalization-concurrency.test.ts (3 race tests) fails to load (module absent).
+# One test was added after this run (debit order, 'binds each debit to the balance the review showed'); mutation M10 shows it red.
+
+ ❯ tests/integration/finalization-concurrency.test.ts (0 test)
+ ❯ tests/integration/finalization.test.ts (20 tests | 20 failed) 5445ms
+     × creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step 316ms
+     × finalizes a period with no saved entries, creating its timesheet row 260ms
+     × rolls everything back when a posting fails inside the transaction 280ms
+     × refuses a blank or missing signer name with 422 and writes nothing 264ms
+     × refuses a sign-off without a signature image with 422 and writes nothing 267ms
+     × requires the explicit acknowledgement when evidence is incomplete 278ms
+     × answers 409 for a stale expected version and writes nothing 258ms
+     × answers 409 when a day was edited after the review, and writes nothing 266ms
+     × answers 409 when the signature changed after the review (same timesheet version) 274ms
+     × choose mode: a chosen debit posts, a waived one is recorded as waived, and every choose day needs a choice 271ms
+     × refuses a choice in a mode without choices 278ms
+     × keeps a debit the balance cannot cover pending, persists the line and never posts it in the background 267ms
+     × records no line for a deficit in ignore mode 263ms
+     × an identical retry returns the same revision and writes nothing; a different one is a conflict 253ms
+     × posted plus provisional minutes never double count 259ms
+     × answers 404 for a payroll date of another owner and writes nothing 375ms
+     × an administrator on the same calendar cannot sign the employee timesheet 274ms
+     × requires a signed-in user and an allowed origin 245ms
+     × rejects unknown fields such as user_id 251ms
+     × the finalization status GET writes nothing and reports an unfinalized period 244ms
+ FAIL  tests/integration/finalization-concurrency.test.ts [ tests/integration/finalization-concurrency.test.ts ]
+Error: Cannot find module '../../src/server/services/finalization.ts' imported from <project>/tests/support/concurrency.ts
+ ❯ tests/support/concurrency.ts:10:1
+ ❯ tests/integration/finalization-concurrency.test.ts:13:1
+⎯⎯⎯⎯⎯⎯ Failed Tests 20 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/finalization.test.ts > sign-off transaction > creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:186:60
+ FAIL  tests/integration/finalization.test.ts > sign-off transaction > finalizes a period with no saved entries, creating its timesheet row
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:269:60
+ FAIL  tests/integration/finalization.test.ts > sign-off transaction > rolls everything back when a posting fails inside the transaction
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:288:60
+ FAIL  tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > refuses a blank or missing signer name with 422 and writes nothing
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:302:26
+ FAIL  tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > refuses a sign-off without a signature image with 422 and writes nothing
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:317:60
+ FAIL  tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > requires the explicit acknowledgement when evidence is incomplete
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:329:28
+ FAIL  tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 for a stale expected version and writes nothing
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:349:29
+ FAIL  tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 when a day was edited after the review, and writes nothing
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:363:26
+ FAIL  tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 when the signature changed after the review (same timesheet version)
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:382:29
+ FAIL  tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > choose mode: a chosen debit posts, a waived one is recorded as waived, and every choose day needs a choice
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:397:25
+ FAIL  tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > refuses a choice in a mode without choices
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:453:29
+ FAIL  tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > keeps a debit the balance cannot cover pending, persists the line and never posts it in the background
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:467:60
+ FAIL  tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > records no line for a deficit in ignore mode
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:507:60
+ FAIL  tests/integration/finalization.test.ts > idempotency and provisional minutes > an identical retry returns the same revision and writes nothing; a different one is a conflict
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:522:54
+ FAIL  tests/integration/finalization.test.ts > idempotency and provisional minutes > posted plus provisional minutes never double count
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:553:57
+ FAIL  tests/integration/finalization.test.ts > ownership > answers 404 for a payroll date of another owner and writes nothing
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:621:66
+ FAIL  tests/integration/finalization.test.ts > ownership > an administrator on the same calendar cannot sign the employee timesheet
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:633:29
+ FAIL  tests/integration/finalization.test.ts > ownership > requires a signed-in user and an allowed origin
+AssertionError: expected 404 to be 401 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:640:71
+ FAIL  tests/integration/finalization.test.ts > ownership > rejects unknown fields such as user_id
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:649:29
+ FAIL  tests/integration/finalization.test.ts > read side > the finalization status GET writes nothing and reports an unfinalized period
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/finalization.test.ts:660:29
+ Test Files  2 failed (2)
+      Tests  20 failed (20)

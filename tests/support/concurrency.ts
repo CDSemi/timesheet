@@ -4,7 +4,10 @@ import { isMainThread, parentPort, Worker, workerData } from 'node:worker_thread
 import { isDomainError } from '../../src/domain/errors.ts';
 import type { Clock } from '../../src/server/clock.ts';
 import { openDatabase } from '../../src/server/db/database.ts';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { ApiError } from '../../src/server/http/errors.ts';
+import type { SessionBody } from '../../src/server/http/schemas.ts';
+import { type SignOffInput, signOffTimesheet } from '../../src/server/services/finalization.ts';
 import { getBalance } from '../../src/server/services/ledger.ts';
 import {
   type CancelOtLeaveInput,
@@ -16,9 +19,11 @@ import {
   reserveOtLeave,
   reverseOtLeaveUse,
 } from '../../src/server/services/otLeave.ts';
+import { createSession } from '../../src/server/services/timesheetCommands.ts';
 
 /*
- * Multi-connection race harness for AC-03 (R-06 "prevent concurrent double spending").
+ * Multi-connection race harness for AC-03 (R-06 "prevent concurrent double spending") and
+ * the WP3 sign-off finalization (AC-03 WP3 part, AC-06 concurrent edit).
  *
  * better-sqlite3 is synchronous, so two calls on one in-process connection serialize
  * trivially and prove nothing. Each racer here is a separate worker thread that opens its
@@ -44,12 +49,28 @@ export interface UnsafeReserveControlInput {
   minutes: number;
 }
 
+/** A manual sign-off of `payrollDate` by the owner `userId` (WP3-T05). */
+export interface SignOffRaceInput {
+  userId: string;
+  payrollDate: string;
+  input: SignOffInput;
+}
+
+/** A day edit by the owner `userId`: one new session on `workDate`. */
+export interface CreateSessionRaceInput {
+  userId: string;
+  workDate: string;
+  body: SessionBody;
+}
+
 /** One racer's operation. `unsafeReserveControl` is the harness self-check, never production code. */
 export type RaceOp =
   | { kind: 'reserve'; input: ReserveOtLeaveInput }
   | { kind: 'use'; input: RecordOtLeaveUseInput }
   | { kind: 'cancel'; input: CancelOtLeaveInput }
   | { kind: 'reverse'; input: ReverseOtLeaveUseInput }
+  | { kind: 'signOff'; input: SignOffRaceInput }
+  | { kind: 'createSession'; input: CreateSessionRaceInput }
   | { kind: 'unsafeReserveControl'; input: UnsafeReserveControlInput };
 
 export type RaceOutcome = (
@@ -119,19 +140,29 @@ function unsafeReserveControl(db: ReturnType<typeof openDatabase>, input: Unsafe
   return 'reserved';
 }
 
+/** The session user of `userId`, read from the racer's own connection (the HTTP layer is not involved). */
+function sessionUserOf(db: ReturnType<typeof openDatabase>, userId: string): SessionUser {
+  const row = db
+    .prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?')
+    .get(userId) as { id: string; email: string; display_name: string; role: SessionUser['role']; calendar_id: string } | undefined;
+  if (row === undefined) throw new Error('Unknown racer user');
+  return { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'racer' };
+}
+
 function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
   const clock: Clock = { now: () => new Date(message.nowIso) };
   const db = openDatabase(message.dbPath);
   let startedAtMs = 0;
   try {
     const ctx = { db, clock };
+    const { op } = message;
+    const user = op.kind === 'signOff' || op.kind === 'createSession' ? sessionUserOf(db, op.input.userId) : null;
     // Touch the file so the connection is fully open before the barrier releases.
     db.prepare('SELECT count(*) FROM ot_leave_requests').pluck().get();
     parentPort?.postMessage({ type: 'ready' } satisfies WorkerMessage);
     const released = Atomics.wait(control, GO, 0, BARRIER_TIMEOUT_MS);
     if (released === 'timed-out') throw new Error('barrier_timeout');
     startedAtMs = wallMs();
-    const { op } = message;
     let status: string;
     switch (op.kind) {
       case 'reserve':
@@ -145,6 +176,13 @@ function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
         break;
       case 'reverse':
         status = reverseOtLeaveUse(ctx, op.input).status;
+        break;
+      case 'signOff':
+        status = signOffTimesheet({ db, clock, user: user as SessionUser }, op.input.payrollDate, op.input.input).status;
+        break;
+      case 'createSession':
+        createSession({ db, clock, user: user as SessionUser }, op.input.workDate, op.input.body);
+        status = 'session_created';
         break;
       case 'unsafeReserveControl':
         status = unsafeReserveControl(db, op.input, message.nowIso, control, message.racers);

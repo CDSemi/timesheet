@@ -1,0 +1,60 @@
+# Route inventory at c289375 (grep of src/server/routes/*.ts)
+$ grep -n "app\.(get|post|patch|put|delete)(" src/server/routes/*.ts
+src/server/routes/admin.ts:57:  app.get('/users', (c) => c.json({ users: listUsers(deps.db).map(accountJson) }));
+src/server/routes/admin.ts:59:  app.post('/users', async (c) => {
+src/server/routes/admin.ts:79:  app.patch('/users/:id', async (c) => {
+src/server/routes/admin.ts:92:  app.post('/users/:id/deactivate', async (c) => {
+src/server/routes/admin.ts:103:  app.post('/users/:id/reactivate', async (c) => {
+src/server/routes/admin.ts:115:  app.post('/calendar/import/preview', async (c) => {
+src/server/routes/admin.ts:128:  app.post('/calendar/import/commit', async (c) => {
+src/server/routes/admin.ts:153:  app.post('/payroll-exceptions', async (c) => {
+src/server/routes/api.ts:59:  app.get('/calendar', auth, (c) => {
+src/server/routes/api.ts:92:  app.get('/periods/current', auth, (c) => {
+src/server/routes/api.ts:103:  app.get('/periods', auth, (c) => {
+src/server/routes/api.ts:124:  app.get('/timesheets/:payrollDate', auth, (c) =>
+src/server/routes/api.ts:128:  app.get('/days/:workDate', auth, (c) => c.json(getDayView(deps.db, deps.clock, c.get('user'), c.req.param('workDate'))));
+src/server/routes/api.ts:131:  app.post('/days/batch', auth, async (c) => {
+src/server/routes/api.ts:136:  app.put('/days/:workDate', auth, async (c) =>
+src/server/routes/api.ts:140:  app.post('/days/:workDate/sessions', auth, async (c) =>
+src/server/routes/api.ts:144:  app.get('/sessions/:id', auth, (c) => {
+src/server/routes/api.ts:150:  app.put('/sessions/:id', auth, async (c) =>
+src/server/routes/api.ts:154:  app.delete('/sessions/:id', auth, async (c) =>
+src/server/routes/api.ts:158:  app.post('/clock/in', auth, async (c) => c.json(clockIn(command(c), await readJson(c, clockInBody)), 201));
+src/server/routes/api.ts:160:  app.post('/clock/out', auth, async (c) => c.json(clockOut(command(c), await readJson(c, clockOutBody))));
+src/server/routes/api.ts:162:  app.get('/policies', auth, (c) => c.json({ policies: listPolicyVersions(deps.db, c.get('user').id).map(policyJson) }));
+src/server/routes/api.ts:184:  app.post('/policies', auth, async (c) => {
+src/server/routes/api.ts:190:  app.post('/policies/preview', auth, async (c) =>
+src/server/routes/auth.ts:31:  app.post('/login', async (c) => {
+src/server/routes/auth.ts:72:  app.post('/logout', requireUser(deps), (c) => {
+src/server/routes/auth.ts:90:  app.get('/me', requireUser(deps), (c) => c.json({ user: userJson(c.get('user')) }));
+src/server/routes/history.ts:11:  app.get('/', auth, (c) =>
+src/server/routes/ot.ts:87:  app.get('/summary', auth, (c) => {
+src/server/routes/ot.ts:97:  app.get('/ledger', auth, (c) => {
+src/server/routes/ot.ts:105:  app.get('/leave', auth, (c) => {
+src/server/routes/ot.ts:113:  app.post('/leave', auth, async (c) => {
+src/server/routes/ot.ts:138:  app.post('/leave/:id/consume', auth, async (c) => {
+src/server/routes/ot.ts:157:  app.post('/leave/:id/cancel', auth, async (c) => {
+src/server/routes/ot.ts:175:  app.post('/leave/:id/reverse', auth, async (c) => {
+src/server/routes/ot.ts:195:  app.get('/evidence.csv', auth, (c) => {
+src/server/routes/settings.ts:37:  app.get('/submission', auth, (c) =>
+src/server/routes/settings.ts:41:  app.get('/submission/versions', auth, (c) =>
+src/server/routes/settings.ts:45:  app.get('/submission/versions/:id', auth, (c) => {
+src/server/routes/settings.ts:52:  app.post('/submission', auth, async (c) => {
+src/server/routes/settings.ts:69:  app.post('/submission/preview', auth, async (c) => {
+src/server/routes/settings.ts:82:  app.post('/submission/auto-image/authorize', auth, async (c) => {
+src/server/routes/settings.ts:91:  app.post('/submission/auto-image/revoke', auth, async (c) => {
+src/server/routes/signatures.ts:46:  app.post(
+src/server/routes/signatures.ts:63:  app.get('/current', auth, (c) => {
+src/server/routes/signatures.ts:69:  app.get('/:id', auth, (c) => {
+src/server/routes/submission.ts:16:  app.get('/timesheets/:payrollDate/review', auth, (c) =>
+exit 0
+$ grep -n "app.route(" src/server/app.ts
+88:  app.route('/api/auth', authRoutes(deps));
+89:  app.route('/api/admin', adminRoutes(deps));
+90:  app.route('/api/ot', otRoutes(deps));
+91:  app.route('/api/history', historyRoutes(deps));
+92:  app.route('/api/settings', settingsRoutes(deps));
+93:  app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+94:  app.route('/api', submissionRoutes(deps));
+95:  app.route('/api', apiRoutes(deps));
+exit 0

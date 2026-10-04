@@ -1,0 +1,68 @@
+# Green: node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/finalization.test.ts tests/integration/finalization-concurrency.test.ts tests/integration/ot-api.test.ts
+# exit=0
+
+ RUN  v5.0.2 <project>
+
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > starts at zero 345ms
+ ✓ tests/integration/finalization.test.ts > sign-off transaction > creates the signed revision, the real sign-off, the ledger postings, the lines and the jobs in one step 396ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > keeps posted, provisional (E-6), reserved and available apart 303ms
+ ✓ tests/integration/finalization.test.ts > sign-off transaction > finalizes a period with no saved entries, creating its timesheet row 315ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > raises the negative flag for a truthful correction below zero (LG-08) 311ms
+ ✓ tests/integration/finalization.test.ts > sign-off transaction > rolls everything back when a posting fails inside the transaction 319ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > requires a session 303ms
+ ✓ tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > refuses a blank or missing signer name with 422 and writes nothing 310ms
+stdout | tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > two different sign-offs of the same period: one wins, the other gets 409 (20 rounds)
+[race] sign-off vs different sign-off: 20 rounds, overlapping call windows 20/20, outcomes: 409 already_finalized + created x20
+
+ ✓ tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > two different sign-offs of the same period: one wins, the other gets 409 (20 rounds) 1308ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > lists only the caller’s entries in posting order, with the balance 287ms
+ ✓ tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > refuses a sign-off without a signature image with 422 and writes nothing 312ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > ignores a client-supplied owner parameter 275ms
+ ✓ tests/integration/finalization.test.ts > required name, image and acknowledgement (AC-06) > requires the explicit acknowledgement when evidence is incomplete 311ms
+stdout | tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds)
+[race] sign-off vs identical sign-off: 10 rounds, overlapping call windows 10/10, outcomes: created + replayed x10
+
+ ✓ tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > two identical sign-offs (a concurrent retry): one creates, the other replays (10 rounds) 632ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the permission and reserves 1:1 minutes (201), then lists it 278ms
+ ✓ tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 for a stale expected version and writes nothing 314ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > is idempotent per request key (200 duplicate) and refuses a changed payload (409) 331ms
+ ✓ tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 when a day was edited after the review, and writes nothing 345ms
+stdout | tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the reviewed content (10 rounds)
+[race] sign-off vs day edit: 10 rounds, overlapping call windows 10/10, outcomes: created + session_created x6; 409 stale_version + session_created x4
+
+ ✓ tests/integration/finalization-concurrency.test.ts > concurrent sign-offs (AC-03, WP3) > a sign-off racing a day edit: either the edit wins and the sign-off is stale, or the sign-off binds the reviewed content (10 rounds) 682ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > rejects insufficient balance with 409 and creates nothing (E-5) 309ms
+ ✓ tests/integration/finalization.test.ts > stale review (AC-06: a concurrent edit causes a conflict) > answers 409 when the signature changed after the review (same timesheet version) 312ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > needs the recorded permission and rejects owner or unknown fields 260ms
+ ✓ tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > choose mode: a chosen debit posts, a waived one is recorded as waived, and every choose day needs a choice 308ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the session user as both actor and owner 267ms
+ ✓ tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > refuses a choice in a mode without choices 287ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > posts a partial linked debit and keeps the remainder reserved 300ms
+ ✓ tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > keeps a debit the balance cannot cover pending, persists the line and never posts it in the background 286ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > refuses stale versions, over-use and use before the leave date 261ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel releases the unused reservation and retries are unchanged 298ms
+ ✓ tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > binds each debit to the balance the review showed: credits of the same period post after the debits 333ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel with a stale version is refused while minutes are still reserved 258ms
+ ✓ tests/integration/finalization.test.ts > deficits (R-05) and pending lines (R4, owner decision F-2) > records no line for a deficit in ignore mode 277ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > reverse gives used minutes back with a reason and a linked positive delta 272ms
+ ✓ tests/integration/finalization.test.ts > idempotency and provisional minutes > an identical retry returns the same revision and writes nothing; a different one is a conflict 295ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > returns 404 for another user’s request on consume, cancel and reverse, also for admins 297ms
+ ✓ tests/integration/finalization.test.ts > idempotency and provisional minutes > posted plus provisional minutes never double count 305ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > shows an admin only the admin’s own summary, ledger and requests 284ms
+ ✓ tests/integration/finalization.test.ts > ownership > answers 404 for a payroll date of another owner and writes nothing 409ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies 260ms
+ ✓ tests/integration/finalization.test.ts > ownership > an administrator on the same calendar cannot sign the employee timesheet 276ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies 268ms
+ ✓ tests/integration/finalization.test.ts > ownership > requires a signed-in user and an allowed origin 268ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies 277ms
+ ✓ tests/integration/finalization.test.ts > ownership > rejects unknown fields such as user_id 290ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies 261ms
+ ✓ tests/integration/finalization.test.ts > read side > the finalization status GET writes nothing and reports an unfinalized period 258ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > exposes exactly the reviewed OT, history and evidence routes 264ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting 264ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > never imports a ledger posting function into an HTTP router 273ms
+
+ Test Files  3 passed (3)
+      Tests  49 passed (49)
+   Start at  16:06:59
+   Duration  7.81s (tests 90%, import 6%, transform 4%)

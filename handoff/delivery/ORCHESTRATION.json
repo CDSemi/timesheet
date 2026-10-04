@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T07-FREEZE",
+  "next_task_id": "WP3-T05-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -75,7 +75,7 @@
       "observation": "WP3-T07-FREEZE attempt 1: the worker edited a test after computing its digest and running verify, so the reported digest was stale and the committer stopped. Worker briefs must require that verify and the digest are the last commands after the final edit, with the digest re-run if any file changes."
     }
   ],
-  "pending_owner_question": "WP3-PLAN section F (asked 2026-10-04): F-1 should the deadline auto-submit a period with no saved entries (recommended yes, with default labels, OT pending, review-pending banner, no deficit)? F-2 a pending deficit debit is re-evaluated only by a later finalized revision, no background posting (recommended)? F-3 admin operations status shows only configuration, heartbeat, activation and system-wide job-state totals, without user, period or recipient (recommended)? F-4 one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant (recommended)? F-5 PDF total = credited OT total in h:mm over 14 days, hidden when Show OT is off (proceeds unless the owner objects). Needed before T05 (F-2), T10 (F-1, F-4), T13 (F-3); T00-T04 continue.",
+  "pending_owner_question": "WP3-REQ section F (asked 2026-10-04; needed before WP3-DOC, which runs after the T06 freeze): F-Q1 the 'show employee review pending' setting governs every automatic submission (recommended) or only periods with no saved entries? F-Q2 with the notice off, keep a small factual 'automatic submission' label, a blank sign date and {SignOffStatus} 'Automatic submission' (recommended), or also force the notice on whenever the auto-image is included, or remove every automatic indicator (not recommended)? F-Q3 the admin sees flags and redacted fault codes but not recipient addresses, templates or message content (recommended), or also recipient addresses? F-Q4 a share covers timesheets only (periods, day views, sessions, calculations, revision status), not OT balances/ledger/leave, evidence export, history, review payload, PDFs or signatures (recommended), or also OT read-only and final PDFs? F-Q5 edit access = manual day/session/break/batch edits (with a reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares but not create them (recommended), or also Clock in/out? F-Q6 (optional) keep the WP2-A-01 removal of employee-derived holiday-preview counts (recommended).",
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -90,7 +90,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
+    "last_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
     "unpushed": []
   },
   "owner_decisions": [
@@ -139,9 +139,25 @@
       "source": "owner chat, direct reply typed by the owner (after an IDE commit-dialog screenshot)",
       "verbatim": "đã commit xong và push, tiếp tục đi",
       "decision": "The owner committed and pushed the WP2-T11-FREEZE set manually from the IDE after the classifier denial (option 2), having been told the two IDE font-family warnings were false positives and to run git add -A and the precommit check first; continue. WP2-T11-RECON (verifier, read-only) checks the commit before WP2-T12."
+    },
+    {
+      "date": "2026-10-04",
+      "source": "owner chat, direct reply typed by the owner to WP3-PLAN section F",
+      "verbatim": "OK tiếp tục đi, đây là câu trả lời của tôi: - F-2: OK, dùng đề xuất. - F-1: đến hạn mà kỳ chưa có dữ liệu thì vẫn tự nộp theo nhãn mặc định. OT không tính (mặc định, nhưng có thể cập nhật lại giờ OT sau nếu muốn), không hiện \"nhân viên chưa duyệt\" (mặc định là không hiện, nhưng có option trong settings để bật nếu muốn), không tính thiếu giờ. - F-3: Admin thấy tất cả, ngoại trừ chi tiết timesheets của từng người. Cá nhân có thể share quyền xem only / sửa timesheets cho người khác nếu muốn. - F-4, F-5: Yes.",
+      "decision": "F-2: adopt the recommendation (a pending deficit debit stays a recorded pending line of its revision, shown on review and OT screens, re-evaluated only by a later finalized revision; no background posting). F-1 (modified): at the deadline a period with no saved entries is still submitted automatically with the default labels; OT is not counted by default (the employee may update OT later); the 'employee review pending' notice is NOT shown by default, with a settings option to turn it on; no deficit. F-3 (modified): the admin sees everything except each person's timesheet details; an individual may share view-only or edit access to their own timesheets with another person. F-4: one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant. F-5: the PDF total is the credited OT total in h:mm over the 14 days, hidden when Show OT is off. F-1 and F-3 change canonical rules (AGENTS rule 8) and F-3 adds a sharing feature; WP3-REQ drafts the canonical text, impact and placement before dependent tasks."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "WP3-REQ (opus planner) sections A-G",
+      "decision": "Adopt the WP3-REQ revised plan subject to the owner's F-Q answers: after T05 run T06 (adding a first credit for a day without a posted original), then WP3-DOC (canonical EN/VI text, prompts' gate lines, policy example; a writer task, needs F-Q1..F-Q5), then T07B (notice setting delta on frozen T01/T03/T04/T07), then T08-T13, T13D (admin status per the F-3 boundary), T13A (actor/subject seam, no behaviour change), T13B (sharing grants, opus), T13C (sharing UI), T14 (adds sharing e2e and notice renders), T15; gate items 13-16; audits A and B with an optional area C for sharing. Sharing stays inside WP3 (authorized scope WP1-WP5). WP2-A-01 and A3-01 stay unchanged unless the owner decides otherwise (F-Q6)."
+    },
+    {
+      "date": "2026-10-04",
+      "basis": "Owner answers to WP3-PLAN F-1..F-5 (owner_decisions 2026-10-04); AGENTS rules 2 and 8",
+      "decision": "Dispatch WP3-T05 now with the F-2 decision (it does not depend on F-1 or F-3; sign-off stays owner-only). In parallel run WP3-REQ (opus planner, read-only) to: draft the exact EN/VI canonical text for F-1..F-5 (F-1 and F-3 contradict current docs: the automatic-submission pending notice and the admin privacy boundary); specify the new timesheet-sharing feature (view-only/edit grants) with an authorization matrix, defaults and the minimal owner questions; assess the impact on frozen T01-T07 (for example a settings flag, snapshot field and renderer condition for the notice) and on accepted WP1/WP2 ownership checks; and revise the WP3 plan and placement. Canonical docs are part of the source digest, so the doc update runs as its own writer task after the T05 freeze and before the dependent tasks (T10 for F-1/F-4, T13 for F-3 and sharing). The accepted WP2 removal of employee-derived holiday-preview counts stays unless the owner reverses it explicitly."
+    },
     {
       "date": "2026-10-04",
       "basis": "WP3-PLAN dependency table (T07 depends only on T04 code) and the pending owner answer F-2 required before T05",
@@ -4996,7 +5012,7 @@
       "id": "WP3-T07-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T07"
       ],
@@ -5009,10 +5025,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a081daf2a51abf31e",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 2,
       "history": [
@@ -5028,16 +5044,155 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T07-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T07-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T07-FREEZE/02-digest.txt",
+        "handoff/delivery/evidence/WP3-T07-FREEZE/03-precommit.txt",
+        "handoff/delivery/evidence/WP3-T07-FREEZE/05-validate-orch.txt",
+        "handoff/delivery/evidence/WP3-T07-FREEZE/07-preflight.txt",
+        "handoff/delivery/evidence/WP3-T07-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "pushed": true,
       "source_digest": "3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): parent b89f8a8, remote SHA identical; digest 3f4a016d recomputed before git add and matched; lockfile 4 named dependencies, 20 packages added, 0 removed, none downgraded; about 41 paths including its own evidence logs; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; T05 waits for the owner's F-2 answer."
+    },
+    {
+      "id": "WP3-T05",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T07-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ad0a0552e99345a1b",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/finalization.ts",
+        "src/server/services/revisionLedger.ts",
+        "src/server/routes/submission.ts",
+        "src/server/http/schemas.ts",
+        "tests/integration/finalization.test.ts",
+        "tests/integration/finalization-concurrency.test.ts",
+        "tests/support/concurrency.ts",
+        "handoff/delivery/tasks/WP3-T05.md",
+        "handoff/delivery/evidence/WP3-T05"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T05.md",
+      "report": "handoff/delivery/tasks/WP3-T05.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T05/01-red.txt",
+        "handoff/delivery/evidence/WP3-T05/02-green.txt",
+        "handoff/delivery/evidence/WP3-T05/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T05/04-precommit-check.txt",
+        "handoff/delivery/evidence/WP3-T05/05-verify.txt",
+        "handoff/delivery/evidence/WP3-T05/06-digest.txt"
+      ],
+      "baseline_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "source_digest": "c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: signOffTimesheet runs one IMMEDIATE transaction: recompute and compare the review payload (409 already_finalized, stale_version or stale_review; an identical retry returns 200 replayed); 422 for a missing name, signature, acknowledgement or deficit choice; signed revision and sign-off with signed_at from the clock; debits then credits only through ledger.ts with revision-independent day keys, every outcome in revision_ledger_lines; finalized_revision_no set; PDF and send job rows; audit without personal content. F-2: a pending debit stays a revision line without a ledger entry, exposed through GET /api/timesheets/:payrollDate/finalization and GET /api/revisions/pending-lines; nothing posts it later. Red: 20/20 failed and the race file absent; green 24 new tests; race 20/20 rounds one winner, one 409, one revision, one ledger set, one job set; 13/13 mutations caught; verify exit 0, 930 tests, 0 deprecation lines. Deviation: one allowlist line in tests/integration/ot-api.test.ts. ledger.ts and calculations unchanged.",
+      "next_action": "None; WP3-T05-FREEZE."
+    },
+    {
+      "id": "WP3-T05-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T05"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T05-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Attempt 2: commit and push with digest 3f4a016d."
+      "next_action": "Commit and push the WP3-T05 set with the pending handoff records."
+    },
+    {
+      "id": "WP3-REQ",
+      "package": "WP3",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP3-PLAN"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a70675bc0ed40287b",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-REQ.md",
+        "handoff/delivery/evidence/WP3-REQ"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-REQ.md",
+      "report": "handoff/delivery/tasks/WP3-REQ.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-REQ/00-baseline.txt",
+        "handoff/delivery/evidence/WP3-REQ/01-route-inventory.txt",
+        "handoff/delivery/evidence/WP3-REQ/02-canonical-lines.txt",
+        "handoff/delivery/evidence/WP3-REQ/03-pinned-behaviour.txt"
+      ],
+      "baseline_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered: exact EN/VI canonical drafts for F-1..F-5 (contradicted: docs/05:19,24, docs/04:40,56, AC-07 docs/06:15 for F-1; docs/01:36, docs/03:33,37, docs/05:56, docs/07:36, AC-01 docs/06:9 for F-3; WP3 scope/gate docs/09:33,37 and the WP3 prompts; not contradicted: docs/09:25, D-09); a 'timesheet details' table; sharing spec FR-17/AC-16 with migration 0006 grants, an allowlisted /api/shared/:ownerId mount with live grant checks and an authorization matrix (delegates never sign off, use signatures/PDFs, send/resend, change settings/auto-image, touch ledger/leave, export, read History or re-share); impact: delta task T07B (migration 0005 notice flag, settings, snapshot v2, renderer condition) after WP3-DOC; T06 must post a first credit for a day without an original; WP2-A-01 and A3-01 unchanged (recommended). Revised plan: T05, T06, WP3-DOC, T07B, T08-T13, T13D (admin status), T13A (actor/subject seam), T13B (grants, opus), T13C (sharing UI), T14, T15, gate items 13-16, audits A and B (+ optional C). Owner questions F-Q1..F-Q6 needed before WP3-DOC (after T06).",
+      "next_action": "None; owner questions F-Q1..F-Q6 asked; T06 proceeds after the T05 freeze."
     },
     {
       "id": "WP3-T07-RECON",
