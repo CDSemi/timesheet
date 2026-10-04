@@ -1,0 +1,60 @@
+// WP2-AUDIT-A: build a populated database with the ACCEPTED WP1 code (commit f32978f, exported
+// separately) through its own services and HTTP API. Synthetic data only. The run-time passwords
+// are written to a file in the scratch work dir (never printed) so the upgrade probe can sign in.
+// Usage: node pd-wp1-build.mjs <wp1-export-root> <work-dir>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [wp1Root, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(wp1Root, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const db = openDatabase(join(workDir, 'wp1.db'));
+const applied = migrate(db);
+class Clock { constructor(iso) { this.t = new Date(iso); } now() { return new Date(this.t.getTime()); } set(iso) { this.t = new Date(iso); } }
+const clock = new Clock('2026-09-29T20:00:00Z');
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+await seedSynthetic(db, clock, { passwords: pw });
+writeFileSync(join(workDir, 'pw.json'), JSON.stringify(pw));
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 3600, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function req(method, path, cookie, body) {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers };
+}
+const login = async (email, password) => (await req('POST', '/api/auth/login', undefined, { email, password })).headers.get('set-cookie').split(';')[0];
+const emp = await login('employee@example.invalid', pw.employee);
+await login('admin@example.invalid', pw.admin);
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+const steps = [];
+const brk = (d, a, b) => ({ start: at(d, a), end: at(d, b), counts_as_work: false });
+steps.push(['session 09-21 09:00-18:00 shifted breaks', await req('POST', '/api/days/2026-09-21/sessions', emp, { start: at('2026-09-21', '09:00'), end: at('2026-09-21', '18:00'), input_zone: LA, breaks_confirmed: true, breaks: [brk('2026-09-21', '11:00', '11:15'), brk('2026-09-21', '13:00', '13:30'), brk('2026-09-21', '15:30', '15:45')] })]);
+steps.push(['overnight Fri 09-25 22:00 to 02:00', await req('POST', '/api/days/2026-09-25/sessions', emp, { start: at('2026-09-25', '22:00'), end: at('2026-09-26', '02:00'), input_zone: LA, breaks_confirmed: true, breaks: [] })]);
+steps.push(['session 09-24 08:00-19:00 (credit 120)', await req('POST', '/api/days/2026-09-24/sessions', emp, { start: at('2026-09-24', '08:00'), end: at('2026-09-24', '19:00'), input_zone: LA, breaks_confirmed: true, breaks: [brk('2026-09-24', '10:00', '10:15'), brk('2026-09-24', '12:00', '12:30'), brk('2026-09-24', '14:30', '14:45')] })]);
+steps.push(['day 09-22 Vacation 480', await req('PUT', '/api/days/2026-09-22', emp, { category: 'Vacation', leave_minutes: 480, wfh: false, notes: 'synthetic vacation' })]);
+steps.push(['day 09-23 Worked leave 240 wfh', await req('PUT', '/api/days/2026-09-23', emp, { category: 'Worked', leave_minutes: 240, wfh: true, notes: 'synthetic partial leave' })]);
+steps.push(['session 09-23 08:00-12:00 unknown breaks', await req('POST', '/api/days/2026-09-23/sessions', emp, { start: at('2026-09-23', '08:00'), end: at('2026-09-23', '12:00'), input_zone: LA, breaks_confirmed: false, breaks: [] })]);
+clock.set('2026-09-29T16:00:00Z');
+steps.push(['clock in (open session)', await req('POST', '/api/clock/in', emp, { input_zone: LA })]);
+for (const [label, r] of steps) console.log(`${r.status < 300 ? 'OK  ' : 'FAIL'} ${label} -> ${r.status}`);
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+const counts = Object.fromEntries(tables.map((t) => [t, db.prepare(`SELECT count(*) FROM ${t}`).pluck().get()]));
+console.log(`WP1 migrate applied=${JSON.stringify(applied.applied)} version=${applied.version}`);
+console.log(`WP1 tables (${tables.length}) row counts ${JSON.stringify(counts)}`);
+console.log(`integrity_check=${db.pragma('integrity_check', { simple: true })}`);
+db.close();
+process.exitCode = steps.every(([, r]) => r.status < 300) ? 0 : 1;

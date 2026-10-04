@@ -1,0 +1,110 @@
+// WP2-AUDIT-A supplementary probe: ADV-A-03 stale cancel, E-3 leave-date boundary in the saved
+// reporting zone, idempotent retries through HTTP, own leave-entry correction target, correction
+// retry with a different sourceRef, policy-note CSV output, and the holiday-preview aggregate counts.
+// Synthetic data only; output reports codes, counts and booleans.
+// Usage: node pf-supplement.mjs <clone-root> <work-dir>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [cloneRoot, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+
+let pass = 0; let fail = 0;
+const check = (id, ok, detail = '') => { ok ? pass++ : fail++; process.stdout.write(`${ok ? 'PASS' : 'FAIL'} ${id}${detail ? `  ${detail}` : ''}\n`); };
+const observe = (id, detail) => process.stdout.write(`OBS  ${id}  ${detail}\n`);
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const db = openDatabase(join(workDir, 'supp.db'));
+migrate(db);
+class Clock { constructor(iso) { this.t = new Date(iso); } now() { return new Date(this.t.getTime()); } set(iso) { this.t = new Date(iso); } }
+const clock = new Clock('2026-10-09T20:00:00Z');
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await seedSynthetic(db, clock, { passwords: pw });
+const ids = Object.fromEntries(seed.users.map((u) => [u.role, u.id]));
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 30 * 86400, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function req(method, path, cookie, body) {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  let json = null; try { json = JSON.parse(text); } catch { json = null; }
+  return { status: res.status, body: json, text };
+}
+// Run 1 used a one-day session; the clock moves three days ahead (S4), so the sessions expired (probe bug).
+const login = async (email, password) => {
+  const res = await app.request('/api/auth/login', { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
+  return res.headers.get('set-cookie').split(';')[0];
+};
+const emp = await login('employee@example.invalid', pw.employee);
+const admin = await login('admin@example.invalid', pw.admin);
+const ctx = { db, clock };
+ledger.postCredit(ctx, { userId: ids.employee, sourceKey: 'supp-credit', actorUserId: null, origin: 'system', reason: 'probe setup', workDate: '2026-10-01', minutes: 2000 });
+const permission = { approver_name: 'Probe Manager', approval_date: '2026-10-01', evidence_ref: 'probe ref' };
+const ledgerCount = () => db.prepare('SELECT count(*) FROM ot_ledger').pluck().get();
+
+// ADV-A-03: stale cancel after a full use is 409 stale_version (was 200 unchanged)
+const r = (await req('POST', '/api/ot/leave', emp, { request_key: 'adv3', leave_date: '2026-10-05', requested_minutes: 120, permission })).body.request;
+await req('POST', `/api/ot/leave/${r.id}/consume`, emp, { use_key: 'adv3-use', minutes: 120, expected_version: 1 });
+const staleCancel = await req('POST', `/api/ot/leave/${r.id}/cancel`, emp, { expected_version: 1 });
+const freshCancel = await req('POST', `/api/ot/leave/${r.id}/cancel`, emp, { expected_version: 2 });
+check('S1 ADV-A-03 stale cancel after full use -> 409 stale_version; current version -> 200 unchanged', staleCancel.status === 409 && staleCancel.body.error.code === 'stale_version' && freshCancel.status === 200 && freshCancel.body.status === 'unchanged');
+
+// Idempotent retries through HTTP (lost response): same use key with the now-stale version is a duplicate
+const r2 = (await req('POST', '/api/ot/leave', emp, { request_key: 'idem', leave_date: '2026-10-05', requested_minutes: 240, permission })).body.request;
+const u1 = await req('POST', `/api/ot/leave/${r2.id}/consume`, emp, { use_key: 'same-attempt', minutes: 60, expected_version: 1 });
+const beforeRetry = ledgerCount();
+const u1retry = await req('POST', `/api/ot/leave/${r2.id}/consume`, emp, { use_key: 'same-attempt', minutes: 60, expected_version: 1 });
+const u1conflict = await req('POST', `/api/ot/leave/${r2.id}/consume`, emp, { use_key: 'same-attempt', minutes: 61, expected_version: 2 });
+check('S2 record-use retry with the same key and stale version -> 200 duplicate, no new entry; changed minutes -> 409 source_key_conflict', u1.body.status === 'used' && u1retry.status === 200 && u1retry.body.status === 'duplicate' && ledgerCount() === beforeRetry && u1conflict.status === 409 && u1conflict.body.error.code === 'source_key_conflict');
+const dupReserve = await req('POST', '/api/ot/leave', emp, { request_key: 'idem', leave_date: '2026-10-05', requested_minutes: 240, permission });
+const conflictReserve = await req('POST', '/api/ot/leave', emp, { request_key: 'idem', leave_date: '2026-10-06', requested_minutes: 240, permission });
+check('S3 reserve retry same key/payload -> 200 duplicate; different payload -> 409 request_key_conflict', dupReserve.status === 200 && dupReserve.body.status === 'duplicate' && conflictReserve.status === 409 && conflictReserve.body.error.code === 'request_key_conflict');
+
+// E-3: record use only on or after the leave date in the SAVED reporting zone (America/Los_Angeles)
+const r3 = (await req('POST', '/api/ot/leave', emp, { request_key: 'date', leave_date: '2026-10-12', requested_minutes: 60, permission })).body.request;
+clock.set('2026-10-12T06:59:59Z'); // 2026-10-11 23:59:59 in Los Angeles, already 10-12 in UTC and in Asia
+const early = await req('POST', `/api/ot/leave/${r3.id}/consume`, emp, { use_key: 'd1', minutes: 60, expected_version: 1 });
+clock.set('2026-10-12T07:00:00Z'); // 2026-10-12 00:00:00 in Los Angeles
+const onTime = await req('POST', `/api/ot/leave/${r3.id}/consume`, emp, { use_key: 'd1', minutes: 60, expected_version: 1 });
+check('S4 E-3 use one second before LA midnight -> 409 before_leave_date; at LA midnight -> used (-60)', early.status === 409 && early.body.error.code === 'before_leave_date' && onTime.status === 200 && onTime.body.entry.delta_minutes === -60);
+
+// Correcting the owner's own leave consumption is refused (only credits/debits are corrected)
+let target = null;
+try { ledger.postCorrection(ctx, { userId: ids.employee, actorUserId: ids.employee, origin: 'manual', reason: 'probe', sourceKey: 'c-leave', originalEntryId: onTime.body.entry.id, correctedMinutes: 30 }); } catch (e) { target = `${e.status}:${e.code}`; }
+check('S5 correcting an own leave_consumption -> 422 invalid_correction_target', target === '422:invalid_correction_target', `${target}`);
+
+// Correction retry with the same key/value but a different sourceRef
+const cr = ledger.postCredit(ctx, { userId: ids.employee, sourceKey: 'cr-ref', sourceRef: 'rev-1', actorUserId: null, origin: 'automatic', workDate: '2026-10-02', minutes: 60 });
+ledger.postCorrection(ctx, { userId: ids.employee, actorUserId: null, origin: 'automatic', reason: 'rev 2', sourceKey: 'corr-ref', sourceRef: 'rev-2', originalEntryId: cr.entry.id, correctedMinutes: 90 });
+let refRetry; try { refRetry = ledger.postCorrection(ctx, { userId: ids.employee, actorUserId: null, origin: 'automatic', reason: 'rev 3', sourceKey: 'corr-ref', sourceRef: 'rev-3', originalEntryId: cr.entry.id, correctedMinutes: 90 }).status; } catch (e) { refRetry = `error:${e.code}`; }
+let creditRefRetry; try { creditRefRetry = ledger.postCredit(ctx, { userId: ids.employee, sourceKey: 'cr-ref', sourceRef: 'rev-9', actorUserId: null, origin: 'automatic', workDate: '2026-10-02', minutes: 60 }).status; } catch (e) { creditRefRetry = `error:${e.code}`; }
+observe('S6 same correction key and value with a different sourceRef', `correction -> ${refRetry}; credit with a different sourceRef -> ${creditRefRetry}`);
+
+// Run 2 used 08:00-17:00 with no breaks (422 inconsistent_reference_schedule); 08:00-16:00 is consistent.
+// Policy note with leading whitespace before '=' in the evidence CSV (advisory R3)
+const pol = await req('POST', '/api/policies', emp, { effective_from: '2026-10-26', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'ignore', note: ' =1+1' });
+const csv = await req('GET', '/api/ot/evidence.csv?from=2026-10-01&to=2026-10-31', emp);
+const line = csv.text.split('\n').find((l) => l.includes('=1+1')) ?? '';
+observe('S7 policy note " =1+1" (leading space) in the CSV', `policy saved ${pol.status} ${pol.body?.error?.code ?? ''}; cell starts with a space and no apostrophe: ${/, =1\+1,/.test(line)}; trimmed: ${/,=1\+1,/.test(line)}; apostrophe: ${line.includes("'=1+1")}`);
+
+// Holiday-preview aggregate counts (admin): employee explicit day on a date the import changes
+await req('PUT', '/api/days/2026-12-24', emp, { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: '' });
+const preview = await req('POST', '/api/admin/calendar/import/preview', admin, { calendar_id: seed.calendarId, year: 2026, effective_from: '2026-10-12', csv: 'date,name,kind\n2026-12-24,Synthetic Eve,holiday' });
+const day = preview.body?.affected_days?.find((d) => d.date === '2026-12-24');
+observe('S8 holiday preview shows the admin per-date counts of employee day entries', `status ${preview.status}; 2026-12-24 explicit_overrides_preserved=${day?.explicit_overrides_preserved} default_labelled_entries=${day?.default_labelled_entries}; no user id or label value in response: ${!preview.text.includes(ids.employee) && !preview.text.includes('Vacation')}`);
+
+check('S9 integrity ok', db.pragma('integrity_check', { simple: true }) === 'ok');
+db.close();
+process.stdout.write(`RESULT pass=${pass} fail=${fail}\n`);
+process.exitCode = fail === 0 ? 0 : 1;

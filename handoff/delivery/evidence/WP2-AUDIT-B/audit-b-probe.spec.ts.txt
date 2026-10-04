@@ -1,0 +1,175 @@
+// WP2-AUDIT-B probe (auditor-owned, temporary; removed from the scratch clone after the run).
+// It never changes production code. It captures the insufficient-balance flow (WP2-GATE F1),
+// screenshots of every screen on both projects, and records (without failing) the CSP inline-style
+// count, the computed transition/radius values and, on mobile, overflow and 44px target sizes.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { type Page } from '@playwright/test';
+import { formatDuration } from '../../src/domain/format.ts';
+import { expect, SCREENSHOT_DIR, screenshotPath, seedCredit, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const consoleErrors: string[] = [];
+test.beforeEach(({ page }) => {
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+});
+
+interface ScreenReport {
+  screen: string;
+  project: string;
+  inlineStyleCount: number;
+  overflow: number;
+  transitions: string[];
+  radii: string[];
+  panelShadows: string[];
+  smallTargets: string[];
+  controlsChecked: number;
+}
+
+async function inspect(page: Page, screen: string, project: string): Promise<ScreenReport> {
+  const data = await page.evaluate<Omit<ScreenReport, 'screen' | 'project'>>(`(() => {
+    const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+    const interactive = [...document.querySelectorAll('button, a[href], select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), label.inline, label.pick')].filter(visible);
+    const transitions = new Set();
+    const radii = new Set();
+    for (const el of document.querySelectorAll('button, a[href], select, textarea, input')) {
+      if (!visible(el)) continue;
+      const s = getComputedStyle(el);
+      transitions.add(el.tagName + ' ' + s.transitionProperty + ' ' + s.transitionDuration + ' ' + s.transitionTimingFunction);
+      radii.add(el.tagName + ' ' + s.borderTopLeftRadius);
+    }
+    const panelShadows = new Set();
+    for (const el of document.querySelectorAll('section, .card, .panel, dialog[open], form')) {
+      if (!visible(el)) continue;
+      const s = getComputedStyle(el);
+      radii.add((el.className ? el.tagName + '.' + String(el.className).split(' ')[0] : el.tagName) + ' ' + s.borderTopLeftRadius);
+      if (s.boxShadow !== 'none') panelShadows.add((el.className ? String(el.className).split(' ')[0] : el.tagName) + ' ' + s.boxShadow.slice(0, 60));
+    }
+    const small = [];
+    for (const el of interactive) {
+      const r = el.getBoundingClientRect();
+      const name = el.tagName + ' ' + ((el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || '').trim().slice(0, 40));
+      const isButtonLike = el.tagName === 'BUTTON' || el.tagName === 'A';
+      if (r.height < 43.5 || (isButtonLike && r.width < 43.5)) small.push(name + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+    }
+    return {
+      inlineStyleCount: document.querySelectorAll('[style]').length,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      transitions: [...transitions].sort(),
+      radii: [...radii].sort(),
+      panelShadows: [...panelShadows].sort(),
+      smallTargets: small,
+      controlsChecked: interactive.length,
+    };
+  })()`);
+  return { screen, project, ...data };
+}
+
+test('audit-b: insufficient balance flow (WP2-GATE F1) with screenshot', async ({ page, builtServer, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  seedCredit(builtServer, 60);
+  const before = await employeeSeed.call<{ available_minutes: number; reserved_minutes: number }>('GET', '/api/ot/summary');
+  const leavesBefore = await employeeSeed.call<{ requests: unknown[] }>('GET', '/api/ot/leave');
+  await signInThroughUi();
+  await page.goto('/#/ot');
+  await expect(page.locator('[data-balance="available"] dd')).toHaveAttribute('data-minutes', String(before.available_minutes));
+  const form = page.getByRole('form', { name: 'Reserve OT leave' });
+  await form.getByLabel('Minutes of leave').fill(String(before.available_minutes + 1));
+  await form.getByLabel('Manager who gave permission').fill('Synthetic Manager');
+  await form.getByLabel('Permission reference').fill('SYN-AUDIT-B-F1');
+  await form.getByRole('button', { name: 'Reserve leave' }).click();
+  const message = page.locator('[data-error="reserve"]');
+  await expect(message).toContainText('Not enough available OT balance.');
+  await expect(message).toContainText('Nothing was reserved.');
+  await expect(message).toContainText(formatDuration(before.available_minutes));
+  await message.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: screenshotPath(`insufficient-balance-${project}-synthetic.png`), fullPage: true });
+  await page.screenshot({ path: screenshotPath(`insufficient-balance-viewport-${project}-synthetic.png`) });
+  const after = await employeeSeed.call<{ available_minutes: number; reserved_minutes: number }>('GET', '/api/ot/summary');
+  const leavesAfter = await employeeSeed.call<{ requests: unknown[] }>('GET', '/api/ot/leave');
+  expect(after).toEqual(before);
+  expect(leavesAfter.requests.length).toBe(leavesBefore.requests.length);
+  writeFileSync(
+    join(SCREENSHOT_DIR, `audit-b-f1-${project}.json`),
+    `${JSON.stringify({ project, before, after, leavesBefore: leavesBefore.requests.length, leavesAfter: leavesAfter.requests.length, message: await message.innerText() }, null, 2)}\n`,
+  );
+});
+
+test('audit-b: every screen, CSP inline styles, tokens and mobile targets', async ({ page, builtServer, employeeSeed, signInThroughUi, signInPageAs }, testInfo) => {
+  const project = testInfo.project.name;
+  const reports: ScreenReport[] = [];
+  const [day] = await employeeSeed.displayedPeriodFreeWorkdays();
+  if (day !== undefined) await employeeSeed.seedCompleteDay(day);
+  seedCredit(builtServer, 120);
+  await signInThroughUi();
+  for (const screen of ['timesheet', 'ot', 'history', 'settings']) {
+    await page.goto(`/#/${screen}`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(400);
+    reports.push(await inspect(page, screen, project));
+    await page.screenshot({ path: screenshotPath(`audit-b-${screen}-${project}-synthetic.png`), fullPage: true });
+  }
+  if (day !== undefined) {
+    await page.goto('/#/timesheet');
+    await page.locator(`[data-day="${day}"]`).getByRole('button', { name: `Edit ${day}` }).click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await page.waitForTimeout(400);
+    reports.push(await inspect(page, 'day-editor', project));
+    await page.screenshot({ path: screenshotPath(`audit-b-day-editor-${project}-synthetic.png`), fullPage: true });
+    await page.keyboard.press('Escape');
+  }
+  await page.context().clearCookies();
+  await page.goto('about:blank');
+  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(400);
+  reports.push(await inspect(page, 'admin', project));
+  await page.screenshot({ path: screenshotPath(`audit-b-admin-${project}-synthetic.png`), fullPage: true });
+  const csp = (await page.request.get('/')).headers()['content-security-policy'] ?? '';
+  writeFileSync(
+    join(SCREENSHOT_DIR, `audit-b-screens-${project}.json`),
+    `${JSON.stringify({ project, csp, consoleErrors, reports }, null, 2)}\n`,
+  );
+  if (day !== undefined) await employeeSeed.clearSessions(day);
+});
+
+test.describe('audit-b: manual-entry input zone default (R-07)', () => {
+  test.use({ timezoneId: 'Asia/Ho_Chi_Minh' });
+  test('new session form: default input zone versus the display zone', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    const project = testInfo.project.name;
+    const [day] = await employeeSeed.displayedPeriodFreeWorkdays();
+    expect(day).toBeDefined();
+    await signInThroughUi();
+    await page.locator(`[data-day="${day}"]`).getByRole('button', { name: `Edit ${day}` }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    const inputZone = await form.getByLabel('Input zone').inputValue();
+    const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    const intro = await editor.locator('p').first().innerText();
+    await form.getByLabel('Input zone').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: screenshotPath(`input-zone-default-${project}-synthetic.png`) });
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b-input-zone-${project}.json`), `${JSON.stringify({ project, displayZone, defaultInputZone: inputZone, editorIntro: intro }, null, 2)}\n`);
+  });
+});
+
+test.describe('audit-b: dark colour scheme', () => {
+  test.use({ colorScheme: 'dark' });
+  test('timesheet and OT screens in dark mode', async ({ page, builtServer, employeeSeed, signInThroughUi }, testInfo) => {
+    const project = testInfo.project.name;
+    const [day] = await employeeSeed.displayedPeriodFreeWorkdays();
+    if (day !== undefined) await employeeSeed.seedUnconfirmedBreaksDay(day);
+    seedCredit(builtServer, 30);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]').first()).toBeVisible();
+    await page.screenshot({ path: screenshotPath(`audit-b-dark-timesheet-${project}-synthetic.png`) });
+    await page.goto('/#/ot');
+    await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(`audit-b-dark-ot-${project}-synthetic.png`) });
+    if (day !== undefined) await employeeSeed.clearSessions(day);
+  });
+});

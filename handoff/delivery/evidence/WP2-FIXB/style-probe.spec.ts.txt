@@ -1,0 +1,53 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * Temporary WP2-FIXB probe: computed values of the rules that used literal sizes. It injects
+ * class-only elements (no inline style, so the CSP is untouched) and records what the browser
+ * resolves. Run before and after the custom-property change and compare the two files.
+ */
+const OUT = process.env.PROBE_OUT ?? '';
+const CASES: Array<{ name: string; html: string; target: string }> = [
+  { name: 'facts', html: '<dl class="facts"><div></div><div></div><div></div><div></div></dl>', target: '.facts' },
+  { name: 'select', html: '<select><option>a</option></select>', target: 'select' },
+  { name: 'dialog', html: '<div class="dialog"><h2>t</h2></div>', target: '.dialog' },
+  { name: 'dialog-h2', html: '<div class="dialog"><h2>t</h2></div>', target: '.dialog h2' },
+  { name: 'dialog-wide', html: '<div class="dialog dialog-wide"></div>', target: '.dialog-wide' },
+  { name: 'figures', html: '<dl class="facts figures"><div></div><div></div><div></div><div></div></dl>', target: '.figures' },
+  { name: 'card-h2', html: '<section class="card"><h2>t</h2></section>', target: '.card h2' },
+  { name: 'ot-screen-h2', html: '<section class="ot-screen"><h2>t</h2></section>', target: '.ot-screen h2' },
+  { name: 'ot-balances-dd', html: '<dl class="ot-balances"><div><dd>1</dd></div></dl>', target: '.ot-balances dd' },
+  { name: 'ot-counters', html: '<dl class="facts ot-counters"><div></div><div></div><div></div><div></div></dl>', target: '.ot-counters' },
+  { name: 'ot-actions', html: '<div class="ot-actions"><div></div><div></div><div></div><div></div></div>', target: '.ot-actions' },
+];
+
+test('computed styles of the tokenized rules', async ({ page, builtServer }, testInfo) => {
+  test.skip(OUT === '', 'PROBE_OUT not set');
+  await page.goto(builtServer.origin);
+  await expect(page.locator('body')).toBeVisible();
+  const result: Record<string, Record<string, string>> = {};
+  for (const item of CASES) {
+    result[item.name] = await page.evaluate(
+      ({ html, target }: { html: string; target: string }) => {
+        const holder = document.createElement('div');
+        holder.innerHTML = html;
+        document.body.append(holder);
+        const element = holder.querySelector(target);
+        if (element === null) throw new Error(`probe target missing: ${target}`);
+        const style = getComputedStyle(element);
+        const values = {
+          width: style.width,
+          minWidth: style.minWidth,
+          fontSize: style.fontSize,
+          gridTemplateColumns: style.gridTemplateColumns,
+        };
+        holder.remove();
+        return values;
+      },
+      { html: item.html, target: item.target },
+    );
+  }
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `computed-${testInfo.project.name}.json`), `${JSON.stringify(result, null, 2)}\n`);
+});

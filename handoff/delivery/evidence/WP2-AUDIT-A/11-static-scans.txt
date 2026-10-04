@@ -1,0 +1,81 @@
+# WP2-AUDIT-A static scans on the reviewed commit 8fae685 (scratch clone, read-only)
+# generated 2026-10-04T09:22:03Z
+
+## 1. Importers of the posting functions and of the seed module in src/ (expect: seed.ts only, via cli.ts)
+$ grep -rn -E "seed\.ts|postCredit|postDeficitDebit|postCorrection" src | grep -v '^src/server/services/ledger.ts'
+src/server/cli.ts:5:import { seedSynthetic } from './seed.ts';
+src/server/seed.ts:7:import { postCredit } from './services/ledger.ts';
+src/server/seed.ts:124:  postCredit(
+
+## 2. Importers of services/ledger.ts and services/otLeave.ts (expect: routes/ot.ts, otEvidence.ts, otLeave.ts; no day/label service)
+src/domain/index.ts:12:export * from './ledger.ts';
+src/server/routes/ot.ts:8:import { getBalance, type LedgerEntry, listLedgerEntries } from '../services/ledger.ts';
+src/server/routes/ot.ts:17:} from '../services/otLeave.ts';
+src/server/services/otEvidence.ts:7:import { listLedgerEntries } from './ledger.ts';
+src/server/services/otEvidence.ts:8:import { listOtLeaveRequests } from './otLeave.ts';
+src/server/services/otLeave.ts:18:import { getBalance, type LedgerEntry } from './ledger.ts';
+
+## 3. Environment reads in src/server (expect: no flag enables credit seeding; SEED_* passwords only in cli.ts)
+src/server/cli.ts:28:            admin: process.env.SEED_ADMIN_PASSWORD,
+src/server/cli.ts:29:            employee: process.env.SEED_EMPLOYEE_PASSWORD,
+src/server/cli.ts:30:            employee2: process.env.SEED_EMPLOYEE2_PASSWORD,
+src/server/config.ts:17:export function defaultDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
+src/server/config.ts:39:export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+src/server/index.ts:14:  if (process.env.STATIC_DIR !== undefined) return process.env.STATIC_DIR;
+
+## 4. Test-only credit seeding lives in tests/e2e/fixtures.ts and imports built dist modules in a child process
+110:/* ---- Test-only credit seeding ------------------------------------------------ */
+117: * code only: no production route or flag exists, and nothing infers an opening balance.
+119:const SEED_CREDIT_SCRIPT = `
+145:export function seedCredit(server: BuiltServer, minutes: number, workDate = '2020-01-06'): void {
+149:    ['--input-type=module', '-e', SEED_CREDIT_SCRIPT, dist('db/database.js'), dist('services/ledger.js'), dist('clock.js')],
+$ grep -rln 'SEED_DB_PATH\|SEED_MINUTES\|seedCredit' src dist (expect none)
+(none)
+$ grep -rln 'postCredit' dist/server (expect services/ledger.js and seed.js only)
+dist/server/seed.js
+dist/server/services/ledger.js
+
+## 5. CLI seed refuses production
+24:        if (config.production) throw new Error('Refusing to seed synthetic data when NODE_ENV=production');
+
+## 6. Tracked images/PDFs: count and those without 'synthetic' in the basename (outside reference fixtures/examples)
+tracked: 48 without synthetic: 0
+
+## 7. Email domains in tracked evidence (expect example.invalid and the attribution address only; other tokens are package@version strings)
+    330 0.1.0
+     83 example.invalid
+     24 anthropic.com
+      4 19.3.0
+      1 9.6.0
+      1 8.71.0
+      1 8.3.1
+      1 6.1.1
+      1 6.0.3
+      1 5.0.2
+      1 4.6.5
+      1 4.13.11
+      1 24.19.0
+      1 2.1.3
+      1 13.0.3
+      1 10.11.0
+
+## 8. Password hashes / generated passwords / literal seed passwords in tracked files (expect none; values would be masked)
+scrypt$<digits> occurrences: 0 files
+'generated dev password: <value>' lines: 0
+SEED_*PASSWORD=<literal> lines: 0
+password_hash mentions in evidence (column names in advisory probe SQL):
+  handoff/delivery/evidence/WP2-ADV-REVIEW/probes/pa-negative.ts.txt:48
+  handoff/delivery/evidence/WP2-ADV-REVIEW/probes/pb-race.ts.txt:33
+
+## 9. .gitattributes evidence rule (WP2-INFRA1); precommit privacy rules do not read git whitespace attributes
+29:handoff/delivery/evidence/** -whitespace
+whitespace mentions in precommit-check.mjs: 0
+
+## 10. Client storage and console use (expect none)
+(none)
+
+## 11. Holiday preview counts are rendered in the admin UI
+130:                  {day.default_labelled_entries} default entries follow, {day.explicit_overrides_preserved} personal labels preserved
+203-         FROM day_entries d
+204-         JOIN users u ON u.id = d.user_id
+206-        WHERE u.calendar_id = ? AND t.finalized_revision_no IS NULL AND d.work_date IN (${placeholders(changedDates.length)})

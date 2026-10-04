@@ -5,8 +5,9 @@ import { dayFigures } from './sessionModel.ts';
 
 /**
  * The figures the server computed for the day, in hours and minutes: raw regular (R) and
- * off-calendar (O) time, eligible and credited minutes. Expected finish comes from the shared
- * domain function. Nothing here is computed from the browser clock.
+ * off-calendar (O) time, eligible and credited minutes. Expected finish is the one derived value:
+ * it comes from the shared domain function, is shown in the display zone and is labelled as
+ * derived and display only. Nothing here is computed from the browser clock.
  */
 export function DayFigures({
   day,
@@ -30,7 +31,7 @@ export function DayFigures({
           </dd>
         </div>
         <div>
-          <dt>Expected finish</dt>
+          <dt data-figure-label="expected-finish">Expected finish (derived)</dt>
           <dd data-figure="expected-finish">{expectedFinish ?? 'none yet'}</dd>
         </div>
         <div>
@@ -54,6 +55,12 @@ export function DayFigures({
           <dd data-figure="deficit">{figures.deficit}</dd>
         </div>
       </dl>
+      {expectedFinish !== null && (
+        <p className="muted hint" data-figure-note="expected-finish">
+          Expected finish is derived from the first session start, the required work and the excluded breaks of the policy. It is shown in your
+          current display zone. Display only; nothing is saved.
+        </p>
+      )}
       {display.pendingOt && (
         <p className="muted hint">OT for this day stays pending until breaks are confirmed and every session has ended.</p>
       )}

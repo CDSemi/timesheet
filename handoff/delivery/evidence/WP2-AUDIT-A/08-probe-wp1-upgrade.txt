@@ -1,0 +1,35 @@
+# command: node pd-wp1-build.mjs <wp1-export f32978f> <work-up> (run 2: U9/U10 expectation fixed in the probe; source untouched)
+# start 2026-10-04T09:13:09Z
+OK   session 09-21 09:00-18:00 shifted breaks -> 201
+OK   overnight Fri 09-25 22:00 to 02:00 -> 201
+OK   session 09-24 08:00-19:00 (credit 120) -> 201
+OK   day 09-22 Vacation 480 -> 200
+OK   day 09-23 Worked leave 240 wfh -> 200
+OK   session 09-23 08:00-12:00 unknown breaks -> 201
+OK   clock in (open session) -> 201
+WP1 migrate applied=[1] version=1
+WP1 tables (13) row counts {"audit_events":19,"auth_sessions":2,"calendar_versions":1,"calendars":1,"day_entries":6,"pay_periods":2,"payroll_exceptions":0,"schema_migrations":1,"session_breaks":6,"timesheets":2,"users":2,"work_policies":2,"work_sessions":5}
+integrity_check=ok
+exit=0
+# command: node pd-wp2-upgrade.mjs <clone 8fae685> <work-up> (run 2)
+PASS U1 WP1 database (version 1) upgrades by applying [2,3]  before v1 applied [2,3]
+PASS U2 all 13 WP1 tables keep every row and value (day_entries compared on WP1 columns)  identical 13/13; rows {"audit_events":19,"auth_sessions":2,"calendar_versions":1,"calendars":1,"day_entries":6,"pay_periods":2,"payroll_exceptions":0,"schema_migrations":1,"session_breaks":6,"timesheets":2,"users":2,"work_policies":2,"work_sessions":5}
+PASS U3 WP1 day entries backfilled category_source=explicit, leave_kind NULL  6 rows
+PASS U4 schema_migrations rows 1..3 with current checksums; migration 0001 checksum unchanged
+PASS U5 integrity_check ok, foreign_key_check empty, ot tables empty
+PASS U6 re-running migrate is a no-op
+PASS U7 WP1 employee signs in on the upgraded database
+PASS U8 timesheet view works; WP1 labels kept (09-22 Vacation 480, 09-23 Worked 240 wfh)
+PASS U9 WP1 credits recomputed by the one engine: 09-21 0, 09-24 120, 09-25 overnight 120  0/120/120
+PASS U10 OT summary on upgraded data: posted 0, provisional 240, nothing inferred  posted 0 provisional 240
+PASS U11 reservation on upgraded data with no posted balance -> 409 insufficient_balance (no opening balance inferred)
+PASS U12 evidence CSV on upgraded data lists WP1 sessions and daily credits
+PASS U13 history on upgraded data returns the WP1 audit events of the owner  15 events
+PASS U14 re-saving a WP1 row with leave minutes but no kind asks for the kind (422 leave_kind_required)  422 leave_kind_required
+PASS U15 setting leave_kind ot on the WP1 row saves and spends nothing
+PASS U16 v2 database with ledger/leave rows upgrades by applying [3] and keeps every row  ledger 3 leave 1 differing none
+PASS U17 balance after upgrade equals before (posted 240, reserved 120)
+PASS U18 v2->v3 integrity ok and FK check empty
+RESULT pass=18 fail=0
+exit=0
+# end 2026-10-04T09:13:10Z

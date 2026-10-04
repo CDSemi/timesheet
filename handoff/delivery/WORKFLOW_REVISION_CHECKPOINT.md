@@ -7,14 +7,12 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = da0ffc492b608f1108e3c455e55aa01cca118b45, the WP2-T12 freeze.
-  - Source digest 321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54
-    (author-reported).
-  - Uncommitted: WP2-T13 (source digest
-    8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2, author-reported in
-    a clean export), WP2_HANDOFF (+vi), the T12-FREEZE evidence, the T13-FREEZE, GATE,
-    AUDIT-A and AUDIT-B briefs, the board and this checkpoint. WP2-T13-FREEZE commits them
-    as the package-final freeze.
+  - HEAD = origin/main = 8fae685949adb525ec137e5972202f58b408ac24, the WP2-T13
+    package-final freeze.
+  - Source digest 8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2
+    (author-reported; the gate records the digest of record).
+  - Uncommitted (handoff only): the board, this checkpoint, the gate brief target line and
+    the T13-FREEZE evidence.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -153,10 +151,25 @@ America/Los_Angeles).
   no-print hygiene.
 - WP2-T13 (seed, smoke, docs, WP2 HANDOFF) is done. In a clean export: verify 599 tests
   and smoke 28, test:e2e 66 passed and 2 skipped, preflight 0.
+- WP2-T13 was frozen in 8fae685 (the package-final freeze): 28 paths, all checks 0,
+  preflight 0.
+- WP2-GATE PASS on 8fae685 (digest of record
+  8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2).
+  - npm ci, verify with deprecation tracing, 599 tests with every LG/DF fixture,
+    concurrency x20, fresh and WP1-upgrade migrations, e2e with 66 passed and all 12 flows
+    mapped, and validators: all passed.
+  - Minor F1: the insufficient-balance flow has no screenshot. The coordinator accepts it;
+    AUDIT-B captures one.
+- The B: temp drive had 12 MB free. WP2-TMPCLEAN (light) removes only this project's
+  leftover e2e temp directories before the audits.
+- WP2-TMPCLEAN is done. B: has about 548 MB free; the 12 MB reading was transient. Only
+  the project's e2e leftovers (about 13 MB) were removed.
 - Next action:
-  1. Record the WP2-T13-FREEZE result.
-  2. Dispatch WP2-GATE on the freeze SHA (brief ready).
-  3. After a gate PASS, run WP2-AUDIT-A and WP2-AUDIT-B in parallel (briefs ready).
+  1. Record the WP2-AUDIT-A and WP2-AUDIT-B results.
+  2. If both PASS on 8fae685, run WP2-ACCEPT: the reviews, evidence, HANDOFF acceptance
+     record, STATE and NEXT_ACTION.
+  3. If either is FIX REQUIRED, create bounded fix tasks (`addresses_audit`), then freeze,
+     gate and recheck.
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -172,8 +185,43 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T13-FREEZE (committer). WP2-GATE is pending on it.
-- Live processes: none known besides the committer. The T13 worker removed its temporary
-  export.
+- WP2-AUDIT-B (fresh opus) is FIX REQUIRED on 8fae685 / 8ebce5fe.
+  - WP2-B-01 Medium: the manual-entry input zone defaults to the reporting zone instead of
+    the display zone that R-07 requires.
+  - WP2-B-02 Low: literal CSS values instead of custom properties.
+  - Everything else in area B passed, and gate F1 needs no code change.
+  - The fix brief WP2-FIXB is ready. It is dispatched after WP2-AUDIT-A, because no
+    source writer may run beside an audit.
+- WP2-AUDIT-A (fresh opus) is FIX REQUIRED on 8fae685 / 8ebce5fe.
+  - WP2-A-01 Medium (privacy): the admin holiday preview returns per-date counts of
+    employee entries.
+  - Everything else in the ledger held: a 550-round multi-process race, 119/119 probes,
+    the WP1 upgrade, and ADV-A-01..04 fixed.
+  - R1–R4 are non-blocking and carried forward.
+- Coordinator decision (2026-10-04): remove the counts, because the canonical privacy
+  boundary outranks the plan wording. The owner may reverse this.
+- Fix order: WP2-FIXA (privacy), then WP2-FIXB (zone default and CSS tokens). Then one
+  combined freeze, WP2-GATE2, and fresh rechecks WP2-AUDIT-A2 and WP2-AUDIT-B2.
+- WP2-FIXA is done (author-reported).
+  - The preview no longer carries employee-derived counts, and `finalized_conflicts` is
+    date-only.
+  - The regression tests were red 3, then green 29.
+  - verify 600 tests; e2e 66 passed.
+  - Digest 73db9c0a… (working tree).
+- WP2-FIXB, first pass done (author-reported):
+  - the display-zone default (the R-07 guard passed; no doc change);
+  - the derived expected finish in the display zone;
+  - CSS tokens with an identical computed-style probe;
+  - verify 603 tests; e2e 68 passed, 2 skipped; digest 01110f75….
+- The worker observed that editing an existing session's zone keeps the old pinned
+  offsets. The coordinator resumed the same FIXB worker to fix this too, with red-first
+  tests, before the freeze; this avoids another audit cycle.
+- WP2-FIXB is done, including the addendum (author-reported):
+  - changing a saved session's zone re-reads the typed wall times;
+  - verify 606 tests; e2e 74 passed, 2 skipped;
+  - digest 4c2bd7ef… (working tree, FIXA plus FIXB).
+- Running: WP2-FIX-FREEZE (committer), the new package-final freeze. After it come
+  WP2-GATE2, then WP2-AUDIT-A2 and WP2-AUDIT-B2 in parallel (briefs ready).
+- Live processes: none known besides the committer.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

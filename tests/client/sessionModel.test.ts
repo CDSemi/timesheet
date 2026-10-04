@@ -7,6 +7,7 @@ import {
   buildClockOutRequest,
   buildDayEntryRequest,
   buildSessionRequest,
+  changeZone,
   chosenFold,
   dayFieldsDraft,
   dayFigures,
@@ -16,6 +17,7 @@ import {
   emptyField,
   expectedFinishText,
   gapReplacement,
+  inputZoneChoices,
   leaveHint,
   newSessionDraft,
   otMismatchNotice,
@@ -295,18 +297,95 @@ describe('expected finish and policy (R-02)', () => {
   });
 
   it('adds required work and excluded breaks to the start: 07:00, 08:00 and 09:00 give 16:00, 17:00 and 18:00', () => {
-    const at = (start: string) => expectedFinishText([savedSession({ start_utc: start })], policy('2026-01-01', 1));
+    const at = (start: string) => expectedFinishText([savedSession({ start_utc: start })], policy('2026-01-01', 1), LA);
     expect(at('2026-09-21T14:00:00Z')).toBe('2026-09-21 16:00 (America/Los_Angeles)');
     expect(at('2026-09-21T15:00:00Z')).toBe('2026-09-21 17:00 (America/Los_Angeles)');
     expect(at('2026-09-21T16:00:00Z')).toBe('2026-09-21 18:00 (America/Los_Angeles)');
   });
 
+  it('shows the finish in the display zone, not the zone the session was typed in (R-07)', () => {
+    // Typed in Los Angeles (input_zone), viewed in Ho Chi Minh City: 09:00 PDT + 9 h = 18:00 PDT = 08:00 next day, UTC+7.
+    const sessions = [savedSession({ start_utc: '2026-09-21T16:00:00Z', input_zone: LA })];
+    expect(expectedFinishText(sessions, policy('2026-01-01', 1), 'Asia/Ho_Chi_Minh')).toBe('2026-09-22 08:00 (Asia/Ho_Chi_Minh)');
+    expect(expectedFinishText(sessions, policy('2026-01-01', 1), LA)).toBe('2026-09-21 18:00 (America/Los_Angeles)');
+  });
+
   it('uses the earliest session and says nothing without a session or a policy', () => {
     const late = savedSession({ id: 'late', start_utc: '2026-09-21T20:00:00Z' });
     const early = savedSession({ id: 'early', start_utc: '2026-09-21T16:00:00Z' });
-    expect(expectedFinishText([late, early], policy('2026-01-01', 1))).toBe('2026-09-21 18:00 (America/Los_Angeles)');
-    expect(expectedFinishText([], policy('2026-01-01', 1))).toBeNull();
-    expect(expectedFinishText([early], undefined)).toBeNull();
+    expect(expectedFinishText([late, early], policy('2026-01-01', 1), LA)).toBe('2026-09-21 18:00 (America/Los_Angeles)');
+    expect(expectedFinishText([], policy('2026-01-01', 1), LA)).toBeNull();
+    expect(expectedFinishText([early], undefined, LA)).toBeNull();
+  });
+});
+
+describe('input zone choices for manual entry (R-07)', () => {
+  it('defaults to the current display zone, not the reporting zone, and still offers both', () => {
+    const choices = inputZoneChoices('Asia/Ho_Chi_Minh', LA);
+    expect(choices[0]).toBe('Asia/Ho_Chi_Minh');
+    expect(choices).toContain(LA);
+    expect(new Set(choices).size).toBe(choices.length);
+  });
+
+  it('lists a display zone that is also a common zone once', () => {
+    expect(inputZoneChoices(LA, LA).filter((zone) => zone === LA)).toHaveLength(1);
+    expect(inputZoneChoices(LA, LA)[0]).toBe(LA);
+  });
+});
+
+describe('changing the input zone of a saved session (R-07)', () => {
+  const withBreak = () =>
+    savedSession({
+      breaks: [{ id: 'b1', start_utc: '2026-09-21T18:00:00Z', end_utc: '2026-09-21T18:15:00Z', counts_as_work: false }],
+    });
+
+  it('re-reads the entered wall clock in the new zone: the offsets pinned in the old zone are dropped', () => {
+    const saved = draftFromSession(withBreak());
+    expect(saved.start.offset).toBe('-07:00');
+    const moved = changeZone(saved, 'Europe/London');
+    expect(moved.zone).toBe('Europe/London');
+    // The typed wall times stay as shown...
+    expect(moved.start).toEqual(field('2026-09-21', '09:00'));
+    expect(moved.end).toEqual(field('2026-09-21', '18:00'));
+    expect(moved.breaks[0]?.start).toEqual(field('2026-09-21', '11:00'));
+    // ...and the request carries no offset from the old zone, so the server resolves them in London.
+    const request = buildSessionRequest(moved, { expectedVersion: 4 });
+    expect(request.input_zone).toBe('Europe/London');
+    expect(request.start).toEqual({ local: '2026-09-21T09:00', zone: 'Europe/London' });
+    expect(request.end).toEqual({ local: '2026-09-21T18:00', zone: 'Europe/London' });
+    expect(request.breaks[0]?.start).toEqual({ local: '2026-09-21T11:00', zone: 'Europe/London' });
+    const resolved = resolveStart(moved);
+    if (!resolved.ok) throw new Error('start must resolve');
+    expect(new Date(Number(resolved.utc) * 1000).toISOString()).toBe('2026-09-21T08:00:00.000Z');
+  });
+
+  it('leaves an unchanged zone alone, so an unchanged edit keeps the saved instants', () => {
+    const saved = draftFromSession(withBreak());
+    expect(changeZone(saved, LA)).toBe(saved);
+    expect(buildSessionRequest(saved).start).toEqual({ local: '2026-09-21T09:00', zone: LA, offset: '-07:00' });
+  });
+
+  it('asks again when the same wall time is repeated or missing in the new zone', () => {
+    // 02:30 on 2026-04-05 exists once in Los Angeles but happens twice in Sydney.
+    const saved = draftFromSession(savedSession({ start_utc: '2026-04-05T09:30:00Z', end_utc: '2026-04-05T11:30:00Z' }));
+    expect(saved.start).toEqual({ date: '2026-04-05', time: '02:30', fold: null, offset: '-07:00' });
+    const moved = changeZone(saved, SYDNEY);
+    const start = resolveStart(moved);
+    expect(start.ok).toBe(false);
+    if (start.ok) return;
+    expect(start.problem).toMatchObject({ kind: 'ambiguous', zone: SYDNEY, local: '2026-04-05T02:30' });
+    // Choosing the later time pins it; the same wall time is a different instant than before.
+    const problem = start.problem;
+    if (problem === null) throw new Error('an ambiguous problem is expected');
+    const chosen = applyFold(moved, problem, 1);
+    expect(buildSessionRequest(chosen).start).toEqual({ local: '2026-04-05T02:30', zone: SYDNEY, fold: 1 });
+    // A missing local time in the new zone: 02:30 on 2026-03-08 does not exist in Los Angeles.
+    const sydneySaved = draftFromSession(savedSession({ start_utc: '2026-03-07T15:30:00Z', end_utc: '2026-03-07T17:30:00Z', input_zone: SYDNEY }));
+    expect(sydneySaved.start.time).toBe('02:30');
+    const gapMove = changeZone({ ...sydneySaved, start: { ...sydneySaved.start, date: '2026-03-08' } }, LA);
+    const gap = resolveStart(gapMove);
+    expect(gap.ok).toBe(false);
+    if (!gap.ok) expect(gap.problem).toMatchObject({ kind: 'gap', zone: LA });
   });
 });
 

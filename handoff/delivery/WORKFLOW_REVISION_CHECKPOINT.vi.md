@@ -7,15 +7,12 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = da0ffc492b608f1108e3c455e55aa01cca118b45, commit đóng băng
-    WP2-T12.
-  - Digest mã nguồn 321d2a53bebb7625e8d44a0c377420fc038e1432e63c6a489c307965c4a69e54
-    (tác giả tự báo).
-  - Chưa commit: WP2-T13 (digest mã nguồn
-    8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2, tác giả tự báo, chạy
-    trên bản xuất sạch), WP2_HANDOFF (+vi), bằng chứng của T12-FREEZE, các brief
-    T13-FREEZE, GATE, AUDIT-A và AUDIT-B, board và checkpoint này. WP2-T13-FREEZE sẽ commit
-    chúng làm commit đóng băng cuối package.
+  - HEAD = origin/main = 8fae685949adb525ec137e5972202f58b408ac24, commit đóng băng cuối
+    package WP2-T13.
+  - Digest mã nguồn 8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2
+    (tác giả tự báo; gate sẽ ghi digest chính thức).
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, dòng target trong brief gate và
+    bằng chứng của T13-FREEZE.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -162,10 +159,25 @@ America/Los_Angeles).
   không in nội dung test.
 - WP2-T13 (dữ liệu mẫu, smoke, tài liệu, bàn giao WP2) đã xong. Chạy trên bản xuất sạch:
   verify 599 test, smoke 28; test:e2e 66 đạt, 2 bỏ qua; preflight 0.
+- WP2-T13 đã đóng băng ở 8fae685 (commit đóng băng cuối package): 28 đường dẫn, mọi kiểm
+  tra 0, preflight 0.
+- WP2-GATE PASS trên 8fae685 (digest chính thức
+  8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2).
+  - Đều đạt: npm ci, verify có bật cảnh báo API lỗi thời, 599 test với đủ các bộ mẫu
+    LG/DF, chạy đồng thời 20 lần, migration trên database mới và nâng cấp từ WP1, e2e 66
+    đạt với đủ 12 luồng, và các validator.
+  - Lỗi nhỏ F1: luồng không đủ số dư không có ảnh chụp. Coordinator chấp nhận; AUDIT-B sẽ
+    chụp bổ sung.
+- Ổ tạm B: chỉ còn 12 MB trống. WP2-TMPCLEAN (light) chỉ xóa các thư mục tạm e2e do dự án
+  này để lại, trước khi chạy audit.
+- WP2-TMPCLEAN đã xong. Ổ B: còn khoảng 548 MB trống; con số 12 MB lúc trước chỉ là tạm
+  thời. Chỉ xóa phần thư mục e2e dự án để lại (khoảng 13 MB).
 - Bước tiếp:
-  1. Ghi kết quả WP2-T13-FREEZE.
-  2. Giao WP2-GATE trên SHA đóng băng (brief sẵn).
-  3. Khi gate PASS, chạy song song WP2-AUDIT-A và WP2-AUDIT-B (brief sẵn).
+  1. Ghi kết quả WP2-AUDIT-A và WP2-AUDIT-B.
+  2. Nếu cả hai PASS trên 8fae685, chạy WP2-ACCEPT: các báo cáo review, bằng chứng, record
+     nghiệm thu trong HANDOFF, STATE và NEXT_ACTION.
+  3. Nếu có audit FIX REQUIRED, lên các task sửa giới hạn phạm vi (`addresses_audit`), rồi
+     đóng băng, chạy gate và kiểm tra lại.
   - WP2-T09-PREP đã xong. Kết quả chính:
     - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
       duyệt;
@@ -181,8 +193,44 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T13-FREEZE (committer). WP2-GATE chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Worker T13 đã xóa bản xuất
-  tạm của mình.
+- WP2-AUDIT-B (opus mới) cho kết quả FIX REQUIRED trên 8fae685 / 8ebce5fe.
+  - WP2-B-01, mức Medium: khi nhập giờ tay, múi giờ nhập mặc định là múi giờ báo cáo, trong
+    khi R-07 yêu cầu múi giờ hiển thị.
+  - WP2-B-02, mức Low: một số giá trị CSS viết cứng thay vì dùng biến CSS.
+  - Mọi phần khác của mảng B đều đạt, và F1 của gate không cần sửa code.
+  - Brief sửa WP2-FIXB đã sẵn. Task này chỉ được giao sau khi WP2-AUDIT-A xong, vì không
+    được có bên ghi mã nguồn chạy song song với audit.
+- WP2-AUDIT-A (opus mới) cho kết quả FIX REQUIRED trên 8fae685 / 8ebce5fe.
+  - WP2-A-01, mức Medium, về quyền riêng tư: bản xem trước import lịch của admin trả về số
+    ngày nhập liệu của nhân viên theo từng ngày.
+  - Mọi phần khác của sổ OT đều đạt: chạy đồng thời nhiều process 550 vòng, probe 119/119,
+    nâng cấp từ WP1, và ADV-A-01..04 đã sửa.
+  - R1–R4 không chặn nghiệm thu và được ghi lại cho các giai đoạn sau.
+- Quyết định của coordinator (2026-10-04): bỏ các con số đó, vì ranh giới quyền riêng tư
+  trong tài liệu gốc cao hơn câu chữ của kế hoạch. Chủ dự án có thể đảo lại.
+- Thứ tự sửa: WP2-FIXA (quyền riêng tư), rồi WP2-FIXB (múi giờ mặc định và biến CSS). Sau
+  đó là một commit đóng băng chung, WP2-GATE2, rồi hai lượt kiểm tra lại bằng auditor mới,
+  WP2-AUDIT-A2 và WP2-AUDIT-B2.
+- WP2-FIXA đã xong (tác giả tự báo).
+  - Bản xem trước không còn con số nào lấy từ dữ liệu nhân viên, và `finalized_conflicts`
+    chỉ còn ngày.
+  - Test hồi quy đỏ 3, sau khi sửa xanh 29.
+  - verify 600 test; e2e 66 đạt.
+  - Digest 73db9c0a… (working tree).
+- WP2-FIXB lượt đầu đã xong (tác giả tự báo):
+  - múi giờ mặc định là múi giờ hiển thị (kiểm tra R-07 đạt; không đổi tài liệu);
+  - giờ dự kiến về được suy ra và hiện theo múi giờ hiển thị;
+  - chuyển sang biến CSS, có probe chứng minh style tính ra không đổi;
+  - verify 603 test; e2e 68 đạt, 2 bỏ qua; digest 01110f75….
+- Worker phát hiện khi sửa múi giờ của một phiên đã lưu, độ lệch múi giờ cũ vẫn bị giữ.
+  Coordinator giao tiếp cho chính worker FIXB sửa luôn lỗi này, có test viết trước, trước
+  khi đóng băng; như vậy tránh phải thêm một vòng audit.
+- WP2-FIXB đã xong, kể cả phần bổ sung (tác giả tự báo):
+  - đổi múi giờ của phiên đã lưu thì giờ đã nhập được hiểu lại theo múi giờ mới;
+  - verify 606 test; e2e 74 đạt, 2 bỏ qua;
+  - digest 4c2bd7ef… (working tree, gồm FIXA và FIXB).
+- Đang chạy: WP2-FIX-FREEZE (committer), commit đóng băng cuối package mới. Sau đó là
+  WP2-GATE2, rồi WP2-AUDIT-A2 và WP2-AUDIT-B2 chạy song song (brief sẵn).
+- Process còn sống: không biết có process nào ngoài committer.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

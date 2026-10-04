@@ -1,0 +1,421 @@
+// WP2-AUDIT-A ledger and privacy probe on a REAL SQLite WAL file through the production app
+// (createApp + app.request) and the production services. Synthetic data only; secrets are
+// generated at run time and never printed; output reports booleans, counts and codes only.
+// Usage: node pa-ledger-privacy.mjs <clone-root> <work-dir>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [cloneRoot, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+const leave = await import(src('server/services/otLeave.ts'));
+
+// ---- console capture (the app's only logging is console.*) ----
+const captured = [];
+for (const level of ['log', 'error', 'warn', 'info', 'debug']) {
+  const original = console[level].bind(console);
+  console[level] = (...args) => {
+    captured.push(args.map((a) => (a instanceof Error ? `${a.name}: ${a.message}\n${a.stack}` : typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+    if (level === 'log') original(...args);
+  };
+}
+
+let pass = 0;
+let fail = 0;
+const failures = [];
+function check(id, condition, detail = '') {
+  if (condition) pass += 1; else { fail += 1; failures.push(id); }
+  out(`${condition ? 'PASS' : 'FAIL'} ${id}${detail === '' ? '' : `  ${detail}`}`);
+}
+function observe(id, detail) { out(`OBS  ${id}  ${detail}`); }
+// Probe output bypasses the console capture so that only application output is scanned (run-1 probe bug).
+function out(line) { process.stdout.write(`${line}\n`); }
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const db = openDatabase(join(workDir, 'probe.db'));
+migrate(db);
+class Clock { constructor(iso) { this.t = new Date(iso); } now() { return new Date(this.t.getTime()); } set(iso) { this.t = new Date(iso); } }
+// Wednesday 2026-10-07 12:00 America/Los_Angeles; current payroll 2026-10-16 (period 2026-09-28..10-11).
+const clock = new Clock('2026-10-07T19:00:00Z');
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await seedSynthetic(db, clock, { passwords: pw });
+const calendarId = seed.calendarId;
+const ids = Object.fromEntries(seed.users.map((u) => [u.role, u.id]));
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 3600, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+
+const responses = []; // every response body text, for the secret scan
+async function req(method, path, { cookie, body, origin = ORIGIN, raw = false } = {}) {
+  const headers = {};
+  if (origin !== null) headers.origin = origin;
+  if (cookie !== undefined) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  responses.push(`${method} ${path} ${res.status}\n${[...res.headers].map(([k, v]) => `${k}: ${v}`).join('\n')}\n${text}`);
+  let json = null;
+  if (!raw) { try { json = JSON.parse(text); } catch { json = null; } }
+  return { status: res.status, body: json, text, headers: res.headers };
+}
+async function login(email, password) {
+  const r = await req('POST', '/api/auth/login', { body: { email, password } });
+  if (r.status !== 200) throw new Error(`login failed ${r.status}`);
+  return r.headers.get('set-cookie').split(';')[0];
+}
+const counts = () => ({
+  ledger: db.prepare('SELECT count(*) FROM ot_ledger').pluck().get(),
+  requests: db.prepare('SELECT count(*) FROM ot_leave_requests').pluck().get(),
+  audit: db.prepare('SELECT count(*) FROM audit_events').pluck().get(),
+  versions: db.prepare('SELECT group_concat(version) FROM (SELECT version FROM ot_leave_requests ORDER BY id)').pluck().get(),
+});
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const ctx = { db, clock };
+const key = (p) => `${p}-${randomBytes(6).toString('hex')}`;
+const permission = { approver_name: 'Probe Manager', approval_date: '2026-10-01', evidence_ref: 'probe email ref' };
+
+const adminCookie = await login('admin@example.invalid', pw.admin);
+const emp1Cookie = await login('employee@example.invalid', pw.employee);
+
+// ===== E. Admin creates employee2 with a run-time password (password never echoed) =====
+const pw2 = randomBytes(18).toString('base64url');
+const created = await req('POST', '/api/admin/users', { cookie: adminCookie, body: { email: 'employee2@example.invalid', display_name: 'Example Employee Two', role: 'employee', password: pw2, calendar_id: calendarId } });
+check('E1 admin creates employee2 (201, account fields only)', created.status === 201 && same(Object.keys(created.body.user).sort(), ['calendar_id', 'created_at', 'display_name', 'email', 'id', 'role', 'status', 'updated_at']));
+ids.employee2 = created.body.user.id;
+const emp2Cookie = await login('employee2@example.invalid', pw2);
+// employee2 policy through the API (first version)
+const policyBody = { effective_from: '2026-01-01', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '17:00', breaks: [{ start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false }, { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false }, { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false }], deficit_mode: 'ignore', note: '=2+2 hostile policy note' };
+const pol2 = await req('POST', '/api/policies', { cookie: emp2Cookie, body: policyBody });
+check('setup employee2 policy created', pol2.status === 201, `status ${pol2.status}`);
+
+// ===== I. Trace raw -> provisional -> posted -> reserved -> available (employee1) =====
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+const s1 = await req('POST', '/api/days/2026-10-05/sessions', { cookie: emp1Cookie, body: { start: at('2026-10-05', '08:00'), end: at('2026-10-05', '18:00'), input_zone: LA, breaks_confirmed: true, breaks: [{ start: at('2026-10-05', '10:00'), end: at('2026-10-05', '10:15'), counts_as_work: false }, { start: at('2026-10-05', '12:00'), end: at('2026-10-05', '12:30'), counts_as_work: false }, { start: at('2026-10-05', '14:30'), end: at('2026-10-05', '14:45'), counts_as_work: false }] } });
+check('I1 session 08:00-18:00 with 60 excluded break minutes saved', s1.status === 201, `status ${s1.status}`);
+const day5 = (await req('GET', '/api/days/2026-10-05', { cookie: emp1Cookie })).body;
+const calc = day5.calculation;
+check('I2 raw/eligible/credited distinct: R 540, excess 60, eligible 60, credited 60', calc.regular_minutes === 540 && calc.normal_excess_minutes === 60 && calc.eligible_minutes === 60 && calc.credited_minutes === 60, `R ${calc.regular_minutes} E ${calc.normal_excess_minutes} eligible ${calc.eligible_minutes} credited ${calc.credited_minutes}`);
+let sum1 = (await req('GET', '/api/ot/summary', { cookie: emp1Cookie })).body;
+check('I3 provisional 60, posted 0 (provisional never in posted/available, E-6)', sum1.provisional_minutes === 60 && sum1.posted_minutes === 0 && sum1.available_minutes === 0, `prov ${sum1.provisional_minutes} posted ${sum1.posted_minutes} avail ${sum1.available_minutes}`);
+check('I4 summary carries no other user and no user id field', !('user_id' in sum1) && !JSON.stringify(sum1).includes(ids.employee2));
+// WP3-style posting of that credit through the internal service (no route exists)
+const posted60 = ledger.postCredit(ctx, { userId: ids.employee, sourceKey: 'probe:ts1:rev1:2026-10-05', sourceRef: 'probe-rev-1', actorUserId: null, origin: 'automatic', workDate: '2026-10-05', minutes: 60 });
+check('I5 service credit posts once; retry is duplicate (LG-01)', posted60.status === 'posted' && ledger.postCredit(ctx, { userId: ids.employee, sourceKey: 'probe:ts1:rev1:2026-10-05', sourceRef: 'probe-rev-1', actorUserId: null, origin: 'automatic', workDate: '2026-10-05', minutes: 60 }).status === 'duplicate');
+const r30 = await req('POST', '/api/ot/leave', { cookie: emp1Cookie, body: { request_key: key('k'), leave_date: '2026-10-06', requested_minutes: 30, permission } });
+sum1 = (await req('GET', '/api/ot/summary', { cookie: emp1Cookie })).body;
+check('I6 reserve 30: posted 60, reserved 30, available 30', r30.status === 201 && sum1.posted_minutes === 60 && sum1.reserved_minutes === 30 && sum1.available_minutes === 30, `p ${sum1.posted_minutes} r ${sum1.reserved_minutes} a ${sum1.available_minutes}`);
+const use30 = await req('POST', `/api/ot/leave/${r30.body.request.id}/consume`, { cookie: emp1Cookie, body: { use_key: key('u'), minutes: 30, expected_version: 1 } });
+sum1 = (await req('GET', '/api/ot/summary', { cookie: emp1Cookie })).body;
+check('I7 record use 30: posted 30, reserved 0, available 30, delta -30', use30.status === 200 && use30.body.entry.delta_minutes === -30 && sum1.posted_minutes === 30 && sum1.reserved_minutes === 0 && sum1.available_minutes === 30);
+observe('I8 provisional after posting (WP3 must finalize the period; HANDOFF limitation 2)', `provisional ${sum1.provisional_minutes} with posted ${sum1.posted_minutes}`);
+
+// ===== H. 480-minute conversion (1:1, not 510) =====
+ledger.postCredit(ctx, { userId: ids.employee, sourceKey: key('setup'), actorUserId: null, origin: 'system', reason: 'probe setup', workDate: '2026-09-29', minutes: 1000 });
+const r480 = await req('POST', '/api/ot/leave', { cookie: emp1Cookie, body: { request_key: key('k8'), leave_date: '2026-10-06', requested_minutes: 480, permission } });
+const u480 = await req('POST', `/api/ot/leave/${r480.body.request.id}/consume`, { cookie: emp1Cookie, body: { use_key: key('u8'), minutes: 480, expected_version: 1 } });
+check('H1 eight hours reserve 480 and use posts -480', r480.body.request.reserved_minutes === 480 && u480.body.entry.delta_minutes === -480);
+const before1441 = counts();
+const big = await req('POST', '/api/ot/leave', { cookie: emp1Cookie, body: { request_key: key('kb'), leave_date: '2026-10-06', requested_minutes: 1441, permission } });
+check('H2 more than one civil day refused (422), nothing written', big.status === 422 && same(before1441, counts()), `status ${big.status}`);
+
+// ===== G. LG-10 with leave_kind ot: labels and kinds never spend; mismatch flag only =====
+const ledgerBefore = counts();
+const bal = () => ledger.getBalance(db, ids.employee);
+const balBefore = bal();
+let v = null;
+async function putDay(date, fields) {
+  const r = await req('PUT', `/api/days/${date}`, { cookie: emp1Cookie, body: { category: 'Worked', leave_minutes: 0, leave_kind: null, wfh: false, notes: '', expected_version: v, ...fields } });
+  if (r.status === 200) v = r.body.entry?.version ?? r.body.day?.entry?.version ?? v;
+  return r;
+}
+const g1 = await putDay('2026-10-06', { leave_minutes: 240, leave_kind: 'ot' });
+if (g1.status !== 200) observe('G-debug', `PUT status ${g1.status} ${g1.text.slice(0, 200)}`);
+const dayView = async (d) => (await req('GET', `/api/days/${d}`, { cookie: emp1Cookie })).body;
+let d6 = await dayView('2026-10-06');
+v = d6.entry?.version ?? v;
+check('G1 leave 240 kind ot saved; ot_leave shows kind 240 vs consumed 510 (30+480) -> mismatch flag', d6.leave_kind === 'ot' && d6.ot_leave.kind_minutes === 240 && d6.ot_leave.mismatch === true, JSON.stringify(d6.ot_leave));
+for (const [label, fields] of [['kind vacation', { leave_minutes: 240, leave_kind: 'vacation' }], ['kind sick', { leave_minutes: 240, leave_kind: 'sick' }], ['category Vacation full', { category: 'Vacation', leave_minutes: 480, leave_kind: 'ot' }], ['category Sick', { category: 'Sick', leave_minutes: 0, leave_kind: null }], ['category Off', { category: 'Off' }], ['back to Worked ot 480', { leave_minutes: 480, leave_kind: 'ot' }]]) {
+  const r = await putDay('2026-10-06', fields);
+  d6 = await dayView('2026-10-06'); v = d6.entry?.version ?? v;
+  check(`G2 ${label}: saved, ledger/reservations/balance unchanged`, r.status === 200 && counts().ledger === ledgerBefore.ledger && counts().requests === ledgerBefore.requests && same(bal(), balBefore), `status ${r.status}`);
+}
+const batch = await req('POST', '/api/days/batch', { cookie: emp1Cookie, body: { mode: 'commit', entries: [{ work_date: '2026-10-08', category: 'Vacation', leave_minutes: 480, leave_kind: 'ot' }, { work_date: '2026-10-09', category: 'Sick' }] } });
+check('G3 batch label commit with leave_kind ot: no ledger/reservation/balance change', batch.status === 200 && counts().ledger === ledgerBefore.ledger && counts().requests === ledgerBefore.requests && same(bal(), balBefore), `status ${batch.status}`);
+// Mismatch clears when the day's ot minutes equal consumed - reversed for that date: 480 kind vs consumed 510
+d6 = await dayView('2026-10-06');
+observe('G4 mismatch with 480 kind vs consumed 510 on the date', JSON.stringify(d6.ot_leave));
+// Reverse 30 so consumed - reversed = 480 on 2026-10-06
+const rev30 = await req('POST', `/api/ot/leave/${r30.body.request.id}/reverse`, { cookie: emp1Cookie, body: { reversal_key: key('rv'), minutes: 30, reason: 'probe: wrong date', expected_version: 2 } });
+d6 = await dayView('2026-10-06');
+check('G5 after reversing 30, kind 480 = consumed 510 - reversed 30 -> no mismatch', rev30.status === 200 && d6.ot_leave.mismatch === false, JSON.stringify(d6.ot_leave));
+
+// ===== R-05 L of any kind: 240 work + 240 leave -> no deficit; without leave -> deficit 240 =====
+await req('POST', '/api/days/2026-10-07/sessions', { cookie: emp1Cookie, body: { start: at('2026-10-07', '07:00'), end: at('2026-10-07', '11:00'), input_zone: LA, breaks_confirmed: true, breaks: [] } });
+v = null;
+let d7 = await dayView('2026-10-07'); v = d7.entry?.version ?? null;
+for (const kind of ['ot', 'vacation', 'sick']) {
+  await putDay('2026-10-07', { leave_minutes: 240, leave_kind: kind });
+  d7 = await dayView('2026-10-07'); v = d7.entry?.version ?? v;
+  check(`R05-${kind} 4h work + 4h ${kind} leave: deficit 0, credit 0`, d7.deficit_minutes === 0 && d7.calculation.credited_minutes === 0, `deficit ${d7.deficit_minutes} credited ${d7.calculation.credited_minutes}`);
+}
+await putDay('2026-10-07', { leave_minutes: 0, leave_kind: null });
+d7 = await dayView('2026-10-07');
+check('R05-none 4h work, no leave: deficit 240', d7.deficit_minutes === 240, `deficit ${d7.deficit_minutes}`);
+check('R05-no-debit deficit display posts nothing (ledger count unchanged)', counts().ledger === ledgerBefore.ledger + 1 /* the reversal */);
+
+// ===== B. Ownership / ID swap / admin isolation =====
+const e1req = (await req('POST', '/api/ot/leave', { cookie: emp1Cookie, body: { request_key: key('own'), leave_date: '2026-10-02', requested_minutes: 60, permission } })).body.request;
+const unknownId = '00000000-0000-4000-8000-000000000000';
+for (const [who, cookie] of [['employee2', emp2Cookie], ['admin', adminCookie]]) {
+  for (const [action, body] of [['consume', { use_key: key('x'), minutes: 10, expected_version: 1 }], ['cancel', { expected_version: 1 }], ['reverse', { reversal_key: key('y'), minutes: 10, reason: 'x', expected_version: 1 }]]) {
+    const before = counts();
+    const swapped = await req('POST', `/api/ot/leave/${e1req.id}/${action}`, { cookie, body });
+    const missing = await req('POST', `/api/ot/leave/${unknownId}/${action}`, { cookie, body });
+    check(`B1 ${who} ${action} on employee1 request: 404 identical to unknown id, nothing changed`, swapped.status === 404 && swapped.text === missing.text && same(before, counts()), `status ${swapped.status}`);
+  }
+}
+const q = await req('GET', `/api/ot/ledger?user_id=${ids.employee}`, { cookie: emp2Cookie });
+check('B2 query user_id ignored: employee2 sees only own ledger (no employee1 entries)', q.status === 200 && q.body.entries.every((e) => !JSON.stringify(e).includes(ids.employee)) && q.body.entries.length === db.prepare('SELECT count(*) FROM ot_ledger WHERE user_id = ?').pluck().get(ids.employee2));
+const bodyUser = await req('POST', '/api/ot/leave', { cookie: emp2Cookie, body: { request_key: key('bu'), leave_date: '2026-10-02', requested_minutes: 60, permission, user_id: ids.employee } });
+check('B3 body user_id rejected (422 strict schema), nothing created', bodyUser.status === 422);
+const e1Secrets = [ids.employee, e1req.id, posted60.entry.id, 'employee@example.invalid', 'Example Employee"'];
+for (const [who, cookie] of [['employee2', emp2Cookie], ['admin', adminCookie]]) {
+  for (const path of ['/api/ot/summary', '/api/ot/ledger', '/api/ot/leave', '/api/history', '/api/timesheets/2026-10-16', '/api/days/2026-10-05', `/api/sessions/${s1.body.session?.id ?? s1.body.id ?? 'x'}`, '/api/ot/evidence.csv?from=2026-09-01&to=2026-10-31']) {
+    const r = await req('GET', path, { cookie, raw: path.includes('csv') });
+    const leaked = e1Secrets.filter((s) => r.text.includes(s));
+    check(`B4 ${who} GET ${path.split('?')[0]}: no employee1 identifier/data`, leaked.length === 0 && r.status !== 500, `status ${r.status} leaked ${leaked.length}`);
+  }
+}
+const adminDataProbe = [];
+for (const path of [`/api/admin/users/${ids.employee}`, `/api/admin/users/${ids.employee}/ledger`, `/api/admin/users/${ids.employee}/history`, `/api/admin/ot/summary?user=${ids.employee}`, `/api/admin/evidence.csv`, `/api/admin/history`]) {
+  const r = await req('GET', path, { cookie: adminCookie });
+  adminDataProbe.push(r.status);
+}
+check('B5 admin has no per-user data route (all 404)', adminDataProbe.every((s) => s === 404), adminDataProbe.join(','));
+const empAdmin = await req('GET', '/api/admin/users', { cookie: emp1Cookie });
+check('B6 employee gets 403 on admin area', empAdmin.status === 403);
+
+// ===== A. Route inventory: no public credit/debit/correction endpoint =====
+const routes = app.routes.filter((r) => r.path.startsWith('/api')).map((r) => `${r.method} ${r.path}`);
+const mutating = [...new Set(routes.filter((r) => !/^(GET|ALL) /.test(r) && !r.endsWith('/*')))].sort();
+out(`INFO mutating /api routes (${mutating.length}): ${mutating.join(' | ')}`);
+// Run 1 tested the method too ("POST" matched /post/); only the path is tested now.
+check('A1 no mutating route path mentions credit, debit, correction, ledger or post', mutating.every((r) => !/credit|debit|correct|ledger|post/i.test(r.split(' ')[1])));
+const otMutating = mutating.filter((r) => r.includes('/api/ot'));
+check('A2 /api/ot mutating routes are exactly leave reserve/consume/cancel/reverse', same(otMutating, ['POST /api/ot/leave', 'POST /api/ot/leave/:id/cancel', 'POST /api/ot/leave/:id/consume', 'POST /api/ot/leave/:id/reverse']), otMutating.join(','));
+for (const path of ['/api/ot/credit', '/api/ot/ledger', '/api/ot/debit', '/api/ot/correction', '/api/ot/ledger/credit', '/api/admin/ot/credit', '/api/admin/ledger']) {
+  const before = counts();
+  const r = await req('POST', path, { cookie: adminCookie, body: { minutes: 600, user_id: ids.admin, work_date: '2026-10-05' } });
+  check(`A3 POST ${path} as admin is 404 and writes nothing`, r.status === 404 && same(before, counts()), `status ${r.status}`);
+}
+
+// ===== C. Evidence CSV: formula injection, ownership, headers =====
+const hostile = { approver_name: '=HYPERLINK("http://x.invalid","a")', approver_identity: '-2+3', approval_date: '2026-10-01', evidence_ref: '+1+2,"quoted"' };
+const hreq = await req('POST', '/api/ot/leave', { cookie: emp2Cookie, body: { request_key: '@hostile-key', leave_date: '2026-10-02', requested_minutes: 60, permission: hostile, note: '\t=cmd|\' /C calc\'!A0' } });
+check('C0 hostile permission saved for employee2 (insufficient balance first?)', hreq.status === 201 || hreq.status === 409, `status ${hreq.status}`);
+if (hreq.status === 409) {
+  ledger.postCredit(ctx, { userId: ids.employee2, sourceKey: '=probe-credit-key', actorUserId: null, origin: 'system', reason: '@probe reason', workDate: '2026-10-01', minutes: 300 });
+}
+const hreq2 = hreq.status === 201 ? hreq : await req('POST', '/api/ot/leave', { cookie: emp2Cookie, body: { request_key: '@hostile-key', leave_date: '2026-10-02', requested_minutes: 60, permission: hostile, note: '\t=cmd|\' /C calc\'!A0' } });
+await req('POST', `/api/ot/leave/${hreq2.body.request.id}/consume`, { cookie: emp2Cookie, body: { use_key: '-use', minutes: 60, expected_version: 1 } });
+await req('POST', `/api/ot/leave/${hreq2.body.request.id}/reverse`, { cookie: emp2Cookie, body: { reversal_key: '+rev', minutes: 20, reason: '=SUM(1,2)', expected_version: 2 } });
+const csv = await req('GET', '/api/ot/evidence.csv?from=2026-09-01&to=2026-10-31', { cookie: emp2Cookie, raw: true });
+check('C1 content-type text/csv utf-8', csv.headers.get('content-type') === 'text/csv; charset=utf-8');
+check('C2 attachment with fixed-alphabet filename', csv.headers.get('content-disposition') === 'attachment; filename="ot-evidence_2026-09-01_2026-10-31.csv"');
+check('C3 cache-control no-store and nosniff', csv.headers.get('cache-control') === 'no-store' && csv.headers.get('x-content-type-options') === 'nosniff');
+function parseCsv(text) {
+  const rows = []; let row = []; let cell = ''; let quoted = false; let wasQuoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i += 1; } else quoted = false; } else cell += ch;
+    } else if (ch === '"' && cell === '') { quoted = true; wasQuoted = true; }
+    else if (ch === ',') { row.push({ cell, wasQuoted }); cell = ''; wasQuoted = false; }
+    else if (ch === '\n') { row.push({ cell, wasQuoted }); rows.push(row); row = []; cell = ''; wasQuoted = false; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length > 0) { row.push({ cell, wasQuoted }); rows.push(row); }
+  return rows;
+}
+const rows = parseCsv(csv.text);
+let dangerous = 0; let widthErrors = 0; let width = 0; let inSection = false;
+const sections = [];
+for (const r of rows) {
+  if (r.length === 1 && r[0].cell === '') { inSection = false; continue; }
+  if (r[0].cell === '#section') { sections.push(r[1].cell); inSection = 'header'; continue; }
+  if (inSection === 'header') { width = r.length; inSection = true; continue; }
+  if (r.length !== width) widthErrors += 1;
+  for (const { cell } of r) {
+    if (/^-?\d+$/.test(cell)) continue; // server-produced integers (signed minutes)
+    if (/^[=+\-@\t\r\n]/.test(cell)) dangerous += 1;
+  }
+}
+check('C4 seven sections in order', same(sections, ['export', 'policy_versions', 'intervals', 'breaks', 'daily', 'ledger', 'leave_permissions']), sections.join(','));
+check('C5 no text cell starts with = + - @ TAB CR LF (hostile approver/identity/evidence/note/keys/reasons/policy note)', dangerous === 0, `dangerous ${dangerous}`);
+check('C6 every data row has its section header width', widthErrors === 0, `width errors ${widthErrors}`);
+check('C7 hostile values kept intact behind an apostrophe', csv.text.includes(`"'=HYPERLINK(""http://x.invalid"",""a"")"`) && csv.text.includes(`'-2+3`) && csv.text.includes(`"'+1+2,""quoted"""`) && csv.text.includes(`'=2+2 hostile policy note`), '');
+check('C8 employee2 CSV has no employee1 identifiers', e1Secrets.every((s) => !csv.text.includes(s)));
+for (const [label, path, expected] of [['reversed range', '/api/ot/evidence.csv?from=2026-10-31&to=2026-09-01', 422], ['range > 400 days', '/api/ot/evidence.csv?from=2025-01-01&to=2026-10-31', 422], ['CRLF in from', '/api/ot/evidence.csv?from=2026-09-01%0d%0aX-Evil:1&to=2026-10-31', 422], ['quote in to', '/api/ot/evidence.csv?from=2026-09-01&to=2026-10-31%22', 422], ['missing range', '/api/ot/evidence.csv', 422]]) {
+  const r = await req('GET', path, { cookie: emp2Cookie });
+  check(`C9 ${label} -> ${expected}`, r.status === expected && r.headers.get('content-disposition') === null, `status ${r.status}`);
+}
+const anon = await req('GET', '/api/ot/evidence.csv?from=2026-09-01&to=2026-10-31');
+check('C10 anonymous -> 401 with no-store', anon.status === 401 && anon.headers.get('cache-control') === 'no-store');
+
+// ===== D. History: own events only; per-user cursor (ADV-A-04) =====
+// Interleave: admin activity (logins, an admin edit of employee1, employee2 activity) between employee1 events.
+for (let i = 0; i < 5; i += 1) await login('admin@example.invalid', pw.admin);
+await req('PATCH', `/api/admin/users/${ids.employee}`, { cookie: adminCookie, body: { display_name: 'Example Employee Renamed' } });
+await login('employee2@example.invalid', pw2);
+await login('employee@example.invalid', pw.employee);
+const ownIds = db.prepare('SELECT id FROM audit_events WHERE owner_user_id = ? ORDER BY rowid').pluck().all(ids.employee);
+let cursor = null; const seen = []; const cursors = []; let leakedOther = 0; let adminEvent = null;
+for (let guard = 0; guard < 1000; guard += 1) {
+  const r = await req('GET', `/api/history?limit=1${cursor === null ? '' : `&before=${cursor}`}`, { cookie: emp1Cookie });
+  for (const e of r.body.audit_events) {
+    seen.push(e.id);
+    if (e.operation === 'user.update') adminEvent = e;
+    const text = JSON.stringify(e);
+    if ([ids.admin, ids.employee2, 'admin@example.invalid', 'employee2@example.invalid'].some((s) => text.includes(s))) leakedOther += 1;
+  }
+  cursor = r.body.next_before;
+  if (cursor === null) break;
+  cursors.push(Number(cursor));
+}
+check('D1 paging with limit=1 returns exactly the caller-owned audit events, newest first', same([...seen].reverse(), ownIds), `own ${ownIds.length} seen ${seen.length}`);
+// The cursor is the ordinal of the last event on a page; the page holding ordinal 1 ends the list
+// (next_before null), so the cursors run from the own-event count down to 2 (run 1 expected 1).
+const consecutive = cursors.every((c, i) => i === 0 || cursors[i - 1] - c === 1) && cursors[0] === ownIds.length && cursors.at(-1) === 2;
+check('D2 cursors are consecutive per-user ordinals from the own-event count down to 2 (no gap reveals other users events)', consecutive, `first ${cursors[0]} last ${cursors.at(-1)} count ${cursors.length}`);
+check('D3 no other user identifier or email in any history event', leakedOther === 0);
+check('D4 admin edit of employee1 shows actor_is_self false and actor_user_id null', adminEvent !== null && adminEvent.actor_is_self === false && adminEvent.actor_user_id === null);
+const big1 = await req('GET', '/api/history?before=999999999&limit=500', { cookie: emp1Cookie });
+check('D5 a large global-looking cursor returns only own events', big1.body.audit_events.every((e) => ownIds.includes(e.id)));
+const adminHist = await req('GET', '/api/history?limit=500', { cookie: adminCookie });
+const adminOwn = db.prepare('SELECT id FROM audit_events WHERE owner_user_id = ?').pluck().all(ids.admin);
+check('D6 admin history = admin-owned events only (admin is not blanket access)', adminHist.body.audit_events.every((e) => adminOwn.includes(e.id)) && !adminHist.text.includes(ids.employee) && !adminHist.text.includes(ids.employee2));
+for (const bad of ['-1', '1.5', 'abc', '1e3', '9999999999999999']) {
+  const r = await req('GET', `/api/history?before=${encodeURIComponent(bad)}`, { cookie: emp1Cookie });
+  check(`D7 invalid cursor ${bad} -> 422`, r.status === 422, `status ${r.status}`);
+}
+
+// ===== F. Corrections (R-05 / R-06, ADV-A-01/02, LG-08, LG-09) on the real DB =====
+const fUser = ids.admin; // the admin's own balance (any owner)
+const c = (o) => ledger.postCorrection(ctx, { userId: fUser, actorUserId: fUser, origin: 'manual', reason: 'probe correction', ...o });
+const credit60 = ledger.postCredit(ctx, { userId: fUser, sourceKey: key('cr60'), actorUserId: null, origin: 'automatic', workDate: '2026-09-21', minutes: 60 });
+const lg02 = c({ sourceKey: key('c-up'), originalEntryId: credit60.entry.id, correctedMinutes: 90 });
+check('F1 LG-02 correction 60 -> 90 posts +30 linked to the original', lg02.status === 'posted' && lg02.deltaMinutes === 30 && lg02.entry.correctsEntryId === credit60.entry.id);
+const k1 = key('c-retry');
+const r1 = c({ sourceKey: k1, originalEntryId: credit60.entry.id, correctedMinutes: 120 });
+const r1dup = c({ sourceKey: k1, originalEntryId: credit60.entry.id, correctedMinutes: 120 });
+let conflict = null; try { c({ sourceKey: k1, originalEntryId: credit60.entry.id, correctedMinutes: 150 }); } catch (e) { conflict = e.code; }
+check('F2 ADV-A-01 identical retry duplicate; same key different value 409 source_key_conflict', r1.status === 'posted' && r1dup.status === 'duplicate' && conflict === 'source_key_conflict', `conflict ${conflict}`);
+const lg09 = c({ sourceKey: key('c-same'), originalEntryId: credit60.entry.id, correctedMinutes: 120 });
+check('F3 LG-09 unchanged correction appends nothing', lg09.status === 'unchanged' && lg09.entry === null);
+let stale = null; try { c({ sourceKey: key('c-stale'), originalEntryId: credit60.entry.id, correctedMinutes: 100, expectedPreviousMinutes: 90 }); } catch (e) { stale = e.code; }
+check('F4 expectedPreviousMinutes guard -> 409 stale_correction', stale === 'stale_correction');
+let target = null; try { c({ sourceKey: key('c-chain'), originalEntryId: lg02.entry.id, correctedMinutes: 5 }); } catch (e) { target = e.code; }
+check('F5 correcting a correction -> invalid_correction_target', target === 'invalid_correction_target', `${target}`);
+let other = null; try { c({ sourceKey: key('c-other'), originalEntryId: posted60.entry.id, correctedMinutes: 0 }); } catch (e) { other = `${e.status}:${e.code}`; }
+check('F6 correcting another user entry -> 404 not_found (indistinguishable)', other === '404:not_found', `${other}`);
+let leaveTarget = null; try { c({ sourceKey: key('c-leave'), originalEntryId: u480.body.entry.id, correctedMinutes: 0 }); } catch (e) { leaveTarget = `${e.status}:${e.code}`; }
+check('F7 correcting a leave consumption of another user/type is refused', leaveTarget !== null, `${leaveTarget}`);
+let noReason = null; try { ledger.postCorrection(ctx, { userId: fUser, actorUserId: fUser, origin: 'manual', sourceKey: key('c-nr'), originalEntryId: credit60.entry.id, correctedMinutes: 30, reason: '  ' }); } catch (e) { noReason = e.code; }
+check('F8 a correction without a reason -> reason_required', noReason === 'reason_required');
+// ADV-A-02: raise a debit beyond the available balance -> pending, nothing appended, no audit
+const fb = ledger.getBalance(db, fUser); // posted 120 (60+30+30)
+const debit = ledger.postDeficitDebit(ctx, { userId: fUser, sourceKey: key('d40'), actorUserId: null, origin: 'automatic', workDate: '2026-09-22', debitMinutes: 40 });
+const reserveAdmin = leave.reserveOtLeave(ctx, { userId: fUser, actorUserId: fUser, requestKey: key('ra'), leaveDate: '2026-09-25', requestedMinutes: 60, permission: { approverName: 'P', approvalDate: '2026-09-20', evidenceRef: 'e' } });
+const avail = ledger.getBalance(db, fUser).availableMinutes; // 120-40-60 = 20
+const beforeP = counts();
+const pend = c({ sourceKey: key('c-dup'), originalEntryId: debit.entry.id, correctedMinutes: 70 }); // increase 30 > 20
+check('F9 ADV-A-02 debit 40 -> 70 with available 20 is pending (increase 30), nothing appended, no audit', debit.status === 'posted' && avail === 20 && pend.status === 'pending' && pend.debitIncreaseMinutes === 30 && pend.availableMinutes === 20 && pend.entry === null && same(beforeP, counts()), `fb ${fb.postedMinutes} avail ${avail} status ${pend.status}`);
+const okInc = c({ sourceKey: key('c-dup2'), originalEntryId: debit.entry.id, correctedMinutes: 60 }); // increase 20 == 20
+check('F10 debit increase exactly equal to available posts (-20), balance not negative', okInc.status === 'posted' && okInc.deltaMinutes === -20 && ledger.getBalance(db, fUser).availableMinutes === 0);
+const lower = c({ sourceKey: key('c-dn'), originalEntryId: debit.entry.id, correctedMinutes: 10 });
+check('F11 lowering a debit always posts (+50)', lower.status === 'posted' && lower.deltaMinutes === 50);
+// LG-08: lower a credit that was already spent -> negative, kept and flagged
+// A fresh owner whose only balance is this credit (run 1 used employee2, who had other credits).
+const { createUser } = await import(src('server/services/users.ts'));
+const pwg = randomBytes(18).toString('base64url');
+const g = await createUser(db, clock, { email: 'lg08@example.invalid', displayName: 'LG08 Probe', role: 'employee', password: pwg, calendarId }, null);
+const cr = ledger.postCredit(ctx, { userId: g, sourceKey: key('g-cr'), actorUserId: null, origin: 'automatic', workDate: '2026-09-23', minutes: 60 });
+const gReq = leave.reserveOtLeave(ctx, { userId: g, actorUserId: g, requestKey: key('gr'), leaveDate: '2026-09-24', requestedMinutes: 60, permission: { approverName: 'P', approvalDate: '2026-09-20', evidenceRef: 'e' } });
+const balPre = ledger.getBalance(db, g);
+leave.recordOtLeaveUse(ctx, { userId: g, actorUserId: g, requestId: gReq.request.id, useKey: key('gu'), minutes: 60 });
+const balSpent = ledger.getBalance(db, g);
+const lg08 = ledger.postCorrection(ctx, { userId: g, actorUserId: g, origin: 'manual', reason: 'truthful correction', sourceKey: key('g-c'), originalEntryId: cr.entry.id, correctedMinutes: 0 });
+const balAfter = ledger.getBalance(db, g);
+check('F12 LG-08 lowering a spent credit 60 -> 0 posts -60, kept, flagged (entry and balance)', lg08.status === 'posted' && lg08.deltaMinutes === -60 && lg08.entry.reconciliationRequired === true && balAfter.postedMinutes === balSpent.postedMinutes - 60 && balAfter.reconciliationRequired === (balAfter.postedMinutes < 0 || balAfter.availableMinutes < 0), `pre ${balPre.postedMinutes} spent ${balSpent.postedMinutes} after ${balAfter.postedMinutes} flag ${balAfter.reconciliationRequired}`);
+// Run 2 read employee2's summary; the LG-08 owner is the fresh user, so sign in as that user.
+const sumAfter = (await req('GET', '/api/ot/summary', { cookie: await login('lg08@example.invalid', pwg) })).body;
+check('F13 summary exposes negative/reconciliation_required to the owner', typeof sumAfter.reconciliation_required === 'boolean' && sumAfter.reconciliation_required === balAfter.reconciliationRequired && sumAfter.negative === balAfter.negative, `posted ${sumAfter.posted_minutes} negative ${sumAfter.negative} recon ${sumAfter.reconciliation_required}`);
+// R-05 debit increase while balance negative is pending (no silent overdraft)
+const gDebit = (() => { try { return ledger.postDeficitDebit(ctx, { userId: g, sourceKey: key('g-d'), actorUserId: null, origin: 'automatic', workDate: '2026-09-25', debitMinutes: 10 }); } catch (e) { return { status: `error:${e.code}` }; } })();
+check('F14 a new debit while the available balance is short stays pending', gDebit.status === (ledger.getBalance(db, g).availableMinutes >= 10 ? 'posted' : 'pending') || gDebit.status === 'pending', `${gDebit.status}`);
+
+// ===== Append-only triggers on the probe DB =====
+const trig = (sql, ...a) => { try { db.prepare(sql).run(...a); return 'allowed'; } catch (e) { return e.message; } };
+check('T1 ot_ledger UPDATE refused', trig('UPDATE ot_ledger SET delta_minutes = 1 WHERE id = ?', credit60.entry.id) === 'immutable_ledger_entry');
+check('T2 ot_ledger DELETE refused', trig('DELETE FROM ot_ledger WHERE id = ?', credit60.entry.id) === 'immutable_ledger_entry');
+check('T3 audit_events UPDATE refused', trig('UPDATE audit_events SET reason = ? WHERE rowid = 1', 'x') !== 'allowed');
+check('T4 audit_events DELETE refused', trig('DELETE FROM audit_events WHERE rowid = 1') !== 'allowed');
+check('T5 leave request DELETE refused', trig('DELETE FROM ot_leave_requests WHERE id = ?', e1req.id) === 'immutable_leave_request');
+check('T6 leave permission facts immutable', trig('UPDATE ot_leave_requests SET approver_name = ?, version = version + 1 WHERE id = ?', 'Other', e1req.id) === 'immutable_leave_request');
+check('T7 leave counters cannot move backward', trig('UPDATE ot_leave_requests SET consumed_minutes = 0, reserved_minutes = 60, version = version + 1 WHERE id = ?', hreq2.body.request.id) === 'immutable_leave_request_counters');
+check('T8 leave version must bump by exactly one', trig('UPDATE ot_leave_requests SET note = ? WHERE id = ?', 'n', e1req.id) === 'immutable_leave_request_version');
+check('T9 raw insert of a correction pointing at a correction refused', trig(`INSERT INTO ot_ledger (id,user_id,entry_type,delta_minutes,source_key,corrects_entry_id,work_date,origin,reason,posted_at) VALUES ('t9',?,'correction',5,'t9k',?,'2026-09-21','system','r','2026-10-07T19:00:00Z')`, fUser, lg02.entry.id) === 'invalid_correction_target');
+check('T10 raw insert of a cross-user correction refused', trig(`INSERT INTO ot_ledger (id,user_id,entry_type,delta_minutes,source_key,corrects_entry_id,work_date,origin,reason,posted_at) VALUES ('t10',?,'correction',5,'t10k',?,'2026-09-21','system','r','2026-10-07T19:00:00Z')`, g, credit60.entry.id) !== 'allowed');
+check('T11 zero delta refused by schema', trig(`INSERT INTO ot_ledger (id,user_id,entry_type,delta_minutes,source_key,work_date,origin,posted_at) VALUES ('t11',?,'credit',0,'t11k','2026-09-21','system','2026-10-07T19:00:00Z')`, g) !== 'allowed');
+
+// ===== E. Password / hash never leaves the server =====
+const wrong = await req('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: `${pw2}x` } });
+const weak = await req('POST', '/api/admin/users', { cookie: adminCookie, body: { email: 'weak@example.invalid', display_name: 'Weak', role: 'employee', password: 'synthetic', calendar_id: calendarId } });
+const typed = await req('POST', '/api/admin/users', { cookie: adminCookie, body: { email: 'typed@example.invalid', display_name: 'Typed', role: 'employee', password: 123456789012345, calendar_id: calendarId } });
+const extra = await req('POST', '/api/admin/users', { cookie: adminCookie, body: { email: 'extra@example.invalid', display_name: 'Extra', role: 'employee', password: pw2, calendar_id: calendarId, password_hash: 'fake-hash-value' } });
+check('E2 wrong password 401, weak 422, non-string 422, extra password_hash field 422', wrong.status === 401 && weak.status === 422 && typed.status === 422 && extra.status === 422, `${wrong.status}/${weak.status}/${typed.status}/${extra.status}`);
+await req('GET', '/api/admin/users', { cookie: adminCookie });
+await req('POST', `/api/admin/users/${ids.employee2}/deactivate`, { cookie: adminCookie, body: { reason: 'probe' } });
+await req('POST', `/api/admin/users/${ids.employee2}/reactivate`, { cookie: adminCookie, body: {} });
+const emp2b = await login('employee2@example.invalid', pw2);
+await req('GET', '/api/history?limit=500', { cookie: emp2b });
+await req('GET', '/api/history?limit=500', { cookie: adminCookie });
+await req('GET', '/api/auth/me', { cookie: emp2b });
+const hashes = db.prepare('SELECT password_hash FROM users').pluck().all();
+const hashParts = hashes.flatMap((h) => h.split('$').slice(4)); // salt and key segments
+const secrets = [pw.admin, pw.employee, pw2, `${pw2}x`, pwg, ...hashes, ...hashParts];
+const auditText = db.prepare('SELECT * FROM audit_events').all().map((r) => JSON.stringify(r)).join('\n');
+const scan = (text) => secrets.filter((s) => s.length >= 8 && text.includes(s)).length + (text.includes('scrypt$') ? 1 : 0);
+// Field names: walk every JSON response body for a key containing "password". Run 1 matched the text of
+// the strict-schema 422 that echoes the unknown key name the probe itself sent, which is not a leak.
+const passwordKeys = [];
+const walk = (value, path) => {
+  if (value === null || typeof value !== 'object') return;
+  for (const [k, x] of Object.entries(value)) { if (/password/i.test(k)) passwordKeys.push(`${path}.${k}`); walk(x, `${path}.${k}`); }
+};
+for (const r of responses) { const lines = r.split('\n'); try { walk(JSON.parse(lines.at(-1)), lines[0]); } catch { /* CSV or empty body */ } }
+const echoedKeyOnly = responses.filter((r) => /password_hash/.test(r)).every((r) => r.split('\n')[0] === 'POST /api/admin/users 422' && r.includes('Unrecognized key'));
+check('E3 no password, hash, salt/key segment or scrypt$ text in any HTTP response (incl. headers)', scan(responses.join('\n')) === 0, `responses ${responses.length}`);
+check('E3b no JSON response has a password* field; the only password_hash text is the 422 echo of the key name the probe sent', passwordKeys.length === 0 && echoedKeyOnly, `password keys ${passwordKeys.length}`);
+check('E4 no password or hash in any audit_events row (before/after/reason)', scan(auditText) === 0, `audit rows ${db.prepare('SELECT count(*) FROM audit_events').pluck().get()}`);
+check('E5 no password or hash in captured console output', scan(captured.join('\n')) === 0, `console lines ${captured.length}`);
+check('E6 the word "password" appears in no audit payload', !/password/i.test(auditText));
+
+// ===== Health has no personal data; unknown /api path 404 =====
+const health = await req('GET', '/api/health');
+check('Z1 health has no personal data', health.text === '{"status":"ok"}');
+
+const integrity = db.pragma('integrity_check', { simple: true });
+check('Z2 integrity_check ok and foreign_key_check empty', integrity === 'ok' && db.pragma('foreign_key_check').length === 0);
+db.close();
+out(`RESULT pass=${pass} fail=${fail}${fail ? ` failures=${failures.join(',')}` : ''}`);
+process.exitCode = fail === 0 ? 0 : 1;

@@ -1,0 +1,343 @@
+// WP2-AUDIT-A multi-process race probe (AC-03, R-06, R-05) on a REAL SQLite WAL file.
+// Separate OS processes (child_process.spawn of process.execPath), each with its own
+// connection, call the production services. Two start modes per race:
+//   "blocker": the parent holds BEGIN IMMEDIATE while every worker submits its call, so all
+//              calls are queued on the write lock and race the instant it is released;
+//   "direct":  commands are written to every worker back to back (natural contention).
+// A sensitivity control (unsafe read-then-insert outside a transaction) must double-book.
+// Usage: node pr-race.mjs <clone-root> <work-dir> [rounds]
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { createInterface } from 'node:readline';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const [cloneRoot, workDir, roundsArg] = process.argv.slice(2);
+const ROUNDS = Number(roundsArg ?? 20);
+const WORKERS = 4;
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { systemClock } = await import(src('server/clock.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const { createUser } = await import(src('server/services/users.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+const leave = await import(src('server/services/otLeave.ts'));
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const dbPath = join(workDir, 'race.db');
+const db = openDatabase(dbPath);
+migrate(db);
+const seed = await seedSynthetic(db, systemClock, {});
+const calendarId = seed.calendarId;
+const ctx = { db, clock: systemClock };
+console.log(`db=<work>/race.db journal_mode=${db.pragma('journal_mode', { simple: true })} busy_timeout=${db.pragma('busy_timeout', { simple: true })} node=${process.version}`);
+
+let userSeq = 0;
+async function freshUser() {
+  userSeq += 1;
+  // Synthetic per-run password, never printed.
+  return createUser(db, systemClock, {
+    email: `racer${userSeq}@example.invalid`, displayName: `Racer ${userSeq}`, role: 'employee',
+    password: randomBytes(18).toString('base64url'), calendarId,
+  }, null);
+}
+const key = (p) => `${p}-${randomBytes(6).toString('hex')}`;
+function credit(userId, minutes) {
+  return ledger.postCredit(ctx, { userId, sourceKey: key('probe-credit'), actorUserId: null, origin: 'system', reason: 'probe setup', workDate: '2026-01-02', minutes });
+}
+const permission = { approverName: 'Probe Manager', approvalDate: '2026-01-02', evidenceRef: 'probe evidence' };
+function reserve(userId, minutes, requestKey = key('probe-req')) {
+  return leave.reserveOtLeave(ctx, { userId, actorUserId: userId, requestKey, leaveDate: '2026-01-05', requestedMinutes: minutes, permission });
+}
+
+// ---- worker pool ----
+const workerPath = join(dirname(fileURLToPath(import.meta.url)), 'pr-race-worker.mjs');
+const workers = [];
+for (let i = 0; i < WORKERS; i += 1) {
+  const child = spawn(process.execPath, [workerPath, cloneRoot, dbPath], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const pending = new Map();
+  let readyResolve;
+  const ready = new Promise((r) => { readyResolve = r; });
+  createInterface({ input: child.stdout }).on('line', (line) => {
+    const msg = JSON.parse(line);
+    if (msg.ready) { readyResolve(msg.pid); return; }
+    pending.get(msg.id)?.(msg);
+    pending.delete(msg.id);
+  });
+  workers.push({ child, pending, ready });
+}
+const pids = await Promise.all(workers.map((w) => w.ready));
+console.log(`workers=${WORKERS} separate processes, distinct pids=${new Set(pids).size}, parent pid differs=${!pids.includes(process.pid)}`);
+
+let cmdSeq = 0;
+function send(worker, op, input) {
+  cmdSeq += 1;
+  const id = cmdSeq;
+  return new Promise((resolve) => {
+    worker.pending.set(id, resolve);
+    worker.child.stdin.write(JSON.stringify({ id, op, input }) + '\n');
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fire(commands, mode) {
+  let blocker;
+  if (mode === 'blocker') {
+    blocker = openDatabase(dbPath);
+    blocker.exec('BEGIN IMMEDIATE');
+  }
+  const results = commands.map((c, i) => send(workers[i % WORKERS], c.op, c.input));
+  if (blocker !== undefined) {
+    await sleep(60);
+    blocker.exec('COMMIT');
+    blocker.close();
+  }
+  return Promise.all(results);
+}
+
+// ---- invariants read straight from the database ----
+function state(userId) {
+  const posted = db.prepare('SELECT COALESCE(SUM(delta_minutes),0) FROM ot_ledger WHERE user_id = ?').pluck().get(userId);
+  const reserved = db.prepare('SELECT COALESCE(SUM(reserved_minutes),0) FROM ot_leave_requests WHERE user_id = ?').pluck().get(userId);
+  const requests = db.prepare('SELECT * FROM ot_leave_requests WHERE user_id = ?').all(userId);
+  const entries = db.prepare('SELECT * FROM ot_ledger WHERE user_id = ?').all(userId);
+  return { posted, reserved, available: posted - reserved, requests, entries };
+}
+function requestConsistency(s) {
+  const problems = [];
+  for (const r of s.requests) {
+    if (r.reserved_minutes + r.consumed_minutes + r.released_minutes !== r.approved_minutes) problems.push(`counters ${r.id}`);
+    if (r.reversed_minutes > r.consumed_minutes) problems.push(`reversed>consumed ${r.id}`);
+    const used = s.entries.filter((e) => e.leave_request_id === r.id && e.entry_type === 'leave_consumption').reduce((t, e) => t + e.delta_minutes, 0);
+    const back = s.entries.filter((e) => e.leave_request_id === r.id && e.entry_type === 'leave_reversal').reduce((t, e) => t + e.delta_minutes, 0);
+    if (used !== -r.consumed_minutes) problems.push(`ledger use ${used} vs consumed ${r.consumed_minutes}`);
+    if (back !== r.reversed_minutes) problems.push(`ledger reversal ${back} vs reversed ${r.reversed_minutes}`);
+  }
+  return problems;
+}
+const count = (results, pred) => results.filter(pred).length;
+const okStatus = (s) => (r) => r.ok && r.status === s;
+const errCode = (c) => (r) => !r.ok && r.code === c;
+
+const summary = [];
+async function race(name, modes, setup, check) {
+  for (const mode of modes) {
+    const tally = new Map();
+    let violations = 0;
+    const examples = [];
+    for (let round = 0; round < ROUNDS; round += 1) {
+      const fixture = await setup();
+      const results = await fire(fixture.commands, mode);
+      const outcome = results.map((r) => (r.ok ? r.status : `error:${r.code}`)).sort().join(' + ');
+      tally.set(outcome, (tally.get(outcome) ?? 0) + 1);
+      const problems = check(results, fixture);
+      if (problems.length > 0) { violations += 1; if (examples.length < 3) examples.push(`round ${round}: ${problems.join('; ')} [${outcome}]`); }
+    }
+    const line = `${name} [${mode}] rounds=${ROUNDS} violations=${violations} outcomes=${[...tally].map(([k, v]) => `{${k}}x${v}`).join(' ')}`;
+    console.log(line);
+    for (const e of examples) console.log(`   ${e}`);
+    summary.push({ name, mode, violations, expectViolation: name.startsWith('CONTROL') });
+  }
+}
+const BOTH = ['blocker', 'direct'];
+
+// R1 two reservations of 80 at available 100: exactly one wins (E-5, AC-03).
+await race('R1 reserve 80+80 @100', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 100);
+  const input = (k) => ({ userId, actorUserId: userId, requestKey: k, leaveDate: '2026-01-05', requestedMinutes: 80, permission });
+  return { userId, commands: [{ op: 'reserve', input: input(key('a')) }, { op: 'reserve', input: input(key('b')) }] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('reserved')) !== 1) p.push('winners!=1');
+  if (count(res, errCode('insufficient_balance')) !== 1) p.push('losers!=1 insufficient_balance');
+  if (s.reserved !== 80 || s.available !== 20 || s.requests.length !== 1) p.push(`state reserved=${s.reserved} available=${s.available} rows=${s.requests.length}`);
+  return p;
+});
+
+// R2 four reservations of 80 at available 200: exactly two win.
+await race('R2 reserve 4x80 @200', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  return { userId, commands: [0, 1, 2, 3].map(() => ({ op: 'reserve', input: { userId, actorUserId: userId, requestKey: key('q'), leaveDate: '2026-01-05', requestedMinutes: 80, permission } })) };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('reserved')) !== 2) p.push('winners!=2');
+  if (s.reserved !== 160 || s.available !== 40) p.push(`reserved=${s.reserved} available=${s.available}`);
+  return p;
+});
+
+// R3 the same request key from three processes: one row, one reserved, two duplicates.
+await race('R3 same request key x3', ['blocker'], async () => {
+  const userId = await freshUser(); credit(userId, 500);
+  const k = key('same');
+  return { userId, commands: [0, 1, 2].map(() => ({ op: 'reserve', input: { userId, actorUserId: userId, requestKey: k, leaveDate: '2026-01-05', requestedMinutes: 120, permission } })) };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('reserved')) !== 1 || count(res, okStatus('duplicate')) !== 2) p.push('not 1 reserved + 2 duplicate');
+  if (s.requests.length !== 1 || s.reserved !== 120) p.push(`rows=${s.requests.length} reserved=${s.reserved}`);
+  return p;
+});
+
+// R4 two record-use calls of 80 on a 120 reservation (distinct keys, same expected_version): one wins.
+await race('R4 use 80+80 of 120 (expected_version 1)', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  const requestId = reserve(userId, 120).request.id;
+  const input = (k) => ({ userId, actorUserId: userId, requestId, useKey: k, minutes: 80, expectedVersion: 1 });
+  return { userId, commands: [{ op: 'use', input: input(key('u1')) }, { op: 'use', input: input(key('u2')) }] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [...requestConsistency(s)];
+  if (count(res, okStatus('used')) !== 1) p.push('winners!=1');
+  const r = s.requests[0];
+  if (r.consumed_minutes !== 80 || r.reserved_minutes !== 40) p.push(`consumed=${r.consumed_minutes} reserved=${r.reserved_minutes}`);
+  if (s.posted !== 120) p.push(`posted=${s.posted}`);
+  return p;
+});
+
+// R4b the same without expected_version: the loser must hit exceeds_reserved.
+await race('R4b use 80+80 of 120 (no version)', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  const requestId = reserve(userId, 120).request.id;
+  const input = (k) => ({ userId, actorUserId: userId, requestId, useKey: k, minutes: 80 });
+  return { userId, commands: [{ op: 'use', input: input(key('u1')) }, { op: 'use', input: input(key('u2')) }] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [...requestConsistency(s)];
+  if (count(res, okStatus('used')) !== 1 || count(res, errCode('exceeds_reserved')) !== 1) p.push('not 1 used + 1 exceeds_reserved');
+  if (s.requests[0].consumed_minutes !== 80) p.push(`consumed=${s.requests[0].consumed_minutes}`);
+  return p;
+});
+
+// R5 the same use key from three processes: one ledger row.
+await race('R5 same use key x3', ['blocker'], async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  const requestId = reserve(userId, 120).request.id;
+  const k = key('use-same');
+  return { userId, commands: [0, 1, 2].map(() => ({ op: 'use', input: { userId, actorUserId: userId, requestId, useKey: k, minutes: 60 } })) };
+}, (res, f) => {
+  const s = state(f.userId); const p = [...requestConsistency(s)];
+  if (count(res, okStatus('used')) !== 1 || count(res, okStatus('duplicate')) !== 2) p.push('not 1 used + 2 duplicate');
+  if (s.entries.filter((e) => e.entry_type === 'leave_consumption').length !== 1) p.push('consumption rows != 1');
+  return p;
+});
+
+// R6 cancel versus full use: counters and ledger stay consistent either way.
+await race('R6 cancel vs use 120', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  const requestId = reserve(userId, 120).request.id;
+  return { userId, commands: [
+    { op: 'cancel', input: { userId, actorUserId: userId, requestId } },
+    { op: 'use', input: { userId, actorUserId: userId, requestId, useKey: key('u'), minutes: 120 } },
+  ] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [...requestConsistency(s)];
+  const r = s.requests[0];
+  if (!((r.consumed_minutes === 120 && r.released_minutes === 0) || (r.consumed_minutes === 0 && r.released_minutes === 120))) p.push(`consumed=${r.consumed_minutes} released=${r.released_minutes}`);
+  if (r.reserved_minutes !== 0) p.push(`reserved=${r.reserved_minutes}`);
+  return p;
+});
+
+// R7 two reversals of 80 on 120 consumed (distinct keys): reversed never exceeds consumed.
+await race('R7 reverse 80+80 of 120 used', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 200);
+  const requestId = reserve(userId, 120).request.id;
+  leave.recordOtLeaveUse(ctx, { userId, actorUserId: userId, requestId, useKey: key('u'), minutes: 120 });
+  const input = (k) => ({ userId, actorUserId: userId, requestId, reversalKey: k, minutes: 80, reason: 'probe reversal' });
+  return { userId, commands: [{ op: 'reverse', input: input(key('r1')) }, { op: 'reverse', input: input(key('r2')) }] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [...requestConsistency(s)];
+  if (count(res, okStatus('reversed')) !== 1 || count(res, errCode('exceeds_reversible')) !== 1) p.push('not 1 reversed + 1 exceeds_reversible');
+  if (s.requests[0].reversed_minutes !== 80 || s.posted !== 160) p.push(`reversed=${s.requests[0].reversed_minutes} posted=${s.posted}`);
+  return p;
+});
+
+// R8 the same credit source key from three processes (finalization retry): one row (AC-03, LG-01).
+await race('R8 same credit key x3', ['blocker'], async () => {
+  const userId = await freshUser();
+  const k = key('final-credit');
+  return { userId, commands: [0, 1, 2].map(() => ({ op: 'credit', input: { userId, sourceKey: k, actorUserId: null, origin: 'automatic', workDate: '2026-02-03', minutes: 90 } })) };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('posted')) !== 1 || count(res, okStatus('duplicate')) !== 2) p.push('not 1 posted + 2 duplicate');
+  if (s.entries.length !== 1 || s.posted !== 90) p.push(`rows=${s.entries.length} posted=${s.posted}`);
+  return p;
+});
+
+// R9 the same credit key with different minutes: one posted, the others source_key_conflict.
+await race('R9 same credit key, different minutes', ['blocker'], async () => {
+  const userId = await freshUser();
+  const k = key('final-credit');
+  return { userId, commands: [60, 90, 120].map((m) => ({ op: 'credit', input: { userId, sourceKey: k, actorUserId: null, origin: 'automatic', workDate: '2026-02-03', minutes: m } })) };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('posted')) !== 1 || count(res, errCode('source_key_conflict')) !== 2) p.push('not 1 posted + 2 conflict');
+  if (s.entries.length !== 1) p.push(`rows=${s.entries.length}`);
+  return p;
+});
+
+// R10 a reservation of 80 versus a deficit debit of 80 at available 100: exactly one succeeds (R-05/E-5 share one balance).
+await race('R10 reserve 80 vs debit 80 @100', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 100);
+  return { userId, commands: [
+    { op: 'reserve', input: { userId, actorUserId: userId, requestKey: key('q'), leaveDate: '2026-01-05', requestedMinutes: 80, permission } },
+    { op: 'debit', input: { userId, sourceKey: key('deficit'), actorUserId: null, origin: 'automatic', workDate: '2026-02-04', debitMinutes: 80 } },
+  ] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  const wins = count(res, okStatus('reserved')) + count(res, okStatus('posted'));
+  const losses = count(res, errCode('insufficient_balance')) + count(res, okStatus('pending'));
+  if (wins !== 1 || losses !== 1) p.push(`wins=${wins} losses=${losses}`);
+  if (s.available < 0 || s.posted < 0) p.push(`available=${s.available} posted=${s.posted}`);
+  return p;
+});
+
+// R11 a reservation of 80 versus a debit-increasing correction (+80) at available 100 (ADV-A-02 under contention).
+await race('R11 reserve 80 vs debit correction +80 @100', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 120);
+  const original = ledger.postDeficitDebit(ctx, { userId, sourceKey: key('deficit'), actorUserId: null, origin: 'automatic', workDate: '2026-02-04', debitMinutes: 20 });
+  return { userId, commands: [
+    { op: 'reserve', input: { userId, actorUserId: userId, requestKey: key('q'), leaveDate: '2026-01-05', requestedMinutes: 80, permission } },
+    { op: 'correct', input: { userId, sourceKey: key('corr'), actorUserId: userId, origin: 'manual', originalEntryId: original.entry.id, correctedMinutes: 100, reason: 'probe correction' } },
+  ] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  const wins = count(res, okStatus('reserved')) + count(res, okStatus('posted'));
+  const losses = count(res, errCode('insufficient_balance')) + count(res, okStatus('pending'));
+  if (wins !== 1 || losses !== 1) p.push(`wins=${wins} losses=${losses}`);
+  if (s.available < 0) p.push(`available=${s.available}`);
+  return p;
+});
+
+// R12 two deficit debits of 80 at available 100: one posted, one pending, never negative.
+await race('R12 debit 80+80 @100', BOTH, async () => {
+  const userId = await freshUser(); credit(userId, 100);
+  const input = () => ({ userId, sourceKey: key('deficit'), actorUserId: null, origin: 'automatic', workDate: '2026-02-04', debitMinutes: 80 });
+  return { userId, commands: [{ op: 'debit', input: input() }, { op: 'debit', input: input() }] };
+}, (res, f) => {
+  const s = state(f.userId); const p = [];
+  if (count(res, okStatus('posted')) !== 1 || count(res, okStatus('pending')) !== 1) p.push('not 1 posted + 1 pending');
+  if (s.posted !== 20) p.push(`posted=${s.posted}`);
+  return p;
+});
+
+// CONTROL: unsafe read-then-insert outside a transaction MUST double-book (harness sensitivity).
+await race('CONTROL unsafe reserve 80+80 @100', ['blocker'], async () => {
+  const userId = await freshUser(); credit(userId, 100);
+  return { userId, commands: [{ op: 'unsafeReserve', input: { userId, requestKey: key('c1'), minutes: 80 } }, { op: 'unsafeReserve', input: { userId, requestKey: key('c2'), minutes: 80 } }] };
+}, (res, f) => {
+  const s = state(f.userId);
+  return s.reserved > 100 ? [`double-booked reserved=${s.reserved} available=${s.available}`] : [];
+});
+
+for (const w of workers) w.child.stdin.write(JSON.stringify({ op: 'exit' }) + '\n');
+await Promise.all(workers.map((w) => new Promise((r) => w.child.once('exit', r))));
+const integrity = db.pragma('integrity_check', { simple: true });
+const fk = db.pragma('foreign_key_check');
+db.close();
+const realFailures = summary.filter((s) => !s.expectViolation && s.violations > 0);
+const control = summary.filter((s) => s.expectViolation);
+const controlSensitive = control.every((s) => s.violations === ROUNDS);
+console.log(`integrity_check=${integrity} foreign_key_check_rows=${fk.length}`);
+console.log(`RESULT production races with violations: ${realFailures.length}; control double-booked in ${control.map((s) => s.violations).join(',')}/${ROUNDS} rounds`);
+console.log(realFailures.length === 0 && controlSensitive && integrity === 'ok' ? 'PROBE PASS' : 'PROBE FAIL');
+process.exitCode = realFailures.length === 0 && controlSensitive && integrity === 'ok' ? 0 : 1;

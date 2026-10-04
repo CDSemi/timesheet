@@ -1,0 +1,402 @@
+// WP2-AUDIT-B API probe (auditor-owned; runs against the BUILT server of the scratch clone with a
+// fresh temporary SQLite file and the synthetic CLI seed). Prints PASS/FAIL lines; never prints
+// passwords, cookies or CSV bodies. Usage: node api-probe.mjs <clone-dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const CLONE = process.argv[2];
+const require = createRequire(pathToFileURL(join(CLONE, 'package.json')));
+const Database = require('better-sqlite3');
+const dist = (file) => pathToFileURL(join(CLONE, 'dist', 'server', file)).href;
+
+let failures = 0;
+function check(name, ok, detail = '') {
+  if (!ok) failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail === '' ? '' : `  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+}
+
+const port = await new Promise((resolve) => {
+  const s = createServer();
+  s.listen(0, '127.0.0.1', () => {
+    const { port: p } = s.address();
+    s.close(() => resolve(p));
+  });
+});
+const origin = `http://127.0.0.1:${port}`;
+const work = mkdtempSync(join(tmpdir(), 'audit-b-api-'));
+const dbPath = join(work, 'timesheet.db');
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: dbPath,
+  APP_ORIGINS: origin,
+  SEED_ADMIN_PASSWORD: pw.admin,
+  SEED_EMPLOYEE_PASSWORD: pw.employee,
+  SEED_EMPLOYEE2_PASSWORD: pw.employee2,
+};
+for (const command of ['migrate', 'seed']) {
+  const r = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: CLONE, env, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`cli ${command} failed: ${r.stderr}`);
+}
+const server = spawn(process.execPath, ['dist/server/index.js'], { cwd: CLONE, env, stdio: 'ignore' });
+for (let i = 0; i < 100; i += 1) {
+  try {
+    if ((await fetch(`${origin}/api/health`)).ok) break;
+  } catch {}
+  await new Promise((r) => setTimeout(r, 100));
+}
+const db = new Database(dbPath);
+db.pragma('busy_timeout = 5000');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+class Client {
+  constructor() { this.cookie = ''; }
+  async req(method, path, body, raw = false) {
+    const headers = { origin };
+    if (this.cookie) headers.cookie = this.cookie;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const res = await fetch(`${origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const text = await res.text();
+    if (raw) return { status: res.status, text, headers: res.headers };
+    let json = null;
+    try { json = JSON.parse(text); } catch {}
+    return { status: res.status, json, text };
+  }
+  async login(email, password) {
+    const res = await fetch(`${origin}/api/auth/login`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    this.cookie = (res.headers.get('set-cookie') ?? '').split(';')[0];
+    return res.status;
+  }
+}
+const admin = new Client();
+const emp = new Client();
+const emp2 = new Client();
+const anon = new Client();
+check('logins (admin, employee, employee2)', (await admin.login('admin@example.invalid', pw.admin)) === 200 && (await emp.login('employee@example.invalid', pw.employee)) === 200 && (await emp2.login('employee2@example.invalid', pw.employee2)) === 200);
+
+const count = (sql, ...args) => db.prepare(sql).pluck().get(...args);
+const userId = (email) => count('SELECT id FROM users WHERE email = ?', email);
+const EMP = userId('employee@example.invalid');
+const EMP2 = userId('employee2@example.invalid');
+const ADMIN = userId('admin@example.invalid');
+const periods = (await emp.req('GET', '/api/periods/current')).json;
+const today = periods.today_local;
+const periodStart = periods.current.period_start;
+const sheet = (await emp.req('GET', `/api/timesheets/${periods.current.payroll_date}`)).json;
+const pastNormal = sheet.days.filter((d) => d.work_date < today && d.classification?.day_class === 'normal').map((d) => d.work_date);
+console.log(`INFO  today_local=${today} current_period_start=${periodStart} past_normal_days=${pastNormal.join(',')}`);
+const LA = 'America/Los_Angeles';
+const at = (date, time, zone = LA) => ({ local: `${date}T${time}`, zone });
+const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/* ---------------- A. T01 break contract and Clock-out expected_version ---------------- */
+{
+  const inRes = await emp.req('POST', '/api/clock/in', { input_zone: LA });
+  check('A1 clock in 201', inRes.status === 201);
+  const s = inRes.json.session;
+  await sleep(2600);
+  const noVersion = await emp.req('POST', '/api/clock/out', { breaks_confirmed: false });
+  check('A2 clock out without expected_version is 422 validation_error', noVersion.status === 422 && noVersion.json?.error?.code === 'validation_error', noVersion.json?.error?.code);
+  const stale = await emp.req('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: s.version + 5 });
+  check('A3 stale expected_version is 409 stale_version', stale.status === 409 && stale.json?.error?.code === 'stale_version');
+  const omitConfirmed = await emp.req('POST', '/api/clock/out', { breaks_confirmed: true, expected_version: s.version });
+  check('A4 omitted list + confirmed is 422 breaks_required', omitConfirmed.status === 422 && omitConfirmed.json?.error?.code === 'breaks_required');
+  const future = new Date(Date.now() + 10 * 60000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const startPlus = new Date(Date.parse(s.start_utc) + 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const fb = await emp.req('PUT', `/api/sessions/${s.id}`, { start: s.start_utc, end: null, input_zone: LA, breaks: [{ start: startPlus, end: future, counts_as_work: false }], breaks_confirmed: false, expected_version: s.version });
+  check('A5 break ending now+10min on open session is 422 future_break', fb.status === 422 && fb.json?.error?.code === 'future_break', fb.json?.error?.code);
+  // A legacy future break row (written before the rule) inserted directly.
+  const legacyEnd = new Date(Date.now() + 2 * 3600000).toISOString().replace(/\.\d+Z$/, 'Z');
+  db.prepare('INSERT INTO session_breaks (id, session_id, user_id, start_utc, end_utc, counts_as_work) VALUES (?, ?, ?, ?, ?, 0)').run('legacy-break-probe', s.id, EMP, startPlus, legacyEnd);
+  const auditBefore = count('SELECT count(*) FROM audit_events');
+  const legacy = await emp.req('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: s.version });
+  check('A6 omitted list with a legacy future row is 422 saved_break_after_clock_out naming the row', legacy.status === 422 && legacy.json?.error?.code === 'saved_break_after_clock_out' && JSON.stringify(legacy.json?.error?.details?.break_ids) === '["legacy-break-probe"]', legacy.json?.error);
+  check('A6b nothing written: session open, row kept, no audit', count('SELECT end_utc IS NULL FROM work_sessions WHERE id = ?', s.id) === 1 && count('SELECT count(*) FROM session_breaks WHERE id = ?', 'legacy-break-probe') === 1 && count('SELECT count(*) FROM audit_events') === auditBefore);
+  const replaced = await emp.req('POST', '/api/clock/out', { breaks: [], breaks_confirmed: true, expected_version: s.version });
+  check('A7 present [] confirmed replaces saved rows and closes the session', replaced.status === 200 && replaced.json.session.breaks.length === 0 && replaced.json.session.breaks_confirmed === true && replaced.json.session.end_utc !== null && count('SELECT count(*) FROM session_breaks WHERE session_id = ?', s.id) === 0, replaced.status);
+  const ev = db.prepare("SELECT before_json, after_json FROM audit_events WHERE operation = 'work_session.clock_out' AND entity_id = ? ORDER BY rowid DESC LIMIT 1").get(s.id);
+  check('A7b clock_out audit has before (open, legacy break) and after (closed, no breaks)', ev !== undefined && JSON.parse(ev.before_json).end_utc === null && JSON.parse(ev.before_json).breaks.length === 1 && JSON.parse(ev.after_json).breaks.length === 0);
+  // E-1 omitted keeps rows (unconfirmed).
+  await sleep(1200);
+  const in2 = (await emp.req('POST', '/api/clock/in', { input_zone: LA })).json.session;
+  await sleep(3200);
+  const b0 = new Date(Date.parse(in2.start_utc) + 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const b1 = new Date(Date.parse(in2.start_utc) + 2000).toISOString().replace(/\.\d+Z$/, 'Z');
+  const upd = await emp.req('PUT', `/api/sessions/${in2.id}`, { start: in2.start_utc, end: null, input_zone: LA, breaks: [{ start: b0, end: b1, counts_as_work: false }], breaks_confirmed: false, expected_version: in2.version });
+  const savedId = upd.json?.session?.breaks?.[0]?.id;
+  const keep = await emp.req('POST', '/api/clock/out', { breaks_confirmed: false, expected_version: upd.json.session.version });
+  check('A8 omitted list (unconfirmed) keeps the saved break row (same id), breaks stay unconfirmed', keep.status === 200 && keep.json.session.breaks.length === 1 && keep.json.session.breaks[0].id === savedId && keep.json.session.breaks_confirmed === false, keep.status);
+}
+
+/* ---------------- B. T05 batch, partial leave, WFH; C. AC-04 reasons/audit ---------------- */
+const [dA, dB, dC, dD] = pastNormal; // past normal days of the current period (no reason needed)
+const dOld = addDays(periodStart, -13); // old period
+{
+  const before = { entries: count('SELECT count(*) FROM day_entries WHERE user_id = ?', EMP), audit: count('SELECT count(*) FROM audit_events') };
+  const prev = await emp.req('POST', '/api/days/batch', { mode: 'preview', entries: [{ work_date: dA, category: 'Vacation' }, { work_date: dOld, category: 'Sick' }] });
+  check('B1 preview: create x2, reason required for the old date only, nothing written', prev.status === 200 && prev.json.reason_required === true && JSON.stringify(prev.json.reason_required_dates) === JSON.stringify([dOld]) && count('SELECT count(*) FROM day_entries WHERE user_id = ?', EMP) === before.entries && count('SELECT count(*) FROM audit_events') === before.audit, prev.json?.entries?.map((e) => e.status));
+  const noReason = await emp.req('POST', '/api/days/batch', { mode: 'commit', entries: [{ work_date: dA, category: 'Vacation' }, { work_date: dOld, category: 'Sick' }] });
+  check('B2 commit without reason: 422 reason_required, nothing written', noReason.status === 422 && noReason.json.error.code === 'reason_required' && count('SELECT count(*) FROM day_entries WHERE user_id = ?', EMP) === before.entries);
+  const ok = await emp.req('POST', '/api/days/batch', { mode: 'commit', reason: 'Audit probe reason', entries: [{ work_date: dA, category: 'Vacation' }, { work_date: dOld, category: 'Sick' }] });
+  const evs = db.prepare("SELECT operation, reason, before_json, after_json FROM audit_events WHERE owner_user_id = ? AND operation LIKE 'day_entry.%' ORDER BY rowid DESC LIMIT 2").all(EMP);
+  check('B3 commit with reason: 2 day_entry.create events with reason, before null, after explicit label', ok.status === 200 && evs.length === 2 && evs.every((e) => e.reason === 'Audit probe reason' && e.before_json === null && JSON.parse(e.after_json).category_source === 'explicit'));
+  const verA = (await emp.req('GET', `/api/days/${dA}`)).json.entry.version;
+  const stale = await emp.req('POST', '/api/days/batch', { mode: 'commit', entries: [{ work_date: dA, category: 'Sick', expected_version: null }, { work_date: dB, category: 'Sick' }] });
+  check('B4 stale version: 409 stale_version naming the date; the other date untouched (atomic)', stale.status === 409 && stale.json.error.code === 'stale_version' && JSON.stringify(stale.json.error.details.work_dates) === JSON.stringify([dA]) && (await emp.req('GET', `/api/days/${dB}`)).json.entry === null);
+  // Conflict with a manual session; sessions untouched.
+  await emp.req('POST', `/api/days/${dC}/sessions`, { start: at(dC, '09:00'), end: at(dC, '13:00'), input_zone: LA, breaks: [], breaks_confirmed: true });
+  const dayC = (await emp.req('GET', `/api/days/${dC}`)).json;
+  const sessionsBefore = JSON.stringify(dayC.sessions);
+  const pc = await emp.req('POST', '/api/days/batch', { mode: 'preview', entries: [{ work_date: dC, category: 'Off', expected_version: dayC.entry.version }] });
+  check('B5 preview reports the conflict (session ids, counts)', pc.json.requires_conflict_confirmation === true && pc.json.conflicts[0].session_count === 1 && pc.json.conflicts[0].session_ids[0] === dayC.sessions[0].id);
+  const nc = await emp.req('POST', '/api/days/batch', { mode: 'commit', entries: [{ work_date: dC, category: 'Off', expected_version: dayC.entry.version }] });
+  check('B5b commit without confirm: 409 conflicts_require_confirmation', nc.status === 409 && nc.json.error.code === 'conflicts_require_confirmation');
+  const cc = await emp.req('POST', '/api/days/batch', { mode: 'commit', confirm_conflicts: true, entries: [{ work_date: dC, category: 'Off', expected_version: dayC.entry.version }] });
+  const dayC2 = (await emp.req('GET', `/api/days/${dC}`)).json;
+  check('B5c confirmed commit relabels; sessions byte-identical', cc.status === 200 && dayC2.category === 'Off' && JSON.stringify(dayC2.sessions) === sessionsBefore);
+  // Partial leave validation and R-05: 240 work + 240 leave.
+  const v = dayC2.entry.version;
+  const over = await emp.req('PUT', `/api/days/${dC}`, { category: 'Worked', leave_minutes: 481, leave_kind: 'vacation', wfh: false, notes: '', expected_version: v });
+  check('B6 leave 481 > B is 422 leave_exceeds_required', over.status === 422 && over.json.error.code === 'leave_exceeds_required', over.json?.error?.code);
+  const noKind = await emp.req('PUT', `/api/days/${dC}`, { category: 'Worked', leave_minutes: 240, wfh: false, notes: '', expected_version: v });
+  check('B6b leave without kind is 422 leave_kind_required', noKind.status === 422 && noKind.json.error.code === 'leave_kind_required');
+  const kindNoMin = await emp.req('PUT', `/api/days/${dC}`, { category: 'Worked', leave_minutes: 0, leave_kind: 'sick', wfh: false, notes: '', expected_version: v });
+  check('B6c kind without minutes is refused (422)', kindNoMin.status === 422, kindNoMin.json?.error?.code);
+  const good = await emp.req('PUT', `/api/days/${dC}`, { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: '', expected_version: v });
+  check('B6d 240 work + 240 vacation: deficit 0, credited 0, WFH saved', good.status === 200 && good.json.deficit_minutes === 0 && good.json.calculation.credited_minutes === 0 && good.json.wfh === true && good.json.calculation.regular_minutes === 240, { deficit: good.json?.deficit_minutes, credited: good.json?.calculation?.credited_minutes });
+  const dup = await emp.req('POST', '/api/days/batch', { mode: 'preview', entries: [{ work_date: dB, category: 'Off' }, { work_date: dB, category: 'Sick' }] });
+  check('B7 duplicate date is 422 duplicate_date', dup.status === 422 && dup.json.error.code === 'duplicate_date');
+  const foreign = await emp.req('POST', '/api/days/batch', { mode: 'preview', entries: [{ work_date: dB, category: 'Off', user_id: EMP2 }] });
+  check('B8 user_id field rejected by the strict schema', foreign.status === 422);
+  // C. AC-04: current draft no reason, old needs one; audit before/after.
+  const cur = await emp.req('PUT', `/api/days/${dB}`, { category: 'Worked', leave_minutes: 0, wfh: true, notes: 'probe', expected_version: null });
+  const curEv = db.prepare("SELECT reason, after_json FROM audit_events WHERE owner_user_id = ? AND operation = 'day_entry.create' ORDER BY rowid DESC LIMIT 1").get(EMP);
+  check('C1 current-period edit without reason: 200, audited with null reason and after state', cur.status === 200 && curEv.reason === null && JSON.parse(curEv.after_json).wfh === true);
+  const oldDay = (await emp.req('GET', `/api/days/${dOld}`)).json;
+  const oldNo = await emp.req('PUT', `/api/days/${dOld}`, { category: 'Worked', leave_minutes: 0, wfh: false, notes: '', expected_version: oldDay.entry.version });
+  check('C2 old-period edit without reason: 422 reason_required', oldNo.status === 422 && oldNo.json.error.code === 'reason_required');
+  const oldYes = await emp.req('PUT', `/api/days/${dOld}`, { category: 'Worked', leave_minutes: 0, wfh: false, notes: '', expected_version: oldDay.entry.version, reason: 'Old edit probe' });
+  const oldEv = db.prepare("SELECT reason, before_json, after_json FROM audit_events WHERE owner_user_id = ? AND operation = 'day_entry.update' ORDER BY rowid DESC LIMIT 1").get(EMP);
+  check('C3 old-period edit with reason: audited with reason, before Sick, after Worked', oldYes.status === 200 && oldEv.reason === 'Old edit probe' && JSON.parse(oldEv.before_json).category === 'Sick' && JSON.parse(oldEv.after_json).category === 'Worked');
+  const hist = (await emp.req('GET', '/api/history?limit=200')).json;
+  const hist2 = (await emp2.req('GET', '/api/history?limit=200')).json;
+  check('C4 own history lists the reasoned events; employee2 history has none of them', hist.audit_events.some((e) => e.reason === 'Old edit probe') && !hist2.audit_events.some((e) => e.reason === 'Old edit probe' || e.reason === 'Audit probe reason'));
+}
+
+/* ---------------- E. T06 policy preview equals post-creation views ---------------- */
+{
+  const body = { effective_from: periodStart, required_minutes: 420, threshold_minutes: 0, rounding_step_minutes: 15, reference_start: '08:00', reference_end: '16:00', breaks: [{ start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false }, { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false }, { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false }], deficit_mode: 'ignore' };
+  const pvBefore = count('SELECT count(*) FROM work_policies');
+  const pv = await emp2.req('POST', '/api/policies/preview', body);
+  check('E1 policy preview writes nothing and lists changed days', pv.status === 200 && pv.json.days.length > 0 && count('SELECT count(*) FROM work_policies') === pvBefore, { days: pv.json?.days?.length });
+  const created = await emp2.req('POST', '/api/policies', body);
+  let equal = created.status === 201;
+  for (const d of pv.json.days) {
+    const view = (await emp2.req('GET', `/api/days/${d.work_date}`)).json.calculation;
+    for (const k of ['regular_minutes', 'nonworking_minutes', 'eligible_minutes', 'credited_minutes']) {
+      if (d.after[k] !== undefined && d.after[k] !== view[k]) equal = false;
+    }
+  }
+  check('E2 every previewed "after" equals the post-creation day view', equal, pv.json.days.map((d) => `${d.work_date}:${d.after.credited_minutes}`).join(','));
+  const r02 = await emp2.req('POST', '/api/policies/preview', { ...body, reference_end: '17:00' });
+  const r02c = await emp2.req('POST', '/api/policies', { ...body, reference_end: '17:00' });
+  check('E3 R-02 inconsistency refused identically by preview and create', r02.status === r02c.status && r02.json?.error?.code === r02c.json?.error?.code && r02.status === 422, r02.json?.error?.code);
+}
+
+/* ---------------- F. T07 / CALFIX user administration ---------------- */
+{
+  const list = await admin.req('GET', '/api/admin/users');
+  const keys = [...new Set(list.json.users.flatMap((u) => Object.keys(u)))].sort().join(',');
+  check('F1 admin list: account fields only', keys === 'calendar_id,created_at,display_name,email,id,role,status,updated_at' && !list.text.includes('scrypt') && !list.text.includes('password'), keys);
+  check('F1b employee 403 and anonymous 401 on /api/admin/users', (await emp.req('GET', '/api/admin/users')).status === 403 && (await anon.req('GET', '/api/admin/users')).status === 401);
+  const cal = (await admin.req('GET', '/api/calendar')).json;
+  const tmpPw = randomBytes(18).toString('base64url');
+  const created = await admin.req('POST', '/api/admin/users', { email: 'probe-user@example.invalid', display_name: 'Probe User', role: 'employee', password: tmpPw, calendar_id: cal.id });
+  const NEW = created.json?.user?.id;
+  const hash = count('SELECT password_hash FROM users WHERE id = ?', NEW);
+  const auditText = db.prepare('SELECT coalesce(before_json, \'\') || coalesce(after_json, \'\') AS t FROM audit_events').all().map((r) => r.t).join('\n');
+  check('F2 create: 201, password and hash in no response or audit payload', created.status === 201 && !created.text.includes(tmpPw) && !created.text.includes(hash) && !auditText.includes(tmpPw) && !auditText.includes(hash));
+  const probe = new Client();
+  check('F3 new user signs in', (await probe.login('probe-user@example.invalid', tmpPw)) === 200);
+  const deact = await admin.req('POST', `/api/admin/users/${NEW}/deactivate`, { reason: 'probe' });
+  check('F3b deactivate revokes the existing session (401)', deact.status === 200 && (await probe.req('GET', '/api/auth/me')).status === 401);
+  await admin.req('POST', `/api/admin/users/${NEW}/reactivate`, {});
+  check('F3c reactivation does not revive the old session', (await probe.req('GET', '/api/auth/me')).status === 401);
+  const fresh = new Client();
+  check('F3d fresh sign-in after reactivation works', (await fresh.login('probe-user@example.invalid', tmpPw)) === 200);
+  const self = await admin.req('POST', `/api/admin/users/${ADMIN}/deactivate`, {});
+  check('F4 self-deactivation 409 cannot_deactivate_self', self.status === 409 && self.json.error.code === 'cannot_deactivate_self');
+  const demote = await admin.req('PATCH', `/api/admin/users/${ADMIN}`, { role: 'employee' });
+  check('F4b demoting the last active admin 409 last_active_admin', demote.status === 409 && demote.json.error.code === 'last_active_admin');
+  // Second calendar with a version (test-only, internal services of the built code).
+  const { createCalendar, createCalendarVersion } = await import(dist('services/calendars.js'));
+  const { systemClock } = await import(dist('clock.js'));
+  const { openDatabase } = await import(dist('db/database.js'));
+  const wdb = openDatabase(dbPath);
+  const cal2 = createCalendar(wdb, systemClock, { name: 'Probe calendar (synthetic)', schedule: { reportingZone: 'Asia/Ho_Chi_Minh', anchorPayrollDate: '2026-10-05', cycleDays: 14, periodStartOffsetDays: -18, periodEndOffsetDays: -5, dueOffsetDays: -3, dueLocalTime: '17:00' } }, null);
+  createCalendarVersion(wdb, systemClock, { calendarId: cal2, effectiveFrom: '2026-01-01', weekdays: [1, 2, 3, 4, 5], dates: [] }, null);
+  const auditN = count('SELECT count(*) FROM audit_events');
+  const empBefore = JSON.stringify(db.prepare('SELECT display_name, calendar_id, updated_at FROM users WHERE id = ?').get(EMP));
+  const inUse = await admin.req('PATCH', `/api/admin/users/${EMP}`, { display_name: 'Renamed In Same Patch', calendar_id: cal2 });
+  check('F5 user with data: combined PATCH 409 calendar_in_use, nothing applied, no audit', inUse.status === 409 && inUse.json.error.code === 'calendar_in_use' && JSON.stringify(db.prepare('SELECT display_name, calendar_id, updated_at FROM users WHERE id = ?').get(EMP)) === empBefore && count('SELECT count(*) FROM audit_events') === auditN);
+  // Ledger-only account: a fresh account given one credit through the internal service.
+  const ledgerOnly = await admin.req('POST', '/api/admin/users', { email: 'probe-ledger@example.invalid', display_name: 'Probe Ledger', role: 'employee', password: randomBytes(18).toString('base64url'), calendar_id: cal.id });
+  const { postCredit } = await import(dist('services/ledger.js'));
+  postCredit({ db: wdb, clock: systemClock }, { userId: ledgerOnly.json.user.id, sourceKey: 'audit-b-probe-credit', actorUserId: null, origin: 'system', reason: 'Audit probe synthetic credit', workDate: '2020-01-06', minutes: 30 });
+  const lo = await admin.req('PATCH', `/api/admin/users/${ledgerOnly.json.user.id}`, { calendar_id: cal2 });
+  check('F5b ledger-only account: 409 calendar_in_use', lo.status === 409 && lo.json.error.code === 'calendar_in_use');
+  const nd = await admin.req('PATCH', `/api/admin/users/${NEW}`, { calendar_id: cal2 });
+  check('F5c account without data: calendar changes with one user.update audit event', nd.status === 200 && nd.json.user.calendar_id === cal2 && count("SELECT count(*) FROM audit_events WHERE operation = 'user.update' AND entity_id = ?", NEW) === 1);
+  const rn = await admin.req('PATCH', `/api/admin/users/${EMP}`, { display_name: 'Example Employee' });
+  check('F5d display-name-only PATCH of a user with data is allowed (no-op here)', rn.status === 200);
+  // Admin is not blanket access.
+  const empSession = (await emp.req('GET', `/api/days/${dC}`)).json.sessions[0];
+  const g = await admin.req('GET', `/api/sessions/${empSession.id}`);
+  const p = await admin.req('PUT', `/api/sessions/${empSession.id}`, { start: empSession.start_utc, end: empSession.end_utc, input_zone: LA, breaks: [], breaks_confirmed: true, expected_version: empSession.version });
+  const d = await admin.req('DELETE', `/api/sessions/${empSession.id}`, { expected_version: empSession.version, reason: 'x' });
+  check('F6 admin gets 404 on an employee session (GET/PUT/DELETE)', g.status === 404 && p.status === 404 && d.status === 404);
+  const adminDay = (await admin.req('GET', `/api/days/${dC}`)).json;
+  check('F6b admin day view of the same date shows only the admin (no sessions, no entry)', adminDay.sessions.length === 0 && adminDay.entry === null);
+  const adminHist = (await admin.req('GET', '/api/history?limit=200')).json;
+  check('F6c admin history holds no employee day/session events', !adminHist.audit_events.some((e) => e.operation.startsWith('day_entry') || e.operation.startsWith('work_session')));
+  for (const path of ['/api/admin/timesheets', `/api/admin/users/${EMP}/timesheet`, `/api/admin/users/${EMP}/ledger`, '/api/admin/history']) {
+    const r = await admin.req('GET', path);
+    check(`F6d no admin data route: GET ${path.replace(EMP, '<employee-id>')} -> ${r.status}`, r.status === 404);
+  }
+  globalThis.probeCtx = { wdb, systemClock, cal, cal2, createCalendar };
+}
+
+/* ---------------- G. E-10 payroll exceptions ---------------- */
+{
+  const { cal } = globalThis.probeCtx;
+  const oldPayroll = addDays(periods.current.payroll_date, -14); // the old period touched by dOld
+  const noReason = await admin.req('POST', '/api/admin/payroll-exceptions', { calendar_id: cal.id, nominal_payroll_date: oldPayroll, payroll_date: addDays(oldPayroll, -1), reason: '  ' });
+  check('G1 blank reason: 422 reason_required', noReason.status === 422 && noReason.json.error.code === 'reason_required');
+  const rowBefore = db.prepare('SELECT * FROM pay_periods WHERE calendar_id = ? AND nominal_payroll_date = ?').get(cal.id, oldPayroll);
+  const ok = await admin.req('POST', '/api/admin/payroll-exceptions', { calendar_id: cal.id, nominal_payroll_date: oldPayroll, payroll_date: addDays(oldPayroll, -1), reason: 'Probe closure move' });
+  const rowAfter = db.prepare('SELECT * FROM pay_periods WHERE calendar_id = ? AND nominal_payroll_date = ?').get(cal.id, oldPayroll);
+  check('G2 unfinalized stored row refreshed (payroll date moved; start/end/id kept)', ok.status === 201 && ok.json.refreshed_pay_period === true && rowAfter.payroll_date === addDays(oldPayroll, -1) && rowAfter.id === rowBefore.id && rowAfter.period_start === rowBefore.period_start && rowAfter.period_end === rowBefore.period_end);
+  const dup = await admin.req('POST', '/api/admin/payroll-exceptions', { calendar_id: cal.id, nominal_payroll_date: oldPayroll, payroll_date: addDays(oldPayroll, 1), reason: 'again' });
+  check('G3 duplicate: 409 payroll_exception_exists', dup.status === 409 && dup.json.error.code === 'payroll_exception_exists');
+  // A finalized timesheet (simulated with the existing column) blocks the change.
+  const finPayroll = addDays(periods.current.payroll_date, -28);
+  const finDay = addDays(periodStart, -26);
+  await emp.req('PUT', `/api/days/${finDay}`, { category: 'Worked', leave_minutes: 0, wfh: false, notes: '', reason: 'probe setup' });
+  db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ? AND pay_period_id = (SELECT id FROM pay_periods WHERE calendar_id = ? AND nominal_payroll_date = ?)').run(EMP, cal.id, finPayroll);
+  const finRowBefore = JSON.stringify(db.prepare('SELECT * FROM pay_periods WHERE calendar_id = ? AND nominal_payroll_date = ?').get(cal.id, finPayroll));
+  const excBefore = count('SELECT count(*) FROM payroll_exceptions');
+  const fin = await admin.req('POST', '/api/admin/payroll-exceptions', { calendar_id: cal.id, nominal_payroll_date: finPayroll, payroll_date: addDays(finPayroll, -1), reason: 'Probe finalized' });
+  check('G4 finalized period: 409 period_finalized, row and exceptions unchanged', fin.status === 409 && fin.json.error.code === 'period_finalized' && JSON.stringify(db.prepare('SELECT * FROM pay_periods WHERE calendar_id = ? AND nominal_payroll_date = ?').get(cal.id, finPayroll)) === finRowBefore && count('SELECT count(*) FROM payroll_exceptions') === excBefore);
+  check('G5 employee 403 on payroll exceptions', (await emp.req('POST', '/api/admin/payroll-exceptions', { calendar_id: cal.id, nominal_payroll_date: finPayroll, payroll_date: finPayroll, reason: 'x' })).status === 403);
+}
+
+/* ---------------- I. Integration: seed, label vs ledger, export completeness ---------------- */
+{
+  const rows = db.prepare('SELECT source_key, origin, entry_type, delta_minutes, reason FROM ot_ledger WHERE user_id = ?').all(EMP2);
+  check('I1 employee2 ledger: exactly one keyed synthetic setup credit (600, system, reason), nothing inferred', rows.length === 1 && rows[0].source_key === 'seed-setup-credit-employee2' && rows[0].origin === 'system' && rows[0].delta_minutes === 600 && rows[0].entry_type === 'credit' && /not inferred/.test(rows[0].reason), rows.map((r) => `${r.entry_type}:${r.delta_minutes}:${r.source_key}`));
+  const leave = (await emp2.req('GET', '/api/ot/leave')).json.requests[0];
+  const sumBefore = (await emp2.req('GET', '/api/ot/summary')).json;
+  const ledgerN = count('SELECT count(*) FROM ot_ledger');
+  const put = await emp2.req('PUT', `/api/days/${leave.leave_date}`, { category: 'Worked', leave_minutes: 240, leave_kind: 'ot', wfh: false, notes: '' });
+  const bat = await emp2.req('POST', '/api/days/batch', { mode: 'commit', entries: [{ work_date: leave.leave_date, category: 'Vacation', expected_version: put.json.entry.version }] });
+  const sumAfter = (await emp2.req('GET', '/api/ot/summary')).json;
+  const leaveAfter = (await emp2.req('GET', '/api/ot/leave')).json.requests[0];
+  check('I2 OT-kind leave label and a batch relabel spend and reserve nothing (ledger, summary, request unchanged)', put.status === 200 && bat.status === 200 && count('SELECT count(*) FROM ot_ledger') === ledgerN && sumAfter.posted_minutes === sumBefore.posted_minutes && sumAfter.reserved_minutes === sumBefore.reserved_minutes && leaveAfter.version === leave.version && leaveAfter.consumed_minutes === 0);
+  const dv = (await emp2.req('GET', `/api/days/${leave.leave_date}`)).json;
+  check('I2b day view flags the E-2 mismatch informationally (kind 240, consumed 0)', dv.ot_leave.kind_minutes === 240 && dv.ot_leave.consumed_minutes === 0 && dv.ot_leave.mismatch === true);
+  const from = addDays(today, -30);
+  const to = addDays(today, 30);
+  const csv = await emp2.req('GET', `/api/ot/evidence.csv?from=${from}&to=${to}`, undefined, true);
+  const sections = {};
+  let cur = null;
+  for (const line of csv.text.split('\n')) {
+    if (line.startsWith('#section,')) { cur = line.slice(9); sections[cur] = []; continue; }
+    if (cur !== null && line !== '') sections[cur].push(line);
+  }
+  const sessionsInRange = count('SELECT count(*) FROM work_sessions WHERE user_id = ? AND work_date BETWEEN ? AND ?', EMP2, from, to);
+  const breaksInRange = count('SELECT count(*) FROM session_breaks b JOIN work_sessions s ON s.id = b.session_id WHERE s.user_id = ? AND s.work_date BETWEEN ? AND ?', EMP2, from, to);
+  const ledgerAll = count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', EMP2);
+  const leaveAll = count('SELECT count(*) FROM ot_leave_requests WHERE user_id = ?', EMP2);
+  const policyAll = count('SELECT count(*) FROM work_policies WHERE user_id = ?', EMP2);
+  // Each section starts with one header row.
+  const n = (name) => (sections[name]?.length ?? 1) - 1;
+  console.log(`INFO  evidence sections ${Object.keys(sections).join(',')} rows(excl header) intervals=${n('intervals')} breaks=${n('breaks')} daily=${n('daily')} ledger=${n('ledger')} leave=${n('leave_permissions')} policies=${n('policy_versions')}`);
+  console.log(`INFO  db counts sessions=${sessionsInRange} breaks=${breaksInRange} ledger=${ledgerAll} leave=${leaveAll} policies=${policyAll}`);
+  check('I3 evidence CSV: status 200, no-store, sections in order', csv.status === 200 && /no-store/.test(csv.headers.get('cache-control') ?? '') && Object.keys(sections).join(',') === 'export,policy_versions,intervals,breaks,daily,ledger,leave_permissions');
+  check('I3b evidence completeness: intervals, breaks, ledger, leave and policy rows equal the stored rows', n('intervals') === sessionsInRange && n('breaks') === breaksInRange && n('ledger') === ledgerAll && n('leave_permissions') === leaveAll && n('policy_versions') >= 1);
+  const dailyHeader = sections.daily?.[0] ?? '';
+  check('I3c daily section carries category_source and leave_kind columns', dailyHeader.includes('category_source') && dailyHeader.includes('leave_kind'), dailyHeader);
+  const empCsv = await emp.req('GET', `/api/ot/evidence.csv?from=${from}&to=${to}`, undefined, true);
+  check('I3d employee export carries none of employee2 rows', !empCsv.text.includes('seed-setup-credit-employee2') && !empCsv.text.includes('Example Manager'));
+}
+
+/* ---------------- D. AC-05 holiday import (run last: it reclassifies current days) ---------------- */
+{
+  const { cal, wdb, systemClock, createCalendar } = globalThis.probeCtx;
+  const versionsN = () => count('SELECT count(*) FROM calendar_versions WHERE calendar_id = ?', cal.id);
+  const v0 = versionsN();
+  const auditN0 = count('SELECT count(*) FROM audit_events');
+  const bad = await admin.req('POST', '/api/admin/calendar/import/preview', { calendar_id: cal.id, year: 2027, effective_from: periodStart, csv: 'date,name,kind\n2027-01-01,Probe New Year,holiday\n2027-01-01,Duplicate,holiday\n2027-02-30,Bad date\n2027-03-01,=HYPERLINK("x")\n2027-04-01,\n2026-12-31,Wrong year\n' });
+  const codes = [...new Set(bad.json.issues.map((i) => i.code))].sort().join(',');
+  check('D1 preview flags duplicate, invalid date, formula cell, empty name, out-of-year; cannot commit; writes nothing', bad.status === 200 && bad.json.can_commit === false && bad.json.preview_hash === null && ['duplicate_date', 'empty_name', 'formula_cell', 'invalid_date', 'out_of_year'].every((c) => codes.includes(c)) && versionsN() === v0 && count('SELECT count(*) FROM audit_events') === auditN0, codes);
+  // Read-time default label versus explicit label (E-4): employee2 has a default row from a seed session.
+  const e2Days = db.prepare("SELECT work_date FROM day_entries WHERE user_id = ? AND category_source = 'default' AND work_date >= ? AND work_date < ? ORDER BY work_date").pluck().all(EMP2, periodStart, today);
+  const defaultDay = e2Days[0];
+  const explicitDay = dB; // employee explicit row (Worked, WFH) from C1
+  const e2RowBefore = JSON.stringify(db.prepare('SELECT * FROM day_entries WHERE user_id = ? AND work_date = ?').get(EMP2, defaultDay));
+  const empRowBefore = JSON.stringify(db.prepare('SELECT * FROM day_entries WHERE user_id = ? AND work_date = ?').get(EMP, explicitDay));
+  const oldClassBefore = JSON.stringify((await emp.req('GET', `/api/days/${dOld}`)).json.classification);
+  const pastPayrolls = (await emp.req('GET', `/api/periods?from=${addDays(periodStart, -364)}&to=${addDays(periodStart, -1)}`)).json.periods.map((p) => p.payroll_date);
+  const yearSheet = async () => {
+    const out = [];
+    for (const payroll of pastPayrolls) out.push(JSON.stringify((await emp.req('GET', `/api/timesheets/${payroll}`)).json.days.map((d) => [d.work_date, d.classification, d.category])));
+    return out;
+  };
+  const yearSheetBefore = await yearSheet();
+  console.log(`INFO  past periods compared: ${pastPayrolls.length}`);
+  const csvText = `date,name,kind\n${defaultDay},Probe Holiday Default,holiday\n${explicitDay},Probe Holiday Explicit,holiday\n${addDays(periodStart, -7)},Probe Past,holiday\n`;
+  const prev = await admin.req('POST', '/api/admin/calendar/import/preview', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: csvText });
+  check('D2 preview: 2 added, 1 ignored_past, kept dates listed (manual/existing dates stay), hash present', prev.json.can_commit === true && prev.json.diff.added.length === 2 && prev.json.diff.ignored_past.length === 1 && prev.json.diff.kept.length > 0 && typeof prev.json.preview_hash === 'string', { added: prev.json?.diff?.added?.length, ignored: prev.json?.diff?.ignored_past?.length, kept: prev.json?.diff?.kept?.length });
+  const aff = prev.json.affected_days.find((a) => a.date === defaultDay);
+  check('D2b affected_days reports counts only (default entries, preserved explicit overrides), no identity', aff !== undefined && !JSON.stringify(prev.json.affected_days).includes(EMP2) && !JSON.stringify(prev.json.affected_days).includes('example.invalid'), prev.json.affected_days);
+  const wrong = await admin.req('POST', '/api/admin/calendar/import/commit', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: csvText, preview_hash: '0'.repeat(64) });
+  check('D3 mismatched hash: 409 stale_preview, nothing written', wrong.status === 409 && wrong.json.error.code === 'stale_preview' && versionsN() === v0);
+  const retro = await admin.req('POST', '/api/admin/calendar/import/commit', { calendar_id: cal.id, year: 2026, effective_from: addDays(periodStart, -1), csv: csvText, preview_hash: prev.json.preview_hash });
+  check('D3b effective_from before the boundary: 422 retroactive_change (checked before the hash)', retro.status === 422 && retro.json.error.code === 'retroactive_change');
+  const removeOld = await admin.req('POST', '/api/admin/calendar/import/preview', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: 'date,name\n', remove_dates: ['2026-01-01'] });
+  check('D3c removing a date before effective_from is a removal problem', removeOld.json.can_commit === false && removeOld.json.removal_problems.length === 1, removeOld.json?.removal_problems);
+  const commit = await admin.req('POST', '/api/admin/calendar/import/commit', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: csvText, preview_hash: prev.json.preview_hash, note: 'Probe import' });
+  check('D4 commit: 201, one new version, one calendar_version.create audit event', commit.status === 201 && versionsN() === v0 + 1 && count("SELECT count(*) FROM audit_events WHERE operation = 'calendar_version.create' AND reason = 'Probe import'") === 1);
+  const again = await admin.req('POST', '/api/admin/calendar/import/commit', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: csvText, preview_hash: prev.json.preview_hash, note: 'Probe import' });
+  check('D4b identical re-commit: 200 unchanged, no new version', again.status === 200 && again.json.unchanged === true && versionsN() === v0 + 1);
+  const e2View = (await emp2.req('GET', `/api/days/${defaultDay}`)).json;
+  check('D5 default-labelled row follows the calendar at read time (Holiday) with no employee row write', e2View.category === 'Holiday' && e2View.category_source === 'default' && JSON.stringify(db.prepare('SELECT * FROM day_entries WHERE user_id = ? AND work_date = ?').get(EMP2, defaultDay)) === e2RowBefore, { category: e2View.category, day_class: e2View.classification?.day_class });
+  const empView = (await emp.req('GET', `/api/days/${explicitDay}`)).json;
+  check('D5b explicit label preserved (Worked), row untouched', empView.category === 'Worked' && empView.category_source === 'explicit' && JSON.stringify(db.prepare('SELECT * FROM day_entries WHERE user_id = ? AND work_date = ?').get(EMP, explicitDay)) === empRowBefore);
+  const yearSheetAfter = await yearSheet();
+  check('D6 classification and labels of every day in the periods of the year before the current one are identical after commit', yearSheetBefore.length >= 26 && yearSheetAfter.every((s, i) => s === yearSheetBefore[i]) && JSON.stringify((await emp.req('GET', `/api/days/${dOld}`)).json.classification) === oldClassBefore);
+  check('D7 employee 403 / anonymous 401 on import routes', (await emp.req('POST', '/api/admin/calendar/import/preview', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: '' })).status === 403 && (await anon.req('POST', '/api/admin/calendar/import/preview', { calendar_id: cal.id, year: 2026, effective_from: periodStart, csv: '' })).status === 401);
+  const bare = createCalendar(wdb, systemClock, { name: 'Probe bare calendar (synthetic)', schedule: { reportingZone: 'America/Los_Angeles', anchorPayrollDate: '2026-10-02', cycleDays: 14, periodStartOffsetDays: -18, periodEndOffsetDays: -5, dueOffsetDays: -3, dueLocalTime: '17:00' } }, null);
+  const nv = await admin.req('POST', '/api/admin/calendar/import/preview', { calendar_id: bare, year: 2026, effective_from: periodStart, csv: 'date,name\n2026-12-25,X\n' });
+  check('D8 calendar without a version: 422 calendar_has_no_version', nv.status === 422 && nv.json.error.code === 'calendar_has_no_version');
+  wdb.close();
+}
+
+const integrity = db.pragma('integrity_check', { simple: true });
+const fk = db.pragma('foreign_key_check');
+check('Z  integrity_check ok and foreign_key_check empty after all probes', integrity === 'ok' && fk.length === 0, { integrity, fk: fk.length });
+db.close();
+server.kill();
+await new Promise((r) => server.once('exit', r));
+rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+console.log(failures === 0 ? 'API PROBE: all checks passed' : `API PROBE: ${failures} check(s) failed`);
+process.exitCode = failures === 0 ? 0 : 1;

@@ -1,0 +1,74 @@
+# WP2-FIXB red run: new tests against the unfixed client (Node v24.21.0)
+$ npx vitest run tests/client/sessionModel.test.ts
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/sessionModel.test.ts (32 tests | 4 failed) 15ms
+   ❯ expected finish and policy (R-02) (4)
+     × shows the finish in the display zone, not the zone the session was typed in (R-07) 4ms
+   ❯ input zone choices for manual entry (R-07) (3)
+     × defaults to the current display zone, not the reporting zone, and still offers both 0ms
+     × lists a display zone that is also a common zone once 0ms
+     × keeps the explicit choice of a new draft in the zone it is given 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/sessionModel.test.ts > expected finish and policy (R-02) > shows the finish in the display zone, not the zone the session was typed in (R-07)
+AssertionError: expected '2026-09-21 18:00 (America/Los_Angeles)' to be '2026-09-22 08:00 (Asia/Ho_Chi_Minh)' // Object.is equality
+
+Expected: "2026-09-22 08:00 (Asia/Ho_Chi_Minh)"
+Received: "2026-09-21 18:00 (America/Los_Angeles)"
+
+ ❯ tests/client/sessionModel.test.ts:308:87
+    306|     // Typed in Los Angeles (input_zone), viewed in Ho Chi Minh City: …
+    307|     const sessions = [savedSession({ start_utc: '2026-09-21T16:00:00Z'…
+    308|     expect(expectedFinishText(sessions, policy('2026-01-01', 1), 'Asia…
+       |                                                                                       ^
+    309|     expect(expectedFinishText(sessions, policy('2026-01-01', 1), LA)).…
+    310|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > input zone choices for manual entry (R-07) > defaults to the current display zone, not the reporting zone, and still offers both
+TypeError: inputZoneChoices is not a function
+ ❯ tests/client/sessionModel.test.ts:323:21
+    321| describe('input zone choices for manual entry (R-07)', () => {
+    322|   it('defaults to the current display zone, not the reporting zone, an…
+    323|     const choices = inputZoneChoices('Asia/Ho_Chi_Minh', LA);
+       |                     ^
+    324|     expect(choices[0]).toBe('Asia/Ho_Chi_Minh');
+    325|     expect(choices).toContain(LA);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > input zone choices for manual entry (R-07) > lists a display zone that is also a common zone once
+TypeError: inputZoneChoices is not a function
+ ❯ tests/client/sessionModel.test.ts:330:12
+    328|
+    329|   it('lists a display zone that is also a common zone once', () => {
+    330|     expect(inputZoneChoices(LA, LA).filter((zone) => zone === LA)).toH…
+       |            ^
+    331|     expect(inputZoneChoices(LA, LA)[0]).toBe(LA);
+    332|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > input zone choices for manual entry (R-07) > keeps the explicit choice of a new draft in the zone it is given
+TypeError: inputZoneChoices is not a function
+ ❯ tests/client/sessionModel.test.ts:335:49
+    333|
+    334|   it('keeps the explicit choice of a new draft in the zone it is given…
+    335|     const fresh = newSessionDraft('2026-09-21', inputZoneChoices('Asia…
+       |                                                 ^
+    336|     expect(fresh.zone).toBe('Asia/Ho_Chi_Minh');
+    337|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 28 passed (32)
+   Start at  02:38:04
+   Duration  282ms (transform 75%, import 15%, tests 8%, worker 2%)
+
+exit=1

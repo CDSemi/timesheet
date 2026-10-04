@@ -1,0 +1,61 @@
+// WP2-AUDIT-A probe worker: one separate OS process with its OWN better-sqlite3 connection
+// to the shared WAL database file. Reads newline-delimited JSON commands on stdin, runs the
+// PRODUCTION service function named by the command, and writes one JSON result line.
+// Usage: node pr-race-worker.mjs <clone-root> <db-path>
+import { createInterface } from 'node:readline';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [cloneRoot, dbPath] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { systemClock } = await import(src('server/clock.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+const leave = await import(src('server/services/otLeave.ts'));
+
+const db = openDatabase(dbPath);
+const ctx = { db, clock: systemClock };
+
+function run(op, input) {
+  switch (op) {
+    case 'reserve': return leave.reserveOtLeave(ctx, input).status;
+    case 'use': return leave.recordOtLeaveUse(ctx, input).status;
+    case 'cancel': return leave.cancelOtLeave(ctx, input).status;
+    case 'reverse': return leave.reverseOtLeaveUse(ctx, input).status;
+    case 'credit': return ledger.postCredit(ctx, input).status;
+    case 'debit': return ledger.postDeficitDebit(ctx, input).status;
+    case 'correct': return ledger.postCorrection(ctx, input).status;
+    case 'unsafeReserve': {
+      // SENSITIVITY CONTROL ONLY (never production code): read the balance outside any
+      // transaction, then insert a reservation row in autocommit. Two of these racing
+      // against the same balance must double-book, proving the harness can see it.
+      const balance = ledger.getBalance(db, input.userId);
+      if (balance.availableMinutes < input.minutes) return 'insufficient_balance(read)';
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+      db.prepare(
+        `INSERT INTO ot_leave_requests (id, user_id, request_key, leave_date, requested_minutes, approved_minutes,
+           reserved_minutes, approver_name, approval_date, evidence_ref, approval_origin, created_by, created_at, updated_at)
+         VALUES (lower(hex(randomblob(16))), ?, ?, '2026-01-05', ?, ?, ?, 'Control Manager', '2026-01-02', 'control', 'self_recorded', ?, ?, ?)`,
+      ).run(input.userId, input.requestKey, input.minutes, input.minutes, input.minutes, input.userId, now, now);
+      return 'reserved(unsafe)';
+    }
+    default: throw new Error(`unknown op ${op}`);
+  }
+}
+
+const rl = createInterface({ input: process.stdin });
+process.stdout.write(JSON.stringify({ ready: true, pid: process.pid }) + '\n');
+rl.on('line', (line) => {
+  const cmd = JSON.parse(line);
+  if (cmd.op === 'exit') { db.close(); process.exit(0); }
+  const started = performance.now();
+  let out;
+  try {
+    out = { id: cmd.id, ok: true, status: run(cmd.op, cmd.input) };
+  } catch (error) {
+    out = { id: cmd.id, ok: false, status: 'error', code: error?.code ?? String(error), http: error?.status ?? null };
+  }
+  out.ms = Math.round(performance.now() - started);
+  out.pid = process.pid;
+  process.stdout.write(JSON.stringify(out) + '\n');
+});

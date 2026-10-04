@@ -4,13 +4,10 @@ import { DayFieldsForm } from './components/DayFieldsForm.tsx';
 import { DayFigures } from './components/DayFigures.tsx';
 import { describeError, isStaleVersion } from './components/errors.ts';
 import { sessionText } from './components/format.ts';
-import { expectedFinishText, policyOn } from './components/sessionModel.ts';
+import { expectedFinishText, inputZoneChoices, policyOn } from './components/sessionModel.ts';
 import { SessionForm } from './components/SessionForm.tsx';
 import { WEEKDAYS } from './components/dayModel.ts';
 import { isoWeekday } from '../domain/dates.ts';
-
-/** Zones offered in the input-zone list; any other IANA zone can still be typed. */
-const COMMON_ZONES = ['America/Los_Angeles', 'Asia/Ho_Chi_Minh', 'Australia/Sydney', 'Europe/London', 'UTC'];
 
 type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: string };
 
@@ -72,7 +69,8 @@ export function DayEditor({
     void load();
   }, [load]);
 
-  const zones = useMemo(() => [...new Set([reportingZone, displayZone, ...COMMON_ZONES])], [reportingZone, displayZone]);
+  // R-07: a new session is typed in the current display zone unless the user picks another.
+  const zones = useMemo(() => inputZoneChoices(displayZone, reportingZone), [displayZone, reportingZone]);
   const policy = policyOn(policies, workDate);
   const reasonRequired = day?.edit.reason_required ?? false;
 
@@ -177,7 +175,7 @@ export function DayEditor({
               </p>
             )}
 
-            <DayFigures day={day} todayLocal={todayLocal} expectedFinish={expectedFinishText(day.sessions, policy)} />
+            <DayFigures day={day} todayLocal={todayLocal} expectedFinish={expectedFinishText(day.sessions, policy, displayZone)} />
 
             <section className="stack" aria-label="Sessions">
               <h3>Sessions</h3>

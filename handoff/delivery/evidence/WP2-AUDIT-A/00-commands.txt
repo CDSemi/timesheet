@@ -1,0 +1,31 @@
+# WP2-AUDIT-A command index (auditor, fresh context; reviewed commit 8fae685949adb525ec137e5972202f58b408ac24)
+# All runs in a scratch clone <scratch>/clone on the C: drive outside Dropbox, Node v24.21.0 called by full path,
+# TEMP/TMP pointed at <scratch>/tmp. Synthetic data only; run-time passwords are never printed. Times are UTC.
+
+| # | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 1 | git rev-parse HEAD; git ls-tree digest (project and clone) | 0 | 8fae685, 8ebce5fe...24a2 in both | 01-digest-before.txt |
+| 2 | npm ci --no-audit --no-fund | 0 | 144 packages | 02-npm-ci.txt |
+| 3 | NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify | 0 | typecheck, lint, 31 files / 599 tests, build, SMOKE PASSED (28 PASS lines); 0 'deprecat' matches | 03-verify.txt |
+| 4 | vitest run on 10 ledger/privacy/admin files; ot-leave-concurrency.test.ts x3 more | 0 | 10 files / 216 tests; concurrency 8/8 three times | 04-targeted-tests.txt |
+| 5 | playwright test tests/e2e/isolation.spec.ts tests/e2e/ot-leave.spec.ts (Edge, built dist) | 0 | 14 passed (desktop + mobile) | 05-e2e-isolation-ot-leave.txt |
+| 6a | node probes/pr-race.mjs <clone> <work> 3 (trial) | 0 | all races held, control double-booked 3/3; output shown in the session only, superseded by 6b | - |
+| 6b | node probes/pr-race.mjs <clone> <work> 25 (4 separate OS processes, real WAL file) | 0 | 22 production race/mode combinations x 25 rounds (550), 0 violations; unsafe control double-booked 25/25; integrity ok | 06-probe-multiprocess-race.txt |
+| 7a | node probes/pa-ledger-privacy.mjs (run 1) | 1 | 113 pass / 5 fail - all 5 probe bugs: A1 regex matched the HTTP method "POST"; D2 expected the last cursor 1 (it is 2 by design); F12 used a user with other credits; E3/E5 matched the strict-schema echo of a key name the probe sent and the probe's own console lines | 07a-...-run1.txt |
+| 7b | same (run 2, probe bugs fixed) | 1 | 118 / 1 - F13 read the wrong user's summary (probe bug) | 07b-...-run2.txt |
+| 7c | same (run 3, F13 session fixed) | 0 | 119 / 0 | 07c-...-run3.txt |
+| 7d | same (run 4, weak-password and fake-hash literals renamed to placeholder values so the stored probe passes the precommit privacy rule) | 0 | 119 / 0 | 07-probe-ledger-privacy.txt |
+| 8a | node probes/pd-wp1-build.mjs <wp1-export f32978f>; node probes/pd-wp2-upgrade.mjs <clone> (run 1) | 0 / 1 | 16 / 2 - U9/U10 expected 90 for 08:00-19:00 (correct is 120; probe arithmetic bug) | 08a-...-run1.txt |
+| 8b | same (run 2, expectations fixed) | 0 / 0 | 18 / 0: WP1 v1 -> [2,3], 13 WP1 tables identical, v2 with ledger rows -> [3] identical | 08-probe-wp1-upgrade.txt |
+| 9a | node probes/pf-supplement.mjs (run 1) | 1 | 4 / 2 - one-day probe session expired after the clock moved (probe bug) | 09a-...-run1.txt |
+| 9b | same (run 2, TTL 30 days) | 0 | 6 / 0; S7 policy body inconsistent (422) | 09b-...-run2.txt |
+| 9c | same with the S7 error code printed (grep S7 only) | 0 | 422 inconsistent_reference_schedule; output shown in the session only | - |
+| 9d | same (run 3, S7 policy 08:00-16:00) | 0 | 6 / 0 plus observations S6-S8 | 09-probe-supplement.txt |
+| 10 | node probes/pg-holiday-preview-privacy.mjs | 0 | reproduced WP2-A-01: admin preview reveals the dates the employee recorded work (10-05, 10-07), writes nothing | 10-probe-holiday-preview-privacy.txt |
+| 11 | grep/git grep static scans (posting importers, env flags, dist, images, emails, hashes, client storage) | 0 | see file | 11-static-scans.txt |
+| 12 | git rev-parse HEAD; git ls-tree digest; node scripts/source-digest.mjs (clone) | 0 | unchanged 8ebce5fe...24a2 | 12-digest-after.txt |
+
+Probe sources (final versions, each carrying comments on what changed between runs) are in probes/*.mjs.txt.
+The WP1 export for step 8 is `git archive f32978f src reference package.json` with a node_modules junction to the
+clone's node_modules (same runtime dependency versions). The scratch clone, work databases and the export were deleted
+after the audit.

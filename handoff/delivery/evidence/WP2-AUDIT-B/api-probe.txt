@@ -1,0 +1,84 @@
+# node api-probe.mjs <clone>   (node v24.21.0; built server of 8fae685, fresh temp SQLite, CLI synthetic seed; source in api-probe.mjs.txt)
+PASS  logins (admin, employee, employee2)
+INFO  today_local=2026-10-04 current_period_start=2026-09-28 past_normal_days=2026-09-28,2026-09-29,2026-09-30,2026-10-01,2026-10-02
+PASS  A1 clock in 201
+PASS  A2 clock out without expected_version is 422 validation_error  validation_error
+PASS  A3 stale expected_version is 409 stale_version
+PASS  A4 omitted list + confirmed is 422 breaks_required
+PASS  A5 break ending now+10min on open session is 422 future_break  future_break
+PASS  A6 omitted list with a legacy future row is 422 saved_break_after_clock_out naming the row  {"code":"saved_break_after_clock_out","message":"A saved break ends after this Clock out; resubmit the complete list of breaks to replace it","details":{"break_ids":["legacy-break-probe"]}}
+PASS  A6b nothing written: session open, row kept, no audit
+PASS  A7 present [] confirmed replaces saved rows and closes the session  200
+PASS  A7b clock_out audit has before (open, legacy break) and after (closed, no breaks)
+PASS  A8 omitted list (unconfirmed) keeps the saved break row (same id), breaks stay unconfirmed  200
+PASS  B1 preview: create x2, reason required for the old date only, nothing written  ["create","create"]
+PASS  B2 commit without reason: 422 reason_required, nothing written
+PASS  B3 commit with reason: 2 day_entry.create events with reason, before null, after explicit label
+PASS  B4 stale version: 409 stale_version naming the date; the other date untouched (atomic)
+PASS  B5 preview reports the conflict (session ids, counts)
+PASS  B5b commit without confirm: 409 conflicts_require_confirmation
+PASS  B5c confirmed commit relabels; sessions byte-identical
+PASS  B6 leave 481 > B is 422 leave_exceeds_required  leave_exceeds_required
+PASS  B6b leave without kind is 422 leave_kind_required
+PASS  B6c kind without minutes is refused (422)  leave_kind_without_minutes
+PASS  B6d 240 work + 240 vacation: deficit 0, credited 0, WFH saved  {"deficit":0,"credited":0}
+PASS  B7 duplicate date is 422 duplicate_date
+PASS  B8 user_id field rejected by the strict schema
+PASS  C1 current-period edit without reason: 200, audited with null reason and after state
+PASS  C2 old-period edit without reason: 422 reason_required
+PASS  C3 old-period edit with reason: audited with reason, before Sick, after Worked
+PASS  C4 own history lists the reasoned events; employee2 history has none of them
+PASS  E1 policy preview writes nothing and lists changed days  {"days":3}
+PASS  E2 every previewed "after" equals the post-creation day view  2026-09-30:60,2026-10-01:180,2026-10-02:60
+PASS  E3 R-02 inconsistency refused identically by preview and create  inconsistent_reference_schedule
+PASS  F1 admin list: account fields only  calendar_id,created_at,display_name,email,id,role,status,updated_at
+PASS  F1b employee 403 and anonymous 401 on /api/admin/users
+PASS  F2 create: 201, password and hash in no response or audit payload
+PASS  F3 new user signs in
+PASS  F3b deactivate revokes the existing session (401)
+PASS  F3c reactivation does not revive the old session
+PASS  F3d fresh sign-in after reactivation works
+PASS  F4 self-deactivation 409 cannot_deactivate_self
+PASS  F4b demoting the last active admin 409 last_active_admin
+PASS  F5 user with data: combined PATCH 409 calendar_in_use, nothing applied, no audit
+PASS  F5b ledger-only account: 409 calendar_in_use
+PASS  F5c account without data: calendar changes with one user.update audit event
+PASS  F5d display-name-only PATCH of a user with data is allowed (no-op here)
+PASS  F6 admin gets 404 on an employee session (GET/PUT/DELETE)
+PASS  F6b admin day view of the same date shows only the admin (no sessions, no entry)
+PASS  F6c admin history holds no employee day/session events
+PASS  F6d no admin data route: GET /api/admin/timesheets -> 404
+PASS  F6d no admin data route: GET /api/admin/users/<employee-id>/timesheet -> 404
+PASS  F6d no admin data route: GET /api/admin/users/<employee-id>/ledger -> 404
+PASS  F6d no admin data route: GET /api/admin/history -> 404
+PASS  G1 blank reason: 422 reason_required
+PASS  G2 unfinalized stored row refreshed (payroll date moved; start/end/id kept)
+PASS  G3 duplicate: 409 payroll_exception_exists
+PASS  G4 finalized period: 409 period_finalized, row and exceptions unchanged
+PASS  G5 employee 403 on payroll exceptions
+PASS  I1 employee2 ledger: exactly one keyed synthetic setup credit (600, system, reason), nothing inferred  ["credit:600:seed-setup-credit-employee2"]
+PASS  I2 OT-kind leave label and a batch relabel spend and reserve nothing (ledger, summary, request unchanged)
+PASS  I2b day view flags the E-2 mismatch informationally (kind 240, consumed 0)
+INFO  evidence sections export,policy_versions,intervals,breaks,daily,ledger,leave_permissions rows(excl header) intervals=3 breaks=3 daily=61 ledger=1 leave=1 policies=2
+INFO  db counts sessions=3 breaks=3 ledger=1 leave=1 policies=2
+PASS  I3 evidence CSV: status 200, no-store, sections in order
+PASS  I3b evidence completeness: intervals, breaks, ledger, leave and policy rows equal the stored rows
+PASS  I3c daily section carries category_source and leave_kind columns  work_date,day_class,day_class_reason,calendar_version_id,category,category_source,leave_minutes,leave_kind,wfh,calculation_status,policy_version_id,gross_seconds,excluded_break_seconds,regular_minutes,nonworking_minutes,normal_excess_minutes,eligible_minutes,credited_minutes,period_payroll_date,period_finalized
+PASS  I3d employee export carries none of employee2 rows
+PASS  D1 preview flags duplicate, invalid date, formula cell, empty name, out-of-year; cannot commit; writes nothing  duplicate_date,empty_name,formula_cell,invalid_date,out_of_year
+INFO  past periods compared: 26
+PASS  D2 preview: 2 added, 1 ignored_past, kept dates listed (manual/existing dates stay), hash present  {"added":2,"ignored":1,"kept":9}
+PASS  D2b affected_days reports counts only (default entries, preserved explicit overrides), no identity  [{"date":"2026-09-29","label_before":"Worked","label_after":"Holiday","default_labelled_entries":0,"explicit_overrides_preserved":1},{"date":"2026-09-30","label_before":"Worked","label_after":"Holiday","default_labelled_entries":1,"explicit_overrides_preserved":1}]
+PASS  D3 mismatched hash: 409 stale_preview, nothing written
+PASS  D3b effective_from before the boundary: 422 retroactive_change (checked before the hash)
+PASS  D3c removing a date before effective_from is a removal problem  [{"date":"2026-01-01","code":"remove_before_effective_from","message":"2026-01-01 is before the effective date; past days are never changed"}]
+PASS  D4 commit: 201, one new version, one calendar_version.create audit event
+PASS  D4b identical re-commit: 200 unchanged, no new version
+PASS  D5 default-labelled row follows the calendar at read time (Holiday) with no employee row write  {"category":"Holiday","day_class":"nonworking"}
+PASS  D5b explicit label preserved (Worked), row untouched
+PASS  D6 classification and labels of every day in the periods of the year before the current one are identical after commit
+PASS  D7 employee 403 / anonymous 401 on import routes
+PASS  D8 calendar without a version: 422 calendar_has_no_version
+PASS  Z  integrity_check ok and foreign_key_check empty after all probes  {"integrity":"ok","fk":0}
+API PROBE: all checks passed
+exit 0

@@ -30,8 +30,8 @@ import {
  * immutable calendar version with one audit event. The import is a merge: dates the CSV does
  * not list stay (manual dates included) and only explicitly listed dates are removed.
  * Employee rows are never written: default day labels follow the calendar at read time and
- * explicit labels are never replaced. Everything here is aggregate configuration data; no
- * result names a user.
+ * explicit labels are never replaced. The preview reads calendar configuration only: no
+ * result carries an employee identity or an employee-derived count (docs/01 "Initial boundary").
  */
 
 export interface HolidayImportInput {
@@ -48,17 +48,15 @@ interface EffectiveFromProblem {
   details: Record<string, unknown>;
 }
 
+/** A date-only signal: no count and no identity of the finalized timesheets leaves the server. */
 interface FinalizedConflict {
   date: CivilDate;
-  finalized_timesheets: number;
 }
 
 interface AffectedDay {
   date: CivilDate;
   label_before: DayCategory | null;
   label_after: DayCategory | null;
-  default_labelled_entries: number;
-  explicit_overrides_preserved: number;
 }
 
 interface ImportPlan {
@@ -103,22 +101,18 @@ function categoryOn(versions: readonly CalendarVersion[], date: CivilDate): DayC
   }
 }
 
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => '?').join(',');
-}
-
 /** Finalized timesheets of this calendar's pay periods that cover each date. */
 function finalizedConflictsFor(db: Db, calendarId: string, dates: readonly CivilDate[]): FinalizedConflict[] {
   const statement = db
     .prepare(
-      `SELECT count(*) FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
-        WHERE p.calendar_id = ? AND t.finalized_revision_no IS NOT NULL AND ? BETWEEN p.period_start AND p.period_end`,
+      `SELECT EXISTS(
+         SELECT 1 FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
+          WHERE p.calendar_id = ? AND t.finalized_revision_no IS NOT NULL AND ? BETWEEN p.period_start AND p.period_end)`,
     )
     .pluck();
   const conflicts: FinalizedConflict[] = [];
   for (const date of dates) {
-    const count = statement.get(calendarId, date) as number;
-    if (count > 0) conflicts.push({ date, finalized_timesheets: count });
+    if (statement.get(calendarId, date) === 1) conflicts.push({ date });
   }
   return conflicts;
 }
@@ -185,10 +179,12 @@ const issueJson = (issue: HolidayCsvIssue) => ({
 });
 
 /**
- * Counts, per changed date, the employees' default-labelled and explicit day entries in
- * unfinalized timesheets of users on this calendar. Counts only: no identity leaves here.
+ * The changed dates whose default label differs before and after, from the calendar versions
+ * alone. Nothing here reads employee rows: an administrator's preview must not reveal which
+ * days an employee recorded (docs/01 "Initial boundary", docs/03 "Records"). Explicit labels
+ * and manual dates are preserved by the commit; that is a rule, not a per-employee count.
  */
-function affectedDays(db: Db, plan: ImportPlan): AffectedDay[] {
+function affectedDays(plan: ImportPlan): AffectedDay[] {
   const { diff } = plan;
   const changedDates = [...diff.added.map((rule) => rule.date), ...diff.removed.map((rule) => rule.date), ...diff.kindChanged.map((item) => item.date)].sort();
   if (changedDates.length === 0) return [];
@@ -197,26 +193,8 @@ function affectedDays(db: Db, plan: ImportPlan): AffectedDay[] {
     ...plan.versions,
     { id: 'preview', seq, effectiveFrom: plan.effectiveFrom, weekdays: plan.base.weekdays, dates: diff.next },
   ];
-  const rows = db
-    .prepare(
-      `SELECT d.work_date AS work_date, d.category_source AS source, count(*) AS entries
-         FROM day_entries d
-         JOIN users u ON u.id = d.user_id
-         JOIN timesheets t ON t.id = d.timesheet_id
-        WHERE u.calendar_id = ? AND t.finalized_revision_no IS NULL AND d.work_date IN (${placeholders(changedDates.length)})
-        GROUP BY d.work_date, d.category_source`,
-    )
-    .all(plan.input.calendarId, ...changedDates) as Array<{ work_date: CivilDate; source: 'default' | 'explicit'; entries: number }>;
-  const count = (date: CivilDate, source: 'default' | 'explicit') =>
-    rows.find((row) => row.work_date === date && row.source === source)?.entries ?? 0;
   return changedDates
-    .map((date) => ({
-      date,
-      label_before: categoryOn(plan.versions, date),
-      label_after: categoryOn(after, date),
-      default_labelled_entries: count(date, 'default'),
-      explicit_overrides_preserved: count(date, 'explicit'),
-    }))
+    .map((date) => ({ date, label_before: categoryOn(plan.versions, date), label_after: categoryOn(after, date) }))
     .filter((day) => day.label_before !== day.label_after);
 }
 
@@ -262,7 +240,7 @@ export function previewHolidayImport(db: Db, clock: Clock, input: HolidayImportI
       ignored_past: diff.ignoredPast.map(ruleJson),
     },
     result_date_count: diff.next.length,
-    affected_days: affectedDays(db, plan),
+    affected_days: affectedDays(plan),
   };
 }
 

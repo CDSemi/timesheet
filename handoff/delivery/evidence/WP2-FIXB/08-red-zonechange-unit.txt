@@ -1,0 +1,56 @@
+# WP2-FIXB addendum red run: zone-change unit tests against the unfixed model (Node v24.21.0)
+$ npx vitest run tests/client/sessionModel.test.ts
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/sessionModel.test.ts (34 tests | 3 failed) 14ms
+   ❯ changing the input zone of a saved session (R-07) (3)
+     × re-reads the entered wall clock in the new zone: the offsets pinned in the old zone are dropped 3ms
+     × leaves an unchanged zone alone, so an unchanged edit keeps the saved instants 0ms
+     × asks again when the same wall time is repeated or missing in the new zone 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > re-reads the entered wall clock in the new zone: the offsets pinned in the old zone are dropped
+TypeError: changeZone is not a function
+ ❯ tests/client/sessionModel.test.ts:345:19
+    343|     const saved = draftFromSession(withBreak());
+    344|     expect(saved.start.offset).toBe('-07:00');
+    345|     const moved = changeZone(saved, 'Europe/London');
+       |                   ^
+    346|     expect(moved.zone).toBe('Europe/London');
+    347|     // The typed wall times stay as shown...
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > leaves an unchanged zone alone, so an unchanged edit keeps the saved instants
+TypeError: changeZone is not a function
+ ❯ tests/client/sessionModel.test.ts:364:12
+    362|   it('leaves an unchanged zone alone, so an unchanged edit keeps the s…
+    363|     const saved = draftFromSession(withBreak());
+    364|     expect(changeZone(saved, LA)).toBe(saved);
+       |            ^
+    365|     expect(buildSessionRequest(saved).start).toEqual({ local: '2026-09…
+    366|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > asks again when the same wall time is repeated or missing in the new zone
+TypeError: changeZone is not a function
+ ❯ tests/client/sessionModel.test.ts:372:19
+    370|     const saved = draftFromSession(savedSession({ start_utc: '2026-04-…
+    371|     expect(saved.start).toEqual({ date: '2026-04-05', time: '02:30', f…
+    372|     const moved = changeZone(saved, SYDNEY);
+       |                   ^
+    373|     const start = resolveStart(moved);
+    374|     expect(start.ok).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 31 passed (34)
+   Start at  02:43:19
+   Duration  312ms (transform 77%, import 15%, tests 7%, worker 2%)
+
+exit=1

@@ -1,0 +1,105 @@
+// WP2-AUDIT-A: upgrade the WP1-built database with the REVIEWED code (8fae685) and prove that every
+// WP1 row survives byte for byte, then use the WP2 API on the upgraded data. Also upgrades a v2
+// database holding ledger rows to v3. Synthetic data only; nothing secret is printed.
+// Usage: node pd-wp2-upgrade.mjs <clone-root> <work-dir>
+import { copyFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { randomBytes } from 'node:crypto';
+
+const [cloneRoot, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate, MIGRATIONS, migrationChecksum } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+const leave = await import(src('server/services/otLeave.ts'));
+
+let pass = 0; let fail = 0;
+const check = (id, ok, detail = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'} ${id}${detail ? `  ${detail}` : ''}`); };
+const tablesOf = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+const dump = (db, table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
+
+// ---- WP1 -> WP2 ----
+copyFileSync(join(workDir, 'wp1.db'), join(workDir, 'upgraded.db'));
+const db = openDatabase(join(workDir, 'upgraded.db'));
+const wp1Tables = tablesOf(db);
+const before = Object.fromEntries(wp1Tables.map((t) => [t, dump(db, t)]));
+const versionBefore = db.prepare('SELECT max(version) FROM schema_migrations').pluck().get();
+const result = migrate(db);
+check('U1 WP1 database (version 1) upgrades by applying [2,3]', versionBefore === 1 && JSON.stringify(result.applied) === '[2,3]' && result.version === 3, `before v${versionBefore} applied ${JSON.stringify(result.applied)}`);
+let identical = 0; const differing = [];
+for (const t of wp1Tables) {
+  const after = dump(db, t);
+  const strip = (rows) => rows.map((r) => { const { category_source, leave_kind, ...rest } = r; return t === 'day_entries' ? rest : r; });
+  const a = t === 'schema_migrations' ? after.slice(0, before[t].length) : after;
+  if (JSON.stringify(strip(a)) === JSON.stringify(before[t]) && (t === 'schema_migrations' || after.length === before[t].length)) identical += 1; else differing.push(t);
+}
+check(`U2 all ${wp1Tables.length} WP1 tables keep every row and value (day_entries compared on WP1 columns)`, differing.length === 0, `identical ${identical}/${wp1Tables.length}; rows ${JSON.stringify(Object.fromEntries(wp1Tables.map((t) => [t, before[t].length])))}`);
+const de = dump(db, 'day_entries');
+check('U3 WP1 day entries backfilled category_source=explicit, leave_kind NULL', de.length > 0 && de.every((r) => r.category_source === 'explicit' && r.leave_kind === null), `${de.length} rows`);
+const sm = dump(db, 'schema_migrations');
+check('U4 schema_migrations rows 1..3 with current checksums; migration 0001 checksum unchanged', sm.length === 3 && sm.every((r, i) => r.version === i + 1 && r.checksum === migrationChecksum(MIGRATIONS[i])) && JSON.stringify(sm[0]) === JSON.stringify(before.schema_migrations[0]));
+check('U5 integrity_check ok, foreign_key_check empty, ot tables empty', db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0 && dump(db, 'ot_ledger').length === 0 && dump(db, 'ot_leave_requests').length === 0);
+check('U6 re-running migrate is a no-op', JSON.stringify(migrate(db).applied) === '[]');
+
+// WP2 API on the upgraded WP1 data
+class Clock { constructor(iso) { this.t = new Date(iso); } now() { return new Date(this.t.getTime()); } }
+const clock = new Clock('2026-09-30T18:00:00Z');
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 3600, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function req(method, path, cookie, body) {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  let json = null; try { json = JSON.parse(text); } catch { json = null; }
+  return { status: res.status, body: json, text, headers: res.headers };
+}
+const pw = JSON.parse(readFileSync(join(workDir, 'pw.json'), 'utf8'));
+const emp = (await req('POST', '/api/auth/login', undefined, { email: 'employee@example.invalid', password: pw.employee })).headers.get('set-cookie')?.split(';')[0];
+check('U7 WP1 employee signs in on the upgraded database', typeof emp === 'string');
+const ts = await req('GET', '/api/timesheets/2026-10-02', emp);
+const day = (d) => ts.body.days.find((x) => x.work_date === d);
+check('U8 timesheet view works; WP1 labels kept (09-22 Vacation 480, 09-23 Worked 240 wfh)', ts.status === 200 && day('2026-09-22').category === 'Vacation' && day('2026-09-22').leave_minutes === 480 && day('2026-09-23').leave_minutes === 240 && day('2026-09-23').wfh === true && day('2026-09-23').leave_kind === null);
+// Run 1 expected 90 for 09-24; 08:00-19:00 less 60 breaks is R 600, excess 120, credit 120 (probe arithmetic bug).
+check('U9 WP1 credits recomputed by the one engine: 09-21 0, 09-24 120, 09-25 overnight 120', day('2026-09-21').calculation.credited_minutes === 0 && day('2026-09-24').calculation.credited_minutes === 120 && day('2026-09-25').calculation.credited_minutes === 120, `${day('2026-09-21').calculation.credited_minutes}/${day('2026-09-24').calculation.credited_minutes}/${day('2026-09-25').calculation.credited_minutes}`);
+const sum = await req('GET', '/api/ot/summary', emp);
+check('U10 OT summary on upgraded data: posted 0, provisional 240, nothing inferred', sum.status === 200 && sum.body.posted_minutes === 0 && sum.body.provisional_minutes === 240, `posted ${sum.body.posted_minutes} provisional ${sum.body.provisional_minutes}`);
+const reserve = await req('POST', '/api/ot/leave', emp, { request_key: 'u-1', leave_date: '2026-10-05', requested_minutes: 60, permission: { approver_name: 'M', approval_date: '2026-09-30', evidence_ref: 'ref' } });
+check('U11 reservation on upgraded data with no posted balance -> 409 insufficient_balance (no opening balance inferred)', reserve.status === 409 && reserve.body.error.code === 'insufficient_balance');
+const csv = await req('GET', '/api/ot/evidence.csv?from=2026-09-14&to=2026-09-27', emp);
+check('U12 evidence CSV on upgraded data lists WP1 sessions and daily credits', csv.status === 200 && csv.text.includes('#section,intervals') && (csv.text.match(/\n2026-09-2[1-5],[0-9a-f-]{36},manual/g) ?? []).length >= 4);
+const hist = await req('GET', '/api/history?limit=500', emp);
+check('U13 history on upgraded data returns the WP1 audit events of the owner', hist.status === 200 && hist.body.audit_events.length > 0 && hist.body.audit_events.some((e) => e.operation.startsWith('session') || e.operation.startsWith('work_session') || e.operation.startsWith('day_entry')), `${hist.body.audit_events.length} events`);
+const resave = await req('PUT', '/api/days/2026-09-23', emp, { category: 'Worked', leave_minutes: 240, wfh: true, notes: 'synthetic partial leave', expected_version: day('2026-09-23').entry.version });
+check('U14 re-saving a WP1 row with leave minutes but no kind asks for the kind (422 leave_kind_required)', resave.status === 422 && resave.body.error.code === 'leave_kind_required', `${resave.status} ${resave.body?.error?.code}`);
+const kinded = await req('PUT', '/api/days/2026-09-23', emp, { category: 'Worked', leave_minutes: 240, leave_kind: 'ot', wfh: true, notes: 'synthetic partial leave', expected_version: day('2026-09-23').entry.version });
+check('U15 setting leave_kind ot on the WP1 row saves and spends nothing', kinded.status === 200 && dump(db, 'ot_ledger').length === 0);
+db.close();
+
+// ---- v2 (with ledger rows) -> v3 ----
+const db2 = openDatabase(join(workDir, 'v2.db'));
+migrate(db2, MIGRATIONS.slice(0, 2));
+const ck = new Clock('2026-09-30T18:00:00Z');
+const seed = await seedSynthetic(db2, ck, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+const userId = seed.users.find((u) => u.role === 'employee').id;
+const ctx = { db: db2, clock: ck };
+const credit = ledger.postCredit(ctx, { userId, sourceKey: 'v2-credit', actorUserId: null, origin: 'system', reason: 'probe', workDate: '2026-09-21', minutes: 300 });
+ledger.postCorrection(ctx, { userId, sourceKey: 'v2-corr', actorUserId: userId, origin: 'manual', reason: 'probe', originalEntryId: credit.entry.id, correctedMinutes: 360 });
+const lr = leave.reserveOtLeave(ctx, { userId, actorUserId: userId, requestKey: 'v2-req', leaveDate: '2026-09-22', requestedMinutes: 240, permission: { approverName: 'M', approvalDate: '2026-09-20', evidenceRef: 'ref' } });
+leave.recordOtLeaveUse(ctx, { userId, actorUserId: userId, requestId: lr.request.id, useKey: 'v2-use', minutes: 120 });
+const v2Tables = tablesOf(db2);
+const b2 = Object.fromEntries(v2Tables.map((t) => [t, dump(db2, t)]));
+const r2 = migrate(db2);
+const diff2 = v2Tables.filter((t) => t !== 'schema_migrations' && JSON.stringify(dump(db2, t)) !== JSON.stringify(b2[t]));
+check('U16 v2 database with ledger/leave rows upgrades by applying [3] and keeps every row', JSON.stringify(r2.applied) === '[3]' && diff2.length === 0, `ledger ${b2.ot_ledger.length} leave ${b2.ot_leave_requests.length} differing ${diff2.join(',') || 'none'}`);
+check('U17 balance after upgrade equals before (posted 240, reserved 120)', JSON.stringify(ledger.getBalance(db2, userId)) === JSON.stringify({ postedMinutes: 240, reservedMinutes: 120, availableMinutes: 120, negative: false, reconciliationRequired: false }));
+check('U18 v2->v3 integrity ok and FK check empty', db2.pragma('integrity_check', { simple: true }) === 'ok' && db2.pragma('foreign_key_check').length === 0);
+db2.close();
+console.log(`RESULT pass=${pass} fail=${fail}`);
+process.exitCode = fail === 0 ? 0 : 1;

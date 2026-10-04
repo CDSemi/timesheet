@@ -1,0 +1,134 @@
+// WP2-AUDIT-B upgrade probe: a database created and populated by the WP1 code (f32978f, built
+// from a git archive) is upgraded by the WP2 code (8fae685) and then used through the WP2 API.
+// Usage: node upgrade-probe.mjs <wp1-dir> <wp2-clone-dir>. Prints PASS/FAIL; never prints secrets.
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [WP1, WP2] = process.argv.slice(2);
+const Database = createRequire(pathToFileURL(join(WP2, 'package.json')))('better-sqlite3');
+let failures = 0;
+const check = (name, ok, detail = '') => {
+  if (!ok) failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail === '' ? '' : `  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+};
+const freePort = () => new Promise((resolve) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
+const work = mkdtempSync(join(tmpdir(), 'audit-b-upgrade-'));
+const dbPath = join(work, 'timesheet.db');
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const envFor = (port) => ({ ...process.env, NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(port), DATABASE_PATH: dbPath, APP_ORIGINS: `http://127.0.0.1:${port}`, SEED_ADMIN_PASSWORD: pw.admin, SEED_EMPLOYEE_PASSWORD: pw.employee });
+const cli = (dir, command, env) => spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: dir, env, encoding: 'utf8' });
+async function start(dir) {
+  const port = await freePort();
+  const env = envFor(port);
+  const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: dir, env, stdio: 'ignore' });
+  const origin = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 100; i += 1) { try { if ((await fetch(`${origin}/api/health`)).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
+  return { origin, child, env };
+}
+async function stop(child) { if (child.exitCode !== null || child.signalCode !== null) return; const done = new Promise((r) => child.once("exit", r)); child.kill(); await done; }
+function client(origin) {
+  let cookie = '';
+  return {
+    async login(email, password) {
+      const res = await fetch(`${origin}/api/auth/login`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      cookie = (res.headers.get('set-cookie') ?? '').split(';')[0];
+      return res.status;
+    },
+    async req(method, path, body) {
+      const headers = { origin, cookie };
+      if (body !== undefined) headers['content-type'] = 'application/json';
+      const res = await fetch(`${origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      const text = await res.text();
+      let json = null; try { json = JSON.parse(text); } catch {}
+      return { status: res.status, json, text };
+    },
+  };
+}
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+let wp2server;
+let wp1server;
+try {
+  // 1. WP1 creates and populates the database.
+  const wp1Env = envFor(await freePort());
+  const m1 = cli(WP1, 'migrate', wp1Env);
+  const s1 = cli(WP1, 'seed', wp1Env);
+  check('U1 WP1 migrate and seed', m1.status === 0 && s1.status === 0, m1.stdout.trim());
+  const wp1 = await start(WP1);
+  wp1server = wp1;
+  const e1 = client(wp1.origin);
+  check('U2 WP1 employee login', (await e1.login('employee@example.invalid', pw.employee)) === 200);
+  const periods = (await e1.req('GET', '/api/periods/current')).json;
+  const sheet = (await e1.req('GET', `/api/timesheets/${periods.current.payroll_date}`)).json;
+  const past = sheet.days.filter((d) => d.work_date < periods.today_local && d.classification?.day_class === 'normal').map((d) => d.work_date);
+  const [d1, d2, d3] = past;
+  const r1 = await e1.req('POST', `/api/days/${d1}/sessions`, { start: at(d1, '09:00'), end: at(d1, '18:00'), input_zone: LA, breaks_confirmed: true, breaks: [{ start: at(d1, '11:00'), end: at(d1, '11:15'), counts_as_work: false }, { start: at(d1, '13:00'), end: at(d1, '13:30'), counts_as_work: false }, { start: at(d1, '15:30'), end: at(d1, '15:45'), counts_as_work: false }] });
+  const r2 = await e1.req('PUT', `/api/days/${d2}`, { category: 'Vacation', leave_minutes: 0, wfh: false, notes: 'wp1 synthetic note' });
+  const r3 = await e1.req('PUT', `/api/days/${d3}`, { category: 'Worked', leave_minutes: 240, wfh: true, notes: '' });
+  const old = '2026-09-15';
+  const r4 = await e1.req('POST', `/api/days/${old}/sessions`, { start: at(old, '08:00'), end: at(old, '12:00'), input_zone: LA, breaks_confirmed: false, breaks: [], reason: 'wp1 old entry' });
+  const r5 = await e1.req('POST', '/api/clock/in', { input_zone: LA });
+  check('U3 WP1 data written (manual session with breaks, Vacation, leave 240, old-period session, open clock session)', r1.status === 201 && r2.status === 200 && r3.status === 200 && r4.status === 201 && r5.status === 201, [r1.status, r2.status, r3.status, r4.status, r5.status]);
+  await stop(wp1.child);
+  wp1server = undefined;
+
+  const db1 = new Database(dbPath, { readonly: true });
+  const tables = db1.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  const colsByTable = Object.fromEntries(tables.map((t) => [t, db1.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name)]));
+  const snapshot = (db) => Object.fromEntries(tables.map((t) => [t, JSON.stringify(db.prepare(`SELECT ${colsByTable[t].join(', ')} FROM ${t} ORDER BY rowid`).all())]));
+  const before = snapshot(db1);
+  const counts = Object.fromEntries(tables.map((t) => [t, db1.prepare(`SELECT count(*) FROM ${t}`).pluck().get()]));
+  const v1 = db1.prepare('SELECT max(version) FROM schema_migrations').pluck().get();
+  db1.close();
+  console.log(`INFO  WP1 schema version ${v1}; row counts ${JSON.stringify(counts)}`);
+
+  // 2. WP2 upgrades it.
+  const m2 = cli(WP2, 'migrate', wp1Env);
+  check('U4 WP2 migrate applies [2,3] to the WP1 database', m2.status === 0 && /"applied":\[2,3\]/.test(m2.stdout) && /"version":3/.test(m2.stdout), m2.stdout.trim());
+  const m3 = cli(WP2, 'migrate', wp1Env);
+  check('U4b second migrate is a no-op', m3.status === 0 && /"applied":\[\]/.test(m3.stdout));
+  const db2 = new Database(dbPath);
+  const after = snapshot(db2);
+  const changed = tables.filter((t) => before[t] !== after[t] && t !== 'schema_migrations');
+  check('U5 every WP1 table keeps its rows byte-identical (original columns)', changed.length === 0, changed);
+  check('U5b integrity_check ok, foreign_key_check empty', db2.pragma('integrity_check', { simple: true }) === 'ok' && db2.pragma('foreign_key_check').length === 0);
+  const src = db2.prepare('SELECT category_source, leave_kind, count(*) AS n FROM day_entries GROUP BY 1, 2').all();
+  check('U5c WP1 day entries backfilled explicit with leave_kind NULL (nothing inferred)', src.length === 1 && src[0].category_source === 'explicit' && src[0].leave_kind === null, src);
+  const newTables = db2.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('ot_ledger', 'ot_leave_requests')").pluck().all();
+  check('U5d ledger tables exist and are empty', newTables.length === 2 && db2.prepare('SELECT count(*) FROM ot_ledger').pluck().get() === 0 && db2.prepare('SELECT count(*) FROM ot_leave_requests').pluck().get() === 0);
+  db2.close();
+
+  // 3. WP2 serves and edits the upgraded data.
+  wp2server = await start(WP2);
+  const e2 = client(wp2server.origin);
+  check('U6 WP1 password still signs in on WP2', (await e2.login('employee@example.invalid', pw.employee)) === 200);
+  const v1d = (await e2.req('GET', `/api/days/${d1}`)).json;
+  check('U6b WP1 manual day reads R 480 / credit 0, explicit source', v1d.calculation.regular_minutes === 480 && v1d.calculation.credited_minutes === 0 && v1d.category_source === 'explicit' && v1d.sessions[0].breaks.length === 3);
+  const v3d = (await e2.req('GET', `/api/days/${d3}`)).json;
+  check('U6c WP1 leave 240 kept with leave_kind null and WFH', v3d.leave_minutes === 240 && v3d.leave_kind === null && v3d.wfh === true);
+  const open = (await e2.req('GET', `/api/days/${periods.today_local}`)).json.sessions.find((s) => s.end_utc === null);
+  await new Promise((r) => setTimeout(r, 1200));
+  const out = await e2.req('POST', '/api/clock/out', { breaks: [], breaks_confirmed: true, expected_version: open.version });
+  check('U7 the WP1 open clock session clocks out on WP2 with expected_version', out.status === 200 && out.json.session.end_utc !== null);
+  const v2d = (await e2.req('GET', `/api/days/${d2}`)).json;
+  const bat = await e2.req('POST', '/api/days/batch', { mode: 'commit', entries: [{ work_date: d2, category: 'Sick', expected_version: v2d.entry.version }] });
+  check('U8 batch relabel of a WP1 entry commits', bat.status === 200 && (await e2.req('GET', `/api/days/${d2}`)).json.category === 'Sick');
+  const bat3 = await e2.req('POST', '/api/days/batch', { mode: 'preview', entries: [{ work_date: d3, category: 'Vacation', expected_version: v3d.entry.version }] });
+  console.log(`INFO  batch preview on the WP1 leave day without a kind: status ${bat3.json?.entries?.[0]?.status}, error ${bat3.json?.entries?.[0]?.error?.code ?? 'none'}`);
+  const oldv = (await e2.req('GET', `/api/days/${old}`)).json;
+  check('U9 WP1 old-period session still incomplete (unconfirmed breaks), no credit invented', oldv.calculation.status === 'incomplete_breaks' && oldv.sessions.length === 1, oldv.calculation?.status);
+  const sum = (await e2.req('GET', '/api/ot/summary')).json;
+  check('U10 OT summary after upgrade: posted 0, reserved 0 (no opening balance inferred)', sum.posted_minutes === 0 && sum.reserved_minutes === 0, sum);
+} finally {
+  if (wp1server !== undefined) await stop(wp1server.child);
+  if (wp2server !== undefined) await stop(wp2server.child);
+  rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+console.log(failures === 0 ? 'UPGRADE PROBE: all checks passed' : `UPGRADE PROBE: ${failures} check(s) failed`);
+process.exitCode = failures === 0 ? 0 : 1;

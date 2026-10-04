@@ -7,6 +7,7 @@ import {
   applyFold,
   applyGapReplacement,
   buildSessionRequest,
+  changeZone,
   draftFromSession,
   draftGap,
   newSessionDraft,
@@ -39,7 +40,7 @@ export function SessionForm({
   workDate: string;
   /** The session being edited; absent for a new one. */
   session?: Session;
-  /** Zones offered for the input zone (any IANA zone can be typed); the first is the default. */
+  /** Zones offered for the input zone (any IANA zone can be typed); the first is the default (the current display zone, R-07). */
   zones: readonly string[];
   policy: PolicyVersion | undefined;
   reason: string;
@@ -117,7 +118,11 @@ export function SessionForm({
           type="text"
           list={`${formId}-zones`}
           value={draft.zone}
-          onChange={(event) => setDraft({ ...draft, zone: event.target.value })}
+          onChange={(event) => {
+            // The typed wall times are read again in the new zone; an earlier question named the old one.
+            setProblem(null);
+            setDraft(changeZone(draft, event.target.value));
+          }}
           spellCheck={false}
           required
         />

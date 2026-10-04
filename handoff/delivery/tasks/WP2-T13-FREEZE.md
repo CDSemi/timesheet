@@ -93,4 +93,10 @@ Evidence goes in handoff/delivery/evidence/WP2-T13-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD da0ffc492b608f1108e3c455e55aa01cca118b45; post-HEAD and commit
+  8fae685949adb525ec137e5972202f58b408ac24; pushed to origin main; remote SHA equal.
+- Staged count 28. Node v24.21.0 (full path).
+- Check exits: add 0; precommit 0; diff --check 0; JSON parse 0; orchestration
+  validator 0; check_recovery 0; preflight 0 with the workflow Python (system Python
+  3.14 exit 1: no IANA tz data); package.json one line changed (description).
+- Blockers: none. Evidence: evidence/WP2-T13-FREEZE/.

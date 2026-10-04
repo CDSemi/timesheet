@@ -158,6 +158,18 @@ export function buildClockOutRequest(draft: SessionDraft, expectedVersion: numbe
   return request;
 }
 
+/**
+ * Selects another input zone for a draft (R-07). The typed wall clocks (start, end and breaks,
+ * with their dates) stay as shown and are read again in the new zone, so the offsets and folds
+ * pinned in the old zone are dropped; a repeated or missing local time in the new zone is then
+ * asked about again. Nothing is stored until the user saves. The same zone returns the draft
+ * itself, so an unchanged edit keeps every saved instant.
+ */
+export function changeZone(draft: SessionDraft, zone: string): SessionDraft {
+  if (zone === draft.zone) return draft;
+  return { ...mapFields(draft, (field) => ({ ...field, fold: null, offset: null })), zone };
+}
+
 /** The editor form for a saved session; each time carries its offset, so a resave never asks again. */
 export function draftFromSession(session: Session): SessionDraft {
   const zone = session.input_zone;
@@ -312,9 +324,14 @@ export function policyOn(policies: readonly PolicyVersion[], workDate: string): 
 
 /**
  * Expected finish = actual start + required work + excluded breaks (R-02), by the shared domain
- * function, shown in the first session's input zone. Null while there is no session or policy.
+ * function. It is derived and display only, shown in the current display zone (R-07), whatever
+ * zone the session was typed in. Null while there is no session or policy.
  */
-export function expectedFinishText(sessions: readonly Session[], policy: PolicyVersion | undefined): string | null {
+export function expectedFinishText(
+  sessions: readonly Session[],
+  policy: PolicyVersion | undefined,
+  displayZone: string,
+): string | null {
   const first = [...sessions].sort((a, b) => (a.start_utc < b.start_utc ? -1 : 1))[0];
   if (first === undefined || policy === undefined) return null;
   const finish = expectedFinishUtc(
@@ -322,7 +339,20 @@ export function expectedFinishText(sessions: readonly Session[], policy: PolicyV
     policy.required_minutes,
     excludedBreakMinutes(toBreakRules(policy.breaks)),
   );
-  return `${formatInZone(first.input_zone, finish).slice(0, 16).replace('T', ' ')} (${first.input_zone})`;
+  return `${formatInZone(displayZone, finish).slice(0, 16).replace('T', ' ')} (${displayZone})`;
+}
+
+/* ---- Input zone ---------------------------------------------------------------------------- */
+
+/** Zones offered in the input-zone list besides the display and reporting zones; any IANA zone can still be typed. */
+const COMMON_ZONES: readonly string[] = ['America/Los_Angeles', 'Asia/Ho_Chi_Minh', 'Australia/Sydney', 'Europe/London', 'UTC'];
+
+/**
+ * The zones offered for manual time entry. The first is the default: the current display zone
+ * (R-07). The reporting zone stays one explicit choice away; it is never the default.
+ */
+export function inputZoneChoices(displayZone: string, reportingZone: string): string[] {
+  return [...new Set([displayZone, reportingZone, ...COMMON_ZONES])];
 }
 
 /* ---- Server figures and notices ------------------------------------------------------------ */

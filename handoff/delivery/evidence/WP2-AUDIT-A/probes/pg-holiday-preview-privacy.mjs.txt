@@ -1,0 +1,61 @@
+// WP2-AUDIT-A: can the admin learn an employee's per-date attendance from the holiday-import
+// PREVIEW (which writes nothing and records no audit event)? Synthetic data only.
+// Usage: node pg-holiday-preview-privacy.mjs <clone-root> <work-dir>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [cloneRoot, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(cloneRoot, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const db = openDatabase(join(workDir, 'hp.db'));
+migrate(db);
+class Clock { constructor(iso) { this.t = new Date(iso); } now() { return new Date(this.t.getTime()); } }
+const clock = new Clock('2026-10-09T20:00:00Z'); // Friday; current period 2026-09-28..2026-10-11
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await seedSynthetic(db, clock, { passwords: pw });
+const employeeId = seed.users.find((u) => u.role === 'employee').id;
+const ORIGIN = 'http://localhost:3000';
+const app = createApp({ db, clock, config: { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 3600, production: false }, loginLimiter: new LoginRateLimiter(), staticDir: null });
+async function req(method, path, cookie, body) {
+  const headers = { origin: ORIGIN, cookie };
+  const init = { method, headers };
+  if (body !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  return { status: res.status, body: JSON.parse(text), text, setCookie: res.headers.get('set-cookie') };
+}
+const login = async (email, password) => (await req('POST', '/api/auth/login', undefined, { email, password })).setCookie.split(';')[0];
+const emp = await login('employee@example.invalid', pw.employee);
+const admin = await login('admin@example.invalid', pw.admin);
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+// The employee records work on Monday 10-05 and Wednesday 10-07 only (nothing on 10-06 or 10-08).
+for (const d of ['2026-10-05', '2026-10-07']) {
+  const r = await req('POST', `/api/days/${d}/sessions`, emp, { start: at(d, '09:00'), end: at(d, '17:00'), input_zone: LA, breaks_confirmed: true, breaks: [] });
+  process.stdout.write(`setup employee session ${d} -> ${r.status}\n`);
+}
+const auditBefore = db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+const versionsBefore = db.prepare('SELECT count(*) FROM calendar_versions').pluck().get();
+// The admin previews (never commits) a CSV that turns each probed date into a holiday.
+const csv = ['date,name,kind', '2026-10-05,Probe A,holiday', '2026-10-06,Probe B,holiday', '2026-10-07,Probe C,holiday', '2026-10-08,Probe D,holiday'].join('\n');
+const preview = await req('POST', '/api/admin/calendar/import/preview', admin, { calendar_id: seed.calendarId, year: 2026, effective_from: '2026-09-28', csv });
+process.stdout.write(`admin preview status ${preview.status}, can_commit ${preview.body.can_commit}, effective_from ${preview.body.effective_from}\n`);
+for (const day of preview.body.affected_days ?? []) {
+  process.stdout.write(`  ${day.date}: label ${day.label_before} -> ${day.label_after}, default_labelled_entries=${day.default_labelled_entries}, explicit_overrides_preserved=${day.explicit_overrides_preserved}\n`);
+}
+const worked = (preview.body.affected_days ?? []).filter((d) => d.default_labelled_entries > 0).map((d) => d.date);
+process.stdout.write(`dates the admin can infer the (only) employee recorded work on: ${worked.join(',') || 'none'}\n`);
+process.stdout.write(`preview wrote nothing: audit events ${auditBefore} -> ${db.prepare('SELECT count(*) FROM audit_events').pluck().get()}, calendar versions ${versionsBefore} -> ${db.prepare('SELECT count(*) FROM calendar_versions').pluck().get()}\n`);
+process.stdout.write(`response contains the employee id: ${preview.text.includes(employeeId)}\n`);
+const leak = worked.join(',') === '2026-10-05,2026-10-07';
+process.stdout.write(`RESULT per-date employee attendance inferable by the admin from a preview: ${leak ? 'YES (reproduced)' : 'no'}\n`);
+db.close();

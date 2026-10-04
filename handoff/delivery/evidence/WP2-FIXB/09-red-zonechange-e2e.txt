@@ -1,0 +1,103 @@
+# WP2-FIXB addendum red run: zone-change e2e against the unfixed client (Node v24.21.0; dist is the build before the zone-change fix)
+$ npx playwright test day-editor -g "changing the input zone|unchanged edit"
+Running 6 tests using 2 workers
+  x  1 [mobile] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants (8.1s)
+  x  2 [desktop] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants (8.2s)
+  ok 3 [mobile] › tests\e2e\day-editor.spec.ts:380:1 › an unchanged edit keeps the saved zone and instants (1.1s)
+  ok 4 [desktop] › tests\e2e\day-editor.spec.ts:380:1 › an unchanged edit keeps the saved zone and instants (1.0s)
+  x  5 [mobile] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again (8.1s)
+  x  6 [desktop] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again (8.1s)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.')
+      364 |     await snap(page, 'day-editor-zone-change', project);
+      365 |     await edit.getByRole('button', { name: 'Save changes' }).click();
+    > 366 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+          |                                                      ^
+      367 |
+      368 |     const after = (await employeeSeed.dayView(date)).sessions[0];
+      369 |     expect(after?.input_zone).toBe(LONDON);
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-desktop\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-desktop\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-desktop\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  2) [desktop] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]')
+      428 |     // The repeated time is not guessed from the Los Angeles offset: the form asks, and nothing is saved.
+      429 |     const prompt = edit.locator('[data-problem="fold"]');
+    > 430 |     await expect(prompt).toBeVisible();
+          |                          ^
+      431 |     await expect(prompt).toContainText('happens twice in Australia/Sydney');
+      432 |     expect((await employeeSeed.dayView(day)).sessions[0]?.start_utc).toBe(before?.start_utc);
+      433 |
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-desktop\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-desktop\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-desktop\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  3) [mobile] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByText('Session saved.')
+      364 |     await snap(page, 'day-editor-zone-change', project);
+      365 |     await edit.getByRole('button', { name: 'Save changes' }).click();
+    > 366 |     await expect(editor.getByText('Session saved.')).toBeVisible();
+          |                                                      ^
+      367 |
+      368 |     const after = (await employeeSeed.dayView(date)).sessions[0];
+      369 |     expect(after?.input_zone).toBe(LONDON);
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-mobile\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-mobile\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-b5d04-ne-and-saves-those-instants-mobile\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  4) [mobile] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]')
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Edit session' }).locator('[data-problem="fold"]')
+      428 |     // The repeated time is not guessed from the Los Angeles offset: the form asks, and nothing is saved.
+      429 |     const prompt = edit.locator('[data-problem="fold"]');
+    > 430 |     await expect(prompt).toBeVisible();
+          |                          ^
+      431 |     await expect(prompt).toContainText('happens twice in Australia/Sydney');
+      432 |     expect((await employeeSeed.dayView(day)).sessions[0]?.start_utc).toBe(before?.start_utc);
+      433 |
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-mobile\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-mobile\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-changing-the-in-07eec-ted-asks-for-a-choice-again-mobile\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  4 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants
+    [desktop] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again
+    [mobile] › tests\e2e\day-editor.spec.ts:339:1 › changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants
+    [mobile] › tests\e2e\day-editor.spec.ts:402:1 › changing the input zone to one where the same wall time is repeated asks for a choice again
+exit=1

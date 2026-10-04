@@ -397,7 +397,7 @@ export interface HolidayImportPreview {
   issue_count: number;
   removal_problems: unknown[];
   effective_from_problem: { code: string; message: string } | null;
-  finalized_conflicts: Array<{ date: string; finalized_timesheets: number }>;
+  finalized_conflicts: Array<{ date: string }>;
   diff: {
     added: HolidayRule[];
     renamed: HolidayChange[];
@@ -412,8 +412,6 @@ export interface HolidayImportPreview {
     date: string;
     label_before: string | null;
     label_after: string | null;
-    default_labelled_entries: number;
-    explicit_overrides_preserved: number;
   }>;
 }
 

@@ -70,6 +70,31 @@ function wallClock(instant: string, zone: string): string {
   return new Date(instant).toLocaleTimeString('en-GB', { timeZone: zone, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/** The browser's current zone, read with Intl: the display zone the app shows times in. */
+function browserZone(page: Page): Promise<string> {
+  return page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+}
+
+/** Types the input zone explicitly: manual entry defaults to the display zone (R-07), not to the reporting zone. */
+async function typeInputZone(form: Locator, zone: string) {
+  await form.getByLabel('Input zone').fill(zone);
+}
+
+/** The wall clock of an instant in a zone as "YYYY-MM-DD HH:mm", read with Intl (an oracle independent of the app). */
+function dateTimeIn(instant: string, zone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(instant));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
+}
+
 async function chooseNoBreaks(form: Locator) {
   await form.getByRole('radio', { name: /No breaks taken/ }).check();
 }
@@ -92,7 +117,9 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
 
     await editor.getByRole('button', { name: 'Add session' }).click();
     const form = editor.getByRole('form', { name: 'New session' });
-    await expect(form.getByLabel('Input zone')).toHaveValue(LA);
+    // R-07: the default is the current display zone; Los Angeles is chosen explicitly below.
+    await expect(form.getByLabel('Input zone')).toHaveValue(await browserZone(page));
+    await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('09:00');
     await form.getByLabel('End time', { exact: true }).fill('18:00');
     await form.getByRole('button', { name: 'Suggest breaks' }).click();
@@ -115,8 +142,15 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
     await expect(figure(editor, 'status')).toContainText('confirm breaks');
     await expect(editor.getByText('OT for this day stays pending')).toBeVisible();
     await expect(figure(editor, 'credited')).toHaveText('none');
-    // Expected finish = start + required work + excluded breaks: 09:00 gives 18:00.
-    await expect(figure(editor, 'expected-finish')).toHaveText(`${date} 18:00 (${LA})`);
+    // Expected finish = start + required work + excluded breaks: 09:00 Los Angeles gives 18:00 there.
+    // It is derived (shared domain function), display only, and shown in the display zone (R-07).
+    const displayZone = await browserZone(page);
+    const startUtc = (await employeeSeed.dayView(date)).sessions[0]?.start_utc ?? '';
+    const finishUtc = new Date(Date.parse(startUtc) + 9 * 3600 * 1000).toISOString();
+    await expect(figure(editor, 'expected-finish')).toHaveText(`${dateTimeIn(finishUtc, displayZone)} (${displayZone})`);
+    await expect(figure(editor, 'expected-finish')).not.toContainText(LA);
+    await expect(editor.locator('[data-figure-label="expected-finish"]')).toContainText('derived');
+    await expect(editor.locator('[data-figure-note="expected-finish"]')).toContainText('Display only');
 
     // Confirm the suggested breaks of the saved session (edit with the version it loaded).
     await editor.getByRole('button', { name: /^Edit session/ }).click();
@@ -150,6 +184,68 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
   }
 });
 
+test('manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  try {
+    await signInThroughUi();
+    const displayZone = await browserZone(page);
+    // The test only means something while the display zone differs from the reporting zone.
+    expect(displayZone).not.toBe(LA);
+    const editor = await openEditor(page, date);
+    await expect(editor.getByText(`in the reporting zone ${LA}`)).toBeVisible();
+    await expect(editor.getByText(`they are shown in ${displayZone}`)).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await expect(form.getByLabel('Input zone')).toHaveValue(displayZone);
+    // Both zones stay available to choose.
+    await expect(editor.locator('datalist option[value="America/Los_Angeles"]')).toHaveCount(1);
+    await expect(editor.locator(`datalist option[value="${displayZone}"]`)).toHaveCount(1);
+
+    // 22:00 to 23:30 in the display zone is 08:00 to 09:30 in Los Angeles on the same accounting date.
+    await form.getByLabel('Start time', { exact: true }).fill('22:00');
+    await form.getByLabel('End time', { exact: true }).fill('23:30');
+    await chooseNoBreaks(form);
+    await form.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    await expect(editor.getByText(`entered in ${displayZone}`)).toBeVisible();
+    await snap(page, 'day-editor-display-zone-default', project);
+
+    const stored = (await employeeSeed.dayView(date)).sessions[0];
+    expect(stored?.input_zone).toBe(displayZone);
+    expect(wallClock(stored?.start_utc ?? '', displayZone)).toBe('22:00:00');
+    expect(wallClock(stored?.end_utc ?? '', displayZone)).toBe('23:30:00');
+    expect(dateTimeIn(stored?.start_utc ?? '', LA)).toBe(`${date} 08:00`);
+    expect(dateTimeIn(stored?.end_utc ?? '', LA)).toBe(`${date} 09:30`);
+
+    // An edited session keeps its saved input zone; it is not reset to the default.
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await expect(edit.getByLabel('Input zone')).toHaveValue(displayZone);
+    await edit.getByRole('button', { name: 'Cancel' }).click();
+
+    // The default can still be changed explicitly: the same kind of wall time typed in Los Angeles is another instant.
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const second = editor.getByRole('form', { name: 'New session' });
+    await expect(second.getByLabel('Input zone')).toHaveValue(displayZone);
+    await typeInputZone(second, LA);
+    await second.getByLabel('Start time', { exact: true }).fill('03:00');
+    await second.getByLabel('End time', { exact: true }).fill('04:00');
+    await chooseNoBreaks(second);
+    await second.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const later = (await employeeSeed.dayView(date)).sessions.find((session) => session.input_zone === LA);
+    expect(wallClock(later?.start_utc ?? '', LA)).toBe('03:00:00');
+    expect(wallClock(later?.end_utc ?? '', LA)).toBe('04:00:00');
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
 test('an overnight entry needs its explicit end date and is saved with it', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   const project = testInfo.project.name;
   const { todayLocal } = await employeeSeed.today();
@@ -163,6 +259,7 @@ test('an overnight entry needs its explicit end date and is saved with it', asyn
     const editor = await openEditor(page, workDate);
     await editor.getByRole('button', { name: 'Add session' }).click();
     const form = editor.getByRole('form', { name: 'New session' });
+    await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('22:00');
     await form.getByLabel('End time', { exact: true }).fill('03:00');
     await chooseNoBreaks(form);
@@ -239,6 +336,114 @@ test('a repeated local time (DST fold) in an explicit input zone needs a choice 
   }
 });
 
+test('changing the input zone of a saved session re-reads the typed wall times in the new zone and saves those instants', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const LONDON = 'Europe/London';
+  try {
+    // Saved in Los Angeles: 09:00 to 18:00 with three confirmed breaks.
+    await employeeSeed.seedCompleteDay(date);
+    const before = (await employeeSeed.dayView(date)).sessions[0];
+    expect(before?.input_zone).toBe(LA);
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await expect(edit.getByLabel('Input zone')).toHaveValue(LA);
+    await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
+
+    // Nothing is saved by changing the zone; the wall times stay as typed and mean London times now.
+    await typeInputZone(edit, LONDON);
+    await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
+    await expect(edit.getByLabel('End time', { exact: true })).toHaveValue('18:00');
+    expect((await employeeSeed.dayView(date)).sessions[0]?.start_utc).toBe(before?.start_utc);
+    await snap(page, 'day-editor-zone-change', project);
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+
+    const after = (await employeeSeed.dayView(date)).sessions[0];
+    expect(after?.input_zone).toBe(LONDON);
+    expect(wallClock(after?.start_utc ?? '', LONDON)).toBe('09:00:00');
+    expect(wallClock(after?.end_utc ?? '', LONDON)).toBe('18:00:00');
+    expect(after?.start_utc).not.toBe(before?.start_utc);
+    expect(after?.breaks.map((item) => wallClock(item.start_utc, LONDON))).toEqual(['11:00:00', '13:00:00', '15:30:00']);
+    expect(after?.breaks_confirmed).toBe(true);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+test('an unchanged edit keeps the saved zone and instants', async ({ page, employeeSeed, signInThroughUi }) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  try {
+    await employeeSeed.seedCompleteDay(date);
+    const before = (await employeeSeed.dayView(date)).sessions[0];
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await edit.getByLabel('Start time', { exact: true }).fill('09:15');
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const after = (await employeeSeed.dayView(date)).sessions[0];
+    expect(after?.input_zone).toBe(LA);
+    expect(wallClock(after?.start_utc ?? '', LA)).toBe('09:15:00');
+    expect(after?.end_utc).toBe(before?.end_utc);
+    expect(after?.breaks.map((item) => item.start_utc)).toEqual(before?.breaks.map((item) => item.start_utc));
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+test('changing the input zone to one where the same wall time is repeated asks for a choice again', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}) => {
+  // 2026-04-05 02:30 exists once in Los Angeles but happens twice in Sydney (+11:00, then +10:00).
+  const day = '2026-04-05';
+  try {
+    await signInThroughUi();
+    const editor = await openEditor(page, day);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await typeInputZone(form, LA);
+    await form.getByLabel('Start time', { exact: true }).fill('02:30');
+    await form.getByLabel('End time', { exact: true }).fill('04:30');
+    await chooseNoBreaks(form);
+    await form.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const before = (await employeeSeed.dayView(day)).sessions[0];
+    expect(before?.start_utc).toBe('2026-04-05T09:30:00Z');
+
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await typeInputZone(edit, 'Australia/Sydney');
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    // The repeated time is not guessed from the Los Angeles offset: the form asks, and nothing is saved.
+    const prompt = edit.locator('[data-problem="fold"]');
+    await expect(prompt).toBeVisible();
+    await expect(prompt).toContainText('happens twice in Australia/Sydney');
+    expect((await employeeSeed.dayView(day)).sessions[0]?.start_utc).toBe(before?.start_utc);
+
+    await prompt.getByRole('radio', { name: 'Earlier time, UTC offset +11:00' }).check();
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const after = (await employeeSeed.dayView(day)).sessions[0];
+    expect(after?.input_zone).toBe('Australia/Sydney');
+    // 02:30 at +11:00 is 15:30 UTC on the 4th; the end 04:30 is after the change, at +10:00.
+    expect(after?.start_utc).toBe('2026-04-04T15:30:00Z');
+    expect(after?.end_utc).toBe('2026-04-04T18:30:00Z');
+  } finally {
+    await employeeSeed.clearSessions(day);
+  }
+});
+
 test('a local time that does not exist (DST gap) is explained and can move to the first valid time', async ({
   page,
   employeeSeed,
@@ -251,6 +456,7 @@ test('a local time that does not exist (DST gap) is explained and can move to th
     await editor.getByLabel('Reason for editing an old or finalized period').fill('Entering a past shift');
     await editor.getByRole('button', { name: 'Add session' }).click();
     const form = editor.getByRole('form', { name: 'New session' });
+    await typeInputZone(form, LA);
     await form.getByLabel('Start time', { exact: true }).fill('02:30');
     await form.getByLabel('End time', { exact: true }).fill('05:00');
     await chooseNoBreaks(form);

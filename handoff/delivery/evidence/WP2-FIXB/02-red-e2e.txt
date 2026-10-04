@@ -1,0 +1,93 @@
+# WP2-FIXB red run: day-editor e2e against the unfixed client (Node v24.21.0, dist built from the unfixed source)
+$ npx playwright test day-editor -g "display zone|09:00 to 18:00"
+Running 4 tests using 2 workers
+  x  2 [mobile] › tests\e2e\day-editor.spec.ts:102:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0 (7.9s)
+  x  1 [desktop] › tests\e2e\day-editor.spec.ts:102:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0 (7.9s)
+  x  3 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (7.8s)
+  x  4 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (8.0s)
+  1) [desktop] › tests\e2e\day-editor.spec.ts:102:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+    Error: expect(locator).toHaveValue(expected) failed
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+    Expected: "Asia/Saigon"
+    Received: "America/Los_Angeles"
+    Timeout:  7000ms
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+        18 × locator resolved to <input required="" type="text" list="_r_0_-zones" spellcheck="false" value="America/Los_Angeles"/>
+           - unexpected value "America/Los_Angeles"
+      119 |     const form = editor.getByRole('form', { name: 'New session' });
+      120 |     // R-07: the default is the current display zone; Los Angeles is chosen explicitly below.
+    > 121 |     await expect(form.getByLabel('Input zone')).toHaveValue(await browserZone(page));
+          |                                                 ^
+      122 |     await typeInputZone(form, LA);
+      123 |     await form.getByLabel('Start time', { exact: true }).fill('09:00');
+      124 |     await form.getByLabel('End time', { exact: true }).fill('18:00');
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-desktop\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  2) [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+    Error: expect(locator).toHaveValue(expected) failed
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+    Expected: "Asia/Saigon"
+    Received: "America/Los_Angeles"
+    Timeout:  7000ms
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+        18 × locator resolved to <input required="" type="text" list="_r_0_-zones" spellcheck="false" value="America/Los_Angeles"/>
+           - unexpected value "America/Los_Angeles"
+      202 |     await editor.getByRole('button', { name: 'Add session' }).click();
+      203 |     const form = editor.getByRole('form', { name: 'New session' });
+    > 204 |     await expect(form.getByLabel('Input zone')).toHaveValue(displayZone);
+          |                                                 ^
+      205 |     // Both zones stay available to choose.
+      206 |     await expect(editor.locator('datalist option[value="America/Los_Angeles"]')).toHaveCount(1);
+      207 |     await expect(editor.locator(`datalist option[value="${displayZone}"]`)).toHaveCount(1);
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  3) [mobile] › tests\e2e\day-editor.spec.ts:102:1 › 09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, confirmed gives R 8h 00m and credit 0
+    Error: expect(locator).toHaveValue(expected) failed
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+    Expected: "Asia/Saigon"
+    Received: "America/Los_Angeles"
+    Timeout:  7000ms
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+        18 × locator resolved to <input required="" type="text" list="_r_0_-zones" spellcheck="false" value="America/Los_Angeles"/>
+           - unexpected value "America/Los_Angeles"
+      119 |     const form = editor.getByRole('form', { name: 'New session' });
+      120 |     // R-07: the default is the current display zone; Los Angeles is chosen explicitly below.
+    > 121 |     await expect(form.getByLabel('Input zone')).toHaveValue(await browserZone(page));
+          |                                                 ^
+      122 |     await typeInputZone(form, LA);
+      123 |     await form.getByLabel('Start time', { exact: true }).fill('09:00');
+      124 |     await form.getByLabel('End time', { exact: true }).fill('18:00');
+    Error Context: B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\error-context.md
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\trace.zip
+    Usage:
+        npx playwright show-trace B:\Temp\timesheet-e2e-output\day-editor-09-00-to-18-00--6bf49-gives-R-8h-00m-and-credit-0-mobile\trace.zip
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+  4) [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+    Error: expect(locator).toHaveValue(expected) failed
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+    Expected: "Asia/Saigon"
+    Received: "America/Los_Angeles"
+    Timeout:  7000ms
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'New session' }).getByLabel('Input zone')
+        18 × locator resolved to <input required="" type="text" list="_r_0_-zones" spellcheck="false" value="America/Los_Angeles"/>
+           - unexpected value "America/Los_Angeles"
+      202 |     await editor.getByRole('button', { name: 'Add session' }).click();
+      203 |     const form = editor.getByRole('form', { name: 'New session' });
+exit=1

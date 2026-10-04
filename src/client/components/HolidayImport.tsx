@@ -118,16 +118,13 @@ function PreviewResult({
       {preview.affected_days.length > 0 && (
         <div data-diff="affected">
           <h4>Days whose default label changes ({preview.affected_days.length})</h4>
-          <p className="hint muted">Labels you set yourself are never replaced; only default labels follow the calendar.</p>
+          <p className="hint muted">Explicit labels and manual dates are preserved; only default labels follow the calendar.</p>
           <ul className="plain">
             {preview.affected_days.map((day) => (
               <li key={day.date} className="ot-line" data-affected-date={day.date}>
                 <span className="mono">{day.date}</span>
                 <span>
                   {day.label_before ?? 'none'} to {day.label_after ?? 'none'}
-                </span>
-                <span className="muted">
-                  {day.default_labelled_entries} default entries follow, {day.explicit_overrides_preserved} personal labels preserved
                 </span>
               </li>
             ))}

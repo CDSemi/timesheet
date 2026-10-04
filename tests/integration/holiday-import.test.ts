@@ -217,34 +217,47 @@ describe('preview', () => {
     expect(response.body.earliest_effective_from).toBe(BOUNDARY);
   });
 
-  it('lists the affected default-labelled draft days and the preserved explicit overrides, without identities', async () => {
-    await addSession(employee, '2026-10-07');
-    await addSession(admin, '2026-10-07');
-    await putExplicit(employee, '2026-10-08', 'Worked');
+  it('lists the days whose default label changes from the calendar alone, with no employee-derived counts', async () => {
     const response = await preview(
       csv('2026-10-07,Synthetic Company Day', '2026-10-08,Synthetic Shutdown,closure', '2026-12-24,Synthetic Eve'),
     );
     expect(response.status).toBe(200);
     expect(response.body.affected_days).toEqual([
-      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 2, explicit_overrides_preserved: 0 },
-      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown', default_labelled_entries: 0, explicit_overrides_preserved: 1 },
-      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday', default_labelled_entries: 0, explicit_overrides_preserved: 0 },
+      { date: '2026-10-07', label_before: 'Worked', label_after: 'Holiday' },
+      { date: '2026-10-08', label_before: 'Worked', label_after: 'Shutdown' },
+      { date: '2026-12-24', label_before: 'Worked', label_after: 'Holiday' },
     ]);
-    const text = JSON.stringify(response.body);
-    for (const secret of [t.userIds.employee, t.userIds.admin, t.emails.employee, t.emails.admin]) {
-      expect(text).not.toContain(secret);
-    }
   });
 
-  it('counts only draft days: a finalized period blocks the commit and is reported', async () => {
+  it('answers identically whether or not employees have day entries on the affected dates (WP2-A-01)', async () => {
+    const text = csv('2026-10-07,Synthetic Company Day', '2026-10-08,Synthetic Shutdown,closure', '2026-12-24,Synthetic Eve');
+    const before = await preview(text);
+    expect(before.status).toBe(200);
+    // Default-labelled work, an explicit personal label and a second user's work on changed dates.
     await addSession(employee, '2026-10-07');
-    t.db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ?').run(t.userIds.employee);
+    await addSession(admin, '2026-10-07');
+    await putExplicit(employee, '2026-10-08', 'Worked');
+    const after = await preview(text);
+    expect(after.status).toBe(200);
+    expect(after.body).toEqual(before.body);
+    const body = JSON.stringify(after.body);
+    for (const secret of [t.userIds.employee, t.userIds.admin, t.emails.employee, t.emails.admin]) {
+      expect(body).not.toContain(secret);
+    }
+    // No count keys of any employee data remain anywhere in the response.
+    expect(body).not.toMatch(/default_labelled_entries|explicit_overrides_preserved|finalized_timesheets/);
+  });
+
+  it('reports a finalized period as a date-only signal and blocks the commit, without counts', async () => {
+    await addSession(employee, '2026-10-07');
+    await addSession(admin, '2026-10-07');
+    t.db.prepare('UPDATE timesheets SET finalized_revision_no = 1').run();
     const response = await preview(csv('2026-10-07,Synthetic Company Day'));
     expect(response.body.can_commit).toBe(false);
-    expect(response.body.finalized_conflicts).toEqual([
-      expect.objectContaining({ date: '2026-10-07', finalized_timesheets: 1 }),
-    ]);
-    expect(response.body.affected_days[0]).toMatchObject({ date: '2026-10-07', default_labelled_entries: 0 });
+    expect(response.body.preview_hash).toBeNull();
+    expect(response.body.finalized_conflicts).toEqual([{ date: '2026-10-07' }]);
+    // Two timesheets are finalized, yet no count of them leaves the server.
+    expect(JSON.stringify(response.body)).not.toMatch(/finalized_timesheets/);
   });
 });
 

@@ -1,0 +1,33 @@
+# WP1 baseline: git archive f32978fcc7dec9429f0aa544c4ee4ee26c14f798 | tar -x -C <wp1>; npm ci; npm run build:server
+$ npm ci --no-audit --no-fund (in <wp1>)
+
+added 141 packages in 3s
+exit 0
+$ npm run build:server (in <wp1>)
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+exit 0
+
+# node upgrade-probe.mjs <wp1> <clone>   (source in upgrade-probe.mjs.txt)
+PASS  U1 WP1 migrate and seed  {"database":"<tmp>\\audit-b-upgrade-FRzPGO\\timesheet.db","applied":[1],"version":1}
+PASS  U2 WP1 employee login
+PASS  U3 WP1 data written (manual session with breaks, Vacation, leave 240, old-period session, open clock session)  [201,200,200,201,201]
+INFO  WP1 schema version 1; row counts {"audit_events":15,"auth_sessions":1,"calendar_versions":1,"calendars":1,"day_entries":5,"pay_periods":2,"payroll_exceptions":0,"schema_migrations":1,"session_breaks":3,"timesheets":2,"users":2,"work_policies":2,"work_sessions":3}
+PASS  U4 WP2 migrate applies [2,3] to the WP1 database  {"database":"<tmp>\\audit-b-upgrade-FRzPGO\\timesheet.db","applied":[2,3],"version":3}
+PASS  U4b second migrate is a no-op
+PASS  U5 every WP1 table keeps its rows byte-identical (original columns)  []
+PASS  U5b integrity_check ok, foreign_key_check empty
+PASS  U5c WP1 day entries backfilled explicit with leave_kind NULL (nothing inferred)  [{"category_source":"explicit","leave_kind":null,"n":5}]
+PASS  U5d ledger tables exist and are empty
+PASS  U6 WP1 password still signs in on WP2
+PASS  U6b WP1 manual day reads R 480 / credit 0, explicit source
+PASS  U6c WP1 leave 240 kept with leave_kind null and WFH
+PASS  U7 the WP1 open clock session clocks out on WP2 with expected_version
+PASS  U8 batch relabel of a WP1 entry commits
+INFO  batch preview on the WP1 leave day without a kind: status invalid, error leave_kind_required
+PASS  U9 WP1 old-period session still incomplete (unconfirmed breaks), no credit invented  incomplete_breaks
+PASS  U10 OT summary after upgrade: posted 0, reserved 0 (no opening balance inferred)  {"posted_minutes":0,"reserved_minutes":0,"available_minutes":0,"negative":false,"reconciliation_required":false,"provisional_minutes":0,"provisional_periods":[{"payroll_date":"2026-10-02","period_start":"2026-09-14","period_end":"2026-09-27","credited_minutes":0,"complete_days":0,"pending_days":1},{"payroll_date":"2026-10-16","period_start":"2026-09-28","period_end":"2026-10-11","credited_minutes":0,"complete_days":2,"pending_days":0}]}
+UPGRADE PROBE: all checks passed
+exit 0

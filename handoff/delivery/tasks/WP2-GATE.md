@@ -9,8 +9,11 @@
   - handoff/prompts/WP2_REVIEW.md;
   - handoff/delivery/WP2_HANDOFF.md;
   - the T09A harness notes in [WP2-T09A](WP2-T09A.md).
-- Target: `freeze_commit` = the WP2-T13-FREEZE commit, which the coordinator gives at
-  dispatch. Record HEAD, origin/main and the source digest before and after.
+- Target: `freeze_commit` = 8fae685949adb525ec137e5972202f58b408ac24, the WP2-T13-FREEZE
+  package-final commit. Record HEAD, origin/main and the source digest before and after.
+  WP2-T13 reported 8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2 for
+  the uncommitted tree as an author claim. Your digest of the freeze is the identity of
+  record.
 - Do not edit source, commit or push.
 
 ## Environment
@@ -91,3 +94,47 @@ Return at most 250 words, beginning with your self-reported model:
 ## Results
 
 (Verifier appends here.)
+
+### Verifier result (attempt 1)
+
+Self-reported model: claude-sonnet-5-5. Evidence: `handoff/delivery/evidence/WP2-GATE/`.
+
+- Freeze: HEAD = origin/main = 8fae685949adb525ec137e5972202f58b408ac24 before and after.
+  Source digest before and after: 8ebce5fe790870e0d52015fde658cfef0ee60929d6dcdafd80f563725f8524a2
+  (611 files); the `git ls-tree` cross-check gives the same value (`digest-lstree.txt`). Working-tree
+  changes were under handoff/ only. The digest equals the WP2-T13 author claim.
+- Environment: `git archive` export in the C: user temp (B: had 12 MB free; nothing deleted anywhere);
+  Node v24.21.0 portable by full path; Edge channel, no download; all temp (TEMP/TMP) on C:.
+- Step 1: `npm ci` exit 0; `NODE_OPTIONS=--trace-deprecation --pending-deprecation npm run verify` exit 0,
+  0 matches for "deprecat", 31 files / 599 tests, smoke PASSED.
+- Step 2: `npm test -- --reporter=verbose` exit 0, 31 files / 599 tests, 0 failures (`vitest-per-file.txt`).
+  LG-01..LG-10 each present and passing (LG-09 zero-delta in ledger.fixtures and ledger.test); DF-01..DF-16
+  each present and passing.
+- Step 3: `ot-leave-concurrency.test.ts` run 20 times, every run exit 0 with 8/8 passed (LG-07 25 rounds,
+  one winner each, no duplicate deltas asserted by the tests).
+- Step 4: fresh DB applied [1,2,3]; WP1 DB (f32978f code: seed, login, Clock in) upgraded with [2,3];
+  every WP1 table row count unchanged, integrity_check ok, foreign_key_check 0 rows (`migrations.txt`).
+- Step 5: `npm run test:e2e` exit 0, 66 passed, 2 skipped (mobile-only tests on desktop), both projects.
+- Step 6: 11 desktop screenshots plus `evidence-export-synthetic.csv.txt` copied; 0 email addresses in the CSV.
+- Step 7: digest and ls-tree as above.
+- Step 8: validate_orchestration exit 0 (PASS, 9 profiles), check_recovery exit 0, preflight exit 0 (PASS).
+
+Flow map (spec > test name, both projects pass):
+1. sign-in, two-week view: shell.spec "sign-in form, then the shell"; timesheet.spec "shows 14 days ..." (login, timesheet-view png).
+2. manual 09:00-18:00, R 480, credit 0: day-editor.spec "09:00 to 18:00 with breaks shifted..." (day-editor-09-18-breaks png).
+3. Clock in/out with version: day-editor.spec "Clock in then Clock out ..." and "stale session version at Clock out" (clock-out-dialog png).
+4. batch category with conflict: timesheet.spec "batch edit: preview, conflict dialog..." (batch-conflict png).
+5. partial leave 240/240: day-editor.spec "partial leave 240 with kind vacation saves ..." (partial-leave png).
+6. permission, reserve 480, partial use, cancel, reverse: ot-leave.spec "reserve, partial use, cancel the rest and reverse, with history" (ot-after-use png).
+7. insufficient balance: ot-leave.spec "insufficient balance shows the E-5 message and reserves nothing" (no screenshot, see finding).
+8. evidence CSV download: ot-leave.spec "the evidence CSV downloads ..." (CSV saved).
+9. holiday CSV preview with error rows, commit: admin.spec "holiday CSV: issue, boundary, stale hash, preview diff, commit ..." (holiday-preview png).
+10. deactivation revokes session: admin.spec "accounts: create, rename, refusals, deactivate with 401, reactivate" (admin-accounts png).
+11. second employee id/URL swap 404: isolation.spec "a second employee cannot reach employee 1 by hash swap or by id swap" (isolation-employee2 png).
+12. admin cannot open employee data: isolation.spec "an admin cannot open employee data through any admin screen" (isolation-admin png).
+
+Finding F1 (minor, evidence only): the insufficient-balance spec writes no screenshot, so flow 7 has no
+`*-synthetic.png`; the test itself passes. Test code was not edited.
+
+Verdict: PASS for functional steps 1-5, 7, 8; step 6 is one screenshot short (F1). Overall: PASS with F1 noted.
+Export, wp1 clone and temp databases deleted afterwards; no process left running.
