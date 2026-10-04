@@ -13,6 +13,7 @@ import { historyRoutes } from './routes/history.ts';
 import { otRoutes } from './routes/ot.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { DEFAULT_SIGNATURE_MAX_BYTES, isSignatureUpload, signatureRoutes } from './routes/signatures.ts';
+import { submissionRoutes } from './routes/submission.ts';
 import type { AppDeps, AppEnv } from './types.ts';
 
 export interface AppOptions {
@@ -90,6 +91,7 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.route('/api/history', historyRoutes(deps));
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+  app.route('/api', submissionRoutes(deps));
   app.route('/api', apiRoutes(deps));
   app.all('/api/*', () => {
     throw notFound('Endpoint');

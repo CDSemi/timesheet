@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T03-FREEZE",
+  "next_task_id": "WP3-T04-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -86,7 +86,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
+    "last_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
     "unpushed": []
   },
   "owner_decisions": [
@@ -4751,9 +4751,147 @@
       "id": "WP3-T03-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T03"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a70dbc4b84087c921",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T03-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T03-FREEZE/02-digest.txt",
+        "handoff/delivery/evidence/WP3-T03-FREEZE/03-precommit.txt",
+        "handoff/delivery/evidence/WP3-T03-FREEZE/05-validate-orch.txt",
+        "handoff/delivery/evidence/WP3-T03-FREEZE/07-preflight.txt",
+        "handoff/delivery/evidence/WP3-T03-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
+      "branch": "main",
+      "commit_sha": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+      "pushed": true,
+      "source_digest": "22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 32 paths (exact expected set), parent b060d33, fast-forward, remote SHA identical; digest 22acf6c4 matches; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T04 starts on 79862bb."
+    },
+    {
+      "id": "WP3-T04",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T03-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af1afb86262ad9b86",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/domain/canonical.ts",
+        "src/domain/snapshot.ts",
+        "src/server/services/reviewPayload.ts",
+        "src/server/routes/submission.ts",
+        "src/server/app.ts",
+        "tests/domain/canonical.test.ts",
+        "tests/integration/review-payload.test.ts",
+        "handoff/delivery/tasks/WP3-T04.md",
+        "handoff/delivery/evidence/WP3-T04"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T04.md",
+      "report": "handoff/delivery/tasks/WP3-T04.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T04/01-red-modules-absent.txt",
+        "handoff/delivery/evidence/WP3-T04/02-red-route-not-wired.txt",
+        "handoff/delivery/evidence/WP3-T04/03-green.txt",
+        "handoff/delivery/evidence/WP3-T04/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-T04/05-verify.txt",
+        "handoff/delivery/evidence/WP3-T04/06-digest.txt",
+        "handoff/delivery/evidence/WP3-T04/07-precommit-check.txt"
+      ],
+      "baseline_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+      "source_digest": "69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: canonical JSON and SHA-256; snapshot 'timesheet-review' with the 14 days, policy and calendar version IDs, reporting zone, employee name, OT and deficit proposals with the policy mode, unresolved inputs, unconsumed OT-leave reservations (use_due flag), recipients with rendered subject and body, signature attachment ID and hash, template version, show-OT flag; all minutes from the engine. GET /api/timesheets/:payrollDate/review returns payload, payload_hash and expected_version and writes nothing; anonymous 401; unknown payroll date 404. Two red runs, 57 green; 16/16 mutations caught; verify exit 0, 39 files/878 tests, 0 deprecation lines. No deviations. Environment: the B: scratch drive filled (448 KB free; about 7.8 GB of other Claude sessions under its Temp\\claude folder); the worker used a local-drive TEMP for the remaining runs and removed it.",
+      "next_action": "None; WP3-T04-FREEZE (after WP3-TMPCLEAN)."
+    },
+    {
+      "id": "WP3-TMPCLEAN",
+      "package": "WP3",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP3-T04"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a354a8b0937ec61cc",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-TMPCLEAN.md",
+        "handoff/delivery/evidence/WP3-TMPCLEAN"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-TMPCLEAN.md",
+      "report": "handoff/delivery/tasks/WP3-TMPCLEAN.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-TMPCLEAN/space.txt"
+      ],
+      "baseline_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: B: free 229,376 -> 22,052,864 bytes; C: about 1.179 TB. Project prefixes found: timesheet-e2e-output, -e2e-screenshots, -files-, -migrate-, -static-root-, -static-, -test-, -smoke-. Deleted 28 unused project temp directories in the OS temp (about 14.9 MB). B:\\Temp\\claude total unmeasured (size walk returned 0). Other large consumers left untouched (owner's choice): VSTelem 405 MB, JetBrains 267 MB, JetLogs 189 MB, Diagnostics 169 MB, node-compile-cache 140 MB, DiagOutputDir 120 MB. B: stays nearly full.",
+      "next_action": "None; WP3-T04-FREEZE. The owner is told that B: stays nearly full."
+    },
+    {
+      "id": "WP3-T04-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T04",
+        "WP3-TMPCLEAN"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -4771,21 +4909,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T03-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T03-FREEZE"
+        "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T04-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T03-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "b060d330960bddaa2b98a80444775e67c55eac01",
+      "baseline_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd",
+      "source_digest": "69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T03 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T04 set with the pending handoff records."
     },
     {
       "id": "WP2-AUDIT-B",

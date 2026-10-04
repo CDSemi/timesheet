@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = b060d330960bddaa2b98a80444775e67c55eac01 (WP3-T02-FREEZE).
+  - HEAD = origin/main = 79862bba6ea8f8077e26dd043dc0aa03b21b6594 (WP3-T03-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 629e7d9d… (T02, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là 22acf6c4… (T03, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T02-FREEZE. Các file này vào commit đóng băng kế tiếp.
+    T03-FREEZE. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -94,10 +94,20 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   tự động có ghi audit, xem trước không ghi gì; 18/18 bản đối chứng bị phát hiện; verify
   821 test; digest 22acf6c4…. Worker đã báo một sự cố của script đối chứng (một file bị
   xóa trắng, đã viết lại và chạy lại toàn bộ).
-- Đang chạy: WP3-T03-FREEZE (committer).
+- WP3-T03-FREEZE đã commit và push, SHA 79862bb (32 đường dẫn, mọi kiểm tra 0).
+- WP3-T04 đã xong (tác giả tự báo): JSON chuẩn hóa và SHA-256, snapshot màn duyệt lấy số
+  từ engine hiện có, route GET màn duyệt không ghi gì; 16/16 bản đối chứng bị phát hiện;
+  verify 878 test; digest 69e790e0….
+- Môi trường: ổ tạm B: chỉ còn khoảng 448 KB trống; khoảng 7,8 GB trong B:\Temp\claude
+  thuộc về các phiên Claude. Agent không được đụng vào thư mục đó; dọn hay không là do chủ
+  dự án quyết.
+- WP3-TMPCLEAN đã xong: xóa 28 thư mục tạm không dùng của dự án (khoảng 14,9 MB); B: còn
+  khoảng 22 MB trống, vẫn gần đầy. Các thư mục lớn khác trong B:\Temp (của IDE và công cụ
+  chẩn đoán) do chủ dự án quyết.
+- Đang chạy: WP3-T04-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T03; sau đó WP3-T04 (snapshot chuẩn, dữ liệu màn duyệt
-     và hash; brief đã sẵn). T05 cần câu trả lời F-2 của chủ dự án.
+  1. Ghi kết quả commit đóng băng T04. T05 (giao dịch ký và chốt sổ) cần câu trả lời F-2
+     của chủ dự án; nếu chưa có, coordinator dừng trước T05.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -115,5 +125,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T03-FREEZE.
+- Process còn sống: chỉ WP3-T04-FREEZE.
 - Usage/reset: không quan sát được.

@@ -1,43 +1,44 @@
-# WP3-T03-FREEZE dispatch brief
+# WP3-T04-FREEZE dispatch brief
 
-- Mission/task: timesheet-software-readiness / WP3-T03-FREEZE; package WP3; kind commit;
-  attempt 1; depends on WP3-T03.
+- Mission/task: timesheet-software-readiness / WP3-T04-FREEZE; package WP3; kind commit;
+  attempt 1; depends on WP3-T04 and WP3-TMPCLEAN.
 - Profile/routing: timesheet-committer, requested sonnet/medium, no override. Routing:
-  size S, risk M (privacy: recipient handling, synthetic addresses in tests, evidence
-  scripts), novelty no. Records in English.
+  size S, risk M (privacy: review payload with employee name and recipients in synthetic
+  tests, evidence scripts), novelty no. Records in English.
 - Authority: AGENTS.md rule 12, the docs/08 section "Commits and pushes" and the board
   `owner_decisions`.
 - Branch: main (`git.release_declared` is false). Expected HEAD = origin/main =
-  b060d330960bddaa2b98a80444775e67c55eac01. If either differs, stop and report.
+  79862bba6ea8f8077e26dd043dc0aa03b21b6594. If either differs, stop and report.
 - Push after the commit.
+- The B: scratch drive has only about 22 MB free. Keep temporary output small; if a write
+  fails for lack of space, stop and report.
 
 ## Expected working-tree set
 
 Source and tests: changed or new paths outside handoff/ may only be among these:
-- new: src/domain/emailTemplate.ts, src/server/services/submissionSettings.ts,
-  src/server/routes/settings.ts, tests/domain/email-template.test.ts and
-  tests/integration/submission-settings.test.ts;
-- modified: src/server/http/schemas.ts, src/server/app.ts and
-  tests/integration/ot-api.test.ts (a reported deviation: the route allowlist).
+- new: src/domain/canonical.ts, src/domain/snapshot.ts,
+  src/server/services/reviewPayload.ts, src/server/routes/submission.ts,
+  tests/domain/canonical.test.ts and tests/integration/review-payload.test.ts;
+- modified: src/server/app.ts.
 
 Compute the digest with Node 24 (`scripts/source-digest.mjs` or `npm run digest`) and
 record it. The worker reported
-22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd; a different value stops
+69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92; a different value stops
 the commit.
 
 New handoff files:
-- handoff/delivery/tasks/: WP3-T03-FREEZE.md and WP3-T04.md.
-- Every file under handoff/delivery/evidence/WP3-T03/ (including the `*.py.txt`
-  scripts).
+- handoff/delivery/tasks/: WP3-T04-FREEZE.md and WP3-TMPCLEAN.md.
+- Every file under handoff/delivery/evidence/WP3-T04/ (including the `*.py.txt`
+  scripts) and handoff/delivery/evidence/WP3-TMPCLEAN/.
 
 Modified or new handoff files:
 - handoff/delivery/ORCHESTRATION.json.
 - handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md and .vi.md.
-- handoff/delivery/tasks/: WP3-T02-FREEZE.md and WP3-T03.md.
-- Every file under handoff/delivery/evidence/WP3-T02-FREEZE/.
+- handoff/delivery/tasks/: WP3-T03-FREEZE.md and WP3-T04.md.
+- Every file under handoff/delivery/evidence/WP3-T03-FREEZE/.
 
 Allowed but not staged:
-- your own files in handoff/delivery/evidence/WP3-T03-FREEZE/;
+- your own files in handoff/delivery/evidence/WP3-T04-FREEZE/;
 - the results you append to this brief after the commit.
 
 Any other changed or untracked path stops the commit; report it. That includes a file
@@ -66,8 +67,8 @@ nothing else. If the precommit check masks a user-profile path in an evidence lo
 is allowed; a block in a source or test file stops the commit.
 
 Privacy hygiene: the precommit script is the privacy and secret scan.
-- Do not print diffs, test bodies, probe sources, addresses or CSV content through the
-  shell.
+- Do not print diffs, test bodies, probe sources, names, addresses or CSV content through
+  the shell.
 - For any extra check, use the Grep tool and report masked values only.
 
 If any other check fails, do not commit. Report the file, line and rule.
@@ -81,20 +82,21 @@ single final newline. Stop any background process you started before you finish.
 
 ## Commit message (refine with the commit-message skill; keep the facts)
 
-Subject: Add per-user submission settings, a safe email template engine and validated
-recipients
+Subject: Add the canonical review snapshot, its SHA-256 and a write-free review route
 
-- feat(domain): email template engine with a closed variable set, 422 on an unknown
-  variable, HTML escaping and single-line subject values; validated, de-duplicated
-  recipients
-- feat(api): owner-only /api/settings/submission routes: append-only versions with a
-  stale check, per-user auto-submit effective instant, audited auto-image authorize and
-  revoke on an own signature, write-free preview
-- test: 110 new tests; 18 mutations caught
-- docs(handoff): WP3-T02 freeze result, WP3-T03 record and evidence, WP3-T04 brief, board
-  and checkpoint (+ vi)
+- feat(domain): canonical JSON (stable keys, integer minutes, ISO dates, UTC instants,
+  NFC) and SHA-256
+- feat(api): GET /api/timesheets/:payrollDate/review returns the snapshot built from the
+  existing engine (14 days, versions, zone, proposals, reservations, recipients and
+  rendered email, signature reference, template version, show-OT flag), its hash and the
+  expected version; writes nothing
+- test: 57 new tests; 16 mutations caught
+- chore(handoff): remove only this project's unused temp directories on the scratch
+  drive (WP3-TMPCLEAN)
+- docs(handoff): WP3-T03 freeze result, WP3-T04 record and evidence, board and checkpoint
+  (+ vi)
 
-Task: WP3-T03-FREEZE
+Task: WP3-T04-FREEZE
 
 ## Push and report
 
@@ -105,16 +107,8 @@ Push per the profile. Append these results here:
 - check exits;
 - blockers.
 
-Evidence goes in handoff/delivery/evidence/WP3-T03-FREEZE/. Return at most 150 words.
+Evidence goes in handoff/delivery/evidence/WP3-T04-FREEZE/. Return at most 150 words.
 
 ## Results
 
-
-- Node: v24.21.0.
-- Pre-HEAD b060d330960bddaa2b98a80444775e67c55eac01; post-HEAD and commit SHA
-  79862bba6ea8f8077e26dd043dc0aa03b21b6594; pushed to origin/main; remote SHA the same.
-- Digest 22acf6c41a10b84cc4564ee3ca290210f642ccc933609508f1a54f56babf54bd (matches);
-  staged count 32.
-- Check exits: digest 0, precommit 0 (0 findings), diff --check 0, JSON parse 0,
-  orchestration validator 0, check_recovery 0, preflight 0.
-- No masking or EOF fix needed; no blockers.
+(Committer appends here.)

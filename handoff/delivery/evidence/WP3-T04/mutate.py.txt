@@ -1,0 +1,93 @@
+"""Mutation checks for WP3-T04.
+
+Each mutation is computed in memory first (every pattern must match exactly once), the
+file is written only after that, the two new test files are run, and the original bytes are
+restored in a finally block and compared with the saved SHA-256. Usage (from the repo root):
+python mutate.py.txt <out-file>
+"""
+import hashlib
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+TESTS = ['tests/domain/canonical.test.ts', 'tests/integration/review-payload.test.ts']
+CANON = 'src/domain/canonical.ts'
+SERVICE = 'src/server/services/reviewPayload.ts'
+ROUTE = 'src/server/routes/submission.ts'
+
+MUTATIONS = [
+    ('M1 canonical keys are not sorted', CANON, [('    .sort()\n', '\n')]),
+    ('M2 canonical strings are not NFC-normalized', CANON, [("return JSON.stringify(value.normalize('NFC'));", 'return JSON.stringify(value);')]),
+    ('M3 canonical accepts floating-point numbers', CANON, [('if (!Number.isSafeInteger(value)) return fail(', 'if (!Number.isFinite(value)) return fail(')]),
+    ('M4 the signature reference is left out of the payload', SERVICE, [('signature: signature === null ? null : { attachment_id: signature.id, sha256: signature.sha256 },', 'signature: null,')]),
+    ('M5 the GET writes an audit event', SERVICE, [
+        ("import { getBalance } from './ledger.ts';", "import { recordAudit } from './audit.ts';\nimport { getBalance } from './ledger.ts';"),
+        ('  const view = getTimesheetView(db, clock, user, period.payrollDate);\n', "  const view = getTimesheetView(db, clock, user, period.payrollDate);\n  recordAudit(db, clock, { actorUserId: user.id, ownerUserId: user.id, operation: 'review.read', entityType: 'timesheet', entityId: null });\n"),
+    ]),
+    ('M6 an unknown payroll date is 422 instead of not found', SERVICE, [("if (isDomainError(error) && error.code === 'unknown_payroll_date') throw notFound('Timesheet');", '')]),
+    ('M7 calendar version ids are left out', SERVICE, [('calendar: { id: scope.calendar.id, version_ids: [...calendarVersionIds] },', 'calendar: { id: scope.calendar.id, version_ids: [] },')]),
+    ('M8 day notes are left out', SERVICE, [("notes: day.entry?.notes ?? '',", "notes: '',")]),
+    ('M9 later deficits ignore the balance earlier debits used', SERVICE, [('      available -= outcome.debitMinutes;\n', '')]),
+    ('M10 cc recipients are left out', SERVICE, [('cc: settings.recipientsCc,', 'cc: [],')]),
+    ('M11 consumed reservations are listed too', SERVICE, [('    .filter((request) => request.reservedMinutes > 0)\n', '')]),
+    ('M12 the route reports a fixed expected version', ROUTE, [('c.json(reviewPayloadJson(buildReviewPayload(deps.db, deps.clock, c.get(\'user\'), c.req.param(\'payrollDate\'))))', "c.json({ ...reviewPayloadJson(buildReviewPayload(deps.db, deps.clock, c.get('user'), c.req.param('payrollDate'))), expected_version: 0 })")]),
+    ('M13 a clock-dependent value enters the payload', SERVICE, [("notes: day.entry?.notes ?? '',", "notes: (day.entry?.notes ?? '') + clock.now().toISOString().slice(0, 16),")]),
+    ('M14 policy version ids are left out', SERVICE, [('policy: { version_ids: [...policyVersionIds] },', 'policy: { version_ids: [] },')]),
+    ('M15 the review reads another user (admin sees the first employee)', SERVICE, [("  const sessions = loadSessions(db, user.id, period.periodStart, period.periodEnd);", "  const sessions = loadSessions(db, (db.prepare(\"SELECT id FROM users WHERE email = 'employee@example.invalid'\").pluck().get() as string) ?? user.id, period.periodStart, period.periodEnd);")]),
+    ('M16 SHA-256 uses a wrong rotation constant', CANON, [('rotateRight(e, 6) ^ rotateRight(e, 11)', 'rotateRight(e, 7) ^ rotateRight(e, 11)')]),
+]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run_tests() -> tuple[int, str]:
+    node = 'node'
+    result = subprocess.run([node, 'node_modules/vitest/vitest.mjs', 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=ROOT)
+    out = result.stdout + result.stderr
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests ', 'Test Files'))]
+    return result.returncode, ' | '.join(summary)
+
+
+def main() -> int:
+    out_path = Path(sys.argv[1])
+    lines = []
+    caught_total = 0
+    originals = {name: (ROOT / name).read_bytes() for name in {CANON, SERVICE, ROUTE}}
+    baseline = {name: sha(data) for name, data in originals.items()}
+    code, summary = run_tests()
+    lines.append(f'baseline exit={code} {summary}')
+    if code != 0:
+        out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+        return 1
+    for label, name, edits in MUTATIONS:
+        original = originals[name].decode('utf-8')
+        mutated = original
+        for old, new in edits:
+            if mutated.count(old) != 1:
+                lines.append(f'{label}: PATTERN COUNT {mutated.count(old)} (not run)')
+                break
+            mutated = mutated.replace(old, new)
+        else:
+            mutated_bytes = mutated.encode('utf-8')
+            target = ROOT / name
+            try:
+                target.write_bytes(mutated_bytes)
+                code, summary = run_tests()
+            finally:
+                target.write_bytes(originals[name])
+            restored = sha(target.read_bytes()) == baseline[name]
+            caught = code != 0
+            caught_total += 1 if caught else 0
+            lines.append(f'{label}: {"CAUGHT" if caught else "NOT CAUGHT"} ({summary}); restored byte-identical={restored}')
+    lines.append(f'caught {caught_total} of {len(MUTATIONS)}')
+    ok = all(sha((ROOT / n).read_bytes()) == h for n, h in baseline.items())
+    lines.append(f'all files byte-identical after the run: {ok}')
+    out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

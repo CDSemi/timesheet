@@ -6,12 +6,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = b060d330960bddaa2b98a80444775e67c55eac01 (WP3-T02-FREEZE).
+  - HEAD = origin/main = 79862bba6ea8f8077e26dd043dc0aa03b21b6594 (WP3-T03-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 629e7d9d… (T02, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest 22acf6c4… (T03, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T02-FREEZE results and
+  - Uncommitted (handoff only): the board, this checkpoint, the T03-FREEZE results and
     evidence. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
@@ -84,10 +84,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   auto-image authorization, write-free preview; 18/18 mutations caught; verify 821 tests;
   digest 22acf6c4…. A mutation-script incident (one file truncated, rewritten, all runs
   repeated) is disclosed.
-- Running: WP3-T03-FREEZE (committer).
+- WP3-T03-FREEZE is committed and pushed as 79862bb (32 paths, all checks 0).
+- WP3-T04 is done (author-reported): canonical JSON and SHA-256, the review snapshot from
+  the existing engine, a GET review route that writes nothing; 16/16 mutations caught;
+  verify 878 tests; digest 69e790e0….
+- Environment: the B: scratch drive had about 448 KB free; about 7.8 GB under
+  B:\Temp\claude belongs to Claude sessions. Agents must not touch it; cleaning it is the
+  owner's choice.
+- WP3-TMPCLEAN is done: 28 unused project temp directories removed (about 14.9 MB); B:
+  now has about 22 MB free and stays nearly full. Other large B:\Temp consumers (IDE and
+  diagnostics folders) are the owner's choice.
+- Running: WP3-T04-FREEZE (committer).
 - Next action:
-  1. Record the T03 freeze; then WP3-T04 (canonical snapshot, review payload and hash;
-     brief ready). T05 needs the owner's F-2 answer.
+  1. Record the T04 freeze. T05 (manual sign-off finalization) needs the owner's F-2
+     answer; without it the coordinator stops before T05.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -104,5 +114,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T03-FREEZE only.
+- Live processes: WP3-T04-FREEZE only.
 - Usage/reset: not observable.

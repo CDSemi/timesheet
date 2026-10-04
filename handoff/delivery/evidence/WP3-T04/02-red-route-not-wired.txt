@@ -1,0 +1,96 @@
+# Red 2: new modules present, route not mounted in app.ts yet (summary lines only).
+# Includes one real defect found by the tests: canonicalUtc let a DomainError escape for a well-formed but impossible instant (fixed afterwards).
+
+ ❯ tests/domain/canonical.test.ts (34 tests | 1 failed) 11ms
+     × accepts whole-second UTC strings and rejects offsets, fractions and local times 3ms
+ ❯ tests/integration/review-payload.test.ts (22 tests | 21 failed) 4175ms
+     × lists the 14 days of the period with the zone, employee, policy and calendar versions 216ms
+     × carries day category, leave, sessions, breaks and the engine minutes unchanged 192ms
+     × proposes OT per day from the engine credit 186ms
+     × lists unresolved inputs: unconfirmed breaks and open sessions credit nothing 188ms
+     × proposes deficits with the policy mode and the balance each decision saw 187ms
+     × flags unconsumed OT-leave reservations (E-3) and drops a cancelled one 182ms
+     × shows recipients with the rendered subject and body, the signature reference and the template flags 180ms
+     × carries no credential, token, password or file path 188ms
+     × does not depend on the clock or the zone of the device 180ms
+     × is identical for an unchanged state, repeated 187ms
+     × changes on every kind of day edit 182ms
+     × changes on a recipient, a template, a flag and a signature change 187ms
+     × changes on a policy version or a calendar version change, even with identical rules 185ms
+     × changes when the balance changes a deficit decision 183ms
+     × gives the same hash for canonically equivalent employee names 181ms
+     × leaves every row, the audit log and the data untouched 189ms
+     × does not create the pay period or timesheet row of a period nobody edited 176ms
+     × requires a signed-in user 184ms
+     × answers 404 for a payroll date that is not the caller’s, and 422 for a malformed date 263ms
+     × never shows another user’s data, also not to an administrator on the same calendar 195ms
+     × does not regroup the period when a session was entered in another zone 181ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 22 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/domain/canonical.test.ts > typed helpers > accepts whole-second UTC strings and rejects offsets, fractions and local times
+AssertionError: expected error to be instance of CanonicalError
+ ❯ tests/domain/canonical.test.ts:153:46
+ FAIL  tests/integration/review-payload.test.ts > payload content > lists the 14 days of the period with the zone, employee, policy and calendar versions
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:170:18
+ FAIL  tests/integration/review-payload.test.ts > payload content > carries day category, leave, sessions, breaks and the engine minutes unchanged
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:208:18
+ FAIL  tests/integration/review-payload.test.ts > payload content > proposes OT per day from the engine credit
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:242:18
+ FAIL  tests/integration/review-payload.test.ts > payload content > lists unresolved inputs: unconfirmed breaks and open sessions credit nothing
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:258:18
+ FAIL  tests/integration/review-payload.test.ts > payload content > proposes deficits with the policy mode and the balance each decision saw
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:276:16
+ FAIL  tests/integration/review-payload.test.ts > payload content > flags unconsumed OT-leave reservations (E-3) and drops a cancelled one
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:326:16
+ FAIL  tests/integration/review-payload.test.ts > payload content > shows recipients with the rendered subject and body, the signature reference and the template flags
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:341:16
+ FAIL  tests/integration/review-payload.test.ts > payload content > carries no credential, token, password or file path
+AssertionError: {"settings":{"id":"40b419e9-37ac-4f55-b593-565ac4301105","seq":1,"is_default":false,"recipients":{"to":["payroll@example.invalid"],"cc":[]},"subject_template":"Timesheet {PeriodStart} to {PeriodEnd} - {EmployeeName} - {SignOffStatus}","body_template":"Hello,\n\nAttached is the timesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd} (payroll date {PayrollDate}).\nStatus: {SignOffStatus}.\nSubmission {SubmissionId}, revision {Revision}.","template_version":1,"variables":["EmployeeName","PeriodStart","PeriodEnd","PayrollDate","SignOffStatus","SubmissionId","Revision"],"auto_submit":true,"auto_submit_effective_from":"2026-09-29T20:00:00Z","auto_image":{"authorized":false,"signature_attachment_id":null,"authorized_at":null},"show_ot_on_pdf":true,"reminder_offsets_minutes":[1440,120],"created_at":"2026-09-29T20:00:00Z"}}: expected 201 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:373:5
+ FAIL  tests/integration/review-payload.test.ts > payload content > does not depend on the clock or the zone of the device
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:380:19
+ FAIL  tests/integration/review-payload.test.ts > hash sensitivity > is identical for an unchanged state, repeated
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:392:15
+ FAIL  tests/integration/review-payload.test.ts > hash sensitivity > changes on every kind of day edit
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:399:35
+ FAIL  tests/integration/review-payload.test.ts > hash sensitivity > changes on a recipient, a template, a flag and a signature change
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:451:35
+ FAIL  tests/integration/review-payload.test.ts > hash sensitivity > changes on a policy version or a calendar version change, even with identical rules
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:483:20
+ FAIL  tests/integration/review-payload.test.ts > hash sensitivity > changes when the balance changes a deficit decision
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:504:23
+ FAIL  tests/integration/review-payload.test.ts > Unicode and canonical stability end to end > gives the same hash for canonically equivalent employee names
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:520:15
+ FAIL  tests/integration/review-payload.test.ts > GET writes nothing > leaves every row, the audit log and the data untouched
+AssertionError: {"settings":{"id":"b4be962f-b92c-4c9a-b8a4-bdc639e57dce","seq":1,"is_default":false,"recipients":{"to":["payroll@example.invalid"],"cc":[]},"subject_template":"Timesheet {PeriodStart} to {PeriodEnd} - {EmployeeName} - {SignOffStatus}","body_template":"Hello,\n\nAttached is the timesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd} (payroll date {PayrollDate}).\nStatus: {SignOffStatus}.\nSubmission {SubmissionId}, revision {Revision}.","template_version":1,"variables":["EmployeeName","PeriodStart","PeriodEnd","PayrollDate","SignOffStatus","SubmissionId","Revision"],"auto_submit":true,"auto_submit_effective_from":"2026-09-29T20:00:00Z","auto_image":{"authorized":false,"signature_attachment_id":null,"authorized_at":null},"show_ot_on_pdf":true,"reminder_offsets_minutes":[1440,120],"created_at":"2026-09-29T20:00:00Z"}}: expected 201 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:533:5
+ FAIL  tests/integration/review-payload.test.ts > GET writes nothing > does not create the pay period or timesheet row of a period nobody edited
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:554:29
+ FAIL  tests/integration/review-payload.test.ts > ownership > requires a signed-in user
+AssertionError: expected 404 to be 401 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:573:29
+ FAIL  tests/integration/review-payload.test.ts > ownership > answers 404 for a payroll date that is not the caller’s, and 422 for a malformed date
+AssertionError: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:625:57
+ FAIL  tests/integration/review-payload.test.ts > ownership > never shows another user’s data, also not to an administrator on the same calendar
+AssertionError: {"settings":{"id":"15436d26-bb14-46e7-b480-002e833d4ef1","seq":1,"is_default":false,"recipients":{"to":["employee-only@example.invalid"],"cc":[]},"subject_template":"EMPLOYEE-ONLY {PayrollDate}","body_template":"Hello,\n\nAttached is the timesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd} (payroll date {PayrollDate}).\nStatus: {SignOffStatus}.\nSubmission {SubmissionId}, revision {Revision}.","template_version":1,"variables":["EmployeeName","PeriodStart","PeriodEnd","PayrollDate","SignOffStatus","SubmissionId","Revision"],"auto_submit":true,"auto_submit_effective_from":"2026-09-29T20:00:00Z","auto_image":{"authorized":false,"signature_attachment_id":null,"authorized_at":null},"show_ot_on_pdf":true,"reminder_offsets_minutes":[1440,120],"created_at":"2026-09-29T20:00:00Z"}}: expected 201 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:636:5
+ FAIL  tests/integration/review-payload.test.ts > device zone > does not regroup the period when a session was entered in another zone
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 200 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:665:18
+ Test Files  2 failed (2)
+      Tests  22 failed | 34 passed (56)
