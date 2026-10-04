@@ -1,0 +1,14 @@
+const fmt = (ms, zone) => {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms));
+  const g = (t) => p.find((x) => x.type === t).value;
+  return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}`;
+};
+for (const date of ['2026-07-15', '2026-10-02', '2026-11-03', '2027-01-14']) {
+  const start = Date.parse(`${date}T22:00:00+07:00`);
+  const end = Date.parse(`${date}T23:30:00+07:00`);
+  const oldStart = `${date} 08:00`;
+  const oldEnd = `${date} 09:30`;
+  const gotStart = fmt(start, 'America/Los_Angeles');
+  const gotEnd = fmt(end, 'America/Los_Angeles');
+  console.log(`${date}: stored start in LA ${gotStart}, old expectation ${oldStart} -> ${gotStart === oldStart ? 'PASS' : 'FAIL'}; end ${gotEnd} vs ${oldEnd} -> ${gotEnd === oldEnd ? 'PASS' : 'FAIL'}`);
+}

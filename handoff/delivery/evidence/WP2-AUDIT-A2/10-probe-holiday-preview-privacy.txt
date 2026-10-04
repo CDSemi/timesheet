@@ -1,0 +1,29 @@
+# command: node probes/pg-holiday-preview-privacy.mjs <clone> <work-hp> (attempt-1 probe, unchanged, against f79413b)
+# start 2026-10-04T10:18:36Z
+setup employee session 2026-10-05 -> 201
+setup employee session 2026-10-07 -> 201
+admin preview status 200, can_commit true, effective_from 2026-09-28
+  2026-10-05: label Worked -> Holiday, default_labelled_entries=undefined, explicit_overrides_preserved=undefined
+  2026-10-06: label Worked -> Holiday, default_labelled_entries=undefined, explicit_overrides_preserved=undefined
+  2026-10-07: label Worked -> Holiday, default_labelled_entries=undefined, explicit_overrides_preserved=undefined
+  2026-10-08: label Worked -> Holiday, default_labelled_entries=undefined, explicit_overrides_preserved=undefined
+dates the admin can infer the (only) employee recorded work on: none
+preview wrote nothing: audit events 12 -> 12, calendar versions 1 -> 1
+response contains the employee id: false
+RESULT per-date employee attendance inferable by the admin from a preview: no
+exit=0
+# end 2026-10-04T10:18:37Z
+
+# control: same probe against the 8fae685 export (base)
+setup employee session 2026-10-05 -> 201
+setup employee session 2026-10-07 -> 201
+admin preview status 200, can_commit true, effective_from 2026-09-28
+  2026-10-05: label Worked -> Holiday, default_labelled_entries=1, explicit_overrides_preserved=0
+  2026-10-06: label Worked -> Holiday, default_labelled_entries=0, explicit_overrides_preserved=0
+  2026-10-07: label Worked -> Holiday, default_labelled_entries=1, explicit_overrides_preserved=0
+  2026-10-08: label Worked -> Holiday, default_labelled_entries=0, explicit_overrides_preserved=0
+dates the admin can infer the (only) employee recorded work on: 2026-10-05,2026-10-07
+preview wrote nothing: audit events 12 -> 12, calendar versions 1 -> 1
+response contains the employee id: false
+RESULT per-date employee attendance inferable by the admin from a preview: YES (reproduced)
+exit=0

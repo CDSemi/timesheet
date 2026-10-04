@@ -96,7 +96,7 @@ describe('creating an exception', () => {
       due_local_time: '12:00',
       reason: 'Synthetic bank holiday moves payroll',
     });
-    expect(response.body.refreshed_pay_period).toBe(false);
+    expect(Object.keys(response.body)).toEqual(['payroll_exception']);
     expect(exceptionRows()).toMatchObject([{ nominal_payroll_date: '2026-10-16', created_by: t.userIds.admin }]);
 
     const audits = auditRows();
@@ -166,7 +166,7 @@ describe('stored pay_periods rows (E-10)', () => {
 
     const response = await t.request('POST', PATH, { cookie: admin, body: exceptionBody() });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
-    expect(response.body.refreshed_pay_period).toBe(true);
+    expect(Object.keys(response.body)).toEqual(['payroll_exception']);
 
     const after = periodRow();
     expect(after).toMatchObject({
@@ -193,6 +193,43 @@ describe('stored pay_periods rows (E-10)', () => {
     const audit = auditRows()[0];
     expect(JSON.parse(audit?.before_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-16', due_local_date: '2026-10-13' });
     expect(JSON.parse(audit?.after_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-15', refreshed_pay_period: true });
+  });
+
+  it('answers the same success body whether or not employees have timesheets in the period (WP2-A2-02)', async () => {
+    const request = () => t.request('POST', PATH, { cookie: admin, body: exceptionBody() });
+    // Fixture A: nobody has a timesheet, so no pay_periods row exists.
+    expect(periodRow()).toBeUndefined();
+    const without = await request();
+    expect(without.status, JSON.stringify(without.body)).toBe(201);
+    expect(periodRow()).toBeUndefined();
+
+    // Fixture B: the same request on a fresh database after two users have edited the period.
+    const other = await createTestContext('2026-10-09T20:00:00Z');
+    try {
+      const otherAdmin = await other.login('admin');
+      const otherEmployee = await other.login('employee');
+      for (const who of [otherAdmin, otherEmployee]) {
+        const added = await other.request('POST', '/api/days/2026-10-07/sessions', {
+          cookie: who,
+          body: { start: la('2026-10-07T09:00'), end: la('2026-10-07T17:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+        });
+        expect(added.status, JSON.stringify(added.body)).toBe(201);
+      }
+      expect(other.db.prepare('SELECT count(*) FROM pay_periods').pluck().get()).toBe(1);
+      const withTimesheets = await other.request('POST', PATH, {
+        cookie: otherAdmin,
+        body: { ...exceptionBody(), calendar_id: other.calendarId },
+      });
+      expect(withTimesheets.status, JSON.stringify(withTimesheets.body)).toBe(201);
+      // The stored row really was refreshed in fixture B, yet the response says nothing about it.
+      expect(other.db.prepare('SELECT is_exception FROM pay_periods').pluck().get()).toBe(1);
+      const stripped = (body: Record<string, unknown>, calendarId: string) =>
+        JSON.parse(JSON.stringify(body).replaceAll(calendarId, '<calendar>')) as Record<string, unknown>;
+      expect(stripped(withTimesheets.body, other.calendarId)).toEqual(stripped(without.body, t.calendarId));
+      expect(Object.keys(withTimesheets.body)).toEqual(['payroll_exception']);
+    } finally {
+      await other.close();
+    }
   });
 
   it('refreshes the due date alone when only the deadline moves', async () => {
@@ -237,7 +274,7 @@ describe('stored pay_periods rows (E-10)', () => {
       body: exceptionBody({ nominal_payroll_date: '2026-10-30', payroll_date: '2026-10-29', due_local_date: null, due_local_time: null }),
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
-    expect(response.body.refreshed_pay_period).toBe(false);
+    expect(Object.keys(response.body)).toEqual(['payroll_exception']);
     expect(periodRow()).toEqual(before);
   });
 

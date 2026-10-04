@@ -1,0 +1,14 @@
+# command: node probes/pf-supplement.mjs <clone> <work-pf> (attempt-1 probe, unchanged, against f79413b)
+# start 2026-10-04T10:23:33Z
+PASS S1 ADV-A-03 stale cancel after full use -> 409 stale_version; current version -> 200 unchanged
+PASS S2 record-use retry with the same key and stale version -> 200 duplicate, no new entry; changed minutes -> 409 source_key_conflict
+PASS S3 reserve retry same key/payload -> 200 duplicate; different payload -> 409 request_key_conflict
+PASS S4 E-3 use one second before LA midnight -> 409 before_leave_date; at LA midnight -> used (-60)
+PASS S5 correcting an own leave_consumption -> 422 invalid_correction_target  422:invalid_correction_target
+OBS  S6 same correction key and value with a different sourceRef  correction -> duplicate; credit with a different sourceRef -> error:source_key_conflict
+OBS  S7 policy note " =1+1" (leading space) in the CSV  policy saved 201 ; cell starts with a space and no apostrophe: true; trimmed: false; apostrophe: false
+OBS  S8 holiday preview shows the admin per-date counts of employee day entries  status 200; 2026-12-24 explicit_overrides_preserved=undefined default_labelled_entries=undefined; no user id or label value in response: true
+PASS S9 integrity ok
+RESULT pass=6 fail=0
+exit=0
+# end 2026-10-04T10:23:34Z

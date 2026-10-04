@@ -1,0 +1,46 @@
+Red run: tests/client/zoneOracle.test.ts against an UNFIXED stand-in (old hard-coded PDT arithmetic behind wallTimeIn). Exit 1.
+Command: node vitest run tests/client/zoneOracle.test.ts (Node v24.21.0)
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/zoneOracle.test.ts (4 tests | 2 failed) 28ms
+   ❯ zone oracle (4)
+     × follows the Los Angeles season for a time typed at +07:00 5ms
+     × shows that the old fixed 08:00 expectation is wrong in winter and right only in summer 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/zoneOracle.test.ts > zone oracle > follows the Los Angeles season for a time typed at +07:00
+AssertionError: 2026-01-14: expected '2026-01-14 08:00' to be '2026-01-14 07:00' // Object.is equality
+
+Expected: "2026-01-14 07:00"
+Received: "2026-01-14 08:00"
+
+ ❯ tests/client/zoneOracle.test.ts:26:56
+     24|     ];
+     25|     for (const [date, start, end] of cases) {
+     26|       expect(wallTimeIn(date, '22:00', HCM, LA), date).toBe(`${date} $…
+       |                                                        ^
+     27|       expect(wallTimeIn(date, '23:30', HCM, LA), date).toBe(`${date} $…
+     28|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/zoneOracle.test.ts > zone oracle > shows that the old fixed 08:00 expectation is wrong in winter and right only in summer
+AssertionError: expected '2026-01-14 08:00' not to be '2026-01-14 08:00' // Object.is equality
+ ❯ tests/client/zoneOracle.test.ts:52:58
+     50|   it('shows that the old fixed 08:00 expectation is wrong in winter an…
+     51|     expect(legacyPdtWallTime('2026-07-15', '22:00')).toBe(wallTimeIn('…
+     52|     expect(legacyPdtWallTime('2026-01-14', '22:00')).not.toBe(wallTime…
+       |                                                          ^
+     53|   });
+     54| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  03:45:36
+   Duration  174ms (transform 45%, tests 37%, import 14%, worker 4%)

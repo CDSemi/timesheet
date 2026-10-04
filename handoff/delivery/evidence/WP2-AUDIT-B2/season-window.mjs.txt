@@ -1,0 +1,35 @@
+// WP2-AUDIT-B2 (auditor-owned): for each date from 2026-10-01 to 2027-04-30, 22:00 typed in
+// Asia/Ho_Chi_Minh (+07:00, no DST) is converted to America/Los_Angeles with Intl. The committed
+// e2e (tests/e2e/day-editor.spec.ts:225-226) expects "<date> 08:00"; list where that fails.
+const fmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const wall = (ms) => {
+  const parts = fmt.formatToParts(new Date(ms));
+  const part = (type) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
+};
+let failing = [];
+const ranges = [];
+for (let ms = Date.parse('2026-10-01T00:00:00Z'); ms <= Date.parse('2027-04-30T00:00:00Z'); ms += 86_400_000) {
+  const date = new Date(ms).toISOString().slice(0, 10);
+  const startUtc = Date.parse(`${date}T22:00:00+07:00`);
+  const actual = wall(startUtc);
+  const ok = actual === `${date} 08:00`;
+  if (!ok) failing.push(`${date} -> ${actual}`);
+  else if (failing.length > 0) {
+    ranges.push(failing);
+    failing = [];
+  }
+}
+if (failing.length > 0) ranges.push(failing);
+for (const range of ranges) {
+  console.log(`assertion fails for ${range.length} dates: first ${range[0]}, last ${range[range.length - 1]}`);
+}
+console.log(`sample: 2026-10-02 -> ${wall(Date.parse('2026-10-02T22:00:00+07:00'))}; 2026-11-02 -> ${wall(Date.parse('2026-11-02T22:00:00+07:00'))}`);

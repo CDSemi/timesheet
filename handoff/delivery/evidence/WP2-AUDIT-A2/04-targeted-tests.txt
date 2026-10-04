@@ -1,0 +1,80 @@
+2026-10-04T10:17:22Z
+# vitest run on 13 ledger/privacy/admin files (node_modules/vitest/vitest.mjs on Node 24; this header first said 12 by mistake)
+
+ RUN  v5.0.2 <clone>
+
+
+ Test Files  13 passed (13)
+      Tests  266 passed (266)
+   Start at  03:17:23
+   Duration  20.19s (tests 93%, import 4%, transform 3%)
+
+exit=0
+# concurrency rerun 1
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit=0
+# concurrency rerun 2
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit=0
+# concurrency rerun 3
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit=0
+# holiday-import verbose
+
+ RUN  v5.0.2 <clone>
+
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/preview, changing nothing 278ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > answers 401 without a session and 403 to an employee on /api/admin/calendar/import/commit, changing nothing 229ms
+ ✓ tests/integration/holiday-import.test.ts > access control on the admin import routes > rejects a cross-origin POST and unknown fields, and answers 404 for an unknown calendar 234ms
+ ✓ tests/integration/holiday-import.test.ts > preview > writes nothing: no version, no audit event, no employee row 240ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports invalid dates, duplicates, empty names, out-of-year rows and formula cells, and gives no commit hash 234ms
+ ✓ tests/integration/holiday-import.test.ts > preview > diffs against the effective version: added, renamed, kind changed, removed and kept dates (E-4) 228ms
+ ✓ tests/integration/holiday-import.test.ts > preview > keeps every manual date when the CSV lists none of them and nothing is marked for removal 249ms
+ ✓ tests/integration/holiday-import.test.ts > preview > flags a removal of an unknown date, a CSV conflict and a past date, and blocks the commit 275ms
+ ✓ tests/integration/holiday-import.test.ts > preview > ignores CSV rows before the effective date and says so 233ms
+ ✓ tests/integration/holiday-import.test.ts > preview > refuses an effective date before the prospective boundary in the preview and names the earliest 234ms
+ ✓ tests/integration/holiday-import.test.ts > preview > lists the days whose default label changes from the calendar alone, with no employee-derived counts 234ms
+ ✓ tests/integration/holiday-import.test.ts > preview > answers identically whether or not employees have day entries on the affected dates (WP2-A-01) 243ms
+ ✓ tests/integration/holiday-import.test.ts > preview > reports a finalized period as a date-only signal and blocks the commit, without counts 248ms
+ ✓ tests/integration/holiday-import.test.ts > commit > creates one immutable version and one audit event from a matching preview 229ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a missing, malformed, stale or mismatched preview hash and writes nothing 234ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date before the prospective boundary 233ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses an effective date earlier than the latest version 232ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a CSV with issues or removal problems and writes nothing 229ms
+ ✓ tests/integration/holiday-import.test.ts > commit > treats an identical re-commit as a no-op: no new version, no audit event 232ms
+ ✓ tests/integration/holiday-import.test.ts > commit > removes a manual date only when the commit lists it explicitly 248ms
+stderr | tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written
+Unhandled request error SqliteError: forced_audit_failure
+    at recordAudit (<clone>/src/server/services/audit.ts:22:5)
+    at sqliteTransaction.<anonymous> (<clone>/src/server/services/calendars.ts:193:7)
+    at sqliteTransaction (<clone>\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at createCalendarVersion (<clone>/src/server/services/calendars.ts:204:6)
+    at sqliteTransaction.<anonymous> (<clone>/src/server/services/holidayImport.ts:289:23)
+    at sqliteTransaction (<clone>\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at commitHolidayImport (<clone>/src/server/services/holidayImport.ts:315:6)
+    at <clone>/src/server/routes/admin.ts:131:20
+    at dispatch (<clone>/node_modules/hono/dist/compose.js:35:11)
+    at <clone>/src/server/http/auth.ts:28:7 {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/holiday-import.test.ts > commit > rolls the version back when the audit event cannot be written 239ms
+ ✓ tests/integration/holiday-import.test.ts > commit > keeps the classification of past dates and old finalized periods unchanged 276ms
+ ✓ tests/integration/holiday-import.test.ts > commit > preserves explicit labels and relabels default rows at read time (E-4) 245ms
+ ✓ tests/integration/holiday-import.test.ts > commit > refuses a change that would alter a finalized timesheet, then accepts a later date 239ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty before 1 October in the reporting zone and appears from then 437ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > is empty in the new year until the next 1 October 368ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > disappears once a committed version holds next-year dates 290ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > does not count a version that is not in force for next year 235ms
+ ✓ tests/integration/holiday-import.test.ts > missing next-year calendar warning (E-12), with a fixed clock > keeps the existing calendar fields 234ms
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Start at  03:18:00
+   Duration  8.31s (tests 90%, import 6%, transform 4%)
+
+exit=0
+2026-10-04T10:18:09Z

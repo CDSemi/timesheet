@@ -1,0 +1,56 @@
+// WP2-AUDIT-A2 temporary probe spec (scratch clone only; deleted after the run, kept as evidence .txt).
+// The admin holiday-import preview SCREEN must look the same whether or not the employee recorded
+// work or a personal label on the affected days (WP2-A-01). Synthetic data only.
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('audit-a2: the holiday preview screen is identical with and without employee day data', async (
+  { page, builtServer, adminSeed, employeeSeed, signInPageAs },
+  testInfo,
+) => {
+  const project = testInfo.project.name;
+  const calendar = await adminSeed.call<{ id: string }>('GET', '/api/calendar');
+  const periods = await adminSeed.call<{ current: { period_start: string; period_end: string } }>('GET', '/api/periods/current');
+  const free = (await employeeSeed.displayedPeriodFreeWorkdays()).sort();
+  test.skip(free.length < 3, 'needs three free past workdays in the displayed period');
+  const [day1, day2, day3] = free.slice(-3);
+  const { reportingZone } = await employeeSeed.today();
+  const csv = `date,name,kind\n${day1},Probe A,holiday\n${day2},Probe B,holiday\n${day3},Probe C,holiday\n`;
+
+  await signInPageAs(builtServer.credentials.admin);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  const section = page.getByRole('form', { name: 'Holiday import' });
+  // Run-1 spec bug: the year field defaults to next year after 1 October; use the probed days' year.
+  await section.getByLabel('Year of the dates').fill(day1.slice(0, 4));
+  await section.getByLabel('Effective from').fill(periods.current.period_start);
+  await section.getByLabel('Paste the CSV rows').fill(csv);
+  await section.getByRole('button', { name: 'Preview import' }).click();
+  const preview = section.getByRole('region', { name: 'Holiday import preview' });
+  await expect(section.locator('[data-diff="affected"]')).toBeVisible();
+  const before = await preview.innerText();
+
+  // The employee records a session on day1 and a personal Vacation label on day3; day2 stays empty.
+  await employeeSeed.call('POST', `/api/days/${day1}/sessions`, {
+    start: { local: `${day1}T09:00`, zone: reportingZone },
+    end: { local: `${day1}T17:00`, zone: reportingZone },
+    input_zone: reportingZone,
+    breaks: [],
+    breaks_confirmed: true,
+  }, 201);
+  await employeeSeed.call('PUT', `/api/days/${day3}`, { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: '' });
+
+  await section.getByRole('button', { name: 'Preview import' }).click();
+  await expect(section.locator('[data-diff="affected"]')).toBeVisible();
+  const after = await preview.innerText();
+  expect(after).toBe(before);
+  const affected = await section.locator('[data-diff="affected"]').innerText();
+  expect(affected).not.toMatch(/\d+\s+(default|personal)|entries follow|labels preserved/);
+  for (const date of [day1, day2, day3]) {
+    await expect(section.locator(`[data-affected-date="${date}"]`)).toHaveText(`${date}Worked to Holiday`);
+  }
+  expect(await page.content()).not.toContain('Vacation');
+  await page.screenshot({ path: screenshotPath(`audit-a2-holiday-preview-employee-data-${project}-synthetic.png`), fullPage: true });
+  expect(calendar.id.length).toBeGreaterThan(0);
+});

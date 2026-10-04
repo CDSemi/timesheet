@@ -139,3 +139,14 @@ Evidence goes in handoff/delivery/evidence/WP2-FIX-FREEZE/. Return at most 150 w
 - Blockers: WP2-AUDIT-B.md:155 has a blank line at EOF; preflight fails because the
   Python on this host has no IANA zone data (America/Los_Angeles not found).
 - Evidence: handoff/delivery/evidence/WP2-FIX-FREEZE/01-checks.txt
+
+### Committer results (attempt 2, Sonnet 5.5)
+
+- Pre-HEAD 8fae685949adb525ec137e5972202f58b408ac24; post-HEAD f79413b77e7f745e1eff383f1ad748e7667533da.
+- Commit f79413b77e7f745e1eff383f1ad748e7667533da; pushed to origin main; remote SHA f79413b77e7f745e1eff383f1ad748e7667533da.
+- Staged count 152; no extras.
+- Exits (all 0): node --version (v24.21.0); git add; precommit; diff --cached --check; JSON parse;
+  orchestration validator; check_recovery; validate_package --preflight (workflow Python).
+- Screenshots viewed: 6 (desktop and mobile), synthetic only.
+- Blockers: none.
+- Evidence: handoff/delivery/evidence/WP2-FIX-FREEZE/02-a2-checks.txt

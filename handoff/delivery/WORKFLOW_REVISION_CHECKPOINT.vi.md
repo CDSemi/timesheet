@@ -229,8 +229,37 @@ America/Los_Angeles).
   - đổi múi giờ của phiên đã lưu thì giờ đã nhập được hiểu lại theo múi giờ mới;
   - verify 606 test; e2e 74 đạt, 2 bỏ qua;
   - digest 4c2bd7ef… (working tree, gồm FIXA và FIXB).
-- Đang chạy: WP2-FIX-FREEZE (committer), commit đóng băng cuối package mới. Sau đó là
-  WP2-GATE2, rồi WP2-AUDIT-A2 và WP2-AUDIT-B2 chạy song song (brief sẵn).
+- WP2-FIX-FREEZE đã commit và push, SHA f79413b (attempt 2, 152 đường dẫn).
+  - Attempt 1 hỏng vì một dòng trống cuối file record và vì Python hệ thống thiếu dữ liệu
+    múi giờ.
+  - f79413b là commit đóng băng cuối package mới.
+- WP2-GATE2 PASS trên f79413b; digest chính thức
+  4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528.
+  - 606 test với đủ các bộ mẫu LG/DF; chạy đồng thời 20 lần; migration; e2e 74 đạt với đủ
+    12 luồng; các validator.
+  - Các test hồi quy của FIXA và FIXB có mặt và đều đạt.
+  - F1 vẫn chỉ là ghi chú về bằng chứng.
+- WP2-AUDIT-A2 PASS trên f79413b: WP2-A-01 đã hết, không có lỗi hồi quy. Hai ghi chú: A2-01
+  (Info, chú thích cũ) và A2-02 (Low, `refreshed_pay_period` cho biết kỳ lương đã có bảng
+  giờ hay chưa).
+- WP2-AUDIT-B2 FIX REQUIRED: các bản sửa sản phẩm đều đúng.
+  - WP2-B2-01 mức Medium: một test e2e viết cứng giờ mùa hè (PDT) nên sẽ hỏng vào mùa
+    đông.
+  - WP2-B2-02 mức Low: vẫn còn một số giá trị CSS viết cứng.
+  - Auditor B2 đã xóa file `nul` lạ ở gốc repo do chính nó tạo.
+- Quyết định của coordinator (ghi trên board):
+  - WP2-FIXB2 sửa B2-01 và B2-02, đồng thời gộp A2-02 và A2-01;
+  - sau đó đóng băng và chạy WP2-GATE3;
+  - rồi kiểm tra lại cả hai mảng bằng auditor mới trên digest mới: WP2-AUDIT-A2 lần 2 (kết
+    quả PASS lần 1 mất hiệu lực vì mã nguồn đổi, vẫn giữ trong lịch sử) và WP2-AUDIT-B3.
+- WP2-FIXB2 đã xong (tác giả tự báo):
+  - test e2e R-07 không còn phụ thuộc mùa (helper zoneOracle và unit test);
+  - thêm 4 biến CSS;
+  - phản hồi 201 khi tạo ngoại lệ kỳ lương chỉ còn chính ngoại lệ đó, có test so sánh;
+  - sửa chú thích;
+  - verify 611 test; e2e 74 đạt; digest 5b370621….
+- Đang chạy: WP2-FIXB2-FREEZE (committer). Tiếp theo là WP2-GATE3, rồi WP2-AUDIT-A2 lần 2 và
+  WP2-AUDIT-B3 chạy song song, rồi WP2-ACCEPT.
 - Process còn sống: không biết có process nào ngoài committer.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

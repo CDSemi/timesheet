@@ -268,14 +268,16 @@ export interface PayrollExceptionRecord {
  * Admin payroll exception (FR-13, E-10). The reason is required. In one transaction it records
  * the exception, refreshes the stored pay_periods row when one exists and no finalized
  * timesheet references it (otherwise 409 period_finalized and nothing changes), and writes one
- * audit event with the before/after of the row.
+ * audit event with the before/after of the row. The result carries only the exception: whether a
+ * stored row existed says whether anyone on the calendar has edited a timesheet in that period,
+ * so it stays in the audit event and is never returned to the administrator (WP2-A2-02).
  */
 export function createPayrollException(
   db: Db,
   clock: Clock,
   input: PayrollExceptionInput,
   actorUserId: string,
-): { exception: PayrollExceptionRecord; refreshedPayPeriod: boolean } {
+): { exception: PayrollExceptionRecord } {
   const reason = input.reason.trim();
   if (reason === '') throw new ApiError(422, 'reason_required', 'A reason is required for a payroll exception');
   return db
@@ -340,7 +342,7 @@ export function createPayrollException(
         before: stored ?? null,
         after: { ...exception, refreshed_pay_period: refreshed !== undefined, pay_period: refreshed ?? null },
       });
-      return { exception, refreshedPayPeriod: refreshed !== undefined };
+      return { exception };
     })
     .immediate();
 }

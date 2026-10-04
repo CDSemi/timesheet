@@ -1,0 +1,51 @@
+// WP2-AUDIT-B2 (auditor-owned): compares two style captures of zz-audit-b2-style.spec.ts.
+// Usage: node style-compare.mjs <before.json> <after.json>
+import { readFileSync } from 'node:fs';
+
+const [beforePath, afterPath] = process.argv.slice(2);
+const before = JSON.parse(readFileSync(beforePath, 'utf8'));
+const after = JSON.parse(readFileSync(afterPath, 'utf8'));
+let targetDiffs = 0;
+let elementDiffs = 0;
+const counts = (list) => {
+  const map = new Map();
+  for (const item of list) map.set(item, (map.get(item) ?? 0) + 1);
+  return map;
+};
+for (const b of before) {
+  const a = after.find((item) => item.screen === b.screen);
+  if (a === undefined) {
+    console.log(`screen ${b.screen}: missing after`);
+    targetDiffs += 1;
+    continue;
+  }
+  const selectorLines = [];
+  for (const selector of Object.keys(b.bySelector)) {
+    const x = JSON.stringify(b.bySelector[selector]);
+    const y = JSON.stringify(a.bySelector[selector]);
+    const n = b.bySelector[selector].length;
+    if (x !== y) {
+      targetDiffs += 1;
+      selectorLines.push(`  DIFF ${selector}: before=${x} after=${y}`);
+    } else if (n > 0) {
+      const first = b.bySelector[selector][0];
+      const shown = Object.entries(first)
+        .filter(([key]) => ['width', 'min-width', 'max-height', 'font-size', 'grid-template-columns'].includes(key))
+        .map(([key, value]) => `${key}=${value}`)
+        .join('; ');
+      selectorLines.push(`  same ${selector} (${n} element(s)); first: ${shown}`);
+    }
+  }
+  const cb = counts(b.all);
+  const ca = counts(a.all);
+  const onlyBefore = [];
+  const onlyAfter = [];
+  for (const [key, n] of cb) if ((ca.get(key) ?? 0) < n) onlyBefore.push(`${n - (ca.get(key) ?? 0)}x ${key}`);
+  for (const [key, n] of ca) if ((cb.get(key) ?? 0) < n) onlyAfter.push(`${n - (cb.get(key) ?? 0)}x ${key}`);
+  elementDiffs += onlyBefore.length + onlyAfter.length;
+  console.log(`screen ${b.screen}: elements before ${b.all.length}, after ${a.all.length}; element-signature differences ${onlyBefore.length + onlyAfter.length}`);
+  for (const line of selectorLines) console.log(line);
+  for (const line of onlyBefore) console.log(`  only-before ${line}`);
+  for (const line of onlyAfter) console.log(`  only-after  ${line}`);
+}
+console.log(`TOTAL: target-selector differences ${targetDiffs}; element-signature differences ${elementDiffs}`);

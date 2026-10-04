@@ -1,0 +1,33 @@
+# WP2-AUDIT-A2 command index (auditor, fresh context; reviewed commit f79413b77e7f745e1eff383f1ad748e7667533da)
+# All runs in a scratch clone <clone> on the C: drive outside Dropbox (git clone --no-hardlinks of the project
+# folder, detached at f79413b). Node v24.21.0 called by full path; TEMP/TMP pointed at <scratch>/tmp. Controls ran
+# on <base> (git archive of 8fae685 with a node_modules junction) and <redcheck> (a scratch git worktree at 8fae685).
+# Synthetic data only; run-time passwords are never printed. Times are UTC (2026-10-04).
+
+| # | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 1 | git rev-parse HEAD; git ls-tree digest (project and clone) | 0 | f79413b, 4c2bd7ef...3528 in both (611 files) | 01-digest-before.txt |
+| 2 | npm ci --no-audit --no-fund | 0 | 144 packages | 02-npm-ci.txt |
+| 3 | NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify | 0 | typecheck, lint, 31 files / 606 tests, build, SMOKE PASSED; 0 'deprecat' matches | 03-verify.txt |
+| 4 | vitest run on 13 files (ledger, ot-leave, ot-leave-concurrency, history, evidence-export, isolation, migrations, ot-api, ledger.fixtures, user-admin, holiday-import, payroll-exceptions, adminModel); concurrency x3 more; holiday-import verbose | 0 | 13 files / 266 tests; 8/8 three times; holiday-import 29/29 incl. the WP2-A-01 regression tests | 04-targeted-tests.txt |
+| 4b | f79413b tests/integration/holiday-import.test.ts against the 8fae685 source (scratch worktree) | 1 | expected red: 3 failed / 26 passed (the three new privacy tests) | 04b-regression-red-on-base.txt |
+| 5a | playwright test admin.spec.ts isolation.spec.ts ot-leave.spec.ts + temporary zz-audit-a2.spec.ts (Edge, built dist) | 1 | the authors' specs: 24 passed (desktop + mobile); the temporary spec failed 2/2 (spec bug: the year field defaults to next year after 1 October, so the CSV dates were refused as outside 2027) | 05a-e2e-admin-isolation-ot-leave-run1.txt |
+| 5b | playwright test zz-audit-a2.spec.ts (run 2, year filled in the spec) | 0 | 2 passed: preview screen text identical before and after employee data; only date + "Worked to Holiday"; screenshots | 05b-e2e-preview-screen-probe.txt, audit-a2-holiday-preview-employee-data-{desktop,mobile}-synthetic.png |
+| 6 | node probes/pr-race.mjs <clone> <work> 10 (attempt-1 probe unchanged; 4 OS processes, one WAL file) | 0 | 22 race/mode combinations x 10 rounds = 220 rounds, 0 violations; unsafe control double-booked 10/10; integrity ok | 06-probe-multiprocess-race.txt |
+| 7 | node probes/pa-ledger-privacy.mjs <clone> <work> (attempt-1 probe unchanged) | 0 | 119 pass / 0 fail | 07-probe-ledger-privacy.txt |
+| 9 | node probes/pf-supplement.mjs <clone> <work> (attempt-1 probe unchanged) | 0 | 6 / 0; S6 (R1) and S7 (R2) unchanged; S8 counts now undefined | 09-probe-supplement.txt |
+| 10 | node probes/pg-holiday-preview-privacy.mjs (attempt-1 probe unchanged) on <clone>, then on <base> | 0 / 0 | f79413b: no inference ("none"), writes nothing; 8fae685 control: leak reproduced (10-05, 10-07) | 10-probe-holiday-preview-privacy.txt |
+| 13r1 | node probes/pg2-admin-differential.mjs <clone> <work> (run 1) | 1 | output shown in the session only; two probe bugs: W1 compared preview_hash across two databases whose random calendar ids differ (the hash binds the calendar id), and the audit query used column `after` instead of `after_json` (crash in section C after C1 and the commit). Every product check before the crash passed. | - |
+| 13r2 | same (run 2, both bugs fixed in the probe) | 1 | 23 / 1: C3 expected 409 for the same request after its own commit; the code documents that as an identical re-commit (200 unchanged, nothing written) because the hash binds the resulting rule set (probe expectation bug) | 13a-probe-admin-differential-run2.txt |
+| 13 | same (run 3, C3 split into C3a identical re-commit and C3b a preview made stale by another commit) | 0 | 25 / 0: 27/27 admin responses byte-identical before and after employee activity; one versus two finalized timesheets identical; finalized_conflicts {date} only and period-level; commit path unchanged; OBS W3 refreshed_pay_period | 13-probe-admin-differential.txt |
+| 13b | same probe on <base> (8fae685) as a sensitivity control | 1 | 15 / 10 as expected: the probe detects the old per-date counts (5 previews differ) and the finalized_timesheets count; commit checks C1-C6, W1, W2 pass on both trees | 13b-probe-admin-differential-base-control.txt |
+| 11 | git diff / git grep static scans | 0 | server change limited to holidayImport.ts; leftover wording (WP2-A2-01); refreshed_pay_period path (WP2-A2-02); FIXB client scan 0 matches | 11-static-scans.txt |
+| 12 | git rev-parse HEAD; digest; node scripts/source-digest.mjs (clone) | 0 | unchanged 4c2bd7ef...3528 (project and clone) | 12-digest-after.txt |
+| 14 | <workflow-python> validate_package.py --preflight; validate_orchestration.py (project folder, read-only) | 0 / 0 | PASS / PASS | 14-preflight.txt |
+| 14b | <workflow-python> validate_package.py --preflight again after writing the report pair, brief results and this folder | 0 | PASS (translation pairs 53, local links 895) | 14-preflight.txt |
+| 15 | node scripts/precommit-check.mjs in <clone> with only this task's outputs staged (scratch clone index; the project index was not touched) | 0 | PASS: 25 staged files, 0 blocking, 0 warnings | 15-precommit-check.txt |
+
+Probe sources: the attempt-1 probes were reused unchanged from handoff/delivery/evidence/WP2-AUDIT-A/probes/; the new
+probe and the temporary e2e spec are in probes/*.txt here (each carries comments on what changed between runs). The
+temporary spec was deleted from the clone after run 2; the clone's tracked tree stayed identical (digest step 12).
+The scratch clone, the worktree, the base export, the work databases and the e2e output were deleted after the audit.

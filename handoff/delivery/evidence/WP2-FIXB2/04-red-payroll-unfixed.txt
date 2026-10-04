@@ -1,0 +1,109 @@
+Red run: tests/integration/payroll-exceptions.test.ts against the unfixed server (refreshed_pay_period still returned). Exit 1.
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/payroll-exceptions.test.ts (13 tests | 4 failed) 3002ms
+   ❯ creating an exception (4)
+     × stores the exception with its reason, audits it and shows it on the calendar read 217ms
+   ❯ stored pay_periods rows (E-10) (7)
+     × refreshes an unfinalized stored row in the same transaction, keeping its id and period 217ms
+     × answers the same success body whether or not employees have timesheets in the period (WP2-A2-02) 420ms
+     × does not touch a finalized period when the exception belongs to another period 220ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+
+- Expected
++ Received
+
+  [
+    "payroll_exception",
++   "refreshed_pay_period",
+  ]
+
+ ❯ tests/integration/payroll-exceptions.test.ts:99:40
+     97|       reason: 'Synthetic bank holiday moves payroll',
+     98|     });
+     99|     expect(Object.keys(response.body)).toEqual(['payroll_exception']);
+       |                                        ^
+    100|     expect(exceptionRows()).toMatchObject([{ nominal_payroll_date: '20…
+    101|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+
+- Expected
++ Received
+
+  [
+    "payroll_exception",
++   "refreshed_pay_period",
+  ]
+
+ ❯ tests/integration/payroll-exceptions.test.ts:169:40
+    167|     const response = await t.request('POST', PATH, { cookie: admin, bo…
+    168|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+    169|     expect(Object.keys(response.body)).toEqual(['payroll_exception']);
+       |                                        ^
+    170|
+    171|     const after = periodRow();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > answers the same success body whether or not employees have timesheets in the period (WP2-A2-02)
+AssertionError: expected { payroll_exception: { …(7) }, …(1) } to deeply equal { payroll_exception: { …(7) }, …(1) }
+
+- Expected
++ Received
+
+@@ -6,7 +6,7 @@
+      "due_local_time": "12:00",
+      "nominal_payroll_date": "2026-10-16",
+      "payroll_date": "2026-10-15",
+      "reason": "Synthetic bank holiday moves payroll",
+    },
+-   "refreshed_pay_period": false,
++   "refreshed_pay_period": true,
+  }
+
+ ❯ tests/integration/payroll-exceptions.test.ts:228:63
+    226|       const stripped = (body: Record<string, unknown>, calendarId: str…
+    227|         JSON.parse(JSON.stringify(body).replaceAll(calendarId, '<calen…
+    228|       expect(stripped(withTimesheets.body, other.calendarId)).toEqual(…
+       |                                                               ^
+    229|       expect(Object.keys(withTimesheets.body)).toEqual(['payroll_excep…
+    230|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+
+- Expected
++ Received
+
+  [
+    "payroll_exception",
++   "refreshed_pay_period",
+  ]
+
+ ❯ tests/integration/payroll-exceptions.test.ts:277:40
+    275|     });
+    276|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+    277|     expect(Object.keys(response.body)).toEqual(['payroll_exception']);
+       |                                        ^
+    278|     expect(periodRow()).toEqual(before);
+    279|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 9 passed (13)
+   Start at  03:46:26
+   Duration  3.89s (tests 79%, transform 18%, import 3%)

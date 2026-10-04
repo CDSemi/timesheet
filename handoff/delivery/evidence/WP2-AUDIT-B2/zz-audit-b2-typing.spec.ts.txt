@@ -1,0 +1,55 @@
+// WP2-AUDIT-B2 probe (auditor-owned, temporary; removed from the scratch clone after the run).
+// The zone field of a saved session is typed key by key (each partial value, such as "Eur", is
+// not a valid zone and calls changeZone), as a person would type it. The page must not throw,
+// the wall times must stay, nothing is stored before Save, and the save uses the final zone.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, SCREENSHOT_DIR, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Tokyo' });
+
+const LA = 'America/Los_Angeles';
+
+test('audit-b2: typing a new input zone key by key on a saved session', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const [day = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  try {
+    await employeeSeed.seedCompleteDay(day);
+    const before = (await employeeSeed.dayView(day)).sessions[0];
+    await signInThroughUi();
+    await page.getByLabel('Open a day').fill(day);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    const zone = edit.getByLabel('Input zone');
+    await expect(zone).toHaveValue(LA);
+    await zone.fill('');
+    await zone.pressSequentially('Europe/London', { delay: 20 });
+    await expect(zone).toHaveValue('Europe/London');
+    await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
+    await expect(edit.getByLabel('End time', { exact: true })).toHaveValue('18:00');
+    const unsaved = (await employeeSeed.dayView(day)).sessions[0];
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const after = (await employeeSeed.dayView(day)).sessions[0];
+    const london = (instant: string) =>
+      new Date(instant).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour12: false, hour: '2-digit', minute: '2-digit' });
+    const result = {
+      project: testInfo.project.name,
+      day,
+      pageErrors: errors,
+      unsavedStartEqualsBefore: unsaved?.start_utc === before?.start_utc,
+      after: { zone: after?.input_zone, startLondon: london(after?.start_utc ?? ''), endLondon: london(after?.end_utc ?? '') },
+    };
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b2-typing-${testInfo.project.name}.json`), `${JSON.stringify(result, null, 2)}\n`);
+    expect(errors).toEqual([]);
+    expect(result.unsavedStartEqualsBefore).toBe(true);
+    expect(after?.input_zone).toBe('Europe/London');
+    expect(result.after.startLondon).toBe('09:00');
+    expect(result.after.endLondon).toBe('18:00');
+  } finally {
+    await employeeSeed.clearSessions(day);
+  }
+});

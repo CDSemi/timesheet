@@ -1,0 +1,167 @@
+// WP2-AUDIT-B2 computed-style probe (auditor-owned, temporary; copied into a scratch clone at
+// 8fae685 and at f79413b, run there, then removed). It changes no production code. On real
+// screens with the same synthetic data it records the computed values of the rules WP2-B-02
+// touched, plus a style signature of every visible element, so the two commits can be diffed.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { type Page } from '@playwright/test';
+import { expect, seedCredit, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', colorScheme: 'light' });
+
+const OUT = process.env.AUDIT_OUT ?? '';
+
+const SELECTORS = [
+  '.facts',
+  'select',
+  '.dialog',
+  '.dialog h2',
+  '.dialog-wide',
+  '.figures',
+  '.card h2',
+  '.ot-screen h2',
+  '.ot-balances dd',
+  '.ot-counters',
+  '.ot-actions',
+];
+const TARGET_PROPS = ['width', 'min-width', 'max-width', 'max-height', 'font-size', 'grid-template-columns', 'letter-spacing', 'font-weight'];
+const ALL_PROPS = [
+  'font-size',
+  'font-weight',
+  'line-height',
+  'min-width',
+  'max-width',
+  'grid-template-columns',
+  'padding',
+  'margin',
+  'gap',
+  'border-radius',
+  'box-shadow',
+  'transition',
+  'color',
+  'background-color',
+];
+
+interface Capture {
+  screen: string;
+  bySelector: Record<string, Array<Record<string, string>>>;
+  all: string[];
+}
+
+async function capture(page: Page, screen: string): Promise<Capture> {
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1_200); // past the 300 ms transitions
+  const data = await page.evaluate(
+    ({ selectors, targetProps, allProps }) => {
+      const visible = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+      };
+      const sig = (el: Element) => {
+        const parts: string[] = [];
+        let node: Element | null = el;
+        while (node !== null && node !== document.body) {
+          parts.unshift(node.tagName.toLowerCase() + (node.classList.length > 0 ? `.${[...node.classList].sort().join('.')}` : ''));
+          node = node.parentElement;
+        }
+        return parts.join('>');
+      };
+      const bySelector: Record<string, Array<Record<string, string>>> = {};
+      for (const selector of selectors) {
+        bySelector[selector] = [...document.querySelectorAll(selector)].filter(visible).map((el) => {
+          const s = getComputedStyle(el);
+          return Object.fromEntries(targetProps.map((p) => [p, s.getPropertyValue(p)]));
+        });
+      }
+      const all: string[] = [];
+      for (const el of document.querySelectorAll('body *')) {
+        if (!visible(el)) continue;
+        const s = getComputedStyle(el);
+        all.push(`${sig(el)} | ${allProps.map((p) => s.getPropertyValue(p)).join(' | ')}`);
+      }
+      all.sort();
+      return { bySelector, all };
+    },
+    { selectors: SELECTORS, targetProps: TARGET_PROPS, allProps: ALL_PROPS },
+  );
+  return { screen, ...data };
+}
+
+test('audit-b2: computed styles on real screens', async ({ page, builtServer, employeeSeed, signInThroughUi, signInPageAs }, testInfo) => {
+  test.skip(OUT === '', 'AUDIT_OUT not set');
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const captures: Capture[] = [];
+
+  await page.goto('/');
+  await expect(page.getByLabel('Email')).toBeVisible();
+  captures.push(await capture(page, 'login'));
+
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  const day = days[0];
+  expect(day).toBeDefined();
+  await employeeSeed.seedCompleteDay(day ?? '');
+  seedCredit(builtServer, 240);
+
+  await signInThroughUi();
+  await expect(page.locator('[data-day]').first()).toBeVisible();
+  captures.push(await capture(page, 'timesheet'));
+
+  // Batch dialog (.dialog, .dialog h2).
+  await page.getByLabel(`Select ${day}`).check();
+  await page.getByLabel('Category for selected days').selectOption('Vacation');
+  await page.getByRole('button', { name: 'Preview changes' }).click();
+  const batch = page.getByRole('dialog');
+  await expect(batch.getByRole('heading', { name: 'Review category change' })).toBeVisible();
+  captures.push(await capture(page, 'batch-dialog'));
+  await page.keyboard.press('Escape');
+  await expect(batch).toHaveCount(0);
+  await page.getByLabel(`Select ${day}`).uncheck();
+
+  // Day editor (.dialog-wide, .figures); the session is the seeded Los Angeles day.
+  await page.getByLabel('Open a day').fill(day ?? '');
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+  captures.push(await capture(page, 'day-editor'));
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+
+  // OT screen with one reserved leave row (.ot-balances dd, .ot-counters, .ot-actions).
+  await page.goto('/#/ot');
+  const form = page.getByRole('form', { name: 'Reserve OT leave' });
+  await form.getByLabel('Minutes of leave').fill('60');
+  await form.getByLabel('Manager who gave permission').fill('Synthetic Manager');
+  await form.getByLabel('Permission reference').fill('SYN-AUDIT-B2-STYLE');
+  await form.getByRole('button', { name: 'Reserve leave' }).click();
+  await expect(page.locator('li.ot-leave', { hasText: 'SYN-AUDIT-B2-STYLE' })).toBeVisible();
+  captures.push(await capture(page, 'ot'));
+
+  for (const screen of ['history', 'settings']) {
+    await page.goto(`/#/${screen}`);
+    await expect(page.locator('main')).toBeVisible();
+    captures.push(await capture(page, screen));
+  }
+
+  // Clock-out dialog (.dialog-wide) after a Clock in.
+  await page.goto('/#/timesheet');
+  await page.getByRole('button', { name: 'Clock in' }).click();
+  await expect(page.getByRole('button', { name: 'Clock out' })).toBeEnabled();
+  await page.waitForTimeout(1_500);
+  await page.getByRole('button', { name: 'Clock out' }).click();
+  const clockOut = page.getByRole('dialog', { name: 'Clock out' });
+  await expect(clockOut).toBeVisible();
+  captures.push(await capture(page, 'clock-out-dialog'));
+  await page.keyboard.press('Escape');
+
+  // Admin screen (.card h2, .facts, select) without a holiday preview (its content changed in WP2-FIXA).
+  await page.context().clearCookies();
+  await page.goto('about:blank');
+  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  captures.push(await capture(page, 'admin'));
+
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `style-${project}.json`), `${JSON.stringify(captures, null, 2)}\n`);
+});

@@ -1,0 +1,39 @@
+# WP2-AUDIT-B2 digest after (probe files removed)
+date_utc: 2026-10-04T10:32:18Z
+## scratch clone <clone> (git clone of f79413b)
+$ git rev-parse HEAD
+f79413b77e7f745e1eff383f1ad748e7667533da
+$ git status --short --untracked-files=all
+(clean)
+$ <node24> scripts/source-digest.mjs
+4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528  (611 files, handoff/ excluded)
+exit: 0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528
+## base clone <base-clone> (git clone of 8fae685, style comparison only)
+$ git -C <base-clone> rev-parse HEAD; git status --short --untracked-files=all
+8fae685949adb525ec137e5972202f58b408ac24
+(clean)
+## project folder <project>
+$ git rev-parse HEAD
+f79413b77e7f745e1eff383f1ad748e7667533da
+$ git status --short (outside handoff/)
+(none)
+$ <node24> scripts/source-digest.mjs
+4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528  (611 files, handoff/ excluded)
+exit: 0
+$ git ls-tree ... | sha256sum
+4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528
+gate digest (WP2-GATE2): 4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528
+## project folder <project>, rechecked after removing a stray untracked file ./nul (see below)
+date_utc: 2026-10-04T10:36:38Z
+$ ls ./nul
+  ls: cannot access './nul': No such file or directory
+$ git rev-parse HEAD
+f79413b77e7f745e1eff383f1ad748e7667533da
+$ git status --short (outside handoff/)
+(none)
+$ <node24> scripts/source-digest.mjs
+4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528  (611 files, handoff/ excluded)
+exit: 0
+note: at 10:33:58Z an auditor export call with destination /dev/null was converted by Git Bash to the native path 'nul' and Node created a real untracked file ./nul (a masked copy of the attempt-1 probe spec, synthetic content) at the project root. It was created after the 10:32:18Z digest above, reported by the coordinator, and deleted by the auditor; no tracked file was touched.

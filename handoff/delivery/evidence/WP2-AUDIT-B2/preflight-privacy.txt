@@ -1,0 +1,23 @@
+# Privacy and package checks on the auditor outputs (run in <project> after writing them)
+$ GIT_INDEX_FILE=<scratch>/tmp-index git read-tree HEAD; git add handoff/delivery/WP2_RECHECK_B.md handoff/delivery/WP2_RECHECK_B.vi.md handoff/delivery/tasks/WP2-AUDIT-B2.md handoff/delivery/evidence/WP2-AUDIT-B2
+$ node scripts/precommit-check.mjs   (same temporary index; the real index was not touched)
+PASS: 61 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit 0
+$ git diff --cached --check -- <the two report files and the brief>
+exit 0
+(temporary index deleted afterwards; git status shows nothing staged)
+
+$ <workflow python 3.12.14> handoff/delivery/validate_package.py --preflight   (project folder, after writing the report pair)
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 54,
+  "local_links": 905,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit 0

@@ -46,8 +46,8 @@ function accountJson(account: UserAccount) {
  * no password reset route: FR-01 and E-11 do not require one.
  *
  * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
- * holiday CSV preview/commit and payroll exceptions return dates, names and aggregate counts
- * only, never a user's rows.
+ * holiday CSV preview/commit and payroll exceptions return calendar-only fields (dates, names,
+ * versions and the admin's own input) and no employee-derived count, never a user's rows.
  */
 export function adminRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -166,7 +166,9 @@ export function adminRoutes(deps: AppDeps) {
       },
       actor.id,
     );
-    return c.json({ payroll_exception: result.exception, refreshed_pay_period: result.refreshedPayPeriod }, 201);
+    // The answer is the exception alone: whether a stored period was refreshed would reveal whether
+    // anyone on the calendar has a timesheet there (WP2-A2-02).
+    return c.json({ payroll_exception: result.exception }, 201);
   });
 
   return app;

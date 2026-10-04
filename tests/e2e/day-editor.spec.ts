@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
+import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
 import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
 
 /*
@@ -78,21 +79,6 @@ function browserZone(page: Page): Promise<string> {
 /** Types the input zone explicitly: manual entry defaults to the display zone (R-07), not to the reporting zone. */
 async function typeInputZone(form: Locator, zone: string) {
   await form.getByLabel('Input zone').fill(zone);
-}
-
-/** The wall clock of an instant in a zone as "YYYY-MM-DD HH:mm", read with Intl (an oracle independent of the app). */
-function dateTimeIn(instant: string, zone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: zone,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).formatToParts(new Date(instant));
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
 }
 
 async function chooseNoBreaks(form: Locator) {
@@ -206,7 +192,9 @@ test('manual entry defaults its input zone to the display zone and stores the in
     await expect(editor.locator('datalist option[value="America/Los_Angeles"]')).toHaveCount(1);
     await expect(editor.locator(`datalist option[value="${displayZone}"]`)).toHaveCount(1);
 
-    // 22:00 to 23:30 in the display zone is 08:00 to 09:30 in Los Angeles on the same accounting date.
+    // 22:00 to 23:30 in the display zone is the same instant as another wall time in Los Angeles
+    // (08:00 to 09:30 under PDT, 07:00 to 08:30 under PST). The expectation is derived with Intl from
+    // the real date, so the test holds in every season; the accounting date stays the same either way.
     await form.getByLabel('Start time', { exact: true }).fill('22:00');
     await form.getByLabel('End time', { exact: true }).fill('23:30');
     await chooseNoBreaks(form);
@@ -219,8 +207,11 @@ test('manual entry defaults its input zone to the display zone and stores the in
     expect(stored?.input_zone).toBe(displayZone);
     expect(wallClock(stored?.start_utc ?? '', displayZone)).toBe('22:00:00');
     expect(wallClock(stored?.end_utc ?? '', displayZone)).toBe('23:30:00');
-    expect(dateTimeIn(stored?.start_utc ?? '', LA)).toBe(`${date} 08:00`);
-    expect(dateTimeIn(stored?.end_utc ?? '', LA)).toBe(`${date} 09:30`);
+    expect(Date.parse(stored?.start_utc ?? '')).toBe(Date.parse(instantOfWallTime(date, '22:00', displayZone)));
+    expect(Date.parse(stored?.end_utc ?? '')).toBe(Date.parse(instantOfWallTime(date, '23:30', displayZone)));
+    expect(dateTimeIn(stored?.start_utc ?? '', LA)).toBe(wallTimeIn(date, '22:00', displayZone, LA));
+    expect(dateTimeIn(stored?.end_utc ?? '', LA)).toBe(wallTimeIn(date, '23:30', displayZone, LA));
+    expect(dateTimeIn(stored?.start_utc ?? '', LA).slice(0, 10)).toBe(date);
 
     // An edited session keeps its saved input zone; it is not reset to the default.
     await editor.getByRole('button', { name: /^Edit session/ }).click();

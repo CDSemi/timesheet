@@ -220,8 +220,36 @@ America/Los_Angeles).
   - changing a saved session's zone re-reads the typed wall times;
   - verify 606 tests; e2e 74 passed, 2 skipped;
   - digest 4c2bd7ef… (working tree, FIXA plus FIXB).
-- Running: WP2-FIX-FREEZE (committer), the new package-final freeze. After it come
-  WP2-GATE2, then WP2-AUDIT-A2 and WP2-AUDIT-B2 in parallel (briefs ready).
+- WP2-FIX-FREEZE is committed and pushed as f79413b (attempt 2, 152 paths).
+  - Attempt 1 failed on an EOF blank line in a task record and on the system Python
+    lacking tzdata.
+  - f79413b is the new package-final freeze.
+- WP2-GATE2 PASS on f79413b; digest of record
+  4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528.
+  - 606 tests with every LG/DF fixture; concurrency x20; migrations; e2e 74 passed with
+    all 12 flows; validators.
+  - The FIXA and FIXB regression tests are present and pass.
+  - F1 stays an evidence-only note.
+- WP2-AUDIT-A2 PASS on f79413b: WP2-A-01 resolved, no regression. Two observations:
+  A2-01 (Info, stale comments) and A2-02 (Low, `refreshed_pay_period` reveals whether a
+  period has timesheets).
+- WP2-AUDIT-B2 FIX REQUIRED: the product fixes hold.
+  - WP2-B2-01 Medium: an e2e hard-codes PDT and would fail every winter.
+  - WP2-B2-02 Low: more CSS literals.
+  - The B2 auditor removed a stray repo-root `nul` file it had created.
+- Coordinator decision (board):
+  - WP2-FIXB2 fixes B2-01 and B2-02 and also folds in A2-02 and A2-01;
+  - then a freeze and WP2-GATE3;
+  - then fresh rechecks at the new digest: WP2-AUDIT-A2 attempt 2 (its attempt-1 PASS is
+    invalidated by the source change and kept in history) and WP2-AUDIT-B3.
+- WP2-FIXB2 is done (author-reported):
+  - a season-independent R-07 e2e (zoneOracle helper and unit test);
+  - 4 more CSS tokens;
+  - the payroll-exception 201 returns only the exception, with a differential test;
+  - comments;
+  - verify 611 tests; e2e 74 passed; digest 5b370621….
+- Running: WP2-FIXB2-FREEZE (committer). Next come WP2-GATE3, then WP2-AUDIT-A2 attempt 2
+  and WP2-AUDIT-B3 in parallel, then WP2-ACCEPT.
 - Live processes: none known besides the committer.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

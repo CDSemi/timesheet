@@ -1,0 +1,24 @@
+// WP2-AUDIT-B2 (auditor-owned): copies a log into the evidence folder masked, ANSI-free, LF,
+// without trailing whitespace. Usage: node export-evidence.mjs <src> <dest> [header line]...
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [src, dest, ...header] = process.argv.slice(2);
+let text = readFileSync(src, 'utf8');
+const rules = [
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]Temp[\\/]wp2-audit-b2[\\/]repo/gi, '<clone>'],
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]Temp[\\/]wp2-audit-b2[\\/]base/gi, '<base-clone>'],
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]Temp[\\/]wp2-audit-b2[\\/]tmp/gi, '<tmp>'],
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]Temp[\\/]wp2-audit-b2[\\/]shots/gi, '<shots>'],
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]Temp[\\/]wp2-audit-b2/gi, '<work>'],
+  [/\/c\/Users\/[^/]+\/AppData\/Local\/Temp\/wp2-audit-b2\/repo/gi, '<clone>'],
+  [/\/c\/Users\/[^/]+\/AppData\/Local\/Temp\/wp2-audit-b2/gi, '<work>'],
+  [/C:[\\/]Users[\\/][^\\/]+[\\/]AppData[\\/]Local[\\/]timesheet-dev[^\s"']*/gi, '<node24>'],
+  [/D:[\\/]Dropbox[\\/]Work\.CDSemi[\\/]timesheet/gi, '<project>'],
+  [/C:[\\/]Users[\\/][^\\/\s"']+/gi, 'C:\\Users\\<user>'],
+  [/<user>/gi, '<user>'],
+];
+text = text.replace(/\r\n/g, '\n').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
+const body = `${[...header, ...text.split('\n')].map((line) => line.replace(/[ \t]+$/, '')).join('\n').replace(/\n+$/, '')}\n`;
+writeFileSync(dest, body);
+console.log(`${dest}: ${body.split('\n').length - 1} lines`);

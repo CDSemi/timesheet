@@ -1,0 +1,21 @@
+# Host-zone check of the committed test day-editor.spec.ts:187 ("manual entry defaults its input zone to the display zone ..."): AUDIT_TZ=<zone> node node_modules/@playwright/test/cli.js test -c zz-audit-b2-tz.config.ts day-editor.spec.ts -g "defaults its input zone to the display zone"
+# all three runs exit 0: the spec pins test.use({ timezoneId: 'Asia/Ho_Chi_Minh' }) at file level (day-editor.spec.ts:16), which overrides the config, so the test does not depend on the host zone. It depends on the date instead: see season-window.txt and season-probe.txt.
+--- temporary config <clone>/zz-audit-b2-tz.config.ts (removed after the run):
+import { defineConfig } from '@playwright/test';
+import base from './playwright.config.ts';
+export default defineConfig({ ...base, use: { ...base.use, timezoneId: process.env.AUDIT_TZ } });
+### AUDIT_TZ=Asia/Ho_Chi_Minh
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.5s)
+  ok 1 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.5s)
+  2 passed (3.3s)
+exit 0
+### AUDIT_TZ=Asia/Tokyo
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.6s)
+  ok 1 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.6s)
+  2 passed (3.3s)
+exit 0
+### AUDIT_TZ=Europe/Berlin
+  ok 1 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.7s)
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.7s)
+  2 passed (3.5s)
+exit 0

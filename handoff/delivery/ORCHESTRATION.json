@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-fix-freeze",
+  "phase": "wp2-fixb2-freeze",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-FIX-FREEZE",
+  "next_task_id": "WP2-FIXB2-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -77,7 +77,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "8fae685949adb525ec137e5972202f58b408ac24",
+    "last_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
     "unpushed": []
   },
   "owner_decisions": [
@@ -170,6 +170,11 @@
       "date": "2026-10-03",
       "basis": "WP2-ADV-REVIEW ADV-A-02 (debit-increasing correction overdraws)",
       "decision": "Apply the existing R-05 to corrections: the increase of a deficit debit is checked with canDebit and becomes pending when the available balance is insufficient (no silent overdraft); a correction reducing a spent credit may still go negative and is flagged (LG-08). Recorded in docs/02 and docs/10 by WP2-ADVFIX; reversible by the owner. Advisory findings ADV-A-01..04 are fixed before T05; ADV-A-05 goes to the backlog."
+    },
+    {
+      "date": "2026-10-04",
+      "basis": "WP2-AUDIT-B2 FIX REQUIRED (B2-01 season-dependent e2e; B2-02 CSS literals) after WP2-AUDIT-A2 PASS; docs/08 'Changed source identity invalidates an old audit pass'",
+      "decision": "WP2-FIXB2 fixes B2-01 and B2-02 and also folds in A2-02 (non-revealing payroll-exception response) and A2-01 (stale comments), because both areas are re-audited anyway. Re-audit plan: freeze, then WP2-GATE3, then fresh area rechecks at the new digest. Area A reuses task WP2-AUDIT-A2 as attempt 2: its attempt-1 PASS at 4c2bd7ef is preserved in history and invalidated by the source change, so no stale PASS remains. Area B uses a new task WP2-AUDIT-B3, because WP2-FIXB2 must keep pointing to the done FIX REQUIRED WP2-AUDIT-B2. current_source_digest stays 4c2bd7ef until the gate records the new digest."
     },
     {
       "date": "2026-10-04",
@@ -3543,7 +3548,7 @@
       "id": "WP2-FIX-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "history": [
         "attempt 1 (agent af5604ca6d31861e1): no commit; 152 paths left staged. git diff --cached --check exit 2 (blank line at EOF in tasks/WP2-AUDIT-B.md:155); the preflight exit 1 on the system Python 3.14 (no tzdata) because the workflow Python was not found. Every other check passed. Attempt 2 gets an authorized EOF fix and the workflow Python path."
       ],
@@ -3563,10 +3568,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a478b6cc23befba3d",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 2,
       "owned_paths": [
@@ -3575,8 +3580,286 @@
       ],
       "prompt": "handoff/delivery/tasks/WP2-FIX-FREEZE.md",
       "report": "handoff/delivery/tasks/WP2-FIX-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP2-FIX-FREEZE/01-checks.txt",
+        "handoff/delivery/evidence/WP2-FIX-FREEZE/02-a2-checks.txt",
+        "handoff/delivery/evidence/WP2-FIX-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "8fae685949adb525ec137e5972202f58b408ac24",
+      "branch": "main",
+      "commit_sha": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed on attempt 2: 152 paths (expected set; the authorized EOF fix in tasks/WP2-AUDIT-B.md only). git add, precommit (0/0), diff-check, JSON parse, validator, check_recovery and preflight (workflow Python) exit 0; 6 screenshots viewed, synthetic.",
+      "next_action": "None; WP2-GATE2 runs on f79413b."
+    },
+    {
+      "id": "WP2-GATE2",
+      "package": "WP2",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "depends_on": [
+        "WP2-FIX-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a44cc217fb0ba6b27",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-GATE2.md",
+        "handoff/delivery/evidence/WP2-GATE2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-GATE2.md",
+      "report": "handoff/delivery/tasks/WP2-GATE2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-GATE2/digest-before.txt",
+        "handoff/delivery/evidence/WP2-GATE2/node-version.txt",
+        "handoff/delivery/evidence/WP2-GATE2/npm-ci.txt",
+        "handoff/delivery/evidence/WP2-GATE2/verify.txt",
+        "handoff/delivery/evidence/WP2-GATE2/vitest-verbose.txt",
+        "handoff/delivery/evidence/WP2-GATE2/vitest-per-file.txt",
+        "handoff/delivery/evidence/WP2-GATE2/concurrency.txt",
+        "handoff/delivery/evidence/WP2-GATE2/migrations.txt",
+        "handoff/delivery/evidence/WP2-GATE2/e2e.txt",
+        "handoff/delivery/evidence/WP2-GATE2/regression-tests.txt",
+        "handoff/delivery/evidence/WP2-GATE2/evidence-export-synthetic.csv.txt",
+        "handoff/delivery/evidence/WP2-GATE2/digest-lstree.txt",
+        "handoff/delivery/evidence/WP2-GATE2/validator.txt",
+        "handoff/delivery/evidence/WP2-GATE2/check_recovery.txt",
+        "handoff/delivery/evidence/WP2-GATE2/preflight.txt",
+        "handoff/delivery/evidence/WP2-GATE2/digest-after.txt"
+      ],
+      "baseline_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "source_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Clean export on C:, Node v24.21.0, Edge channel. npm ci 0. Verify with deprecation tracing 0 (0 matches; 31 files, 606 tests; smoke passed). Verbose counts include LG-01..LG-10 and DF-01..DF-16. Concurrency: 20 runs, 8/8 each. Migrations: fresh [1,2,3]; the f32978f database upgraded via [2,3] with rows preserved; integrity ok; FK 0. e2e: 74 passed, 2 skipped; all 12 flows pass on both projects. 12 screenshots; the CSV has 0 emails. The digest equals ls-tree and the FIXB claim. Validator, check_recovery and preflight (workflow Python) exit 0. The WP2-FIXA and FIXB regression tests are present and pass; the WP2-B-02 computed-style probe is evidence-only, with no committed test. F1 remains an evidence-only note, covered by the WP2-AUDIT-B screenshots. A hung cmd.exe the verifier started was killed by the verifier.",
+      "next_action": "None; WP2-AUDIT-A2 and WP2-AUDIT-B2 on f79413b."
+    },
+    {
+      "id": "WP2-AUDIT-A2",
+      "package": "WP2",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "depends_on": [
+        "WP2-GATE2"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a09f7f19da91a5f11",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP2_RECHECK_A.md",
+        "handoff/delivery/WP2_RECHECK_A.vi.md",
+        "handoff/delivery/tasks/WP2-AUDIT-A2.md",
+        "handoff/delivery/evidence/WP2-AUDIT-A2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-AUDIT-A2.md",
+      "report": "handoff/delivery/tasks/WP2-AUDIT-A2.md",
+      "evidence": [
+        "handoff/delivery/WP2_RECHECK_A.md",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/00-commands.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/01-digest-before.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/03-verify.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/04-targeted-tests.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/04b-regression-red-on-base.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/06-probe-multiprocess-race.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/07-probe-ledger-privacy.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/10-probe-holiday-preview-privacy.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/13-probe-admin-differential.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/14-preflight.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-A2/12-digest-after.txt"
+      ],
+      "baseline_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "source_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
+      "reviewed_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "findings": [
+        "WP2-A-01 resolved: the attempt-1 probe infers nothing on f79413b and still reproduces the leak on 8fae685. 27/27 admin responses are byte-identical before and after employee data. The regression test is red on the base and green on the fix. finalized_conflicts is date-only. Commit behaviour is unchanged.",
+        "No area-A regression: verify 606 tests; 266 targeted tests; ledger probe 119/0; race 220 rounds with 0 violations (control 10/10); 24 e2e passed; preflight PASS.",
+        "R1-R4 and ADV-A-05 remain non-blocking.",
+        "WP2-A2-01 Info: stale 'aggregate counts' wording at src/server/routes/admin.ts:48-50, tests/integration/isolation.test.ts:280 and WP2_HANDOFF.md:41.",
+        "WP2-A2-02 Low, pre-existing: the payroll-exception response field refreshed_pay_period (admin.ts:169) reveals per pay period whether anyone on the calendar has edited a timesheet; optional WP3 hardening."
+      ],
+      "audit_notes": "Fresh opus; HEAD f79413b and digest 4c2bd7ef unchanged before and after, equal to the gate digest. The auditor reported an untracked repo-root file 'nul' containing a WP2-AUDIT-B2 probe output; it left the file alone, and the coordinator asked the B2 auditor to remove it.",
+      "next_action": "None; WP2-ACCEPT after WP2-AUDIT-B2 PASS."
+    },
+    {
+      "id": "WP2-AUDIT-B2",
+      "package": "WP2",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "depends_on": [
+        "WP2-GATE2"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a9e5f7844199fa574",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP2_RECHECK_B.md",
+        "handoff/delivery/WP2_RECHECK_B.vi.md",
+        "handoff/delivery/tasks/WP2-AUDIT-B2.md",
+        "handoff/delivery/evidence/WP2-AUDIT-B2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-AUDIT-B2.md",
+      "report": "handoff/delivery/tasks/WP2-AUDIT-B2.md",
+      "evidence": [
+        "handoff/delivery/WP2_RECHECK_B.md",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/digest-before.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/verify.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/e2e.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/probe-b01.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/style-compare.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/css-substitute.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/season-window.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/season-probe.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/preflight-privacy.txt",
+        "handoff/delivery/evidence/WP2-AUDIT-B2/digest-after.txt"
+      ],
+      "baseline_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "source_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
+      "reviewed_digest": "4c2bd7eff1079b4825de8791037aafa00b0c36939902c5121584114a0bee3528",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP2-B-01 fixed: the auditor's own probe (Asia/Tokyo, Europe/Berlin, Intl oracle) passes.",
+        "WP2-B-02 fixed for the ten listed literals: static substitution has 0 differing lines, and computed styles on 11 selectors are identical.",
+        "WP2-B2-01 Medium: tests/e2e/day-editor.spec.ts:222-223 hard-codes PDT expectations (08:00/09:30 Los Angeles). It fails from about 2026-11-03 to 2027-03-15 and every winter. The product is correct. Fix: derive the expectation with Intl or pin the date.",
+        "WP2-B2-02 Low: WP2-introduced literals remain in src/client/styles.css at 241-242, 473-474, 629, 706, 884 and 1000. Fix: tokens with identical computed values.",
+        "Gate F1 stays closed; the FIXA admin screen is correct."
+      ],
+      "audit_notes": "Fresh opus; HEAD f79413b and digest 4c2bd7ef unchanged, equal to the gate digest. verify 606 tests; e2e 74 passed, 2 skipped. The auditor's export call created a stray repo-root 'nul' file; it deleted the file on the coordinator's request and confirmed the project tree and digest unchanged. Clones and e2e outputs (419 MB) were deleted.",
+      "next_action": "None; WP2-FIXB2 addresses it, then a freeze, WP2-GATE3, and final rechecks of both areas at the new digest (A2 attempt 2 and B3)."
+    },
+    {
+      "id": "WP2-FIXB2",
+      "package": "WP2",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP2-AUDIT-B2",
+      "depends_on": [],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a908ddae97aaffe5a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/client",
+        "src/client/styles.css",
+        "src/server/routes/admin.ts",
+        "src/server/services/calendars.ts",
+        "tests/integration/payroll-exceptions.test.ts",
+        "tests/integration/isolation.test.ts",
+        "src/client/components/PayrollExceptions.tsx",
+        "src/client/api.ts",
+        "handoff/delivery/tasks/WP2-FIXB2.md",
+        "handoff/delivery/evidence/WP2-FIXB2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-FIXB2.md",
+      "report": "handoff/delivery/tasks/WP2-FIXB2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-FIXB2/00-commands.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/01-red-zone-oracle-unfixed.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/02-green-zone-oracle-fixed.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/03-old-expectation-by-season.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/04-red-payroll-unfixed.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/05-css-computed-style-compare.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/05b-css-probe-sensitivity-mutant.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/08-verify.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/09-e2e.txt",
+        "handoff/delivery/evidence/WP2-FIXB2/10-digest.txt"
+      ],
+      "baseline_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
+      "source_digest": "5b370621e7d3b9f292e8facebb1f0f6e9307a40cbda3a9f87b7dd61924298581",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "fixed (author-reported).\n- B2-01: the R-07 e2e derives the Los Angeles expectation with Intl from the real date through the new tests/client/zoneOracle.ts. Its unit test covers both seasons, the DST-change days and every day of 2026. The old expectation fails on 2026-11-03 and 2027-01-14.\n- B2-02: four tokens replace 8 declarations. The static-page computed-style probe shows 0 of 480 values differing, and it detects a mutant.\n- A2-02: the payroll-exception 201 returns {payroll_exception} only; a differential test proves identical bodies with and without employee timesheets; the 409 is kept. The rule-8 guard passed and the UI never used the field.\n- A2-01: comments fixed.\nverify 611 tests; e2e 74 passed, 2 skipped. Deviation: the new helper tests/client/zoneOracle.ts, inside the owned directory. Not independent acceptance.",
+      "next_action": "None; WP2-FIXB2-FREEZE."
+    },
+    {
+      "id": "WP2-FIXB2-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP2-FIXB2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-FIXB2-FREEZE.md",
+        "handoff/delivery/evidence/WP2-FIXB2-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-FIXB2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-FIXB2-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "f79413b77e7f745e1eff383f1ad748e7667533da",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -3584,16 +3867,16 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Package-final freeze after the audit-fix round; no-print hygiene; on a permission denial stop without retrying."
+      "next_action": "Package-final freeze after the second fix round; no-print hygiene; on a permission denial stop without retrying."
     },
     {
-      "id": "WP2-GATE2",
+      "id": "WP2-GATE3",
       "package": "WP2",
       "kind": "gate",
       "status": "pending",
       "freeze_commit": null,
       "depends_on": [
-        "WP2-FIX-FREEZE"
+        "WP2-FIXB2-FREEZE"
       ],
       "profile": "timesheet-verifier",
       "requested_model": "sonnet",
@@ -3611,27 +3894,27 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "handoff/delivery/tasks/WP2-GATE2.md",
-        "handoff/delivery/evidence/WP2-GATE2"
+        "handoff/delivery/tasks/WP2-GATE3.md",
+        "handoff/delivery/evidence/WP2-GATE3"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-GATE2.md",
-      "report": "handoff/delivery/tasks/WP2-GATE2.md",
+      "prompt": "handoff/delivery/tasks/WP2-GATE3.md",
+      "report": "handoff/delivery/tasks/WP2-GATE3.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Repeat the package-final gate on the fix freeze, plus the new regression tests."
+      "next_action": "Repeat the package-final gate on the second fix freeze, plus the FIXB2 regressions."
     },
     {
-      "id": "WP2-AUDIT-A2",
+      "id": "WP2-AUDIT-B3",
       "package": "WP2",
       "kind": "audit",
       "status": "pending",
       "reviewed_commit": null,
       "depends_on": [
-        "WP2-GATE2"
+        "WP2-GATE3"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -3649,60 +3932,20 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "handoff/delivery/WP2_RECHECK_A.md",
-        "handoff/delivery/WP2_RECHECK_A.vi.md",
-        "handoff/delivery/tasks/WP2-AUDIT-A2.md",
-        "handoff/delivery/evidence/WP2-AUDIT-A2"
+        "handoff/delivery/WP2_RECHECK_B3.md",
+        "handoff/delivery/WP2_RECHECK_B3.vi.md",
+        "handoff/delivery/tasks/WP2-AUDIT-B3.md",
+        "handoff/delivery/evidence/WP2-AUDIT-B3"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-AUDIT-A2.md",
-      "report": "handoff/delivery/tasks/WP2-AUDIT-A2.md",
+      "prompt": "handoff/delivery/tasks/WP2-AUDIT-B3.md",
+      "report": "handoff/delivery/tasks/WP2-AUDIT-B3.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh opus recheck of area A after the fix round."
-    },
-    {
-      "id": "WP2-AUDIT-B2",
-      "package": "WP2",
-      "kind": "audit",
-      "status": "pending",
-      "reviewed_commit": null,
-      "depends_on": [
-        "WP2-GATE2"
-      ],
-      "profile": "timesheet-auditor",
-      "requested_model": "opus",
-      "requested_effort": "xhigh",
-      "model_override_reason": null,
-      "routing": {
-        "size": "M",
-        "risk": "H",
-        "novelty": false
-      },
-      "actual_model": null,
-      "actual_source": null,
-      "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
-      "owned_paths": [
-        "handoff/delivery/WP2_RECHECK_B.md",
-        "handoff/delivery/WP2_RECHECK_B.vi.md",
-        "handoff/delivery/tasks/WP2-AUDIT-B2.md",
-        "handoff/delivery/evidence/WP2-AUDIT-B2"
-      ],
-      "prompt": "handoff/delivery/tasks/WP2-AUDIT-B2.md",
-      "report": "handoff/delivery/tasks/WP2-AUDIT-B2.md",
-      "evidence": [],
-      "baseline_commit": null,
-      "source_digest": null,
-      "reviewed_digest": null,
-      "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Fresh opus recheck of area B after the fix round."
+      "next_action": "Fresh opus final recheck of area B at the GATE3 freeze."
     },
     {
       "id": "WP2-AUDIT-B",

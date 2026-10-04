@@ -1,0 +1,74 @@
+// WP2-AUDIT-B2 probe (auditor-owned, temporary; removed from the scratch clone after the run).
+// It replays the steps of the committed e2e "manual entry defaults its input zone to the display
+// zone and stores the instant typed there (R-07)" (tests/e2e/day-editor.spec.ts:187) on a date in
+// Pacific Standard Time. The committed test picks its date from the real clock (the newest past
+// free workday of the displayed period), so from November this is the date it will use. It records
+// the product result and the value the committed assertions hard-code.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, SCREENSHOT_DIR, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LA = 'America/Los_Angeles';
+
+/** Same oracle as the committed spec (dateTimeIn). */
+function dateTimeIn(instant: string, zone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(instant));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
+}
+
+test('audit-b2: the committed display-zone e2e assertions on a Pacific Standard Time date', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const date = '2026-01-14';
+  try {
+    await signInThroughUi();
+    const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Synthetic audit probe');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await expect(form.getByLabel('Input zone')).toHaveValue(displayZone);
+    await form.getByLabel('Start time', { exact: true }).fill('22:00');
+    await form.getByLabel('End time', { exact: true }).fill('23:30');
+    await form.getByRole('radio', { name: /No breaks taken/ }).check();
+    await form.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const stored = (await employeeSeed.dayView(date)).sessions[0];
+    const result = {
+      project: testInfo.project.name,
+      date,
+      displayZone,
+      storedInputZone: stored?.input_zone,
+      storedStartUtc: stored?.start_utc,
+      storedEndUtc: stored?.end_utc,
+      startInDisplayZone: dateTimeIn(stored?.start_utc ?? '', displayZone),
+      startInLosAngeles: dateTimeIn(stored?.start_utc ?? '', LA),
+      endInLosAngeles: dateTimeIn(stored?.end_utc ?? '', LA),
+      committedAssertionExpects: { start: `${date} 08:00`, end: `${date} 09:30` },
+    };
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b2-season-${testInfo.project.name}.json`), `${JSON.stringify(result, null, 2)}\n`);
+    // The product stores the typed display-zone time (correct) ...
+    expect(result.startInDisplayZone).toBe(`${date} 22:00`);
+    // ... which is 07:00 in Los Angeles in winter, not the 08:00 the committed test hard-codes.
+    expect(result.startInLosAngeles).toBe(`${date} 07:00`);
+    expect(result.startInLosAngeles).not.toBe(result.committedAssertionExpects.start);
+  } finally {
+    await employeeSeed.clearSessions(date, 'audit cleanup');
+  }
+});

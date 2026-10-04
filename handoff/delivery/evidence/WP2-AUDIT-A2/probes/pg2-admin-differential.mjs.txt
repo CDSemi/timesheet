@@ -1,0 +1,277 @@
+// WP2-AUDIT-A2 differential admin-visibility probe (WP2-A-01 recheck). Synthetic data only.
+// Question: does ANY response the administrator can obtain change when employees record data?
+// Method: one real SQLite WAL file, fixed clock. Capture every admin-reachable read route plus a
+// set of holiday-import previews and non-writing commit refusals (S0); let two employees record
+// sessions, labels, leave, a running Clock in, a credit and an OT-leave reservation; capture again
+// (S1) and compare byte for byte. Then simulate WP3 finalization (S2: one employee, S3: every user)
+// to inspect finalized_conflicts. Writing admin actions run on VACUUM INTO copies of S0 and S1.
+// Finally the commit path: hash, version, audit, no employee row written, explicit labels kept.
+// Passwords are generated at run time and never printed; UUIDs are masked in the output.
+// Usage: node pg2-admin-differential.mjs <tree-root> <work-dir>
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(root, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const ledger = await import(src('server/services/ledger.ts'));
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const out = (line) => process.stdout.write(`${line}\n`);
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const mask = (text) => String(text).replace(UUID, '<uuid>');
+const sha = (text) => createHash('sha256').update(text).digest('hex').slice(0, 12);
+let pass = 0;
+let fail = 0;
+const check = (name, ok, detail = '') => {
+  if (ok) pass += 1;
+  else fail += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : `  ${mask(detail)}`}`);
+};
+
+class Clock {
+  constructor(iso) { this.t = new Date(iso); }
+  now() { return new Date(this.t.getTime()); }
+}
+const clock = new Clock('2026-10-09T20:00:00Z'); // Friday 13:00 Los Angeles; current period 2026-09-28..2026-10-11
+const ORIGIN = 'http://localhost:3000';
+const config = { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 30 * 86400, production: false };
+const makeApp = (db) => createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+
+const db = openDatabase(join(workDir, 'pg2.db'));
+migrate(db);
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await seedSynthetic(db, clock, { passwords: pw });
+const calendarId = seed.calendarId;
+const ids = Object.fromEntries(seed.users.map((user) => [user.role === 'admin' ? 'admin' : 'employee', user.id]));
+let app = makeApp(db);
+
+async function req(method, path, cookie, body) {
+  const headers = { origin: ORIGIN };
+  if (cookie !== undefined) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers['content-type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  const res = await app.request(path, init);
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { json = null; }
+  return { status: res.status, text, json, setCookie: res.headers.get('set-cookie') };
+}
+const login = async (email, password) => (await req('POST', '/api/auth/login', undefined, { email, password })).setCookie.split(';')[0];
+const admin = await login('admin@example.invalid', pw.admin);
+const emp = await login('employee@example.invalid', pw.employee);
+const pw2 = randomBytes(18).toString('base64url');
+const created = await req('POST', '/api/admin/users', admin, { email: 'employee2@example.invalid', display_name: 'Example Employee Two', role: 'employee', password: pw2, calendar_id: calendarId });
+out(`setup admin creates employee2 -> ${created.status}`);
+ids.employee2 = created.json.user.id;
+const emp2 = await login('employee2@example.invalid', pw2);
+
+// ---- the administrator's view: every admin-reachable read plus non-writing import calls ----
+const csv = (...rows) => ['date,name,kind', ...rows].join('\n');
+const preview = (effective_from, text, remove_dates) => ({ calendar_id: calendarId, year: 2026, effective_from, csv: text, ...(remove_dates === undefined ? {} : { remove_dates }) });
+const everyDay = [];
+for (let d = 28; d <= 30; d += 1) everyDay.push(`2026-09-${d},Probe day,holiday`);
+for (let d = 1; d <= 11; d += 1) everyDay.push(`2026-10-${String(d).padStart(2, '0')},Probe day,holiday`);
+const PREVIEWS = {
+  'pv-A current period 10-05..10-08 (attempt-1 scenario)': preview('2026-09-28', csv('2026-10-05,Probe A,holiday', '2026-10-06,Probe B,holiday', '2026-10-07,Probe C,holiday', '2026-10-08,Probe D,holiday')),
+  'pv-B future 12-24 holiday, 12-31 closure': preview('2026-10-12', csv('2026-12-24,Synthetic Eve,holiday', '2026-12-31,Synthetic Shutdown,closure')),
+  'pv-C rename 11-26, kind change 11-27': preview('2026-10-12', csv('2026-11-26,Synthetic Thanks,holiday', '2026-11-27,Synthetic Plant Stop,closure')),
+  'pv-D remove 12-25 with 12-24 listed': preview('2026-10-12', csv('2026-12-24,Synthetic Eve,holiday'), ['2026-12-25']),
+  'pv-E retroactive effective date': preview('2026-09-01', csv('2026-10-05,Probe A,holiday')),
+  'pv-F CSV with issues': preview('2026-10-12', csv('2026-13-45,Bad,holiday', '2026-12-24,Synthetic Eve,party')),
+  'pv-G every day of the current period': preview('2026-09-28', csv(...everyDay)),
+};
+async function adminView() {
+  const view = new Map();
+  const reads = ['/api/admin/users', '/api/auth/me', '/api/calendar', '/api/periods/current', '/api/periods?from=2026-09-01&to=2026-12-31',
+    '/api/timesheets/2026-10-16', '/api/days/2026-10-05', '/api/days/2026-12-24', '/api/policies', '/api/history', '/api/history?limit=1',
+    '/api/ot/summary', '/api/ot/ledger', '/api/ot/leave', '/api/ot/evidence.csv?from=2026-09-01&to=2026-12-31', '/api/health'];
+  for (const path of reads) view.set(`GET ${path}`, await req('GET', path, admin));
+  for (const [name, body] of Object.entries(PREVIEWS)) view.set(name, await req('POST', '/api/admin/calendar/import/preview', admin, body));
+  view.set('cm-stale commit of pv-B with a wrong hash', await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], preview_hash: '0'.repeat(64) }));
+  view.set('cm-retro commit of pv-E', await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-E retroactive effective date'], preview_hash: '0'.repeat(64) }));
+  view.set('cm-issues commit of pv-F', await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-F CSV with issues'], preview_hash: '0'.repeat(64) }));
+  view.set('GET /api/admin unknown employee-data guesses', await req('GET', `/api/admin/users/${ids.employee}/days`, admin));
+  return view;
+}
+function diffPaths(a, b, path = '$', acc = []) {
+  if (acc.length >= 12) return acc;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') {
+    if (a !== b) acc.push(`${path}: ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);
+    return acc;
+  }
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) diffPaths(a[key], b[key], `${path}.${key}`, acc);
+  return acc;
+}
+function compare(label, before, after, expectSame = () => true) {
+  let identical = 0;
+  const differing = [];
+  for (const [name, x] of before) {
+    const y = after.get(name);
+    const same = x.status === y.status && x.text === y.text;
+    if (same) identical += 1;
+    else differing.push(name);
+    const detail = same ? '' : ` | ${x.status}->${y.status} ${x.json !== null && y.json !== null ? diffPaths(x.json, y.json).join('; ') : 'non-JSON body differs'}`;
+    out(`  ${same ? 'same' : 'DIFF'} ${name} [${x.status} ${sha(x.text)}]${mask(detail)}`);
+  }
+  out(`  ${label}: ${identical}/${before.size} identical`);
+  return differing;
+}
+const dbCounts = () => Object.fromEntries(['audit_events', 'calendar_versions', 'day_entries', 'work_sessions', 'timesheets', 'ot_ledger', 'ot_leave_requests'].map((table) => [table, db.prepare(`SELECT count(*) FROM ${table}`).pluck().get()]));
+
+out('## S0: administrator view before any employee activity');
+const auditS0 = dbCounts();
+const S0 = await adminView();
+const auditS0b = dbCounts();
+check('V0 the admin view (previews, refused commits, reads) writes nothing', JSON.stringify(auditS0) === JSON.stringify(auditS0b), JSON.stringify(auditS0b));
+for (const [name, r] of S0) if (r.status >= 500) check(`V0 no server error: ${name}`, false, String(r.status));
+
+// ---- employee activity on the probed dates ----
+out('## employee activity (synthetic)');
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+const steps = [];
+const step = async (label, promise) => { const r = await promise; steps.push(`${label} -> ${r.status}${r.status >= 300 ? ` ${r.json?.error?.code ?? ''}` : ''}`); return r; };
+await step('employee session 10-05 09:00-17:00', req('POST', '/api/days/2026-10-05/sessions', emp, { start: at('2026-10-05', '09:00'), end: at('2026-10-05', '17:00'), input_zone: LA, breaks_confirmed: true, breaks: [] }));
+await step('employee session 10-07 08:00-18:00 with a break', req('POST', '/api/days/2026-10-07/sessions', emp, { start: at('2026-10-07', '08:00'), end: at('2026-10-07', '18:00'), input_zone: LA, breaks_confirmed: true, breaks: [{ start: at('2026-10-07', '12:00'), end: at('2026-10-07', '13:00'), counts_as_work: false }] }));
+await step('employee explicit Sick 10-06 (480 sick leave)', req('PUT', '/api/days/2026-10-06', emp, { category: 'Sick', leave_minutes: 480, leave_kind: 'sick', wfh: false, notes: 'synthetic' }));
+await step('employee explicit Vacation 12-24 (480 vacation leave)', req('PUT', '/api/days/2026-12-24', emp, { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: '' }));
+await step('employee explicit Worked 11-27 (on a company holiday)', req('PUT', '/api/days/2026-11-27', emp, { category: 'Worked', leave_minutes: 0, wfh: true, notes: '' }));
+await step('employee Clock in today 10-09', req('POST', '/api/clock/in', emp, { input_zone: LA }));
+ledger.postCredit({ db, clock }, { userId: ids.employee, sourceKey: 'probe-a2:credit', actorUserId: null, origin: 'system', reason: 'probe setup', workDate: '2026-09-29', minutes: 600 });
+await step('employee reserves OT leave 120 on 10-20', req('POST', '/api/ot/leave', emp, { request_key: 'probe-a2-r1', leave_date: '2026-10-20', requested_minutes: 120, permission: { approver_name: 'Probe Manager', approval_date: '2026-10-01', evidence_ref: 'probe ref' } }));
+await step('employee2 session 10-08 07:00-19:00', req('POST', '/api/days/2026-10-08/sessions', emp2, { start: at('2026-10-08', '07:00'), end: at('2026-10-08', '19:00'), input_zone: LA, breaks_confirmed: true, breaks: [] }));
+await step('employee2 explicit Off 12-31', req('PUT', '/api/days/2026-12-31', emp2, { category: 'Off', leave_minutes: 0, wfh: false, notes: '' }));
+await step('employee2 explicit Worked 11-26', req('PUT', '/api/days/2026-11-26', emp2, { category: 'Worked', leave_minutes: 0, wfh: false, notes: '' }));
+for (const line of steps) out(`setup ${line}`);
+check('E0 every employee setup step succeeded', steps.every((line) => / -> 20[01]/.test(line)));
+out(`employee rows now: ${JSON.stringify(dbCounts())}`);
+
+out('## S1: administrator view after employee activity (expected byte-identical to S0)');
+const S1 = await adminView();
+const d01 = compare('S0 vs S1', S0, S1);
+check('A1 no admin response changes when employees record data (WP2-A-01)', d01.length === 0, d01.join(', '));
+for (const [name, r] of S1) {
+  if (!name.startsWith('pv-')) continue;
+  const body = r.text;
+  const leaks = [ids.employee, ids.employee2, 'employee@example', 'employee2@example', 'Vacation', 'Sick', 'default_labelled_entries', 'explicit_overrides_preserved', 'finalized_timesheets'].filter((needle) => body.includes(needle));
+  check(`A2 ${name}: no identity, personal label or count key`, leaks.length === 0, leaks.join(','));
+}
+const pvA = S1.get('pv-A current period 10-05..10-08 (attempt-1 scenario)').json;
+check('A3 pv-A affected_days carry only date/label_before/label_after', pvA.affected_days.length === 4 && pvA.affected_days.every((day) => JSON.stringify(Object.keys(day).sort()) === '["date","label_after","label_before"]'), JSON.stringify(pvA.affected_days));
+
+out('## S2/S3: simulated WP3 finalization (direct UPDATE, as WP3 will set the column)');
+db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ? AND pay_period_id IN (SELECT id FROM pay_periods WHERE period_start = ?)').run(ids.employee, '2026-09-28');
+out(`finalized timesheets (employee, period 09-28): ${db.prepare('SELECT count(*) FROM timesheets WHERE finalized_revision_no IS NOT NULL').pluck().get()}`);
+const S2 = await adminView();
+const d12 = compare('S1 vs S2 (one finalized timesheet)', S1, S2);
+db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHERE pay_period_id IN (SELECT id FROM pay_periods WHERE period_start = ?)').run('2026-09-28');
+out(`finalized timesheets (every user, period 09-28): ${db.prepare('SELECT count(*) FROM timesheets WHERE finalized_revision_no IS NOT NULL').pluck().get()}`);
+const S3 = await adminView();
+const d23 = compare('S2 vs S3 (one versus two finalized timesheets)', S2, S3);
+check('F1 one versus two finalized timesheets: identical admin view (no count)', d23.length === 0, d23.join(', '));
+const fa = S2.get('pv-A current period 10-05..10-08 (attempt-1 scenario)').json;
+const fg = S2.get('pv-G every day of the current period').json;
+out(`pv-A finalized_conflicts: ${JSON.stringify(fa.finalized_conflicts)} can_commit=${fa.can_commit} preview_hash=${fa.preview_hash}`);
+out(`pv-G finalized_conflicts dates: ${fg.finalized_conflicts.map((item) => item.date.slice(5)).join(' ')}`);
+check('F2 finalized_conflicts entries are {date} only', [...fa.finalized_conflicts, ...fg.finalized_conflicts].every((item) => JSON.stringify(Object.keys(item)) === '["date"]'));
+check('F3 the signal is period-level: every changed date of the finalized period is listed, days without entries included', fg.finalized_conflicts.length === 14 && fa.finalized_conflicts.map((item) => item.date).join(',') === '2026-10-05,2026-10-06,2026-10-07,2026-10-08');
+check('F4 previews outside the finalized period are unaffected', d12.every((name) => name.startsWith('pv-A') || name.startsWith('pv-G') || name.startsWith('pv-E') || name === 'GET /api/periods?from=2026-09-01&to=2026-12-31' || name.startsWith('GET /api/timesheets')), d12.join(', '));
+const finalCommit = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-A current period 10-05..10-08 (attempt-1 scenario)'], preview_hash: S0.get('pv-A current period 10-05..10-08 (attempt-1 scenario)').json.preview_hash });
+out(`commit of pv-A over the finalized period -> ${finalCommit.status} ${finalCommit.json?.error?.code} details=${JSON.stringify(finalCommit.json?.error?.details)}`);
+check('F5 commit refused 409 finalized_period_affected with date-only details', finalCommit.status === 409 && finalCommit.json.error.code === 'finalized_period_affected' && !finalCommit.text.includes('finalized_timesheets'));
+db.prepare('UPDATE timesheets SET finalized_revision_no = NULL').run();
+
+// ---- writing admin actions on copies: world 0 (no employee data) versus world 1 ----
+out('## W: writing admin actions on VACUUM INTO copies of S0-equivalent and S1 worlds');
+// World 0 is rebuilt from a fresh database with the same seed calls (ids differ, so bodies are masked).
+async function writingActions(targetDb, adminCookie, empId) {
+  const saved = app;
+  app = makeApp(targetDb);
+  const pv = await req('POST', '/api/admin/calendar/import/preview', adminCookie, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], calendar_id: targetCal(targetDb) });
+  const commit = await req('POST', '/api/admin/calendar/import/commit', adminCookie, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], calendar_id: targetCal(targetDb), preview_hash: pv.json.preview_hash, note: 'probe' });
+  const exception = await req('POST', '/api/admin/payroll-exceptions', adminCookie, { calendar_id: targetCal(targetDb), nominal_payroll_date: '2026-10-16', payroll_date: '2026-10-15', reason: 'probe exception' });
+  const deactivate = await req('POST', `/api/admin/users/${empId}/deactivate`, adminCookie, { reason: 'probe' });
+  app = saved;
+  return { commit, exception, deactivate };
+}
+const targetCal = (targetDb) => targetDb.prepare('SELECT id FROM calendars').pluck().get();
+const w1Path = join(workDir, 'w1.db');
+db.exec(`VACUUM INTO '${w1Path.replaceAll('\\', '/')}'`);
+const w1 = openDatabase(w1Path);
+const w1r = await writingActions(w1, admin, ids.employee);
+const w0 = openDatabase(join(workDir, 'w0.db'));
+migrate(w0);
+const pw0 = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed0 = await seedSynthetic(w0, clock, { passwords: pw0 });
+app = makeApp(w0);
+const admin0 = await login('admin@example.invalid', pw0.admin);
+await req('POST', '/api/admin/users', admin0, { email: 'employee2@example.invalid', display_name: 'Example Employee Two', role: 'employee', password: randomBytes(18).toString('base64url'), calendar_id: seed0.calendarId });
+const emp0 = seed0.users.find((user) => user.role === 'employee').id;
+app = makeApp(db);
+const w0r = await writingActions(w0, admin0, emp0);
+// The preview hash binds the calendar id, which is random per seeded database: mask it here
+// (section C checks the hash against an independent recomputation). Run-1 probe bug.
+const maskW = (text) => mask(text).replace(/"preview_hash":"[0-9a-f]{64}"/g, '"preview_hash":"<hash>"');
+for (const key of ['commit', 'exception', 'deactivate']) {
+  const a = maskW(w0r[key].text);
+  const b = maskW(w1r[key].text);
+  out(`  ${a === b ? 'same' : 'DIFF'} ${key} [${w0r[key].status} vs ${w1r[key].status}]${a === b ? '' : ` | ${diffPaths(JSON.parse(a), JSON.parse(b)).join('; ')}`}`);
+}
+check('W1 holiday commit response is identical with and without employee data (hash masked)', maskW(w0r.commit.text) === maskW(w1r.commit.text) && w0r.commit.status === 201);
+check('W2 deactivate response is identical with and without employee data', mask(w0r.deactivate.text) === mask(w1r.deactivate.text));
+out(`OBS W3 payroll exception refreshed_pay_period: no employee data=${w0r.exception.json?.refreshed_pay_period}, after employee edits=${w1r.exception.json?.refreshed_pay_period} (period-level, pre-existing; a write with an audit event)`);
+w0.close();
+w1.close();
+
+// ---- commit behaviour on the probe database (employee rows untouched, explicit labels kept) ----
+out('## C: commit behaviour');
+const dayRows = () => sha(JSON.stringify(db.prepare('SELECT * FROM day_entries ORDER BY id').all()));
+const before = { rows: dayRows(), counts: dbCounts() };
+const pvB = await req('POST', '/api/admin/calendar/import/preview', admin, PREVIEWS['pv-B future 12-24 holiday, 12-31 closure']);
+const base = db.prepare('SELECT weekdays, dates FROM calendar_versions WHERE calendar_id = ? ORDER BY seq DESC LIMIT 1').get(calendarId);
+const nextDates = [...JSON.parse(base.dates), { date: '2026-12-24', kind: 'holiday', name: 'Synthetic Eve' }, { date: '2026-12-31', kind: 'closure', name: 'Synthetic Shutdown' }].sort((x, y) => x.date.localeCompare(y.date));
+const expectedHash = createHash('sha256').update(JSON.stringify({ calendar_id: calendarId, effective_from: '2026-10-12', weekdays: JSON.parse(base.weekdays).sort((x, y) => x - y), dates: nextDates.map((r) => ({ date: r.date, kind: r.kind, name: r.name })) })).digest('hex');
+check('C1 preview_hash equals the independently recomputed sha256 of the canonical result', pvB.json.preview_hash === expectedHash);
+const c1 = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], preview_hash: pvB.json.preview_hash, note: 'probe commit' });
+out(`commit -> ${c1.status} committed=${c1.json.committed} unchanged=${c1.json.unchanged} seq=${c1.json.version?.seq} effective_from=${c1.json.version?.effective_from} dates=${c1.json.version?.dates.length}`);
+const after1 = { rows: dayRows(), counts: dbCounts() };
+const audit = db.prepare("SELECT operation, owner_user_id, after_json AS after FROM audit_events WHERE entity_type = 'calendar_version' ORDER BY rowid DESC LIMIT 1").get();
+const auditImport = JSON.parse(audit.after).import;
+out(`audit ${audit.operation} owner=${audit.owner_user_id} import=${JSON.stringify({ ...auditImport, preview_hash: auditImport.preview_hash === expectedHash ? '<= expected>' : 'MISMATCH' })}`);
+check('C2 commit 201: one calendar version and one audit event; day_entries and sessions unchanged', c1.status === 201 && after1.counts.calendar_versions === before.counts.calendar_versions + 1 && after1.counts.audit_events === before.counts.audit_events + 1 && after1.rows === before.rows && after1.counts.work_sessions === before.counts.work_sessions);
+const c2 = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], preview_hash: pvB.json.preview_hash });
+const after2 = dbCounts();
+// Run-2 probe bug: the hash binds the resulting rule set, not the base version, so the same
+// request after its own commit is the documented identical re-commit (200 unchanged, no write).
+check('C3a same request and hash after its own commit -> 200 unchanged, nothing written (identical re-commit)', c2.status === 200 && c2.json.unchanged === true && after2.audit_events === after1.counts.audit_events, `${c2.status} ${c2.json?.error?.code ?? ''}`);
+const pvC = await req('POST', '/api/admin/calendar/import/preview', admin, PREVIEWS['pv-C rename 11-26, kind change 11-27']);
+const pvD = await req('POST', '/api/admin/calendar/import/preview', admin, PREVIEWS['pv-D remove 12-25 with 12-24 listed']);
+const cD = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-D remove 12-25 with 12-24 listed'], preview_hash: pvD.json.preview_hash });
+const afterD = dbCounts();
+const cC = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-C rename 11-26, kind change 11-27'], preview_hash: pvC.json.preview_hash });
+check('C3b a preview made stale by another commit -> 409 stale_preview, nothing written', cD.status === 201 && cC.status === 409 && cC.json.error.code === 'stale_preview' && dbCounts().audit_events === afterD.audit_events && dbCounts().calendar_versions === afterD.calendar_versions, `${cD.status} ${cC.status} ${cC.json?.error?.code ?? ''}`);
+const pvSame = await req('POST', '/api/admin/calendar/import/preview', admin, PREVIEWS['pv-B future 12-24 holiday, 12-31 closure']);
+const c3 = await req('POST', '/api/admin/calendar/import/commit', admin, { ...PREVIEWS['pv-B future 12-24 holiday, 12-31 closure'], preview_hash: pvSame.json.preview_hash });
+check('C4 identical re-commit (fresh preview, no_change) -> 200 unchanged, nothing written', pvSame.json.no_change === true && c3.status === 200 && c3.json.unchanged === true && dbCounts().audit_events === afterD.audit_events, `${c3.status}`);
+const v24 = await req('GET', '/api/days/2026-12-24', emp);
+const v31 = await req('GET', '/api/days/2026-12-31', emp);
+const v31b = await req('GET', '/api/days/2026-12-31', emp2);
+const label = (r) => `${r.json?.day?.category ?? r.json?.entry?.category ?? r.json?.category}/${r.json?.day?.category_source ?? r.json?.entry?.category_source ?? r.json?.category_source}`;
+out(`employee 12-24 ${label(v24)}; employee 12-31 ${label(v31)}; employee2 12-31 ${label(v31b)}`);
+check('C5 explicit labels preserved (employee Vacation 12-24, employee2 Off 12-31); a default day follows the calendar (employee 12-31 Shutdown)', label(v24).startsWith('Vacation') && label(v31b).startsWith('Off') && label(v31).startsWith('Shutdown'), `${label(v24)} ${label(v31b)} ${label(v31)}`);
+check('C6 integrity_check ok and foreign_key_check empty', db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0);
+out(`RESULT pass=${pass} fail=${fail}`);
+db.close();
+process.exitCode = fail === 0 ? 0 : 1;

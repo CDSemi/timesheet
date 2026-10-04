@@ -1,0 +1,39 @@
+// Computed-style probe for the WP2-B2-02 token substitution. Usage: node probe.mjs <css> <out.json>
+import { createRequire } from 'node:module';
+import { readFileSync, writeFileSync } from 'node:fs';
+const require = createRequire(process.env.REPO_ROOT + '/package.json');
+const { chromium } = require('@playwright/test');
+const [css, out] = process.argv.slice(2);
+const html = `<!doctype html><html><head><meta charset="utf-8"><style>${readFileSync(css, 'utf8')}</style></head><body>
+<main>
+<input id="cb" type="checkbox"><input id="rd" type="radio">
+<span id="shape" class="shape shape-circle"></span>
+<span id="shape-sq" class="shape shape-square"></span>
+<dialog id="dlg" class="dialog" open><h2>Title</h2><h3 id="dlg-h3">Sub</h3></dialog>
+<dialog id="dlgw" class="dialog dialog-wide" open><h3 id="dlgw-h3">Wide</h3></dialog>
+<div class="ot-leave-head"><h3 id="olh">Leave</h3></div>
+<div class="user-head"><h3 id="uh">User</h3></div>
+</main></body></html>`;
+const props = ['width', 'height', 'maxHeight', 'fontSize', 'lineHeight', 'marginRight', 'paddingTop', 'paddingLeft', 'display', 'borderTopLeftRadius', 'fontWeight', 'minHeight'];
+const ids = ['cb', 'rd', 'shape', 'shape-sq', 'dlg', 'dlg-h3', 'dlgw', 'dlgw-h3', 'olh', 'uh'];
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const result = {};
+for (const [name, viewport] of [['desktop', { width: 1280, height: 800 }], ['mobile', { width: 390, height: 844 }]]) {
+  for (const scheme of ['light', 'dark']) {
+    const context = await browser.newContext({ viewport, colorScheme: scheme });
+    const page = await context.newPage();
+    await page.setContent(html);
+    result[`${name}-${scheme}`] = await page.evaluate(({ ids, props }) => {
+      const o = {};
+      for (const id of ids) {
+        const cs = getComputedStyle(document.getElementById(id));
+        o[id] = Object.fromEntries(props.map((p) => [p, cs[p]]));
+      }
+      return o;
+    }, { ids, props });
+    await context.close();
+  }
+}
+await browser.close();
+writeFileSync(out, JSON.stringify(result, null, 2) + '\n');
+console.log('wrote', out, Object.keys(result).join(','));

@@ -277,7 +277,7 @@ describe('admin router is account administration, not private-data access (AC-01
       [
         'GET /api/admin/users',
         'PATCH /api/admin/users/:id',
-        // Company calendar configuration (WP2-T08): dates, names and aggregate counts only.
+        // Company calendar configuration (WP2-T08): calendar-only fields, no employee-derived counts.
         'POST /api/admin/calendar/import/commit',
         'POST /api/admin/calendar/import/preview',
         'POST /api/admin/payroll-exceptions',

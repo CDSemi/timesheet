@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs';
+const [beforeFile, afterFile] = process.argv.slice(2);
+const b = JSON.parse(readFileSync(beforeFile, 'utf8'));
+const a = JSON.parse(readFileSync(afterFile, 'utf8'));
+let compared = 0; let differing = 0;
+for (const ctx of Object.keys(b)) for (const id of Object.keys(b[ctx])) for (const prop of Object.keys(b[ctx][id])) {
+  compared += 1;
+  if (b[ctx][id][prop] !== a[ctx]?.[id]?.[prop]) { differing += 1; console.log(`DIFF ${ctx} #${id} ${prop}: ${b[ctx][id][prop]} -> ${a[ctx]?.[id]?.[prop]}`); }
+}
+console.log(`contexts: ${Object.keys(b).join(', ')}`);
+console.log(`elements per context: ${Object.keys(b[Object.keys(b)[0]]).length}; properties per element: ${Object.keys(b[Object.keys(b)[0]].cb).length}`);
+console.log(`compared ${compared} values; differing ${differing}`);
+process.exitCode = differing === 0 ? 0 : 1;
