@@ -1,0 +1,99 @@
+# WP3-T07 dependency and lockfile evidence (Node 24.21.0 by full path; npm run through it).
+
+# Registry check: npm view prints a deprecated line only for a deprecated package; none is printed below.
+$ npm view pdf-lib@1.17.1 version deprecated license
+version = '1.17.1'
+license = 'MIT'
+exit 0
+$ npm view @pdf-lib/fontkit@1.1.1 version deprecated license
+version = '1.1.1'
+license = 'MIT'
+exit 0
+$ npm view dejavu-fonts-ttf@2.37.3 version deprecated license
+version = '2.37.3'
+license = 'SEE LICENSE IN README.md AND LICENSE'
+exit 0
+$ npm view pdfjs-dist@6.4.299 version deprecated license
+version = '6.4.299'
+license = 'Apache-2.0'
+exit 0
+diff --git a/package.json b/package.json
+index ef817b6..6b093b1 100644
+--- a/package.json
++++ b/package.json
+@@ -28,8 +28,11 @@
+   },
+   "dependencies": {
+     "@hono/node-server": "2.1.3",
++    "@pdf-lib/fontkit": "1.1.1",
+     "better-sqlite3": "13.0.3",
++    "dejavu-fonts-ttf": "2.37.3",
+     "hono": "4.13.11",
++    "pdf-lib": "1.17.1",
+     "react": "19.3.0",
+     "react-dom": "19.3.0",
+     "zod": "4.6.5"
+@@ -42,6 +45,7 @@
+     "@types/react-dom": "19.3.0",
+     "@vitejs/plugin-react": "6.1.1",
+     "eslint": "10.11.0",
++    "pdfjs-dist": "6.4.299",
+     "typescript": "6.0.3",
+     "typescript-eslint": "8.71.0",
+     "vite": "8.3.1",
+# Packages added to package-lock.json (node_modules keys), from git diff
+"node_modules/@napi-rs/canvas"
+"node_modules/@napi-rs/canvas-android-arm64"
+"node_modules/@napi-rs/canvas-darwin-arm64"
+"node_modules/@napi-rs/canvas-darwin-x64"
+"node_modules/@napi-rs/canvas-linux-arm-gnueabihf"
+"node_modules/@napi-rs/canvas-linux-arm64-gnu"
+"node_modules/@napi-rs/canvas-linux-arm64-musl"
+"node_modules/@napi-rs/canvas-linux-riscv64-gnu"
+"node_modules/@napi-rs/canvas-linux-x64-gnu"
+"node_modules/@napi-rs/canvas-linux-x64-musl"
+"node_modules/@napi-rs/canvas-win32-arm64-msvc"
+"node_modules/@napi-rs/canvas-win32-x64-msvc"
+"node_modules/@pdf-lib/fontkit"
+"node_modules/@pdf-lib/standard-fonts"
+"node_modules/@pdf-lib/upng"
+"node_modules/dejavu-fonts-ttf"
+"node_modules/pako"
+"node_modules/pdf-lib"
+"node_modules/pdfjs-dist"
+"node_modules/tslib"
+
+# lockfile: removed lines (expected none)
+351	0	package-lock.json
+# install scripts / deprecated markers in the added part
+0
+$ npm install (second run, nothing to change; any "npm warn deprecated" line would show here)
+
+up to date, audited 155 packages in 684ms
+
+42 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+exit 0
+
+$ npm ls pdf-lib @pdf-lib/fontkit dejavu-fonts-ttf pdfjs-dist @napi-rs/canvas
+timesheet@0.1.0 <project>
++-- @pdf-lib/fontkit@1.1.1
++-- dejavu-fonts-ttf@2.37.3
++-- pdf-lib@1.17.1
+`-- pdfjs-dist@6.4.299
+  `-- @napi-rs/canvas@1.0.10
+
+exit 0
+
+$ npm view @napi-rs/canvas version deprecated license
+version = '1.0.10'
+license = 'MIT'
+
+# Font licence (node_modules/dejavu-fonts-ttf/LICENSE, DejaVu Sans and DejaVu Sans Bold only; the files are read at run time and are not committed)
+Fonts are (c) Bitstream (Bitstream Vera licence); DejaVu changes are in the public domain; glyphs imported from Arev
+fonts are (c) Tavmjong Bah (Arev licence). The licences permit use, copying, embedding and redistribution, require
+the copyright and permission notice to stay with copies of the font software, forbid selling the font by itself and
+forbid reusing the names "Bitstream" or "Vera" for modified fonts. The renderer embeds unmodified subsets of the fonts
+inside the PDF; the licence file ships with the npm package in node_modules.

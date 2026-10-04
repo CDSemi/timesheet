@@ -1,0 +1,83 @@
+# Mutation checks for WP3-T07 (run with: python mutate.py.txt <repo-root>).
+# Each mutation is computed in memory first; only then is the file opened for writing. The file is
+# restored from the original bytes and its SHA-256 is compared after every run.
+import hashlib, os, re, shutil, subprocess, sys
+
+repo = sys.argv[1]
+node = shutil.which('node.exe') or shutil.which('node')
+vitest = os.path.join(repo, 'node_modules', 'vitest', 'vitest.mjs')
+test = 'tests/integration/pdf-render.test.ts'
+pdf = 'src/server/pdf/timesheetPdf.ts'
+lay = 'src/server/pdf/layout.ts'
+
+MUTATIONS = [
+    ('M1 OT rows and total shown although Show OT on PDF is off', pdf,
+     'const showOt = snapshot.show_ot_on_pdf;', 'const showOt = true;'),
+    ('M2 the total omits the Sundays (the template defect)', pdf,
+     'formatHoursMinutes(snapshot.totals.credited_minutes)',
+     "formatHoursMinutes(snapshot.days.filter((d) => weekdayName(d.work_date) !== 'Sunday').reduce((s, d) => s + (d.calculation?.credited_minutes ?? 0), 0))"),
+    ('M3 hours are printed as decimal hours', lay,
+     "return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;",
+     'return (minutes / 60).toFixed(2);'),
+    ('M4 a sign date is printed when there is no real sign-off', pdf,
+     'input.signedAt === null ? null : formatUsDate(',
+     'input.signedAt === null ? formatUsDate(snapshot.period.due_local_date) : formatUsDate('),
+    ('M5 the pending banner is dropped', pdf,
+     "if (input.origin === 'automatic') {\n    canvas.rect(", "if (input.origin === 'never') {\n    canvas.rect("),
+    ('M6 the signature image is scaled by width only (height unbounded)', lay,
+     'const scale = Math.min(boxWidth / imageWidth, boxHeight / imageHeight);', 'const scale = boxWidth / imageWidth;'),
+    ('M7 the creation date is the current time', pdf,
+     'const creation = new Date(parseUtcInstant(snapshot.period.due_at_utc) * 1000);', 'const creation = new Date();'),
+    ('M8 an automatic revision may carry a real sign-off instant', pdf,
+     "if (input.origin === 'automatic' && input.signedAt !== null) {", "if (input.origin === 'never' && input.signedAt !== null) {"),
+    ('M9 text outside ASCII is replaced (no Unicode font coverage)', pdf,
+     'result += fonts.supported.has(code) ? char : \'?\';', "result += code < 128 ? char : '?';"),
+    ('M10 an over-long last line is not cut with an ellipsis', lay,
+     'if (measure(line, size) <= maxWidth) return line;\n  const chars', 'return line;\n  const chars'),
+    ('M11 the file name is not sanitized', lay,
+     ".replace(/[^A-Za-z0-9]+/g, '_')", ".replace(/[^A-Za-z0-9 /]+/g, '_')"),
+    ('M12 the second week is not drawn', pdf,
+     'y = drawWeek(canvas, snapshot, weekTwo, 2, y, showOt) + 6;', 'y += 6;'),
+    ('M13 the Sunday OT cell is blank', pdf,
+     "if (day.completeness === 'complete' && day.calculation?.credited_minutes !== null && day.calculation !== null) {",
+     "if (weekdayName(day.work_date) !== 'Sunday' && day.completeness === 'complete' && day.calculation?.credited_minutes !== null && day.calculation !== null) {"),
+    ('M14 the submission identifier is left out of the header', pdf,
+     'const idLine = `Submission ${input.submissionId}`;', "const idLine = '';"),
+]
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+def run_tests():
+    result = subprocess.run([node, vitest, 'run', test], cwd=repo, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    out = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout + result.stderr)
+    files = re.search(r'Test Files\s+(.*)', out)
+    tests = re.search(r'Tests\s+(.*)', out)
+    return result.returncode, (files.group(1).strip() if files else '?'), (tests.group(1).strip() if tests else '?')
+
+code, files, tests = run_tests()
+print(f'baseline exit={code} Test Files {files} | Tests {tests}')
+caught = 0
+for label, rel, old, new in MUTATIONS:
+    path = os.path.join(repo, rel)
+    with open(path, 'rb') as handle:
+        original = handle.read()
+    text = original.decode('utf-8')
+    if text.count(old) != 1:
+        print(f'{label}: PATTERN NOT UNIQUE ({text.count(old)})')
+        continue
+    mutated = text.replace(old, new).encode('utf-8')  # computed before the file is opened for writing
+    before = sha(original)
+    try:
+        with open(path, 'wb') as handle:
+            handle.write(mutated)
+        code, files, tests = run_tests()
+    finally:
+        with open(path, 'wb') as handle:
+            handle.write(original)
+    with open(path, 'rb') as handle:
+        identical = sha(handle.read()) == before
+    status = 'CAUGHT' if code != 0 else 'SURVIVED'
+    caught += code != 0
+    print(f'{label}: {status} (Test Files {files} | Tests {tests}); restored byte-identical={identical}')
+print(f'caught {caught} of {len(MUTATIONS)}')

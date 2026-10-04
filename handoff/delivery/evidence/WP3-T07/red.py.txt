@@ -1,0 +1,63 @@
+# Red-first runs for WP3-T07 (run with: python red.py.txt <repo-root>).
+# Red 1: the three new source modules are absent. Red 2: a stub renderer that draws one blank page.
+# Files are held in memory and restored byte-identical (SHA-256 compared).
+import hashlib, os, re, shutil, subprocess, sys
+
+repo = sys.argv[1]
+node = shutil.which('node.exe') or shutil.which('node')
+vitest = os.path.join(repo, 'node_modules', 'vitest', 'vitest.mjs')
+test = 'tests/integration/pdf-render.test.ts'
+names = ['timesheetPdf.ts', 'layout.ts', 'fonts.ts']
+paths = {n: os.path.join(repo, 'src', 'server', 'pdf', n) for n in names}
+STUB = """import { PDFDocument } from 'pdf-lib';
+export { PdfRenderError, SIGNATURE_BOX, timesheetPdfFileName } from './layout.ts';
+export type PdfOrigin = 'manual' | 'automatic';
+export type TimesheetPdfInput = { snapshot: unknown; submissionId: string; revisionNo: number; origin: PdfOrigin; signedAt: string | null; signatureImage: Uint8Array | null };
+export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint8Array> {
+  void input;
+  const doc = await PDFDocument.create();
+  doc.addPage([612, 792]);
+  return doc.save();
+}
+"""
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+def run_tests():
+    result = subprocess.run([node, vitest, 'run', test], cwd=repo, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    out = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout + result.stderr)
+    files = re.search(r'Test Files\s+(.*)', out)
+    tests = re.search(r'Tests\s+(.*)', out)
+    first = [l.strip() for l in out.splitlines() if 'Error' in l][:1]
+    return result.returncode, (files.group(1).strip() if files else '?'), (tests.group(1).strip() if tests else 'no tests ran'), first
+
+originals = {n: open(p, 'rb').read() for n, p in paths.items()}
+hashes = {n: sha(b) for n, b in originals.items()}
+
+def restore():
+    for n, p in paths.items():
+        with open(p, 'wb') as handle:
+            handle.write(originals[n])
+    return all(sha(open(p, 'rb').read()) == hashes[n] for n, p in paths.items())
+
+try:
+    for p in paths.values():
+        os.remove(p)
+    code, files, tests, first = run_tests()
+    print(f'red 1 (source modules absent): exit={code} Test Files {files} | Tests {tests} | {first}')
+finally:
+    ok = restore()
+print(f'restored byte-identical={ok}')
+
+stub = STUB.encode('utf-8')  # computed before the file is opened for writing
+try:
+    with open(paths['timesheetPdf.ts'], 'wb') as handle:
+        handle.write(stub)
+    code, files, tests, first = run_tests()
+    print(f'red 2 (stub renderer, one blank page): exit={code} Test Files {files} | Tests {tests}')
+finally:
+    ok = restore()
+print(f'restored byte-identical={ok}')
+code, files, tests, first = run_tests()
+print(f'green after restore: exit={code} Test Files {files} | Tests {tests}')

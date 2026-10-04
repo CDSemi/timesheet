@@ -111,4 +111,8 @@ Evidence goes in handoff/delivery/evidence/WP3-T04-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 79862bba6ea8f8077e26dd043dc0aa03b21b6594; post-HEAD b89f8a8122781b0e8c7cf1a0086089b96713b17b.
+- Commit b89f8a8122781b0e8c7cf1a0086089b96713b17b pushed to origin/main; remote SHA identical.
+- Digest 69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92 (matches); staged 32 files.
+- Node v24.21.0. Exits: digest 0, precommit 0, diff --check 0, JSON parse 0, orchestration validator 0, check_recovery 0, preflight 0.
+- No EOF fix, no masking, no unstaging. Blockers: none. Evidence in handoff/delivery/evidence/WP3-T04-FREEZE/ (not staged).

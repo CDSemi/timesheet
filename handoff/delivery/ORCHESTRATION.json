@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T04-FREEZE",
+  "next_task_id": "WP3-T07-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -69,6 +69,10 @@
     {
       "date": "2026-10-04",
       "observation": "WP3-T01-FREEZE attempt 1: the precommit check blocks user-profile path literals (a Windows Users-folder pattern) in source and test files, even synthetic ones; only evidence logs may be masked. Worker briefs must ask for neutral synthetic roots or paths built at run time."
+    },
+    {
+      "date": "2026-10-04",
+      "observation": "WP3-T07-FREEZE attempt 1: the worker edited a test after computing its digest and running verify, so the reported digest was stale and the committer stopped. Worker briefs must require that verify and the digest are the last commands after the final edit, with the digest re-run if any file changes."
     }
   ],
   "pending_owner_question": "WP3-PLAN section F (asked 2026-10-04): F-1 should the deadline auto-submit a period with no saved entries (recommended yes, with default labels, OT pending, review-pending banner, no deficit)? F-2 a pending deficit debit is re-evaluated only by a later finalized revision, no background posting (recommended)? F-3 admin operations status shows only configuration, heartbeat, activation and system-wide job-state totals, without user, period or recipient (recommended)? F-4 one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant (recommended)? F-5 PDF total = credited OT total in h:mm over 14 days, hidden when Show OT is off (proceeds unless the owner objects). Needed before T05 (F-2), T10 (F-1, F-4), T13 (F-3); T00-T04 continue.",
@@ -86,7 +90,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+    "last_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
     "unpushed": []
   },
   "owner_decisions": [
@@ -138,6 +142,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "WP3-PLAN dependency table (T07 depends only on T04 code) and the pending owner answer F-2 required before T05",
+      "decision": "Run WP3-T07 (PDF renderer) right after the T04 freeze instead of after T06, so the single-writer chain does not idle while F-2 is pending. T07 renders from the T04 snapshot plus revision metadata as a pure function; T05/T08 wire it later. F-5 proceeds as recommended unless the owner objects. T05 starts only after the owner answers F-2."
+    },
     {
       "date": "2026-10-04",
       "basis": "WP3-PLAN (opus planner) sections B, C, E and the routine defaults after section F",
@@ -4888,10 +4897,108 @@
       "id": "WP3-T04-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T04",
         "WP3-TMPCLEAN"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7f047d5e8a9bf632",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T04-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T04-FREEZE/02-digest.txt",
+        "handoff/delivery/evidence/WP3-T04-FREEZE/03-precommit.txt",
+        "handoff/delivery/evidence/WP3-T04-FREEZE/05-validate-orch.txt",
+        "handoff/delivery/evidence/WP3-T04-FREEZE/07-preflight.txt",
+        "handoff/delivery/evidence/WP3-T04-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+      "branch": "main",
+      "commit_sha": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
+      "pushed": true,
+      "source_digest": "69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 32 paths (exact expected set), parent 79862bb, remote SHA identical; digest 69e790e0 matches; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T07 starts on b89f8a8 (T05 waits for F-2)."
+    },
+    {
+      "id": "WP3-T07",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T04-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a26aec06c30680a97",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "package.json",
+        "package-lock.json",
+        "src/server/pdf/timesheetPdf.ts",
+        "src/server/pdf/layout.ts",
+        "src/server/pdf/fonts.ts",
+        "tests/integration/pdf-render.test.ts",
+        "tests/support/pdfText.ts",
+        "handoff/delivery/tasks/WP3-T07.md",
+        "handoff/delivery/evidence/WP3-T07"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T07.md",
+      "report": "handoff/delivery/tasks/WP3-T07.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T07/00-commands.txt",
+        "handoff/delivery/evidence/WP3-T07/01-red.txt",
+        "handoff/delivery/evidence/WP3-T07/02-green.txt",
+        "handoff/delivery/evidence/WP3-T07/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T07/04-verify.txt",
+        "handoff/delivery/evidence/WP3-T07/05-digest.txt",
+        "handoff/delivery/evidence/WP3-T07/06-visual.txt"
+      ],
+      "baseline_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
+      "source_digest": "3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Digest corrected by WP3-T07-RECON to 3f4a016d (the worker's 971e7843 predates its final test edit; verify re-run on the final tree passed). Author-reported: dependencies pdf-lib 1.17.1, @pdf-lib/fontkit 1.1.1, dejavu-fonts-ttf 2.37.3, dev pdfjs-dist 6.4.299, none deprecated; the lockfile adds 20 packages (pdfjs-dist 6 pulls optional @napi-rs/canvas) and removes none. Pure renderer: one US Letter page, 14 dates in two Monday-Sunday blocks, h:mm OT total including both Sundays, Show OT toggle, embedded Vietnamese-capable font, wrapped/shrunk labels, bounded signature, pending banner on automatic revisions, deterministic bytes; rendered pages viewed for both revision types (not committed). Two red runs, 28/28 green; 14/14 mutations caught; verify exit 0, 40 files/906 tests, 0 deprecation lines, lint and smoke pass. No deviations.",
+      "next_action": "None; WP3-T07-FREEZE."
+    },
+    {
+      "id": "WP3-T07-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T07"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -4907,23 +5014,69 @@
       "actual_effort": null,
       "agent_id": null,
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP3-T04-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T04-FREEZE"
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a081daf2a51abf31e",
+          "outcome": "stopped before staging: the source digest was 3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6 (637 files), not the worker-reported 971e7843. Working-tree path set matched the brief; nothing staged, no commit. WP3-T07-RECON (verifier) reconciles before attempt 2."
+        }
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T04-FREEZE.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T07-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T07-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T07-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T07-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "79862bba6ea8f8077e26dd043dc0aa03b21b6594",
+      "baseline_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "69e790e0173236b2deab9aec9d43c72f1904731f03e4a1e5a5c14d231051fc92",
+      "source_digest": "3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T04 set with the pending handoff records."
+      "next_action": "Attempt 2: commit and push with digest 3f4a016d."
+    },
+    {
+      "id": "WP3-T07-RECON",
+      "package": "WP3",
+      "kind": "diagnose",
+      "status": "done",
+      "depends_on": [
+        "WP3-T07"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7adf82e919f9518c",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T07-RECON.md",
+        "handoff/delivery/evidence/WP3-T07-RECON"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T07-RECON.md",
+      "report": "handoff/delivery/tasks/WP3-T07-RECON.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T07-RECON/01-recon.txt"
+      ],
+      "baseline_commit": "b89f8a8122781b0e8c7cf1a0086089b96713b17b",
+      "source_digest": "3f4a016d0834437005cb40566a06b7d030dd6ae2bc072f5629f74984a33b9da6",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Digest 3f4a016d stable (two runs and after all checks, 637 files). Changed paths outside handoff/ are exactly the T07 owned set. Cause: tests/integration/pdf-render.test.ts was edited after the worker's digest and verify (mtime later than both), so 971e7843 described an earlier tree. On the current tree: verify exit 0, 40 files/906 tests, smoke passed, 0 deprecation lines; T07 test file alone 28 passed; precommit on a temporary index 35 files, 0 findings. Safe to freeze with 3f4a016d; real index untouched.",
+      "next_action": "None; WP3-T07-FREEZE attempt 2 with digest 3f4a016d."
     },
     {
       "id": "WP2-AUDIT-B",

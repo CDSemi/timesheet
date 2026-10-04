@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 79862bba6ea8f8077e26dd043dc0aa03b21b6594 (WP3-T03-FREEZE).
+  - HEAD = origin/main = b89f8a8122781b0e8c7cf1a0086089b96713b17b (WP3-T04-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 22acf6c4… (T03, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là 69e790e0… (T04, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T03-FREEZE. Các file này vào commit đóng băng kế tiếp.
+    T04-FREEZE, brief WP3-T07. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -104,10 +104,23 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 - WP3-TMPCLEAN đã xong: xóa 28 thư mục tạm không dùng của dự án (khoảng 14,9 MB); B: còn
   khoảng 22 MB trống, vẫn gần đầy. Các thư mục lớn khác trong B:\Temp (của IDE và công cụ
   chẩn đoán) do chủ dự án quyết.
-- Đang chạy: WP3-T04-FREEZE (committer).
+- WP3-T04-FREEZE đã commit và push, SHA b89f8a8 (32 đường dẫn, mọi kiểm tra 0).
+- Quyết định của coordinator: chạy WP3-T07 (dựng PDF) ngay bây giờ, trước T05/T06, vì T07
+  chỉ phụ thuộc T04 còn T05 đang chờ câu trả lời F-2 của chủ dự án.
+- WP3-T07 đã xong (tác giả tự báo): bộ dựng PDF bằng pdf-lib, kết quả ổn định từng byte
+  (14 ngày, giờ:phút, tổng OT tính cả hai Chủ nhật, bật/tắt hiện OT, font Unicode, chữ ký
+  nằm gọn trong khung, dải "chưa duyệt"); thư viện pdf-lib, fontkit, font DejaVu, pdfjs-dist
+  chỉ cho test (không cái nào bị deprecated; file lock thêm 20 gói); 14/14 bản đối chứng
+  bị phát hiện; verify 906 test; digest 971e7843….
+- Attempt 1 của WP3-T07-FREEZE dừng trước khi stage: digest là 3f4a016d…, không khớp
+  971e7843… do worker báo. Chưa có commit.
+- WP3-T07-RECON đã xong: worker sửa một file test sau khi tính digest; digest của cây file
+  hiện tại là 3f4a016d…, ổn định; các file thay đổi đúng bằng bộ file của T07; verify đạt
+  (906 test) và precommit sạch.
+- Đang chạy: WP3-T07-FREEZE attempt 2 (committer) với digest 3f4a016d….
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T04. T05 (giao dịch ký và chốt sổ) cần câu trả lời F-2
-     của chủ dự án; nếu chưa có, coordinator dừng trước T05.
+  1. Ghi kết quả commit đóng băng T07. Mọi task còn lại đều phụ thuộc T05, mà T05 cần câu
+     trả lời F-2 của chủ dự án: sau commit này coordinator chờ chủ dự án.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -125,5 +138,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T04-FREEZE.
+- Process còn sống: chỉ WP3-T07-FREEZE attempt 2.
 - Usage/reset: không quan sát được.

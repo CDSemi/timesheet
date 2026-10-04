@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 79862bba6ea8f8077e26dd043dc0aa03b21b6594 (WP3-T03-FREEZE).
+  - HEAD = origin/main = b89f8a8122781b0e8c7cf1a0086089b96713b17b (WP3-T04-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 22acf6c4… (T03, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest 69e790e0… (T04, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T03-FREEZE results and
-    evidence. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T04-FREEZE results and
+    evidence, the WP3-T07 brief. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -94,10 +94,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - WP3-TMPCLEAN is done: 28 unused project temp directories removed (about 14.9 MB); B:
   now has about 22 MB free and stays nearly full. Other large B:\Temp consumers (IDE and
   diagnostics folders) are the owner's choice.
-- Running: WP3-T04-FREEZE (committer).
+- WP3-T04-FREEZE is committed and pushed as b89f8a8 (32 paths, all checks 0).
+- Coordinator decision: WP3-T07 (PDF renderer) runs now, before T05/T06, because it
+  depends only on T04 and T05 waits for the owner's F-2 answer.
+- WP3-T07 is done (author-reported): deterministic pdf-lib renderer (14 dates, h:mm, OT
+  total with both Sundays, Show OT toggle, Unicode font, bounded signature, pending
+  banner); dependencies pdf-lib, fontkit, DejaVu fonts, dev pdfjs-dist (none deprecated;
+  lockfile +20 packages); 14/14 mutations caught; verify 906 tests; digest 971e7843….
+- WP3-T07-FREEZE attempt 1 stopped before staging: the digest was 3f4a016d…, not the
+  worker-reported 971e7843…. Nothing was committed.
+- WP3-T07-RECON is done: the worker edited a test after its digest; the current tree's
+  digest 3f4a016d… is stable, the changed set is exactly T07's, verify passes (906 tests)
+  and the precommit check is clean.
+- Running: WP3-T07-FREEZE attempt 2 (committer) with digest 3f4a016d….
 - Next action:
-  1. Record the T04 freeze. T05 (manual sign-off finalization) needs the owner's F-2
-     answer; without it the coordinator stops before T05.
+  1. Record the T07 freeze. Every remaining task now depends on T05, which needs the
+     owner's F-2 answer: the coordinator waits for the owner after this freeze.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -114,5 +126,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T04-FREEZE only.
+- Live processes: WP3-T07-FREEZE attempt 2 only.
 - Usage/reset: not observable.
