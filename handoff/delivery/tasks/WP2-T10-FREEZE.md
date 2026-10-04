@@ -93,4 +93,13 @@ Evidence goes in handoff/delivery/evidence/WP2-T10-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Self-reported model: claude-sonnet-5-5.
+- Pre-HEAD 9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d; post-HEAD and commit
+  26fa7c9f5a2dda1c2b9ab73122934ede04cf186f.
+- Pushed: yes; remote SHA 26fa7c9f5a2dda1c2b9ab73122934ede04cf186f (main).
+- Staged count: 54 (14 modified, 40 new); no extras, nothing unstaged.
+- Checks (Node v24.21.0): precommit 0, diff --cached --check 0, JSON parse 0,
+  validate_orchestration 0, check_recovery 0, personal-data read clean.
+- Screenshots viewed: 6, synthetic only. Blockers: none.
+- Evidence: handoff/delivery/evidence/WP2-T10-FREEZE/.
+

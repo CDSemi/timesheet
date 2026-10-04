@@ -7,13 +7,13 @@ America/Los_Angeles).
   claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d, the WP2-T09B freeze.
-  - Source digest 4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b
+  - HEAD = origin/main = 26fa7c9f5a2dda1c2b9ab73122934ede04cf186f, the WP2-T10 freeze.
+  - Source digest 84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e
     (author-reported).
-  - Uncommitted: WP2-T10 (source digest
-    84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e, author-reported),
-    the T09B-FREEZE evidence, the T11 and T10-FREEZE briefs, the board and this
-    checkpoint. WP2-T10-FREEZE commits them.
+  - Uncommitted: WP2-T11 (source digest
+    afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba, author-reported),
+    the T10-FREEZE evidence, the T12 and T11-FREEZE briefs, the board and this
+    checkpoint. WP2-T11-FREEZE commits them.
   - No unpushed commits.
 - Completed scope:
   - Governance:
@@ -127,7 +127,17 @@ America/Los_Angeles).
   2 skipped (run twice), including a Sydney DST fold and a Los Angeles gap.
   - Note for AUDIT-B: the client shows expected finish and break suggestions through the
     shared domain functions, for display only.
-- Next action: record the WP2-T10-FREEZE result, then dispatch WP2-T11 (brief ready).
+- WP2-T10 frozen in 26fa7c9: 54 paths; six screenshots viewed, all synthetic.
+- WP2-T11 (OT, history and evidence UI) is done: author-reported verify 582 tests and
+  test:e2e 50 passed, 2 skipped. Credits for the e2e are seeded by test-only code.
+- WP2-T11-FREEZE attempt 1 is blocked.
+  - The classifier ("Credential Leakage") denied a call that staged the set and printed
+    the CSV sample and the test-only credit-seeding diff. Nothing ran.
+  - The owner's direction is requested: an approval message naming the action and its
+    danger, or a manual commit with `git add -A`.
+  - The WP2-T13 brief is written and is now part of the set.
+- Next action: follow the owner's direction on WP2-T11-FREEZE, verify the commit, then
+  dispatch WP2-T12 (brief ready).
   - WP2-T09-PREP is done. It found the following:
     - Playwright 1.63.0 can run on the installed Edge (channel msedge), with no browser
       download;
@@ -143,8 +153,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy.
-- Running: WP2-T10-FREEZE (committer). WP2-T11 is pending on it.
-- Live processes: none known besides the committer. The T10 worker left no servers
-  running.
+- Running: nothing. WP2-T11-FREEZE is blocked on the owner, and WP2-T12 waits for it so
+  that no in-progress work is swept into a manual `git add -A`.
+- Live processes: none known.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

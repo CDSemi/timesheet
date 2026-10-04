@@ -293,3 +293,77 @@ export interface PolicyVersion {
   reference_end: string;
   breaks: PolicyBreak[];
 }
+
+/** The balance block of every OT response; the server computes it, the client never does. */
+export interface OtBalance {
+  posted_minutes: number;
+  reserved_minutes: number;
+  available_minutes: number;
+  negative: boolean;
+  reconciliation_required: boolean;
+}
+
+/** One OT leave request with its counters (GET /api/ot/leave); `version` guards every action. */
+export interface OtLeaveRequest {
+  id: string;
+  request_key: string;
+  leave_date: string;
+  requested_minutes: number;
+  approved_minutes: number;
+  reserved_minutes: number;
+  consumed_minutes: number;
+  released_minutes: number;
+  reversed_minutes: number;
+  /** Used minutes that a reversal may still give back. */
+  reversible_minutes: number;
+  approver_name: string;
+  approver_identity: string | null;
+  approval_date: string;
+  /** E-7: a text reference to the permission evidence (no files in WP2). */
+  evidence_ref: string;
+  approval_origin: string;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  version: number;
+}
+
+export interface OtLedgerEntry {
+  id: string;
+  entry_type: 'credit' | 'deficit_debit' | 'correction' | 'leave_consumption' | 'leave_reversal';
+  delta_minutes: number;
+  source_key: string;
+  work_date: string | null;
+  origin: string;
+  reason: string | null;
+  reconciliation_required: boolean;
+  posted_at: string;
+}
+
+/** Body of POST /api/ot/leave. */
+export interface OtReserveRequest {
+  request_key: string;
+  leave_date: string;
+  requested_minutes: number;
+  permission: { approver_name: string; approval_date: string; evidence_ref: string; approver_identity?: string | null };
+  note?: string | null;
+}
+
+/** One of the caller's own audit events (GET /api/history); snapshots are the stored before/after. */
+export interface HistoryEvent {
+  id: string;
+  occurred_at: string;
+  operation: string;
+  entity_type: string;
+  entity_id: string | null;
+  reason: string | null;
+  actor_is_self: boolean;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+}
+
+export interface HistoryPage {
+  audit_events: HistoryEvent[];
+  /** Per-user cursor for the next older page, or null at the end. */
+  next_before: string | null;
+}

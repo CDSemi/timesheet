@@ -1,8 +1,12 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { api, type User } from '../api.ts';
 
-/** The screens reachable from the navigation; later tasks add Day, OT, History and Settings here. */
-export const ROUTES = [{ id: 'timesheet', hash: '#/timesheet', label: 'Timesheet' }] as const;
+/** The screens reachable from the navigation; later tasks add Settings here. */
+export const ROUTES = [
+  { id: 'timesheet', hash: '#/timesheet', label: 'Timesheet' },
+  { id: 'ot', hash: '#/ot', label: 'OT' },
+  { id: 'history', hash: '#/history', label: 'History' },
+] as const;
 
 export type RouteId = (typeof ROUTES)[number]['id'];
 

@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 
 /*
@@ -23,6 +24,8 @@ export type Role = 'employee' | 'admin';
 export interface BuiltServer {
   origin: string;
   credentials: Record<Role, { email: string; password: string }>;
+  /** The temporary SQLite file; only the test-only credit seeding opens it besides the server. */
+  databasePath: string;
 }
 
 export const SCREENSHOT_DIR = process.env.E2E_SCREENSHOT_DIR ?? join(tmpdir(), 'timesheet-e2e-screenshots');
@@ -101,7 +104,65 @@ async function startBuiltServer(): Promise<{ server: BuiltServer; stop: () => Pr
     await stop();
     throw error;
   }
-  return { server: { origin, credentials }, stop };
+  return { server: { origin, credentials, databasePath: env.DATABASE_PATH ?? '' }, stop };
+}
+
+/* ---- Test-only credit seeding ------------------------------------------------ */
+
+/*
+ * By design no public route creates an OT credit (WP3 finalization will). So that the OT specs
+ * have an available balance, a child process (process.execPath) posts one synthetic credit
+ * through the internal ledger service of the BUILT server code, into the temporary database.
+ * SQLite WAL plus the 5 s busy timeout make this safe next to the running server. This is test
+ * code only: no production route or flag exists, and nothing infers an opening balance.
+ */
+const SEED_CREDIT_SCRIPT = `
+const [dbUrl, ledgerUrl, clockUrl] = process.argv.slice(1, 4);
+const { openDatabase } = await import(dbUrl);
+const { postCredit } = await import(ledgerUrl);
+const { systemClock } = await import(clockUrl);
+const env = process.env;
+const db = openDatabase(env.SEED_DB_PATH);
+try {
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(env.SEED_USER_EMAIL);
+  if (user === undefined) throw new Error('seed user not found');
+  const result = postCredit({ db, clock: systemClock }, {
+    userId: user.id,
+    sourceKey: env.SEED_SOURCE_KEY,
+    actorUserId: null,
+    origin: 'system',
+    reason: env.SEED_REASON,
+    workDate: env.SEED_WORK_DATE,
+    minutes: Number(env.SEED_MINUTES),
+  });
+  process.stdout.write(result.status);
+} finally {
+  db.close();
+}
+`;
+
+/** Posts one synthetic credit of `minutes` for the synthetic employee; each call has its own setup key. */
+export function seedCredit(server: BuiltServer, minutes: number, workDate = '2020-01-06'): void {
+  const dist = (file: string) => pathToFileURL(join(REPO_ROOT, 'dist', 'server', file)).href;
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', SEED_CREDIT_SCRIPT, dist('db/database.js'), dist('services/ledger.js'), dist('clock.js')],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SEED_DB_PATH: server.databasePath,
+        SEED_USER_EMAIL: server.credentials.employee.email,
+        SEED_SOURCE_KEY: `e2e-setup-credit-${randomBytes(8).toString('hex')}`,
+        SEED_REASON: 'Synthetic e2e setup credit (test only)',
+        SEED_WORK_DATE: workDate,
+        SEED_MINUTES: String(minutes),
+      },
+    },
+  );
+  if (result.status !== 0) throw new Error(`credit seeding failed with ${result.status}: ${result.stderr}`);
+  expect(result.stdout, 'credit seeding status').toBe('posted');
 }
 
 /* ---- Seeding over HTTP ----------------------------------------------------- */

@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP2",
-  "phase": "wp2-t10-freeze",
+  "phase": "wp2-t11-freeze-blocked",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e",
+  "current_source_digest": "afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP2-T10-FREEZE",
+  "next_task_id": "WP2-T11-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -57,9 +57,18 @@
     {
       "date": "2026-10-03",
       "observation": "WP2-T06-FREEZE: the committer's normal procedure (17 paths, one command per check) passed without any classifier denial. The 'Credential Leakage' denials are therefore not systematic. They hit one large set that included reviewer probe sources with password-named identifiers."
+    },
+    {
+      "date": "2026-10-03",
+      "observation": "WP2-T11-FREEZE: the classifier denied a combined call that staged the set and printed a CSV sample and the staged fixtures diff with test-only credit seeding ('Credential Leakage'). The coordinator's brief had asked the committer to read those files, which led it to print them beside staging. Future briefs should rely on the precommit scan and avoid printing seeding or secret-like test content in the committer transcript; this is hygiene for later commits, not a retry of this one."
     }
   ],
-  "pending_owner_question": null,
+  "pending_owner_question": {
+    "date": "2026-10-03",
+    "task": "WP2-T11-FREEZE",
+    "question": "The auto-mode classifier denied the committer's call that staged the T11 set and printed the CSV sample and the fixtures diff (test-only credit seeding) as 'Credential Leakage'. The coordinator will not route around it. Options: (1) an owner message naming the action and its specific danger, then attempt 2; (2) a manual commit by the owner with git add -A (commands and message file provided in chat).",
+    "context": "The working tree matched the expected set; screenshots were synthetic. The WP2-T13 brief was written after the dispatch and is now part of the set."
+  },
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -73,7 +82,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
+    "last_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
     "unpushed": []
   },
   "owner_decisions": [
@@ -2878,7 +2887,7 @@
       "id": "WP2-T10-FREEZE",
       "package": "WP2",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP2-T10"
       ],
@@ -2891,10 +2900,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a0f327f904a6e62de",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -2903,24 +2912,129 @@
       ],
       "prompt": "handoff/delivery/tasks/WP2-T10-FREEZE.md",
       "report": "handoff/delivery/tasks/WP2-T10-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T10-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP2-T10-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d",
+      "branch": "main",
+      "commit_sha": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 54 paths (14 modified, 40 new; exact expected set); precommit, diff-check, JSON parse, validator and check_recovery exit 0; six screenshots viewed, synthetic only.",
+      "next_action": "None; WP2-T11 runs on 26fa7c9."
+    },
+    {
+      "id": "WP2-T11",
+      "package": "WP2",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP2-T10-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a65a18de811337f07",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/OtScreen.tsx",
+        "src/client/HistoryScreen.tsx",
+        "src/client/components",
+        "src/client/App.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "tests/client",
+        "tests/e2e/ot-leave.spec.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/shell.spec.ts",
+        "handoff/delivery/tasks/WP2-T11.md",
+        "handoff/delivery/evidence/WP2-T11"
+      ],
+      "deviations": [
+        "tests/e2e/shell.spec.ts: one assertion changed (navigation link count 1 to 3) (accepted; path added to owned_paths after the fact)."
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T11.md",
+      "report": "handoff/delivery/tasks/WP2-T11.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP2-T11/verify.log.txt",
+        "handoff/delivery/evidence/WP2-T11/e2e.log.txt",
+        "handoff/delivery/evidence/WP2-T11/digest.txt",
+        "handoff/delivery/evidence/WP2-T11/ot-evidence-desktop-synthetic.csv.txt",
+        "handoff/delivery/evidence/WP2-T11/ot-after-use-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T11/ot-after-use-mobile-synthetic.png",
+        "handoff/delivery/evidence/WP2-T11/history-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP2-T11/history-mobile-synthetic.png"
+      ],
+      "baseline_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
+      "source_digest": "afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (author-reported). OT screen, own-history screen and evidence CSV download, with OT/History navigation. Covered: reserve 480, partial use 240, cancel the rest and reverse with expected_version, balances matching the API after every step; the E-2 warning appears after use and clears after reversal; the E-5 message creates nothing; record use is not offered before the leave date; a replayed use returns duplicate. Test-only credit seeding calls postCredit from dist via process.execPath with a synthetic setup key. verify 582 tests; test:e2e 50 passed, 2 skipped. Not independent acceptance.",
+      "next_action": "None; WP2-T11-FREEZE."
+    },
+    {
+      "id": "WP2-T11-FREEZE",
+      "package": "WP2",
+      "kind": "commit",
+      "status": "blocked",
+      "history": [
+        "attempt 1 (agent aea403dc3c989ee0d): no commit. HEAD = origin/main = 26fa7c9, index empty, working tree equal to the expected set (11 modified, 16 untracked), screenshots synthetic. The auto-mode classifier denied one combined call ('Credential Leakage'): git add of the paths, printing the CSV sample, printing the fixtures.ts staged diff (test-only credit seeding with a synthetic setup key) and listing staged names. Nothing ran. Not retried, split or rephrased. Owner direction requested."
+      ],
+      "depends_on": [
+        "WP2-T11"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aea403dc3c989ee0d",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP2-T11-FREEZE.md",
+        "handoff/delivery/evidence/WP2-T11-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP2-T11-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP2-T11-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "26fa7c9f5a2dda1c2b9ab73122934ede04cf186f",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Commit and push the T10 set (including 19 synthetic screenshots) with the T11 brief; on a permission denial stop without retrying."
+      "decision": "blocked: classifier denial 'Credential Leakage' on the staging/inspection call; no commit.",
+      "next_action": "Owner direction: an approval message naming the action and its specific danger (then attempt 2), or a manual commit with git add -A (the set now also includes the new WP2-T13 brief). The coordinator does not route around the denial."
     },
     {
-      "id": "WP2-T11",
+      "id": "WP2-T12",
       "package": "WP2",
       "kind": "implement",
       "status": "pending",
       "depends_on": [
-        "WP2-T10-FREEZE"
+        "WP2-T11-FREEZE"
       ],
       "profile": "timesheet-worker",
       "requested_model": "sonnet",
@@ -2938,27 +3052,28 @@
       "session_id": null,
       "attempt": 0,
       "owned_paths": [
-        "src/client/OtScreen.tsx",
-        "src/client/HistoryScreen.tsx",
+        "src/client/SettingsScreen.tsx",
+        "src/client/AdminScreen.tsx",
         "src/client/components",
         "src/client/App.tsx",
         "src/client/api.ts",
         "src/client/styles.css",
         "tests/client",
-        "tests/e2e/ot-leave.spec.ts",
+        "tests/e2e/admin.spec.ts",
+        "tests/e2e/isolation.spec.ts",
         "tests/e2e/fixtures.ts",
-        "handoff/delivery/tasks/WP2-T11.md",
-        "handoff/delivery/evidence/WP2-T11"
+        "handoff/delivery/tasks/WP2-T12.md",
+        "handoff/delivery/evidence/WP2-T12"
       ],
-      "prompt": "handoff/delivery/tasks/WP2-T11.md",
-      "report": "handoff/delivery/tasks/WP2-T11.md",
+      "prompt": "handoff/delivery/tasks/WP2-T12.md",
+      "report": "handoff/delivery/tasks/WP2-T12.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "OT screen (balances, flags, evidence, permission and reserve, record use per E-3, cancel and reverse, E-5 message, E-2 warning), history screen, evidence CSV download, navigation; test-only credit seeding; e2e on both projects."
+      "next_action": "Settings (policy form with preview) and admin UI (users, holiday CSV preview/commit, payroll exceptions, calendar warning); isolation e2e."
     },
     {
       "id": "WP2-INFRA1",

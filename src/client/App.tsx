@@ -1,6 +1,8 @@
 import { type SubmitEvent, useEffect, useState } from 'react';
 import { api, ApiRequestError, type User } from './api.ts';
 import { AppShell, useHashRoute } from './components/AppShell.tsx';
+import { HistoryScreen } from './HistoryScreen.tsx';
+import { OtScreen } from './OtScreen.tsx';
 import { TimesheetScreen } from './TimesheetScreen.tsx';
 
 /** Auth gate: the sign-in form, or the shell with its hash-routed screens. */
@@ -23,6 +25,8 @@ function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }
   return (
     <AppShell user={user} route={route} onSignedOut={onSignedOut}>
       {route === 'timesheet' && <TimesheetScreen user={user} />}
+      {route === 'ot' && <OtScreen />}
+      {route === 'history' && <HistoryScreen />}
     </AppShell>
   );
 }

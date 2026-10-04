@@ -7,14 +7,14 @@ America/Los_Angeles).
   (chủ dự án chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 9c36a7ec7e9355afbd7bb9161e24ceed4f99ab8d, commit đóng băng
-    WP2-T09B.
-  - Digest mã nguồn 4d242ea9105936a4bc95a1593c809f56b142b399d1c393a3863ab53e34eb159b
+  - HEAD = origin/main = 26fa7c9f5a2dda1c2b9ab73122934ede04cf186f, commit đóng băng
+    WP2-T10.
+  - Digest mã nguồn 84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e
     (tác giả tự báo).
-  - Chưa commit: WP2-T10 (digest mã nguồn
-    84355bd3a3cb22cacff43257874d6def415065b15ba41d17c526bf42c4e5155e, tác giả tự báo),
-    bằng chứng của T09B-FREEZE, brief T11 và T10-FREEZE, board và checkpoint này.
-    WP2-T10-FREEZE sẽ commit chúng.
+  - Chưa commit: WP2-T11 (digest mã nguồn
+    afe8e004f215e0b9c2200ecec54053b0db85cc8de877095d93fbf82faba3e8ba, tác giả tự báo),
+    bằng chứng của T10-FREEZE, brief T12 và T11-FREEZE, board và checkpoint này.
+    WP2-T11-FREEZE sẽ commit chúng.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị:
@@ -133,7 +133,18 @@ America/Los_Angeles).
   ở Los Angeles.
   - Ghi chú cho AUDIT-B: client hiển thị giờ dự kiến về và gợi ý giờ nghỉ bằng các hàm
     domain dùng chung, chỉ để hiển thị.
-- Bước tiếp: ghi kết quả WP2-T10-FREEZE, rồi giao WP2-T11 (brief sẵn).
+- WP2-T10 đã đóng băng ở 26fa7c9: 54 đường dẫn; đã xem 6 ảnh chụp, tất cả là dữ liệu giả
+  lập.
+- WP2-T11 (giao diện OT, lịch sử và bằng chứng) đã xong: tác giả tự báo verify 582 test;
+  test:e2e 50 đạt, 2 bỏ qua. Số dư OT dùng cho e2e được tạo bằng mã chỉ dành cho test.
+- Attempt 1 của WP2-T11-FREEZE bị chặn.
+  - Bộ phân loại ("Credential Leakage") từ chối một lệnh vừa stage bộ file vừa in mẫu CSV
+    và phần diff tạo bút toán chỉ dành cho test. Không lệnh nào chạy.
+  - Đang chờ chủ dự án chỉ đạo: một tin nhắn duyệt nêu rõ hành động và rủi ro, hoặc tự
+    commit bằng `git add -A`.
+  - Brief WP2-T13 đã viết xong và giờ thuộc bộ file này.
+- Bước tiếp: làm theo chỉ đạo của chủ dự án về WP2-T11-FREEZE, kiểm tra commit, rồi giao
+  WP2-T12 (brief sẵn).
   - WP2-T09-PREP đã xong. Kết quả chính:
     - Playwright 1.63.0 chạy được trên Edge có sẵn (channel msedge), không phải tải trình
       duyệt;
@@ -149,8 +160,8 @@ America/Los_Angeles).
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục.
-- Đang chạy: WP2-T10-FREEZE (committer). WP2-T11 chờ task này.
-- Process còn sống: không biết có process nào ngoài committer. Worker T10 không để server
-  nào chạy.
+- Đang chạy: không có. WP2-T11-FREEZE đang chờ chủ dự án, và WP2-T12 chờ commit đó để
+  không có thay đổi dở dang nào bị cuốn vào lệnh `git add -A` chạy tay.
+- Process còn sống: không biết có process nào.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.
