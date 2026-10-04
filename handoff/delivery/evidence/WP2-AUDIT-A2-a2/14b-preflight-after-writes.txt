@@ -1,0 +1,43 @@
+# 14b preflight again after writing the report pair, the brief result and the evidence folder  (2026-10-04T11:23:48Z)
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 55,
+  "local_links": 918,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit 0
+$ <workflow-python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 85,
+  "active_tasks": 2,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit 0
+
+## re-run after the final report edits  (2026-10-04T11:25:55Z)
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+ValueError: Broken link: <project>\handoff\delivery\WP2_RECHECK_B3.md -> WP2_RECHECK_B3.vi.md
+exit 1
+note: the only failure is WP2_RECHECK_B3.md, written meanwhile by the concurrent WP2-AUDIT-B3 task, whose .vi.md
+translation did not exist yet; it is not an output of this task. This task's pair WP2_RECHECK_A3.md/.vi.md was checked
+separately: links resolve, the ID sets are equal, LF, no trailing whitespace.
+
+## final re-run after WP2_RECHECK_B3.vi.md appeared  (2026-10-04T11:26:35Z)
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+  "status": "PASS",
+  "translation_pairs": 56,
+  "local_links": 930,
+exit 0
+$ <workflow-python> handoff/delivery/validate_orchestration.py
+  "status": "PASS",
+exit 0

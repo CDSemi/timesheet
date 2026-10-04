@@ -18,14 +18,25 @@ export function dateTimeIn(instant: string, zone: string): string {
 
 /**
  * The instant (ISO, UTC) at which a zone shows the wall time date + time. Only for unambiguous
- * wall times: a DST fold or gap throws, because the tests that use this never type one.
+ * wall times: a DST gap (the time never occurs) and a DST fold (the time occurs twice) both
+ * throw, because the tests that use this never type one and a silent choice would depend on the
+ * zone. Candidates come from the zone offsets one day either side, each checked by reading the
+ * wall clock back; this uses Intl only and no product code.
  */
 export function instantOfWallTime(date: string, time: string, zone: string): string {
   const wallAsUtc = Date.parse(`${date}T${time}:00Z`);
-  let instant = wallAsUtc;
-  for (let step = 0; step < 3; step += 1) instant = wallAsUtc - (wallParts(instant, zone).asUtc - instant);
-  if (wallParts(instant, zone).text !== `${date} ${time}`) throw new Error(`${date} ${time} is not an unambiguous wall time in ${zone}`);
-  return new Date(instant).toISOString();
+  const dayMs = 86_400_000;
+  const offsets = new Set<number>();
+  for (const probe of [wallAsUtc - dayMs, wallAsUtc, wallAsUtc + dayMs]) offsets.add(wallParts(probe, zone).asUtc - probe);
+  const matches = new Set<number>();
+  for (const offset of offsets) {
+    const candidate = wallAsUtc - offset;
+    if (wallParts(candidate, zone).text === `${date} ${time}`) matches.add(candidate);
+  }
+  const label = `${date} ${time} is not an unambiguous wall time in ${zone}`;
+  if (matches.size === 0) throw new Error(`${label} (DST gap)`);
+  if (matches.size > 1) throw new Error(`${label} (DST fold)`);
+  return new Date([...matches][0] ?? Number.NaN).toISOString();
 }
 
 /** What a zone shows ("YYYY-MM-DD HH:mm") at the instant another zone shows the wall time date + time. */

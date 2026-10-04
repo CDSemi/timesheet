@@ -112,4 +112,10 @@ Evidence goes in handoff/delivery/evidence/WP2-FIXB2-FREEZE/. Return at most 150
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD f79413b77e7f745e1eff383f1ad748e7667533da; post-HEAD a3d1b6555c352afa68b3d61ddc67f0c596742698.
+- Pushed to origin main: yes; remote SHA a3d1b6555c352afa68b3d61ddc67f0c596742698.
+- Staged count 151. Check exits: all 0 (see evidence/WP2-FIXB2-FREEZE/checks.txt).
+- Pre-HEAD f79413b77e7f745e1eff383f1ad748e7667533da; post-HEAD a3d1b6555c352afa68b3d61ddc67f0c596742698.
+- Pushed to origin main: yes; remote SHA a3d1b6555c352afa68b3d61ddc67f0c596742698.
+- Staged count 151. Check exits: all 0 (see evidence/WP2-FIXB2-FREEZE/checks.txt).
+- Screenshots viewed: 6 of 27, all synthetic. Blockers: none.

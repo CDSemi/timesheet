@@ -1,0 +1,41 @@
+# WP2-AUDIT-A2 attempt 2 command index (auditor, fresh context; reviewed commit a3d1b6555c352afa68b3d61ddc67f0c596742698)
+# All runs in a scratch clone <clone> on the C: drive outside Dropbox (git clone --no-hardlinks of the project
+# folder, detached at a3d1b65). Node v24.21.0 called by full path (<node24>); npm via <node24> npm-cli.js; TEMP/TMP
+# pointed at <scratch>/tmp. Controls ran in <red>, a scratch git worktree of the clone: first at f79413b (steps 4b and
+# 16b), then switched to 8fae685 (step 10b); its node_modules was a junction to the clone's (package.json and
+# package-lock.json are identical across 8fae685..a3d1b65). Synthetic data only; run-time passwords are never printed.
+# Times are UTC (2026-10-04). Evidence files are masked (<clone>, <scratch>, <project>, <home>, <user>), LF, no
+# trailing whitespace, ANSI codes stripped.
+
+| # | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 1 | git rev-parse HEAD / origin/main; git ls-tree digest; node scripts/source-digest.mjs (project folder, read-only) | 0 | a3d1b65 = origin/main; 5b370621...8581 (613 files); no non-handoff change in the project working tree | 01-digest-before.txt |
+| 2 | npm ci --no-audit --no-fund (clone) | 0 | 144 packages | 02-npm-ci.txt |
+| 3 | NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify | 0 | typecheck, lint, 32 files / 611 tests, build, SMOKE PASSED; the only 'deprecat' match is the echoed command line | 03-verify.txt |
+| 4 | vitest run on 13 area-A files (ledger, ot-leave, ot-leave-concurrency, history, evidence-export, isolation, migrations, ot-api, ledger.fixtures, user-admin, holiday-import, payroll-exceptions, adminModel); concurrency x3 more; payroll-exceptions verbose; holiday-import verbose | 0 | 13 files / 267 tests; 8/8 three times; payroll-exceptions 13/13 incl. the WP2-A2-02 differential test; holiday-import 29/29 incl. the WP2-A-01 regression test | 04-targeted-tests.txt |
+| 4b | a3d1b65 tests/integration/payroll-exceptions.test.ts against the f79413b source (<red> at f79413b; the file restored afterwards) | 1 | expected red: 4 failed / 9 passed, all on the extra refreshed_pay_period key; the differential test fails | 04b-red-payroll-on-f79413b.txt |
+| 5 | playwright test admin.spec.ts isolation.spec.ts ot-leave.spec.ts (Edge channel, built dist from step 3) | 0 | 24 passed (desktop + mobile), incl. "payroll exception needs a reason and is recorded once" | 05-e2e-admin-isolation-ot-leave.txt |
+| 6 | node probes/pr-race.mjs <clone> <work>/race 10 (attempt-1 probe unchanged; 4 OS processes, one WAL file) | 0 | 22 combinations x 10 = 220 production rounds, 0 violations; unsafe control double-booked 10/10; integrity ok | 06-probe-multiprocess-race.txt |
+| 6b | node probes/pr-race.mjs <clone> <work>/race2 25 (second run) | 0 | 22 x 25 = 550 production rounds, 0 violations; control 25/25; integrity ok | 06b-probe-multiprocess-race-25.txt |
+| 7 | node probes/pa-ledger-privacy.mjs <clone> <work>/pa (attempt-1 probe unchanged) | 0 | 119 pass / 0 fail | 07-probe-ledger-privacy.txt |
+| 9 | node probes/pf-supplement.mjs <clone> <work>/pf (attempt-1 probe unchanged) | 0 | 6 / 0; S6 (R1) and S7 (R2) unchanged; S8 counts undefined | 09-probe-supplement.txt |
+| 10 | node probes/pg-holiday-preview-privacy.mjs <clone> <work>/pg (attempt-1 probe unchanged) | 0 | nothing inferable ("none"); preview wrote nothing (audit 12 -> 12, versions 1 -> 1) | 10-probe-holiday-preview-privacy.txt |
+| 10b | same probe on <red> at 8fae685 (sensitivity control) | 0 | leak reproduced (10-05, 10-07): the probe is still sensitive | 10b-probe-holiday-preview-privacy-base-control.txt |
+| 13 | node probes/pg2-admin-differential.mjs <clone> <work>/pg2 (attempt-1 A2 probe unchanged) | 0 | 25 / 0: 27/27 admin responses identical before/after employee activity; finalized_conflicts {date} only; commit path unchanged; W-section "same exception" (attempt 1: DIFF refreshed_pay_period false -> true); OBS W3 now undefined/undefined | 13-probe-admin-differential.txt |
+| 16 | node probes/pe-payroll-differential.mjs <clone> <work>/pe (new probe, single run) | 0 | 20 / 0: 10 payroll-exception requests + 20 admin reads identical with and without employee timesheets (30/30); stored rows really refreshed in W1; refreshed flag kept in the owner-less audit event only; 409 period_finalized kept, writes nothing, period dates only, identical for one vs two finalized timesheets | 16-probe-payroll-differential.txt |
+| 16b | same new probe on <red> at f79413b (sensitivity control) | 1 | 17 / 3 as expected: X1-X4 DIFF refreshed_pay_period false -> true; P1, P3, P5 fail; every read after the exception was identical even there | 16b-probe-payroll-differential-base-control.txt |
+| 11 | git diff / git grep static scans (clone) | 0 | fix range: styles.css, admin.ts, calendars.ts, tests; 22 area-A paths unchanged; refreshed_pay_period only in the audit payload and its two test assertions; no client use; no "aggregate count" left in src/tests/docs; zoneOracle test-only | 11-static-scans.txt |
+| 12 | git rev-parse HEAD; digest; node scripts/source-digest.mjs (clone and project folder) | 0 | unchanged a3d1b65 / 5b370621...8581; clone tracked tree clean | 12-digest-after.txt |
+| 14 | <workflow-python> validate_package.py --preflight; validate_orchestration.py (project folder, read-only) | 0 / 0 | PASS / PASS | 14-preflight.txt |
+| 14b | the same two validators again after writing the report pair, the brief result and this folder | 0 / 0 | PASS (translation pairs 55, local links 918) / PASS | 14b-preflight-after-writes.txt |
+| 15 | node scripts/precommit-check.mjs in <clone> with only this task's outputs staged (clone index; the project index was not touched); run 2 after the final index update | 0 | PASS: 24 staged files, 0 blocking, 0 warnings (run 1); run 2 in the same file | 15-precommit-check.txt |
+| 17 | git worktree remove <red>; rm -rf <scratch> (clone, worktree, work databases, e2e output, probe copies) | 0 | scratch removed; project folder HEAD and digest re-checked unchanged | 17-cleanup.txt |
+
+Probe sources: the attempt-1 probes were reused unchanged; sha256 of the copies run here equals the tracked sources:
+  pa-ledger-privacy e0f70f8c..., pf-supplement 93345c4e..., pg-holiday-preview-privacy 009d9ebf..., pr-race 07fefbe9...,
+  pr-race-worker 206ca1ab... (handoff/delivery/evidence/WP2-AUDIT-A/probes/) and pg2-admin-differential a507c79f...
+  (handoff/delivery/evidence/WP2-AUDIT-A2/probes/). The new probe is probes/pe-payroll-differential.mjs.txt here
+  (stored as .txt because of the lint trap). No probe failed on a probe bug in this attempt; every run is kept.
+The scratch clone, the worktree, the work databases and the e2e output were deleted after the audit (step 17).
+17-cleanup.txt was written after the clone was removed, so the precommit gate (step 15) did not cover it; a grep
+scan for user-profile paths, CR bytes and trailing whitespace over this whole folder found none.

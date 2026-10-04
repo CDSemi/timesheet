@@ -1,0 +1,77 @@
+== vitest run tests/client/zoneOracle.test.ts tests/integration/payroll-exceptions.test.ts tests/client/sessionModel.test.ts --reporter=verbose (2026-10-04T11:21:47Z)
+
+ RUN  v5.0.2 <work>/clone
+
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > follows the Los Angeles season for a time typed at +07:00 15ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > keeps the Los Angeles calendar date for every day of a year 171ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > resolves the instant of a wall time and refuses a DST gap 1ms
+ ✓ tests/client/zoneOracle.test.ts > zone oracle > shows that the old fixed 08:00 expectation is wrong in winter and right only in summer 1ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > sends local wall times in the explicit input zone, with a fold only when no offset pins the instant 1ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > puts the explicit end date of an overnight session into the end instant 0ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > keeps unknown breaks unconfirmed and sends confirmed ones as typed 1ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > sends none as an explicit empty list even when rows were left behind 0ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > omits an empty reason 0ms
+ ✓ tests/client/sessionModel.test.ts > request bodies follow the server contract > builds Clock out per E-1: unknown omits the list, confirmed or none sends the complete list 1ms
+ ✓ tests/client/sessionModel.test.ts > draft completeness (not business validation) > names the first empty field 0ms
+ ✓ tests/client/sessionModel.test.ts > draft completeness (not business validation) > asks for every listed break unless none were taken 0ms
+ ✓ tests/client/sessionModel.test.ts > draft completeness (not business validation) > drops the fold and the offset when the typed value changes 0ms
+ ✓ tests/client/sessionModel.test.ts > DST fold and gap choices (R-07) > reads the server details of a repeated time and of a missing time 0ms
+ ✓ tests/client/sessionModel.test.ts > DST fold and gap choices (R-07) > ignores other errors and malformed details 0ms
+ ✓ tests/client/sessionModel.test.ts > DST fold and gap choices (R-07) > applies the chosen fold to every field that holds the repeated time, and to no other 0ms
+ ✓ tests/client/sessionModel.test.ts > DST fold and gap choices (R-07) > resolves the repeated start to the instant of the chosen fold with the shared resolver 1ms
+ ✓ tests/client/sessionModel.test.ts > DST fold and gap choices (R-07) > offers the first valid time after a gap and moves every field that held the missing time 1ms
+ ✓ tests/client/sessionModel.test.ts > break suggestions shift with the arrival (R-02) > places the default breaks from a 09:00 start at 11:00, 13:00 and 15:30, unconfirmed, pinned by offset 0ms
+ ✓ tests/client/sessionModel.test.ts > break suggestions shift with the arrival (R-02) > shifts them with a 07:00 arrival 0ms
+ ✓ tests/client/sessionModel.test.ts > expected finish and policy (R-02) > picks the policy effective on the date, the later seq on the same date 0ms
+ ✓ tests/client/sessionModel.test.ts > expected finish and policy (R-02) > adds required work and excluded breaks to the start: 07:00, 08:00 and 09:00 give 16:00, 17:00 and 18:00 0ms
+ ✓ tests/client/sessionModel.test.ts > expected finish and policy (R-02) > shows the finish in the display zone, not the zone the session was typed in (R-07) 0ms
+ ✓ tests/client/sessionModel.test.ts > expected finish and policy (R-02) > uses the earliest session and says nothing without a session or a policy 0ms
+ ✓ tests/client/sessionModel.test.ts > input zone choices for manual entry (R-07) > defaults to the current display zone, not the reporting zone, and still offers both 0ms
+ ✓ tests/client/sessionModel.test.ts > input zone choices for manual entry (R-07) > lists a display zone that is also a common zone once 0ms
+ ✓ tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > re-reads the entered wall clock in the new zone: the offsets pinned in the old zone are dropped 1ms
+ ✓ tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > leaves an unchanged zone alone, so an unchanged edit keeps the saved instants 0ms
+ ✓ tests/client/sessionModel.test.ts > changing the input zone of a saved session (R-07) > asks again when the same wall time is repeated or missing in the new zone 0ms
+ ✓ tests/client/sessionModel.test.ts > editing a saved session > pins each time by the offset it had, so a resave never asks about a repeated time again 0ms
+ ✓ tests/client/sessionModel.test.ts > editing a saved session > keeps the seconds of a live clock session 0ms
+ ✓ tests/client/sessionModel.test.ts > editing a saved session > maps the stored break state to a mode 0ms
+ ✓ tests/client/sessionModel.test.ts > editing a saved session > shows an open session with an empty end on the start date 0ms
+ ✓ tests/client/sessionModel.test.ts > server figures, E-2 notice and day fields > shows the figures exactly as the server reports them, in hours and minutes 0ms
+ ✓ tests/client/sessionModel.test.ts > server figures, E-2 notice and day fields > shows the OT mismatch notice only when the server says the minutes differ, and it never offers an action 0ms
+ ✓ tests/client/sessionModel.test.ts > server figures, E-2 notice and day fields > builds the day entry body with the version it saw and drops the kind without leave 0ms
+ ✓ tests/client/sessionModel.test.ts > server figures, E-2 notice and day fields > leaves a missing kind to the server and rejects only a malformed minutes field 1ms
+ ✓ tests/client/sessionModel.test.ts > server figures, E-2 notice and day fields > starts the form from the day, and hints whole minutes as hours and minutes 0ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > answers 401 without a session and 403 to an employee, changing nothing 266ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > rejects a missing Origin, unknown fields and an unknown calendar 250ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read 238ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > requires a reason and validates the exception without writing 239ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > refuses a second exception for the same payroll date 242ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > uses the exception when the period row is first created later 273ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period 250ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > answers the same success body whether or not employees have timesheets in the period (WP2-A2-02) 491ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes the due date alone when only the deadline moves 253ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when a finalized timesheet references the row and changes nothing 238ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when any user’s finalized timesheet references the row, even if the others are drafts 248ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period 256ms
+stderr | tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written
+Unhandled request error SqliteError: forced_audit_failure
+    at recordAudit (<work>/clone/src/server/services/audit.ts:22:5)
+    at sqliteTransaction.<anonymous> (<work>/clone/src/server/services/calendars.ts:335:7)
+    at sqliteTransaction (<work>\clone\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at createPayrollException (<work>/clone/src/server/services/calendars.ts:347:6)
+    at <work>/clone/src/server/routes/admin.ts:156:20
+    at dispatch (file:///<work>/clone/node_modules/hono/dist/compose.js:35:11)
+    at <work>/clone/src/server/http/auth.ts:28:7
+    at <work>/clone/src/server/http/auth.ts:14:5
+    at <work>/clone/src/server/http/auth.ts:26:5
+    at dispatch (file:///<work>/clone/node_modules/hono/dist/compose.js:35:11) {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written 253ms
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  04:21:47
+   Duration  4.55s (tests 75%, import 14%, transform 11%)
+
+exit 0

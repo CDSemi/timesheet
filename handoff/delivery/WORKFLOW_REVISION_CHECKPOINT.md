@@ -248,8 +248,29 @@ America/Los_Angeles).
   - the payroll-exception 201 returns only the exception, with a differential test;
   - comments;
   - verify 611 tests; e2e 74 passed; digest 5b370621….
-- Running: WP2-FIXB2-FREEZE (committer). Next come WP2-GATE3, then WP2-AUDIT-A2 attempt 2
-  and WP2-AUDIT-B3 in parallel, then WP2-ACCEPT.
+- WP2-FIXB2-FREEZE is committed and pushed as a3d1b65 (151 paths, all checks 0). This is
+  the new package-final freeze.
+- WP2-GATE3 PASS on a3d1b65; digest of record
+  5b370621e7d3b9f292e8facebb1f0f6e9307a40cbda3a9f87b7dd61924298581.
+  - 611 tests; concurrency x20; migrations; e2e 74 passed with all 12 flows.
+  - The FIXA, FIXB and FIXB2 regressions are present and pass.
+- WP2-AUDIT-A2 attempt 2 PASS on a3d1b65 / 5b370621.
+  - A2-02 is resolved and A-01 holds; the race ran 770 rounds.
+  - A3-01 (Info, the audit record keeps the refresh flag) is carried to WP3.
+- WP2-AUDIT-B3 FIX REQUIRED, with two Low findings. Every scope item passed, including the
+  winter-clock run and 159,460 style values with 0 differences.
+  - WP2-B3-01: font-weight and letter-spacing literals.
+  - WP2-B3-02: a zoneOracle fold comment.
+- WP2-FIXB3 is done (author-reported):
+  - the literal inventory went from 67 occurrences to 0; only the media conditions are
+    left, as documented;
+  - computed styles: 230,692 values with 0 differences; the mutant control was detected;
+  - the oracle throws on folds and gaps;
+  - verify 613 tests; e2e 74 passed; digest e61fa914….
+  - The agent was stopped by the coordinator after its hand-back.
+- Running: WP2-FIXB3-FREEZE (committer).
+- Next: a freeze, then WP2-GATE4, then WP2-AUDIT-A2 attempt 3 (a delta re-audit, because
+  any source change invalidates the A pass) and WP2-AUDIT-B4.
 - Live processes: none known besides the committer.
 - Last digest: 809215583… (author-reported). No WP2 package audit has run yet.
 - Usage/reset: not observable.

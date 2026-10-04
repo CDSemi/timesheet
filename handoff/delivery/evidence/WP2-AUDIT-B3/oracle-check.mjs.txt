@@ -1,0 +1,61 @@
+// WP2-AUDIT-B3 oracle cross-check (auditor-owned). It imports the committed test oracle
+// tests/client/zoneOracle.ts from the clone and compares it with a rule-based Los Angeles offset
+// computed by plain arithmetic (US rule since 2007: PDT from the second Sunday of March 02:00
+// local to the first Sunday of November 02:00 local), with no Intl at all. It also checks the
+// committed R-07 expectation for every day of 2026-2028 and the oracle's DST fold behaviour.
+import { pathToFileURL } from 'node:url';
+const clone = process.argv[2];
+const oracle = await import(pathToFileURL(`${clone}/tests/client/zoneOracle.ts`).href);
+const { dateTimeIn, instantOfWallTime, wallTimeIn } = oracle;
+
+const pad = (n) => String(n).padStart(2, '0');
+function nthSunday(year, month, n) { // month 1-12, UTC day of the nth Sunday
+  const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  return 1 + ((7 - first) % 7) + 7 * (n - 1);
+}
+function laOffsetHours(utcMs) { // -7 (PDT) or -8 (PST), no Intl
+  const y = new Date(utcMs).getUTCFullYear();
+  const start = Date.UTC(y, 2, nthSunday(y, 3, 2), 10); // 02:00 PST = 10:00Z
+  const end = Date.UTC(y, 10, nthSunday(y, 11, 1), 9); // 02:00 PDT = 09:00Z
+  return utcMs >= start && utcMs < end ? -7 : -8;
+}
+function arithmeticLa(date, time) { // time typed in Asia/Ho_Chi_Minh (+07:00, no DST since 1975)
+  const utc = Date.parse(`${date}T${time}:00Z`) - 7 * 3600_000;
+  const la = new Date(utc + laOffsetHours(utc) * 3600_000);
+  return `${la.getUTCFullYear()}-${pad(la.getUTCMonth() + 1)}-${pad(la.getUTCDate())} ${pad(la.getUTCHours())}:${pad(la.getUTCMinutes())}`;
+}
+
+let days = 0, mismatches = 0, pst = 0, pdt = 0, dateChanged = 0, oldWouldFail = 0;
+const firstOldFail = [];
+for (let ms = Date.UTC(2026, 0, 1); ms < Date.UTC(2029, 0, 1); ms += 86_400_000) {
+  const date = new Date(ms).toISOString().slice(0, 10);
+  for (const [time, oldExpected] of [['22:00', '08:00'], ['23:30', '09:30']]) {
+    const viaOracle = wallTimeIn(date, time, 'Asia/Ho_Chi_Minh', 'America/Los_Angeles');
+    const viaSaigon = wallTimeIn(date, time, 'Asia/Saigon', 'America/Los_Angeles');
+    const viaArith = arithmeticLa(date, time);
+    if (viaOracle !== viaArith || viaSaigon !== viaArith) { mismatches += 1; console.log('MISMATCH', date, time, viaOracle, viaSaigon, viaArith); }
+    if (viaOracle.slice(0, 10) !== date) dateChanged += 1;
+    if (time === '22:00') { if (viaOracle.endsWith('07:00')) pst += 1; else pdt += 1; }
+    if (time === '22:00' && viaOracle !== `${date} ${oldExpected}`) { oldWouldFail += 1; if (firstOldFail.length < 3) firstOldFail.push(date); }
+  }
+  days += 1;
+}
+console.log(`days 2026-01-01..2028-12-31: ${days}; oracle vs no-Intl arithmetic mismatches: ${mismatches} (both Asia/Ho_Chi_Minh and the Edge alias Asia/Saigon)`);
+console.log(`22:00 +07:00 in Los Angeles: ${pdt} PDT days (08:00), ${pst} PST days (07:00); accounting date changed on ${dateChanged} of ${days * 2} conversions`);
+console.log(`old hard-coded 08:00 expectation would fail on ${oldWouldFail} days; first: ${firstOldFail.join(', ')}`);
+
+for (const date of ['2026-11-02', '2026-11-03', '2026-12-21', '2027-01-14', '2027-03-15', '2026-07-15']) {
+  const start = instantOfWallTime(date, '22:00', 'Asia/Saigon');
+  console.log(`${date}: 22:00 Asia/Saigon = ${start} = ${dateTimeIn(start, 'America/Los_Angeles')} LA; 23:30 -> ${wallTimeIn(date, '23:30', 'Asia/Saigon', 'America/Los_Angeles')} LA`);
+}
+
+// DST behaviour of instantOfWallTime (its comment says a fold or a gap throws).
+for (const [date, time, zone, label] of [
+  ['2026-03-08', '02:30', 'America/Los_Angeles', 'LA spring-forward gap'],
+  ['2026-11-01', '01:30', 'America/Los_Angeles', 'LA fall-back fold'],
+  ['2026-04-05', '02:30', 'Australia/Sydney', 'Sydney fall-back fold'],
+  ['2026-10-25', '02:30', 'Europe/Berlin', 'Berlin fall-back fold'],
+]) {
+  try { console.log(`${label} ${date} ${time} ${zone}: returned ${instantOfWallTime(date, time, zone)} (no throw)`); }
+  catch (error) { console.log(`${label} ${date} ${time} ${zone}: threw "${error.message}"`); }
+}

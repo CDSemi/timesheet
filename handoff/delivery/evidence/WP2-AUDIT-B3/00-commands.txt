@@ -1,0 +1,40 @@
+WP2-AUDIT-B3 commands and exits (Node v24.21.0 portable by full path; Edge channel msedge, no browser download;
+TEMP/TMP, clones, e2e output and screenshots in the auditor's own C: work folder <work>, outside Dropbox).
+Reviewed commit a3d1b6555c352afa68b3d61ddc67f0c596742698 (clone <work>/clone); base f79413b77e7f745e1eff383f1ad748e7667533da
+(clone <work>/base, used only for the real-screen style comparison and the winter negative control).
+
+1. git rev-parse HEAD / origin/main; node scripts/source-digest.mjs; git ls-tree ... | sha256sum (project, clone, base):
+   exit 0; 5b370621...8581 (613 files) three ways; base 4c2bd7ef...3528 (digest-before.txt)
+2. git clone --no-hardlinks <project> clone|base; git checkout <sha>: exit 0
+3. npm ci --no-audit --no-fund (clone, base): 144 packages each; exit 0 / 0 (npm-ci.txt)
+4. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (clone): typecheck, lint, 32 files / 611 tests,
+   build, smoke SMOKE PASSED; 0 deprecation lines; exit 0 (verify.txt)
+5. same NODE_OPTIONS, npm run test:e2e (clone, desktop and mobile): 74 passed, 2 skipped; exit 0 (e2e.txt)
+6. node oracle-check.mjs <clone> (imports tests/client/zoneOracle.ts; compares with no-Intl US-rule arithmetic, 2026-2028):
+   0 mismatches of 2192 conversions (Asia/Ho_Chi_Minh and Asia/Saigon); old 08:00 expectation fails on 382 PST days;
+   instantOfWallTime throws for the LA gap but returns an instant for three folds; exit 0 (oracle-check.txt)
+7. AUDIT_FAKE_NOW=2026-11-03T20:00:00Z and 2027-01-14T20:00:00Z, NODE_OPTIONS=--import=<work>/tools/fake-clock.mjs
+   (shifts the clock of dist/server/index.js and cli.js only), playwright test zz-audit-b3-date day-editor.spec.ts
+   -g "R-07|audit-b3" (clone, committed spec unmodified): picked 2026-11-02 and 2027-01-13 (PST); 4 passed each; exit 0 / 0
+   (winter-run.txt)
+8. npm run build (base): exit 0 (base-build.txt); the same playwright command on base f79413b: real clock 4 passed, exit 0;
+   AUDIT_FAKE_NOW=2026-11-03T20:00:00Z: R-07 test fails on both projects (expected "2026-11-02 08:00", received
+   "2026-11-02 07:00"), exit 1 = expected negative control (winter-control.txt)
+9. node literal-scan.mjs <clone>: 72 declarations with literals, 30 with a literal absent from WP1; exit 0 (literal-scan.txt)
+10. playwright test zz-audit-b3-style with AUDIT_STYLE_LABEL=reviewed (clone) and =base (base): 4 passed each; exit 0 / 0
+    (style-runs.txt); node compare.mjs <style>: 18 screens, 4690 elements, 159460 values, 0 differences; exit 0
+    (style-compare.txt)
+11. mutant: dist CSS of the clone edited (--shape-size .75rem, --font-size-base 1.02rem), capture rerun (4 passed, exit 0),
+    original CSS restored (same sha256 prefix); compare base vs mutant: 1817 differing lines on the 12 screens that use
+    the tokens; exit 0 (style-mutant.txt)
+12. playwright test zz-audit-b3-zone zz-audit-b3-payroll zz-audit-b3-f1 (clone): 8 passed; exit 0 (probes-run1.txt,
+    audit-b3-*.json, audit-b3-*-synthetic.png)
+13. vitest run tests/client/zoneOracle.test.ts tests/integration/payroll-exceptions.test.ts tests/client/sessionModel.test.ts
+    --reporter=verbose (clone): 3 files, 51 tests passed; exit 0 (vitest-targeted.txt)
+14. probe specs removed from both clones; after digests: clone and base clean, project HEAD a3d1b65, 5b370621...8581
+    two ways, nothing outside handoff/; exit 0 (digest-after.txt)
+15. node scripts/precommit-check.mjs in the scratch clone with this audit's outputs (copied from the project) staged
+    there (the project index untouched): PASS, 50 files, 0 findings; exit 0. Workflow Python
+    validate_package.py --preflight in the clone (55 pairs, 924 links) and in the project folder (56 pairs, 931 links,
+    includes the concurrent WP2-AUDIT-A2 pair): PASS; exit 0 / 0 (preflight-privacy.txt)
+16. clones (<work>/clone, <work>/base), temporary databases, e2e output and screenshots deleted with the whole work folder

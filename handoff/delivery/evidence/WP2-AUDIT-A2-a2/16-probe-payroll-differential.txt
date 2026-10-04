@@ -1,0 +1,73 @@
+$ <node24> probes/pe-payroll-differential.mjs <clone> <work>/pe  (2026-10-04T11:14:40Z) [new probe, run 1]
+## W0: no employee activity
+  setup admin creates employee2 -> 201; counts {"audit_events":10,"payroll_exceptions":0,"pay_periods":0,"timesheets":0,"day_entries":0,"work_sessions":0}
+## W1: two employees edit days in four pay periods
+  setup admin creates employee2 -> 201
+  setup employee session 09-21 (period of payroll 10-02, past) with reason -> 201
+  setup employee session 10-07 (payroll 10-16, current) -> 201
+  setup employee2 session 10-08 (payroll 10-16, current) -> 201
+  setup employee explicit Vacation 10-20 (payroll 10-30, next) -> 200
+  setup employee2 explicit Off 11-02 (payroll 11-13) -> 200
+PASS E0 every W1 employee setup step succeeded
+  W1 counts {"audit_events":18,"payroll_exceptions":0,"pay_periods":4,"timesheets":5,"day_entries":5,"work_sessions":3}; stored pay_periods nominal dates: 2026-10-02 2026-10-16 2026-10-30 2026-11-13
+PASS E1 W0 has no stored pay_periods row; W1 has rows for 10-02, 10-16, 10-30 and 11-13
+## administrator sequence and reads in W0 and W1
+  same X1 current period 10-16 -> 10-15 with a new due date (stored rows in W1) [201 8271294199ed]
+  same X2 next period 10-30, deadline only (stored rows in W1) [201 18a977cea436]
+  same X3 past period 10-02 -> 10-01 (stored rows in W1) [201 b446550c1cee]
+  same X4 period 11-13 -> 11-12 (stored row in W1 from an explicit label) [201 76d81e97f536]
+  same X5 period 11-27 -> 11-25 (no stored row in either world) [201 0001a061402b]
+  same X6 duplicate of X1 (409 expected) [409 002a464d6045]
+  same X7 blank reason on 12-11 (422 expected, nothing written) [422 589c2ba92b68]
+  same X8 not a payroll date 10-17 (422 expected) [422 f70d7db27ad5]
+  same X9 beyond half a cycle (422 expected) [422 4eac6d343a38]
+  same X10 unknown calendar (404 expected) [404 f87cf2657032]
+  same GET /api/admin/users [200 cc17405e48d7]
+  same GET /api/auth/me [200 8f3710c154ab]
+  same GET /api/calendar [200 64926df48e75]
+  same GET /api/periods/current [200 e7d4fe83bbb0]
+  same GET /api/periods?from=2026-09-01&to=2026-12-31 [200 fdef8b305652]
+  same GET /api/timesheets/2026-10-15 [200 ee7fe6a14d66]
+  same GET /api/timesheets/2026-10-16 [422 4c020fb319f3]
+  same GET /api/timesheets/2026-10-30 [200 d82d4240393c]
+  same GET /api/timesheets/2026-10-01 [200 18ca64b9c9b4]
+  same GET /api/timesheets/2026-11-12 [200 cb5c36c836f8]
+  same GET /api/days/2026-10-07 [200 7d2bb76bc669]
+  same GET /api/days/2026-10-20 [200 be9bee993db0]
+  same GET /api/days/2026-09-21 [200 f614b235ca50]
+  same GET /api/policies [200 31ec43e13d28]
+  same GET /api/history [200 83e1364aa7c0]
+  same GET /api/history?limit=1 [200 027803518512]
+  same GET /api/ot/summary [200 f3fc9219aa8c]
+  same GET /api/ot/ledger [200 ac7166f520b8]
+  same GET /api/ot/leave [200 e4995f66d36b]
+  same GET /api/health [200 a29ee2b15c49]
+  W0 vs W1: 30/30 identical
+PASS P1 every payroll-exception response and every admin read is identical with and without employee timesheets (WP2-A2-02)
+  statuses (both worlds): X1:201 X2:201 X3:201 X4:201 X5:201 X6:409/payroll_exception_exists X7:422/reason_required X8:422/invalid_payroll_exception X9:422/invalid_payroll_exception X10:404/not_found
+PASS P2 X1-X5 answer 201; X6 409 payroll_exception_exists; X7 422 reason_required; X8/X9 422; X10 404  X1:201 X2:201 X3:201 X4:201 X5:201 X6:409/payroll_exception_exists X7:422/reason_required X8:422/invalid_payroll_exception X9:422/invalid_payroll_exception X10:404/not_found
+PASS P3 every 201 body has exactly the key payroll_exception  ["payroll_exception"]
+PASS P4 payroll_exception carries calendar-only fields (admin input, calendar id, created_at)  ["calendar_id","created_at","due_local_date","due_local_time","nominal_payroll_date","payroll_date","reason"]
+PASS P5 no admin response contains "refreshed", "pay_period_id" or an employee id
+  W1 stored rows after: [{"period_index":0,"nominal_payroll_date":"2026-10-02","payroll_date":"2026-10-01","due_local_date":"2026-09-29","due_local_time":"17:00","is_exception":1},{"period_index":1,"nominal_payroll_date":"2026-10-16","payroll_date":"2026-10-15","due_local_date":"2026-10-13","due_local_time":"12:00","is_exception":1},{"period_index":2,"nominal_payroll_date":"2026-10-30","payroll_date":"2026-10-30","due_local_date":"2026-10-27","due_local_time":"09:00","is_exception":1},{"period_index":3,"nominal_payroll_date":"2026-11-13","payroll_date":"2026-11-12","due_local_date":"2026-11-10","due_local_time":"17:00","is_exception":1}]
+PASS S1 the stored rows really were refreshed in W1 (10-16 -> 10-15 exception, 10-30 due 10-27 09:00, 10-02 -> 10-01, 11-13 -> 11-12)
+PASS S2 W0 still has no stored pay_periods row (the flow and the reads create none)  {"audit_events":15,"payroll_exceptions":5,"pay_periods":0,"timesheets":0,"day_entries":0,"work_sessions":0}
+  audit W0: [{"owner":null,"nominal":"2026-10-16","refreshed":false},{"owner":null,"nominal":"2026-10-30","refreshed":false},{"owner":null,"nominal":"2026-10-02","refreshed":false},{"owner":null,"nominal":"2026-11-13","refreshed":false},{"owner":null,"nominal":"2026-11-27","refreshed":false}]
+  audit W1: [{"owner":null,"nominal":"2026-10-16","refreshed":true},{"owner":null,"nominal":"2026-10-30","refreshed":true},{"owner":null,"nominal":"2026-10-02","refreshed":true},{"owner":null,"nominal":"2026-11-13","refreshed":true},{"owner":null,"nominal":"2026-11-27","refreshed":false}]
+PASS S3 the refreshed flag stays in the audit event (W0 false x5, W1 true for 10-16/10-30/10-02/11-13, false for 11-27), owner null
+PASS S4 the admin history (owner-scoped) does not list the payroll-exception audit events  849c7270e1d1
+PASS S5 the employee history does not list the payroll-exception audit events either
+PASS S6 integrity_check ok and foreign_key_check empty (W0, W1)
+## W3: finalized timesheets (copy of W1 before the administrator acted)
+PASS F0 the W1 admin session is valid on the W3 copy
+  finalized timesheets: 1 (employee, payroll 10-16)
+  X1 over the finalized period -> 409 {"error":{"code":"period_finalized","message":"A finalized timesheet references this pay period, so its payroll or due date cannot change","details":{"period_start":"2026-09-28","period_end":"2026-10-11"}}}
+PASS F1 409 period_finalized is kept (E-10)
+PASS F2 the refusal writes nothing (no exception, no audit event, stored rows unchanged)  {"audit_events":18,"payroll_exceptions":0,"pay_periods":4}
+PASS F3 the refusal details are the period dates only (no count, no identity)
+  finalized timesheets: 2 (every user, payroll 10-16)
+PASS F4 one versus two finalized timesheets give a byte-identical refusal
+PASS F5 an exception for another (unfinalized) period still answers 201 with the same body as in W1  201
+PASS F6 integrity_check ok (W3)
+RESULT pass=20 fail=0
+exit 0

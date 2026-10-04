@@ -1,0 +1,208 @@
+// WP2-AUDIT-B3 probe (auditor-owned, temporary; copied into the scratch clone, removed after the run).
+// WP2-B-01 recheck with a browser zone the committed specs do not use (Europe/Berlin, a DST zone):
+// the display-zone default, the stored instant, the derived expected finish, the zone change of a
+// saved session (breaks included, accounting date kept, nothing written before Save) and the DST
+// re-ask after a zone change (fold and gap). Expected instants come from the auditor's own Intl
+// helper below, not from the product or tests/client/zoneOracle.ts.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, SCREENSHOT_DIR, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Europe/Berlin' });
+
+const LA = 'America/Los_Angeles';
+const BERLIN = 'Europe/Berlin';
+const LONDON = 'Europe/London';
+
+/** Offset (ms) of a zone at an instant, read with Intl longOffset ("GMT+02:00"). */
+function offsetMs(zone: string, instantMs: number): number {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(instantMs))
+    .find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  if (match === null) return 0;
+  return (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) * 60_000;
+}
+
+/** Every instant at which a zone shows the wall time (0, 1 or 2 instants), from the two offsets around it. */
+function instantsOf(date: string, time: string, zone: string): string[] {
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  const offsets = new Set([offsetMs(zone, wall - 86_400_000), offsetMs(zone, wall + 86_400_000)]);
+  return [...offsets]
+    .map((offset) => wall - offset)
+    .filter((instant) => wall === instant + offsetMs(zone, instant))
+    .sort((a, b) => a - b)
+    .map((instant) => new Date(instant).toISOString().replace('.000Z', 'Z'));
+}
+
+function only(date: string, time: string, zone: string): string {
+  const found = instantsOf(date, time, zone);
+  expect(found, `${date} ${time} in ${zone}`).toHaveLength(1);
+  return found[0] ?? '';
+}
+
+const iso = (instant: string | null | undefined) => new Date(instant ?? '').toISOString().replace('.000Z', 'Z');
+
+async function openEditor(page: Page, workDate: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+  return editor;
+}
+
+test('audit-b3 zone: Berlin display-zone default, stored instant, expected finish and zone change with breaks', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET' && request.url().includes('/api/')) writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  const record: Record<string, unknown> = { project, date };
+  try {
+    await signInThroughUi();
+    const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    record.displayZone = displayZone;
+    expect(displayZone).toBe(BERLIN);
+    const editor = await openEditor(page, date);
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    record.defaultInputZone = await form.getByLabel('Input zone').inputValue();
+    expect(record.defaultInputZone).toBe(BERLIN);
+    await form.getByLabel('Start time', { exact: true }).fill('09:00');
+    await form.getByLabel('End time', { exact: true }).fill('18:00');
+    await form.getByRole('button', { name: 'Suggest breaks' }).click();
+    await form.getByRole('button', { name: 'Confirm suggested breaks' }).click();
+    await form.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+
+    const saved = (await employeeSeed.dayView(date)).sessions[0];
+    record.saved = { input_zone: saved?.input_zone, start: saved?.start_utc, end: saved?.end_utc, breaks: saved?.breaks.map((item) => [item.start_utc, item.end_utc]) };
+    expect(saved?.input_zone).toBe(BERLIN);
+    expect(iso(saved?.start_utc)).toBe(only(date, '09:00', BERLIN));
+    expect(iso(saved?.end_utc)).toBe(only(date, '18:00', BERLIN));
+    expect(saved?.breaks.map((item) => iso(item.start_utc))).toEqual(['11:00', '13:00', '15:30'].map((time) => only(date, time, BERLIN)));
+
+    // The expected finish is shown in the display zone, labelled derived and display only.
+    const finish = editor.locator('[data-figure="expected-finish"]');
+    record.expectedFinish = await finish.textContent();
+    await expect(finish).toContainText(`(${BERLIN})`);
+    await expect(editor.locator('[data-figure-label="expected-finish"]')).toContainText('derived');
+
+    // Zone change of the saved session: Berlin -> London re-reads 09:00, 18:00 and the breaks.
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await expect(edit.getByLabel('Input zone')).toHaveValue(BERLIN);
+    const writesBefore = writes.length;
+    await edit.getByLabel('Input zone').fill(LONDON);
+    await expect(edit.getByLabel('Start time', { exact: true })).toHaveValue('09:00');
+    await expect(edit.getByLabel('Break 1 from time')).toHaveValue('11:00');
+    expect(writes.length, 'no write while changing the zone').toBe(writesBefore);
+    expect(iso((await employeeSeed.dayView(date)).sessions[0]?.start_utc)).toBe(only(date, '09:00', BERLIN));
+    await page.screenshot({ path: join(SCREENSHOT_DIR, `audit-b3-zone-change-${project}-synthetic.png`) });
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+
+    const day = await employeeSeed.dayView(date);
+    const changed = day.sessions[0];
+    record.changed = { work_date: day.work_date, input_zone: changed?.input_zone, start: changed?.start_utc, end: changed?.end_utc, breaks: changed?.breaks.map((item) => [item.start_utc, item.end_utc]) };
+    expect(day.work_date).toBe(date);
+    expect(day.sessions).toHaveLength(1);
+    expect(changed?.input_zone).toBe(LONDON);
+    expect(iso(changed?.start_utc)).toBe(only(date, '09:00', LONDON));
+    expect(iso(changed?.end_utc)).toBe(only(date, '18:00', LONDON));
+    expect(changed?.breaks.map((item) => iso(item.start_utc))).toEqual(['11:00', '13:00', '15:30'].map((time) => only(date, time, LONDON)));
+    expect(changed?.breaks_confirmed).toBe(true);
+    record.writes = writes;
+  } finally {
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b3-zone-${project}.json`), `${JSON.stringify(record, null, 2)}\n`);
+    await employeeSeed.clearSessions(date, 'audit cleanup');
+  }
+});
+
+test('audit-b3 zone: DST re-ask after a zone change (fold Berlin -> Sydney, gap London -> Los Angeles)', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const FOLD = '2026-04-05';
+  const GAP = '2026-03-08';
+  const record: Record<string, unknown> = { project };
+  try {
+    await signInThroughUi();
+    // Fold: 02:30 exists once in Berlin on 2026-04-05 and twice in Sydney.
+    let editor = await openEditor(page, FOLD);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Synthetic audit probe');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await expect(form.getByLabel('Input zone')).toHaveValue(BERLIN);
+    await form.getByLabel('Start time', { exact: true }).fill('02:30');
+    await form.getByLabel('End time', { exact: true }).fill('04:30');
+    await form.getByRole('radio', { name: /No breaks taken/ }).check();
+    await form.getByRole('button', { name: 'Save session' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const foldBefore = (await employeeSeed.dayView(FOLD)).sessions[0];
+    expect(iso(foldBefore?.start_utc)).toBe(only(FOLD, '02:30', BERLIN));
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = editor.getByRole('form', { name: 'Edit session' });
+    await edit.getByLabel('Input zone').fill('Australia/Sydney');
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    const fold = edit.locator('[data-problem="fold"]');
+    await expect(fold).toContainText('happens twice in Australia/Sydney');
+    expect(iso((await employeeSeed.dayView(FOLD)).sessions[0]?.start_utc), 'nothing stored while asking').toBe(iso(foldBefore?.start_utc));
+    const sydney = instantsOf(FOLD, '02:30', 'Australia/Sydney');
+    expect(sydney).toHaveLength(2);
+    await fold.getByRole('radio', { name: /^Later time/ }).check();
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const foldAfter = await employeeSeed.dayView(FOLD);
+    record.fold = { expectedCandidates: sydney, stored: foldAfter.sessions[0]?.start_utc, input_zone: foldAfter.sessions[0]?.input_zone, work_date: foldAfter.work_date };
+    expect(iso(foldAfter.sessions[0]?.start_utc)).toBe(sydney[1]);
+    expect(foldAfter.sessions[0]?.input_zone).toBe('Australia/Sydney');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Gap: 02:30 exists in London on 2026-03-08 but not in Los Angeles.
+    editor = await openEditor(page, GAP);
+    await editor.getByLabel('Reason for editing an old or finalized period').fill('Synthetic audit probe');
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const gapForm = editor.getByRole('form', { name: 'New session' });
+    await gapForm.getByLabel('Input zone').fill(LONDON);
+    await gapForm.getByLabel('Start time', { exact: true }).fill('02:30');
+    await gapForm.getByLabel('End time', { exact: true }).fill('05:00');
+    await gapForm.getByRole('radio', { name: /No breaks taken/ }).check();
+    await gapForm.getByRole('button', { name: 'Save session' }).click();
+    const gapSaved = editor.getByText('Session saved.');
+    const gapRefused = editor.getByRole('alert');
+    await expect(gapSaved.or(gapRefused).first()).toBeVisible();
+    record.gapFirstSave = (await gapSaved.count()) > 0 ? 'saved' : await gapRefused.first().textContent();
+    const gapBefore = (await employeeSeed.dayView(GAP)).sessions[0];
+    expect(iso(gapBefore?.start_utc)).toBe(only(GAP, '02:30', LONDON));
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const gapEdit = editor.getByRole('form', { name: 'Edit session' });
+    await gapEdit.getByLabel('Input zone').fill(LA);
+    await gapEdit.getByRole('button', { name: 'Save changes' }).click();
+    const gap = gapEdit.locator('[data-problem="gap"]');
+    await expect(gap).toContainText(`${GAP} 02:30 does not exist in ${LA}`);
+    expect(instantsOf(GAP, '02:30', LA)).toHaveLength(0);
+    expect(iso((await employeeSeed.dayView(GAP)).sessions[0]?.start_utc), 'nothing stored while asking').toBe(iso(gapBefore?.start_utc));
+    await page.screenshot({ path: join(SCREENSHOT_DIR, `audit-b3-gap-reask-${project}-synthetic.png`) });
+    await gap.getByRole('button', { name: `Use 03:30 on ${GAP}` }).click();
+    await gapEdit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    const gapAfter = await employeeSeed.dayView(GAP);
+    record.gap = { stored: gapAfter.sessions[0]?.start_utc, input_zone: gapAfter.sessions[0]?.input_zone, work_date: gapAfter.work_date, expected: only(GAP, '03:30', LA) };
+    expect(iso(gapAfter.sessions[0]?.start_utc)).toBe(only(GAP, '03:30', LA));
+    expect(gapAfter.sessions[0]?.input_zone).toBe(LA);
+  } finally {
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b3-dst-${project}.json`), `${JSON.stringify(record, null, 2)}\n`);
+    await employeeSeed.clearSessions(FOLD, 'audit cleanup');
+    await employeeSeed.clearSessions(GAP, 'audit cleanup');
+  }
+});

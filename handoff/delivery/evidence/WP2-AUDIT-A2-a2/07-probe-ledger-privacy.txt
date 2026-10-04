@@ -1,0 +1,125 @@
+$ <node24> probes/pa-ledger-privacy.mjs <clone> <work>/pa  (2026-10-04T11:12:33Z) [attempt-1 probe, unchanged]
+PASS E1 admin creates employee2 (201, account fields only)
+PASS setup employee2 policy created  status 201
+PASS I1 session 08:00-18:00 with 60 excluded break minutes saved  status 201
+PASS I2 raw/eligible/credited distinct: R 540, excess 60, eligible 60, credited 60  R 540 E 60 eligible 60 credited 60
+PASS I3 provisional 60, posted 0 (provisional never in posted/available, E-6)  prov 60 posted 0 avail 0
+PASS I4 summary carries no other user and no user id field
+PASS I5 service credit posts once; retry is duplicate (LG-01)
+PASS I6 reserve 30: posted 60, reserved 30, available 30  p 60 r 30 a 30
+PASS I7 record use 30: posted 30, reserved 0, available 30, delta -30
+OBS  I8 provisional after posting (WP3 must finalize the period; HANDOFF limitation 2)  provisional 60 with posted 30
+PASS H1 eight hours reserve 480 and use posts -480
+PASS H2 more than one civil day refused (422), nothing written  status 422
+PASS G1 leave 240 kind ot saved; ot_leave shows kind 240 vs consumed 510 (30+480) -> mismatch flag  {"kind_minutes":240,"consumed_minutes":510,"reversed_minutes":0,"mismatch":true}
+PASS G2 kind vacation: saved, ledger/reservations/balance unchanged  status 200
+PASS G2 kind sick: saved, ledger/reservations/balance unchanged  status 200
+PASS G2 category Vacation full: saved, ledger/reservations/balance unchanged  status 200
+PASS G2 category Sick: saved, ledger/reservations/balance unchanged  status 200
+PASS G2 category Off: saved, ledger/reservations/balance unchanged  status 200
+PASS G2 back to Worked ot 480: saved, ledger/reservations/balance unchanged  status 200
+PASS G3 batch label commit with leave_kind ot: no ledger/reservation/balance change  status 200
+OBS  G4 mismatch with 480 kind vs consumed 510 on the date  {"kind_minutes":480,"consumed_minutes":510,"reversed_minutes":0,"mismatch":true}
+PASS G5 after reversing 30, kind 480 = consumed 510 - reversed 30 -> no mismatch  {"kind_minutes":480,"consumed_minutes":510,"reversed_minutes":30,"mismatch":false}
+PASS R05-ot 4h work + 4h ot leave: deficit 0, credit 0  deficit 0 credited 0
+PASS R05-vacation 4h work + 4h vacation leave: deficit 0, credit 0  deficit 0 credited 0
+PASS R05-sick 4h work + 4h sick leave: deficit 0, credit 0  deficit 0 credited 0
+PASS R05-none 4h work, no leave: deficit 240  deficit 240
+PASS R05-no-debit deficit display posts nothing (ledger count unchanged)
+PASS B1 employee2 consume on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B1 employee2 cancel on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B1 employee2 reverse on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B1 admin consume on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B1 admin cancel on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B1 admin reverse on employee1 request: 404 identical to unknown id, nothing changed  status 404
+PASS B2 query user_id ignored: employee2 sees only own ledger (no employee1 entries)
+PASS B3 body user_id rejected (422 strict schema), nothing created
+PASS B4 employee2 GET /api/ot/summary: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/ot/ledger: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/ot/leave: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/history: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/timesheets/2026-10-16: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/days/2026-10-05: no employee1 identifier/data  status 200 leaked 0
+PASS B4 employee2 GET /api/sessions/23da4a57-a6cd-4077-ba36-93fe94cc6b6b: no employee1 identifier/data  status 404 leaked 0
+PASS B4 employee2 GET /api/ot/evidence.csv: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/ot/summary: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/ot/ledger: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/ot/leave: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/history: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/timesheets/2026-10-16: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/days/2026-10-05: no employee1 identifier/data  status 200 leaked 0
+PASS B4 admin GET /api/sessions/23da4a57-a6cd-4077-ba36-93fe94cc6b6b: no employee1 identifier/data  status 404 leaked 0
+PASS B4 admin GET /api/ot/evidence.csv: no employee1 identifier/data  status 200 leaked 0
+PASS B5 admin has no per-user data route (all 404)  404,404,404,404,404,404
+PASS B6 employee gets 403 on admin area
+INFO mutating /api routes (22): DELETE /api/sessions/:id | PATCH /api/admin/users/:id | POST /api/admin/calendar/import/commit | POST /api/admin/calendar/import/preview | POST /api/admin/payroll-exceptions | POST /api/admin/users | POST /api/admin/users/:id/deactivate | POST /api/admin/users/:id/reactivate | POST /api/auth/login | POST /api/auth/logout | POST /api/clock/in | POST /api/clock/out | POST /api/days/:workDate/sessions | POST /api/days/batch | POST /api/ot/leave | POST /api/ot/leave/:id/cancel | POST /api/ot/leave/:id/consume | POST /api/ot/leave/:id/reverse | POST /api/policies | POST /api/policies/preview | PUT /api/days/:workDate | PUT /api/sessions/:id
+PASS A1 no mutating route path mentions credit, debit, correction, ledger or post
+PASS A2 /api/ot mutating routes are exactly leave reserve/consume/cancel/reverse  POST /api/ot/leave,POST /api/ot/leave/:id/cancel,POST /api/ot/leave/:id/consume,POST /api/ot/leave/:id/reverse
+PASS A3 POST /api/ot/credit as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/ot/ledger as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/ot/debit as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/ot/correction as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/ot/ledger/credit as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/admin/ot/credit as admin is 404 and writes nothing  status 404
+PASS A3 POST /api/admin/ledger as admin is 404 and writes nothing  status 404
+PASS C0 hostile permission saved for employee2 (insufficient balance first?)  status 409
+PASS C1 content-type text/csv utf-8
+PASS C2 attachment with fixed-alphabet filename
+PASS C3 cache-control no-store and nosniff
+PASS C4 seven sections in order  export,policy_versions,intervals,breaks,daily,ledger,leave_permissions
+PASS C5 no text cell starts with = + - @ TAB CR LF (hostile approver/identity/evidence/note/keys/reasons/policy note)  dangerous 0
+PASS C6 every data row has its section header width  width errors 0
+PASS C7 hostile values kept intact behind an apostrophe
+PASS C8 employee2 CSV has no employee1 identifiers
+PASS C9 reversed range -> 422  status 422
+PASS C9 range > 400 days -> 422  status 422
+PASS C9 CRLF in from -> 422  status 422
+PASS C9 quote in to -> 422  status 422
+PASS C9 missing range -> 422  status 422
+PASS C10 anonymous -> 401 with no-store
+PASS D1 paging with limit=1 returns exactly the caller-owned audit events, newest first  own 33 seen 33
+PASS D2 cursors are consecutive per-user ordinals from the own-event count down to 2 (no gap reveals other users events)  first 33 last 2 count 32
+PASS D3 no other user identifier or email in any history event
+PASS D4 admin edit of employee1 shows actor_is_self false and actor_user_id null
+PASS D5 a large global-looking cursor returns only own events
+PASS D6 admin history = admin-owned events only (admin is not blanket access)
+PASS D7 invalid cursor -1 -> 422  status 422
+PASS D7 invalid cursor 1.5 -> 422  status 422
+PASS D7 invalid cursor abc -> 422  status 422
+PASS D7 invalid cursor 1e3 -> 422  status 422
+PASS D7 invalid cursor 9999999999999999 -> 422  status 422
+PASS F1 LG-02 correction 60 -> 90 posts +30 linked to the original
+PASS F2 ADV-A-01 identical retry duplicate; same key different value 409 source_key_conflict  conflict source_key_conflict
+PASS F3 LG-09 unchanged correction appends nothing
+PASS F4 expectedPreviousMinutes guard -> 409 stale_correction
+PASS F5 correcting a correction -> invalid_correction_target  invalid_correction_target
+PASS F6 correcting another user entry -> 404 not_found (indistinguishable)  404:not_found
+PASS F7 correcting a leave consumption of another user/type is refused  404:not_found
+PASS F8 a correction without a reason -> reason_required
+PASS F9 ADV-A-02 debit 40 -> 70 with available 20 is pending (increase 30), nothing appended, no audit  fb 120 avail 20 status pending
+PASS F10 debit increase exactly equal to available posts (-20), balance not negative
+PASS F11 lowering a debit always posts (+50)
+PASS F12 LG-08 lowering a spent credit 60 -> 0 posts -60, kept, flagged (entry and balance)  pre 60 spent 0 after -60 flag true
+PASS F13 summary exposes negative/reconciliation_required to the owner  posted -60 negative true recon true
+PASS F14 a new debit while the available balance is short stays pending  pending
+PASS T1 ot_ledger UPDATE refused
+PASS T2 ot_ledger DELETE refused
+PASS T3 audit_events UPDATE refused
+PASS T4 audit_events DELETE refused
+PASS T5 leave request DELETE refused
+PASS T6 leave permission facts immutable
+PASS T7 leave counters cannot move backward
+PASS T8 leave version must bump by exactly one
+PASS T9 raw insert of a correction pointing at a correction refused
+PASS T10 raw insert of a cross-user correction refused
+PASS T11 zero delta refused by schema
+PASS E2 wrong password 401, weak 422, non-string 422, extra password_hash field 422  401/422/422/422
+PASS E3 no password, hash, salt/key segment or scrypt$ text in any HTTP response (incl. headers)  responses 160
+PASS E3b no JSON response has a password* field; the only password_hash text is the 422 echo of the key name the probe sent  password keys 0
+PASS E4 no password or hash in any audit_events row (before/after/reason)  audit rows 70
+PASS E5 no password or hash in captured console output  console lines 0
+PASS E6 the word "password" appears in no audit payload
+PASS Z1 health has no personal data
+PASS Z2 integrity_check ok and foreign_key_check empty
+RESULT pass=119 fail=0
+exit 0

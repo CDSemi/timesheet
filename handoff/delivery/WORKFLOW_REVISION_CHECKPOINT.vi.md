@@ -258,8 +258,29 @@ America/Los_Angeles).
   - phản hồi 201 khi tạo ngoại lệ kỳ lương chỉ còn chính ngoại lệ đó, có test so sánh;
   - sửa chú thích;
   - verify 611 test; e2e 74 đạt; digest 5b370621….
-- Đang chạy: WP2-FIXB2-FREEZE (committer). Tiếp theo là WP2-GATE3, rồi WP2-AUDIT-A2 lần 2 và
-  WP2-AUDIT-B3 chạy song song, rồi WP2-ACCEPT.
+- WP2-FIXB2-FREEZE đã commit và push, SHA a3d1b65 (151 đường dẫn, mọi kiểm tra 0). Đây là
+  commit đóng băng cuối package mới.
+- WP2-GATE3 PASS trên a3d1b65; digest chính thức
+  5b370621e7d3b9f292e8facebb1f0f6e9307a40cbda3a9f87b7dd61924298581.
+  - 611 test; chạy đồng thời 20 lần; migration; e2e 74 đạt với đủ 12 luồng.
+  - Các test hồi quy của FIXA, FIXB và FIXB2 có mặt và đều đạt.
+- WP2-AUDIT-A2 lần 2 PASS trên a3d1b65 / 5b370621.
+  - A2-02 đã hết và A-01 vẫn giữ; chạy đồng thời 770 vòng.
+  - A3-01 (Info, bản ghi audit vẫn lưu cờ cập nhật kỳ lương) được chuyển sang WP3.
+- WP2-AUDIT-B3 FIX REQUIRED, có hai lỗi Low. Mọi mục trong phạm vi đều đạt, kể cả chạy với
+  đồng hồ mùa đông và so sánh 159.460 giá trị style không lệch.
+  - WP2-B3-01: giá trị font-weight và letter-spacing viết cứng.
+  - WP2-B3-02: chú thích về giờ trùng trong zoneOracle.
+- WP2-FIXB3 đã xong (tác giả tự báo):
+  - danh sách giá trị viết cứng giảm từ 67 chỗ xuống 0; chỉ còn các điều kiện media, có ghi
+    chú lý do;
+  - style tính ra: 230.692 giá trị không lệch; bản đối chứng cố ý làm sai bị phát hiện;
+  - helper báo lỗi khi gặp giờ trùng hoặc giờ bị nhảy;
+  - verify 613 test; e2e 74 đạt; digest e61fa914….
+  - Coordinator đã dừng agent sau khi nó bàn giao.
+- Đang chạy: WP2-FIXB3-FREEZE (committer).
+- Tiếp theo: commit đóng băng, rồi WP2-GATE4, rồi WP2-AUDIT-A2 lần 3 (chỉ kiểm tra phần thay
+  đổi, vì mã nguồn đổi thì PASS mảng A mất hiệu lực) và WP2-AUDIT-B4.
 - Process còn sống: không biết có process nào ngoài committer.
 - Digest gần nhất: 809215583… (tác giả tự báo). Chưa có audit package WP2 nào chạy.
 - Usage/reset: không quan sát được.

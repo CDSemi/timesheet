@@ -1,0 +1,22 @@
+WP2-FIXB3 commands and exits (Node v24.21.0 portable by full path; Edge channel msedge; scratch clones under the OS temp
+directory <work>, outside Dropbox, deleted afterwards). Baseline a3d1b6555c352afa68b3d61ddc67f0c596742698.
+
+1. node literal-inventory.mjs <a3d1b65 styles.css> <f32978f styles.css> > inventory-before.txt: 60 declarations, 67 literal
+   occurrences, 37 absent from WP1; exit 0
+2. src/client/styles.css tokenized (new :root tokens, rules reference them); node literal-inventory.mjs <new styles.css>
+   <f32978f styles.css> > inventory-after.txt: 0 declarations, 0 occurrences; exit 0 (final-list.txt)
+3. vitest run tests/client/zoneOracle.test.ts, new fold and gap cases before the oracle change: 2 failed, 4 passed (red-first,
+   vitest-red-first.txt); after the oracle change: 6 passed; exit 0 (vitest-zoneoracle.txt)
+4. git clone --no-hardlinks <project> <work>/base and <work>/after; checkout a3d1b65; npm ci --no-audit --no-fund: exit 0 each
+   (an earlier clone on the B: scratch drive failed npm ci with ENOENT inside node_modules and was discarded)
+   <work>/after got the tokenized styles.css only.
+5. npm run build in both: exit 0; playwright test zz-fixb3-style (probe style-probe.spec.ts.txt, label before / after): 4 passed
+   each; exit 0 / 0 (style-runs.txt)
+6. node compare.mjs <style dir> (before vs after): 20 screens, 4708 elements, 230692 values, 0 differences (style-compare-after.txt)
+7. mutant: dist CSS of <work>/after edited (--font-weight-strong 600 to 700, --rule 2px to 3px, --hairline 1px to 2px),
+   capture rerun (4 passed), CSS restored (same sha256 prefix 957a13dd28eb9741); compare before vs mutant: 7210 differences
+   (style-compare-mutant.txt)
+8. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (project): typecheck, lint, 32 files / 613 tests,
+   build, SMOKE PASSED; exit 0 (verify.txt)
+9. same NODE_OPTIONS, npm run test:e2e (project, desktop and mobile): 74 passed, 2 skipped; exit 0 (e2e.txt)
+10. npm run digest: e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (613 files); exit 0 (digest.txt)

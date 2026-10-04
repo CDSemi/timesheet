@@ -1,0 +1,108 @@
+// WP2-AUDIT-B3 probe (auditor-owned, temporary; copied into the scratch clone, removed after the run).
+// WP2-A2-02 from the UI side: the admin payroll-exception screen requires a reason (blank and
+// whitespace-only keep the button disabled; the server answers 422 reason_required), succeeds with
+// a body that holds only payroll_exception, and shows the period_finalized refusal (409) in words
+// when a finalized timesheet uses the period, with nothing recorded. The finalized state is set
+// directly in the temporary database (WP3 finalization does not exist yet), as the integration
+// tests do. Synthetic data only.
+import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { expect, SCREENSHOT_DIR, statusInPage, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const FINALIZE_SCRIPT = `
+const [dbUrl] = process.argv.slice(1, 2);
+const { openDatabase } = await import(dbUrl);
+const db = openDatabase(process.env.AUDIT_DB_PATH);
+try {
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(process.env.AUDIT_EMAIL);
+  const changed = db.prepare('UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ?').run(user.id).changes;
+  process.stdout.write(String(changed));
+} finally {
+  db.close();
+}
+`;
+
+test('audit-b3 payroll: reason required, body without refresh flag, finalized 409 shown in words', async ({
+  page,
+  builtServer,
+  adminSeed,
+  employeeSeed,
+  signInPageAs,
+}, testInfo) => {
+  const project = testInfo.project.name;
+  const record: Record<string, unknown> = { project };
+  const calendar = await adminSeed.call<{ id: string; payroll: { cycle_days: number } }>('GET', '/api/calendar');
+  const periods = await adminSeed.call<{ current: { payroll_date: string }; in_progress: { payroll_date: string } }>('GET', '/api/periods/current');
+  const [workDate = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  const future = addDays(periods.current.payroll_date, calendar.payroll.cycle_days * 7);
+  try {
+    await signInPageAs(builtServer.credentials.admin, '#/admin');
+    await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+    const form = page.getByRole('form', { name: 'Payroll exception' });
+    const button = form.getByRole('button', { name: 'Record exception' });
+
+    // Reason required in the UI: blank and whitespace-only keep the button disabled.
+    await form.getByLabel('Scheduled payroll date').fill(future);
+    await form.getByLabel('Actual payroll date').fill(addDays(future, -1));
+    await expect(button).toBeDisabled();
+    await form.getByLabel('Reason (required)').fill('   ');
+    await expect(button).toBeDisabled();
+    // ... and on the server.
+    record.blankReasonStatus = await statusInPage(page, 'POST', '/api/admin/payroll-exceptions', {
+      calendar_id: calendar.id, nominal_payroll_date: future, payroll_date: addDays(future, -1), due_local_date: null, due_local_time: null, reason: '   ',
+    });
+    expect(record.blankReasonStatus).toBe(422);
+
+    // Success: the response body holds the exception only.
+    await form.getByLabel('Reason (required)').fill('Synthetic closure (audit probe)');
+    const created = page.waitForResponse((response) => response.url().endsWith('/api/admin/payroll-exceptions') && response.request().method() === 'POST');
+    await button.click();
+    const createdResponse = await created;
+    const createdBody = (await createdResponse.json()) as Record<string, unknown>;
+    record.createdStatus = createdResponse.status();
+    record.createdKeys = Object.keys(createdBody);
+    expect(createdResponse.status()).toBe(201);
+    expect(Object.keys(createdBody)).toEqual(['payroll_exception']);
+    await expect(form.locator('[data-status="payroll-exception-created"]')).toContainText(addDays(future, -1));
+
+    // Finalized: an employee timesheet in the current period, then marked finalized in the temp DB.
+    await employeeSeed.seedCompleteDay(workDate);
+    const result = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', FINALIZE_SCRIPT, pathToFileURL(join(process.cwd(), 'dist', 'server', 'db', 'database.js')).href],
+      { encoding: 'utf8', env: { ...process.env, AUDIT_DB_PATH: builtServer.databasePath, AUDIT_EMAIL: builtServer.credentials.employee.email } },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    record.finalizedRows = result.stdout;
+    expect(Number(result.stdout)).toBeGreaterThan(0);
+    const before = await adminSeed.call<{ payroll_exceptions: Array<{ nominal_payroll_date: string }> }>('GET', '/api/calendar');
+
+    const nominal = periods.current.payroll_date;
+    await form.getByLabel('Scheduled payroll date').fill(nominal);
+    await form.getByLabel('Actual payroll date').fill(addDays(nominal, -1));
+    await form.getByLabel('Reason (required)').fill('Synthetic move of a finalized period (audit probe)');
+    const refused = page.waitForResponse((response) => response.url().endsWith('/api/admin/payroll-exceptions') && response.request().method() === 'POST');
+    await button.click();
+    const refusedResponse = await refused;
+    const refusedBody = (await refusedResponse.json()) as { error?: { code?: string } };
+    record.finalizedStatus = refusedResponse.status();
+    record.finalizedCode = refusedBody.error?.code;
+    expect(refusedResponse.status()).toBe(409);
+    expect(refusedBody.error?.code).toBe('period_finalized');
+    const alert = form.locator('[data-error="payroll-exception"]');
+    await expect(alert).toHaveAttribute('role', 'alert');
+    await expect(alert).toContainText('A finalized timesheet uses this pay period');
+    record.finalizedMessage = await alert.textContent();
+    const after = await adminSeed.call<{ payroll_exceptions: Array<{ nominal_payroll_date: string }> }>('GET', '/api/calendar');
+    expect(after.payroll_exceptions).toEqual(before.payroll_exceptions);
+    expect(after.payroll_exceptions.some((item) => item.nominal_payroll_date === nominal)).toBe(false);
+    await page.screenshot({ path: join(SCREENSHOT_DIR, `audit-b3-payroll-finalized-${project}-synthetic.png`), fullPage: true });
+  } finally {
+    writeFileSync(join(SCREENSHOT_DIR, `audit-b3-payroll-${project}.json`), `${JSON.stringify(record, null, 2)}\n`);
+  }
+});

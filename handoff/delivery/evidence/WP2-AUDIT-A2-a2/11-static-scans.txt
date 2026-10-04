@@ -1,0 +1,138 @@
+# 11 static scans on the clone (HEAD a3d1b65; base f79413b)  (2026-10-04T11:18:05Z)
+
+## 1 fix range f79413b..a3d1b65 outside handoff/
+$ git log --oneline f79413b..a3d1b65
+a3d1b65 Fix the WP2 recheck findings: season-independent R-07 e2e, CSS tokens, non-revealing payroll response
+$ git diff --stat f79413b a3d1b65 -- . ':(exclude)handoff'
+ src/client/styles.css                        | 20 ++++++-----
+ src/server/routes/admin.ts                   |  8 +++--
+ src/server/services/calendars.ts             |  8 +++--
+ tests/client/zoneOracle.test.ts              | 54 ++++++++++++++++++++++++++++
+ tests/client/zoneOracle.ts                   | 53 +++++++++++++++++++++++++++
+ tests/e2e/day-editor.spec.ts                 | 27 +++++---------
+ tests/integration/isolation.test.ts          |  2 +-
+ tests/integration/payroll-exceptions.test.ts | 43 ++++++++++++++++++++--
+ 8 files changed, 179 insertions(+), 36 deletions(-)
+$ git diff --name-status f79413b a3d1b65 -- src
+M	src/client/styles.css
+M	src/server/routes/admin.ts
+M	src/server/services/calendars.ts
+
+## 2 area-A server paths unchanged in the fix range (exit 0 = no change)
+  src/domain/ledger.ts: 0
+  src/server/services/ledger.ts: 0
+  src/server/services/otLeave.ts: 0
+  src/server/services/otEvidence.ts: 0
+  src/server/services/history.ts: 0
+  src/server/services/users.ts: 0
+  src/server/services/holidayImport.ts: 0
+  src/server/services/timesheets.ts: 0
+  src/server/services/timesheetCommands.ts: 0
+  src/server/services/periods.ts: 0
+  src/server/services/audit.ts: 0
+  src/server/db: 0
+  src/server/routes/ot.ts: 0
+  src/server/routes/history.ts: 0
+  src/server/routes/api.ts: 0
+  src/server/routes/auth.ts: 0
+  src/server/http: 0
+  src/server/app.ts: 0
+  src/server/seed.ts: 0
+  src/server/cli.ts: 0
+  src/client/api.ts: 0
+  src/client/components: 0
+
+## 3 the removed field: every remaining mention in tracked source, tests and docs
+$ git grep -n -e refreshed_pay_period -e refreshedPayPeriod -- . ':(exclude)handoff'
+src/server/services/calendars.ts:343:        after: { ...exception, refreshed_pay_period: refreshed !== undefined, pay_period: refreshed ?? null },
+tests/integration/payroll-exceptions.test.ts:111:    expect(JSON.parse(audits[0]?.after_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-15', refreshed_pay_period: false });
+tests/integration/payroll-exceptions.test.ts:195:    expect(JSON.parse(audit?.after_json ?? '{}')).toMatchObject({ payroll_date: '2026-10-15', refreshed_pay_period: true });
+(git grep exit 0)
+$ git grep -n -e refreshed -- src/client
+(git grep exit 1; 1 = no match)
+$ git grep -n -e payroll_exception -e payrollException -- src/client
+src/client/AdminScreen.tsx:107:      <PayrollExceptions calendars={calendars} exceptions={data.calendar.payroll_exceptions} onCreated={reload} />
+src/client/api.ts:361:  payroll_exceptions: Array<{
+src/client/components/PayrollExceptions.tsx:15:  exceptions: CalendarInfo['payroll_exceptions'];
+src/client/components/adminModel.ts:45:    payroll_exception_exists: 'An exception for that payroll date already exists.',
+(exit 0)
+
+## 4 WP2-A2-01 comment wording at a3d1b65
+$ git grep -n -i 'aggregate count' -- src tests docs
+(git grep exit 1; 1 = no match)
+$ sed -n 48,51p src/server/routes/admin.ts
+ * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
+ * holiday CSV preview/commit and payroll exceptions return calendar-only fields (dates, names,
+ * versions and the admin's own input) and no employee-derived count, never a user's rows.
+ */
+$ sed -n 280p tests/integration/isolation.test.ts
+        // Company calendar configuration (WP2-T08): calendar-only fields, no employee-derived counts.
+$ git -C <project> grep -n -i 'affected days, preserved overrides' -- handoff/delivery/WP2_HANDOFF.md (left for the acceptance step by the brief)
+handoff/delivery/WP2_HANDOFF.md:41:| FR-13 holiday import | T08, T12 | CSV preview (issues, diff, affected days, preserved overrides), commit with preview hash, immutable version, idempotent re-commit
+(exit 0)
+
+## 5 canonical texts on the payroll-exception answer (rule-8 guard re-check)
+$ git grep -n -i -e 'refresh' -- docs ':(exclude)docs/agents'
+docs/08_AI_WORKFLOW_AND_BUDGET.md:34:Record per task: profile, requested model, `model_override_reason` (size_risk|novelty|escalation|fallback_unavailable|owner), `routing` {size, risk, novelty}, and self-reported `actual_model` plus `actual_source`. Effort ch
+docs/10_DECISIONS_AND_SOURCES.md:107:- E-10: payroll rows of unfinalized periods are refreshed; finalized rows are refused.
+(exit 0)
+
+## 6 test-only helper: tests/client/zoneOracle.ts is imported only by tests
+$ git grep -n zoneOracle
+tests/client/zoneOracle.test.ts:2:import { dateTimeIn, instantOfWallTime, legacyPdtWallTime, wallTimeIn } from './zoneOracle.ts';
+tests/e2e/day-editor.spec.ts:3:import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
+(exit 0)
+$ git grep -n -e 'from .*tests/' -- src
+(exit 1; 1 = no src import of tests)
+
+## 7 fix-range client and test diffs scanned for area-A constructs (storage, console, network, admin, ledger, user ids)
+$ git diff f79413b a3d1b65 -- src/client tests/client tests/e2e | grep '^+' | grep -n -E 'localStorage|sessionStorage|indexedDB|console\.|fetch\(|XMLHttpRequest|/api/admin|/api/ot|ledger|user_id|userId|password'
+(exit 1; 1 = no match)
+$ git diff f79413b a3d1b65 -- src/client/styles.css | grep -E '^[-+]' | grep -v '^[-+][-+]'
++  --control-check-size: 1.25rem;
++  --shape-size: 0.7rem;
++  --dialog-max-height: 90dvh;
++  --font-size-base: 1rem;
+-  width: 1.25rem;
+-  height: 1.25rem;
++  width: var(--control-check-size);
++  height: var(--control-check-size);
+-  width: 0.7rem;
+-  height: 0.7rem;
++  width: var(--shape-size);
++  height: var(--shape-size);
+-  max-height: 90dvh;
++  max-height: var(--dialog-max-height);
+-  font-size: 1rem;
++  font-size: var(--font-size-base);
+-  font-size: 1rem;
++  font-size: var(--font-size-base);
+-  font-size: 1rem;
++  font-size: var(--font-size-base);
+
+## 8 R1-R4 code anchors at a3d1b65 (unchanged files per section 2)
+$ grep -n 'calendar_in_use' src/server/services/users.ts
+167:        throw new ApiError(409, 'calendar_in_use', 'The calendar cannot change while the account has timesheet data');
+$ grep -n "'pending'" src/server/services/ledger.ts | head -5
+114:      status: 'pending';
+128:      status: 'pending';
+408:          status: 'pending',
+460:        status: 'pending',
+
+## 9 history ownership scope (payroll-exception audit has owner_user_id null)
+$ sed -n 60,70p src/server/services/history.ts
+  const rows = db
+    .prepare(
+      `SELECT seq, id, occurred_at, actor_user_id, operation, entity_type, entity_id, reason, before_json, after_json
+         FROM (SELECT row_number() OVER (ORDER BY rowid) AS seq, id, occurred_at, actor_user_id, operation,
+                      entity_type, entity_id, reason, before_json, after_json
+                 FROM audit_events
+                WHERE owner_user_id = ?)
+        WHERE (? IS NULL OR seq < ?)
+        ORDER BY seq DESC
+        LIMIT ?`,
+    )
+$ grep -n 'ownerUserId' src/server/services/calendars.ts
+117:      ownerUserId: null,
+195:        ownerUserId: null,
+337:        ownerUserId: null,

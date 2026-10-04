@@ -1,0 +1,142 @@
+$ <node24> probes/pg2-admin-differential.mjs <clone> <work>/pg2  (2026-10-04T11:12:43Z) [attempt-1 A2 probe, unchanged]
+setup admin creates employee2 -> 201
+## S0: administrator view before any employee activity
+PASS V0 the admin view (previews, refused commits, reads) writes nothing  {"audit_events":10,"calendar_versions":1,"day_entries":0,"work_sessions":0,"timesheets":0,"ot_ledger":0,"ot_leave_requests":0}
+## employee activity (synthetic)
+setup employee session 10-05 09:00-17:00 -> 201
+setup employee session 10-07 08:00-18:00 with a break -> 201
+setup employee explicit Sick 10-06 (480 sick leave) -> 200
+setup employee explicit Vacation 12-24 (480 vacation leave) -> 200
+setup employee explicit Worked 11-27 (on a company holiday) -> 200
+setup employee Clock in today 10-09 -> 201
+setup employee reserves OT leave 120 on 10-20 -> 201
+setup employee2 session 10-08 07:00-19:00 -> 201
+setup employee2 explicit Off 12-31 -> 200
+setup employee2 explicit Worked 11-26 -> 200
+PASS E0 every employee setup step succeeded
+employee rows now: {"audit_events":25,"calendar_versions":1,"day_entries":9,"work_sessions":4,"timesheets":6,"ot_ledger":1,"ot_leave_requests":1}
+## S1: administrator view after employee activity (expected byte-identical to S0)
+  same GET /api/admin/users [200 a9fb9cdfd235]
+  same GET /api/auth/me [200 24acf97ceda3]
+  same GET /api/calendar [200 57f4f7acf803]
+  same GET /api/periods/current [200 79f505c06b54]
+  same GET /api/periods?from=2026-09-01&to=2026-12-31 [200 3cfa00ec1e4e]
+  same GET /api/timesheets/2026-10-16 [200 d1fde5fd7894]
+  same GET /api/days/2026-10-05 [200 528144e29ea7]
+  same GET /api/days/2026-12-24 [200 0663767498c0]
+  same GET /api/policies [200 0fc53c2bd9ef]
+  same GET /api/history [200 954e0c6ecfbe]
+  same GET /api/history?limit=1 [200 5884d1147cb2]
+  same GET /api/ot/summary [200 f3fc9219aa8c]
+  same GET /api/ot/ledger [200 ac7166f520b8]
+  same GET /api/ot/leave [200 e4995f66d36b]
+  same GET /api/ot/evidence.csv?from=2026-09-01&to=2026-12-31 [200 68f673ea9469]
+  same GET /api/health [200 a29ee2b15c49]
+  same pv-A current period 10-05..10-08 (attempt-1 scenario) [200 c5a60be99886]
+  same pv-B future 12-24 holiday, 12-31 closure [200 03503f0d9365]
+  same pv-C rename 11-26, kind change 11-27 [200 cae2bc7289b3]
+  same pv-D remove 12-25 with 12-24 listed [200 ef26fd9ec0ec]
+  same pv-E retroactive effective date [200 b3d78a9a9545]
+  same pv-F CSV with issues [200 b5f2fc66d22f]
+  same pv-G every day of the current period [200 ec16fabdb189]
+  same cm-stale commit of pv-B with a wrong hash [409 0caf3d6f3ac5]
+  same cm-retro commit of pv-E [422 855b52fa3f77]
+  same cm-issues commit of pv-F [422 d007ddb732d4]
+  same GET /api/admin unknown employee-data guesses [404 ba626809184c]
+  S0 vs S1: 27/27 identical
+PASS A1 no admin response changes when employees record data (WP2-A-01)
+PASS A2 pv-A current period 10-05..10-08 (attempt-1 scenario): no identity, personal label or count key
+PASS A2 pv-B future 12-24 holiday, 12-31 closure: no identity, personal label or count key
+PASS A2 pv-C rename 11-26, kind change 11-27: no identity, personal label or count key
+PASS A2 pv-D remove 12-25 with 12-24 listed: no identity, personal label or count key
+PASS A2 pv-E retroactive effective date: no identity, personal label or count key
+PASS A2 pv-F CSV with issues: no identity, personal label or count key
+PASS A2 pv-G every day of the current period: no identity, personal label or count key
+PASS A3 pv-A affected_days carry only date/label_before/label_after  [{"date":"2026-10-05","label_before":"Worked","label_after":"Holiday"},{"date":"2026-10-06","label_before":"Worked","label_after":"Holiday"},{"date":"2026-10-07","label_before":"Worked","label_after":"Holiday"},{"date":"2026-10-08","label_before":"Worked","label_after":"Holiday"}]
+## S2/S3: simulated WP3 finalization (direct UPDATE, as WP3 will set the column)
+finalized timesheets (employee, period 09-28): 1
+  same GET /api/admin/users [200 a9fb9cdfd235]
+  same GET /api/auth/me [200 24acf97ceda3]
+  same GET /api/calendar [200 57f4f7acf803]
+  same GET /api/periods/current [200 79f505c06b54]
+  same GET /api/periods?from=2026-09-01&to=2026-12-31 [200 3cfa00ec1e4e]
+  same GET /api/timesheets/2026-10-16 [200 d1fde5fd7894]
+  same GET /api/days/2026-10-05 [200 528144e29ea7]
+  same GET /api/days/2026-12-24 [200 0663767498c0]
+  same GET /api/policies [200 0fc53c2bd9ef]
+  same GET /api/history [200 954e0c6ecfbe]
+  same GET /api/history?limit=1 [200 5884d1147cb2]
+  same GET /api/ot/summary [200 f3fc9219aa8c]
+  same GET /api/ot/ledger [200 ac7166f520b8]
+  same GET /api/ot/leave [200 e4995f66d36b]
+  same GET /api/ot/evidence.csv?from=2026-09-01&to=2026-12-31 [200 68f673ea9469]
+  same GET /api/health [200 a29ee2b15c49]
+  DIFF pv-A current period 10-05..10-08 (attempt-1 scenario) [200 c5a60be99886] | 200->200 $.can_commit: true -> false; $.preview_hash: "3dd7cea75c5597eb1e7264d032d40320ab0b1a952ce288689a533d0fea14c0de" -> null; $.finalized_conflicts.0: undefined -> {"date":"2026-10-05"}; $.finalized_conflicts.1: undefined -> {"date":"2026-10-06"}; $.finalized_conflicts.2: undefined -> {"date":"2026-10-07"}; $.finalized_conflicts.3: undefined -> {"date":"2026-10-08"}
+  same pv-B future 12-24 holiday, 12-31 closure [200 03503f0d9365]
+  same pv-C rename 11-26, kind change 11-27 [200 cae2bc7289b3]
+  same pv-D remove 12-25 with 12-24 listed [200 ef26fd9ec0ec]
+  DIFF pv-E retroactive effective date [200 b3d78a9a9545] | 200->200 $.finalized_conflicts.0: undefined -> {"date":"2026-10-05"}
+  same pv-F CSV with issues [200 b5f2fc66d22f]
+  DIFF pv-G every day of the current period [200 ec16fabdb189] | 200->200 $.can_commit: true -> false; $.preview_hash: "5d48a1d7045a63e91b7b71e2143c76f2935a52c7935ab5c36d60621b4de5c966" -> null; $.finalized_conflicts.0: undefined -> {"date":"2026-09-28"}; $.finalized_conflicts.1: undefined -> {"date":"2026-09-29"}; $.finalized_conflicts.2: undefined -> {"date":"2026-09-30"}; $.finalized_conflicts.3: undefined -> {"date":"2026-10-01"}; $.finalized_conflicts.4: undefined -> {"date":"2026-10-02"}; $.finalized_conflicts.5: undefined -> {"date":"2026-10-03"}; $.finalized_conflicts.6: undefined -> {"date":"2026-10-04"}; $.finalized_conflicts.7: undefined -> {"date":"2026-10-05"}; $.finalized_conflicts.8: undefined -> {"date":"2026-10-06"}; $.finalized_conflicts.9: undefined -> {"date":"2026-10-07"}
+  same cm-stale commit of pv-B with a wrong hash [409 0caf3d6f3ac5]
+  same cm-retro commit of pv-E [422 855b52fa3f77]
+  same cm-issues commit of pv-F [422 d007ddb732d4]
+  same GET /api/admin unknown employee-data guesses [404 ba626809184c]
+  S1 vs S2 (one finalized timesheet): 24/27 identical
+finalized timesheets (every user, period 09-28): 2
+  same GET /api/admin/users [200 a9fb9cdfd235]
+  same GET /api/auth/me [200 24acf97ceda3]
+  same GET /api/calendar [200 57f4f7acf803]
+  same GET /api/periods/current [200 79f505c06b54]
+  same GET /api/periods?from=2026-09-01&to=2026-12-31 [200 3cfa00ec1e4e]
+  same GET /api/timesheets/2026-10-16 [200 d1fde5fd7894]
+  same GET /api/days/2026-10-05 [200 528144e29ea7]
+  same GET /api/days/2026-12-24 [200 0663767498c0]
+  same GET /api/policies [200 0fc53c2bd9ef]
+  same GET /api/history [200 954e0c6ecfbe]
+  same GET /api/history?limit=1 [200 5884d1147cb2]
+  same GET /api/ot/summary [200 f3fc9219aa8c]
+  same GET /api/ot/ledger [200 ac7166f520b8]
+  same GET /api/ot/leave [200 e4995f66d36b]
+  same GET /api/ot/evidence.csv?from=2026-09-01&to=2026-12-31 [200 68f673ea9469]
+  same GET /api/health [200 a29ee2b15c49]
+  same pv-A current period 10-05..10-08 (attempt-1 scenario) [200 035cef93d30c]
+  same pv-B future 12-24 holiday, 12-31 closure [200 03503f0d9365]
+  same pv-C rename 11-26, kind change 11-27 [200 cae2bc7289b3]
+  same pv-D remove 12-25 with 12-24 listed [200 ef26fd9ec0ec]
+  same pv-E retroactive effective date [200 4b5d2ed2992c]
+  same pv-F CSV with issues [200 b5f2fc66d22f]
+  same pv-G every day of the current period [200 be668d806e7c]
+  same cm-stale commit of pv-B with a wrong hash [409 0caf3d6f3ac5]
+  same cm-retro commit of pv-E [422 855b52fa3f77]
+  same cm-issues commit of pv-F [422 d007ddb732d4]
+  same GET /api/admin unknown employee-data guesses [404 ba626809184c]
+  S2 vs S3 (one versus two finalized timesheets): 27/27 identical
+PASS F1 one versus two finalized timesheets: identical admin view (no count)
+pv-A finalized_conflicts: [{"date":"2026-10-05"},{"date":"2026-10-06"},{"date":"2026-10-07"},{"date":"2026-10-08"}] can_commit=false preview_hash=null
+pv-G finalized_conflicts dates: 09-28 09-29 09-30 10-01 10-02 10-03 10-04 10-05 10-06 10-07 10-08 10-09 10-10 10-11
+PASS F2 finalized_conflicts entries are {date} only
+PASS F3 the signal is period-level: every changed date of the finalized period is listed, days without entries included
+PASS F4 previews outside the finalized period are unaffected  pv-A current period 10-05..10-08 (attempt-1 scenario), pv-E retroactive effective date, pv-G every day of the current period
+commit of pv-A over the finalized period -> 409 finalized_period_affected details={"conflicts":[{"date":"2026-10-05"},{"date":"2026-10-06"},{"date":"2026-10-07"},{"date":"2026-10-08"}]}
+PASS F5 commit refused 409 finalized_period_affected with date-only details
+## W: writing admin actions on VACUUM INTO copies of S0-equivalent and S1 worlds
+  same commit [201 vs 201]
+  same exception [201 vs 201]
+  same deactivate [200 vs 200]
+PASS W1 holiday commit response is identical with and without employee data (hash masked)
+PASS W2 deactivate response is identical with and without employee data
+OBS W3 payroll exception refreshed_pay_period: no employee data=undefined, after employee edits=undefined (period-level, pre-existing; a write with an audit event)
+## C: commit behaviour
+PASS C1 preview_hash equals the independently recomputed sha256 of the canonical result
+commit -> 201 committed=true unchanged=false seq=2 effective_from=2026-10-12 dates=11
+audit calendar_version.create owner=null import={"year":2026,"added":2,"renamed":0,"kind_changed":0,"removed":0,"ignored_past":0,"preview_hash":"<= expected>"}
+PASS C2 commit 201: one calendar version and one audit event; day_entries and sessions unchanged
+PASS C3a same request and hash after its own commit -> 200 unchanged, nothing written (identical re-commit)  200
+PASS C3b a preview made stale by another commit -> 409 stale_preview, nothing written  201 409 stale_preview
+PASS C4 identical re-commit (fresh preview, no_change) -> 200 unchanged, nothing written  200
+employee 12-24 Vacation/explicit; employee 12-31 Shutdown/default; employee2 12-31 Off/explicit
+PASS C5 explicit labels preserved (employee Vacation 12-24, employee2 Off 12-31); a default day follows the calendar (employee 12-31 Shutdown)  Vacation/explicit Off/explicit Shutdown/default
+PASS C6 integrity_check ok and foreign_key_check empty
+RESULT pass=25 fail=0
+exit 0

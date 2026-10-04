@@ -1,0 +1,53 @@
+// WP2-FIXB3 comparison: node compare.mjs <style dir>
+// Diffs the before (a3d1b65) and after (a3d1b65 + tokenized styles.css) real-screen captures of the style probe:
+// target selector values, element count, DOM paths, bounding boxes and computed properties.
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const files = readdirSync(dir).filter((name) => name.startsWith('after-') && name.endsWith('.json')).sort();
+let totalElements = 0;
+let totalValues = 0;
+let differences = 0;
+const targetSummary = new Map();
+for (const name of files) {
+  const key = name.slice('after-'.length, -'.json'.length);
+  const after = JSON.parse(readFileSync(join(dir, name), 'utf8'));
+  const before = JSON.parse(readFileSync(join(dir, `before-${key}.json`), 'utf8'));
+  const lines = [];
+  // Targets.
+  for (const [index, target] of after.targets.entries()) {
+    const other = before.targets[index];
+    const same = JSON.stringify(target) === JSON.stringify(other);
+    if (!same) lines.push(`  TARGET DIFF ${target.selector}: before ${JSON.stringify(other)} after ${JSON.stringify(target)}`);
+    if (target.count > 0) {
+      const distinct = [...new Set(target.values.map((value) => JSON.stringify(value)))];
+      const entry = targetSummary.get(target.selector) ?? new Set();
+      for (const value of distinct) entry.add(`${key.split('-')[0]} ${value}`);
+      targetSummary.set(target.selector, entry);
+    }
+  }
+  // Elements.
+  if (after.elements.length !== before.elements.length) lines.push(`  ELEMENT COUNT before ${before.elements.length} after ${after.elements.length}`);
+  const count = Math.min(after.elements.length, before.elements.length);
+  for (let i = 0; i < count; i += 1) {
+    const a = before.elements[i];
+    const b = after.elements[i];
+    totalValues += b.values.split(';').length + 1;
+    if (a.path !== b.path) { lines.push(`  PATH ${i}: before ${a.path} after ${b.path}`); continue; }
+    if (a.box !== b.box) lines.push(`  BOX ${b.path}: before ${a.box} after ${b.box}`);
+    if (a.values !== b.values) {
+      const av = a.values.split(';');
+      const bv = b.values.split(';');
+      const changed = bv.filter((value, j) => value !== av[j]).map((value, j) => `${av[bv.indexOf(value)]} -> ${value}`);
+      lines.push(`  VALUES ${b.path}: ${changed.join(' | ')}`);
+    }
+  }
+  totalElements += count;
+  differences += lines.length;
+  console.log(`${key}: ${after.elements.length} visible elements; targets ${after.targets.map((t) => `${t.selector}=${t.count}`).join(', ')}; differences ${lines.length}`);
+  for (const line of lines) console.log(line);
+}
+console.log(`screens ${files.length}; elements compared ${totalElements}; values compared ${totalValues}; differences ${differences}`);
+console.log('distinct computed values of the tokenized targets (project, values):');
+for (const [selector, values] of targetSummary) console.log(`  ${selector}: ${[...values].join(' ; ')}`);

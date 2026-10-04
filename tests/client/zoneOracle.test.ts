@@ -47,6 +47,39 @@ describe('zone oracle', () => {
     expect(dateTimeIn('2026-01-14T15:00:00Z', HCM)).toBe('2026-01-14 22:00');
   });
 
+  it('refuses a DST fold, where one wall time is two instants', () => {
+    // WP2-B3-02: the documented behaviour is a throw, never a silent zone-dependent choice.
+    const folds: Array<[string, string, string]> = [
+      ['2026-11-01', '01:30', LA], // PDT 08:30Z or PST 09:30Z
+      ['2026-04-05', '02:30', 'Australia/Sydney'], // AEDT 15:30Z or AEST 16:30Z
+      ['2026-10-25', '02:30', 'Europe/Berlin'], // CEST 00:30Z or CET 01:30Z
+      ['2026-10-25', '02:00', 'Europe/Berlin'], // the first repeated minute
+      ['2026-10-25', '02:59', 'Europe/Berlin'], // the last repeated minute
+    ];
+    for (const [date, time, zone] of folds) {
+      expect(() => instantOfWallTime(date, time, zone), `${zone} ${date} ${time}`).toThrow(/not an unambiguous wall time.*fold/);
+      expect(() => wallTimeIn(date, time, zone, HCM), `${zone} ${date} ${time}`).toThrow(/fold/);
+    }
+  });
+
+  it('refuses a DST gap in every zone and accepts the minutes next to a gap or a fold', () => {
+    const gaps: Array<[string, string, string]> = [
+      ['2026-03-08', '02:30', LA],
+      ['2026-10-04', '02:30', 'Australia/Sydney'],
+      ['2026-03-29', '02:30', 'Europe/Berlin'],
+    ];
+    for (const [date, time, zone] of gaps) {
+      expect(() => instantOfWallTime(date, time, zone), `${zone} ${date} ${time}`).toThrow(/not an unambiguous wall time.*gap/);
+    }
+    // One minute before and after each ambiguous or missing interval is still unambiguous.
+    expect(instantOfWallTime('2026-03-08', '01:59', LA)).toBe('2026-03-08T09:59:00.000Z');
+    expect(instantOfWallTime('2026-03-08', '03:00', LA)).toBe('2026-03-08T10:00:00.000Z');
+    expect(instantOfWallTime('2026-11-01', '00:59', LA)).toBe('2026-11-01T07:59:00.000Z');
+    expect(instantOfWallTime('2026-11-01', '02:00', LA)).toBe('2026-11-01T10:00:00.000Z');
+    expect(instantOfWallTime('2026-10-25', '01:59', 'Europe/Berlin')).toBe('2026-10-24T23:59:00.000Z');
+    expect(instantOfWallTime('2026-10-25', '03:00', 'Europe/Berlin')).toBe('2026-10-25T02:00:00.000Z');
+  });
+
   it('shows that the old fixed 08:00 expectation is wrong in winter and right only in summer', () => {
     expect(legacyPdtWallTime('2026-07-15', '22:00')).toBe(wallTimeIn('2026-07-15', '22:00', HCM, LA));
     expect(legacyPdtWallTime('2026-01-14', '22:00')).not.toBe(wallTimeIn('2026-01-14', '22:00', HCM, LA));

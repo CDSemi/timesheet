@@ -1,0 +1,41 @@
+// WP2-AUDIT-B3 probe (auditor-owned, temporary; copied into the scratch clone, removed after the run).
+// WP2-GATE F1 stays closed: the insufficient-balance flow shows the E-5 message in an alert,
+// reserves nothing, and is captured as a screenshot on both projects. Synthetic data only.
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, SCREENSHOT_DIR, seedCredit, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface Summary { posted_minutes: number; reserved_minutes: number; available_minutes: number }
+
+test('audit-b3 F1: insufficient balance message, nothing reserved', async ({ page, builtServer, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  seedCredit(builtServer, 60);
+  const before = await employeeSeed.call<Summary>('GET', '/api/ot/summary');
+  const leavesBefore = await employeeSeed.call<{ requests: unknown[] }>('GET', '/api/ot/leave');
+  await signInThroughUi();
+  await page.goto('/#/ot');
+  const form = page.getByRole('form', { name: 'Reserve OT leave' });
+  await form.getByLabel('Minutes of leave').fill(String(before.available_minutes + 1));
+  await form.getByLabel('Manager who gave permission').fill('Synthetic Manager');
+  await form.getByLabel('Permission reference').fill('SYN-B3-F1');
+  await form.getByRole('button', { name: 'Reserve leave' }).click();
+  const message = page.locator('[data-error="reserve"]');
+  await expect(message).toContainText('Nothing was reserved.');
+  const after = await employeeSeed.call<Summary>('GET', '/api/ot/summary');
+  const leavesAfter = await employeeSeed.call<{ requests: unknown[] }>('GET', '/api/ot/leave');
+  const record = {
+    project,
+    role: await message.getAttribute('role'),
+    text: await message.textContent(),
+    before,
+    after,
+    leaveCount: [leavesBefore.requests.length, leavesAfter.requests.length],
+  };
+  writeFileSync(join(SCREENSHOT_DIR, `audit-b3-f1-${project}.json`), `${JSON.stringify(record, null, 2)}\n`);
+  expect(after).toEqual(before);
+  expect(leavesAfter.requests.length).toBe(leavesBefore.requests.length);
+  await message.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(SCREENSHOT_DIR, `audit-b3-insufficient-balance-${project}-synthetic.png`) });
+});

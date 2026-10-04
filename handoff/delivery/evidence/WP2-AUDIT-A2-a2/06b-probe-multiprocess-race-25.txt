@@ -1,0 +1,33 @@
+$ <node24> probes/pr-race.mjs <clone> <work>/race2 25  (2026-10-04T11:15:43Z) [second run, 25 rounds per combination]
+db=<work>/race.db journal_mode=wal busy_timeout=5000 node=v24.21.0
+workers=4 separate processes, distinct pids=4, parent pid differs=true
+R1 reserve 80+80 @100 [blocker] rounds=25 violations=0 outcomes={error:insufficient_balance + reserved}x25
+R1 reserve 80+80 @100 [direct] rounds=25 violations=0 outcomes={error:insufficient_balance + reserved}x25
+R2 reserve 4x80 @200 [blocker] rounds=25 violations=0 outcomes={error:insufficient_balance + error:insufficient_balance + reserved + reserved}x25
+R2 reserve 4x80 @200 [direct] rounds=25 violations=0 outcomes={error:insufficient_balance + error:insufficient_balance + reserved + reserved}x25
+R3 same request key x3 [blocker] rounds=25 violations=0 outcomes={duplicate + duplicate + reserved}x25
+R4 use 80+80 of 120 (expected_version 1) [blocker] rounds=25 violations=0 outcomes={error:stale_version + used}x25
+R4 use 80+80 of 120 (expected_version 1) [direct] rounds=25 violations=0 outcomes={error:stale_version + used}x25
+R4b use 80+80 of 120 (no version) [blocker] rounds=25 violations=0 outcomes={error:exceeds_reserved + used}x25
+R4b use 80+80 of 120 (no version) [direct] rounds=25 violations=0 outcomes={error:exceeds_reserved + used}x25
+R5 same use key x3 [blocker] rounds=25 violations=0 outcomes={duplicate + duplicate + used}x25
+R6 cancel vs use 120 [blocker] rounds=25 violations=0 outcomes={unchanged + used}x11 {cancelled + error:exceeds_reserved}x14
+R6 cancel vs use 120 [direct] rounds=25 violations=0 outcomes={cancelled + error:exceeds_reserved}x18 {unchanged + used}x7
+R7 reverse 80+80 of 120 used [blocker] rounds=25 violations=0 outcomes={error:exceeds_reversible + reversed}x25
+R7 reverse 80+80 of 120 used [direct] rounds=25 violations=0 outcomes={error:exceeds_reversible + reversed}x25
+R8 same credit key x3 [blocker] rounds=25 violations=0 outcomes={duplicate + duplicate + posted}x25
+R9 same credit key, different minutes [blocker] rounds=25 violations=0 outcomes={error:source_key_conflict + error:source_key_conflict + posted}x25
+R10 reserve 80 vs debit 80 @100 [blocker] rounds=25 violations=0 outcomes={pending + reserved}x14 {error:insufficient_balance + posted}x11
+R10 reserve 80 vs debit 80 @100 [direct] rounds=25 violations=0 outcomes={pending + reserved}x12 {error:insufficient_balance + posted}x13
+R11 reserve 80 vs debit correction +80 @100 [blocker] rounds=25 violations=0 outcomes={error:insufficient_balance + posted}x12 {pending + reserved}x13
+R11 reserve 80 vs debit correction +80 @100 [direct] rounds=25 violations=0 outcomes={error:insufficient_balance + posted}x16 {pending + reserved}x9
+R12 debit 80+80 @100 [blocker] rounds=25 violations=0 outcomes={pending + posted}x25
+R12 debit 80+80 @100 [direct] rounds=25 violations=0 outcomes={pending + posted}x25
+CONTROL unsafe reserve 80+80 @100 [blocker] rounds=25 violations=25 outcomes={reserved(unsafe) + reserved(unsafe)}x25
+   round 0: double-booked reserved=160 available=-60 [reserved(unsafe) + reserved(unsafe)]
+   round 1: double-booked reserved=160 available=-60 [reserved(unsafe) + reserved(unsafe)]
+   round 2: double-booked reserved=160 available=-60 [reserved(unsafe) + reserved(unsafe)]
+integrity_check=ok foreign_key_check_rows=0
+RESULT production races with violations: 0; control double-booked in 25/25 rounds
+PROBE PASS
+exit 0

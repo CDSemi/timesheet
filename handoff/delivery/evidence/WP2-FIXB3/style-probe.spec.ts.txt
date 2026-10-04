@@ -1,0 +1,196 @@
+// WP2-FIXB3 probe: adapted from the WP2-AUDIT-B3 style probe (extra properties and a focus capture); temporary, copied into scratch clones only.
+// Real-screen computed-style capture for the WP2-B2-02 comparison. The same steps run at f79413b
+// (label "base") and at a3d1b65 (label "reviewed"); compare.mjs then diffs the JSON files.
+// For every screen it records (1) the target selectors of the tokenized declarations and (2) a
+// signature of every visible element: a DOM path, the bounding box and a broad set of computed
+// properties. Synthetic data only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, SCREENSHOT_DIR, seedCredit, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LABEL = process.env.FIXB3_STYLE_LABEL ?? 'unlabelled';
+const OUT = process.env.FIXB3_STYLE_OUT ?? join(SCREENSHOT_DIR, 'fixb3-style');
+
+const TARGETS: Array<[string, string[]]> = [
+  ["input[type='checkbox']", ['width', 'height']],
+  ["input[type='radio']", ['width', 'height']],
+  ['.shape', ['width', 'height']],
+  ['dialog.dialog[open]', ['max-height', 'width', 'height']],
+  ['.dialog h3', ['font-size', 'line-height', 'height']],
+  ['.ot-leave-head h3', ['font-size', 'line-height', 'height']],
+  ['.user-head h3', ['font-size', 'line-height', 'height']],
+];
+
+const PROPS = [
+  'display', 'position', 'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+  'font-size', 'font-weight', 'line-height', 'letter-spacing',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'row-gap', 'column-gap', 'grid-template-columns', 'border-top-width', 'border-bottom-width',
+  'border-top-left-radius', 'box-shadow', 'color', 'background-color',
+  'transition-duration', 'transition-timing-function', 'transform', 'clip-path',
+  'opacity', 'order', 'flex-grow', 'flex-basis', 'outline-width', 'outline-style', 'outline-offset', 'border-left-width', 'border-right-width',
+  'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'grid-template-rows', 'z-index',
+];
+
+interface Capture {
+  targets: Array<{ selector: string; count: number; values: Array<Record<string, string>> }>;
+  elements: Array<{ path: string; box: string; values: string }>;
+}
+
+async function capture(page: Page, screen: string, project: string): Promise<void> {
+  await page.mouse.move(1, 1);
+  await page.evaluate('document.activeElement && document.activeElement.blur && document.activeElement.blur()');
+  // Let every 300 ms transition finish before sampling.
+  await page.waitForTimeout(1_200);
+  const result = await page.evaluate<Capture, { targets: Array<[string, string[]]>; props: string[] }>(
+    ({ targets, props }) => {
+      const visible = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
+      };
+      const pathOf = (element: Element): string => {
+        const parts: string[] = [];
+        let node: Element | null = element;
+        while (node !== null && node !== document.documentElement) {
+          const parent: Element | null = node.parentElement;
+          const index = parent === null ? 0 : Array.from(parent.children).indexOf(node);
+          const classes = typeof node.className === 'string' && node.className.trim() !== '' ? `.${node.className.trim().split(/\s+/).join('.')}` : '';
+          parts.unshift(`${node.tagName.toLowerCase()}${classes}:${index}`);
+          node = parent;
+        }
+        return parts.join('>');
+      };
+      const round = (value: number) => Math.round(value * 100) / 100;
+      return {
+        targets: targets.map(([selector, names]) => {
+          const found = Array.from(document.querySelectorAll(selector)).filter(visible);
+          return {
+            selector,
+            count: found.length,
+            values: found.map((element) => {
+              const style = getComputedStyle(element);
+              return Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)]));
+            }),
+          };
+        }),
+        elements: Array.from(document.querySelectorAll('body *'))
+          .filter(visible)
+          .map((element) => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return {
+              path: pathOf(element),
+              box: [rect.x, rect.y, rect.width, rect.height].map(round).join(','),
+              values: props.map((name) => `${name}=${style.getPropertyValue(name)}`).join(';'),
+            };
+          }),
+      };
+    },
+    { targets: TARGETS, props: PROPS },
+  );
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `${LABEL}-${project}-${screen}.json`), `${JSON.stringify(result, null, 1)}\n`);
+  await page.screenshot({ path: join(SCREENSHOT_DIR, `fixb3-${LABEL}-${screen}-${project}-synthetic.png`), fullPage: true });
+}
+
+test('fixb3 style: employee screens', async ({ page, builtServer, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(180_000);
+  const project = testInfo.project.name;
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  expect(days.length).toBeGreaterThanOrEqual(3);
+  const [free = '', complete = '', pending = ''] = days;
+  await employeeSeed.seedCompleteDay(complete);
+  await employeeSeed.seedUnconfirmedBreaksDay(pending);
+  const { todayLocal } = await employeeSeed.today();
+  seedCredit(builtServer, 600);
+  await employeeSeed.call('POST', '/api/ot/leave', {
+    request_key: 'fixb3-style-leave',
+    leave_date: todayLocal,
+    requested_minutes: 120,
+    permission: { approver_name: 'Synthetic Manager', approval_date: todayLocal, evidence_ref: 'SYN-B3-STYLE' },
+  }, 201);
+  try {
+    await page.goto('/');
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await capture(page, 'login', project);
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(400);
+    await capture(page, 'login-focus', project);
+    await page.mouse.move(1, 1);
+
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await capture(page, 'timesheet', project);
+
+    // Batch dialog (a plain .dialog).
+    await page.getByLabel(`Select ${free}`).check();
+    await page.getByLabel('Category for selected days').selectOption('Vacation');
+    await page.getByRole('button', { name: 'Preview changes' }).click();
+    const batch = page.getByRole('dialog');
+    await expect(batch.getByRole('heading', { name: 'Review category change' })).toBeVisible();
+    await capture(page, 'batch-dialog', project);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.getByLabel(`Select ${free}`).uncheck();
+
+    // Day editor (.dialog.dialog-wide, .dialog h3, radios and break checkboxes).
+    await page.getByLabel('Open a day').fill(complete);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+    await editor.getByRole('button', { name: 'Add session' }).click();
+    const form = editor.getByRole('form', { name: 'New session' });
+    await form.getByLabel('Start time', { exact: true }).fill('19:00');
+    await form.getByLabel('End time', { exact: true }).fill('20:00');
+    await form.getByRole('button', { name: 'Suggest breaks' }).click();
+    await capture(page, 'day-editor', project);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // OT screen with one leave row (.ot-leave-head h3).
+    await page.goto('/#/ot');
+    await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
+    await expect(page.locator('li.ot-leave', { hasText: 'SYN-B3-STYLE' })).toBeVisible();
+    await capture(page, 'ot', project);
+
+    await page.goto('/#/history');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await capture(page, 'history', project);
+
+    await page.goto('/#/settings');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await capture(page, 'settings', project);
+
+    // Clock-out dialog last, because it adds a session today.
+    await page.goto('/');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('button', { name: 'Clock in' }).click();
+    await expect.poll(async () => (await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+    await page.waitForTimeout(1_500);
+    await page.getByRole('button', { name: 'Clock out' }).click();
+    const clockOut = page.getByRole('dialog', { name: 'Clock out' });
+    await expect(clockOut).toBeVisible();
+    await clockOut.getByRole('button', { name: 'Suggest breaks' }).click();
+    await expect(clockOut.locator('[data-break]')).toHaveCount(3);
+    await capture(page, 'clock-out', project);
+    await clockOut.getByRole('radio', { name: /No breaks taken/ }).check();
+    await clockOut.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+    await expect(clockOut).toHaveCount(0);
+  } finally {
+    await employeeSeed.clearSessions(complete, 'audit cleanup');
+    await employeeSeed.clearSessions(pending, 'audit cleanup');
+    await employeeSeed.clearSessions(todayLocal, 'audit cleanup');
+  }
+});
+
+test('fixb3 style: admin screen', async ({ page, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(60_000);
+  await signInPageAs(builtServer.credentials.admin, '#/admin');
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  await expect(page.locator('.user-head h3').first()).toBeVisible();
+  await capture(page, 'admin', testInfo.project.name);
+});

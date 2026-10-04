@@ -23,6 +23,29 @@
   - the WP2-FIXA and WP2-FIXB results;
   - the board coordinator decision dated 2026-10-04.
 
+## Attempt 3 (delta re-audit after the third fix round)
+
+- The attempt-2 PASS at a3d1b65 / 5b370621 is invalidated by a later source change
+  (docs/08).
+- WP2-FIXB3 changed only src/client/styles.css (CSS tokens) and tests/client/zoneOracle.ts
+  plus its unit test, outside handoff/.
+- Attempt 3 is a fresh auditor, not an earlier A2 auditor. Target: `reviewed_commit` =
+  the WP2-GATE4 `freeze_commit`, given at dispatch, and the gate digest.
+- Scope:
+  - confirm that the diff since a3d1b65 is limited to those files and touches no
+    server, ledger, privacy or admin code;
+  - run `npm run verify` and the targeted ledger, privacy and admin tests;
+  - re-run the holiday-preview and payroll differential probes and a short race of at
+    least 50 rounds, as a regression smoke;
+  - confirm that WP2-A-01 and WP2-A2-02 stay resolved and that R1–R4 and A3-01 stay
+    non-blocking.
+- Write handoff/delivery/WP2_RECHECK_A4.md and its .vi.md. Keep the earlier reports.
+  Append an "Attempt 3" result below, and put the evidence in
+  handoff/delivery/evidence/WP2-AUDIT-A2-a3/.
+- Execute in your own clone on C:. Never write into the repository root, and on Windows
+  never redirect to /dev/null or nul from a POSIX shell. WP2-AUDIT-B4 runs at the same
+  time.
+
 ## Attempt 2 (re-audit at the new commit)
 
 - The attempt-1 PASS at f79413b / 4c2bd7ef (Results below) is invalidated by a later
@@ -34,7 +57,8 @@
     differential test;
   - WP2-A2-01: comments.
 - Attempt 2 is a fresh auditor, not the attempt-1 auditor. Target: `reviewed_commit` =
-  the WP2-GATE3 `freeze_commit`, given at dispatch, and the gate digest.
+  a3d1b6555c352afa68b3d61ddc67f0c596742698 (the WP2-GATE3 `freeze_commit`). The gate
+  digest is 5b370621e7d3b9f292e8facebb1f0f6e9307a40cbda3a9f87b7dd61924298581.
 - Scope for attempt 2:
   - re-verify area A at the new commit: diff the fix range against f79413b, re-run the
     reduced ledger/privacy probe set and a race of at least 100 rounds, the targeted
@@ -122,3 +146,42 @@ Self-reported model: claude-opus-5-5 (not weaker than the strongest WP2 author m
   shown in the session only.
 - Writes: only WP2_RECHECK_A.md/.vi.md, this Results section and the evidence folder. No source edit, no commit, and
   no ORCHESTRATION.json, STATE.json or NEXT_ACTION edit.
+
+### Auditor result (attempt 2)
+
+Self-reported model: claude-opus-5-5 (not weaker than the strongest author model of the reviewed snapshot, opus;
+WP2-FIXB2 ran on sonnet). Fresh context; not the attempt-1 auditor. Report: [WP2_RECHECK_A3](../WP2_RECHECK_A3.md)
+and its .vi.md. Evidence: handoff/delivery/evidence/WP2-AUDIT-A2-a2/ (index 00-commands.txt; masked, LF).
+
+- Target: HEAD a3d1b6555c352afa68b3d61ddc67f0c596742698 = origin/main before and after. Source digest
+  5b370621e7d3b9f292e8facebb1f0f6e9307a40cbda3a9f87b7dd61924298581 (613 files) before and after, in the project folder
+  and in the scratch clone; it equals the gate digest. All checks ran in a scratch clone on C: outside Dropbox, with
+  Node v24.21.0 by full path.
+- Verdict: **PASS**. No blocking finding.
+- WP2-A2-02: resolved.
+  - The 201 is `{payroll_exception}` only.
+  - New differential probe: 10 payroll-exception requests and 20 admin reads afterwards. All 30 are byte-identical
+    with and without employee timesheets, even though the stored rows really are refreshed in the second world.
+  - The f79413b control detects the old field (17/3).
+  - Regression test: red on f79413b (4 failed), green on a3d1b65 (13/13).
+  - The finalized 409 `period_finalized` is kept. It writes nothing, carries period dates only, and is identical for
+    one or two finalized timesheets.
+- WP2-A-01: stays resolved.
+  - holidayImport.ts is unchanged.
+  - The attempt-1 probe infers nothing, and the 8fae685 control still leaks.
+  - A2 differential: 27/27 identical.
+  - Regression test: 29/29.
+- No area-A regression:
+  - `npm run verify` exit 0: 32 files / 611 tests, no deprecation output.
+  - 13 targeted files / 267 tests; concurrency 8/8 three times.
+  - Ledger probe 119/0 and supplement 6/0.
+  - Race: 220 + 550 production rounds, 0 violations; the controls double-booked.
+  - Admin, isolation and OT-leave e2e: 24 passed. Preflight PASS, also after the writes. A later re-run failed only on
+    WP2_RECHECK_B3.md, the concurrent B3 auditor's report, whose .vi.md was missing at that moment; not this task's file. The final re-run passed (56 pairs).
+- WP2-A2-01: comments fixed in code; WP2_HANDOFF.md:41 is left for the acceptance step.
+- R1–R4 and ADV-A-05: remain non-blocking.
+- New observation WP2-A3-01 (Info, forward-looking): the payroll_exception.create audit payload
+  (src/server/services/calendars.ts:335-344) keeps refreshed_pay_period and the stored row. It is ownerless and
+  unreadable today; any future admin audit view must redact it.
+- Writes: only WP2_RECHECK_A3.md/.vi.md, this Results section and the evidence folder. No source edit, no commit, and
+  no ORCHESTRATION.json, STATE.json or NEXT_ACTION edit. WP2_RECHECK_A.md is unchanged.

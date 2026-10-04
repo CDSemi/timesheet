@@ -1,0 +1,38 @@
+# 04b red-check: a3d1b65 tests/integration/payroll-exceptions.test.ts against the f79413b source (scratch worktree <red>, node_modules junction)  (2026-10-04T11:12:09Z)
+$ git -C <red> rev-parse HEAD
+f79413b77e7f745e1eff383f1ad748e7667533da
+$ git -C <red> status --short
+ M tests/integration/payroll-exceptions.test.ts
+$ <node24> node_modules/vitest/vitest.mjs run tests/integration/payroll-exceptions.test.ts --reporter=verbose
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > answers 401 without a session and 403 to an employee, changing nothing 270ms
+ ✓ tests/integration/payroll-exceptions.test.ts > access control > rejects a missing Origin, unknown fields and an unknown calendar 253ms
+ × tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read 239ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > requires a reason and validates the exception without writing 241ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > refuses a second exception for the same payroll date 233ms
+ ✓ tests/integration/payroll-exceptions.test.ts > creating an exception > uses the exception when the period row is first created later 246ms
+ × tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period 241ms
+ × tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > answers the same success body whether or not employees have timesheets in the period (WP2-A2-02) 457ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes the due date alone when only the deadline moves 232ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when a finalized timesheet references the row and changes nothing 224ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refuses when any user’s finalized timesheet references the row, even if the others are drafts 234ms
+ × tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period 234ms
+ ✓ tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > rolls back the exception and the refreshed row when the audit event cannot be written 235ms
+ FAIL  tests/integration/payroll-exceptions.test.ts > creating an exception > stores the exception with its reason, audits it and shows it on the calendar read
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+- Expected
++ Received
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > refreshes an unfinalized stored row in the same transaction, keeping its id and period
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+- Expected
++ Received
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > answers the same success body whether or not employees have timesheets in the period (WP2-A2-02)
+AssertionError: expected { payroll_exception: { …(7) }, …(1) } to deeply equal { payroll_exception: { …(7) }, …(1) }
+- Expected
++ Received
+ FAIL  tests/integration/payroll-exceptions.test.ts > stored pay_periods rows (E-10) > does not touch a finalized period when the exception belongs to another period
+AssertionError: expected [ 'payroll_exception', …(1) ] to deeply equal [ 'payroll_exception' ]
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  4 failed | 9 passed (13)
+exit 1

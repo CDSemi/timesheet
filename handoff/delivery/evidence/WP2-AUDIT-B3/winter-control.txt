@@ -1,0 +1,80 @@
+== control: base f79413b (old hard-coded 08:00), real clock; 2026-10-04T11:14:38Z
+
+Running 4 tests using 2 workers
+
+{"project":"desktop","fakeNow":null,"today":{"todayLocal":"2026-10-04","reportingZone":"America/Los_Angeles","currentPayrollDate":"2026-10-16"},"picked":"2026-10-02"}
+  ok 1 [desktop] › tests\e2e\zz-audit-b3-date.spec.ts:7:1 › audit-b3: the date the R-07 e2e picks under this server clock (108ms)
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.4s)
+  ok 3 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.4s)
+{"project":"mobile","fakeNow":null,"today":{"todayLocal":"2026-10-04","reportingZone":"America/Los_Angeles","currentPayrollDate":"2026-10-16"},"picked":"2026-10-02"}
+  ok 4 [mobile] › tests\e2e\zz-audit-b3-date.spec.ts:7:1 › audit-b3: the date the R-07 e2e picks under this server clock (87ms)
+
+  4 passed (5.3s)
+exit 0
+== control: base f79413b (old hard-coded 08:00), AUDIT_FAKE_NOW=2026-11-03T20:00:00Z; 2026-10-04T11:14:44Z
+
+Running 4 tests using 2 workers
+
+{"project":"desktop","fakeNow":"2026-11-03T20:00:00Z","today":{"todayLocal":"2026-11-03","reportingZone":"America/Los_Angeles","currentPayrollDate":"2026-11-13"},"picked":"2026-11-02"}
+  ok 1 [desktop] › tests\e2e\zz-audit-b3-date.spec.ts:7:1 › audit-b3: the date the R-07 e2e picks under this server clock (87ms)
+  x  2 [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.1s)
+{"project":"mobile","fakeNow":"2026-11-03T20:00:00Z","today":{"todayLocal":"2026-11-03","reportingZone":"America/Los_Angeles","currentPayrollDate":"2026-11-13"},"picked":"2026-11-02"}
+  ok 4 [mobile] › tests\e2e\zz-audit-b3-date.spec.ts:7:1 › audit-b3: the date the R-07 e2e picks under this server clock (88ms)
+  x  3 [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07) (1.1s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "2026-11-02 08:00"
+    Received: "2026-11-02 07:00"
+
+      220 |     expect(wallClock(stored?.start_utc ?? '', displayZone)).toBe('22:00:00');
+      221 |     expect(wallClock(stored?.end_utc ?? '', displayZone)).toBe('23:30:00');
+    > 222 |     expect(dateTimeIn(stored?.start_utc ?? '', LA)).toBe(`${date} 08:00`);
+          |                                                     ^
+      223 |     expect(dateTimeIn(stored?.end_utc ?? '', LA)).toBe(`${date} 09:30`);
+      224 |
+      225 |     // An edited session keeps its saved input zone; it is not reset to the default.
+
+    Error Context: ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "2026-11-02 08:00"
+    Received: "2026-11-02 07:00"
+
+      220 |     expect(wallClock(stored?.start_utc ?? '', displayZone)).toBe('22:00:00');
+      221 |     expect(wallClock(stored?.end_utc ?? '', displayZone)).toBe('23:30:00');
+    > 222 |     expect(dateTimeIn(stored?.start_utc ?? '', LA)).toBe(`${date} 08:00`);
+          |                                                     ^
+      223 |     expect(dateTimeIn(stored?.end_utc ?? '', LA)).toBe(`${date} 09:30`);
+      224 |
+      225 |     // An edited session keeps its saved input zone; it is not reset to the default.
+
+    Error Context: ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\tmp\timesheet-e2e-output\day-editor-manual-entry-de-7271f-e-instant-typed-there-R-07--mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+    [mobile] › tests\e2e\day-editor.spec.ts:187:1 › manual entry defaults its input zone to the display zone and stores the instant typed there (R-07)
+  2 passed (4.2s)
+exit 1

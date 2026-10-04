@@ -1,0 +1,37 @@
+// WP2-AUDIT-B3 literal scan (auditor-owned). Lists every declaration of src/client/styles.css at
+// the reviewed commit, outside custom-property definitions, whose value still holds a numeric
+// literal (length, percentage, time, unitless number) after removing var(...) references, and
+// says whether the same literal occurs in the WP1 stylesheet (f32978f) and which commit added it.
+import { execFileSync } from 'node:child_process';
+const clone = process.argv[2];
+const git = (...args) => execFileSync('git', args, { cwd: clone, encoding: 'utf8', maxBuffer: 1 << 26 });
+const css = git('show', 'HEAD:src/client/styles.css').split('\n');
+const wp1 = git('show', 'f32978f:src/client/styles.css');
+const blame = git('blame', '-s', '--abbrev=7', 'HEAD', '--', 'src/client/styles.css').split('\n');
+const wp1Literals = new Set((wp1.replace(/\/\*[\s\S]*?\*\//g, '').match(/-?\d*\.?\d+(?:px|rem|em|vw|vh|dvh|%|s|ms|fr|ch)?/g) ?? []));
+let inComment = false;
+let selector = '';
+const rows = [];
+css.forEach((raw, index) => {
+  let line = raw;
+  if (inComment) { if (line.includes('*/')) { inComment = false; line = line.slice(line.indexOf('*/') + 2); } else return; }
+  line = line.replace(/\/\*.*?\*\//g, '');
+  if (line.includes('/*')) { inComment = true; line = line.slice(0, line.indexOf('/*')); }
+  if (line.includes('{')) selector = line.replace('{', '').trim() || selector;
+  const decl = line.match(/^\s*([a-z-]+)\s*:\s*(.+?);?\s*$/);
+  if (decl === null || decl[1].startsWith('--')) return;
+  if (line.trim().startsWith('@')) return;
+  const [, prop, value] = decl;
+  const stripped = value.replace(/var\([^()]*(?:\([^()]*\)[^()]*)*\)/g, 'VAR');
+  const literals = (stripped.match(/(?<![\w#-])-?\d*\.?\d+(?:px|rem|em|vw|vh|dvh|%|s|ms|fr|ch|deg)?(?![\w-])/g) ?? [])
+    .filter((lit) => !/^-?0(?:px|rem|em|%|s|ms)?$/.test(lit));
+  if (literals.length === 0) return;
+  const commit = (blame[index] ?? '').slice(0, 7);
+  rows.push({ line: index + 1, commit, selector, prop, value: value.trim(), literals, inWp1: literals.map((lit) => wp1Literals.has(lit)) });
+});
+for (const row of rows) {
+  console.log(`${String(row.line).padStart(4)} ${row.commit} ${row.selector} | ${row.prop}: ${row.value} | literals ${row.literals.map((lit, i) => `${lit}${row.inWp1[i] ? '(WP1)' : '(new)'}`).join(' ')}`);
+}
+console.log(`declarations with literals: ${rows.length}; with a literal absent from WP1: ${rows.filter((row) => row.inWp1.some((v) => !v)).length}`);
+// Media query conditions are listed separately (custom properties cannot drive them).
+css.forEach((raw, index) => { if (/^\s*@media/.test(raw)) console.log(`media ${index + 1}: ${raw.trim()}`); });

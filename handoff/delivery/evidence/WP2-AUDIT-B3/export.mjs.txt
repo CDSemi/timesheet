@@ -1,0 +1,26 @@
+// Masked LF export of an audit log: node export.mjs <src> <dest>
+// Masks the auditor work folder, the portable Node path, the project path and the account name
+// (both slash styles), strips ANSI codes, converts to LF and trims trailing whitespace.
+import { readFileSync, writeFileSync } from 'node:fs';
+const [src, dest] = process.argv.slice(2);
+let text = readFileSync(src, 'utf8');
+const SEP = '[\\\\/]+';
+const rules = [
+  [new RegExp(`C:${SEP}Users${SEP}<user>${SEP}AppData${SEP}Local${SEP}Temp${SEP}wp2-audit-b3`, 'gi'), '<work>'],
+  [new RegExp('<work>', 'gi'), '<work>'],
+  [new RegExp(`C:${SEP}Users${SEP}<user>${SEP}AppData${SEP}Local${SEP}timesheet-dev${SEP}node-24\\.21\\.0[^\\s'"]*`, 'gi'), '<node24>'],
+  [new RegExp('/c/Users/<user>/AppData/Local/timesheet-dev/node-24\\.21\\.0[^\\s\'"]*', 'gi'), '<node24>'],
+  [new RegExp(`D:${SEP}Dropbox${SEP}Work\\.CDSemi${SEP}timesheet`, 'gi'), '<project>'],
+  [new RegExp('/d/Dropbox/Work\\.CDSemi/timesheet', 'gi'), '<project>'],
+  [/<user>/gi, '<user>'],
+  [/<user>uyenblog@gmail\.com/gi, '<email>'],
+  [new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g'), ''],
+];
+for (const [re, to] of rules) text = text.replace(re, to);
+text = text
+  .replace(/\r\n?/g, '\n')
+  .split('\n')
+  .map((line) => line.replace(/[ \t]+$/, ''))
+  .join('\n')
+  .replace(/\n*$/, '\n');
+writeFileSync(dest, text);

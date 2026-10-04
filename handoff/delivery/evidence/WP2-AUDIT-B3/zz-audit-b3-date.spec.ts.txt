@@ -1,0 +1,14 @@
+// WP2-AUDIT-B3 probe (auditor-owned, temporary in the clone): records the server "today" and the date
+// the committed R-07 e2e will pick (the newest past free workday of the displayed period).
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, SCREENSHOT_DIR, test } from './fixtures.ts';
+
+test('audit-b3: the date the R-07 e2e picks under this server clock', async ({ employeeSeed }, testInfo) => {
+  const today = await employeeSeed.today();
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  const result = { project: testInfo.project.name, fakeNow: process.env.AUDIT_FAKE_NOW ?? null, today, picked: days[0] ?? null };
+  writeFileSync(join(SCREENSHOT_DIR, `audit-b3-date-${result.fakeNow ?? 'real'}-${testInfo.project.name}.json`.replaceAll(':', '')), `${JSON.stringify(result, null, 2)}\n`);
+  console.log(JSON.stringify(result));
+  expect(days.length).toBeGreaterThan(0);
+});

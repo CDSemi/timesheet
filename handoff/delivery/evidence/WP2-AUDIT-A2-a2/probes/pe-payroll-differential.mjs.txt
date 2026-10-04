@@ -1,0 +1,232 @@
+// WP2-AUDIT-A2 attempt 2: payroll-exception differential probe (WP2-A2-02 recheck). Synthetic data only.
+// Question: can the administrator learn, from anything the payroll-exception flow answers or from any
+// read afterwards, whether employees have timesheets (stored pay_periods rows) in a pay period?
+// Method: fresh SQLite WAL files with the same seed and the same fixed clock.
+//   W0: no employee activity.  W1: two employees edit days in four pay periods (past, current, next,
+//   one after), so stored pay_periods rows exist there; the administrator does nothing personal.
+// The administrator then sends the same sequence of payroll-exception requests in both worlds and
+// reads every admin-reachable route afterwards. Bodies are compared byte for byte after masking UUIDs
+// (calendar and user ids are random per database). The stored rows must really be refreshed in W1 and
+// the audit event must keep the refreshed flag (not readable by the administrator).
+// W3: finalized periods (direct UPDATE, as WP3 will set the column): 409 period_finalized is kept,
+// writes nothing, carries period dates only, and is identical for one versus two finalized timesheets.
+// Passwords are generated at run time and never printed.
+// Usage: node pe-payroll-differential.mjs <tree-root> <work-dir>
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [root, workDir] = process.argv.slice(2);
+const src = (rel) => pathToFileURL(join(root, 'src', rel)).href;
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+
+rmSync(workDir, { recursive: true, force: true });
+mkdirSync(workDir, { recursive: true });
+const out = (line) => process.stdout.write(`${line}\n`);
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const mask = (text) => String(text).replace(UUID, '<uuid>');
+const sha = (text) => createHash('sha256').update(text).digest('hex').slice(0, 12);
+let pass = 0;
+let fail = 0;
+const check = (name, ok, detail = '') => {
+  if (ok) pass += 1;
+  else fail += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${name}${detail === '' ? '' : `  ${mask(detail)}`}`);
+};
+
+class Clock {
+  constructor(iso) { this.t = new Date(iso); }
+  now() { return new Date(this.t.getTime()); }
+}
+const clock = new Clock('2026-10-09T20:00:00Z'); // Friday 13:00 Los Angeles; current period 2026-09-28..2026-10-11 (payroll 10-16)
+const ORIGIN = 'http://localhost:3000';
+const config = { host: '127.0.0.1', port: 3000, databasePath: '', allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 30 * 86400, production: false };
+const LA = 'America/Los_Angeles';
+const at = (d, t) => ({ local: `${d}T${t}`, zone: LA });
+
+async function world(name) {
+  const db = openDatabase(join(workDir, `${name}.db`));
+  migrate(db);
+  const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+  const seed = await seedSynthetic(db, clock, { passwords: pw });
+  const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+  async function req(method, path, cookie, body) {
+    const headers = { origin: ORIGIN };
+    if (cookie !== undefined) headers.cookie = cookie;
+    const init = { method, headers };
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    const res = await app.request(path, init);
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch { json = null; }
+    return { status: res.status, text, json, setCookie: res.headers.get('set-cookie') };
+  }
+  const login = async (email, password) => (await req('POST', '/api/auth/login', undefined, { email, password })).setCookie.split(';')[0];
+  const admin = await login('admin@example.invalid', pw.admin);
+  const emp = await login('employee@example.invalid', pw.employee);
+  const pw2 = randomBytes(18).toString('base64url');
+  const created = await req('POST', '/api/admin/users', admin, { email: 'employee2@example.invalid', display_name: 'Example Employee Two', role: 'employee', password: pw2, calendar_id: seed.calendarId });
+  const emp2 = await login('employee2@example.invalid', pw2);
+  const counts = () => Object.fromEntries(['audit_events', 'payroll_exceptions', 'pay_periods', 'timesheets', 'day_entries', 'work_sessions'].map((table) => [table, db.prepare(`SELECT count(*) FROM ${table}`).pluck().get()]));
+  return { name, db, req, admin, emp, emp2, calendarId: seed.calendarId, createdStatus: created.status, ids: { employee: seed.users.find((u) => u.role !== 'admin').id, employee2: created.json.user.id }, counts };
+}
+
+async function employeeActivity(w) {
+  const steps = [];
+  const step = async (label, promise) => { const r = await promise; steps.push(`${label} -> ${r.status}${r.status >= 300 ? ` ${r.json?.error?.code ?? ''}` : ''}`); return r; };
+  await step('employee session 09-21 (period of payroll 10-02, past) with reason', w.req('POST', '/api/days/2026-09-21/sessions', w.emp, { start: at('2026-09-21', '09:00'), end: at('2026-09-21', '17:00'), input_zone: LA, breaks_confirmed: true, breaks: [], reason: 'synthetic late entry' }));
+  await step('employee session 10-07 (payroll 10-16, current)', w.req('POST', '/api/days/2026-10-07/sessions', w.emp, { start: at('2026-10-07', '08:00'), end: at('2026-10-07', '18:00'), input_zone: LA, breaks_confirmed: true, breaks: [] }));
+  await step('employee2 session 10-08 (payroll 10-16, current)', w.req('POST', '/api/days/2026-10-08/sessions', w.emp2, { start: at('2026-10-08', '07:00'), end: at('2026-10-08', '19:00'), input_zone: LA, breaks_confirmed: true, breaks: [] }));
+  await step('employee explicit Vacation 10-20 (payroll 10-30, next)', w.req('PUT', '/api/days/2026-10-20', w.emp, { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: '' }));
+  await step('employee2 explicit Off 11-02 (payroll 11-13)', w.req('PUT', '/api/days/2026-11-02', w.emp2, { category: 'Off', leave_minutes: 0, wfh: false, notes: '' }));
+  for (const line of steps) out(`  setup ${line}`);
+  return steps.every((line) => / -> 20[01]$/.test(line));
+}
+
+const exceptionBody = (w, over) => ({ calendar_id: w.calendarId, nominal_payroll_date: '2026-10-16', payroll_date: '2026-10-15', due_local_date: '2026-10-13', due_local_time: '12:00', reason: 'Synthetic bank holiday moves payroll', ...over });
+// The same administrator request sequence in every world. Each entry: [label, (w) => body]
+const SEQUENCE = [
+  ['X1 current period 10-16 -> 10-15 with a new due date (stored rows in W1)', (w) => exceptionBody(w)],
+  ['X2 next period 10-30, deadline only (stored rows in W1)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-10-30', payroll_date: '2026-10-30', due_local_date: '2026-10-27', due_local_time: '09:00', reason: 'Synthetic deadline move' })],
+  ['X3 past period 10-02 -> 10-01 (stored rows in W1)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-10-02', payroll_date: '2026-10-01', due_local_date: null, due_local_time: null, reason: 'Synthetic past correction' })],
+  ['X4 period 11-13 -> 11-12 (stored row in W1 from an explicit label)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-11-13', payroll_date: '2026-11-12', due_local_date: null, due_local_time: null, reason: 'Synthetic move' })],
+  ['X5 period 11-27 -> 11-25 (no stored row in either world)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-11-27', payroll_date: '2026-11-25', due_local_date: null, due_local_time: null, reason: 'Synthetic Thanksgiving week' })],
+  ['X6 duplicate of X1 (409 expected)', (w) => exceptionBody(w)],
+  ['X7 blank reason on 12-11 (422 expected, nothing written)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-12-11', payroll_date: '2026-12-10', reason: '   ' })],
+  ['X8 not a payroll date 10-17 (422 expected)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-10-17', payroll_date: '2026-10-16' })],
+  ['X9 beyond half a cycle (422 expected)', (w) => exceptionBody(w, { nominal_payroll_date: '2026-12-25', payroll_date: '2027-01-05' })],
+  ['X10 unknown calendar (404 expected)', (w) => exceptionBody(w, { calendar_id: 'calendar-does-not-exist' })],
+];
+const READS = ['/api/admin/users', '/api/auth/me', '/api/calendar', '/api/periods/current', '/api/periods?from=2026-09-01&to=2026-12-31',
+  '/api/timesheets/2026-10-15', '/api/timesheets/2026-10-16', '/api/timesheets/2026-10-30', '/api/timesheets/2026-10-01', '/api/timesheets/2026-11-12',
+  '/api/days/2026-10-07', '/api/days/2026-10-20', '/api/days/2026-09-21', '/api/policies', '/api/history', '/api/history?limit=1', '/api/ot/summary', '/api/ot/ledger', '/api/ot/leave', '/api/health'];
+
+async function adminRun(w) {
+  const view = new Map();
+  for (const [label, body] of SEQUENCE) view.set(label, await w.req('POST', '/api/admin/payroll-exceptions', w.admin, body(w)));
+  for (const path of READS) view.set(`GET ${path}`, await w.req('GET', path, w.admin));
+  return view;
+}
+function diffPaths(a, b, path = '$', acc = []) {
+  if (acc.length >= 12) return acc;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') {
+    if (a !== b) acc.push(`${path}: ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);
+    return acc;
+  }
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) diffPaths(a[key], b[key], `${path}.${key}`, acc);
+  return acc;
+}
+function compare(label, before, after) {
+  const differing = [];
+  for (const [name, x] of before) {
+    const y = after.get(name);
+    const a = mask(x.text);
+    const b = mask(y.text);
+    const same = x.status === y.status && a === b;
+    if (!same) differing.push(name);
+    let detail = '';
+    if (!same) {
+      try { detail = ` | ${x.status}->${y.status} ${diffPaths(JSON.parse(a), JSON.parse(b)).join('; ')}`; } catch { detail = ` | ${x.status}->${y.status} non-JSON body differs`; }
+    }
+    out(`  ${same ? 'same' : 'DIFF'} ${name} [${x.status} ${sha(a)}]${detail}`);
+  }
+  out(`  ${label}: ${before.size - differing.length}/${before.size} identical`);
+  return differing;
+}
+const storedRows = (w) => w.db.prepare('SELECT period_index, nominal_payroll_date, payroll_date, due_local_date, due_local_time, is_exception FROM pay_periods ORDER BY period_index').all();
+const exceptionAudits = (w) => w.db.prepare("SELECT owner_user_id, after_json FROM audit_events WHERE operation = 'payroll_exception.create' ORDER BY rowid").all()
+  .map((row) => ({ owner: row.owner_user_id, ...(() => { const a = JSON.parse(row.after_json); return { nominal: a.nominal_payroll_date, refreshed: a.refreshed_pay_period }; })() }));
+
+// ---------------- W0 and W1 ----------------
+out('## W0: no employee activity');
+const w0 = await world('w0');
+out(`  setup admin creates employee2 -> ${w0.createdStatus}; counts ${JSON.stringify(w0.counts())}`);
+out('## W1: two employees edit days in four pay periods');
+const w1 = await world('w1');
+out(`  setup admin creates employee2 -> ${w1.createdStatus}`);
+check('E0 every W1 employee setup step succeeded', await employeeActivity(w1));
+const w1Before = storedRows(w1);
+out(`  W1 counts ${JSON.stringify(w1.counts())}; stored pay_periods nominal dates: ${w1Before.map((r) => r.nominal_payroll_date).join(' ')}`);
+check('E1 W0 has no stored pay_periods row; W1 has rows for 10-02, 10-16, 10-30 and 11-13', w0.counts().pay_periods === 0 && w1Before.map((r) => r.nominal_payroll_date).join(',') === '2026-10-02,2026-10-16,2026-10-30,2026-11-13');
+// W1b: a copy of W1 taken before the administrator acts, for the finalized scenarios (W3).
+const w3Path = join(workDir, 'w3.db');
+w1.db.exec(`VACUUM INTO '${w3Path.replaceAll('\\', '/')}'`);
+
+out('## administrator sequence and reads in W0 and W1');
+const v0 = await adminRun(w0);
+const v1 = await adminRun(w1);
+const d = compare('W0 vs W1', v0, v1);
+check('P1 every payroll-exception response and every admin read is identical with and without employee timesheets (WP2-A2-02)', d.length === 0, d.join(', '));
+const statuses = SEQUENCE.map(([label]) => `${label.split(' ')[0]}:${v1.get(label).status}${v1.get(label).status >= 300 ? `/${v1.get(label).json?.error?.code}` : ''}`);
+out(`  statuses (both worlds): ${statuses.join(' ')}`);
+check('P2 X1-X5 answer 201; X6 409 payroll_exception_exists; X7 422 reason_required; X8/X9 422; X10 404', statuses.join(' ') === 'X1:201 X2:201 X3:201 X4:201 X5:201 X6:409/payroll_exception_exists X7:422/reason_required X8:422/invalid_payroll_exception X9:422/invalid_payroll_exception X10:404/not_found', statuses.join(' '));
+const successKeys = SEQUENCE.slice(0, 5).map(([label]) => JSON.stringify(Object.keys(v1.get(label).json))).filter((keys, i, all) => all.indexOf(keys) === i);
+check('P3 every 201 body has exactly the key payroll_exception', successKeys.length === 1 && successKeys[0] === '["payroll_exception"]', successKeys.join(' '));
+const excKeys = JSON.stringify(Object.keys(v1.get(SEQUENCE[0][0]).json.payroll_exception).sort());
+check('P4 payroll_exception carries calendar-only fields (admin input, calendar id, created_at)', excKeys === '["calendar_id","created_at","due_local_date","due_local_time","nominal_payroll_date","payroll_date","reason"]', excKeys);
+const allAdminText = [...v0.values(), ...v1.values()].map((r) => r.text).join('\n');
+check('P5 no admin response contains "refreshed", "pay_period_id" or an employee id', !/refreshed|pay_period_id/.test(allAdminText) && ![w1.ids.employee, w1.ids.employee2, w0.ids.employee, w0.ids.employee2].some((id) => allAdminText.includes(id) && !v1.get('GET /api/admin/users').text.includes(id) && !v0.get('GET /api/admin/users').text.includes(id)));
+const w1After = storedRows(w1);
+out(`  W1 stored rows after: ${JSON.stringify(w1After)}`);
+const row = (rows, nominal) => rows.find((r) => r.nominal_payroll_date === nominal);
+check('S1 the stored rows really were refreshed in W1 (10-16 -> 10-15 exception, 10-30 due 10-27 09:00, 10-02 -> 10-01, 11-13 -> 11-12)',
+  row(w1After, '2026-10-16').payroll_date === '2026-10-15' && row(w1After, '2026-10-16').is_exception === 1 && row(w1After, '2026-10-16').due_local_date === '2026-10-13'
+  && row(w1After, '2026-10-30').due_local_date === '2026-10-27' && row(w1After, '2026-10-30').due_local_time === '09:00'
+  && row(w1After, '2026-10-02').payroll_date === '2026-10-01' && row(w1After, '2026-11-13').payroll_date === '2026-11-12');
+check('S2 W0 still has no stored pay_periods row (the flow and the reads create none)', w0.counts().pay_periods === 0, JSON.stringify(w0.counts()));
+const a0 = exceptionAudits(w0);
+const a1 = exceptionAudits(w1);
+out(`  audit W0: ${JSON.stringify(a0)}`);
+out(`  audit W1: ${JSON.stringify(a1)}`);
+check('S3 the refreshed flag stays in the audit event (W0 false x5, W1 true for 10-16/10-30/10-02/11-13, false for 11-27), owner null', a0.length === 5 && a0.every((a) => a.refreshed === false && a.owner === null)
+  && a1.map((a) => `${a.nominal}:${a.refreshed}`).join(',') === '2026-10-16:true,2026-10-30:true,2026-10-02:true,2026-11-13:true,2026-11-27:false' && a1.every((a) => a.owner === null));
+const hist = v1.get('GET /api/history').json;
+check('S4 the admin history (owner-scoped) does not list the payroll-exception audit events', Array.isArray(hist?.events ?? hist?.items ?? []) && !v1.get('GET /api/history').text.includes('payroll_exception'), sha(v1.get('GET /api/history').text));
+const empHistory = await w1.req('GET', '/api/history', w1.emp);
+check('S5 the employee history does not list the payroll-exception audit events either', empHistory.status === 200 && !empHistory.text.includes('payroll_exception') && !empHistory.text.includes('refreshed'));
+check('S6 integrity_check ok and foreign_key_check empty (W0, W1)', [w0, w1].every((w) => w.db.pragma('integrity_check', { simple: true }) === 'ok' && w.db.pragma('foreign_key_check').length === 0));
+
+// ---------------- W3: finalized periods (E-10 refusal kept) ----------------
+out('## W3: finalized timesheets (copy of W1 before the administrator acted)');
+const w3db = openDatabase(w3Path);
+const w3app = createApp({ db: w3db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+const w3req = async (method, path, body) => {
+  const res = await w3app.request(path, { method, headers: { origin: ORIGIN, cookie: w1.admin, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { json = null; }
+  return { status: res.status, text, json };
+};
+const w3counts = () => Object.fromEntries(['audit_events', 'payroll_exceptions', 'pay_periods'].map((t) => [t, w3db.prepare(`SELECT count(*) FROM ${t}`).pluck().get()]));
+const w3rows = () => JSON.stringify(w3db.prepare('SELECT * FROM pay_periods ORDER BY period_index').all());
+const sessionOk = (await w3req('GET', '/api/auth/me')).status === 200;
+check('F0 the W1 admin session is valid on the W3 copy', sessionOk);
+w3db.prepare("UPDATE timesheets SET finalized_revision_no = 1 WHERE user_id = ? AND pay_period_id = (SELECT id FROM pay_periods WHERE nominal_payroll_date = '2026-10-16')").run(w1.ids.employee);
+out(`  finalized timesheets: ${w3db.prepare('SELECT count(*) FROM timesheets WHERE finalized_revision_no IS NOT NULL').pluck().get()} (employee, payroll 10-16)`);
+const beforeF = { counts: JSON.stringify(w3counts()), rows: w3rows() };
+const f1 = await w3req('POST', '/api/admin/payroll-exceptions', exceptionBody({ calendarId: w1.calendarId }));
+out(`  X1 over the finalized period -> ${f1.status} ${mask(f1.text)}`);
+check('F1 409 period_finalized is kept (E-10)', f1.status === 409 && f1.json?.error?.code === 'period_finalized');
+check('F2 the refusal writes nothing (no exception, no audit event, stored rows unchanged)', JSON.stringify(w3counts()) === beforeF.counts && w3rows() === beforeF.rows, JSON.stringify(w3counts()));
+check('F3 the refusal details are the period dates only (no count, no identity)', JSON.stringify(Object.keys(f1.json?.error?.details ?? {}).sort()) === '["period_end","period_start"]' && f1.json.error.details.period_start === '2026-09-28' && f1.json.error.details.period_end === '2026-10-11' && ![w1.ids.employee, w1.ids.employee2].some((id) => f1.text.includes(id)));
+w3db.prepare("UPDATE timesheets SET finalized_revision_no = 1 WHERE pay_period_id = (SELECT id FROM pay_periods WHERE nominal_payroll_date = '2026-10-16')").run();
+out(`  finalized timesheets: ${w3db.prepare('SELECT count(*) FROM timesheets WHERE finalized_revision_no IS NOT NULL').pluck().get()} (every user, payroll 10-16)`);
+const f2 = await w3req('POST', '/api/admin/payroll-exceptions', exceptionBody({ calendarId: w1.calendarId }));
+check('F4 one versus two finalized timesheets give a byte-identical refusal', f2.status === f1.status && f2.text === f1.text);
+const f3 = await w3req('POST', '/api/admin/payroll-exceptions', exceptionBody({ calendarId: w1.calendarId }, { nominal_payroll_date: '2026-10-30', payroll_date: '2026-10-30', due_local_date: '2026-10-27', due_local_time: '09:00', reason: 'Synthetic deadline move' }));
+const x2 = v1.get(SEQUENCE[1][0]);
+check('F5 an exception for another (unfinalized) period still answers 201 with the same body as in W1', f3.status === 201 && mask(f3.text) === mask(x2.text), `${f3.status}`);
+check('F6 integrity_check ok (W3)', w3db.pragma('integrity_check', { simple: true }) === 'ok');
+
+out(`RESULT pass=${pass} fail=${fail}`);
+for (const w of [w0, w1]) w.db.close();
+w3db.close();
+process.exitCode = fail === 0 ? 0 : 1;

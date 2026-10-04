@@ -1,0 +1,20 @@
+// WP2-AUDIT-B3 test-only preload (auditor-owned, outside the clones). Loaded through NODE_OPTIONS
+// --import; it shifts the clock ONLY in the built server and its CLI (dist/server/index.js and
+// dist/server/cli.js) so that "today" is AUDIT_FAKE_NOW. Every other Node process (Playwright
+// runner and workers) keeps the real clock. Product code is not changed.
+const target = process.env.AUDIT_FAKE_NOW;
+const script = (process.argv[1] ?? '').split(String.fromCharCode(92)).join('/');
+if (target !== undefined && /dist\/server\/(index|cli)\.js$/.test(script)) {
+  const RealDate = Date;
+  const offset = RealDate.parse(target) - RealDate.now();
+  class ShiftedDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(RealDate.now() + offset);
+      else super(...args);
+    }
+    static now() {
+      return RealDate.now() + offset;
+    }
+  }
+  globalThis.Date = ShiftedDate;
+}

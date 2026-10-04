@@ -1,0 +1,41 @@
+Red-first run before the oracle change (tail of the vitest output): 2 failed, 4 passed (the fold test and the gap-reason test).
+
+null
+
++ Received:
+undefined
+
+ ❯ tests/client/zoneOracle.test.ts:60:84
+     58|     ];
+     59|     for (const [date, time, zone] of folds) {
+     60|       expect(() => instantOfWallTime(date, time, zone), `${zone} ${dat…
+       |                                                                                    ^
+     61|       expect(() => wallTimeIn(date, time, zone, HCM), `${zone} ${date}…
+     62|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/zoneOracle.test.ts > zone oracle > refuses a DST gap in every zone and accepts the minutes next to a gap or a fold
+AssertionError: America/Los_Angeles 2026-03-08 02:30: expected [Function] to throw error matching /not an unambiguous wall time.*gap/ but got '2026-03-08 02:30 is not an unambiguou…'
+
+- Expected:
+/not an unambiguous wall time.*gap/
+
++ Received:
+"2026-03-08 02:30 is not an unambiguous wall time in America/Los_Angeles"
+
+ ❯ tests/client/zoneOracle.test.ts:72:84
+     70|     ];
+     71|     for (const [date, time, zone] of gaps) {
+     72|       expect(() => instantOfWallTime(date, time, zone), `${zone} ${dat…
+       |                                                                                    ^
+     73|     }
+     74|     // One minute before and after each ambiguous or missing interval …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  04:34:19
+   Duration  338ms (tests 78%, transform 16%, import 4%, worker 1%)

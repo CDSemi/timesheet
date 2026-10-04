@@ -1,0 +1,16 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const [src, dest] = process.argv.slice(2);
+let t = readFileSync(src, 'utf8');
+const S = '[\\/]+';
+const rules = [
+  [new RegExp(`[A-Za-z]:${S}Users${S}[^\\/\s]+${S}AppData${S}Local${S}Temp${S}fb3`, 'gi'), '<work>'],
+  [new RegExp(`/c/Users/[^/\s]+/AppData/Local/Temp/fb3`, 'gi'), '<work>'],
+  [new RegExp(`[A-Za-z]:${S}Users${S}[^\\/\s]+${S}AppData${S}Local${S}timesheet-dev${S}node-24\.21\.0[^\s'"]*`, 'gi'), '<node24>'],
+  [new RegExp(`D:${S}Dropbox${S}Work\.CDSemi${S}timesheet`, 'gi'), '<project>'],
+  [new RegExp('/d/Dropbox/Work\.CDSemi/timesheet', 'gi'), '<project>'],
+  [/C:\Users\[^\\s]+/gi, '<home>'],
+  [new RegExp(`${String.fromCharCode(27)}\[[0-9;?]*[A-Za-z]`, 'g'), ''],
+];
+for (const [re, to] of rules) t = t.replace(re, to);
+t = t.replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n').replace(/\n*$/, '\n');
+writeFileSync(dest, t);
