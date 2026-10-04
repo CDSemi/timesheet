@@ -6,12 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 3ead61edb1316fe926fe969988f595792590cd41 (WP2-ACCEPT, records
-    only). The accepted WP2 source is 5fafeaee72509c6110a907458643bf7582dad81a.
-  - Source digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4; unchanged by the accept commit).
-  - Uncommitted (handoff only): the board, STATE, this checkpoint, the WP2-ACCEPT results
-    and evidence. They go into the next commit.
+  - HEAD = origin/main = ac5d0babf4e10d823f54a74db9248ddb84994958 (WP3-T01-FREEZE).
+    WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
+  - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
+    (WP2-GATE4). Current WP3 working digest 3c6a10c1… (T01, author-reported; no WP3
+    gate yet).
+  - Uncommitted (handoff only): the board, this checkpoint, the T01-FREEZE results and
+    evidence. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -72,9 +73,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   user-profile path literals in tests/integration/config.test.ts. Nothing was committed.
 - WP3-T01 attempt 2 is done (author-reported): a neutral synthetic root replaces the two
   literals; verify 674 tests; digest 3c6a10c1….
-- Running: WP3-T01-FREEZE attempt 2 (committer).
+- WP3-T01-FREEZE is committed and pushed as ac5d0ba (attempt 2, 29 paths, all checks 0).
+- WP3-T02 is done (author-reported): private file store, image check, signature upload
+  (raw PNG/JPEG, 256 KiB route limit) and owner-only download; the JSON-only rule holds
+  elsewhere; 14/14 mutations caught; verify 711 tests; digest 629e7d9d…. Carry to T08:
+  `index.ts` must pass `dataDir` from the delivery config.
+- Running: WP3-T02-FREEZE (committer).
 - Next action:
-  1. Record the T01 freeze; then WP3-T02 (private file store and signatures; brief ready).
+  1. Record the T02 freeze; then WP3-T03 (submission settings, recipients, templates;
+     brief ready).
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -91,5 +98,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T01-FREEZE attempt 2 only.
+- Live processes: WP3-T02-FREEZE only.
 - Usage/reset: not observable.

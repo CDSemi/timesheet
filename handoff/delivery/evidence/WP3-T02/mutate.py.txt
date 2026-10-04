@@ -1,0 +1,72 @@
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.environ['PROJECT_ROOT']  # the repository root (<project>)
+NODE = os.path.join(os.environ['LOCALAPPDATA'], 'timesheet-dev', 'node-24.21.0', 'node_modules', 'node', 'bin', 'node.exe')
+
+TESTS = ['tests/integration/file-store.test.ts', 'tests/integration/signatures.test.ts']
+
+MUTATIONS = [
+    ('M1 drop the magic-byte versus declared-type agreement check', 'src/server/files/imageCheck.ts',
+     "if ((declared === 'image/png') !== isPng) {", 'if (false as boolean) {', TESTS),
+    ('M2 widen the 256 KiB route limit to every /api route (global limit raised)', 'src/server/app.ts',
+     'const GLOBAL_JSON_LIMIT_BYTES = 64 * 1024;', 'const GLOBAL_JSON_LIMIT_BYTES = 256 * 1024;', TESTS),
+    ('M3 widen the upload exemption from the exact path to a path prefix', 'src/server/routes/signatures.ts',
+     'c.req.path === SIGNATURE_UPLOAD_PATH', 'c.req.path.startsWith(SIGNATURE_UPLOAD_PATH)', TESTS),
+    ('M4 the orphan sweep ignores references (removes referenced files)', 'src/server/files/fileStore.ts',
+     'if (options.isReferenced(name)) {', 'if (false as boolean) {', TESTS),
+    ('M5 drop owner scoping from the signature download', 'src/server/services/signatures.ts',
+     "WHERE id = ? AND user_id = ? AND kind = 'signature'`)", "WHERE id = ? AND (user_id = ? OR 1 = 1) AND kind = 'signature'`)", TESTS),
+    ('M6 accept data after the PNG end chunk (polyglot)', 'src/server/files/imageCheck.ts',
+     "if (seenEnd) throw invalid('Data follows the end of the PNG image');", 'if (seenEnd) break;', TESTS),
+    ('M7 accept data after the JPEG end-of-image marker (polyglot)', 'src/server/files/imageCheck.ts',
+     "if (offset !== bytes.length) throw invalid('Data follows the end of the JPEG image');", '', TESTS),
+    ('M8 serve stored bytes without comparing the recorded hash', 'src/server/services/signatures.ts',
+     "if (createHash('sha256').update(bytes).digest('hex') !== row.sha256) {", 'if (false as boolean) {', TESTS),
+    ('M9 put image bytes into the audit payload', 'src/server/services/signatures.ts',
+     'replaces_attachment_id: previous?.id ?? null,' + chr(10) + '        },',
+     'replaces_attachment_id: previous?.id ?? null,' + chr(10) + "          image_base64: Buffer.from(bytes).toString('base64')," + chr(10) + '        },', TESTS),
+    ('M10 lift the pixel-side bound', 'src/server/files/imageCheck.ts',
+     'export const MAX_IMAGE_SIDE_PX = 4096;', 'export const MAX_IMAGE_SIDE_PX = 65_535;', TESTS),
+    ('M11 skip the PNG pixel-data length check', 'src/server/files/imageCheck.ts',
+     "if (raw.length !== expected) throw invalid('The PNG pixel data does not match the header');", '', TESTS),
+    ('M12 drop the per-user signature cap', 'src/server/services/signatures.ts',
+     '>= MAX_SIGNATURES_PER_USER', '>= 100_000', TESTS),
+    ('M13 keep the stored file when the database write fails', 'src/server/services/signatures.ts',
+     'files.discard(stored.storageKey);', '', TESTS),
+    ('M14 allow a private data directory inside the static root', 'src/server/app.ts',
+     'if (deps.staticDir !== null && isInside(deps.staticDir, dataDir)) {', 'if (false as boolean) {', TESTS),
+]
+
+
+def sha(path):
+    return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+
+
+out = []
+for name, rel, old, new, tests in MUTATIONS:
+    path = os.path.join(ROOT, rel)
+    original = open(path, 'rb').read()
+    before = sha(path)
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, name
+    open(path, 'wb').write(text.replace(old, new).encode('utf-8'))
+    try:
+        result = subprocess.run([NODE, 'node_modules/vitest/vitest.mjs', 'run', *tests], cwd=ROOT,
+                                capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        open(path, 'wb').write(original)
+    restored = sha(path) == before
+    log = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', result.stdout + result.stderr)
+    failed = [line.strip() for line in log.splitlines() if line.strip().startswith('×')]
+    summary = [line.strip() for line in log.splitlines() if re.match(r'\s*Tests\s', line)]
+    out.append(f'## {name}')
+    out.append(f'file: {rel}; tests: {", ".join(tests)}')
+    out.append(f'exit: {result.returncode} (expected non-zero); restored byte-identical: {restored}')
+    out.extend(f'  {line}' for line in failed)
+    out.extend(f'  {line}' for line in summary)
+    out.append('')
+sys.stdout.write('\n'.join(out))

@@ -1,0 +1,95 @@
+# Mutation checks: 14 of 14 caught (each mutation made the named tests fail; each file restored byte-identical). Script: mutate.py.txt. Tests: file-store.test.ts and signatures.test.ts (37 tests).
+
+## M1 drop the magic-byte versus declared-type agreement check
+file: src/server/files/imageCheck.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × requires the magic bytes and the declared type to agree 187ms
+  × answers 415 for a wrong content type and for bytes that contradict it 185ms
+  Tests  2 failed | 35 passed (37)
+
+## M2 widen the 256 KiB route limit to every /api route (global limit raised)
+file: src/server/app.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × keeps the 64 KiB limit on JSON routes while the upload route allows 256 KiB 188ms
+  × refuses JSON bodies on the upload route itself and keeps its exemption to POST 183ms
+  Tests  2 failed | 35 passed (37)
+
+## M3 widen the upload exemption from the exact path to a path prefix
+file: src/server/routes/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses image content types on every other state-changing route 213ms
+  × refuses JSON bodies on the upload route itself and keeps its exemption to POST 196ms
+  Tests  2 failed | 35 passed (37)
+
+## M4 the orphan sweep ignores references (removes referenced files)
+file: src/server/files/fileStore.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × removes old temporary files and unreferenced objects but never a referenced file 129ms
+  × keeps every referenced file even when the grace period is zero 109ms
+  × keeps referenced signature files when the orphan sweep runs 190ms
+  Tests  3 failed | 34 passed (37)
+
+## M5 drop owner scoping from the signature download
+file: src/server/services/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × answers 404 to another user (also an administrator) and 401 to anonymous callers 193ms
+  Tests  1 failed | 36 passed (37)
+
+## M6 accept data after the PNG end chunk (polyglot)
+file: src/server/files/imageCheck.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses polyglots: data appended after the image ends 192ms
+  × answers 422 for truncated, polyglot and oversized-pixel images and stores nothing 185ms
+  × writes no audit event for a refused upload 194ms
+  × keeps the 64 KiB limit on JSON routes while the upload route allows 256 KiB 185ms
+  Tests  4 failed | 33 passed (37)
+
+## M7 accept data after the JPEG end-of-image marker (polyglot)
+file: src/server/files/imageCheck.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses polyglots: data appended after the image ends 192ms
+  × answers 422 for truncated, polyglot and oversized-pixel images and stores nothing 186ms
+  Tests  2 failed | 35 passed (37)
+
+## M8 serve stored bytes without comparing the recorded hash
+file: src/server/services/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × never serves a file whose bytes no longer match the recorded hash 193ms
+  Tests  1 failed | 36 passed (37)
+
+## M9 put image bytes into the audit payload
+file: src/server/services/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × records the upload with metadata only: no image bytes, key or personal data 200ms
+  Tests  1 failed | 36 passed (37)
+
+## M10 lift the pixel-side bound
+file: src/server/files/imageCheck.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × bounds the pixel dimensions 188ms
+  × answers 422 for truncated, polyglot and oversized-pixel images and stores nothing 188ms
+  Tests  2 failed | 35 passed (37)
+
+## M11 skip the PNG pixel-data length check
+file: src/server/files/imageCheck.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses a corrupted PNG chunk and pixel data that disagrees with the header 184ms
+  Tests  1 failed | 36 passed (37)
+
+## M12 drop the per-user signature cap
+file: src/server/services/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × bounds the number of stored signatures per user 281ms
+  Tests  1 failed | 36 passed (37)
+
+## M13 keep the stored file when the database write fails
+file: src/server/services/signatures.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × removes the stored file when the database write fails 192ms
+  Tests  1 failed | 36 passed (37)
+
+## M14 allow a private data directory inside the static root
+file: src/server/app.ts; tests: tests/integration/file-store.test.ts, tests/integration/signatures.test.ts
+exit: 1 (expected non-zero); restored byte-identical: True
+  × refuses to start with a private data directory inside the static root 190ms
+  Tests  1 failed | 36 passed (37)

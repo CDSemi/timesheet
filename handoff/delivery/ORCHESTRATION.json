@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T01-FREEZE",
+  "next_task_id": "WP3-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -86,7 +86,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "db753466bbb40386ea1e1f178548b88686872cf7",
+    "last_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
     "unpushed": []
   },
   "owner_decisions": [
@@ -4548,7 +4548,7 @@
       "id": "WP3-T01-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T01"
       ],
@@ -4580,16 +4580,115 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T01-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T01-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T01-FREEZE/stop.txt",
+        "handoff/delivery/evidence/WP3-T01-FREEZE/validate_orch.txt",
+        "handoff/delivery/evidence/WP3-T01-FREEZE/recovery.txt",
+        "handoff/delivery/evidence/WP3-T01-FREEZE/preflight.txt",
+        "handoff/delivery/evidence/WP3-T01-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "db753466bbb40386ea1e1f178548b88686872cf7",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+      "pushed": true,
       "source_digest": "3c6a10c19bc863eb5a38ffeb54f109ae9dda38a2c1cf22177e24e96a15901f38",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): 29 paths, parent db75346, remote SHA identical; digest 3c6a10c1 matches; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0. Minor deviation: the committer also staged its own evidence commit-message.txt (precommit-scanned).",
+      "next_action": "None; WP3-T02 starts on ac5d0ba."
+    },
+    {
+      "id": "WP3-T02",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a190c5419bfb26c18",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/files/fileStore.ts",
+        "src/server/files/imageCheck.ts",
+        "src/server/services/signatures.ts",
+        "src/server/routes/signatures.ts",
+        "src/server/app.ts",
+        "src/server/http/security.ts",
+        "tests/integration/file-store.test.ts",
+        "tests/integration/signatures.test.ts",
+        "handoff/delivery/tasks/WP3-T02.md",
+        "handoff/delivery/evidence/WP3-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T02.md",
+      "report": "handoff/delivery/tasks/WP3-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T02/01-red-modules-absent.txt",
+        "handoff/delivery/evidence/WP3-T02/02-red-wiring-absent.txt",
+        "handoff/delivery/evidence/WP3-T02/03-green.txt",
+        "handoff/delivery/evidence/WP3-T02/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-T02/05-verify.txt",
+        "handoff/delivery/evidence/WP3-T02/06-digest.txt",
+        "handoff/delivery/evidence/WP3-T02/07-precommit-check.txt"
+      ],
+      "baseline_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+      "source_digest": "629e7d9d12f4a38b3c9389a16cba15a331284417c0b1cc1566514bd29d6ceafe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: POST /api/signatures raw PNG/JPEG with a 256 KiB route limit and the origin/CSRF check; GET /api/signatures/current (metadata); GET /api/signatures/:id owner-only, no-store, attachment disposition; the 64 KiB JSON-only rule stays on every other /api route; a 50-signature cap per user (worker addition, accepted by the coordinator as an abuse limit within the contracts; audits may judge it). New suites 37/37 green; red 18 failed on baseline wiring; 14/14 mutations caught; verify exit 0, 35 files/711 tests, 0 deprecation lines. Deviations: tests/integration/ot-api.test.ts route allowlist gained POST /api/signatures; createApp takes optional {dataDir, signatureMaxBytes} (default private-data beside the database, same as loadDeliveryConfig; refuses a data dir inside the static root). Carry to T08: src/server/index.ts must pass dataDir from loadDeliveryConfig so a DATA_DIR override takes effect.",
+      "next_action": "None; WP3-T02-FREEZE."
+    },
+    {
+      "id": "WP3-T02-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T02-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "ac5d0babf4e10d823f54a74db9248ddb84994958",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "629e7d9d12f4a38b3c9389a16cba15a331284417c0b1cc1566514bd29d6ceafe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T01 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T02 set with the pending handoff records."
     },
     {
       "id": "WP2-AUDIT-B",

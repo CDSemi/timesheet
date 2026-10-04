@@ -1,0 +1,78 @@
+# Red 2. New modules present but baseline src/server/app.ts and src/server/http/security.ts (no route wiring, no route-scoped exception). 18 failed / 19 passed (37), exit 1. The 19 passing tests exercise the pure image check and file store, which have no baseline behaviour to fail; mutations M1, M4, M6, M7, M10, M11 and M13 show them red.
+
+ ❯ tests/integration/signatures.test.ts (28 tests | 18 failed) 5374ms
+     × stores a PNG and a JPEG for the signed-in owner and returns metadata only 200ms
+     × answers 401 to anonymous callers before reading a body, and 403 to a foreign origin 194ms
+     × answers 413 above the route limit and accepts a body just below it 191ms
+     × answers 415 for a wrong content type and for bytes that contradict it 188ms
+     × answers 422 for truncated, polyglot and oversized-pixel images and stores nothing 183ms
+     × bounds the number of stored signatures per user 181ms
+     × returns the image to its owner as a no-store attachment 186ms
+     × answers 404 to another user (also an administrator) and 401 to anonymous callers 184ms
+     × treats malformed ids, a storage key and path-like ids as not found 180ms
+     × never serves a file whose bytes no longer match the recorded hash 190ms
+     × reports the caller’s current signature as metadata and 404 when there is none 191ms
+     × appends a new immutable attachment and leaves earlier bytes and hash unchanged 202ms
+     × keeps referenced signature files when the orphan sweep runs 195ms
+     × records the upload with metadata only: no image bytes, key or personal data 188ms
+     × never places or serves a stored file under the static root 193ms
+     × refuses to start with a private data directory inside the static root 188ms
+     × keeps the 64 KiB limit on JSON routes while the upload route allows 256 KiB 185ms
+     × refuses JSON bodies on the upload route itself and keeps its exemption to POST 179ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/signatures.test.ts > upload > stores a PNG and a JPEG for the signed-in owner and returns metadata only
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:246:29
+ FAIL  tests/integration/signatures.test.ts > upload > answers 401 to anonymous callers before reading a body, and 403 to a foreign origin
+AssertionError: expected 415 to be 401 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:273:57
+ FAIL  tests/integration/signatures.test.ts > upload > answers 413 above the route limit and accepts a body just below it
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:295:126
+ FAIL  tests/integration/signatures.test.ts > upload > answers 415 for a wrong content type and for bytes that contradict it
+AssertionError: expected 404 to be 415 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:304:76
+ FAIL  tests/integration/signatures.test.ts > upload > answers 422 for truncated, polyglot and oversized-pixel images and stores nothing
+AssertionError: image/png: expected 415 to be 422 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:328:37
+ FAIL  tests/integration/signatures.test.ts > upload > bounds the number of stored signatures per user
+AssertionError: upload 0: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:337:129
+ FAIL  tests/integration/signatures.test.ts > private download > returns the image to its owner as a no-store attachment
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:363:16
+ FAIL  tests/integration/signatures.test.ts > private download > answers 404 to another user (also an administrator) and 401 to anonymous callers
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:379:16
+ FAIL  tests/integration/signatures.test.ts > private download > treats malformed ids, a storage key and path-like ids as not found
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:395:5
+ FAIL  tests/integration/signatures.test.ts > private download > never serves a file whose bytes no longer match the recorded hash
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:405:16
+ FAIL  tests/integration/signatures.test.ts > private download > reports the caller’s current signature as metadata and 404 when there is none
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:415:16
+ FAIL  tests/integration/signatures.test.ts > replacement > appends a new immutable attachment and leaves earlier bytes and hash unchanged
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/signatures.test.ts:426:74
+ FAIL  tests/integration/signatures.test.ts > replacement > keeps referenced signature files when the orphan sweep runs
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/signatures.test.ts:452:67
+ FAIL  tests/integration/signatures.test.ts > audit > records the upload with metadata only: no image bytes, key or personal data
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/signatures.test.ts:469:67
+ FAIL  tests/integration/signatures.test.ts > private storage boundary > never places or serves a stored file under the static root
+AssertionError: expected 415 to be 201 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:509:29
+ FAIL  tests/integration/signatures.test.ts > private storage boundary > refuses to start with a private data directory inside the static root
+AssertionError: expected [Function] to throw an error
+ ❯ tests/integration/signatures.test.ts:527:76
+ FAIL  tests/integration/signatures.test.ts > global JSON-only rule stays in force for every other route > keeps the 64 KiB limit on JSON routes while the upload route allows 256 KiB
+AssertionError: expected 413 to be 422 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:545:60
+ FAIL  tests/integration/signatures.test.ts > global JSON-only rule stays in force for every other route > refuses JSON bodies on the upload route itself and keeps its exemption to POST
+AssertionError: expected 404 to be 415 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:560:131
+ Test Files  1 failed | 1 passed (2)
+      Tests  18 failed | 19 passed (37)

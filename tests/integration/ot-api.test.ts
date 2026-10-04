@@ -522,6 +522,8 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/policies',
         // Dry run: validates like POST /api/policies but writes nothing (WP2-T06).
         'POST /api/policies/preview',
+        // Raw PNG/JPEG signature upload (WP3-T02): stores a private image, posts nothing.
+        'POST /api/signatures',
         'PUT /api/days/:workDate',
         'PUT /api/sessions/:id',
       ].sort(),

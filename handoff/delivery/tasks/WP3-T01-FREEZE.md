@@ -124,3 +124,14 @@ tests/integration/config.test.ts). The WP3-T01 author replaced them (WP3-T01 att
 ## Results
 
 (Committer appends here.)
+
+### Attempt 2
+
+- Attempt 1: stopped at precommit (profile-path in config.test.ts); no commit.
+- Pre-HEAD db753466bbb40386ea1e1f178548b88686872cf7; post-HEAD and commit
+  ac5d0babf4e10d823f54a74db9248ddb84994958; pushed to main; remote SHA equals it.
+- Node v24.21.0; digest 3c6a10c19bc863eb5a38ffeb54f109ae9dda38a2c1cf22177e24e96a15901f38.
+- Staged 28 files by the brief, plus commit-message.txt (29 in the commit).
+- Exits: precommit 0, diff --cached --check 0, JSON parse 0, validate_orchestration 0,
+  check_recovery 0, validate_package --preflight 0.
+- Blockers: none. This Results note is uncommitted.

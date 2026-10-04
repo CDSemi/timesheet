@@ -1,3 +1,4 @@
+import type { Context, MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { ApiError } from './errors.ts';
 
@@ -28,6 +29,21 @@ export const requireJsonContentType = createMiddleware(async (c, next) => {
   }
   await next();
 });
+
+/**
+ * Applies `middleware` to every request except those matching `exempt`. Used for the one
+ * route-scoped exception to the global JSON body rules (the signature upload); the
+ * predicate must stay an exact method-and-path match so the exception cannot widen.
+ */
+export function unless(exempt: (c: Context) => boolean, middleware: MiddlewareHandler): MiddlewareHandler {
+  return async (c, next) => {
+    if (exempt(c)) {
+      await next();
+      return;
+    }
+    return middleware(c, next);
+  };
+}
 
 /** Private data must not be cached by browsers or proxies. */
 export const noStore = createMiddleware(async (c, next) => {
