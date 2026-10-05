@@ -1,0 +1,112 @@
+# Red: corrections.test.ts (new, 24 tests at this run) and the two R1 tests of ledger.test.ts run before any implementation (finalization.ts, revisionLedger.ts, ledger.ts and the routes unchanged)
+# node node_modules/vitest/vitest.mjs run tests/integration/corrections.test.ts tests/integration/ledger.test.ts
+# exit=1: corrections.test.ts 24 failed of 24 (route 404 for revisions, late-review and resend; setup through the sign-off route passed), ledger.test.ts 2 failed of 30 (R1: no source_key_conflict).
+# Three tests (a day switching between credit and deficit, an unresolved day keeping its posted credit, a pending debit re-evaluated by a later revision) were added after this run; mutations M3, M14 and M15 show them red. One test was renamed ("reduces a posted debit by a correction of the difference ...").
+
+ ❯ tests/integration/ledger.test.ts (30 tests | 2 failed) 5346ms
+     × R1: the same correction key with a different source reference is source_key_conflict and appends nothing 158ms
+     × R1: a deficit-debit correction retry with a different source reference is also source_key_conflict 156ms
+ ❯ tests/integration/corrections.test.ts (24 tests | 24 failed) 7962ms
+     × requires a reason: missing is a validation error and blank is reason_required, with nothing written 357ms
+     × posts only the differences: a changed day is corrected, an unchanged day posts nothing and is recorded unchanged 355ms
+     × records the explicit send choice: true enqueues the PDF and the send, false only the PDF 336ms
+     × posts a first credit with the day original key for a day without a posted original (O7), not a correction 304ms
+     × keeps a debit increase the balance cannot cover pending and recorded (F-2); a later revision re-evaluates it 316ms
+     × reduces a posted debit by a negative-direction correction and keeps a waived choose-mode day waived 331ms
+     × refuses a correction of a period that is not finalized, a stale version and a stale hash, writing nothing 281ms
+     × requires the signer name, the signature image and the acknowledgement like a sign-off 324ms
+     × an identical retry returns the same revision and writes nothing; another one is a conflict 313ms
+     × rolls everything back when a later write fails inside the transaction 305ms
+     × is owner-only: another user gets 404 for the owner payroll date, anonymous 401, and user_id is refused 307ms
+     × creates a genuinely signed revision with zero ledger delta (LG-09) and no send job when send_email is false 322ms
+     × enqueues the send only when send_email is true, and requires the choice 301ms
+     × refuses changed content (use a correction), an already reviewed revision and an unfinalized period 297ms
+     × refuses a late review of a manually signed revision 311ms
+     × is owner-only and rejects unknown fields and a reason field 452ms
+     × creates a new delivery attempt and send job on the same revision with no ledger movement 431ms
+     × refuses while an attempt is preparing 341ms
+     × refuses while an attempt is sending 324ms
+     × refuses while an attempt is uncertain without a decision; an explicit decision to resend lifts it 290ms
+     × refuses while a send job of the revision is still queued 430ms
+     × a changed envelope (recipients or template) needs a new revision, not a resend 318ms
+     × needs a ready PDF and only the current revision of its timesheet 331ms
+     × is owner-only: another user and an unknown id get 404, anonymous 401, and nothing is written 281ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 26 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/corrections.test.ts > correction revision > requires a reason: missing is a validation error and blank is reason_required, with nothing written
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:216:28
+ FAIL  tests/integration/corrections.test.ts > correction revision > posts only the differences: a changed day is corrected, an unchanged day posts nothing and is recorded unchanged
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:245:60
+ FAIL  tests/integration/corrections.test.ts > correction revision > records the explicit send choice: true enqueues the PDF and the send, false only the PDF
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:287:56
+ FAIL  tests/integration/corrections.test.ts > correction revision > posts a first credit with the day original key for a day without a posted original (O7), not a correction
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:309:60
+ FAIL  tests/integration/corrections.test.ts > correction revision > keeps a debit increase the balance cannot cover pending and recorded (F-2); a later revision re-evaluates it
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:334:60
+ FAIL  tests/integration/corrections.test.ts > correction revision > reduces a posted debit by a negative-direction correction and keeps a waived choose-mode day waived
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:380:25
+ FAIL  tests/integration/corrections.test.ts > correction revision > refuses a correction of a period that is not finalized, a stale version and a stale hash, writing nothing
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:406:29
+ FAIL  tests/integration/corrections.test.ts > correction revision > requires the signer name, the signature image and the acknowledgement like a sign-off
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:431:26
+ FAIL  tests/integration/corrections.test.ts > correction revision > an identical retry returns the same revision and writes nothing; another one is a conflict
+AssertionError: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:447:26
+ FAIL  tests/integration/corrections.test.ts > correction revision > rolls everything back when a later write fails inside the transaction
+AssertionError: expected 404 to be 500 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:469:29
+ FAIL  tests/integration/corrections.test.ts > correction revision > is owner-only: another user gets 404 for the owner payroll date, anonymous 401, and user_id is refused
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:487:65
+ FAIL  tests/integration/corrections.test.ts > late review of an automatic revision > creates a genuinely signed revision with zero ledger delta (LG-09) and no send job when send_email is false
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:550:60
+ FAIL  tests/integration/corrections.test.ts > late review of an automatic revision > enqueues the send only when send_email is true, and requires the choice
+AssertionError: expected 404 to be 422 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:581:52
+ FAIL  tests/integration/corrections.test.ts > late review of an automatic revision > refuses changed content (use a correction), an already reviewed revision and an unfinalized period
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:593:31
+ FAIL  tests/integration/corrections.test.ts > late review of an automatic revision > refuses a late review of a manually signed revision
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:617:29
+ FAIL  tests/integration/corrections.test.ts > late review of an automatic revision > is owner-only and rejects unknown fields and a reason field
+AssertionError: expected 404 to be 401 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:628:74
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > creates a new delivery attempt and send job on the same revision with no ledger movement
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:700:60
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > refuses while an attempt is preparing
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > refuses while an attempt is sending
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:731:28
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > refuses while an attempt is uncertain without a decision; an explicit decision to resend lifts it
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:741:30
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > refuses while a send job of the revision is still queued
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:761:28
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > a changed envelope (recipients or template) needs a new revision, not a resend
+AssertionError: expected 404 to be 409 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:770:31
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > needs a ready PDF and only the current revision of its timesheet
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:788:54
+ FAIL  tests/integration/corrections.test.ts > same-revision resend > is owner-only: another user and an unknown id get 404, anonymous 401, and nothing is written
+AssertionError: expected 404 to be 401 // Object.is equality
+ ❯ tests/integration/corrections.test.ts:805:84
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > R1: the same correction key with a different source reference is source_key_conflict and appends nothing
+AssertionError: expected ApiError source_key_conflict: expected undefined to be an instance of ApiError
+ ❯ tests/integration/ledger.test.ts:271:5
+ FAIL  tests/integration/ledger.test.ts > LG-02 correction by difference (R-06) > R1: a deficit-debit correction retry with a different source reference is also source_key_conflict
+AssertionError: expected ApiError source_key_conflict: expected undefined to be an instance of ApiError
+ ❯ tests/integration/ledger.test.ts:294:5
+ Test Files  2 failed (2)
+      Tests  26 failed | 28 passed (54)

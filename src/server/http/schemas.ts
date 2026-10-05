@@ -287,7 +287,7 @@ export const autoImageRevokeBody = z.strictObject({
  * Manual sign-off (WP3-T05). The owner is never a field: it comes from the session. The
  * reviewed hash and expected version bind the request to the review the employee saw.
  */
-export const signoffBody = z.strictObject({
+const signoffShape = {
   /** The timesheet version the review was read at (0 when the period had no saved row). */
   expected_version: z.number().int().min(0),
   reviewed_hash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -296,5 +296,34 @@ export const signoffBody = z.strictObject({
   deficit_choices: z.array(z.strictObject({ work_date: z.string().max(10), choice: z.enum(['deduct', 'waive']) })).max(31).optional(),
   /** Required when the review lists unresolved inputs. */
   incomplete_evidence_acknowledged: z.boolean().optional(),
-});
+};
+
+export const signoffBody = z.strictObject(signoffShape);
 export type SignoffBody = z.infer<typeof signoffBody>;
+
+/*
+ * Revisions after the first finalization (WP3-T06). The sign-off fields bind the request to
+ * the review the employee saw; `send_email` is an explicit choice with no default, so an
+ * edit never silently resends. A correction needs a reason (checked by the service for the
+ * exact code); a late review of an automatic revision takes none.
+ */
+export const correctionRevisionBody = z.strictObject({
+  ...signoffShape,
+  reason: z.string().max(4000),
+  send_email: z.boolean(),
+});
+export type CorrectionRevisionBody = z.infer<typeof correctionRevisionBody>;
+
+export const lateReviewBody = z.strictObject({
+  ...signoffShape,
+  send_email: z.boolean(),
+});
+export type LateReviewBody = z.infer<typeof lateReviewBody>;
+
+/** Optional echo of the envelope the caller expects; any difference needs a new revision (409). */
+export const resendBody = z.strictObject({
+  to: addressList.optional(),
+  cc: addressList.optional(),
+  template_version: z.number().int().min(1).optional(),
+});
+export type ResendBody = z.infer<typeof resendBody>;

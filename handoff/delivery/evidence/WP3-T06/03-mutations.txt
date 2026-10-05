@@ -1,0 +1,80 @@
+# Mutation checks for WP3-T06 (mutate.py.txt): each mutation is computed in memory before the file is opened for writing; the original bytes are restored and compared by SHA-256.
+
+baseline sha256 src/server/services/finalization.ts e042a90fe2b49d3faab4b8fec74f124b62dc8dcfe6f14dc31beb3cfaaac8ee4c
+baseline sha256 src/server/services/ledger.ts b2f58c5f170a34b5c1a41a4d45c1eab1c0adc8915262885be9d6e9c54ed929ff
+baseline sha256 src/server/services/revisionLedger.ts 79416465e4ae298d77d586d35241ce552a35f3ae5d97adfeaf47e88a89d8d1e2
+baseline exit=0 Test Files  2 passed (2) | Tests  57 passed (57)
+M1 R1: the correction retry ignores the source reference: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 55 passed (57)
+    failing: R1: a deficit-debit correction retry with a different source reference is also source_key_conflict
+    failing: R1: the same correction key with a different source reference is source_key_conflict and appends nothing
+M2 correction keys are not revision-specific: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  3 failed | 54 passed (57)
+    failing: a day that switches between a credit and a deficit corrects both sides with distinct keys and kinds
+    failing: keeps a debit increase the balance cannot cover pending and recorded (F-2); a later revision re-evaluates it
+    failing: posts only the differences: a changed day is corrected, an unchanged day posts nothing and is recorded unchang
+M3 a day without a posted original gets no first credit (O7): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 55 passed (57)
+    failing: a day that switches between a credit and a deficit corrects both sides with distinct keys and kinds
+    failing: posts a first credit with the day original key for a day without a posted original (O7), not a correction
+M4 a correction needs no reason: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: requires a reason: missing is a validation error and blank is reason_required, with nothing written
+M5 a pending debit increase is not recorded as a line (F-2, R4): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: keeps a debit increase the balance cannot cover pending and recorded (F-2); a later revision re-evaluates it
+M6 a late review accepts changed content: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: refuses changed content (use a correction), an already reviewed revision and an unfinalized period
+M7 send_email false still enqueues the send job: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  4 failed | 53 passed (57)
+    failing: creates a genuinely signed revision with zero ledger delta (LG-09) and no send job when send_email is false
+    failing: needs a ready PDF and only the current revision of its timesheet
+    failing: posts only the differences: a changed day is corrected, an unchanged day posts nothing and is recorded unchang
+    failing: records the explicit send choice: true enqueues the PDF and the send, false only the PDF
+M8 resend ignores a preparing or sending attempt: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 55 passed (57)
+    failing: refuses while an attempt is preparing
+    failing: refuses while an attempt is sending
+M9 resend accepts a changed envelope: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: a changed envelope (recipients or template) needs a new revision, not a resend
+M10 resend does not scope the revision lookup to the owner: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: is owner-only: another user and an unknown id get 404, anonymous 401, and nothing is written
+M11 resend of a superseded revision is allowed: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: needs a ready PDF and only the current revision of its timesheet
+M12 a late review of an already reviewed revision is allowed: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 55 passed (57)
+    failing: refuses a late review of a manually signed revision
+    failing: refuses changed content (use a correction), an already reviewed revision and an unfinalized period
+M13 the reviewed hash is not compared for a revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: refuses a correction of a period that is not finalized, a stale version and a stale hash, writing nothing
+M14 a day with unresolved records is corrected (its posted credit reversed): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: keeps a posted credit of a day whose records are unresolved instead of reversing it
+M15 a pending debit is never re-evaluated by a later revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: re-evaluates a debit that stayed pending at sign-off: a later revision posts it once with the original key (F-
+M16 an identical retry is not replayed: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: an identical retry returns the same revision and writes nothing; another one is a conflict
+M17 the send choice is not stored on the revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  4 failed | 53 passed (57)
+    failing: an identical retry returns the same revision and writes nothing; another one is a conflict
+    failing: creates a genuinely signed revision with zero ledger delta (LG-09) and no send job when send_email is false
+    failing: posts only the differences: a changed day is corrected, an unchanged day posts nothing and is recorded unchang
+    failing: records the explicit send choice: true enqueues the PDF and the send, false only the PDF
+M18 a pending increase is recorded as unchanged: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: keeps a debit increase the balance cannot cover pending and recorded (F-2); a later revision re-evaluates it
+M19 the revision signs off without the acknowledgement: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 56 passed (57)
+    failing: requires the signer name, the signature image and the acknowledgement like a sign-off
+after restore exit=0 Test Files  2 passed (2) | Tests  57 passed (57)
+caught 19 of 19
+final sha256 src/server/services/finalization.ts e042a90fe2b49d3faab4b8fec74f124b62dc8dcfe6f14dc31beb3cfaaac8ee4c
+final sha256 src/server/services/ledger.ts b2f58c5f170a34b5c1a41a4d45c1eab1c0adc8915262885be9d6e9c54ed929ff
+final sha256 src/server/services/revisionLedger.ts 79416465e4ae298d77d586d35241ce552a35f3ae5d97adfeaf47e88a89d8d1e2

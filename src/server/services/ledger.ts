@@ -342,7 +342,8 @@ export function postCredit(ctx: LedgerContext, input: CreditInput): PostResult {
  * correction of a spent credit that makes the balance negative is kept and flagged
  * (LG-08). Raising a deficit debit is a new debit of the increase: when the available
  * balance cannot cover it the result is `pending` and nothing is appended (R-05).
- * A retry with the same key must ask for the same corrected value, else `source_key_conflict`.
+ * A retry with the same key must ask for the same corrected value from the same source
+ * reference, else `source_key_conflict` (R1: the key alone never lets another source take over).
  */
 export function postCorrection(ctx: LedgerContext, input: CorrectionInput): CorrectionResult {
   const posting = normalizePosting(input);
@@ -360,7 +361,10 @@ export function postCorrection(ctx: LedgerContext, input: CorrectionInput): Corr
 
     const existing = findByKey(ctx.db, posting.userId, posting.sourceKey);
     if (existing !== undefined) {
-      if (existing.entryType !== 'correction' || existing.correctsEntryId !== original.id) throw sourceKeyConflict();
+      // R1: a retry must come from the same source (revision) as the entry it would reuse.
+      if (existing.entryType !== 'correction' || existing.correctsEntryId !== original.id || existing.sourceRef !== posting.sourceRef) {
+        throw sourceKeyConflict();
+      }
       // The retry must ask for the value this entry produced: the original plus all corrections up to it.
       const throughExisting = ctx.db
         .prepare(

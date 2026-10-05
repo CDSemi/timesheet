@@ -1,0 +1,150 @@
+"""Mutation checks for WP3-T06.
+
+Each mutation is computed in memory first (every pattern must match exactly once); only then
+is the file opened for writing. The two test files are run, and the original bytes are
+restored in a finally block and compared with the saved SHA-256. Usage (repository root,
+NODE_EXE pointing at the Node 24 binary):
+python mutate.py.txt <out-file>
+"""
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+TESTS = ['tests/integration/corrections.test.ts', 'tests/integration/ledger.test.ts']
+SERVICE = 'src/server/services/finalization.ts'
+LINES = 'src/server/services/revisionLedger.ts'
+LEDGER = 'src/server/services/ledger.ts'
+
+MUTATIONS = [
+    ('M1 R1: the correction retry ignores the source reference', LEDGER, [
+        ('existing.correctsEntryId !== original.id || existing.sourceRef !== posting.sourceRef) {', 'existing.correctsEntryId !== original.id) {'),
+    ]),
+    ('M2 correction keys are not revision-specific', SERVICE, [
+        ('    const plain = `rev:${revisionId}:day:${workDate}:correction`;', '    const plain = `finalization:day:${workDate}:correction`;'),
+    ]),
+    ('M3 a day without a posted original gets no first credit (O7)', SERVICE, [
+        ('    } else if (wanted > 0) {\n      // O7: no posted original', '    } else if (false && wanted > 0) {\n      // O7: no posted original'),
+    ]),
+    ('M4 a correction needs no reason', SERVICE, [
+        ("  if (reason === null) throw new ApiError(422, 'reason_required', 'A correction requires a reason');", "  if (false && reason === null) throw new ApiError(422, 'reason_required', 'A correction requires a reason');"),
+    ]),
+    ('M5 a pending debit increase is not recorded as a line (F-2, R4)', SERVICE, [
+        ('      collected.push({ workDate: day.work_date, line: correctionLine(result, original, true) });', "      if (result.status !== 'pending') collected.push({ workDate: day.work_date, line: correctionLine(result, original, true) });"),
+    ]),
+    ('M6 a late review accepts changed content', SERVICE, [
+        ("    if (input.kind === 'late_review' && ledgerContent(previous.payload) !== ledgerContent(payload)) {", "    if (false && input.kind === 'late_review' && ledgerContent(previous.payload) !== ledgerContent(payload)) {"),
+    ]),
+    ('M7 send_email false still enqueues the send job', SERVICE, [
+        ('  if (sendEmail) {\n    insert.run(', '  if (true) {\n    insert.run('),
+    ]),
+    ('M8 resend ignores a preparing or sending attempt', SERVICE, [
+        ('    if (open.length > 0 || waiting !== undefined) {', '    if (waiting !== undefined) {'),
+    ]),
+    ('M9 resend accepts a changed envelope', SERVICE, [
+        ('    if (changed.length > 0) {', '    if (false && changed.length > 0) {'),
+    ]),
+    ('M10 resend does not scope the revision lookup to the owner', SERVICE, [
+        ('          WHERE r.id = ? AND r.user_id = ?', "          WHERE r.id = ? AND ? <> ''"),
+    ]),
+    ('M11 resend of a superseded revision is allowed', SERVICE, [
+        ('    if (row.finalized_revision_no !== row.revision_no) {', '    if (false && row.finalized_revision_no !== row.revision_no) {'),
+    ]),
+    ('M12 a late review of an already reviewed revision is allowed', SERVICE, [
+        ("    if (input.kind === 'late_review' && !(previous.view.revision.origin === 'deadline'", "    if (false && input.kind === 'late_review' && !(previous.view.revision.origin === 'deadline'"),
+    ]),
+    ('M13 the reviewed hash is not compared for a revision', SERVICE, [
+        ("    if (review.payloadHash !== input.reviewedHash) {\n      throw conflict('stale_review', 'The reviewed content changed; review it again');\n    }\n\n    // The owner's name and current",
+         "    if (false && review.payloadHash !== input.reviewedHash) {\n      throw conflict('stale_review', 'The reviewed content changed; review it again');\n    }\n\n    // The owner's name and current"),
+    ]),
+    ('M14 a day with unresolved records is corrected (its posted credit reversed)', SERVICE, [
+        ('  const reviewedDays = payload.days.filter((day) => !UNRESOLVED_COMPLETENESS.has(day.completeness));', '  const reviewedDays = payload.days;'),
+    ]),
+    ('M15 a pending debit is never re-evaluated by a later revision', SERVICE, [
+        ('    } else if (wanted > 0) {\n      // No posted original: the first debit', '    } else if (false && wanted > 0) {\n      // No posted original: the first debit'),
+    ]),
+    ('M16 an identical retry is not replayed', SERVICE, [
+        ('    if (isRevisionReplay(previous, input, signer, reason)) {', '    if (false && isRevisionReplay(previous, input, signer, reason)) {'),
+    ]),
+    ('M17 the send choice is not stored on the revision', SERVICE, [
+        ('      input.sendEmail ? 1 : 0,\n', '      1,\n'),
+    ]),
+    ('M18 a pending increase is recorded as unchanged', LINES, [
+        ("proposedMinutes: -result.debitIncreaseMinutes, result: { outcome: 'pending_insufficient_balance', ledgerEntryId: null } };", "proposedMinutes: -result.debitIncreaseMinutes, result: { outcome: 'unchanged', ledgerEntryId: null } };"),
+    ]),
+    ('M19 the revision signs off without the acknowledgement', SERVICE, [
+        ("    if (payload.unresolved_inputs.length > 0 && !input.incompleteEvidenceAcknowledged) {\n      throw new ApiError(422, 'acknowledgement_required', 'Acknowledge the incomplete evidence before signing off', {\n        unresolved: payload.unresolved_inputs.length,\n      });\n    }\n    checkChoices(payload.deficit_proposals, choices);\n    if (input.kind",
+         "    checkChoices(payload.deficit_proposals, choices);\n    if (input.kind"),
+    ]),
+]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run_tests() -> tuple[int, str]:
+    node = os.environ.get('NODE_EXE', 'node')
+    result = subprocess.run([node, 'node_modules/vitest/vitest.mjs', 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=ROOT)
+    out = result.stdout + result.stderr
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests ', 'Test Files'))]
+    failing = sorted({line.strip().split(' > ')[-1][:110] for line in out.splitlines() if line.strip().startswith('FAIL ') and ' > ' in line})
+    detail = ' | '.join(summary)
+    if failing:
+        detail += '\n    failing: ' + '\n    failing: '.join(failing[:6])
+    return result.returncode, detail
+
+
+def main() -> int:
+    out_path = Path(sys.argv[1])
+    lines = []
+    caught_total = 0
+    names = sorted({name for _, name, _ in MUTATIONS})
+    originals = {name: (ROOT / name).read_bytes() for name in names}
+    baseline = {name: sha(data) for name, data in originals.items()}
+    for name in names:
+        lines.append(f'baseline sha256 {name} {baseline[name]}')
+    code, summary = run_tests()
+    lines.append(f'baseline exit={code} {summary}')
+    if code != 0:
+        out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+        return 1
+    for label, name, edits in MUTATIONS:
+        original = originals[name].decode('utf-8')
+        mutated = original
+        ok = True
+        for old, new in edits:
+            if mutated.count(old) != 1:
+                lines.append(f'{label}: PATTERN COUNT {mutated.count(old)} (not run)')
+                ok = False
+                break
+            mutated = mutated.replace(old, new)
+        if not ok:
+            continue
+        mutated_bytes = mutated.encode('utf-8')
+        target = ROOT / name
+        try:
+            target.write_bytes(mutated_bytes)
+            code, summary = run_tests()
+        finally:
+            target.write_bytes(originals[name])
+        restored = sha(target.read_bytes()) == baseline[name]
+        caught = code != 0
+        caught_total += 1 if caught else 0
+        lines.append(f'{label}: exit={code} {"CAUGHT" if caught else "SURVIVED"} restored={"byte-identical" if restored else "MISMATCH"}\n    {summary}')
+        if not restored:
+            out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+            return 2
+    code, summary = run_tests()
+    lines.append(f'after restore exit={code} {summary}')
+    lines.append(f'caught {caught_total} of {len(MUTATIONS)}')
+    for name in names:
+        lines.append(f'final sha256 {name} {sha((ROOT / name).read_bytes())}')
+    out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+    return 0 if caught_total == len(MUTATIONS) and code == 0 else 3
+
+
+if __name__ == '__main__':
+    sys.exit(main())

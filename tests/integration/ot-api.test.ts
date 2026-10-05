@@ -531,6 +531,10 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/signatures',
         // Manual sign-off finalization (WP3-T05): posts only through the ledger service inside its transaction.
         'POST /api/timesheets/:payrollDate/signoff',
+        // Correction revisions, late review and same-revision resend (WP3-T06): they post only differences or nothing, and only through the ledger service.
+        'POST /api/revisions/:id/resend',
+        'POST /api/timesheets/:payrollDate/late-review',
+        'POST /api/timesheets/:payrollDate/revisions',
         'PUT /api/days/:workDate',
         'PUT /api/sessions/:id',
       ].sort(),

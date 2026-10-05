@@ -255,6 +255,46 @@ describe('LG-02 correction by difference (R-06)', () => {
     expect(ledgerRows(employee)).toBe(3);
   });
 
+  it('R1: the same correction key with a different source reference is source_key_conflict and appends nothing', () => {
+    const original = credit(employee, 'ts1-r1-day1', 60);
+    const input = {
+      userId: employee,
+      originalEntryId: original.entry.id,
+      correctedMinutes: 90,
+      sourceKey: 'rev:revision-r2:day:2026-09-21:correction',
+      sourceRef: 'revision-r2',
+      reason: 'Synthetic correction',
+      ...manual(employee),
+    };
+    const first = postCorrection(ctx, input);
+    // A retry of another revision (or another source) must not silently take over the posted entry.
+    expectApiError(() => postCorrection(ctx, { ...input, sourceRef: 'revision-r3' }), 409, 'source_key_conflict');
+    expectApiError(() => postCorrection(ctx, { ...input, sourceRef: undefined }), 409, 'source_key_conflict');
+    expect(ledgerRows(employee)).toBe(2);
+    const retry = postCorrection(ctx, input);
+    expect(retry.status).toBe('duplicate');
+    expect(retry.entry?.id).toBe(first.entry?.id);
+    expect(ledgerRows(employee)).toBe(2);
+  });
+
+  it('R1: a deficit-debit correction retry with a different source reference is also source_key_conflict', () => {
+    credit(employee, 'credit-1', 120);
+    const debit = postDeficitDebit(ctx, { userId: employee, sourceKey: 'debit-1', debitMinutes: 60, workDate: '2026-09-22', ...manual(employee) });
+    if (debit.status === 'pending') throw new Error('debit unexpectedly pending');
+    const input = {
+      userId: employee,
+      originalEntryId: debit.entry.id,
+      correctedMinutes: 15,
+      sourceKey: 'rev:revision-r2:day:2026-09-22:correction',
+      sourceRef: 'revision-r2',
+      reason: 'Synthetic deficit corrected',
+      ...manual(employee),
+    };
+    postCorrection(ctx, input);
+    expectApiError(() => postCorrection(ctx, { ...input, sourceRef: 'revision-r3' }), 409, 'source_key_conflict');
+    expect(ledgerRows(employee)).toBe(3);
+  });
+
   it('refuses a stale expected previous value with 409 and appends nothing', () => {
     const original = credit(employee, 'ts1-r1-day1', 60);
     expectApiError(

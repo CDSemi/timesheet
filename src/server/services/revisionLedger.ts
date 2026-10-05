@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { CivilDate } from '../../domain/dates.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import type { Db } from '../db/database.ts';
-import type { DeficitDebitResult, PostResult } from './ledger.ts';
+import type { CorrectionResult, DeficitDebitResult, PostResult } from './ledger.ts';
 
 /*
  * The ledger outcome of every proposal of a finalized revision (R4, owner decision F-2).
@@ -15,7 +15,9 @@ import type { DeficitDebitResult, PostResult } from './ledger.ts';
  * - `pending_insufficient_balance`: the available balance could not cover the debit, so the
  *   ledger appended nothing (R-05: never silently negative);
  * - `waived`: the employee chose not to deduct a choose-mode deficit at sign-off;
- * - `pending_choice` and `unchanged` belong to the automatic and correction paths.
+ * - `unchanged`: a correction or late review found the day already posted at the right value;
+ *   nothing was appended and the line links the matching original entry;
+ * - `pending_choice` belongs to the automatic path.
  *
  * F-2 (owner, 2026-10-04): a pending line stays a recorded, immutable line of its revision.
  * It is shown on the review and OT screens and is re-evaluated only by a later finalized
@@ -82,6 +84,35 @@ export function creditOutcome(result: PostResult): LineOutcome {
 export function deficitDebitOutcome(result: DeficitDebitResult): LineOutcome {
   if (result.status === 'pending') return { outcome: 'pending_insufficient_balance', ledgerEntryId: null };
   return { outcome: 'posted', ledgerEntryId: result.entry.id };
+}
+
+/** What a correction revision records for one posted original (credit or deficit debit) of a day. */
+export interface CorrectionLine {
+  lineKind: RevisionLineKind;
+  /** Signed minutes: the difference posted (zero when unchanged), or the debit increase kept pending. */
+  proposedMinutes: number;
+  result: LineOutcome;
+}
+
+/**
+ * Maps a `postCorrection` result to its revision line (R4, F-2). Raising a deficit debit is a
+ * new debit of the increase (R-05), so a posted or pending increase is a `deficit_debit` line
+ * (negative minutes); every other correction, and an unchanged value, is a `correction` line.
+ */
+export function correctionLine(result: CorrectionResult, original: { id: string }, isDebit: boolean): CorrectionLine {
+  switch (result.status) {
+    case 'unchanged':
+      return { lineKind: 'correction', proposedMinutes: 0, result: { outcome: 'unchanged', ledgerEntryId: original.id } };
+    case 'pending':
+      return { lineKind: 'deficit_debit', proposedMinutes: -result.debitIncreaseMinutes, result: { outcome: 'pending_insufficient_balance', ledgerEntryId: null } };
+    case 'posted':
+    case 'duplicate':
+      return {
+        lineKind: isDebit && result.deltaMinutes < 0 ? 'deficit_debit' : 'correction',
+        proposedMinutes: result.deltaMinutes,
+        result: { outcome: 'posted', ledgerEntryId: result.entry.id },
+      };
+  }
 }
 
 export interface NewRevisionLine {
@@ -166,4 +197,9 @@ export function pendingLineJson(line: PendingRevisionLine) {
 export function outcomeCounts(lines: readonly RevisionLedgerLine[]) {
   const countOf = (outcome: RevisionLineOutcome) => lines.filter((line) => line.outcome === outcome).length;
   return { posted: countOf('posted'), pending_insufficient_balance: countOf('pending_insufficient_balance'), waived: countOf('waived') };
+}
+
+/** Like `outcomeCounts` plus the unchanged lines of correction and late-review revisions. */
+export function revisionOutcomeCounts(lines: readonly RevisionLedgerLine[]) {
+  return { ...outcomeCounts(lines), unchanged: lines.filter((line) => line.outcome === 'unchanged').length };
 }

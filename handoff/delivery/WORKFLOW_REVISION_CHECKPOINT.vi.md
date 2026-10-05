@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = c289375a8d80c78ea9f3a9e54ff55a795f99ec7b (WP3-T07-FREEZE).
+  - HEAD = origin/main = 72f1920fce178b95a9d51e665d69af3fd05117f4 (WP3-T05-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 3f4a016d… (T07, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả attempt 2 của
-    T07-FREEZE, brief WP3-T05. Các file này vào commit đóng băng kế tiếp.
+    hiện tại của WP3 là c380f302… (T05, committer đã đối chiếu; WP3 chưa có gate).
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
+    T05-FREEZE. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -140,14 +140,33 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   ghi sổ OT chỉ qua ledger.ts, lưu mọi kết quả kể cả dòng "chờ" theo F-2, đặt
   finalized_revision_no, tạo dòng job, ghi audit; gửi lại y hệt thì trả kết quả cũ); race
   20/20; 13/13 bản đối chứng bị phát hiện; verify 930 test; digest c380f302….
-- Đang chạy: WP3-T05-FREEZE (committer).
+- WP3-T05-FREEZE đã commit và push, SHA 72f1920 (28 đường dẫn, mọi kiểm tra 0).
+- WP3-T06 đã xong (tác giả tự báo): bản sửa (chỉ ghi chênh lệch, khóa riêng theo bản sửa,
+  ghi OT lần đầu cho ngày chưa có bút toán gốc, phần tăng đang chờ ghi theo F-2), R1, duyệt
+  muộn không làm đổi sổ OT và có lựa chọn gửi rõ ràng, gửi lại không đụng sổ OT; 19/19
+  bản đối chứng bị phát hiện; verify 959 test; digest b47d30da….
+- **Vướng mắc:** attempt 1 của WP3-T06-FREEZE dừng trước khi chạy lệnh git nào. Ổ tạm B:
+  (nơi Claude Code ghi kết quả tạm của agent, B:\Temp\claude) đã đầy (0 MB), nên mọi lệnh
+  shell của subagent đều lỗi ENOSPC. Chưa stage, chưa commit; thay đổi mã nguồn của T06
+  vẫn nằm trong working tree. Agent không được đụng vào B:\Temp\claude và coordinator
+  không có shell: chủ dự án cần giải phóng dung lượng ổ B: hoặc chuyển thư mục tạm của
+  Claude Code sang ổ khác.
+- Chủ dự án đã trả lời F-Q1..F-Q5 (nguyên văn trong `owner_decisions` trên board): F-Q1
+  (a); F-Q2 khác đề xuất (bản gửi đi không có dấu hiệu tự động, có khối chữ ký đầy đủ,
+  hệ thống tự theo dõi, kèm tùy chọn dòng ghi chú sửa được và tùy chọn chèn ảnh chữ ký);
+  F-Q3 (b) admin xem được địa chỉ người nhận; F-Q4 (b) kèm bật/tắt từng mục; F-Q5 (a).
+  F-Q6 cần hỏi lại cho rõ (WP2-A-01 giữ nguyên trong lúc chờ). Chủ dự án cho phép dùng
+  thư mục tạm trên ổ D: (D:\timesheet-tmp, ngoài Dropbox). Cách hiểu của coordinator ghi
+  trong `coordinator_decisions` trên board.
+- Đang chạy: WP3-T06-FREEZE attempt 2 (committer); dừng ngay nếu B: vẫn đầy.
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T05; sau đó WP3-T06 (brief đã sẵn: bản sửa với quy tắc
-     ghi OT lần đầu, R1, duyệt muộn, gửi lại); WP3-DOC sau khi chủ dự án trả lời F-Q.
+  1. Ghi kết quả commit đóng băng T06; sau đó phần bổ sung của WP3-REQ (giao lại cho chính
+     planner đó, chỉ đọc) chạy song song với WP3-T08; rồi WP3-DOC, T07B (dòng ghi chú, tùy
+     chọn ảnh chữ ký, bỏ dấu hiệu tự động) và từ T09 trở đi.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
-- Vướng mắc: không có. Rủi ro: bộ phân loại có thể chặn `git add` của committer;
+- Vướng mắc: ổ tạm B: đã đầy (xem ở trên). Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động
   và rủi ro, hoặc tự commit bằng `git add -A`).
 - Ràng buộc không đổi: chỉ dùng dữ liệu giả lập và mail dry-run; không gửi hay triển khai
@@ -161,5 +180,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T05-FREEZE.
+- Process còn sống: chỉ WP3-T06-FREEZE attempt 2.
 - Usage/reset: không quan sát được.

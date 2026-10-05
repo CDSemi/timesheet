@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = c289375a8d80c78ea9f3a9e54ff55a795f99ec7b (WP3-T07-FREEZE).
+  - HEAD = origin/main = 72f1920fce178b95a9d51e665d69af3fd05117f4 (WP3-T05-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 3f4a016d… (T07, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest c380f302… (T05, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T07-FREEZE attempt-2
-    results, the WP3-T05 brief. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T05-FREEZE results and
+    evidence. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -127,14 +127,33 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   every outcome persisted incl. F-2 pending lines, finalized_revision_no, job rows,
   audit; identical retry replays); race 20/20; 13/13 mutations caught; verify 930 tests;
   digest c380f302….
-- Running: WP3-T05-FREEZE (committer).
+- WP3-T05-FREEZE is committed and pushed as 72f1920 (28 paths, all checks 0).
+- WP3-T06 is done (author-reported): correction revisions (differences only,
+  revision-specific keys, first credit for a day without an original, pending increases
+  per F-2), R1, late review with zero delta and an explicit send choice, resend without
+  ledger movement; 19/19 mutations caught; verify 959 tests; digest b47d30da….
+- **Blocker:** WP3-T06-FREEZE attempt 1 stopped before any git command. The B: scratch
+  drive (Claude Code agent temp, B:\Temp\claude) is full (0 MB), so every subagent shell
+  call fails with ENOSPC. Nothing was staged or committed; the T06 source changes are in
+  the working tree. Agents must not touch B:\Temp\claude and the coordinator has no
+  shell: the owner must free space on B: or move the Claude Code temp directory.
+- The owner answered F-Q1..F-Q5 (verbatim in board `owner_decisions`): F-Q1 (a); F-Q2
+  overrides the recommendation (no automatic indicator on outgoing submissions, a full
+  signature block, system-only tracking, plus user options for an editable note line
+  and the signature image); F-Q3 (b) admin sees recipient addresses; F-Q4 (b) with
+  per-item toggles; F-Q5 (a). F-Q6 needs a clearer question (WP2-A-01 stays meanwhile).
+  The owner authorized a temporary work folder on D: (D:\timesheet-tmp, outside
+  Dropbox). The coordinator interpretation is in board `coordinator_decisions`.
+- Running: WP3-T06-FREEZE attempt 2 (committer); it stops at once if B: is still full.
 - Next action:
-  1. Record the T05 freeze; then WP3-T06 (brief ready: corrections with the first-credit
-     rule, R1, late review, resend); WP3-DOC after the owner's F-Q answers.
+  1. Record the T06 freeze; then the WP3-REQ addendum (resume the planner, read-only)
+     beside WP3-T08; then WP3-DOC, T07B (note line, image option, no automatic
+     indicators) and T09 onward.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
-- Blocker: none. Risk: the classifier may deny a committer `git add`; the coordinator does
+- Blocker: the B: scratch drive is full (see above). Risk: the classifier may deny a
+  committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its
   danger, or a manual commit with `git add -A`).
 - Unchanged constraints: synthetic data and dry-run mail only; no real sending or
@@ -147,5 +166,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T05-FREEZE only.
+- Live processes: WP3-T06-FREEZE attempt 2 only.
 - Usage/reset: not observable.

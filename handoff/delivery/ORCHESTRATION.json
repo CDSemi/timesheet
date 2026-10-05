@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T05-FREEZE",
+  "next_task_id": "WP3-T06-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -73,9 +73,13 @@
     {
       "date": "2026-10-04",
       "observation": "WP3-T07-FREEZE attempt 1: the worker edited a test after computing its digest and running verify, so the reported digest was stale and the committer stopped. Worker briefs must require that verify and the digest are the last commands after the final edit, with the digest re-run if any file changes."
+    },
+    {
+      "date": "2026-10-04",
+      "observation": "WP3-T06-FREEZE attempt 1: subagent Bash calls write their output under B:\\Temp\\claude\\...\\tasks; with B: at 0 MB the first call failed with ENOSPC and the committer stopped. Scratch-drive exhaustion blocks all shell work (commits, tests, gates); only the owner can free that space or move the Claude Code temp directory."
     }
   ],
-  "pending_owner_question": "WP3-REQ section F (asked 2026-10-04; needed before WP3-DOC, which runs after the T06 freeze): F-Q1 the 'show employee review pending' setting governs every automatic submission (recommended) or only periods with no saved entries? F-Q2 with the notice off, keep a small factual 'automatic submission' label, a blank sign date and {SignOffStatus} 'Automatic submission' (recommended), or also force the notice on whenever the auto-image is included, or remove every automatic indicator (not recommended)? F-Q3 the admin sees flags and redacted fault codes but not recipient addresses, templates or message content (recommended), or also recipient addresses? F-Q4 a share covers timesheets only (periods, day views, sessions, calculations, revision status), not OT balances/ledger/leave, evidence export, history, review payload, PDFs or signatures (recommended), or also OT read-only and final PDFs? F-Q5 edit access = manual day/session/break/batch edits (with a reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares but not create them (recommended), or also Clock in/out? F-Q6 (optional) keep the WP2-A-01 removal of employee-derived holiday-preview counts (recommended).",
+  "pending_owner_question": "F-Q6 re-explained (optional; default keeps the accepted WP2 behaviour): restore the per-date counts of affected employee days in the admin holiday-import preview, removed in WP2 for privacy? Status of the B: blocker: unknown until WP3-T06-FREEZE attempt 2 runs; if subagent shell calls still fail with ENOSPC, only the owner can free B: or move the Claude Code temp directory. History — WP3-REQ section F (asked 2026-10-04, answered except F-Q6; needed before WP3-DOC, which runs after the T06 freeze): F-Q1 the 'show employee review pending' setting governs every automatic submission (recommended) or only periods with no saved entries? F-Q2 with the notice off, keep a small factual 'automatic submission' label, a blank sign date and {SignOffStatus} 'Automatic submission' (recommended), or also force the notice on whenever the auto-image is included, or remove every automatic indicator (not recommended)? F-Q3 the admin sees flags and redacted fault codes but not recipient addresses, templates or message content (recommended), or also recipient addresses? F-Q4 a share covers timesheets only (periods, day views, sessions, calculations, revision status), not OT balances/ledger/leave, evidence export, history, review payload, PDFs or signatures (recommended), or also OT read-only and final PDFs? F-Q5 edit access = manual day/session/break/batch edits (with a reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares but not create them (recommended), or also Clock in/out? F-Q6 (optional) keep the WP2-A-01 removal of employee-derived holiday-preview counts (recommended).",
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -90,7 +94,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+    "last_commit": "72f1920fce178b95a9d51e665d69af3fd05117f4",
     "unpushed": []
   },
   "owner_decisions": [
@@ -145,9 +149,20 @@
       "source": "owner chat, direct reply typed by the owner to WP3-PLAN section F",
       "verbatim": "OK tiếp tục đi, đây là câu trả lời của tôi: - F-2: OK, dùng đề xuất. - F-1: đến hạn mà kỳ chưa có dữ liệu thì vẫn tự nộp theo nhãn mặc định. OT không tính (mặc định, nhưng có thể cập nhật lại giờ OT sau nếu muốn), không hiện \"nhân viên chưa duyệt\" (mặc định là không hiện, nhưng có option trong settings để bật nếu muốn), không tính thiếu giờ. - F-3: Admin thấy tất cả, ngoại trừ chi tiết timesheets của từng người. Cá nhân có thể share quyền xem only / sửa timesheets cho người khác nếu muốn. - F-4, F-5: Yes.",
       "decision": "F-2: adopt the recommendation (a pending deficit debit stays a recorded pending line of its revision, shown on review and OT screens, re-evaluated only by a later finalized revision; no background posting). F-1 (modified): at the deadline a period with no saved entries is still submitted automatically with the default labels; OT is not counted by default (the employee may update OT later); the 'employee review pending' notice is NOT shown by default, with a settings option to turn it on; no deficit. F-3 (modified): the admin sees everything except each person's timesheet details; an individual may share view-only or edit access to their own timesheets with another person. F-4: one system activation instant (null until the owner pilot) combined with each user's auto-submit effective instant. F-5: the PDF total is the credited OT total in h:mm over the 14 days, hidden when Show OT is off. F-1 and F-3 change canonical rules (AGENTS rule 8) and F-3 adds a sharing feature; WP3-REQ drafts the canonical text, impact and placement before dependent tasks."
+    },
+    {
+      "date": "2026-10-04",
+      "source": "owner chat, direct reply typed by the owner to WP3-REQ section F and the B: blocker",
+      "verbatim": "- F-Q1: (a) - F-Q2: bỏ mọi dấu hiệu tự động, bản gửi đi vẫn phải có chữ ký đầy đủ. chỉ cần keep track trên hệ thống là đủ. Nhưng để phù hợp với nhu cầu sử dụng thực tế thì cho các tùy chọn như: + dòng ghi chú (mặc định là \"Automatic submission\" hoặc gì đó, và cho phép người dùng thay đổi theo ý riêng) + có kèm chữ ký ãnh hay không. - F-Q3:(b) - F-Q4: (b), nhưng nên cho phép on/off được từng mục. - F-Q5: (a) - F-Q6: chưa rõ ý bạn muốn hỏi (nếu ổ B: đầy thì có thể work trên ổ D:, tạo 1 thư mục tạm để làm việc)",
+      "decision": "F-Q1 (a): the note setting governs every automatic submission. F-Q2 (owner choice, overriding the recommendation): outgoing automatic submissions carry no automatic indicator and a complete signature block; the system alone tracks the automatic origin; per-user options: a note line (default text 'Automatic submission', editable by the user; shown only when enabled, default off per F-1) and whether the signature image is included. F-Q3 (b): the admin also sees recipient addresses (not templates or message content). F-Q4 (b) with per-item toggles: a share can include timesheets, read-only OT summary/ledger and final PDF downloads, each item switched on or off per grant. F-Q5 (a): edit = manual day/session/break/batch edits (reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares, not create them. F-Q6: the owner did not understand the question; the coordinator re-explains it and keeps the WP2-A-01 removal meanwhile. Agents may use a temporary work folder on D: outside Dropbox."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "Owner answers F-Q1..F-Q6 (owner_decisions 2026-10-04); AGENTS rule 8; WP3-REQ sections A-F",
+      "decision": "Interpretation recorded for the canonical update: (1) automatic revisions keep origin automatic, review pending, signed_at null and no signoffs row in the system and audit; (2) the outgoing PDF and email of an automatic revision show no automatic indicator by default: the signer name and a date are printed (the date is the automatic submission date in the saved reporting zone, distinct from signed_at, which stays null), the signature image appears only when the user's image option is on (the explicit, audited auto-image authorization; default off unless the owner says otherwise), and the note line appears only when the user enables it, with user-editable text defaulting to 'Automatic submission'; {SignOffStatus} follows the same rule; (3) the employee's own screens and outcome notice still say that review is pending. This reverses D-09/R-07 wording for automatic submissions by explicit owner decision and must be recorded in docs/10 and the affected docs (EN+VI). F-Q3 (b), F-Q4 (b) with per-item toggles (timesheet view/edit, OT summary/ledger read-only, final PDF download) and F-Q5 (a) replace the WP3-REQ recommendations. F-Q6 is re-explained to the owner; WP2-A-01 stays as accepted meanwhile. Order: WP3-T06-FREEZE attempt 2 (alone); then a WP3-REQ addendum (resume the same planner, read-only) beside WP3-T08; then WP3-DOC, T07B (now: note line with editable text and enable flag, image option, no automatic indicators, printed name and submission date), then T09 onward. Agents use D:\\timesheet-tmp (outside Dropbox) for TEMP/TMP and scratch clones when B: is short; Claude Code's own task-output directory on B: cannot be moved by agents."
+    },
     {
       "date": "2026-10-04",
       "basis": "WP3-REQ (opus planner) sections A-G",
@@ -5116,9 +5131,101 @@
       "id": "WP3-T05-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T05"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa1a36ce34cd0c726",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T05-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T05-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "branch": "main",
+      "commit_sha": "72f1920fce178b95a9d51e665d69af3fd05117f4",
+      "pushed": true,
+      "source_digest": "c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 28 paths, parent c289375, remote SHA identical; digest c380f302 recomputed and matched; git add, precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0; no masking, EOF fix or unstaging.",
+      "next_action": "None; WP3-T06 starts on 72f1920."
+    },
+    {
+      "id": "WP3-T06",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T05-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3cbb5f3948f10557",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/finalization.ts",
+        "src/server/services/revisionLedger.ts",
+        "src/server/services/ledger.ts",
+        "src/server/routes/submission.ts",
+        "src/server/http/schemas.ts",
+        "tests/integration/corrections.test.ts",
+        "tests/integration/ledger.test.ts",
+        "handoff/delivery/tasks/WP3-T06.md",
+        "handoff/delivery/evidence/WP3-T06"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T06.md",
+      "report": "handoff/delivery/tasks/WP3-T06.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T06/01-red.txt",
+        "handoff/delivery/evidence/WP3-T06/02-green.txt",
+        "handoff/delivery/evidence/WP3-T06/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T06/05-verify.txt",
+        "handoff/delivery/evidence/WP3-T06/06-digest.txt"
+      ],
+      "baseline_commit": "72f1920fce178b95a9d51e665d69af3fd05117f4",
+      "source_digest": "b47d30daad1f89b00a06818d6294a20fbaf5dcddaa948701b17ce58775b1f57a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: correction revisions (POST .../revisions) need a reason and post only differences: a day with a posted original uses postCorrection with rev:{id}:day:{date}:correction (unchanged lines recorded); a day without an original gets a first credit or debit with the original key (O7); a pending debit increase is recorded (F-2). R1: sourceRef compared. Late review (.../late-review): signed revision, zero delta, explicit send_email (false enqueues render_pdf only, no send job); changed content gives 409 content_changed. Resend (POST /api/revisions/:id/resend): a new job and a preparing attempt, no ledger change; refused while preparing/sending/uncertain/queued, when superseded, on a changed envelope or without a ready PDF. Red 26 failed; green 57; 19/19 mutations caught; verify exit 0, 43 files/959 tests, 0 deprecation lines. Deviation: three route lines in tests/integration/ot-api.test.ts.",
+      "next_action": "None; WP3-T06-FREEZE."
+    },
+    {
+      "id": "WP3-T06-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T06"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -5132,25 +5239,32 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a60c44035df700462",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP3-T05-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T05-FREEZE"
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a60c44035df700462",
+          "outcome": "blocked before any git command: the first Bash call failed with ENOSPC because the B: scratch drive (Claude Code temp, B:\\Temp\\claude\\...\\tasks) had 0 MB free; nothing changed, nothing staged, no commit. The owner must free space on B: (or point the Claude Code temp directory elsewhere); then re-dispatch."
+        }
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T05-FREEZE.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T06-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "c289375a8d80c78ea9f3a9e54ff55a795f99ec7b",
+      "baseline_commit": "72f1920fce178b95a9d51e665d69af3fd05117f4",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e",
+      "source_digest": "b47d30daad1f89b00a06818d6294a20fbaf5dcddaa948701b17ce58775b1f57a",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T05 set with the pending handoff records."
+      "next_action": "Attempt 2: stop at once if the first shell call fails with ENOSPC; otherwise commit and push with TEMP/TMP on D:\\timesheet-tmp."
     },
     {
       "id": "WP3-REQ",

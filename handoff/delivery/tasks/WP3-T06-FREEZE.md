@@ -1,14 +1,14 @@
-# WP3-T05-FREEZE dispatch brief
+# WP3-T06-FREEZE dispatch brief
 
-- Mission/task: timesheet-software-readiness / WP3-T05-FREEZE; package WP3; kind commit;
-  attempt 1; depends on WP3-T05.
+- Mission/task: timesheet-software-readiness / WP3-T06-FREEZE; package WP3; kind commit;
+  attempt 1; depends on WP3-T06.
 - Profile/routing: timesheet-committer, requested sonnet/medium, no override. Routing:
-  size S, risk M (finalization and ledger code; synthetic names and signatures in tests;
-  evidence scripts), novelty no. Records in English.
+  size S, risk M (ledger code, correction tests with synthetic data, evidence scripts),
+  novelty no. Records in English.
 - Authority: AGENTS.md rule 12, the docs/08 section "Commits and pushes" and the board
   `owner_decisions`.
 - Branch: main (`git.release_declared` is false). Expected HEAD = origin/main =
-  c289375a8d80c78ea9f3a9e54ff55a795f99ec7b. If either differs, stop and report.
+  72f1920fce178b95a9d51e665d69af3fd05117f4. If either differs, stop and report.
 - Push after the commit.
 - The B: scratch drive is nearly full. Keep temporary output small; if a write fails for
   lack of space, stop and report.
@@ -16,31 +16,29 @@
 ## Expected working-tree set
 
 Source and tests: changed or new paths outside handoff/ may only be among these:
-- new: src/server/services/finalization.ts, src/server/services/revisionLedger.ts,
-  tests/integration/finalization.test.ts and
-  tests/integration/finalization-concurrency.test.ts;
-- modified: src/server/routes/submission.ts, src/server/http/schemas.ts,
-  tests/support/concurrency.ts and tests/integration/ot-api.test.ts (a reported deviation:
-  one route-inventory line).
+- new: tests/integration/corrections.test.ts;
+- modified: src/server/services/finalization.ts, src/server/services/revisionLedger.ts,
+  src/server/services/ledger.ts, src/server/routes/submission.ts,
+  src/server/http/schemas.ts, tests/integration/ledger.test.ts and
+  tests/integration/ot-api.test.ts (a reported deviation: three route-inventory lines).
 
 Recompute the digest with Node 24 (`scripts/source-digest.mjs` or `npm run digest`)
 immediately before `git add` and record it. The worker reported
-c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e; a different value stops
+b47d30daad1f89b00a06818d6294a20fbaf5dcddaa948701b17ce58775b1f57a; a different value stops
 the commit.
 
 New handoff files:
-- handoff/delivery/tasks/: WP3-T05.md, WP3-T05-FREEZE.md, WP3-T06.md and WP3-REQ.md.
-- Every file under handoff/delivery/evidence/WP3-T05/ and
-  handoff/delivery/evidence/WP3-REQ/ (including `*.py.txt` scripts).
+- handoff/delivery/tasks/: WP3-T06-FREEZE.md and WP3-T08.md.
+- Every file under handoff/delivery/evidence/WP3-T06/ (including `*.py.txt` scripts).
 
 Modified or new handoff files:
 - handoff/delivery/ORCHESTRATION.json.
 - handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md and .vi.md.
-- handoff/delivery/tasks/WP3-T07-FREEZE.md.
-- Every file under handoff/delivery/evidence/WP3-T07-FREEZE/.
+- handoff/delivery/tasks/: WP3-T05-FREEZE.md and WP3-T06.md.
+- Every file under handoff/delivery/evidence/WP3-T05-FREEZE/.
 
 Allowed but not staged:
-- your own files in handoff/delivery/evidence/WP3-T05-FREEZE/;
+- your own files in handoff/delivery/evidence/WP3-T06-FREEZE/;
 - the results you append to this brief after the commit.
 
 Any other changed or untracked path stops the commit; report it. That includes a file
@@ -83,21 +81,20 @@ single final newline. Stop any background process you started before you finish.
 
 ## Commit message (refine with the commit-message skill; keep the facts)
 
-Subject: Add the atomic manual sign-off finalization with persisted ledger outcomes
+Subject: Add correction revisions, late review and same-revision resend
 
-- feat(submission): POST /api/timesheets/:payrollDate/signoff runs one IMMEDIATE
-  transaction: review hash and version check (409), name/signature/acknowledgement checks
-  (422), signed revision with the real signed_at, ledger posting only through ledger.ts
-  with revision-independent day keys, every outcome in revision_ledger_lines (pending
-  debits persisted, F-2), finalized_revision_no, PDF and send job rows, audit; identical
-  retries replay
-- feat(api): finalization and pending-line read routes for the owner
-- test: 24 new tests; a 20-round sign-off race (one winner each round); 13 mutations
-  caught
-- docs(handoff): WP3-T07 freeze result, WP3-REQ impact plan and owner questions, WP3-T05
-  record and evidence, WP3-T06 brief, board and checkpoint (+ vi)
+- feat(submission): correction revisions need a reason and post only differences: a
+  revision-specific correction key for days with a posted original, a first credit or
+  debit for days without one; pending increases recorded (F-2)
+- fix(ledger): the correction duplicate check compares sourceRef (WP2 carry-forward R1)
+- feat(submission): late review of an automatic revision signs with zero ledger delta and
+  an explicit send choice; resend creates a new attempt on the same revision without
+  ledger movement and is refused while a send is open or the envelope changed
+- test: 57 tests in the touched suites; 19 mutations caught
+- docs(handoff): WP3-T05 freeze result, WP3-T06 record and evidence, WP3-T08 brief, board
+  and checkpoint (+ vi)
 
-Task: WP3-T05-FREEZE
+Task: WP3-T06-FREEZE
 
 ## Push and report
 
@@ -108,16 +105,23 @@ Push per the profile. Append these results here:
 - check exits;
 - blockers.
 
-Evidence goes in handoff/delivery/evidence/WP3-T05-FREEZE/. Return at most 150 words.
+Evidence goes in handoff/delivery/evidence/WP3-T06-FREEZE/. Return at most 150 words.
+
+## Attempt 2 (coordinator note)
+
+Attempt 1 stopped because the first shell call failed with ENOSPC (the B: drive holding
+Claude Code's task output was full). Nothing was staged.
+
+- Make the first shell call a trivial one (`node --version` with Node 24 by full path). If
+  it fails with ENOSPC or "temp filesystem … is full", stop at once and report; do not
+  retry.
+- The owner authorized a temporary work folder on D: outside Dropbox. Use
+  `D:\timesheet-tmp\WP3-T06-FREEZE` for TEMP/TMP and any temporary file you need (create
+  it, remove it afterwards). Never use a folder under D:\Dropbox for temporary files.
+- The expected set additionally includes your attempt-1 note if you wrote one (none was
+  written). Everything else in this brief is unchanged; recompute the digest immediately
+  before `git add`.
 
 ## Results
 
 (Committer appends here.)
-
-Self-reported model: claude-sonnet-5-5
-
-- Pre-HEAD: c289375a8d80c78ea9f3a9e54ff55a795f99ec7b; post-HEAD: 72f1920fce178b95a9d51e665d69af3fd05117f4.
-- Commit 72f1920fce178b95a9d51e665d69af3fd05117f4, pushed to main; remote SHA 72f1920fce178b95a9d51e665d69af3fd05117f4.
-- Node v24.21.0. Digest c380f3025d8bf4e8ee85fd9280118c5913fa58baf51e6d75e18dcc356602f57e (matches). Staged 28 files.
-- Exit codes: digest 0, git add 0, precommit-check 0 (0 findings), diff --cached --check 0, JSON parse 0, validate_orchestration 0, check_recovery 0, validate_package --preflight 0.
-- No masking, no EOF fix, no unstaging. Blockers: none.
