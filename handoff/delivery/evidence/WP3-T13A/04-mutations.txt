@@ -1,0 +1,51 @@
+WP3-T13A mutation checks (harness: mutations.py.txt)
+Six literal mutations, each caught; every file restored byte-identical.
+
+M1 audit actor recorded as the owner
+  file: src/server/services/timesheetCommands.ts
+  exit: 1 (CAUGHT)
+  Test Files  1 failed (1)
+  Tests  3 failed | 11 passed (14)
+  x writes the subject own rows and attributes the audit event to the actor (api.ts) 153ms
+  x records actor_user_id = actor and owner_user_id = subject for single commands 138ms
+  x records both ids for a committed day batch and writes nothing for a preview 134ms
+  restored byte-identical: True
+M2 api.ts command context owner taken from the actor
+  file: src/server/routes/api.ts
+  exit: 1 (CAUGHT)
+  Test Files  1 failed (1)
+  Tests  1 failed | 13 passed (14)
+  x writes the subject own rows and attributes the audit event to the actor (api.ts) 156ms
+  restored byte-identical: True
+M3 ot.ts summary reads the session user instead of the subject
+  file: src/server/routes/ot.ts
+  exit: 1 (CAUGHT)
+  Test Files  1 failed (1)
+  Tests  2 failed | 12 passed (14)
+  x reads the subject OT balance and records leave under the subject with the actor attributed (ot.ts) 154ms
+  x keeps c.get(user) out of the personal routers 186ms
+  restored byte-identical: True
+M4 operations status reads the environment instead of the injected configuration
+  file: src/server/services/operationsStatus.ts
+  exit: 1 (CAUGHT)
+  Test Files  2 failed (2)
+  Tests  4 failed | 24 passed (28)
+  x reports the configured sender and mode with the process environment unset 248ms
+  x ignores the process environment when a configuration is injected, and never echoes the address 250ms
+  x keeps process.env out of the operations status service and the admin router 214ms
+  x reads the sender flag and mode from the injected configuration without echoing the address 235ms
+  restored byte-identical: True
+M5 access guard no longer sets the actor
+  file: src/server/http/auth.ts
+  exit: 1 (CAUGHT)
+  Test Files  1 failed (1)
+  Tests  1 failed | 13 passed (14)
+  x sets actor = subject = the session user on every personal route 617ms
+  restored byte-identical: True
+M6 submission.ts finalization status reads the session user
+  file: src/server/routes/submission.ts
+  exit: 1 (CAUGHT)
+  Test Files  1 failed (1)
+  Tests  1 failed | 13 passed (14)
+  x keeps c.get(user) out of the personal routers 135ms
+  restored byte-identical: True

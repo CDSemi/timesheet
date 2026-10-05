@@ -11,11 +11,25 @@ export interface AppDeps {
   loginLimiter: LoginRateLimiter;
   /** Built client assets (dist/client); null serves the API only. */
   staticDir: string | null;
+  /**
+   * The delivery configuration the process started with (`loadDeliveryConfig`), so a service never
+   * reads the environment. Absent in tests that exercise no delivery setup; the admin status then
+   * reports the setup as unknown.
+   */
+  delivery?: DeliveryConfig;
 }
 
+/**
+ * Per-request principals. `user` is the signed-in session user. `actor` is who performs the action
+ * (audit attribution) and `subject` is whose timesheet it concerns (the owner of every row read or
+ * written). No grants exist yet, so the access guard sets all three to the session user on every
+ * route; personal routers read the owner from `subject` and never from `user`.
+ */
 export interface AppEnv {
   Variables: {
     user: SessionUser;
+    actor: SessionUser;
+    subject: SessionUser;
   };
 }
 

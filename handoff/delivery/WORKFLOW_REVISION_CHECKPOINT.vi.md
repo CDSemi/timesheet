@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 8e2c2bf288030a48ee4a58fe9a9d86b3df01e818 (WP3-T12-FREEZE).
+  - HEAD = origin/main = 19723b6e77b75c972cf416229d05b3b5203c8480 (WP3-T13D-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 160bb78c… (T12, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là 321cc6a0… (T13D, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T12-FREEZE, brief WP3-T13D. Các file này vào commit đóng băng kế tiếp.
+    T13D-FREEZE. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -215,10 +215,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   test quét đường dẫn khóa chống lộ dữ liệu, danh mục route trong test tách biệt; e2e 97
   đạt; 8/8 bản đối chứng; verify 1150 test; digest 321cc6a0…. Việc chuyển tiếp (giao cho
   T13A): truyền cấu hình gửi qua AppDeps thay vì đọc process.env.
-- Đang chạy: WP3-T13D-FREEZE (committer).
+- WP3-T13D-FREEZE đã commit và push, SHA 19723b6 (34 đường dẫn, đã xem 4 ảnh chụp, mọi
+  kiểm tra 0).
+- WP3-T13A đã xong (tác giả tự báo): tách người thao tác/chủ timesheet, router dạng
+  factory, audit ghi riêng người thao tác và chủ, cấu hình gửi qua AppDeps; danh mục 63
+  route giống hệt trước/sau; test 1150 → 1164; 6/6 bản đối chứng; verify 0; digest
+  0edefc94…. Lượt e2e duy nhất có 2 test mobile hỏng do `net::ERR_NO_BUFFER_SPACE` (lỗi
+  môi trường; chạy lại riêng thì đạt).
+- Đang chạy: WP3-T13A-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T13D; sau đó WP3-DOC và T07B nếu đã có câu trả lời
-     G-Q1/G-Q2, nếu chưa thì T13A (brief đã sẵn); T13 chờ T07B.
+  1. Ghi kết quả commit đóng băng T13A; rồi WP3-E2E-RECHECK (verifier, chỉ đọc, chạy toàn
+     bộ e2e trên commit đã đóng băng). Mọi task còn lại (WP3-DOC, T07B, T13, T13B, T13C,
+     T14, T15) đều cần G-Q1/G-Q2; nếu vẫn chưa có thì dừng và hỏi chủ dự án.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -237,5 +245,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T13D-FREEZE.
+- Process còn sống: chỉ WP3-T13A-FREEZE.
 - Usage/reset: không quan sát được.

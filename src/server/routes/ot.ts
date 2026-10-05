@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { assertCivilDate, diffDays } from '../../domain/dates.ts';
 import type { LedgerBalance } from '../../domain/ledger.ts';
-import { requireUser } from '../http/auth.ts';
+import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
 import { ApiError } from '../http/errors.ts';
 import { otLeaveCancelBody, otLeaveConsumeBody, otLeaveCreateBody, otLeaveReverseBody } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
@@ -72,20 +72,22 @@ function entryJson(entry: LedgerEntry) {
 }
 
 /**
- * OT balance, ledger, leave lifecycle and evidence export. Every handler passes the
- * session user as BOTH owner and actor (the leave service does not check that they are
- * equal), no route accepts a user id, and admin role grants no access to other users'
- * data. There is deliberately no route that posts a credit or debit: credits and debits
- * are posted by WP3 finalization inside its own transaction. The only ledger writes
- * reachable here are the owner's explicit leave actions (record use and reverse).
+ * OT balance, ledger, leave lifecycle and evidence export, built by a factory so the same
+ * handlers can be mounted behind a different access guard. Every handler passes the request
+ * context's subject as the owner and its actor as the actor (the leave service does not check
+ * that they are equal; with the default guard both are the session user), no route accepts a
+ * user id, and admin role grants no access to other users' data. There is deliberately no
+ * route that posts a credit or debit: credits and debits are posted by WP3 finalization inside
+ * its own transaction. The only ledger writes reachable here are the owner's explicit leave
+ * actions (record use and reverse).
  */
-export function otRoutes(deps: AppDeps) {
+export function otRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
   const app = new Hono<AppEnv>();
-  const auth = requireUser(deps);
+  const auth = options.access ?? requireUser(deps);
   const ctx = { db: deps.db, clock: deps.clock };
 
   app.get('/summary', auth, (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
     const provisional = provisionalSummary(deps.db, deps.clock, user);
     return c.json({
       ...balanceJson(getBalance(deps.db, user.id)),
@@ -95,7 +97,7 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.get('/ledger', auth, (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
     return c.json({
       entries: listLedgerEntries(deps.db, user.id).map(entryJson),
       balance: balanceJson(getBalance(deps.db, user.id)),
@@ -103,7 +105,7 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.get('/leave', auth, (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
     return c.json({
       requests: listOtLeaveRequests(deps.db, user.id).map(leaveJson),
       balance: balanceJson(getBalance(deps.db, user.id)),
@@ -111,11 +113,12 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.post('/leave', auth, async (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
+    const actor = c.get('actor');
     const body = await readJson(c, otLeaveCreateBody);
     const result = reserveOtLeave(ctx, {
       userId: user.id,
-      actorUserId: user.id,
+      actorUserId: actor.id,
       requestKey: body.request_key,
       leaveDate: body.leave_date,
       requestedMinutes: body.requested_minutes,
@@ -136,11 +139,12 @@ export function otRoutes(deps: AppDeps) {
 
   /** E-3 "record use": the explicit, idempotent, partial consumption of reserved minutes. */
   app.post('/leave/:id/consume', auth, async (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
+    const actor = c.get('actor');
     const body = await readJson(c, otLeaveConsumeBody);
     const result = recordOtLeaveUse(ctx, {
       userId: user.id,
-      actorUserId: user.id,
+      actorUserId: actor.id,
       requestId: c.req.param('id'),
       useKey: body.use_key,
       minutes: body.minutes,
@@ -155,11 +159,12 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.post('/leave/:id/cancel', auth, async (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
+    const actor = c.get('actor');
     const body = await readJson(c, otLeaveCancelBody);
     const result = cancelOtLeave(ctx, {
       userId: user.id,
-      actorUserId: user.id,
+      actorUserId: actor.id,
       requestId: c.req.param('id'),
       reason: body.reason ?? null,
       expectedVersion: body.expected_version,
@@ -173,11 +178,12 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.post('/leave/:id/reverse', auth, async (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
+    const actor = c.get('actor');
     const body = await readJson(c, otLeaveReverseBody);
     const result = reverseOtLeaveUse(ctx, {
       userId: user.id,
-      actorUserId: user.id,
+      actorUserId: actor.id,
       requestId: c.req.param('id'),
       reversalKey: body.reversal_key,
       minutes: body.minutes,
@@ -193,7 +199,7 @@ export function otRoutes(deps: AppDeps) {
   });
 
   app.get('/evidence.csv', auth, (c) => {
-    const user = c.get('user');
+    const user = c.get('subject');
     const from = assertCivilDate(c.req.query('from'), 'from');
     const to = assertCivilDate(c.req.query('to'), 'to');
     if (to < from || diffDays(to, from) > MAX_EVIDENCE_RANGE_DAYS) {

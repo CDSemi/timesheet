@@ -1,0 +1,41 @@
+WP3-T13A red: tests/integration/actor-subject.test.ts against the HEAD (pre-change) versions of the ten changed source files
+command: npm exec vitest run tests/integration/actor-subject.test.ts   exit: 1
+11 failed; 3 pass by design (production-mount compat, actor defaults to the owner, services free of context reads).
+The source files were restored byte-identical afterwards (cmp, no difference).
+
+ RUN  v5.0.2 <project>
+     x sets actor = subject = the session user on every personal route 224ms
+     x writes the subject own rows and attributes the audit event to the actor (api.ts) 148ms
+     x reads the subject OT balance and records leave under the subject with the actor attributed (ot.ts) 136ms
+     x lists the subject revision status and deliveries, not the actor (submission.ts) 144ms
+     x records actor_user_id = actor and owner_user_id = subject for single commands 154ms
+     x records both ids for a committed day batch and writes nothing for a preview 138ms
+     x keeps c.get(user) out of the personal routers 129ms
+     x reports the configured sender and mode with the process environment unset 179ms
+     x ignores the process environment when a configuration is injected, and never echoes the address 178ms
+     x reports an unknown setup when no configuration was provided 188ms
+     x keeps process.env out of the operations status service and the admin router 136ms
+ FAIL  tests/integration/actor-subject.test.ts > the request context carries actor and subject > sets actor = subject = the session user on every personal route
+AssertionError: GET /api/ot/summary reached its access guard: expected +0 to be 1 // Object.is equality
+ FAIL  tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > writes the subject own rows and attributes the audit event to the actor (api.ts)
+AssertionError: {"error":{"code":"unauthenticated","message":"Sign in required"}}: expected 401 to be 201 // Object.is equality
+ FAIL  tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > reads the subject OT balance and records leave under the subject with the actor attributed (ot.ts)
+AssertionError: expected undefined to be 600 // Object.is equality
+ FAIL  tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > lists the subject revision status and deliveries, not the actor (submission.ts)
+AssertionError: /api/revisions/pending-lines: expected 401 to be 200 // Object.is equality
+ FAIL  tests/integration/actor-subject.test.ts > commands and audit record actor and subject > records actor_user_id = actor and owner_user_id = subject for single commands
+AssertionError: day_entry.create: expected { operation: 'day_entry.create', ...(3) } to match object { ...(2) }
+ FAIL  tests/integration/actor-subject.test.ts > commands and audit record actor and subject > records both ids for a committed day batch and writes nothing for a preview
+AssertionError: expected { operation: 'day_entry.create', ...(3) } to match object { ...(2) }
+ FAIL  tests/integration/actor-subject.test.ts > no personal router or service reads the session user for ownership > keeps c.get(user) out of the personal routers
+AssertionError: api.ts: expected 'import { type Context, Hono } from \'...' not to match /\.get\(\s*['"`]user['"`]\s*\)/
+ FAIL  tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > reports the configured sender and mode with the process environment unset
+AssertionError: expected { configured: false, ...(1) } to deeply equal { configured: true, ...(1) }
+ FAIL  tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > ignores the process environment when a configuration is injected, and never echoes the address
+AssertionError: expected { configured: null, ...(1) } to deeply equal { configured: false, ...(1) }
+ FAIL  tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > reports an unknown setup when no configuration was provided
+AssertionError: expected { configured: true, ...(1) } to deeply equal { configured: null, ...(1) }
+ FAIL  tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > keeps process.env out of the operations status service and the admin router
+AssertionError: routes\admin.ts: expected 'import { Hono } from \'hono\';\nimpor...' not to match /process\.env/
+ Test Files  1 failed (1)
+      Tests  11 failed | 3 passed (14)

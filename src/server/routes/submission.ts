@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireUser } from '../http/auth.ts';
+import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
 import { ApiError } from '../http/errors.ts';
 import { correctionRevisionBody, lateReviewBody, resendBody, signoffBody } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
@@ -23,9 +23,11 @@ const deliveryDecisionBody = z.strictObject({ decision: z.enum(['mark_delivered'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * Review and submission routes. Every handler derives the owner from the session; no route
- * accepts a user id, and an administrator has no access to another user's payload,
- * revision or sign-off. The review and status GETs write nothing (no row, no audit event).
+ * Review and submission routes, built by a factory so the same handlers can be mounted behind a
+ * different access guard. Every handler takes the owner from the request context's subject (the
+ * session user with the default guard); no route accepts a user id, and an administrator has no
+ * access to another user's payload, revision or sign-off. The review and status GETs write
+ * nothing (no row, no audit event).
  * The sign-off POST is the only writer of a first revision: one transaction that binds the
  * reviewed payload, records the real sign-off, posts through the ledger service and enqueues
  * the PDF and send jobs (services/finalization.ts). The revision, late-review and resend
@@ -34,17 +36,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
  * writes nothing; the decision POST records the owner's one decision on an uncertain attempt
  * (mark delivered, or resend as a new attempt on the same revision) and posts nothing.
  */
-export function submissionRoutes(deps: AppDeps) {
+export function submissionRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
   const app = new Hono<AppEnv>();
-  const auth = requireUser(deps);
+  const auth = options.access ?? requireUser(deps);
 
   app.get('/timesheets/:payrollDate/review', auth, (c) =>
-    c.json(reviewPayloadJson(buildReviewPayload(deps.db, deps.clock, c.get('user'), c.req.param('payrollDate')))),
+    c.json(reviewPayloadJson(buildReviewPayload(deps.db, deps.clock, c.get('subject'), c.req.param('payrollDate')))),
   );
 
   app.post('/timesheets/:payrollDate/signoff', auth, async (c) => {
     const body = await readJson(c, signoffBody);
-    const result = signOffTimesheet({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('payrollDate'), {
+    const result = signOffTimesheet({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('payrollDate'), {
       expectedVersion: body.expected_version,
       reviewedHash: body.reviewed_hash,
       signerName: body.signer_name,
@@ -57,7 +59,7 @@ export function submissionRoutes(deps: AppDeps) {
   // A correction revision of a finalized period: a reason, a genuine sign-off, only differences posted.
   app.post('/timesheets/:payrollDate/revisions', auth, async (c) => {
     const body = await readJson(c, correctionRevisionBody);
-    const result = reviseTimesheet({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('payrollDate'), {
+    const result = reviseTimesheet({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('payrollDate'), {
       kind: 'correction',
       reason: body.reason,
       sendEmail: body.send_email,
@@ -73,7 +75,7 @@ export function submissionRoutes(deps: AppDeps) {
   // The owner's late review of an automatic revision: a signed revision with zero ledger delta.
   app.post('/timesheets/:payrollDate/late-review', auth, async (c) => {
     const body = await readJson(c, lateReviewBody);
-    const result = reviseTimesheet({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('payrollDate'), {
+    const result = reviseTimesheet({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('payrollDate'), {
       kind: 'late_review',
       reason: null,
       sendEmail: body.send_email,
@@ -88,16 +90,16 @@ export function submissionRoutes(deps: AppDeps) {
 
   // The finalized revision of a period with its sign-off, ledger lines (pending ones included, F-2) and jobs.
   app.get('/timesheets/:payrollDate/finalization', auth, (c) =>
-    c.json(finalizationStatusJson(getFinalizationStatus(deps.db, c.get('user'), c.req.param('payrollDate')))),
+    c.json(finalizationStatusJson(getFinalizationStatus(deps.db, c.get('subject'), c.req.param('payrollDate')))),
   );
 
   // F-2: the owner's pending lines that are still current (for the review and OT screens).
-  app.get('/revisions/pending-lines', auth, (c) => c.json({ lines: listCurrentPendingLines(deps.db, c.get('user').id) }));
+  app.get('/revisions/pending-lines', auth, (c) => c.json({ lines: listCurrentPendingLines(deps.db, c.get('subject').id) }));
 
   // Same-revision resend: a new delivery attempt on the unchanged PDF; no ledger or revision change.
   app.post('/revisions/:id/resend', auth, async (c) => {
     const body = await readJson(c, resendBody);
-    const result = resendRevision({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('id'), {
+    const result = resendRevision({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('id'), {
       ...(body.to === undefined ? {} : { to: body.to }),
       ...(body.cc === undefined ? {} : { cc: body.cc }),
       ...(body.template_version === undefined ? {} : { templateVersion: body.template_version }),
@@ -109,14 +111,14 @@ export function submissionRoutes(deps: AppDeps) {
   app.get('/deliveries', auth, (c) => {
     const revisionId = c.req.query('revision_id');
     if (revisionId !== undefined && !UUID.test(revisionId)) throw new ApiError(422, 'validation_error', 'revision_id must be an id');
-    const records = listDeliveries(deps.db, c.get('user').id, revisionId === undefined ? {} : { revisionId });
+    const records = listDeliveries(deps.db, c.get('subject').id, revisionId === undefined ? {} : { revisionId });
     return c.json({ deliveries: records.map(deliveryJson) });
   });
 
   // The explicit decision on an uncertain attempt: mark delivered, or resend once as a new attempt.
   app.post('/deliveries/:id/decision', auth, async (c) => {
     const body = await readJson(c, deliveryDecisionBody);
-    const result = decideDelivery({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('id'), body.decision);
+    const result = decideDelivery({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('id'), body.decision);
     return c.json(decisionJson(result), result.resend === null ? 200 : 201);
   });
 

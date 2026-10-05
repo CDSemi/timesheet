@@ -2,7 +2,7 @@ import { type Context, Hono } from 'hono';
 import { assertCivilDate, diffDays } from '../../domain/dates.ts';
 import { editReasonRequirement } from '../../domain/editReason.ts';
 import { currentPayPeriod, payPeriodContaining, payPeriodsOverlapping } from '../../domain/periods.ts';
-import { requireUser } from '../http/auth.ts';
+import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
 import { ApiError, notFound } from '../http/errors.ts';
 import {
   clockInBody,
@@ -48,16 +48,23 @@ import type { AppDeps, AppEnv } from '../types.ts';
 const MAX_PERIOD_RANGE_DAYS = 400;
 
 /**
- * Authenticated personal API. Every handler derives the owner from the session user;
- * no route accepts a user id, and admin role grants no access to other users' data.
+ * Authenticated personal API, built by a factory so the same handlers can be mounted behind a
+ * different access guard. Every handler takes the owner from the request context's subject and
+ * the audit attribution from its actor; no route accepts a user id, and admin role grants no
+ * access to other users' data. The default guard (`requireUser`) sets both to the session user.
  */
-export function apiRoutes(deps: AppDeps) {
+export function apiRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
   const app = new Hono<AppEnv>();
-  const auth = requireUser(deps);
-  const command = (c: Context<AppEnv>): CommandContext => ({ db: deps.db, clock: deps.clock, user: c.get('user') });
+  const auth = options.access ?? requireUser(deps);
+  const command = (c: Context<AppEnv>): CommandContext => ({
+    db: deps.db,
+    clock: deps.clock,
+    user: c.get('subject'),
+    actor: c.get('actor'),
+  });
 
   app.get('/calendar', auth, (c) => {
-    const scope = loadScope(deps.db, c.get('user'));
+    const scope = loadScope(deps.db, c.get('subject'));
     const s = scope.calendar.schedule;
     return c.json({
       id: scope.calendar.id,
@@ -90,7 +97,7 @@ export function apiRoutes(deps: AppDeps) {
   });
 
   app.get('/periods/current', auth, (c) => {
-    const scope = loadScope(deps.db, c.get('user'));
+    const scope = loadScope(deps.db, c.get('subject'));
     const today = todayInReportingZone(deps.clock, scope);
     return c.json({
       reporting_zone: scope.calendar.schedule.reportingZone,
@@ -106,7 +113,7 @@ export function apiRoutes(deps: AppDeps) {
     if (to < from || diffDays(to, from) > MAX_PERIOD_RANGE_DAYS) {
       throw new ApiError(422, 'invalid_range', `Use a range of at most ${MAX_PERIOD_RANGE_DAYS} days`);
     }
-    const scope = loadScope(deps.db, c.get('user'));
+    const scope = loadScope(deps.db, c.get('subject'));
     const today = todayInReportingZone(deps.clock, scope);
     const periods = payPeriodsOverlapping(scope.calendar.schedule, from, to, scope.exceptions).map((period) => ({
       ...periodJson(period),
@@ -122,10 +129,10 @@ export function apiRoutes(deps: AppDeps) {
   });
 
   app.get('/timesheets/:payrollDate', auth, (c) =>
-    c.json(getTimesheetView(deps.db, deps.clock, c.get('user'), c.req.param('payrollDate'))),
+    c.json(getTimesheetView(deps.db, deps.clock, c.get('subject'), c.req.param('payrollDate'))),
   );
 
-  app.get('/days/:workDate', auth, (c) => c.json(getDayView(deps.db, deps.clock, c.get('user'), c.req.param('workDate'))));
+  app.get('/days/:workDate', auth, (c) => c.json(getDayView(deps.db, deps.clock, c.get('subject'), c.req.param('workDate'))));
 
   // Preview first, then commit with a per-date expected_version (all or nothing).
   app.post('/days/batch', auth, async (c) => {
@@ -142,7 +149,7 @@ export function apiRoutes(deps: AppDeps) {
   );
 
   app.get('/sessions/:id', auth, (c) => {
-    const session = findSession(deps.db, c.get('user').id, c.req.param('id'));
+    const session = findSession(deps.db, c.get('subject').id, c.req.param('id'));
     if (session === undefined) throw notFound('Work session');
     return c.json({ session: sessionJson(session) });
   });
@@ -159,11 +166,11 @@ export function apiRoutes(deps: AppDeps) {
 
   app.post('/clock/out', auth, async (c) => c.json(clockOut(command(c), await readJson(c, clockOutBody))));
 
-  app.get('/policies', auth, (c) => c.json({ policies: listPolicyVersions(deps.db, c.get('user').id).map(policyJson) }));
+  app.get('/policies', auth, (c) => c.json({ policies: listPolicyVersions(deps.db, c.get('subject').id).map(policyJson) }));
 
   const policyProposal = (c: Context<AppEnv>, body: PolicyBody): PolicyProposal => ({
-    userId: c.get('user').id,
-    calendarId: c.get('user').calendarId,
+    userId: c.get('subject').id,
+    calendarId: c.get('subject').calendarId,
     effectiveFrom: body.effective_from,
     note: body.note,
     rules: {
@@ -183,12 +190,12 @@ export function apiRoutes(deps: AppDeps) {
 
   app.post('/policies', auth, async (c) => {
     const proposal = policyProposal(c, await readJson(c, policyBody));
-    return c.json({ policy: policyJson(createPolicyVersion(deps.db, deps.clock, proposal, c.get('user').id)) }, 201);
+    return c.json({ policy: policyJson(createPolicyVersion(deps.db, deps.clock, proposal, c.get('actor').id)) }, 201);
   });
 
   // Dry run of POST /policies: same body and checks, writes nothing, lists the changed draft days.
   app.post('/policies/preview', auth, async (c) =>
-    c.json(previewPolicyVersion(deps.db, deps.clock, c.get('user'), policyProposal(c, await readJson(c, policyBody)))),
+    c.json(previewPolicyVersion(deps.db, deps.clock, c.get('subject'), policyProposal(c, await readJson(c, policyBody)))),
   );
 
   return app;

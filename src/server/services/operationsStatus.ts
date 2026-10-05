@@ -1,9 +1,8 @@
-import { parse, resolve } from 'node:path';
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { type Clock, nowEpoch } from '../clock.ts';
-import { type AppConfig, loadDeliveryConfig } from '../config.ts';
 import type { Db } from '../db/database.ts';
 import { DEFAULT_INTERVAL_MS } from '../jobs/runner.ts';
+import type { DeliveryConfig } from '../types.ts';
 import { activationJson, getAutomationActivation } from './automation.ts';
 
 /*
@@ -76,27 +75,20 @@ function recipientsOf(json: string | null): { to: string[]; cc: string[] } | nul
 /* ---------------------------------------------------------- system status ---- */
 
 export interface DeliverySetup {
-  /** Whether a sender address is configured; null when the configuration cannot be read. */
+  /** Whether a sender address is configured; null when no delivery configuration was provided. */
   senderConfigured: boolean | null;
   outboundMode: 'capture' | 'smtp' | 'unknown';
 }
 
 /**
- * The sender and outbound mode the server was started with, read from the same environment
- * variables with the same parser as the job runner. Only a flag and the mode leave this
- * function, never the address or any SMTP setting. Values that do not affect the answer are
- * fixed so an unrelated misconfiguration cannot hide it.
+ * The sender and outbound mode of the delivery configuration the server was started with
+ * (`AppDeps.delivery`, built once by `loadDeliveryConfig`); this module never reads the
+ * environment. Only a flag and the mode leave this function, never the address or any SMTP
+ * setting. Without a configuration the setup is reported as unknown.
  */
-export function deliverySetupFromEnv(env: NodeJS.ProcessEnv, config: Pick<AppConfig, 'databasePath' | 'port'>): DeliverySetup {
-  try {
-    const delivery = loadDeliveryConfig(
-      { ...env, DATA_DIR: parse(resolve('.')).root, PUBLIC_BASE_URL: 'https://localhost' },
-      { databasePath: config.databasePath, port: config.port, production: false },
-    );
-    return { senderConfigured: delivery.senderAddress !== null, outboundMode: delivery.outbound.mode };
-  } catch {
-    return { senderConfigured: null, outboundMode: 'unknown' };
-  }
+export function deliverySetupOf(delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound'> | undefined): DeliverySetup {
+  if (delivery === undefined) return { senderConfigured: null, outboundMode: 'unknown' };
+  return { senderConfigured: delivery.senderAddress !== null, outboundMode: delivery.outbound.mode };
 }
 
 export interface OperationsStatus {

@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T13D-FREEZE",
+  "next_task_id": "WP3-T13A-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -98,7 +98,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "8e2c2bf288030a48ee4a58fe9a9d86b3df01e818",
+    "last_commit": "19723b6e77b75c972cf416229d05b3b5203c8480",
     "unpushed": []
   },
   "owner_decisions": [
@@ -5828,9 +5828,114 @@
       "id": "WP3-T13D-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T13D"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3450728c1fc57b5c",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T13D-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13D-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T13D-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "8e2c2bf288030a48ee4a58fe9a9d86b3df01e818",
+      "branch": "main",
+      "commit_sha": "19723b6e77b75c972cf416229d05b3b5203c8480",
+      "pushed": true,
+      "source_digest": "321cc6a04ec23a92e6aa7e30c153d12db870002bf053cf3fc2b5655d3d0ae862",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 34 paths (expected set), parent 8e2c2bf, remote SHA identical; digest 321cc6a0 matched; 4 synthetic screenshots viewed (example.invalid addresses only); precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T13A starts on 19723b6 (WP3-DOC/T07B wait for G-Q1/G-Q2)."
+    },
+    {
+      "id": "WP3-T13A",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T13D-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a11095bf31d80f1bf",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/types.ts",
+        "src/server/http/auth.ts",
+        "src/server/app.ts",
+        "src/server/index.ts",
+        "src/server/cli.ts",
+        "src/server/services/timesheetCommands.ts",
+        "src/server/services/dayEntries.ts",
+        "src/server/services/operationsStatus.ts",
+        "src/server/routes/api.ts",
+        "src/server/routes/ot.ts",
+        "src/server/routes/submission.ts",
+        "tests/integration/edit-rules.test.ts",
+        "tests/integration/day-entries-batch.test.ts",
+        "tests/integration/actor-subject.test.ts",
+        "tests/integration/operations-status.test.ts",
+        "handoff/delivery/tasks/WP3-T13A.md",
+        "handoff/delivery/evidence/WP3-T13A"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13A.md",
+      "report": "handoff/delivery/tasks/WP3-T13A.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13A/01-baseline-suite.txt",
+        "handoff/delivery/evidence/WP3-T13A/02-red.txt",
+        "handoff/delivery/evidence/WP3-T13A/03-green.txt",
+        "handoff/delivery/evidence/WP3-T13A/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-T13A/05-after-suite.txt",
+        "handoff/delivery/evidence/WP3-T13A/06-route-inventory-compare.txt",
+        "handoff/delivery/evidence/WP3-T13A/07-e2e.txt",
+        "handoff/delivery/evidence/WP3-T13A/08-verify.txt",
+        "handoff/delivery/evidence/WP3-T13A/09-digest.txt"
+      ],
+      "baseline_commit": "19723b6e77b75c972cf416229d05b3b5203c8480",
+      "source_digest": "0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: AppEnv gains actor and subject, set to the session user by requireUser; apiRoutes, otRoutes and submissionRoutes are factories taking (deps, {access?}) and read subject/actor from the context; mounts unchanged; CommandContext.actor optional; audit writes actor and owner separately; AppDeps.delivery optional; deliverySetupOf replaces the env reader. Route inventory 63 entries identical before and after (also per anonymous/employee/admin status). Tests 53 files/1150 -> 54/1164 (+14 new); red 11 of 14 (3 pass by design); green 14/14; 6/6 mutations. e2e once: exit 1 with 95 passed, 3 skipped, 2 mobile failures on net::ERR_NO_BUFFER_SPACE (Windows socket buffer exhaustion, environmental); a targeted rerun of the two spec files passed 27 (exit 0); a full clean e2e run is delegated to WP3-E2E-RECHECK after the freeze. verify exit 0, 0 deprecation lines. Deviations: routes/admin.ts two lines (deliverySetupOf); optional actor and delivery fields to avoid edits to non-owned callers (T13B may make actor required); dayEntries.ts comment only; one operations-status assertion for smtp without the owner flag replaced because that configuration now refuses to start (config.test.ts pins it). No PDF read route exists yet (T13 adds it; T13B parameterizes it).",
+      "next_action": "None; WP3-T13A-FREEZE."
+    },
+    {
+      "id": "WP3-T13A-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T13A"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -5848,21 +5953,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T13D-FREEZE"
+        "handoff/delivery/tasks/WP3-T13A-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T13A-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T13D-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T13A-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T13A-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "8e2c2bf288030a48ee4a58fe9a9d86b3df01e818",
+      "baseline_commit": "19723b6e77b75c972cf416229d05b3b5203c8480",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "321cc6a04ec23a92e6aa7e30c153d12db870002bf053cf3fc2b5655d3d0ae862",
+      "source_digest": "0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T13D set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T13A set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

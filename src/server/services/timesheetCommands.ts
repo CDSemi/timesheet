@@ -45,7 +45,7 @@ import {
 
 /*
  * Write side of a user's timesheet. Each command runs in one short IMMEDIATE
- * transaction that (1) enforces ownership through the session user id, (2) requires a
+ * transaction that (1) enforces ownership through the subject user id, (2) requires a
  * reason for old or finalized periods (R-07), (3) validates intervals (R-01), (4)
  * checks optimistic versions, (5) bumps the timesheet version and (6) appends audit
  * events with before/after snapshots.
@@ -54,7 +54,10 @@ import {
 export interface CommandContext {
   db: Db;
   clock: Clock;
+  /** The subject: the owner of every row the command reads or writes (`owner_user_id` in the audit). */
   user: SessionUser;
+  /** Who performs the command (`actor_user_id` in the audit); absent means the owner acts. */
+  actor?: SessionUser;
 }
 
 /** Manual entries may not describe future work; a small allowance covers clock skew. */
@@ -121,7 +124,7 @@ function audit(
   after: unknown,
 ): void {
   recordAudit(ctx.db, ctx.clock, {
-    actorUserId: ctx.user.id,
+    actorUserId: (ctx.actor ?? ctx.user).id,
     ownerUserId: ctx.user.id,
     operation,
     entityType,

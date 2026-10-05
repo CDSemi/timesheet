@@ -107,7 +107,7 @@ function planBatch(ctx: CommandContext, scope: UserScope, body: DayBatchBody): P
     seen.add(workDate);
     const period = periodForDate(scope, workDate);
     const requirement = editRequirementFor(ctx.clock, scope, period, findTimesheet(ctx.db, scope, period));
-    // Every lookup is scoped by the session user: another user's entry is simply absent.
+    // Every lookup is scoped by the subject (the owner): another user's entry is simply absent.
     const existing = findDayEntry(ctx.db, ctx.user.id, workDate);
     const input = resolveInput(entry, existing);
     const planned: PlannedEntry = {

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createApp } from '../../src/server/app.ts';
+import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
 import { recordHeartbeat } from '../../src/server/jobs/jobStore.ts';
 import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
@@ -10,8 +12,9 @@ import { createOutboundAdapter } from '../../src/server/mail/outbound.ts';
 import { setAutomationActivation } from '../../src/server/services/automation.ts';
 import { faultCode, HEARTBEAT_STALE_SECONDS } from '../../src/server/services/operationsStatus.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import type { DeliveryConfig } from '../../src/server/types.ts';
 import { makePng } from '../support/pdfText.ts';
-import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
+import { createTestContext, la, LA, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 /*
  * WP3-T13D: the administrator operations status (F-3, F-Q3 (b)). The admin sees the submission
@@ -125,6 +128,26 @@ async function runPipeline(sender: string | null): Promise<void> {
 
 async function statusOf(path: string, cookie: string) {
   return t.request('GET', path, { cookie });
+}
+
+/** A delivery configuration as `loadDeliveryConfig` builds it; the sender is the only varying part. */
+function deliveryConfig(senderAddress: string | null, outbound: DeliveryConfig['outbound'] = { mode: 'capture' }): DeliveryConfig {
+  return {
+    dataDir: join(dirname(t.config.databasePath), 'private-data'),
+    publicBaseUrl: 'https://timesheet.example.invalid',
+    senderAddress,
+    outbound,
+  };
+}
+
+/** The operations status through an app started with this delivery configuration (none when undefined). */
+async function operationsWith(delivery: DeliveryConfig | undefined) {
+  const app = createApp(
+    { db: t.db, clock: t.clock, config: t.config, loginLimiter: new LoginRateLimiter(), staticDir: null, ...(delivery === undefined ? {} : { delivery }) },
+    { dataDir: join(dirname(t.config.databasePath), 'private-data') },
+  );
+  const response = await app.request('/api/admin/operations', { headers: { origin: ORIGIN, cookie: admin } });
+  return { status: response.status, body: (await response.json()) as any };
 }
 
 /** Every key path of a JSON value (`a.b`, arrays as `a[]`), so the shape is compared exactly. */
@@ -246,7 +269,7 @@ describe('access (F-3: administrators only)', () => {
 
 describe('system status', () => {
   it('reports an empty system: never a heartbeat, no activation, zero totals', async () => {
-    const response = await statusOf('/api/admin/operations', admin);
+    const response = await operationsWith(deliveryConfig(null));
     expect(response.status).toBe(200);
     expect(response.body.operations).toEqual({
       sender: { configured: false, outbound_mode: 'capture' },
@@ -257,15 +280,18 @@ describe('system status', () => {
     });
   });
 
-  it('reads the sender flag and mode from the configuration without echoing the address', async () => {
-    vi.stubEnv('MAIL_FROM', SENDER);
-    const response = await statusOf('/api/admin/operations', admin);
+  it('reads the sender flag and mode from the injected configuration without echoing the address', async () => {
+    const response = await operationsWith(deliveryConfig(SENDER));
     expect(response.body.operations.sender).toEqual({ configured: true, outbound_mode: 'capture' });
     expect(JSON.stringify(response.body)).not.toContain(SENDER);
-    // A real-sending request without the owner-only flag is reported, never acted on.
-    vi.stubEnv('OUTBOUND_MODE', 'smtp');
-    const refused = await statusOf('/api/admin/operations', admin);
-    expect(refused.body.operations.sender).toEqual({ configured: null, outbound_mode: 'unknown' });
+    // Real sending is reported as a mode, never acted on, and never reveals the SMTP settings.
+    const smtp = await operationsWith(deliveryConfig(SENDER, { mode: 'smtp', smtp: { host: 'smtp.example.invalid', port: 587, security: 'starttls', auth: null } }));
+    expect(smtp.body.operations.sender).toEqual({ configured: true, outbound_mode: 'smtp' });
+    expect(JSON.stringify(smtp.body)).not.toContain('smtp.example.invalid');
+    // The environment is not consulted: an app started without a configuration reports it as unknown.
+    vi.stubEnv('MAIL_FROM', SENDER);
+    const unknown = await operationsWith(undefined);
+    expect(unknown.body.operations.sender).toEqual({ configured: null, outbound_mode: 'unknown' });
   });
 
   it('classifies the runner heartbeat as running, then stale after the documented age', async () => {

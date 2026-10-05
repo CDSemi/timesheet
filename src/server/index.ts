@@ -32,6 +32,7 @@ const app = createApp(
     config,
     loginLimiter: new LoginRateLimiter(),
     staticDir: resolveStaticDir(),
+    delivery,
   },
   { dataDir: delivery.dataDir },
 );

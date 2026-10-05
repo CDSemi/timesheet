@@ -1,0 +1,48 @@
+# Mutation harness (WP3-T13A). Each mutation is a literal single replacement computed in advance.
+# For every mutation: back up the file, apply it, run the named test files, restore byte-identical.
+# Usage: python mutations.py <repo> <backup-dir> <npm-cli.js>   (PATH must start with the Node 24 bin)
+import filecmp, hashlib, shutil, subprocess, sys
+from pathlib import Path
+
+repo, backup, npm_cli = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+M = [
+    ("M1 audit actor recorded as the owner", "src/server/services/timesheetCommands.ts",
+     "actorUserId: (ctx.actor ?? ctx.user).id,", "actorUserId: ctx.user.id,",
+     ["tests/integration/actor-subject.test.ts"]),
+    ("M2 api.ts command context owner taken from the actor", "src/server/routes/api.ts",
+     "    user: c.get('subject'),\n    actor: c.get('actor'),", "    user: c.get('actor'),\n    actor: c.get('actor'),",
+     ["tests/integration/actor-subject.test.ts"]),
+    ("M3 ot.ts summary reads the session user instead of the subject", "src/server/routes/ot.ts",
+     "app.get('/summary', auth, (c) => {\n    const user = c.get('subject');", "app.get('/summary', auth, (c) => {\n    const user = c.get('user');",
+     ["tests/integration/actor-subject.test.ts"]),
+    ("M4 operations status reads the environment instead of the injected configuration", "src/server/services/operationsStatus.ts",
+     "return { senderConfigured: delivery.senderAddress !== null,", "return { senderConfigured: process.env.MAIL_FROM !== undefined,",
+     ["tests/integration/actor-subject.test.ts", "tests/integration/operations-status.test.ts"]),
+    ("M5 access guard no longer sets the actor", "src/server/http/auth.ts",
+     "    c.set('actor', user);\n", "",
+     ["tests/integration/actor-subject.test.ts"]),
+    ("M6 submission.ts finalization status reads the session user", "src/server/routes/submission.ts",
+     "getFinalizationStatus(deps.db, c.get('subject'),", "getFinalizationStatus(deps.db, c.get('user'),",
+     ["tests/integration/actor-subject.test.ts"]),
+]
+for name, rel, old, new, tests in M:
+    path = repo / rel
+    saved = backup / "mutation" / rel
+    saved.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(path, saved)
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    text = path.read_text(encoding="utf8")
+    assert text.count(old) == 1, f"{name}: pattern must occur once"
+    path.write_bytes(text.replace(old, new).encode("utf8"))
+    try:
+        run = subprocess.run(["node.exe", npm_cli, "exec", "vitest", "run", *tests], cwd=repo, capture_output=True, text=True, encoding="utf8", errors="replace")
+        out = run.stdout + run.stderr
+        failed = [line.strip().replace(chr(0xD7), "x") for line in out.splitlines() if line.strip().startswith(chr(0xD7))]
+        summary = [line.strip() for line in out.splitlines() if line.strip().startswith(("Tests", "Test Files"))]
+    finally:
+        shutil.copyfile(saved, path)
+    after = hashlib.sha256(path.read_bytes()).hexdigest()
+    print(f"{name}\n  file: {rel}\n  exit: {run.returncode} ({'CAUGHT' if run.returncode != 0 else 'SURVIVED'})")
+    for line in summary: print(f"  {line}")
+    for line in failed[:6]: print(f"  {line}")
+    print(f"  restored byte-identical: {before == after}")

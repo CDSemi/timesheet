@@ -1,18 +1,34 @@
+import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 import { findSessionUser, SESSION_COOKIE } from '../auth/sessions.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 import { ApiError } from './errors.ts';
 
-/** Resolves the signed-in user from the session cookie; nothing else identifies a caller. */
+/**
+ * Resolves the signed-in user from the session cookie; nothing else identifies a caller. The
+ * session user is also the actor and the subject: there is no grant yet, so everybody acts on
+ * their own timesheet only.
+ */
 export function requireUser(deps: AppDeps) {
   return createMiddleware<AppEnv>(async (c, next) => {
     const token = getCookie(c, SESSION_COOKIE);
     const user = token === undefined ? null : findSessionUser(deps.db, deps.clock, token);
     if (user === null) throw new ApiError(401, 'unauthenticated', 'Sign in required');
     c.set('user', user);
+    c.set('actor', user);
+    c.set('subject', user);
     await next();
   });
+}
+
+/**
+ * Options of a personal router factory. `access` is the guard applied to every route of the
+ * router; it must set `actor` and `subject` in the context. The default is `requireUser`, which
+ * sets both to the session user. A router never decides who the subject is.
+ */
+export interface PersonalRouterOptions {
+  access?: MiddlewareHandler<AppEnv>;
 }
 
 /**

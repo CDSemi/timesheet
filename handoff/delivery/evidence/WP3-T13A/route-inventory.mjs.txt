@@ -1,0 +1,57 @@
+// Route inventory probe (WP3-T13A). Stored as .mjs.txt; copy to a scratch .mjs and run with REPO set.
+// For every registered (method, path) it records the handler count and the status answered to an
+// anonymous caller, the synthetic employee and the synthetic admin (empty JSON body). Synthetic data only.
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const repo = process.env.REPO;
+const scratch = process.env.SCRATCH;
+const src = (p) => pathToFileURL(join(repo, 'src', 'server', p)).href;
+const { createApp } = await import(src('app.ts'));
+const { LoginRateLimiter } = await import(src('auth/rateLimit.ts'));
+const { createAuthSession } = await import(src('auth/sessions.ts'));
+const { openDatabase } = await import(src('db/database.ts'));
+const { migrate } = await import(src('db/migrations.ts'));
+const { seedSynthetic } = await import(src('seed.ts'));
+
+const dir = mkdtempSync(join(scratch, 'inventory-'));
+mkdirSync(join(dir, 'private-data'), { recursive: true });
+const db = openDatabase(join(dir, 'inventory.db'));
+migrate(db);
+const clock = { now: () => new Date('2026-09-29T20:00:00Z') };
+const seed = await seedSynthetic(db, clock, { passwords: { admin: 'Synthetic-admin-pass-0001', employee: 'Synthetic-employee-pass-0002' } });
+const userOf = (role) => seed.users.find((u) => u.role === role);
+const config = {
+  host: '127.0.0.1', port: 3000, databasePath: join(dir, 'inventory.db'), allowedOrigins: ['http://localhost:3000'],
+  cookieSecure: false, sessionTtlSeconds: 43200, production: false,
+};
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null }, { dataDir: join(dir, 'private-data') });
+
+const idOf = (role) => db.prepare('SELECT id FROM users WHERE email = ?').pluck().get(userOf(role).email);
+const cookieFor = (role) => `ts_session=${createAuthSession(db, clock, idOf(role), 43200).token}`;
+
+const counts = new Map();
+for (const r of app.routes) {
+  const key = `${r.method} ${r.path}`;
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+const lines = [];
+for (const [key, handlers] of [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+  const [method, path] = key.split(' ');
+  const url = path.replace(/:[A-Za-z]+/g, 'x').replace('*', 'x');
+  const probe = async (cookie) => {
+    const m = method === 'ALL' ? 'GET' : method;
+    const headers = { origin: 'http://localhost:3000' };
+    if (cookie) headers.cookie = cookie;
+    const init = { method: m, headers };
+    if (m !== 'GET' && m !== 'HEAD') { headers['content-type'] = 'application/json'; init.body = '{}'; }
+    return (await app.request(url, init)).status;
+  };
+  const anon = await probe(null);
+  const employee = await probe(cookieFor('employee'));
+  const admin = await probe(cookieFor('admin'));
+  lines.push(`${method} ${path} | handlers=${handlers} | anonymous=${anon} | employee=${employee} | admin=${admin}`);
+}
+console.log(lines.join('\n'));
+db.close();

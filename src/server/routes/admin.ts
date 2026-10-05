@@ -16,7 +16,7 @@ import { createPayrollException } from '../services/calendars.ts';
 import { calendarVersionJson, commitHolidayImport, previewHolidayImport } from '../services/holidayImport.ts';
 import {
   DEFAULT_SUBMISSION_LIMIT,
-  deliverySetupFromEnv,
+  deliverySetupOf,
   getOperationsStatus,
   listSubmissionStatus,
   MAX_SUBMISSION_LIMIT,
@@ -91,7 +91,7 @@ export function adminRoutes(deps: AppDeps) {
   // Operations status: reads only; nothing here can change a record.
   app.get('/operations', (c) =>
     c.json({
-      operations: operationsStatusJson(getOperationsStatus(deps.db, deps.clock, deliverySetupFromEnv(process.env, deps.config))),
+      operations: operationsStatusJson(getOperationsStatus(deps.db, deps.clock, deliverySetupOf(deps.delivery))),
     }),
   );
 
