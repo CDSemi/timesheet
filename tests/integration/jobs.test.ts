@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
 import {
@@ -18,8 +19,10 @@ import {
 import { createPdfJobHandler, JOB_RENDER_PDF, pdfStorageKey } from '../../src/server/jobs/pdfJob.ts';
 import { runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { renderTimesheetPdf, type TimesheetPdfInput } from '../../src/server/pdf/timesheetPdf.ts';
+import { finalizeAutomatically } from '../../src/server/services/finalization.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
-import { makePng } from '../support/pdfText.ts';
+import { authorizeAutoImage, saveSubmissionSettings } from '../../src/server/services/submissionSettings.ts';
+import { makePng, readPdf } from '../support/pdfText.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -83,7 +86,7 @@ async function addSession(date: string, from: string, to: string, reason?: strin
 }
 
 /** A signed original revision with OT on a weekday and on the second Sunday; its jobs are queued. */
-async function signedRevision(files = new FileStore(dataDir())) {
+async function signedRevision(files = new FileStore(dataDir()), signerName = 'Example Employee') {
   await addSession('2026-09-15', '09:00', '18:00');
   await addSession('2026-09-27', '10:00', '12:00');
   const png = makePng(40, 12);
@@ -96,7 +99,7 @@ async function signedRevision(files = new FileStore(dataDir())) {
     body: {
       expected_version: review.body.expected_version,
       reviewed_hash: review.body.payload_hash,
-      signer_name: 'Example Employee',
+      signer_name: signerName,
       incomplete_evidence_acknowledged: true,
     },
   });
@@ -288,6 +291,8 @@ describe('PDF job', () => {
       revisionNo: revision.revision_no,
       origin: 'manual',
       signedAt: signoff.signed_at,
+      automaticSubmittedAt: null,
+      signerName: 'Example Employee',
       signatureImage: png,
     });
     expect(sha(bytes)).toBe(sha(expected));
@@ -377,3 +382,107 @@ function claimShape(id: string) {
     updatedAt: row.updated_at,
   };
 }
+
+describe('PDF job input mapping (WP3-T07B)', () => {
+  // "Nop tu dong" with Vietnamese diacritics, built from code points so this file stays ASCII.
+  const NOTE_VI = `N${String.fromCodePoint(0x1ed9)}p t${String.fromCodePoint(0x1ef1)} ${String.fromCodePoint(0x111)}${String.fromCodePoint(0x1ed9)}ng`;
+
+  function owner(): SessionUser {
+    const row = t.db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(t.userIds.employee) as {
+      id: string;
+      email: string;
+      display_name: string;
+      role: SessionUser['role'];
+      calendar_id: string;
+    };
+    return { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'test' };
+  }
+
+  /** Runs the PDF job once and returns the renderer input it built and the PDF it stored. */
+  async function runPdfJob(files: FileStore, revisionId: string) {
+    const inputs: TimesheetPdfInput[] = [];
+    const capture = (input: TimesheetPdfInput) => {
+      inputs.push(input);
+      return renderTimesheetPdf(input);
+    };
+    const summary = await runJobsOnce({ db: t.db, clock: t.clock, owner: OWNER_A, handlers: pdfHandlers(files, capture) });
+    expect(summary).toMatchObject({ claimed: 1, succeeded: 1 });
+    const key = t.db
+      .prepare("SELECT a.storage_key FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.revision_id = ? AND f.state = 'ready'")
+      .pluck()
+      .get(revisionId) as string;
+    return { input: inputs[0] as TimesheetPdfInput, content: await readPdf(new Uint8Array(files.read(key))) };
+  }
+
+  /** An automatic (deadline) revision for the seeded employee; the clock sits at 22:30 in Los Angeles on 09/29. */
+  async function automaticRevision(files: FileStore, options: { note?: string; authorizeImage?: boolean } = {}) {
+    const png = makePng(40, 12);
+    const signature = saveSignature(t.db, t.clock, files, t.userIds.employee, png, 'image/png');
+    const settings = saveSubmissionSettings(t.db, t.clock, t.userIds.employee, {
+      expectedSeq: 0,
+      to: ['payroll@example.invalid'],
+      autoSubmit: true,
+      ...(options.note === undefined ? {} : { autoNoteEnabled: true, autoNoteText: options.note }),
+    });
+    if (options.authorizeImage === true) {
+      authorizeAutoImage(t.db, t.clock, t.userIds.employee, { expectedSeq: settings.seq, signatureAttachmentId: signature.id });
+    }
+    t.clock.set('2026-09-30T05:30:00Z');
+    const result = finalizeAutomatically({ db: t.db, clock: t.clock, owner: owner() }, { payrollDate: PAYROLL, authorize: () => null });
+    expect(result.status).toBe('created');
+    const revision = t.db.prepare("SELECT id, created_at FROM timesheet_revisions WHERE origin = 'deadline'").get() as { id: string; created_at: string };
+    t.clock.advanceSeconds(10);
+    return { png, revision };
+  }
+
+  it('maps a manual revision to the stored sign-off name and instant, no automatic instant and the reviewed image', async () => {
+    const { revisionId, png, files } = await signedRevision(new FileStore(dataDir()), 'Quinn Q. Signer');
+    const signoff = t.db.prepare('SELECT signer_name, signed_at FROM signoffs WHERE revision_id = ?').get(revisionId) as { signer_name: string; signed_at: string };
+    expect(signoff.signer_name).toBe('Quinn Q. Signer');
+    const { input, content } = await runPdfJob(files, revisionId);
+    expect(input).toMatchObject({ origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: 'Quinn Q. Signer' });
+    expect(Buffer.from(input.signatureImage ?? []).equals(png)).toBe(true);
+    // The profile name stays in the header; the stored name is printed under the signature line.
+    expect(content.text).toContain('Employee: Example Employee');
+    expect(content.lines.filter((line) => line.includes('Quinn Q. Signer'))).toHaveLength(1);
+  });
+
+  it('maps an automatic revision to its creation instant, the employee name and no image unless authorized', async () => {
+    const files = new FileStore(dataDir());
+    const { revision } = await automaticRevision(files);
+    const { input, content } = await runPdfJob(files, revision.id);
+    expect(input).toMatchObject({
+      origin: 'automatic',
+      signedAt: null,
+      automaticSubmittedAt: revision.created_at,
+      signerName: 'Example Employee',
+      signatureImage: null,
+    });
+    expect(revision.created_at).toBe('2026-09-30T05:30:00Z');
+    // 22:30 on 09/29 in the saved reporting zone, although the UTC date is already 09/30; no automatic indicator anywhere.
+    const date = content.pages[0]?.items.find((item) => item.x > 400 && item.y < 250 && /^\d{2}\/\d{2}\/\d{4}$/.test(item.text));
+    expect(date?.text).toBe('09/29/2026');
+    expect(content.pages[0]?.images).toHaveLength(0);
+    expect(content.text).not.toMatch(/automatic|pending|review/i);
+    expect(t.db.prepare('SELECT count(*) FROM signoffs').pluck().get()).toBe(0);
+    const frozen = JSON.parse((t.db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').get(revision.id) as { payload_json: string }).payload_json);
+    expect(frozen.submission.sign_off_status).toBe('Submitted');
+    expect(frozen.recipients.subject).toMatch(/ - Submitted$/);
+  });
+
+  it('passes the image and the note of an automatic revision only when the user authorized and enabled them', async () => {
+    const files = new FileStore(dataDir());
+    const { png, revision } = await automaticRevision(files, { note: NOTE_VI, authorizeImage: true });
+    const { input, content } = await runPdfJob(files, revision.id);
+    expect(input.origin).toBe('automatic');
+    expect(Buffer.from(input.signatureImage ?? []).equals(png)).toBe(true);
+    expect(content.pages[0]?.images).toHaveLength(1);
+    expect(content.lines).toContain(NOTE_VI);
+    expect(content.text).not.toMatch(/pending|review/i);
+    const snapshot = JSON.parse((t.db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').get(revision.id) as { payload_json: string }).payload_json);
+    expect(snapshot.auto_note).toEqual({ enabled: true, text: NOTE_VI });
+    // The frozen status and subject of the automatic payload carry the note text (one SignOffStatus function).
+    expect(snapshot.submission.sign_off_status).toBe(NOTE_VI);
+    expect(snapshot.recipients.subject).toContain(NOTE_VI);
+  });
+});

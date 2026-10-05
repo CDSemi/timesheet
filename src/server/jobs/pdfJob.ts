@@ -15,9 +15,10 @@ import type { JobHandler } from './runner.ts';
  * The PDF job (docs/03 "Atomicity and snapshots", docs/05 "PDF before send", AC-10).
  *
  * It renders only from the immutable revision: the stored canonical payload (its SHA-256 is
- * re-checked), the revision number, the real sign-off instant of a signed revision and the
- * signature image named by the snapshot, read from the private file store by attachment id and
- * verified against the reviewed hash. Nothing of the owner's current data is read, and nothing
+ * re-checked), the revision number, the real sign-off instant and stored signer name of a signed
+ * revision (or the creation instant of an automatic one and the employee name of its snapshot)
+ * and the signature image named by the snapshot, read from the private file store by attachment
+ * id and verified against the reviewed hash. Nothing of the owner's current data is read, and nothing
  * is posted to the ledger or sent.
  *
  * Steps: the revision file row becomes `pending` (a `failed` one returns to `pending`); the
@@ -53,9 +54,11 @@ interface RevisionRow {
   revision_no: number;
   payload_json: string;
   payload_sha256: string;
+  created_at: string;
 }
 
 interface SignoffRow {
+  signer_name: string;
   signed_at: string;
   signature_attachment_id: string;
 }
@@ -95,15 +98,20 @@ function readSignature(db: Db, files: FileStore, userId: string, attachmentId: s
   return bytes;
 }
 
-/** Origin, real sign-off instant and image of the revision, all from archived records. */
-function signatureInput(
-  db: Db,
-  files: FileStore,
-  revision: RevisionRow,
-  snapshot: ReviewSnapshot,
-): { origin: PdfOrigin; signedAt: string | null; signatureImage: Uint8Array | null } {
+interface SignatureInput {
+  origin: PdfOrigin;
+  signedAt: string | null;
+  automaticSubmittedAt: string | null;
+  signerName: string;
+  signatureImage: Uint8Array | null;
+}
+
+/** Origin, instants, printed name and image of the revision, all from archived records. */
+function signatureInput(db: Db, files: FileStore, revision: RevisionRow, snapshot: ReviewSnapshot): SignatureInput {
   const signoff = db
-    .prepare<[string, string], SignoffRow>('SELECT signed_at, signature_attachment_id FROM signoffs WHERE revision_id = ? AND user_id = ?')
+    .prepare<[string, string], SignoffRow>(
+      'SELECT signer_name, signed_at, signature_attachment_id FROM signoffs WHERE revision_id = ? AND user_id = ?',
+    )
     .get(revision.id, revision.user_id);
   if (signoff !== undefined) {
     const reviewed = snapshot.signature;
@@ -111,11 +119,19 @@ function signatureInput(
       throw new JobError('signature_reference_mismatch', { permanent: true });
     }
     const image = readSignature(db, files, revision.user_id, reviewed.attachment_id, reviewed.sha256);
-    return { origin: 'manual', signedAt: signoff.signed_at, signatureImage: image };
+    // The name the employee signed with (the stored sign-off), not necessarily the profile name.
+    return { origin: 'manual', signedAt: signoff.signed_at, automaticSubmittedAt: null, signerName: signoff.signer_name, signatureImage: image };
   }
+  // No sign-off row: an automatic revision. Its printed date is its own creation instant; signed_at stays empty.
   const auto = snapshot.auto_image;
   const image = auto.authorized && auto.attachment_id !== null ? readSignature(db, files, revision.user_id, auto.attachment_id, null) : null;
-  return { origin: 'automatic', signedAt: null, signatureImage: image };
+  return {
+    origin: 'automatic',
+    signedAt: null,
+    automaticSubmittedAt: revision.created_at,
+    signerName: snapshot.employee.name,
+    signatureImage: image,
+  };
 }
 
 /** Temporary file plus fsync plus atomic rename into the store; an identical finished file is kept. */
@@ -213,7 +229,7 @@ export function createPdfJobHandler(deps: PdfJobDeps): JobHandler {
     }
     const revision = db
       .prepare<[string, string], RevisionRow>(
-        'SELECT id, user_id, revision_no, payload_json, payload_sha256 FROM timesheet_revisions WHERE id = ? AND user_id = ?',
+        'SELECT id, user_id, revision_no, payload_json, payload_sha256, created_at FROM timesheet_revisions WHERE id = ? AND user_id = ?',
       )
       .get(revisionId, userId);
     if (revision === undefined) throw new JobError('revision_not_found', { permanent: true });

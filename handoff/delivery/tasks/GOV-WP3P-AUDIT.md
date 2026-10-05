@@ -47,3 +47,37 @@ Return at most 150 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1, 2026-10-05)
+
+- Self-reported model: claude-opus-5-5 (profile timesheet-auditor; agent aa78670760adbe556 per
+  the board). Author WP3-DOC a3f90533c00057935 used claude-sonnet-5-5; the reviewer is not weaker
+  and authored nothing in the snapshot.
+- Verdict: **PASS**. Review: [GOV_WP3P_REVIEW.md](../GOV_WP3P_REVIEW.md) (+ `.vi.md`). Evidence:
+  `handoff/delivery/evidence/GOV-WP3P-AUDIT/` (masked, LF).
+- Reviewed commit da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d (= GOV-WP3P-GATE freeze_commit =
+  origin/main = remote); parent cb9800e. HEAD before/after da6d0cd. Source digest before/after
+  4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f (git ls-tree pipeline and
+  `npm run digest` on Node 24.21.0), equal to the expected value.
+- Scope 1: the six scope/gate sentences (EN, VI) are byte-identical to docs/09:33/37 once the label
+  is removed; against the parent, the change is pure insertion and nothing was removed. Each added
+  clause traces to an owner decision of 2026-10-04 and its canonical text (F-1, F-Q1/F-Q2, G-Q1,
+  F-3/F-Q3, F-3/F-Q4/F-Q5; F-5 via AC-10). No requirement is added or dropped silently.
+- Scope 2: EN and VI have the same meaning (analysis.txt table B).
+- Scope 3: only lines 17/21 (IMPLEMENT) and 17 (REVIEW) changed; no other docs/08 governance path
+  changed; no conflict with AGENTS.md or docs/08.
+- Scope 4: all 13 required items are present in all four gate lines; the parent clause is kept
+  verbatim.
+- Scope 5 (workflow Python 3.12.14, `C:\Users\<user>\.cache\codex-runtimes\...\python.exe`):
+  validate_orchestration.py exit 0 (PASS, 133 tasks), check_recovery.py exit 0 (82 checks),
+  validate_package.py --preflight exit 0 (58 pairs; 59 pairs and 1079 links after the review pair
+  was written).
+- Also: `git diff --check cb9800e da6d0cd` exit 0; the working tree equals the freeze for the
+  governance and docs paths.
+- Findings: none. Optional (not required): R1 AGENTS rule 4 could mention owner-granted share items;
+  R2 the WP3 gate names neither F-2, F-4 nor the G-Q2 rendering (pre-existing; covered by the scope
+  and the read list); R3 VI "tình trạng admin" polish; R4 and R5 information only.
+- Unrun: `npm run verify` (not required by this brief; GOV-WP3P-GATE exit 0 on the same digest).
+- Temporary files: the scripts and outputs this task created in `D:\timesheet-tmp\GOV-WP3P-AUDIT\`
+  were deleted one by one (the scripts are kept as `*.py.txt` evidence). The `node-compile-cache`
+  folder that Node created there is left in place, because folders are never removed recursively.

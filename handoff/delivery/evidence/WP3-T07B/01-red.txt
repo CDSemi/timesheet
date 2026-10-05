@@ -1,0 +1,356 @@
+# Red (WP3-T07B): node node_modules/vitest/vitest.mjs run tests/domain tests/integration/{pdf-render,migrations,submission-settings,review-payload,signatures,jobs}.test.ts, run after the new and changed tests were written and before any source file was changed (migration 0005 absent, SNAPSHOT_VERSION 1, renderer with banner and origin labels, hardcoded status text). Exit 1; 95 of 492 tests fail (summary lines only). The canonical suite did not load in this run (a string-escape slip in the new test, fixed before any source change); its red run against the baseline source is 01b-red-canonical.txt.
+
+ ❯ tests/domain/canonical.test.ts (0 test)
+ ❯ tests/domain/email-template.test.ts (68 tests | 5 failed) 14ms
+     × is "Submitted" for a manual submission, whatever the note setting 2ms
+     × is "Submitted" for an automatic submission whose note line is off 0ms
+     × is the note text for an automatic submission whose note line is on 1ms
+     × never states a false sign-off or an origin when no note is shown 0ms
+     × renders into the default subject without revealing the origin 0ms
+ ❯ tests/integration/pdf-render.test.ts (44 tests | 40 failed) 463ms
+     × draws the header, employee, payroll date and the 14 dates in two Monday-Sunday blocks 13ms
+     × shows the submission and revision identifiers in the header and the footer 9ms
+     × totals the credited minutes of all 14 days with OT only on the two Sundays 8ms
+     × prints OT as h:mm only, with no decimal hours anywhere 9ms
+     × hides the OT rows and the total when Show OT on PDF is off 8ms
+     × marks days with incomplete OT as pending and says they are outside the total 7ms
+     × prints Vietnamese text intact with an embedded Unicode font 9ms
+     × replaces characters the font cannot draw and control characters instead of failing 8ms
+     × keeps private notes out of the PDF 9ms
+     × prints the signer name and the real sign date (reporting zone) for a manual revision 12ms
+     × prints the stored sign-off name (not the profile name) under the signature line of a manual revision 8ms
+     × refuses a manual revision without a sign-off instant, a name or an image, and one that carries an automatic instant 9ms
+     × refuses an automatic revision that has a sign-off instant or no submission instant 7ms
+     × with the note off carries no automatic indicator, no pending wording and no note text, but the name and the date 7ms
+     × has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside) 6ms
+     × with the note on shows the custom Vietnamese text once, on its own line between the title and the employee 6ms
+     × keeps a 120-character note on one line inside the margins 8ms
+     × ignores the note on a manual revision 7ms
+     × renders a version 1 payload (no note field) like a note-off version 2 payload 188ms
+     × places the image only when the user authorized it 8ms
+     × is byte-identical for identical input, whatever the clock or Math.random 8ms
+     × prints 2026-03-07 for the first and the last second of that local day (manual and automatic) 5ms
+     × prints 2026-03-08 for the first and the last second of that local day (manual and automatic) 5ms
+     × prints 2026-03-09 for the first and the last second of that local day (manual and automatic) 5ms
+     × prints 2026-10-31 for the first and the last second of that local day (manual and automatic) 5ms
+     × prints 2026-11-01 for the first and the last second of that local day (manual and automatic) 5ms
+     × prints 2026-11-02 for the first and the last second of that local day (manual and automatic) 6ms
+     × follows the saved zone of the snapshot, not the UTC date or the device zone 4ms
+     × never takes the date from the clock 5ms
+     × places a tall image inside the bounded box keeping the aspect ratio 6ms
+     × places a wide image inside the bounded box keeping the aspect ratio 6ms
+     × places a typical image inside the bounded box keeping the aspect ratio 6ms
+     × places a tiny image inside the bounded box keeping the aspect ratio 7ms
+     × places no image on an automatic revision without one and refuses bytes that are not PNG or JPEG 6ms
+     × keeps every text item inside the page margins and every category label inside its own column 4ms
+     × shows overnight sessions with +1 and open sessions with an open end 5ms
+     × gives identical bytes for the same input, whatever the clock or Math.random, with and without an image 6ms
+     × writes metadata from the input only: no current-time creation date 5ms
+     × does not change the snapshot it renders and renders a sealed snapshot like a plain one 7ms
+     × refuses a snapshot that is not 14 consecutive days or has a bad revision number 6ms
+ ❯ tests/integration/jobs.test.ts (15 tests | 3 failed) 4424ms
+     × maps a manual revision to the stored sign-off name and instant, no automatic instant and the reviewed image 422ms
+     × maps an automatic revision to its creation instant, the employee name and no image unless authorized 315ms
+     × passes the image and the note of an automatic revision only when the user authorized and enabled them 297ms
+ ❯ tests/integration/migrations.test.ts (34 tests | 8 failed) 5186ms
+     × applies every migration to an empty file database with the required pragmas 37ms
+     × applies 0002-0005, keeps every WP1 row unchanged and leaves a consistent, usable schema 189ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 164ms
+     × applies 0004 and 0005 with unchanged rows and counts, a consistent schema and safe defaults 243ms
+     × adds the note flag (off) and the note text ("Automatic submission") with safe defaults 160ms
+     × constrains the flag to 0/1 and the text to 1-120 characters on one line 146ms
+     × keeps settings versions immutable with the new columns 140ms
+     × upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live 176ms
+ ❯ tests/integration/review-payload.test.ts (27 tests | 7 failed) 8279ms
+     × lists the 14 days of the period with the zone, employee, policy and calendar versions 399ms
+     × shows recipients with the rendered subject and body, the signature reference and the template flags 276ms
+     × freezes the note from the effective settings, and a note change changes the reviewed hash 270ms
+     × gives a manual submission "Submitted" whatever the note setting 257ms
+     × gives an automatic submission with the note off exactly the manual payload: no origin is recorded in it 262ms
+     × gives an automatic submission with the note on the note text in the status, subject and bodies 286ms
+     × escapes a note with markup in the HTML body and keeps the subject on one line 300ms
+ ❯ tests/integration/signatures.test.ts (35 tests | 5 failed) 10477ms
+     × with authorize_auto_image=true stores the image and records the audited authorization in one transaction 263ms
+     × moves an earlier authorization to the new image when the user confirms again 260ms
+     × rolls everything back, and discards the file, when there are no saved settings to authorize against 243ms
+     × refuses any other flag value, a repeated flag and an unauthenticated flagged upload, storing nothing 246ms
+     × applies only to the signed-in owner: another user keeps their own settings 268ms
+ ❯ tests/integration/submission-settings.test.ts (71 tests | 27 failed) 18294ms
+     × shows the defaults (seq 0) and stores nothing 373ms
+     × appends version 1 with normalized recipients, defaults and an effective instant of now 295ms
+     × is off with the text "Automatic submission" until the user turns it on 300ms
+     × saves a custom Vietnamese text and the switch as one version; omitted fields keep the current values 323ms
+     × normalizes the text to NFC and trims it 277ms
+     × accepts exactly 120 characters, counting characters and not bytes 248ms
+     × refuses 121 characters with 422 invalid_auto_note and writes nothing 242ms
+     × refuses an empty text with 422 invalid_auto_note and writes nothing 236ms
+     × refuses a blank text with 422 invalid_auto_note and writes nothing 241ms
+     × refuses a line break with 422 invalid_auto_note and writes nothing 244ms
+     × refuses a carriage return with 422 invalid_auto_note and writes nothing 282ms
+     × refuses a tab with 422 invalid_auto_note and writes nothing 258ms
+     × refuses a control character with 422 invalid_auto_note and writes nothing 227ms
+     × refuses a NUL character with 422 invalid_auto_note and writes nothing 236ms
+     × refuses a line separator with 422 invalid_auto_note and writes nothing 250ms
+     × refuses a bidirectional control with 422 invalid_auto_note and writes nothing 238ms
+     × refuses an opening brace with 422 invalid_auto_note and writes nothing 237ms
+     × refuses a template variable with 422 invalid_auto_note and writes nothing 228ms
+     × refuses a closing brace with 422 invalid_auto_note and writes nothing 243ms
+     × audits a note change with the before and after of the two fields only 224ms
+     × is not a template change and does not move the auto-submit instant 229ms
+     × survives the image authorization and revocation, and a stale save is refused 234ms
+     × never reads or changes another user's note 224ms
+     × renders the stored templates with sample values and writes nothing 226ms
+     × previews an unsaved draft with the SignOffStatus of a manual submission, "Submitted", without storing it 221ms
+     × previews an automatic submission: "Submitted" with the note off, the note text with the note on 220ms
+     × refuses the retired sign_off values 238ms
+ FAIL  tests/domain/canonical.test.ts [ tests/domain/canonical.test.ts ]
+Error: Transform failed with 1 error:
+⎯⎯⎯⎯⎯⎯ Failed Tests 95 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/domain/email-template.test.ts > SignOffStatus text (one domain function for every submission) > is "Submitted" for a manual submission, whatever the note setting
+TypeError: signOffStatusText is not a function
+ ❯ tests/domain/email-template.test.ts:261:12
+ FAIL  tests/domain/email-template.test.ts > SignOffStatus text (one domain function for every submission) > is "Submitted" for an automatic submission whose note line is off
+TypeError: signOffStatusText is not a function
+ ❯ tests/domain/email-template.test.ts:266:12
+ FAIL  tests/domain/email-template.test.ts > SignOffStatus text (one domain function for every submission) > is the note text for an automatic submission whose note line is on
+TypeError: signOffStatusText is not a function
+ ❯ tests/domain/email-template.test.ts:271:12
+ FAIL  tests/domain/email-template.test.ts > SignOffStatus text (one domain function for every submission) > never states a false sign-off or an origin when no note is shown
+TypeError: signOffStatusText is not a function
+ ❯ tests/domain/email-template.test.ts:277:14
+ FAIL  tests/domain/email-template.test.ts > SignOffStatus text (one domain function for every submission) > renders into the default subject without revealing the origin
+TypeError: signOffStatusText is not a function
+ ❯ tests/domain/email-template.test.ts:282:89
+ FAIL  tests/integration/jobs.test.ts > PDF job input mapping (WP3-T07B) > maps a manual revision to the stored sign-off name and instant, no automatic instant and the reviewed image
+AssertionError: expected { snapshot: { …(19) }, …(5) } to match object { origin: 'manual', …(3) }
+ ❯ tests/integration/jobs.test.ts:443:19
+ FAIL  tests/integration/jobs.test.ts > PDF job input mapping (WP3-T07B) > maps an automatic revision to its creation instant, the employee name and no image unless authorized
+AssertionError: expected { snapshot: { …(19) }, …(5) } to match object { origin: 'automatic', …(4) }
+ ❯ tests/integration/jobs.test.ts:454:19
+ FAIL  tests/integration/jobs.test.ts > PDF job input mapping (WP3-T07B) > passes the image and the note of an automatic revision only when the user authorized and enabled them
+AssertionError: expected [ …(24) ] to include 'Nộp tự động'
+ ❯ tests/integration/jobs.test.ts:477:27
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 4 to be 5 // Object.is equality
+ ❯ tests/integration/migrations.test.ts:85:20
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0005, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [ 2, 3, 4 ], version: 4 } to deeply equal { applied: [ 2, 3, 4, 5 ], version: 5 }
+ ❯ tests/integration/migrations.test.ts:229:71
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { applied: [ 3, 4 ], version: 4 } to deeply equal { applied: [ 3, 4, 5 ], version: 5 }
+ ❯ tests/integration/migrations.test.ts:274:37
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004 and 0005 with unchanged rows and counts, a consistent schema and safe defaults
+AssertionError: expected { applied: [ 4 ], version: 4 } to deeply equal { applied: [ 4, 5 ], version: 5 }
+ ❯ tests/integration/migrations.test.ts:463:71
+ FAIL  tests/integration/migrations.test.ts > migration 0005 automatic presentation > adds the note flag (off) and the note text ("Automatic submission") with safe defaults
+SqliteError: no such column: auto_note_enabled
+ ❯ tests/integration/migrations.test.ts:1048:10
+ FAIL  tests/integration/migrations.test.ts > migration 0005 automatic presentation > constrains the flag to 0/1 and the text to 1-120 characters on one line
+AssertionError: expected [Function] to not throw an error but 'SqliteError: table submission_setting…' was thrown
+"SqliteError: table submission_settings has no column named auto_note_enabled"
+ ❯ tests/integration/migrations.test.ts:1067:82
+ FAIL  tests/integration/migrations.test.ts > migration 0005 automatic presentation > keeps settings versions immutable with the new columns
+SqliteError: table submission_settings has no column named auto_note_enabled
+ ❯ tests/integration/migrations.test.ts:1085:5
+ FAIL  tests/integration/migrations.test.ts > migration 0005 automatic presentation > upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live
+AssertionError: expected { applied: [], version: 4 } to deeply equal { applied: [ 5 ], version: 5 }
+ ❯ tests/integration/migrations.test.ts:1169:71
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > draws the header, employee, payroll date and the 14 dates in two Monday-Sunday blocks
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:214:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > shows the submission and revision identifiers in the header and the footer
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:233:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > totals the credited minutes of all 14 days with OT only on the two Sundays
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:245:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > prints OT as h:mm only, with no decimal hours anywhere
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:254:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > hides the OT rows and the total when Show OT on PDF is off
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:261:24
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > marks days with incomplete OT as pending and says they are outside the total
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:276:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > prints Vietnamese text intact with an embedded Unicode font
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:283:38
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > replaces characters the font cannot draw and control characters instead of failing
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:292:31
+ FAIL  tests/integration/pdf-render.test.ts > timesheet PDF content > keeps private notes out of the PDF
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:297:31
+ FAIL  tests/integration/pdf-render.test.ts > sign-off and review state > prints the signer name and the real sign date (reporting zone) for a manual revision
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:304:31
+ FAIL  tests/integration/pdf-render.test.ts > sign-off and review state > prints the stored sign-off name (not the profile name) under the signature line of a manual revision
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:319:31
+ FAIL  tests/integration/pdf-render.test.ts > sign-off and review state > refuses a manual revision without a sign-off instant, a name or an image, and one that carries an automatic instant
+AssertionError: expected error to be instance of PdfRenderError
+ ❯ tests/integration/pdf-render.test.ts:331:65
+ FAIL  tests/integration/pdf-render.test.ts > sign-off and review state > refuses an automatic revision that has a sign-off instant or no submission instant
+AssertionError: expected error to be instance of PdfRenderError
+ ❯ tests/integration/pdf-render.test.ts:339:76
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > with the note off carries no automatic indicator, no pending wording and no note text, but the name and the date
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:352:38
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:371:29
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > with the note on shows the custom Vietnamese text once, on its own line between the title and the employee
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:386:31
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > keeps a 120-character note on one line inside the margins
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:406:31
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > ignores the note on a manual revision
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:417:25
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > renders a version 1 payload (no note field) like a note-off version 2 payload
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:427:27
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > places the image only when the user authorized it
+AssertionError: expected error to be instance of PdfRenderError
+ ❯ tests/integration/pdf-render.test.ts:433:73
+ FAIL  tests/integration/pdf-render.test.ts > automatic submission presentation (owner decision 2026-10-04) > is byte-identical for identical input, whatever the clock or Math.random
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:450:25
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-03-07 for the first and the last second of that local day (manual and automatic)
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-03-08 for the first and the last second of that local day (manual and automatic)
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-03-09 for the first and the last second of that local day (manual and automatic)
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-10-31 for the first and the last second of that local day (manual and automatic)
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-11-01 for the first and the last second of that local day (manual and automatic)
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > prints 2026-11-02 for the first and the last second of that local day (manual and automatic)
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:479:20
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > follows the saved zone of the snapshot, not the UTC date or the device zone
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:486:18
+ FAIL  tests/integration/pdf-render.test.ts > printed date comes from the revision instants in the saved reporting zone > never takes the date from the clock
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:495:18
+ FAIL  tests/integration/pdf-render.test.ts > signature image > places a tall image inside the bounded box keeping the aspect ratio
+ FAIL  tests/integration/pdf-render.test.ts > signature image > places a wide image inside the bounded box keeping the aspect ratio
+ FAIL  tests/integration/pdf-render.test.ts > signature image > places a typical image inside the bounded box keeping the aspect ratio
+ FAIL  tests/integration/pdf-render.test.ts > signature image > places a tiny image inside the bounded box keeping the aspect ratio
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:512:26
+ FAIL  tests/integration/pdf-render.test.ts > signature image > places no image on an automatic revision without one and refuses bytes that are not PNG or JPEG
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:526:18
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > keeps every text item inside the page margins and every category label inside its own column
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:539:31
+ FAIL  tests/integration/pdf-render.test.ts > bounds of long labels > shows overnight sessions with +1 and open sessions with an open end
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:568:31
+ FAIL  tests/integration/pdf-render.test.ts > determinism and purity > gives identical bytes for the same input, whatever the clock or Math.random, with and without an image
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:579:25
+ FAIL  tests/integration/pdf-render.test.ts > determinism and purity > writes metadata from the input only: no current-time creation date
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:592:31
+ FAIL  tests/integration/pdf-render.test.ts > determinism and purity > does not change the snapshot it renders and renders a sealed snapshot like a plain one
+CanonicalError: Unknown snapshot schema
+ ❯ tests/integration/pdf-render.test.ts:604:25
+ FAIL  tests/integration/pdf-render.test.ts > determinism and purity > refuses a snapshot that is not 14 consecutive days or has a bad revision number
+AssertionError: expected error to be instance of PdfRenderError
+ ❯ tests/integration/pdf-render.test.ts:612:96
+ FAIL  tests/integration/review-payload.test.ts > payload content > lists the 14 days of the period with the zone, employee, policy and calendar versions
+AssertionError: expected 1 to be 2 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:175:36
+ FAIL  tests/integration/review-payload.test.ts > payload content > shows recipients with the rendered subject and body, the signature reference and the template flags
+AssertionError: expected undefined to deeply equal { enabled: false, …(1) }
+ ❯ tests/integration/review-payload.test.ts:347:36
+ FAIL  tests/integration/review-payload.test.ts > automatic presentation: the note and SignOffStatus (WP3-T07B) > freezes the note from the effective settings, and a note change changes the reviewed hash
+AssertionError: expected undefined to deeply equal { enabled: false, …(1) }
+ ❯ tests/integration/review-payload.test.ts:708:35
+ FAIL  tests/integration/review-payload.test.ts > automatic presentation: the note and SignOffStatus (WP3-T07B) > gives a manual submission "Submitted" whatever the note setting
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized keys: \"auto_note_enabled\", \"auto_note_text\""}]}}}: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:718:5
+ FAIL  tests/integration/review-payload.test.ts > automatic presentation: the note and SignOffStatus (WP3-T07B) > gives an automatic submission with the note off exactly the manual payload: no origin is recorded in it
+AssertionError: expected 'Signed by employee' to be 'Submitted' // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:730:53
+ FAIL  tests/integration/review-payload.test.ts > automatic presentation: the note and SignOffStatus (WP3-T07B) > gives an automatic submission with the note on the note text in the status, subject and bodies
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized keys: \"auto_note_enabled\", \"auto_note_text\""}]}}}: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:738:5
+ FAIL  tests/integration/review-payload.test.ts > automatic presentation: the note and SignOffStatus (WP3-T07B) > escapes a note with markup in the HTML body and keeps the subject on one line
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized keys: \"auto_note_enabled\", \"auto_note_text\""}]}}}: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/review-payload.test.ts:749:5
+ FAIL  tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > with authorize_auto_image=true stores the image and records the audited authorization in one transaction
+TypeError: Cannot read properties of undefined (reading 'seq')
+ ❯ tests/integration/signatures.test.ts:606:35
+ FAIL  tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > moves an earlier authorization to the new image when the user confirms again
+TypeError: Cannot read properties of undefined (reading 'auto_image')
+ ❯ tests/integration/signatures.test.ts:630:33
+ FAIL  tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > rolls everything back, and discards the file, when there are no saved settings to authorize against
+AssertionError: expected 201 to be 422 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:643:29
+ FAIL  tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > refuses any other flag value, a repeated flag and an unauthenticated flagged upload, storing nothing
+AssertionError: ?authorize_auto_image=yes: expected 201 to be 422 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:656:38
+ FAIL  tests/integration/signatures.test.ts > upload-time automatic image authorization (owner decision G-Q1 b) > applies only to the signed-in owner: another user keeps their own settings
+AssertionError: expected 1 to be 2 // Object.is equality
+ ❯ tests/integration/signatures.test.ts:669:49
+ FAIL  tests/integration/submission-settings.test.ts > defaults before the first save > shows the defaults (seq 0) and stores nothing
+AssertionError: expected { id: null, seq: +0, …(12) } to match object { id: null, seq: +0, …(8) }
+ ❯ tests/integration/submission-settings.test.ts:101:22
+ FAIL  tests/integration/submission-settings.test.ts > saving settings > appends version 1 with normalized recipients, defaults and an effective instant of now
+AssertionError: expected { …(14) } to match object { seq: 1, is_default: false, …(9) }
+ ❯ tests/integration/submission-settings.test.ts:134:36
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > is off with the text "Automatic submission" until the user turns it on
+AssertionError: expected undefined to deeply equal { enabled: false, …(1) }
+ ❯ tests/integration/submission-settings.test.ts:338:43
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > saves a custom Vietnamese text and the switch as one version; omitted fields keep the current values
+AssertionError: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:347:26
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > normalizes the text to NFC and trims it
+AssertionError: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:365:29
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > accepts exactly 120 characters, counting characters and not bytes
+AssertionError: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:373:23
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses 121 characters with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses an empty text with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a blank text with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a line break with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a carriage return with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a tab with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a control character with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a NUL character with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a line separator with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a bidirectional control with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses an opening brace with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a template variable with 422 invalid_auto_note and writes nothing
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > refuses a closing brace with 422 invalid_auto_note and writes nothing
+AssertionError: expected 'validation_error' to be 'invalid_auto_note' // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:398:38
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > audits a note change with the before and after of the two fields only
+AssertionError: expected 422 to be 201 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:416:28
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > is not a template change and does not move the auto-submit instant
+AssertionError: expected undefined to match object { template_version: 1, …(2) }
+ ❯ tests/integration/submission-settings.test.ts:444:35
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > survives the image authorization and revocation, and a stale save is refused
+TypeError: Cannot read properties of undefined (reading 'auto_note')
+ ❯ tests/integration/submission-settings.test.ts:451:37
+ FAIL  tests/integration/submission-settings.test.ts > automatic note line > never reads or changes another user's note
+AssertionError: expected undefined to deeply equal { enabled: false, …(1) }
+ ❯ tests/integration/submission-settings.test.ts:463:43
+ FAIL  tests/integration/submission-settings.test.ts > preview > renders the stored templates with sample values and writes nothing
+AssertionError: expected { sample: true, …(7) } to match object { sample: true, …(6) }
+ ❯ tests/integration/submission-settings.test.ts:598:35
+ FAIL  tests/integration/submission-settings.test.ts > preview > previews an unsaved draft with the SignOffStatus of a manual submission, "Submitted", without storing it
+AssertionError: expected 422 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:618:29
+ FAIL  tests/integration/submission-settings.test.ts > preview > previews an automatic submission: "Submitted" with the note off, the note text with the note on
+AssertionError: expected 422 to be 200 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:629:24
+ FAIL  tests/integration/submission-settings.test.ts > preview > refuses the retired sign_off values
+AssertionError: signed: expected 200 to be 422 // Object.is equality
+ ❯ tests/integration/submission-settings.test.ts:649:38
+ Test Files  8 failed | 8 passed (16)
+      Tests  95 failed | 397 passed (492)

@@ -7,10 +7,51 @@ import { type CanonicalValue, canonicalDate, canonicalHash, canonicalMinutes, ca
  * (computeWorkDay, provisionalCredits, decideDeficit) and handed in by the server service.
  * The payload holds no credential, no file bytes and nothing that depends on the current
  * clock, so equal content always gives an equal hash.
+ *
+ * Version 2 (WP3-T07B) adds `auto_note`, the user's optional note line for automatic
+ * submissions, frozen from the effective settings. Version 1 payloads (finalized before that
+ * change) stay valid for reading and rendering: they have no note, so they render with the
+ * note off and their stored hash is unchanged (normalization adds nothing to them).
  */
 
 export const SNAPSHOT_SCHEMA = 'timesheet-review';
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
+/** The oldest payload version that can still be read and rendered. */
+const OLDEST_READABLE_VERSION = 1;
+
+/** The default text of the optional note line of an automatic submission. */
+export const DEFAULT_AUTO_NOTE_TEXT = 'Automatic submission';
+/** The note text is 1 to this many characters (code points), one line. */
+export const MAX_AUTO_NOTE_LENGTH = 120;
+
+/** The user's note line for automatic submissions as frozen at review time. */
+export type SnapshotAutoNote = { enabled: boolean; text: string };
+
+const UNSAFE_NOTE_CHARACTER = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}{}]/u;
+
+export type AutoNoteCheck = { ok: true; text: string } | { ok: false; message: string };
+
+/**
+ * Validates and normalizes the text of the note line: NFC form, trimmed, 1 to 120 characters, one
+ * line, no control or format character (line and paragraph separators and bidirectional controls
+ * included) and no brace, so the text is literal and can never be a template variable.
+ */
+export function checkAutoNoteText(raw: string): AutoNoteCheck {
+  const text = raw.normalize('NFC').trim();
+  const length = [...text].length;
+  if (length < 1 || length > MAX_AUTO_NOTE_LENGTH) {
+    return { ok: false, message: `The note text must have 1 to ${MAX_AUTO_NOTE_LENGTH} characters` };
+  }
+  if (UNSAFE_NOTE_CHARACTER.test(text)) {
+    return { ok: false, message: 'The note text must be one line without control characters or braces' };
+  }
+  return { ok: true, text };
+}
+
+/** The note of a payload; a version 1 payload has none, so it reads as "off". */
+export function autoNoteOf(snapshot: Pick<ReviewSnapshot, 'auto_note'>): SnapshotAutoNote {
+  return snapshot.auto_note ?? { enabled: false, text: DEFAULT_AUTO_NOTE_TEXT };
+}
 
 /** The OT proposal for a complete day with a positive credit, from the engine's provisional credit. */
 export type SnapshotOtProposal = {
@@ -123,6 +164,8 @@ export type ReviewSnapshot = {
   signature: { attachment_id: string; sha256: string } | null;
   /** The explicit automatic-image authorization at review time (docs/05). */
   auto_image: { authorized: boolean; attachment_id: string | null };
+  /** The optional note line of an automatic submission (version 2); absent in a version 1 payload. */
+  auto_note?: SnapshotAutoNote | undefined;
   show_ot_on_pdf: boolean;
 };
 
@@ -185,13 +228,20 @@ function normalizeDay(day: SnapshotDay): SnapshotDay {
  * the exact canonical payload; nothing is recalculated here.
  */
 export function normalizeReviewSnapshot(input: ReviewSnapshot): ReviewSnapshot {
-  if (input.schema !== SNAPSHOT_SCHEMA || input.schema_version !== SNAPSHOT_VERSION) {
+  if (
+    input.schema !== SNAPSHOT_SCHEMA ||
+    !Number.isInteger(input.schema_version) ||
+    input.schema_version < OLDEST_READABLE_VERSION ||
+    input.schema_version > SNAPSHOT_VERSION
+  ) {
     throw new CanonicalError('Unknown snapshot schema');
   }
+  const { auto_note: note, ...rest } = input;
   const byDate = <T extends { work_date: string }>(items: readonly T[]): T[] =>
     [...items].sort((a, b) => compareText(a.work_date, b.work_date));
   return {
-    ...input,
+    ...rest,
+    ...normalizeAutoNote(input.schema_version, note),
     period: {
       ...input.period,
       payroll_date: canonicalDate(input.period.payroll_date, 'period.payroll_date'),
@@ -244,6 +294,22 @@ export function normalizeReviewSnapshot(input: ReviewSnapshot): ReviewSnapshot {
       template_version: canonicalMinutes(input.recipients.template_version, 'recipients.template_version'),
     },
   };
+}
+
+/** Version 2 requires a valid note; a version 1 payload cannot carry one. Returns the field to add, if any. */
+function normalizeAutoNote(version: number, note: SnapshotAutoNote | undefined): { auto_note?: SnapshotAutoNote } {
+  if (version < 2) {
+    if (note !== undefined) throw new CanonicalError('A version 1 snapshot has no automatic note', { field: 'auto_note' });
+    return {};
+  }
+  if (note === undefined || typeof note.enabled !== 'boolean' || typeof note.text !== 'string') {
+    throw new CanonicalError('auto_note must be an object with a flag and a text', { field: 'auto_note' });
+  }
+  const checked = checkAutoNoteText(note.text);
+  if (!checked.ok || checked.text !== note.text) {
+    throw new CanonicalError('auto_note.text must be a normalized one-line text of 1 to 120 characters', { field: 'auto_note.text' });
+  }
+  return { auto_note: { enabled: note.enabled, text: note.text } };
 }
 
 function wholeNumber(value: number, field: string): number {

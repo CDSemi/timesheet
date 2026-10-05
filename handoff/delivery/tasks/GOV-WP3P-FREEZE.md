@@ -74,3 +74,10 @@ handoff/delivery/evidence/GOV-WP3P-FREEZE/. Return at most 120 words.
 ## Results
 
 (Committer appends here.)
+
+Self-reported model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD cb9800e4cfef57786c2e69bb4fd78d245ab5c817; post-HEAD/commit SHA
+  da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d; pushed true; remote SHA identical; branch main.
+- Digest 4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f; staged count 13.
+- All checks exit 0 (see evidence/GOV-WP3P-FREEZE/checks.txt); no EOF fix, no masking, no
+  unstaging; blockers: none.

@@ -1,0 +1,77 @@
+"""GOV-WP3P-AUDIT mirror check: compare prompt scope/gate sentences with docs/09 at a commit."""
+import subprocess
+import sys
+
+REPO = sys.argv[1]
+COMMIT = sys.argv[2]
+PARENT = sys.argv[3]
+
+
+def show(rev: str, path: str) -> list[str]:
+    out = subprocess.run(
+        ["git", "-C", REPO, "show", f"{rev}:{path}"],
+        check=True, capture_output=True,
+    ).stdout.decode("utf-8")
+    return out.split("\n")
+
+
+def find(lines: list[str], prefix: str) -> tuple[int, str]:
+    hits = [(i + 1, l) for i, l in enumerate(lines) if l.startswith(prefix)]
+    if len(hits) != 1:
+        raise SystemExit(f"expected one line with prefix {prefix!r}, got {len(hits)}")
+    return hits[0]
+
+
+def wp3_section(lines: list[str], header: str) -> list[str]:
+    start = next(i for i, l in enumerate(lines) if l.startswith(header))
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return lines[start:end]
+
+
+fail = 0
+for lang, sfx, scope_doc_prefix, scope_prm, gate_doc, gate_prm in [
+    ("EN", ".md", "Implement immutable snapshots", "Scope: ", "Gate: ", "Required gate: "),
+    ("VI", ".vi.md", "Làm snapshot/hash bất biến", "Phạm vi: ", "Gate: ", "Gate bắt buộc: "),
+]:
+    d09 = show(COMMIT, f"docs/09_IMPLEMENTATION_ROADMAP{sfx}")
+    sec_header = "## WP3"
+    sec = wp3_section(d09, sec_header)
+    off = d09.index(sec[0])
+    scope_doc = [(off + i + 1, l) for i, l in enumerate(sec) if l.startswith(scope_doc_prefix)]
+    gate_docl = [(off + i + 1, l) for i, l in enumerate(sec) if l.startswith(gate_doc)]
+    assert len(scope_doc) == 1 and len(gate_docl) == 1, (lang, scope_doc, gate_docl)
+    sd_no, sd = scope_doc[0]
+    gd_no, gd = gate_docl[0]
+    gd_body = gd[len(gate_doc):]
+    impl = show(COMMIT, f"handoff/prompts/WP3_IMPLEMENT{sfx}")
+    rev = show(COMMIT, f"handoff/prompts/WP3_REVIEW{sfx}")
+    si_no, si = find(impl, scope_prm)
+    gi_no, gi = find(impl, gate_prm)
+    gr_no, gr = find(rev, gate_prm)
+    checks = [
+        (f"{lang} WP3_IMPLEMENT{sfx}:{si_no} scope == docs/09{sfx}:{sd_no}", si[len(scope_prm):] == sd),
+        (f"{lang} WP3_IMPLEMENT{sfx}:{gi_no} gate == docs/09{sfx}:{gd_no}", gi[len(gate_prm):] == gd_body),
+        (f"{lang} WP3_REVIEW{sfx}:{gr_no} gate == docs/09{sfx}:{gd_no}", gr[len(gate_prm):] == gd_body),
+    ]
+    for name, ok in checks:
+        print(("MATCH " if ok else "DIFF  ") + name)
+        fail += 0 if ok else 1
+    # Parent comparison: only the scope/gate lines changed in the prompts.
+    for path in (f"handoff/prompts/WP3_IMPLEMENT{sfx}", f"handoff/prompts/WP3_REVIEW{sfx}"):
+        old = show(PARENT, path)
+        new = show(COMMIT, path)
+        changed = [i + 1 for i, (a, b) in enumerate(zip(old, new)) if a != b]
+        print(f"{lang} {path}: lines {len(old)}->{len(new)}; changed line numbers {changed}")
+        for n in changed:
+            o, nw = old[n - 1], new[n - 1]
+            # the old line must be a prefix-equal sentence; new extends it
+            p = 0
+            while p < min(len(o), len(nw)) and o[p] == nw[p]:
+                p += 1
+            q = 0
+            while q < min(len(o), len(nw)) - p and o[-1 - q] == nw[-1 - q]:
+                q += 1
+            print(f"   removed: {o[p:len(o) - q]!r}")
+            print(f"   added:   {nw[p:len(nw) - q]!r}")
+print("RESULT", "PASS" if fail == 0 else f"FAIL ({fail})")
+sys.exit(1 if fail else 0)

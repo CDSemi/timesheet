@@ -1,0 +1,42 @@
+GOV-WP3P-AUDIT state before the audit (2026-10-05T06:55:46Z, Git Bash, cwd <project>)
+
+$ git rev-parse HEAD
+da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d
+exit 0
+
+$ git status --porcelain
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-WP3P-FREEZE.md
+ M handoff/delivery/tasks/GOV-WP3P-GATE.md
+?? handoff/delivery/evidence/GOV-WP3P-FREEZE/
+?? handoff/delivery/evidence/GOV-WP3P-GATE/
+exit 0 (changes under handoff/delivery/ only)
+
+$ git log --oneline -3
+da6d0cd Mirror the updated WP3 scope and gate in the WP3 prompts
+cb9800e Update the canonical rules for the 2026-10-04 owner decisions
+632092d Record the WP3-T13A freeze and a clean full e2e run before the owner pause
+
+$ git rev-parse origin/main ; git ls-remote origin refs/heads/main
+da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d
+da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d	refs/heads/main
+exit 0 (no unpushed commit)
+
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum | cut -d' ' -f1
+4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f
+exit 0
+
+$ <LOCALAPPDATA>/timesheet-dev/node-24.21.0/node_modules/node/bin/node.exe --version
+v24.21.0
+exit 0
+
+$ node.exe <APPDATA>/npm/node_modules/npm/bin/npm-cli.js run digest --silent
+4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f  (679 files, handoff/ excluded)
+exit 0
+
+Expected digest (brief): 4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f -> equal.
+
+Reviewer model: claude-opus-5-5 (self-reported). Author of the reviewed change: WP3-DOC worker
+a3f90533c00057935, actual_model claude-sonnet-5-5 (board, self_reported). The reviewer is not weaker.

@@ -1,0 +1,47 @@
+GOV-WP3P-AUDIT state after the audit (Git Bash, cwd <project>; the new handoff/ files are the audit outputs)
+
+2026-10-05T07:04:36Z
+$ git rev-parse HEAD
+da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d
+exit 0
+
+$ git status --porcelain
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-WP3P-FREEZE.md
+ M handoff/delivery/tasks/GOV-WP3P-GATE.md
+?? handoff/delivery/GOV_WP3P_REVIEW.md
+?? handoff/delivery/GOV_WP3P_REVIEW.vi.md
+?? handoff/delivery/evidence/GOV-WP3P-AUDIT/
+?? handoff/delivery/evidence/GOV-WP3P-FREEZE/
+?? handoff/delivery/evidence/GOV-WP3P-GATE/
+exit 0
+
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum | cut -d' ' -f1
+4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f
+
+$ node --version (Node 24 bin prepended to PATH)
+v24.21.0
+exit 0
+
+$ node <APPDATA>/npm/node_modules/npm/bin/npm-cli.js run digest --silent
+4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f  (679 files, handoff/ excluded)
+exit 0
+
+$ <workflow-python> handoff/delivery/validate_package.py --preflight (after writing the review pair)
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 59,
+  "local_links": 1079,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit 0
+
+Digest before = after = expected 4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f; HEAD unchanged.

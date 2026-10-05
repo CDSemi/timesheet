@@ -6,15 +6,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = cb9800e4cfef57786c2e69bb4fd78d245ab5c817 (WP3-DOC-FREEZE; commit
-    đóng băng mã nguồn gần nhất là c1e4bb2, WP3-T13A).
+  - HEAD = origin/main = da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d (GOV-WP3P-FREEZE; commit
+    đóng băng mã nguồn gần nhất là c1e4bb2, WP3-T13A; đóng băng tài liệu cb9800e).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
     hiện tại của WP3 là 4d4c4863… (sau WP3-DOC, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit: bốn file prompt WP3 (GOV-WP3P-FREEZE sẽ commit), board, checkpoint này,
-    kết quả DOC-FREEZE và các brief GOV-WP3P.
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả GOV-WP3P-FREEZE, record
+    gate và audit GOV-WP3P, GOV_WP3P_REVIEW (+ vi) cùng bằng chứng; các file này vào commit
+    đóng băng T07B.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -239,11 +240,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   qua GOV-WP3P-FREEZE, GOV-WP3P-GATE và một GOV-WP3P-AUDIT độc lập trước T07B.
 - WP3-DOC-FREEZE đã commit và push, SHA cb9800e (32 đường dẫn; bốn file prompt vẫn chưa
   stage; mọi kiểm tra 0).
-- Đang chạy: GOV-WP3P-FREEZE (committer): bốn file prompt WP3.
+- GOV-WP3P-FREEZE đã commit và push, SHA da6d0cd (13 đường dẫn, gồm bốn file prompt WP3;
+  mọi kiểm tra 0).
+- GOV-WP3P-GATE PASS trên da6d0cd (thay đổi chỉ ở bốn file prompt; khớp nghĩa với tài
+  liệu 09 ở cả EN và VI; validators, verify đạt, digest không đổi).
+- GOV-WP3P-AUDIT PASS (opus mới, không có phát hiện; [báo cáo](GOV_WP3P_REVIEW.vi.md));
+  phạm vi được nghiệm thu cb9800e..da6d0cd. Ba gợi ý tùy chọn R1–R3 đưa vào backlog quản
+  trị.
+- WP3-T07B đã xong (tác giả tự báo): migration 0005 cho dòng ghi chú, cài đặt ghi chú có
+  kiểm tra và audit, đồng ý dùng ảnh ngay lúc upload (`authorize_auto_image`, một
+  transaction; trả 422 khi chưa lưu cài đặt — chuyển cho T13), snapshot phiên bản 2,
+  trạng thái "Submitted"/câu ghi chú, bỏ dấu hiệu tự động, PDF ký tay in đúng tên người
+  ký đã lưu; 19/19 bản đối chứng; verify 1232 test; digest 5e37ab98….
+- Đang chạy: WP3-T07B-FREEZE (committer), gồm luôn các record GOV-WP3P.
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng GOV; GOV-WP3P-GATE (verifier); GOV-WP3P-AUDIT (opus
-     mới); rồi T07B, T13 (brief đã sẵn), T13B (opus), T13C, T14, T15, WP3-GATE và các
-     audit.
+  1. Ghi kết quả commit đóng băng T07B; rồi T13 (brief đã sẵn, đã thêm xử lý trường hợp
+     422), T13B (opus), T13C, T14, T15, WP3-GATE và các audit.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -262,5 +274,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ GOV-WP3P-FREEZE.
+- Process còn sống: chỉ WP3-T07B-FREEZE.
 - Usage/reset: không quan sát được.

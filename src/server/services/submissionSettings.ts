@@ -7,12 +7,15 @@ import {
   renderHtmlBody,
   renderSubject,
   renderTextBody,
+  signOffStatusText,
+  type SubmissionOrigin,
   TEMPLATE_VARIABLES,
   type TemplateValues,
   validateBodyTemplate,
   validateSubjectTemplate,
 } from '../../domain/emailTemplate.ts';
 import { currentPayPeriod } from '../../domain/periods.ts';
+import { checkAutoNoteText, DEFAULT_AUTO_NOTE_TEXT } from '../../domain/snapshot.ts';
 import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
@@ -38,8 +41,14 @@ import { loadScope, todayInReportingZone } from './timesheets.ts';
  * the same user; it is off by default and revoking it is audited as well. Neither act is a
  * review event.
  *
- * Audit records carry flags, counts and identifiers only: never an address, a template
- * text or an image.
+ * Automatic note line (WP3-T07B): two more fields of the same versions, a switch (default off)
+ * and a one-line text (default "Automatic submission", validated by the domain). Omitted fields
+ * keep the current values. The audit event records the before and after of those two fields; the
+ * text is the user's own label, not timesheet data. {SignOffStatus} comes from one domain
+ * function (signOffStatusText) for the preview, the review payload and the automatic snapshot.
+ *
+ * Audit records carry flags, counts and identifiers (and the two note fields): never an
+ * address, a template text or an image.
  */
 
 /** Immutable rows cannot be deleted, so the number of versions per user is bounded. */
@@ -67,6 +76,9 @@ export interface SubmissionSettings {
   autoImageAuthorized: boolean;
   autoImageAttachmentId: string | null;
   autoImageAuthorizedAt: string | null;
+  /** Whether an automatic submission's PDF and email show the note line. */
+  autoNoteEnabled: boolean;
+  autoNoteText: string;
   showOtOnPdf: boolean;
   reminderOffsetsMinutes: number[];
   createdAt: string | null;
@@ -85,6 +97,8 @@ interface SettingsRow {
   auto_image_authorized: number;
   auto_image_attachment_id: string | null;
   auto_image_authorized_at: string | null;
+  auto_note_enabled: number;
+  auto_note_text: string;
   show_ot_on_pdf: number;
   reminder_offsets_minutes: string;
   created_at: string;
@@ -105,6 +119,8 @@ function fromRow(row: SettingsRow): SubmissionSettings {
     autoImageAuthorized: row.auto_image_authorized === 1,
     autoImageAttachmentId: row.auto_image_attachment_id,
     autoImageAuthorizedAt: row.auto_image_authorized_at,
+    autoNoteEnabled: row.auto_note_enabled === 1,
+    autoNoteText: row.auto_note_text,
     showOtOnPdf: row.show_ot_on_pdf === 1,
     reminderOffsetsMinutes: JSON.parse(row.reminder_offsets_minutes) as number[],
     createdAt: row.created_at,
@@ -127,6 +143,8 @@ function defaultSettings(): SubmissionSettings {
     autoImageAuthorized: false,
     autoImageAttachmentId: null,
     autoImageAuthorizedAt: null,
+    autoNoteEnabled: false,
+    autoNoteText: DEFAULT_AUTO_NOTE_TEXT,
     showOtOnPdf: true,
     reminderOffsetsMinutes: [...DEFAULT_REMINDER_OFFSETS_MINUTES],
     createdAt: null,
@@ -150,6 +168,7 @@ export function submissionSettingsJson(settings: SubmissionSettings) {
       signature_attachment_id: settings.autoImageAttachmentId,
       authorized_at: settings.autoImageAuthorizedAt,
     },
+    auto_note: { enabled: settings.autoNoteEnabled, text: settings.autoNoteText },
     show_ot_on_pdf: settings.showOtOnPdf,
     reminder_offsets_minutes: settings.reminderOffsetsMinutes,
     created_at: settings.createdAt,
@@ -202,7 +221,7 @@ function normalizeOffsets(offsets: readonly number[]): number[] {
   return [...new Set(offsets)].sort((a, b) => b - a);
 }
 
-/** Flags, counts and identifiers only: no address, template text or image (canonical audit boundary). */
+/** Flags, counts, identifiers and the two note fields only: no address, template text or image (canonical audit boundary). */
 function auditSummary(settings: SubmissionSettings) {
   return {
     seq: settings.seq,
@@ -213,6 +232,8 @@ function auditSummary(settings: SubmissionSettings) {
     auto_submit_effective_from: settings.autoSubmitEffectiveFrom,
     auto_image_authorized: settings.autoImageAuthorized,
     auto_image_attachment_id: settings.autoImageAttachmentId,
+    auto_note_enabled: settings.autoNoteEnabled,
+    auto_note_text: settings.autoNoteText,
     show_ot_on_pdf: settings.showOtOnPdf,
     reminder_offsets_minutes: settings.reminderOffsetsMinutes,
   };
@@ -228,6 +249,8 @@ interface NewVersion {
   autoSubmitEffectiveFrom: string;
   autoImageAttachmentId: string | null;
   autoImageAuthorizedAt: string | null;
+  autoNoteEnabled: boolean;
+  autoNoteText: string;
   showOtOnPdf: boolean;
   reminderOffsetsMinutes: number[];
 }
@@ -253,8 +276,9 @@ function appendVersion(
     `INSERT INTO submission_settings
        (id, user_id, seq, recipients_to, recipients_cc, subject_template, body_template, template_version,
         auto_submit, auto_submit_effective_from, auto_image_authorized, auto_image_attachment_id,
-        auto_image_authorized_at, show_ot_on_pdf, reminder_offsets_minutes, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        auto_image_authorized_at, auto_note_enabled, auto_note_text, show_ot_on_pdf, reminder_offsets_minutes,
+        created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     userId,
@@ -269,6 +293,8 @@ function appendVersion(
     next.autoImageAttachmentId === null ? 0 : 1,
     next.autoImageAttachmentId,
     next.autoImageAuthorizedAt,
+    next.autoNoteEnabled ? 1 : 0,
+    next.autoNoteText,
     next.showOtOnPdf ? 1 : 0,
     JSON.stringify(next.reminderOffsetsMinutes),
     userId,
@@ -288,6 +314,8 @@ function appendVersion(
     autoImageAuthorized: next.autoImageAttachmentId !== null,
     autoImageAttachmentId: next.autoImageAttachmentId,
     autoImageAuthorizedAt: next.autoImageAuthorizedAt,
+    autoNoteEnabled: next.autoNoteEnabled,
+    autoNoteText: next.autoNoteText,
     showOtOnPdf: next.showOtOnPdf,
     reminderOffsetsMinutes: next.reminderOffsetsMinutes,
     createdAt,
@@ -316,6 +344,8 @@ function carry(base: SubmissionSettings): NewVersion {
     autoSubmitEffectiveFrom: base.autoSubmitEffectiveFrom ?? APPLY_TO_OVERDUE_EFFECTIVE_FROM,
     autoImageAttachmentId: base.autoImageAttachmentId,
     autoImageAuthorizedAt: base.autoImageAuthorizedAt,
+    autoNoteEnabled: base.autoNoteEnabled,
+    autoNoteText: base.autoNoteText,
     showOtOnPdf: base.showOtOnPdf,
     reminderOffsetsMinutes: base.reminderOffsetsMinutes,
   };
@@ -329,6 +359,9 @@ export interface SaveSettingsInput {
   bodyTemplate?: string | undefined;
   autoSubmit: boolean;
   applyToOverdueDrafts?: boolean | undefined;
+  /** The automatic note line switch and text; omitted keeps the current values (default off, "Automatic submission"). */
+  autoNoteEnabled?: boolean | undefined;
+  autoNoteText?: string | undefined;
   showOtOnPdf?: boolean | undefined;
   reminderOffsetsMinutes?: number[] | undefined;
 }
@@ -339,6 +372,13 @@ export interface SaveSettingsInput {
  */
 export function saveSubmissionSettings(db: Db, clock: Clock, userId: string, input: SaveSettingsInput): SubmissionSettings {
   const recipients = validation(() => normalizeRecipients(input.to, input.cc ?? []));
+  // The note text is normalized (NFC, trimmed) and validated before anything is written.
+  let autoNoteText: string | undefined;
+  if (input.autoNoteText !== undefined) {
+    const checked = checkAutoNoteText(input.autoNoteText);
+    if (!checked.ok) throw new ApiError(422, 'invalid_auto_note', checked.message);
+    autoNoteText = checked.text;
+  }
   return writeTransaction(db, () => {
     const previous = currentSubmissionSettings(db, userId);
     if ((previous?.seq ?? 0) !== input.expectedSeq) throw staleVersion();
@@ -350,6 +390,9 @@ export function saveSubmissionSettings(db: Db, clock: Clock, userId: string, inp
       validateBodyTemplate(bodyTemplate);
     });
     const templateChanged = subjectTemplate !== base.subjectTemplate || bodyTemplate !== base.bodyTemplate;
+    const autoNoteEnabled = input.autoNoteEnabled ?? base.autoNoteEnabled;
+    const nextAutoNoteText = autoNoteText ?? base.autoNoteText;
+    const autoNoteChanged = autoNoteEnabled !== base.autoNoteEnabled || nextAutoNoteText !== base.autoNoteText;
 
     // The auto-submit instant moves only when the switch itself changes (or on the first
     // save). By default a change takes effect now, which covers periods not yet due.
@@ -372,12 +415,15 @@ export function saveSubmissionSettings(db: Db, clock: Clock, userId: string, inp
       templateVersion: previous === null ? 1 : base.templateVersion + (templateChanged ? 1 : 0),
       autoSubmit: input.autoSubmit,
       autoSubmitEffectiveFrom,
+      autoNoteEnabled,
+      autoNoteText: nextAutoNoteText,
       showOtOnPdf: input.showOtOnPdf ?? base.showOtOnPdf,
       reminderOffsetsMinutes: normalizeOffsets(input.reminderOffsetsMinutes ?? base.reminderOffsetsMinutes),
     };
     return appendVersion(db, clock, userId, previous, next, 'submission_settings.update', {
       template_changed: previous === null || templateChanged,
       auto_submit_changed: autoChanged,
+      auto_note_changed: autoNoteChanged,
       applies_to_overdue_drafts: autoChanged && input.applyToOverdueDrafts === true,
     });
   });
@@ -394,31 +440,44 @@ export function authorizeAutoImage(
   userId: string,
   input: { expectedSeq: number; signatureAttachmentId: string },
 ): SubmissionSettings {
-  return writeTransaction(db, () => {
-    const previous = currentSubmissionSettings(db, userId);
-    if ((previous?.seq ?? 0) !== input.expectedSeq) throw staleVersion();
-    if (previous === null) {
-      throw new ApiError(422, 'submission_settings_required', 'Save the submission settings before authorizing the signature image');
-    }
-    const attachment = db
-      .prepare<[string, string], { id: string; sha256: string }>(
-        "SELECT id, sha256 FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'",
-      )
-      .get(input.signatureAttachmentId, userId);
-    if (attachment === undefined) throw notFound('Signature');
-    if (previous.autoImageAttachmentId === attachment.id) {
-      throw new ApiError(409, 'already_authorized', 'This signature image is already authorized for automatic submissions');
-    }
-    return appendVersion(
-      db,
-      clock,
-      userId,
-      previous,
-      { ...carry(previous), autoImageAttachmentId: attachment.id, autoImageAuthorizedAt: nowUtc(clock) },
-      'submission_settings.auto_image_authorize',
-      { signature_sha256: attachment.sha256, replaces_attachment_id: previous.autoImageAttachmentId },
-    );
-  });
+  return writeTransaction(db, () => authorizeWithin(db, clock, userId, input.signatureAttachmentId, input.expectedSeq));
+}
+
+/**
+ * The same explicit, audited authorization inside the caller's own write transaction, for the
+ * signature upload that asks for it (owner decision G-Q1 (b)): the new image and its
+ * authorization are one atomic act, so a failure here also rolls back the upload. There is no
+ * `expected_seq`: the consent names the image being uploaded and applies to the settings version
+ * current inside the transaction. Saved settings must exist (422 `submission_settings_required`).
+ */
+export function authorizeAutoImageInTransaction(db: Db, clock: Clock, userId: string, signatureAttachmentId: string): SubmissionSettings {
+  return authorizeWithin(db, clock, userId, signatureAttachmentId, null);
+}
+
+function authorizeWithin(db: Db, clock: Clock, userId: string, signatureAttachmentId: string, expectedSeq: number | null): SubmissionSettings {
+  const previous = currentSubmissionSettings(db, userId);
+  if (expectedSeq !== null && (previous?.seq ?? 0) !== expectedSeq) throw staleVersion();
+  if (previous === null) {
+    throw new ApiError(422, 'submission_settings_required', 'Save the submission settings before authorizing the signature image');
+  }
+  const attachment = db
+    .prepare<[string, string], { id: string; sha256: string }>(
+      "SELECT id, sha256 FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'",
+    )
+    .get(signatureAttachmentId, userId);
+  if (attachment === undefined) throw notFound('Signature');
+  if (previous.autoImageAttachmentId === attachment.id) {
+    throw new ApiError(409, 'already_authorized', 'This signature image is already authorized for automatic submissions');
+  }
+  return appendVersion(
+    db,
+    clock,
+    userId,
+    previous,
+    { ...carry(previous), autoImageAttachmentId: attachment.id, autoImageAuthorizedAt: nowUtc(clock) },
+    'submission_settings.auto_image_authorize',
+    { signature_sha256: attachment.sha256, replaces_attachment_id: previous.autoImageAttachmentId },
+  );
 }
 
 /** Revokes the automatic-image authorization (audited); a no-op revocation is refused. */
@@ -441,12 +500,8 @@ export function revokeAutoImage(db: Db, clock: Clock, userId: string, input: { e
   });
 }
 
-export type PreviewSignOff = 'signed' | 'review_pending';
-
-const SIGN_OFF_LABELS: Record<PreviewSignOff, string> = {
-  signed: 'Signed by the employee',
-  review_pending: 'Automatic submission - employee review pending',
-};
+/** The origin the preview renders {SignOffStatus} for; only the system tracks it, the text may not reveal it. */
+export type PreviewSignOff = SubmissionOrigin;
 
 export interface SubmissionPreview {
   signOff: PreviewSignOff;
@@ -473,13 +528,13 @@ export function previewSubmission(
   const settings = submissionSettingsOrDefault(db, user.id);
   const scope = loadScope(db, user);
   const period = currentPayPeriod(scope.calendar.schedule, todayInReportingZone(clock, scope), scope.exceptions);
-  const signOff = draft.signOff ?? 'signed';
+  const signOff = draft.signOff ?? 'manual';
   const values: TemplateValues = {
     EmployeeName: user.displayName,
     PeriodStart: period.periodStart,
     PeriodEnd: period.periodEnd,
     PayrollDate: period.payrollDate,
-    SignOffStatus: SIGN_OFF_LABELS[signOff],
+    SignOffStatus: signOffStatusText(signOff, { enabled: settings.autoNoteEnabled, text: settings.autoNoteText }),
     SubmissionId: 'PREVIEW',
     Revision: '1',
   };

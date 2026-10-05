@@ -1,0 +1,51 @@
+"""GOV-WP3P-AUDIT scope item 4: required WP3 gate items present in each prompt gate line at a commit."""
+import subprocess
+import sys
+
+REPO, COMMIT, PARENT = sys.argv[1], sys.argv[2], sys.argv[3]
+
+EN = [
+    "AC-06–AC-10 and AC-14", "AC-16", "deadline/manual race", "auto-image on/off",
+    "interrupted/uncertain send", "duplicate jobs", "private downloads",
+    "visual PDF evidence including both Sundays", "All sending stays dry-run/capture.",
+    "the automatic note line and image options",
+    "outgoing automatic submissions without an automatic indicator",
+    "empty-period automatic submission", "admin status without timesheet details",
+]
+VI = [
+    "AC-06–AC-10 và AC-14", "AC-16", "race đến hạn/tay", "ảnh tự động bật/tắt",
+    "gửi gián đoạn/chưa rõ", "job trùng", "tải riêng", "bằng chứng PDF gồm hai Chủ nhật",
+    "Mọi gửi ở dry-run/capture.", "dòng ghi chú và tùy chọn ảnh khi tự nộp",
+    "bản tự nộp gửi đi không dấu hiệu tự động", "tự nộp kỳ chưa có dữ liệu",
+    "tình trạng admin không có chi tiết timesheet",
+]
+
+
+def show(rev: str, path: str) -> list[str]:
+    return subprocess.run(["git", "-C", REPO, "show", f"{rev}:{path}"], check=True,
+                          capture_output=True).stdout.decode("utf-8").split("\n")
+
+
+missing = 0
+for path, prefix, items in [
+    ("handoff/prompts/WP3_IMPLEMENT.md", "Required gate: ", EN),
+    ("handoff/prompts/WP3_REVIEW.md", "Required gate: ", EN),
+    ("handoff/prompts/WP3_IMPLEMENT.vi.md", "Gate bắt buộc: ", VI),
+    ("handoff/prompts/WP3_REVIEW.vi.md", "Gate bắt buộc: ", VI),
+]:
+    new = [l for l in show(COMMIT, path) if l.startswith(prefix)]
+    old = [l for l in show(PARENT, path) if l.startswith(prefix)]
+    assert len(new) == 1 and len(old) == 1, path
+    for it in items:
+        ok = it in new[0]
+        was = it in old[0]
+        print(f"{'OK  ' if ok else 'MISS'} {path}: {it!r} (parent: {'present' if was else 'absent'})")
+        missing += 0 if ok else 1
+    # every parent gate clause is still present (nothing dropped)
+    core_old = old[0][len(prefix):].replace(" All sending stays dry-run/capture.", "").replace(
+        " Mọi gửi ở dry-run/capture.", "").rstrip(".")
+    kept = core_old in new[0]
+    print(f"{'OK  ' if kept else 'MISS'} {path}: parent gate clause kept verbatim")
+    missing += 0 if kept else 1
+print("RESULT", "PASS" if missing == 0 else f"FAIL ({missing})")
+sys.exit(1 if missing else 0)

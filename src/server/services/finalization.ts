@@ -554,7 +554,8 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
  * 1. the caller's `authorize` check runs first, inside the transaction, so a switch, activation
  *    or import change committed by anyone else is seen (a reason means "skip, write nothing");
  * 2. the review payload is built from the current data by the same engine-only builder the
- *    manual path uses; a period with no saved entries has no timesheet row yet, so the row is
+ *    manual path uses (with origin `automatic`, which only changes the {SignOffStatus} text:
+ *    "Submitted", or the user's note text when the note line is on); a period with no saved entries has no timesheet row yet, so the row is
  *    created and the payload is the FR-03 default labels with zero OT and no deficit;
  * 3. a period that is already finalized (the manual sign-off won the race) is skipped;
  * 4. the immutable revision is written and ledger.ts posts the computable credits and the
@@ -672,7 +673,7 @@ export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: 
     const refusal = input.authorize();
     if (refusal !== null) return { status: 'skipped', reason: refusal };
 
-    const review = buildReviewPayload(db, clock, owner, input.payrollDate);
+    const review = buildReviewPayload(db, clock, owner, input.payrollDate, 'automatic');
     const scope = loadScope(db, owner);
     const period = resolvePeriod(scope, review.payload.period.payroll_date);
     const existing = findTimesheet(db, scope, period);

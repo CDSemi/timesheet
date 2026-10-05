@@ -5,6 +5,7 @@ import type { FileStore } from '../files/fileStore.ts';
 import { ImageRejection, inspectImage } from '../files/imageCheck.ts';
 import { ApiError, notFound } from '../http/errors.ts';
 import { recordAudit } from './audit.ts';
+import { authorizeAutoImageInTransaction, type SubmissionSettings } from './submissionSettings.ts';
 
 /*
  * Profile signature images (docs/04 signature image; AC-01, rule 4: private).
@@ -15,6 +16,11 @@ import { recordAudit } from './audit.ts';
  * because later revisions and authorizations reference them. The current signature is
  * the owner's latest `signature` attachment. Every lookup is scoped to the caller, so
  * another user's id is indistinguishable from a missing one.
+ *
+ * The upload can also carry the user's explicit consent to use that image on automatic
+ * submissions (owner decision G-Q1 (b)): the same audited authorization as in the settings,
+ * performed in the same transaction, so an upload whose authorization fails stores nothing.
+ * Without that consent nothing is authorized (the schema default is unchanged).
  */
 
 /** Immutable rows cannot be deleted, so the number of uploads per user is bounded. */
@@ -73,6 +79,38 @@ export function saveSignature(
   bytes: Uint8Array,
   declaredMime: string,
 ): SignatureMetadata {
+  return store(db, clock, files, userId, bytes, declaredMime, null).signature;
+}
+
+/**
+ * Stores the image and, in the same transaction, records the explicit audited authorization to
+ * use it on automatic submissions. Saved submission settings must exist (422
+ * `submission_settings_required`); any failure leaves no attachment, no audit event and no file.
+ */
+export function saveSignatureAndAuthorizeAutoImage(
+  db: Db,
+  clock: Clock,
+  files: FileStore,
+  userId: string,
+  bytes: Uint8Array,
+  declaredMime: string,
+): { signature: SignatureMetadata; settings: SubmissionSettings } {
+  const stored = store(db, clock, files, userId, bytes, declaredMime, (attachmentId) =>
+    authorizeAutoImageInTransaction(db, clock, userId, attachmentId),
+  );
+  if (stored.within === null) throw new Error('The automatic image authorization was not recorded');
+  return { signature: stored.signature, settings: stored.within };
+}
+
+function store<T>(
+  db: Db,
+  clock: Clock,
+  files: FileStore,
+  userId: string,
+  bytes: Uint8Array,
+  declaredMime: string,
+  within: ((attachmentId: string) => T) | null,
+): { signature: SignatureMetadata; within: T | null } {
   let info;
   try {
     info = inspectImage(bytes, declaredMime);
@@ -119,7 +157,7 @@ export function saveSignature(
           replaces_attachment_id: previous?.id ?? null,
         },
       });
-      return toMetadata({
+      const signature = toMetadata({
         id,
         storage_key: stored.storageKey,
         mime_type: info.mime,
@@ -129,6 +167,7 @@ export function saveSignature(
         sha256: stored.sha256,
         created_at: createdAt,
       });
+      return { signature, within: within === null ? null : within(id) };
     });
   } catch (error) {
     files.discard(stored.storageKey);

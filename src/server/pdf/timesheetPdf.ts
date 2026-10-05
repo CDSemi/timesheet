@@ -2,7 +2,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, type PDFFont, type PDFImage, type PDFPage, rgb } from 'pdf-lib';
 import { addDays } from '../../domain/dates.ts';
 import { parseUtcInstant } from '../../domain/instants.ts';
-import { normalizeReviewSnapshot, type ReviewSnapshot, type SnapshotDay } from '../../domain/snapshot.ts';
+import { autoNoteOf, normalizeReviewSnapshot, type ReviewSnapshot, type SnapshotDay } from '../../domain/snapshot.ts';
 import { assertTimeZone, formatInZone, localDateOf } from '../../domain/zones.ts';
 import { loadPdfFontBytes } from './fonts.ts';
 import {
@@ -27,6 +27,16 @@ import {
  * The output is deterministic: pdf-lib is created without automatic dates or producer stamps, the
  * dates come from the snapshot, and pdf-lib's resource names come from a seeded generator, so the
  * same input gives identical bytes.
+ *
+ * Presentation (owner decision of 2026-10-04, docs/04 "Email and PDF"): manual and automatic
+ * revisions look the same. Nothing printed names the origin: no banner, no origin word in the
+ * header or the footer, no pending wording. The signature block prints the signer name and one
+ * date, the local date in the snapshot's saved reporting zone of the real sign-off instant
+ * (manual) or of the automatic revision's submission instant (automatic; its `signed_at` stays
+ * empty and is never an input). The signature image of an automatic revision is placed only when
+ * the snapshot records the user's authorization; the optional note line (automatic only, only
+ * when the user turned it on) is the one line where the banner used to be. A version 1 snapshot
+ * has no note and renders with it off.
  */
 
 export { PdfRenderError, SIGNATURE_BOX, timesheetPdfFileName } from './layout.ts';
@@ -38,9 +48,13 @@ export type TimesheetPdfInput = {
   submissionId: string;
   revisionNo: number;
   origin: PdfOrigin;
-  /** The real employee sign-off instant (UTC) of a manual revision; null when there is none. */
+  /** The real employee sign-off instant (UTC) of a manual revision; null for an automatic revision. */
   signedAt: string | null;
-  /** The validated signature image (PNG or JPEG bytes); null when none is placed. */
+  /** The creation instant (UTC) of an automatic revision, printed as its date; null for a manual revision. */
+  automaticSubmittedAt: string | null;
+  /** The name printed under the signature line: the stored sign-off name (manual) or the employee name (automatic). */
+  signerName: string;
+  /** The validated signature image (PNG or JPEG bytes): required for a manual revision, allowed for an automatic one only when authorized. */
   signatureImage: Uint8Array | null;
 };
 
@@ -55,8 +69,6 @@ const MUTED = rgb(0.38, 0.4, 0.44);
 const RULE = rgb(0.55, 0.58, 0.62);
 const HEAD_FILL = rgb(0.9, 0.92, 0.95);
 const LABEL_FILL = rgb(0.95, 0.96, 0.97);
-const BANNER_FILL = rgb(0.99, 0.93, 0.78);
-const BANNER_RULE = rgb(0.72, 0.5, 0.05);
 
 type Fonts = { regular: PDFFont; bold: PDFFont; supported: ReadonlySet<number> };
 
@@ -229,11 +241,24 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   if (!Number.isSafeInteger(input.revisionNo) || input.revisionNo < 1) {
     throw new PdfRenderError('Revision number must be a positive whole number');
   }
-  if (input.origin === 'automatic' && input.signedAt !== null) {
-    throw new PdfRenderError('An automatic revision has no real sign-off instant');
+  if (cleanText(input.signerName) === '') throw new PdfRenderError('The signature block needs the signer name');
+  let printedInstant: string;
+  if (input.origin === 'manual') {
+    if (input.signedAt === null) throw new PdfRenderError('A manual revision needs its real sign-off instant');
+    if (input.automaticSubmittedAt !== null) throw new PdfRenderError('A manual revision has no automatic submission instant');
+    if (input.signatureImage === null) throw new PdfRenderError('A manual revision needs its signature image');
+    printedInstant = input.signedAt;
+  } else {
+    if (input.signedAt !== null) throw new PdfRenderError('An automatic revision has no real sign-off instant');
+    if (input.automaticSubmittedAt === null) throw new PdfRenderError('An automatic revision needs its submission instant');
+    if (input.signatureImage !== null && !snapshot.auto_image.authorized) {
+      throw new PdfRenderError('The signature image is not authorized for automatic submissions');
+    }
+    printedInstant = input.automaticSubmittedAt;
   }
   const zone = assertTimeZone(snapshot.reporting_zone, 'reporting_zone');
-  const signDate = input.signedAt === null ? null : formatUsDate(localDateOf(zone, parseUtcInstant(input.signedAt, 'signedAt')));
+  const signDate = formatUsDate(localDateOf(zone, parseUtcInstant(printedInstant, 'signature date')));
+  const autoNote = input.origin === 'automatic' ? autoNoteOf(snapshot) : null;
   const showOt = snapshot.show_ot_on_pdf;
 
   const doc = await PDFDocument.create({ updateMetadata: false });
@@ -255,12 +280,11 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   const canvas = new Canvas(page, fonts);
   const right = MARGIN + CONTENT_WIDTH;
 
-  // Header: company, title, submission and revision identifiers.
+  // Header: company, title, submission and revision identifiers (no origin wording).
   canvas.text(COMPANY, MARGIN, 36, 15, true);
   canvas.text(TITLE, MARGIN, 58, 11, true);
-  const originLabel = input.origin === 'manual' ? 'manual sign-off' : 'automatic submission';
   const idLine = `Submission ${input.submissionId}`;
-  const revisionLine = `Revision ${input.revisionNo} (${originLabel})`;
+  const revisionLine = `Revision ${input.revisionNo}`;
   for (const [index, line] of [idLine, revisionLine].entries()) {
     const fit = fitText(printable(fonts, line), 8, 5.5, 230, 1, measurer(regular));
     const text = fit.lines[0] ?? '';
@@ -268,12 +292,10 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   }
 
   let y = 80;
-  if (input.origin === 'automatic') {
-    canvas.rect(MARGIN, y, CONTENT_WIDTH, 36, BANNER_FILL);
-    page.drawRectangle({ x: MARGIN, y: top(y + 36), width: 4, height: 36, color: BANNER_RULE });
-    canvas.text('Employee review pending', MARGIN + 12, y + 5, 11, true);
-    canvas.text('This timesheet was submitted automatically and has not been reviewed or signed by the employee.', MARGIN + 12, y + 21, 7.5);
-    y += 46;
+  if (autoNote?.enabled === true) {
+    // The user's own optional note, one plain line; it takes the place of nothing else on the page.
+    canvas.fitted(autoNote.text, { x: MARGIN, top: y, width: CONTENT_WIDTH, maxLines: 1 }, 9, 6, { color: MUTED });
+    y += 18;
   }
 
   // Employee, payroll date and period.
@@ -303,7 +325,7 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
     }
   }
 
-  // Employee signature (bounded image, real name and sign date), blank manager signature.
+  // Employee signature (bounded image, signer name and date), blank manager signature.
   const lineTop = 594;
   const dateX = MARGIN + 380;
   if (input.signatureImage !== null) {
@@ -313,12 +335,10 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   }
   canvas.line(MARGIN, MARGIN + 300, lineTop);
   canvas.text('Employee Signature', MARGIN, lineTop + 4, 8, false, MUTED);
-  if (input.origin === 'manual') {
-    canvas.fitted(snapshot.employee.name, { x: MARGIN, top: lineTop + 15, width: 300, maxLines: 1 }, 10, 6.5, { bold: true });
-  }
+  canvas.fitted(input.signerName, { x: MARGIN, top: lineTop + 15, width: 300, maxLines: 1 }, 10, 6.5, { bold: true });
   canvas.line(dateX, right, lineTop);
   canvas.text('Date', dateX, lineTop + 4, 8, false, MUTED);
-  if (signDate !== null) canvas.text(signDate, dateX + 2, lineTop - 15, 10.5, true);
+  canvas.text(signDate, dateX + 2, lineTop - 15, 10.5, true);
 
   const managerTop = 672;
   canvas.line(MARGIN, MARGIN + 300, managerTop);
@@ -327,7 +347,7 @@ export async function renderTimesheetPdf(input: TimesheetPdfInput): Promise<Uint
   canvas.text('Date', dateX, managerTop + 4, 8, false, MUTED);
 
   // Footer on the page: identifiers again, so a detached page stays traceable.
-  const footer = `${input.submissionId}  |  Revision ${input.revisionNo}  |  ${originLabel}`;
+  const footer = `${input.submissionId}  |  Revision ${input.revisionNo}`;
   canvas.text(footer, MARGIN, 756, 7, false, MUTED);
 
   return doc.save({ useObjectStreams: false });

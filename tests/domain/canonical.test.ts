@@ -215,7 +215,7 @@ function snapshot(overrides: Partial<ReviewSnapshot> = {}): ReviewSnapshot {
       is_exception: false,
     },
     reporting_zone: 'America/Los_Angeles',
-    submission: { id: 'TS-20261002-0123456789', revision_no: 1, sign_off_status: 'Signed by employee' },
+    submission: { id: 'TS-20261002-0123456789', revision_no: 1, sign_off_status: 'Submitted' },
     timesheet: { finalized_revision_no: null },
     calendar: { id: 'cal', version_ids: ['cal-v2', 'cal-v1', 'cal-v1'] },
     policy: { version_ids: ['pol-v1'] },
@@ -228,6 +228,7 @@ function snapshot(overrides: Partial<ReviewSnapshot> = {}): ReviewSnapshot {
     recipients: { to: ['payroll@example.invalid'], cc: [], subject: 'S', body_text: 'B', body_html: 'B', template_version: 1 },
     signature: null,
     auto_image: { authorized: false, attachment_id: null },
+    auto_note: { enabled: false, text: 'Automatic submission' },
     show_ot_on_pdf: true,
     ...overrides,
   };
@@ -258,6 +259,8 @@ describe('review snapshot normalization', () => {
       { recipients: { ...snapshot().recipients, template_version: 2 } },
       { signature: { attachment_id: 'a', sha256: 'f'.repeat(64) } },
       { auto_image: { authorized: true, attachment_id: 'a' } },
+      { auto_note: { enabled: true, text: 'Automatic submission' } },
+      { auto_note: { enabled: false, text: 'Submitted by the schedule' } },
       { policy: { version_ids: ['pol-v2'] } },
       { calendar: { id: 'cal', version_ids: ['cal-v1'] } },
       { show_ot_on_pdf: false },
@@ -271,11 +274,58 @@ describe('review snapshot normalization', () => {
 
   it('refuses a malformed date, instant or minute count and an unknown schema', () => {
     expect(() => normalizeReviewSnapshot(snapshot({ schema: 'other' }))).toThrow(CanonicalError);
-    expect(() => normalizeReviewSnapshot(snapshot({ schema_version: 2 }))).toThrow(CanonicalError);
+    expect(() => normalizeReviewSnapshot(snapshot({ schema_version: 3 }))).toThrow(CanonicalError);
+    expect(() => normalizeReviewSnapshot(snapshot({ schema_version: 0 }))).toThrow(CanonicalError);
     expect(() => normalizeReviewSnapshot(snapshot({ totals: { credited_minutes: 1.5, pending_days: 0 } }))).toThrow(CanonicalError);
     expect(() => normalizeReviewSnapshot(snapshot({ period: { ...snapshot().period, due_at_utc: '2026-09-30T00:00:00+00:00' } }))).toThrow(CanonicalError);
     const days = snapshot().days;
     days[0] = { ...(days[0] as (typeof days)[number]), work_date: '2026-9-15' };
     expect(() => normalizeReviewSnapshot(snapshot({ days }))).toThrow(CanonicalError);
+  });
+});
+
+describe('review snapshot version 2 and the automatic note', () => {
+  const v1Payload = (): ReviewSnapshot => {
+    const { auto_note: _omitted, ...rest } = snapshot();
+    return { ...rest, schema_version: 1 };
+  };
+  const vietnameseNote = text('N', 0x1ed9, 'p t', 0x1ef1, ' ', 0x111, 0x1ed9, 'ng');
+
+  it('is the current version and carries the note from the effective settings', () => {
+    expect(SNAPSHOT_VERSION).toBe(2);
+    const normalized = normalizeReviewSnapshot(snapshot({ auto_note: { enabled: true, text: vietnameseNote } }));
+    expect(normalized.auto_note).toEqual({ enabled: true, text: vietnameseNote });
+  });
+
+  it('still reads a version 1 payload for rendering: no note is added, so its stored hash stays valid', () => {
+    const v1 = v1Payload();
+    const normalized = normalizeReviewSnapshot(v1);
+    expect('auto_note' in normalized).toBe(false);
+    expect(normalized.schema_version).toBe(1);
+    expect(reviewSnapshotHash(v1)).toBe(canonicalHash(normalized as unknown as CanonicalValue));
+    expect(reviewSnapshotHash(v1)).not.toBe(reviewSnapshotHash(snapshot()));
+    // A version 1 payload cannot carry a note it never had.
+    expect(() => normalizeReviewSnapshot({ ...v1, auto_note: { enabled: true, text: 'x' } })).toThrow(CanonicalError);
+  });
+
+  it('requires a valid note in version 2', () => {
+    expect(() => normalizeReviewSnapshot(snapshot({ auto_note: undefined }))).toThrow(CanonicalError);
+    const refused: unknown[] = [
+      { enabled: 'yes', text: 'Automatic submission' },
+      { enabled: true },
+      { enabled: true, text: '' },
+      { enabled: true, text: '   ' },
+      { enabled: true, text: ' padded ' },
+      { enabled: true, text: 'two\nlines' },
+      { enabled: true, text: 'tab\there' },
+      { enabled: true, text: 'braces {EmployeeName}' },
+      { enabled: true, text: 'x'.repeat(121) },
+      { enabled: true, text: text('e', 0x301) }, // decomposed, not NFC
+      { enabled: true, text: text('a', 0x202e, 'b') },
+    ];
+    for (const note of refused) {
+      expect(() => normalizeReviewSnapshot(snapshot({ auto_note: note as ReviewSnapshot['auto_note'] })), JSON.stringify(note)).toThrow(CanonicalError);
+    }
+    expect(() => normalizeReviewSnapshot(snapshot({ auto_note: { enabled: false, text: 'x'.repeat(120) } }))).not.toThrow();
   });
 });

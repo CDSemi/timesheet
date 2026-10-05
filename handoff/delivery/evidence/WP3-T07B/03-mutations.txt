@@ -1,0 +1,103 @@
+# Mutation checks (WP3-T07B): python handoff/delivery/evidence/WP3-T07B/mutate.py.txt <out> (NODE_EXE = Node 24.21.0 by full path, TEMP/TMP outside the repository). Each mutation is computed in memory before the file is opened for writing; the original bytes are restored and compared by SHA-256. 19 mutations, all caught; exit 0.
+
+baseline sha256 src/server/pdf/timesheetPdf.ts dc0d8562f4ff9f76e72e232fbf88d828084c14f75814d1a919f5df52723b228f
+baseline sha256 src/server/jobs/pdfJob.ts 085d40097bd28c228dd643240465f527b2764d56806995697d0d44faf7a43e2b
+baseline sha256 src/domain/emailTemplate.ts 6ada356ce5a3d13346358bd854ed0cc9152137f95f38c42dde72cbac95ca2aca
+baseline sha256 src/server/services/finalization.ts 2c4edf9a78a9872b4988e40090d6596731c2fa6073f486ff16f5fe3a986e7c5f
+baseline sha256 src/domain/snapshot.ts fa73fd86727b1d12a41231cbe7fa627ac27ecde212469267c2de0588ce06c506
+baseline sha256 src/server/services/submissionSettings.ts bc0ad34f929d1310ceec1bebda37790a583387b2845a49069b94bc6a6f0870ae
+baseline sha256 src/server/routes/signatures.ts 97411d73a6a3b785de4cb351cc5db1905cf72eb91d697cf4aa24d4eaa25a4a3d
+baseline sha256 src/server/services/signatures.ts 8a34846dfd1017bee89f804b21df5bacf9079cb9ff3ec2294580051f3da9268c
+baseline sha256 src/server/db/migrations/0005_automatic_presentation.ts 1c74e251ddb354f08586e9825ea7f1e2e2b468a70fbddb5c4be768203ea39ad4
+baseline exit=0 Test Files  9 passed (9) | Tests  363 passed (363)
+M1 the automatic banner is restored: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  5 failed | 358 passed (363)
+    failing: has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+    failing: passes the image and the note of an automatic revision only when the user authorized and enabled them
+    failing: with the note off carries no automatic indicator, no pending wording and no note text, but the name and the da
+    failing: with the note on shows the custom Vietnamese text once, on its own line between the title and the employee
+M2 the origin label is restored in the revision header line: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  4 failed | 359 passed (363)
+    failing: has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+    failing: shows the submission and revision identifiers in the header and the footer
+    failing: with the note off carries no automatic indicator, no pending wording and no note text, but the name and the da
+M3 the origin label is restored in the footer: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  4 failed | 359 passed (363)
+    failing: has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+    failing: shows the submission and revision identifiers in the header and the footer
+    failing: with the note off carries no automatic indicator, no pending wording and no note text, but the name and the da
+M4 the note line is shown although the user turned it off: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  4 failed | 359 passed (363)
+    failing: has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+    failing: with the note off carries no automatic indicator, no pending wording and no note text, but the name and the da
+    failing: with the note on shows the custom Vietnamese text once, on its own line between the title and the employee
+M5 the signature image is placed on an automatic revision that is not authorized: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: places the image only when the user authorized it
+M6 the automatic date is taken from the clock instead of the revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  14 failed | 349 passed (363)
+    failing: follows the saved zone of the snapshot, not the UTC date or the device zone
+    failing: gives identical bytes for the same input, whatever the clock or Math.random, with and without an image
+    failing: has exactly the extracted text and layout of the manual PDF for the same snapshot, name and date (image aside)
+    failing: is byte-identical for identical input, whatever the clock or Math.random
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+M7 the PDF job prints the profile name instead of the stored sign-off name: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: maps a manual revision to the stored sign-off name and instant, no automatic instant and the reviewed image
+M8 the PDF job takes the automatic instant from the clock instead of the revision: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: maps an automatic revision to its creation instant, the employee name and no image unless authorized
+M9 SignOffStatus shows the note for a manual submission too: exit=1 CAUGHT restored=byte-identical
+    Test Files  3 failed | 6 passed (9) | Tests  4 failed | 359 passed (363)
+    failing: gives a manual submission "Submitted" whatever the note setting
+    failing: gives an automatic submission with the note on the note text in the status, subject and bodies
+    failing: is "Submitted" for a manual submission, whatever the note setting
+    failing: previews an automatic submission: "Submitted" with the note off, the note text with the note on
+M10 SignOffStatus returns the old hardcoded "Signed by employee": exit=1 CAUGHT restored=byte-identical
+    Test Files  4 failed | 5 passed (9) | Tests  11 failed | 352 passed (363)
+    failing: gives a manual submission "Submitted" whatever the note setting
+    failing: gives an automatic submission with the note off exactly the manual payload: no origin is recorded in it
+    failing: is "Submitted" for a manual submission, whatever the note setting
+    failing: is "Submitted" for an automatic submission whose note line is off
+    failing: lists the 14 days of the period with the zone, employee, policy and calendar versions
+M11 the deadline path builds a manual payload (the note never reaches the automatic status or subject): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: passes the image and the note of an automatic revision only when the user authorized and enabled them
+M12 the note text may contain braces: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  4 failed | 359 passed (363)
+    failing: refuses a closing brace with 422 invalid_auto_note and writes nothing
+    failing: refuses a template variable with 422 invalid_auto_note and writes nothing
+    failing: refuses an opening brace with 422 invalid_auto_note and writes nothing
+    failing: requires a valid note in version 2
+M13 the note limit is 121 characters: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed | 7 passed (9) | Tests  2 failed | 361 passed (363)
+    failing: refuses 121 characters with 422 invalid_auto_note and writes nothing
+    failing: requires a valid note in version 2
+M14 a version 1 payload gains a note when normalized (its stored hash would change): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: still reads a version 1 payload for rendering: no note is added, so its stored hash stays valid
+M15 the settings audit omits the note fields: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: audits a note change with the before and after of the two fields only
+M16 the saved note text is not normalized (NFC, trimmed): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: normalizes the text to NFC and trims it
+M17 the upload authorizes the image without the explicit flag: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  14 failed | 349 passed (363)
+    failing: answers 404 to another user (also an administrator) and 401 to anonymous callers
+    failing: answers 413 above the route limit and accepts a body just below it
+    failing: appends a new immutable attachment and leaves earlier bytes and hash unchanged
+    failing: bounds the number of stored signatures per user
+    failing: keeps referenced signature files when the orphan sweep runs
+M18 a failing upload-time authorization is swallowed after the image was stored (not atomic): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  1 failed | 362 passed (363)
+    failing: rolls everything back, and discards the file, when there are no saved settings to authorize against
+M19 the note switch defaults to on in the schema: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 8 passed (9) | Tests  2 failed | 361 passed (363)
+    failing: adds the note flag (off) and the note text ("Automatic submission") with safe defaults
+    failing: upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers
+summary: 19 of 19 mutations caught

@@ -1,0 +1,48 @@
+GOV-WP3P-AUDIT diff scope and governance paths (repository root as cwd, Git Bash)
+
+$ git diff --name-status cb9800e da6d0cd
+M	handoff/delivery/ORCHESTRATION.json
+M	handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+M	handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+A	handoff/delivery/evidence/WP3-DOC-FREEZE/checks.txt
+A	handoff/delivery/evidence/WP3-DOC-FREEZE/commit-message.txt
+A	handoff/delivery/tasks/GOV-WP3P-AUDIT.md
+A	handoff/delivery/tasks/GOV-WP3P-FREEZE.md
+A	handoff/delivery/tasks/GOV-WP3P-GATE.md
+M	handoff/delivery/tasks/WP3-DOC-FREEZE.md
+M	handoff/prompts/WP3_IMPLEMENT.md
+M	handoff/prompts/WP3_IMPLEMENT.vi.md
+M	handoff/prompts/WP3_REVIEW.md
+M	handoff/prompts/WP3_REVIEW.vi.md
+exit 0
+
+$ git diff --check cb9800e da6d0cd
+exit 0
+
+$ git diff --name-only cb9800e da6d0cd | grep -v '^handoff/delivery/'
+handoff/prompts/WP3_IMPLEMENT.md
+handoff/prompts/WP3_IMPLEMENT.vi.md
+handoff/prompts/WP3_REVIEW.md
+handoff/prompts/WP3_REVIEW.vi.md
+exit 0
+
+$ git diff --name-only cb9800e da6d0cd | grep -E '^(AGENTS\.md|CLAUDE\.md|docs/|\.claude/|\.agents/|handoff/templates/|handoff/prompts/(ORCHESTRATE|RESUME)|handoff/delivery/(validate_|check_recovery)|scripts/precommit-check)'
+exit 1 (1 = no other governance path changed)
+
+$ git diff --quiet da6d0cd -- handoff/prompts docs handoff/templates AGENTS.md CLAUDE.md .claude .agents
+exit 0 (0 = working tree equals the freeze commit)
+
+$ git diff --stat da6d0cd -- . ':!handoff/delivery'
+exit 0
+
+$ git grep -n -i 'pending-review disclosure|pending review remains visible|pending-review notice|auto-sign' da6d0cd -- handoff/prompts handoff/templates docs/09 (EN, VI)
+exit 1 (1 = no stale wording)
+
+$ git grep -l 'auto-image on/off|ảnh tự động bật/tắt' da6d0cd -- . ':!handoff/delivery'
+da6d0cd:docs/09_IMPLEMENTATION_ROADMAP.md
+da6d0cd:docs/09_IMPLEMENTATION_ROADMAP.vi.md
+da6d0cd:handoff/prompts/WP3_IMPLEMENT.md
+da6d0cd:handoff/prompts/WP3_IMPLEMENT.vi.md
+da6d0cd:handoff/prompts/WP3_REVIEW.md
+da6d0cd:handoff/prompts/WP3_REVIEW.vi.md
+exit 0 (WP3 gate copies: docs/09 and the four prompts only)

@@ -568,3 +568,119 @@ describe('global JSON-only rule stays in force for every other route', () => {
     expect(response.status).toBe(413);
   });
 });
+
+describe('upload-time automatic image authorization (owner decision G-Q1 b)', () => {
+  const SETTINGS = '/api/settings/submission';
+  const uploadWith = (cookie: string, query: string, body: Uint8Array = makePng({ width: 33, height: 11 })) =>
+    send(app, 'POST', `/api/signatures${query}`, { cookie, body, type: 'image/png' });
+  const settingsVersions = (userId = ctx.userIds.employee) =>
+    (ctx.db.prepare('SELECT count(*) AS n FROM submission_settings WHERE user_id = ?').get(userId) as { n: number }).n;
+  const auditOperations = () =>
+    (ctx.db.prepare('SELECT operation FROM audit_events ORDER BY occurred_at, rowid').all() as Array<{ operation: string }>).map((row) => row.operation);
+
+  async function saveSettings(cookie = employeeCookie, expectedSeq = 0) {
+    const response = await ctx.request('POST', SETTINGS, { cookie, body: { expected_seq: expectedSeq, to: ['payroll@example.invalid'], auto_submit: true } });
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    return response.body.settings as { seq: number };
+  }
+
+  it('never authorizes without the explicit flag: the default is unchanged', async () => {
+    await saveSettings();
+    for (const query of ['', '?authorize_auto_image=false']) {
+      const response = await uploadWith(employeeCookie, query);
+      expect(response.status, query).toBe(201);
+      expect(response.json.settings).toBeUndefined();
+    }
+    expect(settingsVersions()).toBe(1);
+    const current = await ctx.request('GET', SETTINGS, { cookie: employeeCookie });
+    expect(current.body.settings.auto_image).toEqual({ authorized: false, signature_attachment_id: null, authorized_at: null });
+    expect(auditOperations().filter((operation) => operation.startsWith('submission_settings.auto_image'))).toEqual([]);
+  });
+
+  it('with authorize_auto_image=true stores the image and records the audited authorization in one transaction', async () => {
+    const before = await saveSettings();
+    ctx.clock.advanceSeconds(90);
+    const response = await uploadWith(employeeCookie, '?authorize_auto_image=true');
+    expect(response.status).toBe(201);
+    const signature = response.json.signature as { id: string; created_at: string };
+    expect(response.json.settings.seq).toBe(before.seq + 1);
+    expect(response.json.settings.auto_image).toEqual({
+      authorized: true,
+      signature_attachment_id: signature.id,
+      authorized_at: signature.created_at,
+    });
+    expect(settingsVersions()).toBe(2);
+    const current = await ctx.request('GET', SETTINGS, { cookie: employeeCookie });
+    expect(current.body.settings.auto_image.signature_attachment_id).toBe(signature.id);
+    // The same two audit events as the two-step flow, in order, both for the owner.
+    expect(auditOperations().slice(-2)).toEqual(['signature.upload', 'submission_settings.auto_image_authorize']);
+    const event = ctx.db
+      .prepare("SELECT actor_user_id, owner_user_id, entity_type, before_json, after_json FROM audit_events WHERE operation = 'submission_settings.auto_image_authorize'")
+      .get() as { actor_user_id: string; owner_user_id: string; entity_type: string; before_json: string; after_json: string };
+    expect(event).toMatchObject({ actor_user_id: ctx.userIds.employee, owner_user_id: ctx.userIds.employee, entity_type: 'submission_settings' });
+    expect(JSON.parse(event.after_json)).toMatchObject({ auto_image_authorized: true, auto_image_attachment_id: signature.id, replaces_attachment_id: null });
+    expect(JSON.parse(event.before_json)).toMatchObject({ auto_image_authorized: false });
+  });
+
+  it('moves an earlier authorization to the new image when the user confirms again', async () => {
+    await saveSettings();
+    const first = (await uploadWith(employeeCookie, '?authorize_auto_image=true', makePng({ width: 21, height: 9 }))).json.signature.id as string;
+    const second = await uploadWith(employeeCookie, '?authorize_auto_image=true', makePng({ width: 22, height: 9 }));
+    expect(second.status).toBe(201);
+    expect(second.json.settings.auto_image.signature_attachment_id).toBe(second.json.signature.id);
+    const event = ctx.db
+      .prepare("SELECT after_json FROM audit_events WHERE operation = 'submission_settings.auto_image_authorize' ORDER BY rowid DESC LIMIT 1")
+      .get() as { after_json: string };
+    expect(JSON.parse(event.after_json)).toMatchObject({ replaces_attachment_id: first });
+    // A plain upload afterwards leaves the authorization on the image the user confirmed.
+    await uploadWith(employeeCookie, '', makePng({ width: 23, height: 9 }));
+    const current = await ctx.request('GET', SETTINGS, { cookie: employeeCookie });
+    expect(current.body.settings.auto_image.signature_attachment_id).toBe(second.json.signature.id);
+  });
+
+  it('rolls everything back, and discards the file, when there are no saved settings to authorize against', async () => {
+    const response = await uploadWith(employeeCookie, '?authorize_auto_image=true');
+    expect(response.status).toBe(422);
+    expect(response.json.error.code).toBe('submission_settings_required');
+    expect(countAttachments()).toBe(0);
+    expect(storedFiles()).toEqual([]);
+    expect(settingsVersions()).toBe(0);
+    expect(auditOperations().filter((operation) => operation.startsWith('signature.') || operation.startsWith('submission_settings.'))).toEqual([]);
+  });
+
+  it('refuses any other flag value, a repeated flag and an unauthenticated flagged upload, storing nothing', async () => {
+    await saveSettings();
+    const before = { attachments: countAttachments(), files: storedFiles().length, versions: settingsVersions() };
+    for (const query of ['?authorize_auto_image=yes', '?authorize_auto_image=1', '?authorize_auto_image=', '?authorize_auto_image=true&authorize_auto_image=true']) {
+      const response = await uploadWith(employeeCookie, query);
+      expect(response.status, query).toBe(422);
+      expect(response.json.error.code, query).toBe('validation_error');
+    }
+    const anonymous = await send(app, 'POST', '/api/signatures?authorize_auto_image=true', { body: makePng(), type: 'image/png' });
+    expect(anonymous.status).toBe(401);
+    expect({ attachments: countAttachments(), files: storedFiles().length, versions: settingsVersions() }).toEqual(before);
+  });
+
+  it('applies only to the signed-in owner: another user keeps their own settings', async () => {
+    await saveSettings();
+    await saveSettings(adminCookie);
+    const response = await uploadWith(adminCookie, '?authorize_auto_image=true');
+    expect(response.status).toBe(201);
+    expect(settingsVersions(ctx.userIds.admin)).toBe(2);
+    expect(settingsVersions(ctx.userIds.employee)).toBe(1);
+    const own = await ctx.request('GET', SETTINGS, { cookie: employeeCookie });
+    expect(own.body.settings.auto_image.authorized).toBe(false);
+  });
+
+  it('leaves a refused image unauthorized and unstored', async () => {
+    await saveSettings();
+    const before = { attachments: countAttachments(), versions: settingsVersions() };
+    const response = await send(app, 'POST', '/api/signatures?authorize_auto_image=true', {
+      cookie: employeeCookie,
+      body: Buffer.concat([makePng(), ZIP_TAIL]),
+      type: 'image/png',
+    });
+    expect(response.status).toBe(422);
+    expect({ attachments: countAttachments(), versions: settingsVersions() }).toEqual(before);
+  });
+});

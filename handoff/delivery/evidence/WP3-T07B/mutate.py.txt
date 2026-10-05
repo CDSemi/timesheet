@@ -1,0 +1,166 @@
+"""Mutation checks for WP3-T07B.
+
+Each mutation is computed in memory first (every pattern must match exactly once and the result
+must differ from the original); only then is the file opened for writing. The nine test files of
+the task are run, and the original bytes are restored in a finally block and compared with the
+saved SHA-256. Usage (repository root, NODE_EXE pointing at the Node 24 binary, TEMP/TMP outside
+the repository):
+python mutate.py.txt <out-file>
+"""
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+TESTS = [
+    'tests/domain/canonical.test.ts',
+    'tests/domain/email-template.test.ts',
+    'tests/integration/pdf-render.test.ts',
+    'tests/integration/migrations.test.ts',
+    'tests/integration/submission-settings.test.ts',
+    'tests/integration/review-payload.test.ts',
+    'tests/integration/signatures.test.ts',
+    'tests/integration/jobs.test.ts',
+    'tests/integration/deadline.test.ts',
+]
+PDF = 'src/server/pdf/timesheetPdf.ts'
+JOB = 'src/server/jobs/pdfJob.ts'
+TEMPLATE = 'src/domain/emailTemplate.ts'
+SNAPSHOT = 'src/domain/snapshot.ts'
+FINAL = 'src/server/services/finalization.ts'
+SETTINGS = 'src/server/services/submissionSettings.ts'
+SIGNATURES = 'src/server/services/signatures.ts'
+SIG_ROUTE = 'src/server/routes/signatures.ts'
+MIGRATION = 'src/server/db/migrations/0005_automatic_presentation.ts'
+
+MUTATIONS = [
+    ('M1 the automatic banner is restored', PDF, [
+        ("  let y = 80;\n  if (autoNote?.enabled === true) {",
+         "  let y = 80;\n  if (input.origin === 'automatic') canvas.text('Employee review pending', MARGIN, 66, 9);\n  if (autoNote?.enabled === true) {"),
+    ]),
+    ('M2 the origin label is restored in the revision header line', PDF, [
+        ("  const revisionLine = `Revision ${input.revisionNo}`;",
+         "  const revisionLine = `Revision ${input.revisionNo} (${input.origin === 'manual' ? 'manual sign-off' : 'automatic submission'})`;"),
+    ]),
+    ('M3 the origin label is restored in the footer', PDF, [
+        ("  const footer = `${input.submissionId}  |  Revision ${input.revisionNo}`;",
+         "  const footer = `${input.submissionId}  |  Revision ${input.revisionNo}  |  ${input.origin}`;"),
+    ]),
+    ('M4 the note line is shown although the user turned it off', PDF, [
+        ("  if (autoNote?.enabled === true) {", "  if (autoNote !== null) {"),
+    ]),
+    ('M5 the signature image is placed on an automatic revision that is not authorized', PDF, [
+        ("    if (input.signatureImage !== null && !snapshot.auto_image.authorized) {",
+         "    if (input.signatureImage !== null && !snapshot.auto_image.authorized && input.origin === 'manual') {"),
+    ]),
+    ('M6 the automatic date is taken from the clock instead of the revision', PDF, [
+        ("    printedInstant = input.automaticSubmittedAt;",
+         "    printedInstant = new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');"),
+    ]),
+    ('M7 the PDF job prints the profile name instead of the stored sign-off name', JOB, [
+        ("signerName: signoff.signer_name,", "signerName: snapshot.employee.name,"),
+    ]),
+    ('M8 the PDF job takes the automatic instant from the clock instead of the revision', JOB, [
+        ("    automaticSubmittedAt: revision.created_at,",
+         "    automaticSubmittedAt: new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'),"),
+    ]),
+    ('M9 SignOffStatus shows the note for a manual submission too', TEMPLATE, [
+        ("  return origin === 'automatic' && autoNote.enabled ? autoNote.text : SUBMITTED_STATUS;",
+         "  return autoNote.enabled ? autoNote.text : SUBMITTED_STATUS;"),
+    ]),
+    ('M10 SignOffStatus returns the old hardcoded "Signed by employee"', TEMPLATE, [
+        ("export const SUBMITTED_STATUS = 'Submitted';", "export const SUBMITTED_STATUS = 'Signed by employee';"),
+    ]),
+    ('M11 the deadline path builds a manual payload (the note never reaches the automatic status or subject)', FINAL, [
+        ("buildReviewPayload(db, clock, owner, input.payrollDate, 'automatic')", "buildReviewPayload(db, clock, owner, input.payrollDate, 'manual')"),
+    ]),
+    ('M12 the note text may contain braces', SNAPSHOT, [
+        ("const UNSAFE_NOTE_CHARACTER = /[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}{}]/u;", "const UNSAFE_NOTE_CHARACTER = /[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]/u;"),
+    ]),
+    ('M13 the note limit is 121 characters', SNAPSHOT, [
+        ("length > MAX_AUTO_NOTE_LENGTH)", "length > MAX_AUTO_NOTE_LENGTH + 1)"),
+    ]),
+    ('M14 a version 1 payload gains a note when normalized (its stored hash would change)', SNAPSHOT, [
+        ("    return {};\n  }\n  if (note === undefined ||", "    return { auto_note: { enabled: false, text: DEFAULT_AUTO_NOTE_TEXT } };\n  }\n  if (note === undefined ||"),
+    ]),
+    ('M15 the settings audit omits the note fields', SETTINGS, [
+        ("    auto_note_enabled: settings.autoNoteEnabled,\n    auto_note_text: settings.autoNoteText,\n    show_ot_on_pdf: settings.showOtOnPdf,\n    reminder_offsets_minutes: settings.reminderOffsetsMinutes,\n  };",
+         "    show_ot_on_pdf: settings.showOtOnPdf,\n    reminder_offsets_minutes: settings.reminderOffsetsMinutes,\n  };"),
+    ]),
+    ('M16 the saved note text is not normalized (NFC, trimmed)', SETTINGS, [
+        ("    autoNoteText = checked.text;", "    autoNoteText = input.autoNoteText;"),
+    ]),
+    ('M17 the upload authorizes the image without the explicit flag', SIG_ROUTE, [
+        ("  if (values === undefined) return false;", "  if (values === undefined) return true;"),
+    ]),
+    ('M18 a failing upload-time authorization is swallowed after the image was stored (not atomic)', SIGNATURES, [
+        ("      return { signature, within: within === null ? null : within(id) };",
+         "      let extra: T | null = null;\n      if (within !== null) {\n        try {\n          extra = within(id);\n        } catch {\n          extra = null;\n        }\n      }\n      return { signature, within: extra };"),
+    ]),
+    ('M19 the note switch defaults to on in the schema', MIGRATION, [
+        ("auto_note_enabled INTEGER NOT NULL DEFAULT 0", "auto_note_enabled INTEGER NOT NULL DEFAULT 1"),
+    ]),
+]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run_tests() -> tuple[int, str]:
+    node = os.environ.get('NODE_EXE', 'node')
+    result = subprocess.run([node, 'node_modules/vitest/vitest.mjs', 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=ROOT)
+    out = result.stdout + result.stderr
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests ', 'Test Files'))]
+    failing = sorted({line.strip().split(' > ')[-1][:110] for line in out.splitlines() if line.strip().startswith('FAIL ') and ' > ' in line})
+    detail = ' | '.join(summary)
+    if failing:
+        detail += '\n    failing: ' + '\n    failing: '.join(failing[:5])
+    return result.returncode, detail
+
+
+def main(out_path: str) -> int:
+    originals: dict[str, bytes] = {}
+    for _, file, _ in MUTATIONS:
+        if file not in originals:
+            originals[file] = (ROOT / file).read_bytes()
+    lines = []
+    for file, data in originals.items():
+        lines.append(f'baseline sha256 {file} {sha(data)}')
+    code, detail = run_tests()
+    lines.append(f'baseline exit={code} {detail}')
+    # Compute every mutation before any file is opened for writing.
+    planned = []
+    for label, file, pairs in MUTATIONS:
+        text = originals[file].decode('utf-8')
+        for old, new in pairs:
+            if text.count(old) != 1:
+                raise SystemExit(f'pattern for {label!r} matches {text.count(old)} times: {old[:60]!r}')
+            text = text.replace(old, new)
+        mutated = text.encode('utf-8')
+        if mutated == originals[file]:
+            raise SystemExit(f'mutation {label!r} changes nothing')
+        planned.append((label, file, mutated))
+    caught = 0
+    for label, file, mutated in planned:
+        target = ROOT / file
+        try:
+            with open(target, 'wb') as handle:
+                handle.write(mutated)
+            code, detail = run_tests()
+        finally:
+            with open(target, 'wb') as handle:
+                handle.write(originals[file])
+        restored = 'byte-identical' if sha((ROOT / file).read_bytes()) == sha(originals[file]) else 'NOT IDENTICAL'
+        verdict = 'CAUGHT' if code != 0 else 'SURVIVED'
+        caught += 1 if code != 0 else 0
+        lines.append(f'{label}: exit={code} {verdict} restored={restored}\n    {detail}')
+    lines.append(f'summary: {caught} of {len(planned)} mutations caught')
+    Path(out_path).write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+    return 0 if caught == len(planned) else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1]))

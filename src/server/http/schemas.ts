@@ -263,6 +263,9 @@ export const submissionSettingsBody = z.strictObject({
   auto_submit: z.boolean(),
   /** Explicit choice: let an auto-submit change also cover already-overdue drafts. */
   apply_to_overdue_drafts: z.boolean().optional(),
+  /** The optional note line of an automatic submission; the exact text rules are checked by the domain. */
+  auto_note_enabled: z.boolean().optional(),
+  auto_note_text: z.string().max(400).optional(),
   show_ot_on_pdf: z.boolean().optional(),
   reminder_offsets_minutes: z.array(z.number().int().min(1).max(20_160)).max(5).optional(),
 });
@@ -271,7 +274,8 @@ export type SubmissionSettingsBody = z.infer<typeof submissionSettingsBody>;
 export const submissionPreviewBody = z.strictObject({
   subject_template: z.string().max(600).optional(),
   body_template: z.string().max(12_000).optional(),
-  sign_off: z.enum(['signed', 'review_pending']).optional(),
+  /** The origin {SignOffStatus} is previewed for; defaults to manual. */
+  sign_off: z.enum(['manual', 'automatic']).optional(),
 });
 
 export const autoImageAuthorizeBody = z.strictObject({

@@ -1,0 +1,55 @@
+// Visual-check substitute (WP3-T07B). No PDF-to-image tool is installed on this host, so the
+// check reads the generated PDFs back with pdfjs (text items with positions, images) and prints
+// the lines of the header band and of the signature block of one synthetic manual and one
+// synthetic automatic PDF (note off, note on, image authorized). Nothing is written to disk.
+//
+// Run from the repository root with the Node 24 binary, after copying this file to a *.mjs path
+// outside the repository (for example the task's TEMP folder):
+//   node <tmp>/layout-dump.mjs
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const load = (path) => import(pathToFileURL(resolve(path)).href);
+const { datesBetween } = await load('src/domain/dates.ts');
+const { renderTimesheetPdf } = await load('src/server/pdf/timesheetPdf.ts');
+const { makePng, readPdf } = await load('tests/support/pdfText.ts');
+
+const ZONE = 'America/Los_Angeles';
+const dates = datesBetween('2026-09-14', '2026-09-27');
+const day = (date) => ({
+  work_date: date, day_class: 'working', day_class_reason: null, holiday_name: null, calendar_version_id: 'cv-1',
+  category: 'Worked', category_source: 'default', attendance_expected: true, wfh: false, notes: '', leave_minutes: 0,
+  leave_kind: null, ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+  sessions: [], completeness: 'no_records', policy_version_id: 'pv-1', calculation: null, calculation_error: null,
+});
+const snapshot = (overrides = {}) => ({
+  schema: 'timesheet-review', schema_version: 2, employee: { name: 'Alex Example' },
+  period: { payroll_date: '2026-10-02', nominal_payroll_date: '2026-10-02', period_start: '2026-09-14', period_end: '2026-09-27',
+    due_local_date: '2026-09-29', due_local_time: '17:00', due_at_utc: '2026-09-30T00:00:00Z', is_exception: false },
+  reporting_zone: ZONE, submission: { id: 'TS-20261002-0123456789', revision_no: 1, sign_off_status: 'Submitted' },
+  timesheet: { finalized_revision_no: null }, calendar: { id: 'cal-1', version_ids: ['cv-1'] }, policy: { version_ids: ['pv-1'] },
+  days: dates.map(day), totals: { credited_minutes: 0, pending_days: 0 }, ot_proposals: [], deficit_proposals: [],
+  unresolved_inputs: [], ot_leave_reservations: [],
+  recipients: { to: ['payroll@example.invalid'], cc: [], subject: 's', body_text: 'b', body_html: 'b', template_version: 1 },
+  signature: null, auto_image: { authorized: false, attachment_id: null }, auto_note: { enabled: false, text: 'Automatic submission' },
+  show_ot_on_pdf: true, ...overrides,
+});
+
+const base = { submissionId: 'TS-20261002-0123456789', revisionNo: 1 };
+const cases = [
+  ['manual', { ...base, snapshot: snapshot(), origin: 'manual', signedAt: '2026-10-08T05:30:00Z', automaticSubmittedAt: null, signerName: 'Alex Q. Signer', signatureImage: makePng(120, 40) }],
+  ['automatic, note off, no image', { ...base, snapshot: snapshot(), origin: 'automatic', signedAt: null, automaticSubmittedAt: '2026-10-08T05:30:00Z', signerName: 'Alex Example', signatureImage: null }],
+  ['automatic, note on, image authorized', { ...base, snapshot: snapshot({ auto_note: { enabled: true, text: 'Submitted by the weekly schedule' }, auto_image: { authorized: true, attachment_id: 'att-1' } }), origin: 'automatic', signedAt: null, automaticSubmittedAt: '2026-10-08T05:30:00Z', signerName: 'Alex Example', signatureImage: makePng(120, 40) }],
+];
+for (const [label, input] of cases) {
+  const content = await readPdf(await renderTimesheetPdf(input));
+  const page = content.pages[0];
+  const band = page.lines.slice(0, 7);
+  console.log(`== ${label}`);
+  console.log(`   images on the page: ${page.images.length}`);
+  console.log('   header band:');
+  for (const line of band) console.log(`     ${line}`);
+  console.log('   signature block and footer:');
+  for (const line of page.lines.slice(-8)) console.log(`     ${line}`);
+  console.log(`   mentions of automatic/pending/review (case-insensitive): ${(content.text.match(/automatic|pending|review/gi) ?? []).length}`);
+}

@@ -1,7 +1,14 @@
 import { assertCivilDate } from '../../domain/dates.ts';
 import { sha256Hex } from '../../domain/canonical.ts';
 import { decideDeficit } from '../../domain/deficit.ts';
-import { renderHtmlBody, renderSubject, renderTextBody, type TemplateValues } from '../../domain/emailTemplate.ts';
+import {
+  renderHtmlBody,
+  renderSubject,
+  renderTextBody,
+  signOffStatusText,
+  type SubmissionOrigin,
+  type TemplateValues,
+} from '../../domain/emailTemplate.ts';
 import { isDomainError } from '../../domain/errors.ts';
 import { formatUtcInstant } from '../../domain/instants.ts';
 import { type PayPeriod, payPeriodForPayrollDate } from '../../domain/periods.ts';
@@ -38,10 +45,13 @@ import { calculateDay, type DayView, findTimesheet, getTimesheetView, loadScope,
  *
  * The payload depends on content only: nothing in it varies with the current clock or with
  * the device zone, so a recomputation of unchanged content gives the identical hash.
+ *
+ * {SignOffStatus} comes from one domain function (signOffStatusText, owner decision G-Q2 (a)):
+ * "Submitted" for a manual submission and for an automatic one with the note line off, the note
+ * text for an automatic one with the note line on. The automatic deadline path builds its payload
+ * with origin `automatic`; the frozen subject and bodies and `submission.sign_off_status` carry that
+ * text, and nothing else in the payload records the origin (the revision row does).
  */
-
-/** SignOffStatus rendered into the review email: the manual path signs before sending. */
-export const MANUAL_SIGN_OFF_STATUS = 'Signed by employee';
 
 export interface ReviewPayloadResult {
   payload: ReviewSnapshot;
@@ -121,7 +131,7 @@ function snapshotDay(day: DayView): SnapshotDay {
   };
 }
 
-function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: string): ReviewPayloadResult {
+function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: string, origin: SubmissionOrigin): ReviewPayloadResult {
   const period = resolvePeriod(db, user, payrollDateInput);
   const scope = loadScope(db, user);
   const view = getTimesheetView(db, clock, user, period.payrollDate);
@@ -221,12 +231,14 @@ function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: stri
           )
           .get(user.id, timesheet.id)?.latest ?? 0)) + 1;
   const submissionId = submissionIdFor(user.id, scope.calendar.id, period);
+  const autoNote = { enabled: settings.autoNoteEnabled, text: settings.autoNoteText };
+  const signOffStatus = signOffStatusText(origin, autoNote);
   const values: TemplateValues = {
     EmployeeName: user.displayName,
     PeriodStart: period.periodStart,
     PeriodEnd: period.periodEnd,
     PayrollDate: period.payrollDate,
-    SignOffStatus: MANUAL_SIGN_OFF_STATUS,
+    SignOffStatus: signOffStatus,
     SubmissionId: submissionId,
     Revision: String(revisionNo),
   };
@@ -246,7 +258,7 @@ function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: stri
       is_exception: period.isException,
     },
     reporting_zone: scope.calendar.schedule.reportingZone,
-    submission: { id: submissionId, revision_no: revisionNo, sign_off_status: MANUAL_SIGN_OFF_STATUS },
+    submission: { id: submissionId, revision_no: revisionNo, sign_off_status: signOffStatus },
     timesheet: { finalized_revision_no: timesheet?.finalized_revision_no ?? null },
     calendar: { id: scope.calendar.id, version_ids: [...calendarVersionIds] },
     policy: { version_ids: [...policyVersionIds] },
@@ -269,6 +281,7 @@ function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: stri
     },
     signature: signature === null ? null : { attachment_id: signature.id, sha256: signature.sha256 },
     auto_image: { authorized: settings.autoImageAuthorized, attachment_id: settings.autoImageAttachmentId },
+    auto_note: autoNote,
     show_ot_on_pdf: settings.showOtOnPdf,
   });
   return { payload: sealed.snapshot, payloadHash: sealed.sha256, expectedVersion: timesheet?.version ?? 0 };
@@ -277,10 +290,17 @@ function compute(db: Db, clock: Clock, user: SessionUser, payrollDateInput: stri
 /**
  * The owner's review payload for one payroll date. It reads only the caller's own data (a
  * payroll date that is not one of the caller's is "not found") and writes nothing. Inside
- * a caller's transaction (the sign-off) the same function runs as part of it.
+ * a caller's transaction (the sign-off) the same function runs as part of it. `origin` is
+ * `manual` for every employee-driven payload and `automatic` only for the deadline path.
  */
-export function buildReviewPayload(db: Db, clock: Clock, user: SessionUser, payrollDate: string): ReviewPayloadResult {
-  return db.transaction(() => compute(db, clock, user, payrollDate)).deferred();
+export function buildReviewPayload(
+  db: Db,
+  clock: Clock,
+  user: SessionUser,
+  payrollDate: string,
+  origin: SubmissionOrigin = 'manual',
+): ReviewPayloadResult {
+  return db.transaction(() => compute(db, clock, user, payrollDate, origin)).deferred();
 }
 
 export function reviewPayloadJson(result: ReviewPayloadResult) {

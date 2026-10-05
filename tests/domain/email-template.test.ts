@@ -10,6 +10,7 @@ import {
   renderHtmlBody,
   renderSubject,
   renderTextBody,
+  signOffStatusText,
   TEMPLATE_VARIABLES,
   type TemplateValues,
   validateBodyTemplate,
@@ -26,7 +27,7 @@ const VALUES: TemplateValues = {
   PeriodStart: '2026-09-14',
   PeriodEnd: '2026-09-27',
   PayrollDate: '2026-10-02',
-  SignOffStatus: 'Signed by the employee',
+  SignOffStatus: 'Submitted',
   SubmissionId: 'SUB-0001',
   Revision: '1',
 };
@@ -64,7 +65,7 @@ describe('template variables', () => {
 
   it('render the default templates without leftovers', () => {
     expect(renderSubject(DEFAULT_SUBJECT_TEMPLATE, VALUES)).toBe(
-      'Timesheet 2026-09-14 to 2026-09-27 - Example Employee - Signed by the employee',
+      'Timesheet 2026-09-14 to 2026-09-27 - Example Employee - Submitted',
     );
     expect(renderTextBody(DEFAULT_BODY_TEMPLATE, VALUES)).not.toMatch(/[{}]/);
   });
@@ -247,5 +248,40 @@ describe('recipients', () => {
     expect(normalizeRecipients(Array.from({ length: 20 }, () => 'same@example.invalid')).to).toEqual(['same@example.invalid']);
     // A very long input is refused outright.
     expect(codeOf(() => normalizeRecipients(make(4 * MAX_RECIPIENTS_PER_LIST + 1)))).toBe('too_many_recipients');
+  });
+});
+
+describe('SignOffStatus text (one domain function for every submission)', () => {
+  const NOTE_OFF = { enabled: false, text: 'Automatic submission' };
+  const NOTE_ON = { enabled: true, text: 'Submitted by the weekly schedule' };
+  // Vietnamese "Nop tu dong" with diacritics, built from code points so this file stays ASCII.
+  const VIETNAMESE = `N${String.fromCodePoint(0x1ed9)}p t${String.fromCodePoint(0x1ef1)} ${String.fromCodePoint(0x111)}${String.fromCodePoint(0x1ed9)}ng`;
+
+  it('is "Submitted" for a manual submission, whatever the note setting', () => {
+    expect(signOffStatusText('manual', NOTE_OFF)).toBe('Submitted');
+    expect(signOffStatusText('manual', NOTE_ON)).toBe('Submitted');
+  });
+
+  it('is "Submitted" for an automatic submission whose note line is off', () => {
+    expect(signOffStatusText('automatic', NOTE_OFF)).toBe('Submitted');
+    expect(signOffStatusText('automatic', { enabled: false, text: 'x' })).toBe('Submitted');
+  });
+
+  it('is the note text for an automatic submission whose note line is on', () => {
+    expect(signOffStatusText('automatic', NOTE_ON)).toBe('Submitted by the weekly schedule');
+    expect(signOffStatusText('automatic', { enabled: true, text: VIETNAMESE })).toBe(VIETNAMESE);
+  });
+
+  it('never states a false sign-off or an origin when no note is shown', () => {
+    for (const origin of ['manual', 'automatic'] as const) {
+      expect(signOffStatusText(origin, NOTE_OFF)).not.toMatch(/signed|automatic|pending|review/i);
+    }
+  });
+
+  it('renders into the default subject without revealing the origin', () => {
+    const subject = renderSubject(DEFAULT_SUBJECT_TEMPLATE, { ...VALUES, SignOffStatus: signOffStatusText('automatic', NOTE_OFF) });
+    expect(subject).toBe('Timesheet 2026-09-14 to 2026-09-27 - Example Employee - Submitted');
+    const withNote = renderSubject(DEFAULT_SUBJECT_TEMPLATE, { ...VALUES, SignOffStatus: signOffStatusText('automatic', NOTE_ON) });
+    expect(withNote).toBe('Timesheet 2026-09-14 to 2026-09-27 - Example Employee - Submitted by the weekly schedule');
   });
 });

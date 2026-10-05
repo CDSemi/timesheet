@@ -82,7 +82,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(4);
+    expect(LATEST).toBe(5);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -103,7 +103,13 @@ describe('fresh SQLite migrations', () => {
         checksum: createHash('sha256').update(migration.sql).digest('hex'),
       })),
     );
-    expect(MIGRATIONS.map((migration) => migration.name)).toEqual(['initial', 'ot_ledger', 'day_entry_source', 'submission']);
+    expect(MIGRATIONS.map((migration) => migration.name)).toEqual([
+      'initial',
+      'ot_ledger',
+      'day_entry_source',
+      'submission',
+      'automatic_presentation',
+    ]);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
       .pluck()
@@ -150,11 +156,12 @@ describe('fresh SQLite migrations', () => {
 });
 
 describe('committed migrations', () => {
-  // Checksums recorded by databases created at WP1 (0001) and at the accepted WP2 source 5fafeae (0002, 0003).
+  // Checksums recorded by databases created at WP1 (0001), the accepted WP2 source 5fafeae (0002, 0003) and WP3-T01 (0004).
   it.each([
     [1, 'initial', '1c0b248d74c4d83a11282dee28aaf056ae083fb12e0d5b5534cfebd7f2f0c9b5'],
     [2, 'ot_ledger', 'e9a6b285ba8fa97883e6481c700b2c0ac4d0bd9b9ee4f75acfd93b551d9da0c3'],
     [3, 'day_entry_source', '773cbb3dd33936b276353f12296cf679729188bd2bebd4b8c8f34e10c0bace06'],
+    [4, 'submission', '73563328032f2d909d16f572130dca14f42804b661fd463daca474c45486457c'],
   ])('never edits migration %i (%s): its checksum stays pinned', (version, name, checksum) => {
     const migration = MIGRATIONS.find((item) => item.version === version);
     if (migration === undefined) throw new Error(`migration ${version} missing`);
@@ -184,7 +191,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
     );
   }
 
-  it('applies 0002-0004, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+  it('applies 0002-0005, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
     const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
     expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
     const seed = await seedSynthetic(db, new MutableClock(AT), {
@@ -219,7 +226,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4], version: 4 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5], version: 5 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -228,13 +235,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect.objectContaining({ version: 2, name: 'ot_ledger', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 3, name: 'day_entry_source', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 4, name: 'submission', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 5, name: 'automatic_presentation', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true })).toBe(5);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -246,7 +254,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 4 });
+    expect(migrate(db)).toEqual({ applied: [], version: 5 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -263,7 +271,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4], version: 4 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5], version: 5 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -432,7 +440,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     );
   }
 
-  it('applies only 0004 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
+  it('applies 0004 and 0005 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
     // 0001-0003 are byte-identical to 5fafeae (checksums pinned above), so this builds the same schema.
     const v3 = MIGRATIONS.filter((migration) => migration.version <= 3);
     expect(migrate(db, v3)).toEqual({ applied: [1, 2, 3], version: 3 });
@@ -452,13 +460,13 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     const balances = seed.users.map((user) => getBalance(db, user.id));
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4], version: 4 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5], version: 5 });
 
     expect(snapshotV3(db)).toEqual(before);
     expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true })).toBe(5);
     // Existing timesheets are not imported history; automation stays inactive until the owner records it.
     expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
     expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
@@ -474,7 +482,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     for (const name of EXPECTED_TABLES.filter((table) => !V3_TABLES.includes(table) && table !== 'operations_state')) {
       expect(db.prepare(`SELECT count(*) FROM ${name}`).pluck().get(), name).toBe(0);
     }
-    expect(migrate(db)).toEqual({ applied: [], version: 4 });
+    expect(migrate(db)).toEqual({ applied: [], version: 5 });
   });
 });
 
@@ -976,5 +984,215 @@ describe('migration 0004 submission schema', () => {
     db.prepare('UPDATE operations_state SET automation_active_from = ?, automation_recorded_at = ?, automation_recorded_by = ?').run(AT, AT, admin);
     db.prepare('UPDATE operations_state SET runner_heartbeat_at = ?, runner_instance = ?').run(AT, 'runner-a');
     expectSqliteError(() => db.prepare("UPDATE operations_state SET runner_heartbeat_at = 'now'").run(), check);
+  });
+});
+
+describe('migration 0005 automatic presentation', () => {
+  const AT = '2026-10-02T18:00:00Z';
+  const HASH_A = 'a'.repeat(64);
+  /** Columns of submission_settings before migration 0005 adds the note fields. */
+  const V4_SETTINGS_COLUMNS =
+    'id, user_id, seq, recipients_to, recipients_cc, subject_template, body_template, template_version, auto_submit, ' +
+    'auto_submit_effective_from, auto_image_authorized, auto_image_attachment_id, auto_image_authorized_at, show_ot_on_pdf, ' +
+    'reminder_offsets_minutes, created_by, created_at';
+  // Built from code points so this file stays ASCII: 120 Vietnamese characters of 3 bytes each.
+  const VIETNAMESE_120 = String.fromCodePoint(0x1ed9).repeat(120);
+  const NOTE_CHECK = /CHECK constraint failed/;
+
+  type Row = Record<string, string | number | null>;
+
+  function insert(table: string, row: Row): void {
+    const columns = Object.keys(row);
+    db.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...Object.values(row));
+  }
+
+  function settingsRow(id: string, userId: string, seq: number, overrides: Row = {}): Row {
+    return {
+      id,
+      user_id: userId,
+      seq,
+      recipients_to: '["manager@example.invalid"]',
+      recipients_cc: '[]',
+      subject_template: 'Timesheet {EmployeeName} {PayrollDate} r{Revision}',
+      body_template: 'Hello,\n\nAttached.\n{EmployeeName}',
+      template_version: 1,
+      auto_submit: 1,
+      auto_submit_effective_from: AT,
+      auto_image_authorized: 0,
+      auto_image_attachment_id: null,
+      auto_image_authorized_at: null,
+      show_ot_on_pdf: 1,
+      reminder_offsets_minutes: '[1440,120]',
+      created_by: userId,
+      created_at: AT,
+      ...overrides,
+    };
+  }
+
+  async function seed(target: Db): Promise<{ employee: string; admin: string; calendar: string }> {
+    const result = await seedSynthetic(target, new MutableClock(AT), {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass' },
+    });
+    return {
+      employee: result.users.find((user) => user.role === 'employee')?.id ?? '',
+      admin: result.users.find((user) => user.role === 'admin')?.id ?? '',
+      calendar: result.calendarId ?? '',
+    };
+  }
+
+  it('adds the note flag (off) and the note text ("Automatic submission") with safe defaults', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    insert('submission_settings', settingsRow('set-1', ids.employee, 1));
+    expect(
+      db.prepare('SELECT auto_note_enabled, auto_note_text FROM submission_settings WHERE id = ?').get('set-1'),
+    ).toEqual({ auto_note_enabled: 0, auto_note_text: 'Automatic submission' });
+    const columns = db.prepare('SELECT name, type, "notnull", dflt_value FROM pragma_table_info(?)').all('submission_settings') as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>;
+    expect(columns.filter((column) => column.name.startsWith('auto_note'))).toEqual([
+      { name: 'auto_note_enabled', type: 'INTEGER', notnull: 1, dflt_value: '0' },
+      { name: 'auto_note_text', type: 'TEXT', notnull: 1, dflt_value: "'Automatic submission'" },
+    ]);
+  });
+
+  it('constrains the flag to 0/1 and the text to 1-120 characters on one line', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    let seq = 0;
+    const attempt = (overrides: Row) => () => insert('submission_settings', settingsRow(`set-${(seq += 1)}`, ids.employee, seq, overrides));
+    expect(attempt({ auto_note_enabled: 1, auto_note_text: 'Nop tu dong' })).not.toThrow();
+    expect(attempt({ auto_note_enabled: 0, auto_note_text: 'x'.repeat(120) })).not.toThrow();
+    // The limit counts characters, not bytes.
+    expect(attempt({ auto_note_enabled: 1, auto_note_text: VIETNAMESE_120 })).not.toThrow();
+    expectSqliteError(attempt({ auto_note_enabled: 2 }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_enabled: -1 }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: '' }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: 'x'.repeat(121) }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: `${VIETNAMESE_120}x` }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: 'two\nlines' }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: 'carriage\rreturn' }), NOTE_CHECK);
+    expectSqliteError(attempt({ auto_note_text: null }), /NOT NULL constraint failed/);
+    expect(db.prepare('SELECT count(*) FROM submission_settings').pluck().get()).toBe(3);
+  });
+
+  it('keeps settings versions immutable with the new columns', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    insert('submission_settings', settingsRow('set-1', ids.employee, 1, { auto_note_enabled: 1, auto_note_text: 'Nop tu dong' }));
+    expectSqliteError(() => db.prepare("UPDATE submission_settings SET auto_note_enabled = 0 WHERE id = 'set-1'").run(), /immutable_submission_settings/);
+    expectSqliteError(() => db.prepare("UPDATE submission_settings SET auto_note_text = 'Other' WHERE id = 'set-1'").run(), /immutable_submission_settings/);
+    expectSqliteError(() => db.prepare('DELETE FROM submission_settings').run(), /immutable_submission_settings/);
+  });
+
+  it('upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live', async () => {
+    const v4 = MIGRATIONS.filter((migration) => migration.version <= 4);
+    expect(migrate(db, v4)).toEqual({ applied: [1, 2, 3, 4], version: 4 });
+    const ids = await seed(db);
+    const period = db.prepare(`INSERT INTO pay_periods VALUES (?, ?, ?, ?, ?, ?, ?, ?, '17:00', ?, 0, ?)`);
+    period.run('p1', ids.calendar, 0, '2026-10-02', '2026-10-02', '2026-09-14', '2026-09-27', '2026-09-29', '2026-09-30T00:00:00Z', AT);
+    const sheet = db.prepare(`INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at) VALUES (?, ?, 'p1', 3, ?, ?)`);
+    sheet.run('ts-emp', ids.employee, AT, AT);
+    sheet.run('ts-adm', ids.admin, AT, AT);
+    insert('attachments', {
+      id: 'sig-emp',
+      user_id: ids.employee,
+      kind: 'signature',
+      storage_key: 'key_sig_emp_0123456789abcdef',
+      sha256: HASH_A,
+      mime_type: 'image/png',
+      size_bytes: 2048,
+      width_px: 600,
+      height_px: 200,
+      created_at: AT,
+    });
+    insert('submission_settings', settingsRow('set-emp-1', ids.employee, 1));
+    insert(
+      'submission_settings',
+      settingsRow('set-emp-2', ids.employee, 2, {
+        auto_submit: 0,
+        auto_image_authorized: 1,
+        auto_image_attachment_id: 'sig-emp',
+        auto_image_authorized_at: AT,
+        show_ot_on_pdf: 0,
+        template_version: 2,
+      }),
+    );
+    insert('submission_settings', settingsRow('set-adm-1', ids.admin, 1, { recipients_to: '["payroll@example.invalid"]' }));
+    for (const [id, userId, sheetId] of [
+      ['rev-emp-1', ids.employee, 'ts-emp'],
+      ['rev-adm-1', ids.admin, 'ts-adm'],
+    ] as const) {
+      insert('timesheet_revisions', {
+        id,
+        user_id: userId,
+        timesheet_id: sheetId,
+        revision_no: 1,
+        revision_kind: 'original',
+        origin: 'employee',
+        review_state: 'signed',
+        supersedes_revision_id: null,
+        correction_reason: null,
+        timesheet_version: 3,
+        payload_json: '{"days":[]}',
+        payload_sha256: HASH_A,
+        reviewed_sha256: HASH_A,
+        send_requested: 1,
+        actor_user_id: userId,
+        created_at: AT,
+      });
+    }
+    insert('signoffs', {
+      id: 'so-emp-1',
+      user_id: ids.employee,
+      revision_id: 'rev-emp-1',
+      signer_name: 'Example Employee',
+      signed_at: AT,
+      reviewed_sha256: HASH_A,
+      signature_attachment_id: 'sig-emp',
+    });
+
+    const tables = EXPECTED_TABLES.filter((name) => name !== 'schema_migrations');
+    const rowsOf = (): Record<string, unknown[]> =>
+      Object.fromEntries(
+        tables.map((name) => [name, db.prepare(`SELECT ${name === 'submission_settings' ? V4_SETTINGS_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all()]),
+      );
+    const before = rowsOf();
+    for (const name of ['users', 'timesheets', 'attachments', 'submission_settings', 'timesheet_revisions', 'signoffs']) {
+      expect(before[name]?.length, name).toBeGreaterThan(0);
+    }
+    const recorded = db.prepare('SELECT * FROM schema_migrations ORDER BY version').all();
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [5], version: 5 });
+
+    expect(rowsOf()).toEqual(before);
+    expect(db.prepare('SELECT * FROM schema_migrations ORDER BY version').all().slice(0, 4)).toEqual(recorded);
+    expect(db.prepare('SELECT version, name, applied_at FROM schema_migrations WHERE version = 5').get()).toEqual({
+      version: 5,
+      name: 'automatic_presentation',
+      applied_at: '2026-10-05T18:00:00Z',
+    });
+    // Every existing version reads as "note off, default text"; the authorization and the other fields did not move.
+    expect(db.prepare('SELECT id, auto_note_enabled, auto_note_text FROM submission_settings ORDER BY rowid').all()).toEqual([
+      { id: 'set-emp-1', auto_note_enabled: 0, auto_note_text: 'Automatic submission' },
+      { id: 'set-emp-2', auto_note_enabled: 0, auto_note_text: 'Automatic submission' },
+      { id: 'set-adm-1', auto_note_enabled: 0, auto_note_text: 'Automatic submission' },
+    ]);
+    expect(db.prepare("SELECT auto_image_authorized, auto_image_attachment_id FROM submission_settings WHERE id = 'set-emp-2'").get()).toEqual({
+      auto_image_authorized: 1,
+      auto_image_attachment_id: 'sig-emp',
+    });
+    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    // The upgraded table accepts a new version with a note, keeps its checks and its immutability triggers.
+    insert('submission_settings', settingsRow('set-emp-3', ids.employee, 3, { auto_note_enabled: 1, auto_note_text: 'Nop tu dong' }));
+    expectSqliteError(() => insert('submission_settings', settingsRow('set-emp-4', ids.employee, 4, { auto_note_text: 'x'.repeat(121) })), NOTE_CHECK);
+    expectSqliteError(() => db.prepare("UPDATE submission_settings SET auto_note_enabled = 1 WHERE id = 'set-emp-1'").run(), /immutable_submission_settings/);
+    expectSqliteError(() => db.prepare("DELETE FROM submission_settings WHERE id = 'set-emp-1'").run(), /immutable_submission_settings/);
+    expect(migrate(db)).toEqual({ applied: [], version: 5 });
   });
 });

@@ -59,6 +59,22 @@ export const DEFAULT_BODY_TEMPLATE = [
   'Submission {SubmissionId}, revision {Revision}.',
 ].join('\n');
 
+/** How a submission was created; only the system tracks it, an outgoing artifact does not show it. */
+export type SubmissionOrigin = 'manual' | 'automatic';
+
+/** The {SignOffStatus} text of every submission unless an automatic submission's note line is on. */
+export const SUBMITTED_STATUS = 'Submitted';
+
+/**
+ * The one {SignOffStatus} value (owner decision G-Q2 (a)): "Submitted" for manual and automatic
+ * submissions alike, or the note text for an automatic submission whose note line is on. It never
+ * claims a sign-off and never names the origin on its own. The note text is validated one-line,
+ * brace-free text (src/domain/snapshot.ts), so it cannot break a header or add a variable.
+ */
+export function signOffStatusText(origin: SubmissionOrigin, autoNote: { readonly enabled: boolean; readonly text: string }): string {
+  return origin === 'automatic' && autoNote.enabled ? autoNote.text : SUBMITTED_STATUS;
+}
+
 const KNOWN: ReadonlySet<string> = new Set(TEMPLATE_VARIABLES);
 
 type Token = { kind: 'text'; text: string } | { kind: 'variable'; name: TemplateVariable };

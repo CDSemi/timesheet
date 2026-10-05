@@ -24,8 +24,8 @@ import type { AppDeps, AppEnv } from '../types.ts';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Personal submission settings: recipients, email templates, auto-submit and the explicit
- * automatic-image authorization. Every handler passes the session user as the only owner;
+ * Personal submission settings: recipients, email templates, auto-submit, the optional
+ * automatic note line and the explicit automatic-image authorization. Every handler passes the session user as the only owner;
  * no route accepts a user id, and the administrator role grants no access to another
  * user's settings (their ids are "not found"). The preview route writes nothing.
  */
@@ -59,6 +59,8 @@ export function settingsRoutes(deps: AppDeps) {
       bodyTemplate: body.body_template,
       autoSubmit: body.auto_submit,
       applyToOverdueDrafts: body.apply_to_overdue_drafts,
+      autoNoteEnabled: body.auto_note_enabled,
+      autoNoteText: body.auto_note_text,
       showOtOnPdf: body.show_ot_on_pdf,
       reminderOffsetsMinutes: body.reminder_offsets_minutes,
     });

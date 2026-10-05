@@ -4,6 +4,7 @@ import { migration0001 } from './migrations/0001_initial.ts';
 import { migration0002 } from './migrations/0002_ot_ledger.ts';
 import { migration0003 } from './migrations/0003_day_entry_source.ts';
 import { migration0004 } from './migrations/0004_submission.ts';
+import { migration0005 } from './migrations/0005_automatic_presentation.ts';
 
 export interface Migration {
   version: number;
@@ -12,7 +13,13 @@ export interface Migration {
 }
 
 /** Ordered, append-only list. Never edit an applied migration; add a new one. */
-export const MIGRATIONS: readonly Migration[] = [migration0001, migration0002, migration0003, migration0004];
+export const MIGRATIONS: readonly Migration[] = [
+  migration0001,
+  migration0002,
+  migration0003,
+  migration0004,
+  migration0005,
+];
 
 export class MigrationError extends Error {
   constructor(message: string) {

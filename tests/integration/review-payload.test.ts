@@ -11,6 +11,8 @@ import { createCalendar, createCalendarVersion } from '../../src/server/services
 import { postCredit } from '../../src/server/services/ledger.ts';
 import { createPolicyVersion } from '../../src/server/services/policies.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
+import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
 import { createUser } from '../../src/server/services/users.ts';
 import { dateTimeIn, instantOfWallTime } from '../client/zoneOracle.ts';
 import { createTestContext, la, LA, type TestContext } from '../support/testApp.ts';
@@ -170,7 +172,7 @@ describe('payload content', () => {
     const body = await payloadOf();
     const payload = body.payload;
     expect(payload.schema).toBe('timesheet-review');
-    expect(payload.schema_version).toBe(1);
+    expect(payload.schema_version).toBe(2);
     expect(payload.days.map((day: { work_date: string }) => day.work_date)).toEqual(datesBetween(START, END));
     expect(payload.days).toHaveLength(14);
     expect(payload.period).toMatchObject({ payroll_date: PAYROLL, period_start: START, period_end: END, due_local_time: '17:00' });
@@ -179,7 +181,7 @@ describe('payload content', () => {
     expect(payload.policy.version_ids).toEqual([policies.body.policies[0].id]);
     expect(payload.calendar.id).toBe(calendar.body.id);
     expect(payload.calendar.version_ids).toEqual(calendar.body.versions.map((version: { id: string }) => version.id));
-    expect(payload.submission).toMatchObject({ revision_no: 1, sign_off_status: 'Signed by employee' });
+    expect(payload.submission).toMatchObject({ revision_no: 1, sign_off_status: 'Submitted' });
     expect(payload.submission.id).toMatch(/^TS-20261002-[0-9a-f]{10}$/);
     expect(body.payload_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(body.expected_version).toBe(0);
@@ -342,6 +344,7 @@ describe('payload content', () => {
     expect(body.payload.recipients).toMatchObject({ to: [], cc: [], template_version: 1 });
     expect(body.payload.signature).toBeNull();
     expect(body.payload.auto_image).toEqual({ authorized: false, attachment_id: null });
+    expect(body.payload.auto_note).toEqual({ enabled: false, text: 'Automatic submission' });
     expect(body.payload.show_ot_on_pdf).toBe(true);
 
     const signature = await uploadSignature(0x30);
@@ -357,7 +360,7 @@ describe('payload content', () => {
     expect(body.payload.recipients).toEqual({
       to: ['payroll@example.invalid'],
       cc: ['manager@example.invalid'],
-      subject: 'Timesheet 2026-10-02 - Example Employee - r1 - Signed by employee',
+      subject: 'Timesheet 2026-10-02 - Example Employee - r1 - Submitted',
       body_text: `Hello Example Employee, 2026-09-14 to 2026-09-27, ${submissionId}, <b>1</b>`,
       body_html: `Hello Example Employee, 2026-09-14 to 2026-09-27, ${submissionId}, &lt;b&gt;1&lt;/b&gt;`,
       template_version: 1,
@@ -676,5 +679,78 @@ describe('device zone', () => {
     });
     expect(resaved.status, JSON.stringify(resaved.body)).toBe(200);
     expect(await hashOf()).toBe(withDeviceZone);
+  });
+});
+
+describe('automatic presentation: the note and SignOffStatus (WP3-T07B)', () => {
+  // "Nop tu dong" with Vietnamese diacritics, built from code points so this file stays ASCII.
+  const NOTE_VI = `N${String.fromCodePoint(0x1ed9)}p t${String.fromCodePoint(0x1ef1)} ${String.fromCodePoint(0x111)}${String.fromCodePoint(0x1ed9)}ng`;
+  const SUBJECT = 'Timesheet {PayrollDate} - {EmployeeName} - {SignOffStatus}';
+  const BODY = 'Status: {SignOffStatus}.';
+
+  function owner(): SessionUser {
+    const row = t.db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(t.userIds.employee) as {
+      id: string;
+      email: string;
+      display_name: string;
+      role: SessionUser['role'];
+      calendar_id: string;
+    };
+    return { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'test' };
+  }
+
+  const automatic = () => buildReviewPayload(t.db, t.clock, owner(), PAYROLL, 'automatic');
+  const manual = () => buildReviewPayload(t.db, t.clock, owner(), PAYROLL, 'manual');
+
+  it('freezes the note from the effective settings, and a note change changes the reviewed hash', async () => {
+    await saveSettings({ subject_template: SUBJECT, body_template: BODY });
+    const off = await payloadOf();
+    expect(off.payload.auto_note).toEqual({ enabled: false, text: 'Automatic submission' });
+    await saveSettings({ auto_note_enabled: true, auto_note_text: NOTE_VI }, 1);
+    const on = await payloadOf();
+    expect(on.payload.auto_note).toEqual({ enabled: true, text: NOTE_VI });
+    expect(on.payload_hash).not.toBe(off.payload_hash);
+    await saveSettings({ auto_note_text: 'Other note' }, 2);
+    expect((await payloadOf()).payload_hash).not.toBe(on.payload_hash);
+  });
+
+  it('gives a manual submission "Submitted" whatever the note setting', async () => {
+    await saveSettings({ subject_template: SUBJECT, body_template: BODY, auto_note_enabled: true, auto_note_text: NOTE_VI });
+    const body = await payloadOf();
+    expect(body.payload.submission.sign_off_status).toBe('Submitted');
+    expect(body.payload.recipients.subject).toBe('Timesheet 2026-10-02 - Example Employee - Submitted');
+    expect(body.payload.recipients.body_text).toBe('Status: Submitted.');
+    // The direct builder agrees with the route.
+    expect(manual().payload).toEqual(body.payload);
+  });
+
+  it('gives an automatic submission with the note off exactly the manual payload: no origin is recorded in it', async () => {
+    await saveSettings({ subject_template: SUBJECT, body_template: BODY });
+    const auto = automatic();
+    expect(auto.payload.submission.sign_off_status).toBe('Submitted');
+    expect(auto.payload.recipients.subject).toBe('Timesheet 2026-10-02 - Example Employee - Submitted');
+    expect(auto.payload).toEqual(manual().payload);
+    expect(auto.payloadHash).toBe(manual().payloadHash);
+    // What leaves the system (status, subject, bodies) names no origin; the frozen note setting itself is internal.
+    const outgoing = JSON.stringify([auto.payload.submission, auto.payload.recipients]);
+    expect(outgoing).not.toMatch(/Signed by|pending|automatic|review/i);
+  });
+
+  it('gives an automatic submission with the note on the note text in the status, subject and bodies', async () => {
+    await saveSettings({ subject_template: SUBJECT, body_template: BODY, auto_note_enabled: true, auto_note_text: NOTE_VI });
+    const auto = automatic();
+    expect(auto.payload.auto_note).toEqual({ enabled: true, text: NOTE_VI });
+    expect(auto.payload.submission.sign_off_status).toBe(NOTE_VI);
+    expect(auto.payload.recipients.subject).toBe(`Timesheet 2026-10-02 - Example Employee - ${NOTE_VI}`);
+    expect(auto.payload.recipients.body_text).toBe(`Status: ${NOTE_VI}.`);
+    expect(auto.payload.recipients.body_html).toBe(`Status: ${NOTE_VI}.`);
+    expect(auto.payloadHash).not.toBe(manual().payloadHash);
+  });
+
+  it('escapes a note with markup in the HTML body and keeps the subject on one line', async () => {
+    await saveSettings({ subject_template: SUBJECT, body_template: BODY, auto_note_enabled: true, auto_note_text: 'Sent <b>by</b> schedule & co' });
+    const auto = automatic();
+    expect(auto.payload.recipients.body_html).toBe('Status: Sent &lt;b&gt;by&lt;/b&gt; schedule &amp; co.');
+    expect(auto.payload.recipients.subject).not.toMatch(/[\r\n]/);
   });
 });

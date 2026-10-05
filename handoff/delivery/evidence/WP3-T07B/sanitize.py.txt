@@ -1,0 +1,39 @@
+"""Evidence sanitizer (WP3-T07B).
+
+Usage: PROJECT_ROOT=<repository root> python sanitize.py.txt <raw-in> <out> [header] [full|summary]
+
+Strips ANSI codes, converts to LF, masks the repository root, the user profile, the scratch
+and temporary folders, removes trailing whitespace and ends the file with one newline.
+'summary' keeps only the result lines (passes, failures, counts).
+"""
+import os
+import re
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+header = sys.argv[3] if len(sys.argv) > 3 else None
+mode = sys.argv[4] if len(sys.argv) > 4 else 'full'
+t = open(src, 'rb').read().decode('utf-8', 'replace')
+t = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', t)
+t = t.replace('\r\n', '\n').replace('\r', '\n')
+BS = chr(92)
+PROJECT = os.environ['PROJECT_ROOT']
+for p in [PROJECT.replace(BS, '/'), PROJECT.replace('/', BS), PROJECT.replace('/', BS).lower()]:
+    t = t.replace(p, '<project>')
+local = os.environ.get('LOCALAPPDATA', '')
+if local:
+    t = t.replace(local, '<localappdata>').replace(local.replace(BS, '/'), '<localappdata>')
+t = re.sub(r'D:[\\/]timesheet-tmp[\\/]WP3-T07B', '<tmp>', t)
+t = re.sub(r'/d/timesheet-tmp/WP3-T07B', '<tmp>', t)
+t = re.sub(r'B:[\\/]Temp[\\/]claude[\\/][^\s\'"]*?scratchpad', '<scratch>', t)
+t = re.sub(r'/b/Temp/claude/[^\s\'"]*?scratchpad', '<scratch>', t)
+t = re.sub(r'C:[\\/]Users[\\/][^\\/\s]+', '<home>', t)
+t = re.sub(r'/c/Users/[^/\s]+', '<home>', t)
+lines = [line.rstrip() for line in t.split('\n')]
+if mode == 'summary':
+    pattern = r'(✓|×|FAIL|Test Files|Tests |❯ tests/|AssertionError|TypeError|SyntaxError|Error:)'
+    lines = [line for line in lines if re.search(pattern, line)]
+out = '\n'.join(lines).strip('\n') + '\n'
+if header:
+    out = header.rstrip() + '\n\n' + out
+open(dst, 'w', newline='\n', encoding='utf-8').write(out)

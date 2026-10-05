@@ -6,14 +6,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = cb9800e4cfef57786c2e69bb4fd78d245ab5c817 (WP3-DOC-FREEZE; last
-    code freeze c1e4bb2, WP3-T13A).
+  - HEAD = origin/main = da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d (GOV-WP3P-FREEZE; last
+    code freeze c1e4bb2, WP3-T13A; docs freeze cb9800e).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
     (WP2-GATE4). Current WP3 working digest 4d4c4863… (after WP3-DOC, committer-checked;
     no WP3 gate yet).
-  - Uncommitted: the four WP3 prompt files (GOV-WP3P-FREEZE commits them), the board,
-    this checkpoint, the DOC-FREEZE results and the GOV-WP3P briefs.
+  - Uncommitted (handoff only): the board, this checkpoint, the GOV-WP3P-FREEZE results,
+    the GOV-WP3P gate and audit records, GOV_WP3P_REVIEW (+ vi) and their evidence; they
+    go into the T07B freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -221,10 +222,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   go through GOV-WP3P-FREEZE, GOV-WP3P-GATE and a fresh GOV-WP3P-AUDIT before T07B.
 - WP3-DOC-FREEZE is committed and pushed as cb9800e (32 paths; the four prompt files
   stayed unstaged; all checks 0).
-- Running: GOV-WP3P-FREEZE (committer): the four WP3 prompt files.
+- GOV-WP3P-FREEZE is committed and pushed as da6d0cd (13 paths incl. the four WP3 prompt
+  files; all checks 0).
+- GOV-WP3P-GATE PASS on da6d0cd (diff limited to the four prompt files; mirror of docs/09
+  confirmed EN and VI; validators, verify and digest unchanged).
+- GOV-WP3P-AUDIT PASS (fresh opus, no findings; [review](GOV_WP3P_REVIEW.md)); accepted
+  range cb9800e..da6d0cd. Optional notes R1–R3 added to the governance backlog.
+- WP3-T07B is done (author-reported): migration 0005 note fields, audited note settings,
+  upload-time consent (`authorize_auto_image`, one transaction; 422 without saved
+  settings — carried to T13), snapshot v2, "Submitted"/note status, no automatic
+  indicator, stored signer name on manual PDFs; 19/19 mutations; verify 1232 tests;
+  digest 5e37ab98….
+- Running: WP3-T07B-FREEZE (committer), with the GOV-WP3P records.
 - Next action:
-  1. Record the GOV freeze; GOV-WP3P-GATE (verifier); GOV-WP3P-AUDIT (fresh opus); then
-     T07B, T13 (brief ready), T13B (opus), T13C, T14, T15, WP3-GATE and the audits.
+  1. Record the T07B freeze; then T13 (brief ready, updated for the 422 case), T13B
+     (opus), T13C, T14, T15, WP3-GATE and the audits.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -242,5 +254,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: GOV-WP3P-FREEZE only.
+- Live processes: WP3-T07B-FREEZE only.
 - Usage/reset: not observable.
