@@ -1,6 +1,6 @@
 # WP3 handoff — Submission, PDF, delivery, automation and sharing
 
-Completed from [HANDOFF](../templates/HANDOFF.md) with actual evidence. Translation: [WP3_HANDOFF.vi.md](WP3_HANDOFF.vi.md). Every number below is copied from a task record or an evidence file named next to it; nothing was re-run to produce a figure except where a row says so. A figure that was not run or not verified is labelled as such. The package-final gate (WP3-GATE) and the fresh independent audits have not run: the acceptance record at the end is empty on purpose and is the authority for the package identity and the gate and audit verdicts once the accept step fills it.
+Completed from [HANDOFF](../templates/HANDOFF.md) with actual evidence. Translation: [WP3_HANDOFF.vi.md](WP3_HANDOFF.vi.md). Every number below is copied from a task record or an evidence file named next to it; nothing was re-run to produce a figure except where a row says so. A figure that was not run or not verified is labelled as such. The sections before "Next action" are the T15 state as written then (the fix-round sections keep their own dates); the gate and the fresh audits have since run, and the acceptance record at the end is the authority for the package identity and the gate and audit verdicts. Where a figure below differs from the acceptance record, the record wins.
 
 - **Package/scope, date and author:** WP3 only, per [WP3-PLAN](tasks/WP3-PLAN.md), [WP3-REQ](tasks/WP3-REQ.md), [WP3-REQ2](tasks/WP3-REQ2.md), [WP3_IMPLEMENT](../prompts/WP3_IMPLEMENT.md) and [09 Roadmap](../../docs/09_IMPLEMENTATION_ROADMAP.md): review and sign-off, finalization with revisions and corrections, the PDF, the private file store, capture and SMTP delivery, the durable job runner, deadline automation, reminders, owner-granted sharing, the admin status view and the end-to-end evidence. 2026-10-04 → 2026-10-05 (evidence timestamps are UTC). Authors: Claude Code subagents of the timesheet orchestration mission (one source writer at a time); this handoff and the developer-doc changes were written by a `timesheet-worker` (WP3-T15).
 - **Actual model/effort/speed, or not observable:** self-reported by the task records. T01, T05, T08, T09 and T13B ran on `claude-opus-5-5` (profile `timesheet-worker-high`, override `opus`); T00, T02, T03, T04, T06, T07, T07B, T10, T11, T12, T13, T13A, T13C, T13D, T14, WP3-DOC and this task ran on `claude-sonnet-5-5`; the GOV-WP3P audit ran on `claude-opus-5-5`. Effort and speed are not observable from inside the sessions; confirm them in the client.
@@ -94,7 +94,7 @@ Exact pins in `package.json` and `package-lock.json`. Runtime: `pdf-lib` 1.17.1,
 | `npm run verify` | typecheck, lint, test, build, smoke | T14 record: exit 0, 60 files / 1384 tests, no deprecation line; T15 run below |
 | `npm run test:e2e` | build, then Playwright desktop and mobile on the installed Edge channel | T14 record: 127 passed, 5 skipped (132 across both projects, `evidence/WP3-T14/06-e2e.txt`) |
 | `npm run digest` | source digest, `handoff/` excluded | T14: `677b9142…9b20c`; T15: `96870f7e…6e729` |
-| `npm run smoke` | built server over HTTP with a throwaway database | T14 evidence `07-verify.txt`: SMOKE PASSED, 40 `PASS` lines (the T14 record says "46 checks"; the log shows 40 `PASS` lines, a recording discrepancy for the gate to settle) |
+| `npm run smoke` | built server over HTTP with a throwaway database | T14 evidence `07-verify.txt`: SMOKE PASSED, 40 `PASS` lines (the T14 record's "46 checks" was wrong: the log shows 40 `PASS` lines, and every gate run confirms 40; see the acceptance record) |
 | `node dist/server/cli.js run-jobs --once --now <UTC instant>` | one deterministic job pass; refused in production | covered by `tests/integration/jobs-restart.test.ts` and the smoke script |
 | `node scripts/precommit-check.mjs` | privacy gate on a temporary index | run by every freeze task, 0 findings |
 
@@ -143,7 +143,7 @@ Open at this handoff, from the task records (none was judged blocking by its aut
 11. **Admin view:** drafts are not listed, because a draft row would reveal that the person has entries (T13D). The E2E admin spec accepts either final delivery state when the fixture has no sender; T14 now sets `MAIL_FROM` for the fixture.
 12. **E2E environment:** one T13A full run failed two mobile specs on a Windows `net::ERR_NO_BUFFER_SPACE` console error; a re-run by WP3-E2E-RECHECK was clean (97 passed, 3 skipped at that commit). Treat a recurrence as environmental, rerun once and record it.
 13. **WP2 items still open:** **ADV-A-05** (duplicate internal append path in `otLeave.ts` and `ledger.ts`, Info, backlog) and the **B4 optional items** ([WP2_HANDOFF](WP2_HANDOFF.md) acceptance record: unused `--space-6`, equal-valued tokens, the 767 px query comment, the ±1 day oracle assumption, `legacyPdtWallTime` export and the unpinned computed style). WP2 R1, R2, R4 and A4-01 were closed by T06, T00 and T05; A3-01 is respected by the T13D allowlist, which never reads audit payloads.
-14. **Tooling record:** the T14 record counts 46 smoke checks while its own verify log shows 40 `PASS` lines (see Commands).
+14. **Tooling record:** the T14 record counts 46 smoke checks while its own verify log shows 40 `PASS` lines (see Commands). Settled by the gates: 40 is the count (WP3-GATE gate_notes on the board).
 15. **A recorded "through a share" marker is required before WP4** (WP3-FIX2; [WP3_RECHECK_BC](WP3_RECHECK_BC.md) item 6, [WP3_RECHECK_A](WP3_RECHECK_A.md) R7): audit rows do not record the request path, so `SHARED_ACT_OPERATIONS` infers "performed through a grant" from the actor and the operation code. That is enough while only `/api/shared` writes `day_entry.*`, `work_session.*` and `share.pdf_download` for another person. Before WP4 lets any non-shared route (an import or an administrator correction, for example) write day or session rows for another person, audit rows must carry a recorded marker for access through a share (a field, and its migration), and the attribution and the Review hint must read it.
 
 ## Deferrals
@@ -156,11 +156,79 @@ The scope and required-gate sentences in `handoff/prompts/WP3_IMPLEMENT.md` and 
 
 ## Next action
 
-Dispatch WP3-T15-FREEZE (commit and push through `timesheet-committer` after the checks), then WP3-GATE on that commit, then the two fresh independent audits. Do not begin WP4, and do not set `PRODUCTION_SENDING_ENABLED`, until the gate and both audits pass and the owner has authorized the pilot packet.
+Superseded by the acceptance record below: the owner's `.claude/skills/readme-md` skill goes through a GOV-SKILL cycle, with WP4 planning (WP4-PLAN) in parallel where the single-writer rule allows. Do not set `PRODUCTION_SENDING_ENABLED` until the owner has authorized the pilot packet.
 
 ## Acceptance record (WP3-ACCEPT)
 
-(Empty. The accept step records the freeze commit, digest, gate and audit verdicts here.)
+Prepared by WP3-ACCREC (records only, no source edit). Sources: the board tasks WP3-GATE to WP3-RECFIX (`decision`, `findings`, `gate_notes`, `history`), the board `owner_decisions` of 2026-10-04 and 2026-10-05, and the reports [WP3_REVIEW_A](WP3_REVIEW_A.md), [WP3_REVIEW_B](WP3_REVIEW_B.md), [WP3_REVIEW_C](WP3_REVIEW_C.md), [WP3_RECHECK_A](WP3_RECHECK_A.md), [WP3_RECHECK_BC](WP3_RECHECK_BC.md), [WP3_RECHECK_A2](WP3_RECHECK_A2.md), [WP3_RECHECK_BC2](WP3_RECHECK_BC2.md), [WP3_RECHECK_A3](WP3_RECHECK_A3.md) and [WP3_RECHECK_BC3](WP3_RECHECK_BC3.md) (each with a `.vi.md`). The board acceptance step belongs to the coordinator.
+
+- **Accepted source:** commit `49651c8bb91d56bf6c6966405257537ec7ca474b` (WP3-FIX3-FREEZE, pushed), source digest `c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72` in the `git ls-tree` form (WP3-REGATE3 PASS; the export blobs and the committer's digest agree). Final figures: 62 files and 1420 tests; smoke 40 `PASS`; e2e 127 passed and 5 skipped ([verify](evidence/WP3-REGATE3/02-verify.txt), [e2e](evidence/WP3-REGATE3/03-e2e.txt), [digest](evidence/WP3-REGATE3/digest-lstree-after.txt)).
+- **Freeze list and figures corrected by this record:**
+
+| Freeze | Commit | Digest of record | Verify (files / tests) | Smoke `PASS` lines | E2E |
+|---|---|---|---|---:|---|
+| Package freeze (T15) | `a1cd566` | `96870f7e…6e729` | 60 / 1384 | 40 | 127 passed, 5 skipped |
+| Fix round 1 | `2f2520e` | `eeb417d3…48410` | 62 / 1407 | 40 | 127 passed, 5 skipped |
+| Fix round 2 | `2d72d35` | `0d513fca…7ea92` | 62 / 1416 | 40 | 127 passed, 5 skipped |
+| Fix round 3 (accepted) | `49651c8` | `c31c300c…4ec72` | 62 / 1420 | 40 | 127 passed, 5 skipped |
+
+  Source: the gate_notes of WP3-GATE, WP3-REGATE, WP3-REGATE2 and WP3-REGATE3. Corrections: the smoke count is 40 `PASS` lines (the T14 record's "46 checks" was wrong, as the WP3-GATE gate_notes state); the test counts are those of the gates (the figure 60 / 1384 in the earlier sections is the state at `a1cd566` only); e2e is 127 passed and 5 skipped by design at every freeze. The earlier T14 digest `677b9142…` belongs to `b083739`.
+- **Gate chain** (verifier, clean export outside Dropbox, Node 24.21.0, Edge, capture only):
+  - WP3-GATE PASS on `a1cd566` (`96870f7e`);
+  - WP3-REGATE PASS on `2f2520e` (`eeb417d3`);
+  - WP3-REGATE2 PASS on `2d72d35` (`0d513fca`);
+  - WP3-REGATE3 PASS on `49651c8` (`c31c300c`). Attempt 1 passed every source item. Item 12 failed only on the live tree, because an untracked evidence `.md` (`evidence/WP3-FIX3-FREEZE/result.md`) had no `.vi.md` pair. WP3-RECFIX renamed it to `result.txt` (one literal-path rename, nothing deleted). Attempt 2 reran item 12: `validate_orchestration`, `check_recovery` and `validate_package.py --preflight` all exited 0. Caveat from the gate: `npm run digest` in the working tree prints a different value over 724 files, because it also counts three untracked files under `.claude/skills/readme-md/`; they are not in the freeze (see H-Q3).
+- **Audit chain:**
+
+| Task | Commit | Verdict | Findings |
+|---|---|---|---|
+| WP3-AUDIT-A | `a1cd566` | NOT VERIFIED | Procedural only, no finding: the digest was not recorded after a permission refusal; the functional checks passed. Area A was rechecked by a fresh auditor. |
+| WP3-AUDIT-B | `a1cd566` | FIX REQUIRED | WP3-B-01, B-02, B-03 |
+| WP3-AUDIT-C | `a1cd566` | FIX REQUIRED | WP3-C-01, C-02, C-03 |
+| WP3-RECHECK-A attempt 1 | `2f2520e` | PASS | No finding |
+| WP3-RECHECK-BC | `2f2520e` | FIX REQUIRED | WP3-RBC-01, WP3-RBC-02; B-03 partly fixed |
+| WP3-RECHECK-A attempt 2 | `2d72d35` | PASS | No finding |
+| WP3-RECHECK-BC2 | `2d72d35` | FIX REQUIRED | WP3-RBC2-01 (test coverage only) |
+| WP3-RECHECK-A attempt 3 (final) | `49651c8` | **PASS** | No finding |
+| WP3-RECHECK-BC3 (final) | `49651c8` | **PASS** | No finding; WP3-RBC2-01 fixed |
+
+  The final two rechecks were done by one fresh auditor that authored nothing in WP3, on `49651c8` (HEAD and digest unchanged at start and end). Attempts 1 and 2 of area A were PASS at their own digests; later changes made only attempt 3 binding.
+- **Fix rounds and what each closed:**
+  - **Round 1:** WP3-LINKFIX (record links), WP3-FIXB (B-01 account-creation bound, B-02 final-attempt crash recovery, B-03 operation names), WP3-FIXC (C-01 grantee-change hint, C-02 attribution, C-03 comment).
+  - **Round 2:** WP3-FIX2: RBC-01 (every event without an actor is a system event), RBC-02 (grantee changes made before the period started are listed), the direct test of the `sending` branch, and the owner decision H-Q1 (a) with docs/05 and docs/10 in EN and VI.
+  - **Round 3:** WP3-FIX3, test-only: RBC2-01, with the guard sweep (the "Fix round 3" section above).
+- **Owner decisions** (board `owner_decisions`):
+  - 2026-10-04: F-1 to F-5, F-Q1 to F-Q5, G-Q1 (b) and G-Q2 (a) (see "Owner decisions implemented"); F-Q6 stays open.
+  - 2026-10-05, **H-Q1 (a):** automatic submission applies only to accounts that saved their submission settings with auto-submit on; the explicit apply-to-overdue choice stays as implemented (still clamped by the account creation), as the coordinator read it on the board.
+  - 2026-10-05, **H-Q2 (a):** masked `.txt` copies of exactly the six named `.raw` logs of `evidence/WP3-FIX2/`, then the deletion of those six files.
+  - 2026-10-05, the temporary-folder move: from `D:\timesheet-tmp\<task>` to `D:\.claude-tmp\timesheet\<task>`.
+  - 2026-10-05, **H-Q3 (a):** the owner's `.claude/skills/readme-md` skill stays in the repository and goes through a GOV-SKILL cycle (freeze, verifier gate, fresh audit) after the WP3 accept commit. It is not part of the WP3 source.
+- **Non-blocking items carried forward** (none blocks acceptance):
+  - **R1–R9 of [WP3_RECHECK_A](WP3_RECHECK_A.md) and [WP3_RECHECK_A2](WP3_RECHECK_A2.md):** R1 a long holiday label is ellipsized in the PDF; R2 the 50-signature bound is counted outside the transaction; R3 closed by H-Q1 (a); R4 the reviewed hash includes the available balance, so an OT movement elsewhere makes a review stale; R5 a sign-off before the period ends is accepted; R6 the hint and the payload are read in two transactions (integrity is unaffected); R7 attribution rests on operation codes (see the marker item below); R8 never-configured accounts still get before-due reminders to their own address; R9 seed events without an actor show as automatic in History.
+  - **A recorded "through a share" marker** is required before WP4 lets any non-shared route write day or session rows for another person (carry item 15).
+  - The hint shows a count, not dates.
+  - A `HEAD` request on the shared PDF route writes a download audit ([WP3_REVIEW_C](WP3_REVIEW_C.md) R1).
+  - The reminder repeat on real SMTP, the TLS failure classified temporary, and the send-before-PDF attempt (carry items 1 to 3).
+  - **F-Q6** stays open (WP2-A-01 kept).
+  - **ADV-A-05** and the WP2 B4 optional items (carry item 13).
+  - **Final-recheck risks** ([WP3_RECHECK_BC3](WP3_RECHECK_BC3.md), [WP3_RECHECK_BC2](WP3_RECHECK_BC2.md)):
+    - no test covers the activation instant being cleared mid-scan (probe H3 shows how);
+    - the `not_active` guard (`automation.ts:191`) has no single test of its own;
+    - `before_account` is covered only as a pair (M6b);
+    - the hint read has no time bound (it grows with the owner's audit history; RBC2 R1);
+    - never-configured accounts get no overdue warning, and the admin status does not show "not set up" (RBC2 R2);
+    - the deadline scan re-checks their periods on every pass (RBC2 R3).
+- **WP4 carry-forward** (WP4 planning must address):
+  - the recorded "through a share" marker (a field and its migration) before any non-shared route writes day or session rows for another person, with the attribution and the Review hint reading it;
+  - whether never-configured accounts get an overdue warning or an admin "not set up" status, stated in the pilot packet either way;
+  - the job-row retention decision and the unscheduled file-store orphan sweep (carry item 4);
+  - the real-SMTP items: the reminder repeat, TLS-as-temporary and send-before-PDF (carry items 1 to 3);
+  - an optional owner-scoped or work-date-bounded read for the hint;
+  - the three test-coverage gaps above, if the owner wants them closed;
+  - F-Q6, ADV-A-05 and the WP2 B4 optional items;
+  - the Docker container, backup/restore and the pilot packet (Deferrals).
+- **Verification of this record:** `validate_package.py --preflight` and the EN/VI parity check are in [preflight.txt](evidence/WP3-ACCREC/preflight.txt) and [parity.txt](evidence/WP3-ACCREC/parity.txt).
+- **Status:** WP3 implemented, gated (WP3-REGATE3 PASS) and independently audited (WP3-RECHECK-A attempt 3 PASS, WP3-RECHECK-BC3 PASS) on `49651c8`. No production action and no owner pilot authorization is involved; nothing is deployed and no real mail was sent. **Next action:** the GOV-SKILL cycle for the owner's `.claude/skills/readme-md` skill (H-Q3 (a)), with WP4 planning (WP4-PLAN) in parallel where the single-writer rule allows.
 
 ## Fix round 1 — WP3-FIXB (area B findings)
 

@@ -1,0 +1,34 @@
+// WP3-RECHECK-BC3 probe H3 (auditor-written, synthetic, capture mode): the deadline scan's in-loop F-4 recheck
+// (assessPeriod 'not_active', automation.ts:191) when the administrator CLEARS the activation while a scan is running.
+// The scan reads the activation once (automation.ts:343-344) and builds its candidate list; a TEMP trigger clears
+// operations_state.automation_active_from as soon as the first automatic revision is written (the same device the
+// round-3 sweep tests use for 'inactive_user' and 'before_activation'). Expected: the first period (already in its
+// transaction) is finalized, the later period is skipped. Run against PROBE_REPO (default <scratch>/repo).
+import { REPO, reporter, setup } from './lib.mjs';
+
+const { runDeadlineScan, getAutomationActivation } = await import(new URL('src/server/services/automation.ts', REPO).href);
+const r = reporter('H3 activation cleared during a running scan (in-loop F-4 recheck)');
+const ctx = await setup('h3', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const cookie = await ctx.addUser('conf', 'probe-conf3', 'Probe Configured Three');
+const s = await ctx.request('POST', '/api/settings/submission', { cookie, body: { expected_seq: 0, to: [ctx.emails.conf], auto_submit: true } });
+r.check(s.status === 201, `conf saves auto-submit on (${s.status})`);
+// The seeded accounts never saved settings (H-Q1), so only 'conf' is a candidate that can be finalized.
+clock.set('2026-09-29T21:00:00Z');
+const on = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-09-29T21:00:00Z', reason: 'synthetic activation' } });
+r.check(on.status === 200, `activation recorded at 2026-09-29T21:00:00Z (${on.status})`);
+db.exec("CREATE TEMP TRIGGER clear_activation_after_first AFTER INSERT ON timesheet_revisions BEGIN UPDATE operations_state SET automation_active_from = NULL, automation_recorded_at = '2026-10-15T00:00:00Z' WHERE id = 1; END");
+clock.set('2026-10-15T00:00:00Z');
+const summary = runDeadlineScan(db, clock, { batchSize: 1000 });
+const revs = db
+  .prepare(
+    `SELECT p.payroll_date FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+      WHERE r.user_id = ? AND r.origin = 'deadline' ORDER BY p.payroll_date`,
+  )
+  .pluck()
+  .all(ctx.ids.conf);
+r.info(`scan summary ${JSON.stringify(summary)}; activation after the scan ${JSON.stringify(getAutomationActivation(db).activeFrom)}; automatic revisions ${JSON.stringify(revs)}`);
+r.check(summary.examined >= 2, `the candidate list holds both due periods of conf (examined ${summary.examined})`);
+r.check(JSON.stringify(revs) === JSON.stringify(['2026-10-02']), `only the period finalized before the clear exists; the later period due 2026-10-14 is not finalized after the activation was cleared (${JSON.stringify(revs)})`);
+db.close();
+r.done('H3');

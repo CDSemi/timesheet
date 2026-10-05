@@ -1,4 +1,4 @@
-# Mission checkpoint (WP2 accepted, WP3 fix round 1)
+# Mission checkpoint (WP3 acceptance commit)
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
@@ -6,15 +6,14 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714 (WP3-FIX2-FREEZE, the
-    fix-round-2 freeze). Earlier WP3 freezes were a1cd566 and 2f2520e.
+  - HEAD = origin/main = 49651c8bb91d56bf6c6966405257537ec7ca474b (WP3-FIX3-FREEZE, the
+    fix-round-3 freeze). Earlier WP3 freezes were a1cd566, 2f2520e and 2d72d35.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410
     (WP3-REGATE PASS on 2f2520e). The first WP3 gate digest was 96870f7e… (WP3-GATE on
     a1cd566); the WP2 gate digest was e61fa914… (WP2-GATE4).
-  - Uncommitted, being committed by WP3-FIX3-FREEZE:
-    - tests/integration/deadline.test.ts (round 3, digest c31c300c…);
-    - the handoff records since 2d72d35, including the WP3-FIX2-FREEZE brief.
+  - Uncommitted (handoff only): the board, this checkpoint, and the WP3-FIX3-FREEZE
+    results and evidence. The committed round-3 digest is c31c300c….
 
     The gate digest of record is 0d513fca… (WP3-REGATE2 PASS).
   - No unpushed commits.
@@ -412,9 +411,47 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - A guard sweep adds 3 tests.
        - Mutations M4, M5, M5b and the three skips each fail; the clean run passes.
        - verify: 1420 tests; digest c31c300c….
-     - Running: WP3-FIX3-FREEZE (committer). This brief stages itself and the
-       WP3-FIX2-FREEZE brief. The briefs for WP3-REGATE3 and WP3-RECHECK-BC3 (which
-       also covers WP3-RECHECK-A attempt 3) are ready.
+     - WP3-FIX3-FREEZE is committed and pushed as 49651c8. It holds 142 paths, including
+       its own brief and the WP3-FIX2-FREEZE brief. All checks returned 0; one EOF
+       blank line was fixed, which the brief allows.
+     - WP3-REGATE3 attempt 1 (verifier) on 49651c8.
+       - Every source item passed: 1420 tests; smoke 40; e2e 127 passed; races 20/20;
+         migrations clean.
+       - The round-3 guard tests are named; mutations M4, M5 and M5b each fail.
+       - The round-3 scope is the test file only.
+       - Item 12 failed on the live tree only. The cause is a record gap: the
+         committer's untracked evidence `WP3-FIX3-FREEZE/result.md` lacks a `.vi.md`
+         pair. The committed export passes.
+       - The gate is blocked until the record gap is fixed.
+     - WP3-RECFIX is done. It renamed that file to `.txt` with one literal-path move
+       and deleted nothing; the live preflight now exits 0.
+     - WP3-REGATE3: PASS. Attempt 2 reran item 12; all three validators exit 0 on the
+       live board. HEAD is 49651c8 and the gate digest of record is c31c300c….
+     - The owner answered H-Q3 with (a): keep the `readme-md` skill in the repository,
+       through a GOV cycle. Order:
+       1. WP3 acceptance on digest c31c300c… first. WP3-ACCEPT leaves the three skill
+          files unstaged and checks the ls-tree digest.
+       2. Then GOV-SKILL-FREEZE, GOV-SKILL-GATE and a fresh GOV-SKILL-AUDIT. Their
+          briefs are ready.
+       3. WP4-PLAN may run beside the GOV gate or audit, never beside the freeze.
+     - WP3-RECHECK-BC3 and WP3-RECHECK-A attempt 3: both PASS on 49651c8, with no
+       finding (one fresh opus auditor).
+       - Mutations M4, M5 and M5b now fail the suite. The guard sweep is covered except
+         for two single-guard edges, recorded as risks.
+       - The test quality is meaningful.
+       - No B/C regression; the area-A delta is test-only.
+       - The coordinator stopped the auditor's idle shell and the agent after hand-back.
+     - **WP3 review chain closed with PASS at 49651c8, digest c31c300c….**
+     - WP3-ACCREC is done.
+       - The WP3_HANDOFF acceptance record is filled in, EN and VI in parity.
+       - Corrected figures: smoke 40, 1420 tests, e2e 127, and the freeze list.
+       - Carry items R1–R9 and the WP4 carry-forward are listed.
+       - Preflight 0.
+     - STATE now marks WP3 passed with its carried risks. The active package stays WP3
+       until after the accept commit, because the validator allows running tasks only
+       in the active package or GOV. NEXT_ACTION (EN/VI) points to GOV-SKILL and WP4.
+     - Running: WP3-ACCEPT (committer). It commits handoff/ only; the three untracked
+       owner skill files stay unstaged.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -454,7 +491,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-FIX3-FREEZE only.
+- Live processes: WP3-ACCEPT only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

@@ -23,8 +23,20 @@
 ## Required edits (records only)
 
 1. **Fill the WP3_HANDOFF acceptance-record section**, in EN and in VI.
-   - **Accepted source.** The WP3-FIX3-FREEZE commit and its WP3-REGATE3 digest; the
-     coordinator gives both in the dispatch prompt.
+   - **Accepted source:**
+     - commit 49651c8bb91d56bf6c6966405257537ec7ca474b (WP3-FIX3-FREEZE);
+     - source digest c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72
+       (git ls-tree form; WP3-REGATE3 PASS);
+     - final figures: 62 files and 1420 tests; smoke 40 PASS; e2e 127 passed and 5
+       skipped.
+   - **WP3-REGATE3 history.** Attempt 1 passed every source item. Item 12 failed only on
+     the live tree, because an untracked evidence `.md` had no `.vi.md` pair. WP3-RECFIX
+     renamed that file. Attempt 2 reran item 12, and every validator exited 0.
+   - **Final rechecks.** WP3-RECHECK-BC3 and WP3-RECHECK-A attempt 3 both PASS, with no
+     finding, by one fresh auditor on 49651c8.
+   - **Owner decision H-Q3 (a).** The owner's `.claude/skills/readme-md` skill goes
+     through a GOV-SKILL cycle after the WP3 accept commit. It is not part of the WP3
+     source.
    - **Gate chain:**
      - WP3-GATE PASS on a1cd566 (96870f7e);
      - WP3-REGATE PASS on 2f2520e (eeb417d3);
@@ -60,16 +72,23 @@
      - the reminder repeat on real SMTP, TLS-as-temporary, and send-before-PDF items;
      - F-Q6 open (WP2-A-01 kept);
      - ADV-A-05 and the WP2 B4 optional items;
-     - any new non-blocking item from the final rechecks.
+     - the final-recheck risks:
+       - no test covers the activation instant being cleared mid-scan (probe H3 shows
+         how);
+       - the `not_active` guard (`automation.ts:191`) has no single test of its own;
+       - `before_account` is covered only as a pair;
+     - the hint read has no time bound;
+     - never-configured accounts get no overdue warning;
+     - the deadline scan re-checks their periods on every pass.
    - **WP4 carry-forward:** list the items that WP4 planning must address.
 2. **Correct stale figures.** Every figure must cite a task record or an evidence file;
    invent nothing. Correct:
    - the smoke count (40 `PASS` lines; the T14 record's "46" was wrong);
-   - the test counts, taken from the final gate (62 files / 1416 tests at 2d72d35,
-     before round 3);
+   - the test counts, taken from the final gate (62 files / 1420 tests at 49651c8);
    - e2e (127 passed, 5 skipped);
-   - the freeze list (a1cd566, 2f2520e, 2d72d35, and the round-3 freeze).
-3. **Next action:** WP4 planning (WP4-PLAN).
+   - the freeze list: a1cd566, 2f2520e, 2d72d35 and 49651c8.
+3. **Next action:** the GOV-SKILL cycle for the owner's skill, with WP4 planning
+   (WP4-PLAN) in parallel where the single-writer rule allows.
 
 ## Owned (writable) paths
 
@@ -100,4 +119,10 @@ Return at most 120 words, beginning with your self-reported model:
 
 ## Results
 
-(Light worker appends here.)
+Self-reported model: claude-sonnet-5-5. Attempt 1.
+
+- Edited: [WP3_HANDOFF](../WP3_HANDOFF.md) and [WP3_HANDOFF.vi.md](../WP3_HANDOFF.vi.md): the acceptance record (filled), the intro paragraph, the Commands smoke row, carry item 14 and the Next action section. Nothing else was edited.
+- Figures corrected: smoke 40 `PASS` (not 46); verify 62 files / 1420 tests at 49651c8; e2e 127 passed, 5 skipped; freeze list a1cd566, 2f2520e, 2d72d35, 49651c8 with each digest and count, from the gate_notes.
+- Carry items: R1-R9, the through-a-share marker, count-only hint, HEAD audit, SMTP items, F-Q6, ADV-A-05/B4, the final-recheck risks, and a WP4 carry-forward list.
+- Preflight: exit 0 (workflow Python, user `<user>`), [preflight.txt](../evidence/WP3-ACCREC/preflight.txt). Parity: [parity.txt](../evidence/WP3-ACCREC/parity.txt), headings, bullets and table rows match (17 / 82 / 87).
+- Blockers: none. Not committed.

@@ -1,0 +1,22 @@
+### (<W>/probes) <node24>/node.exe h2-guards.mjs (PROBE_REPO default <W>/repo)
+2026-10-05T22:45:51Z
+# H2 activation and imported-period guards with configured accounts (source: repo)
+PASS conf: saves auto-submit on (201)
+PASS imp: saves auto-submit on (201)
+PASS conf: a working day (201)
+
+## (a) F-4 with a configured account: no activation, then a queued scan job after the activation was cleared
+PASS no activation: two deadlines pass and a direct scan reports {"activated":false,"examined":0,"finalized":0,"overdueRecorded":0,"skipped":0,"failed":0,"remaining":false}; nothing automated for the auto-on account
+PASS no scan job is queued while the activation instant is null
+PASS activation recorded (200), one scan job queued for the 2026-10-28 deadline, activation cleared (200)
+INFO runner pass after the clear: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}; scan job state succeeded
+PASS the queued scan finalizes nothing once the activation was cleared (revisions [])
+
+## (b) An imported_unverified period of an auto-on account
+PASS re-activated at 2026-10-28T00:05:00Z (200)
+PASS control: the configured account is automated at the 2026-11-11 deadline (["2026-11-13"])
+PASS the imported period of the auto-on account is not finalized and gets no overdue record (revisions [], overdue 0)
+
+SUMMARY H2 [repo]: 10 PASS, 0 FAIL
+exit=0
+2026-10-05T22:45:55Z

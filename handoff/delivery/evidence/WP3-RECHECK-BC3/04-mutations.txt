@@ -1,0 +1,184 @@
+### Coverage mutations for WP3-RBC2-01 and the guard sweep (bash probes/mutations.sh; source in mutations.sh.txt). Clone <W>/mut at 49651c8; suite = vitest run tests/integration tests/client tests/domain; per run only FAIL lines and counts are kept; each mutation restored with git checkout.
+### clean run at the freeze (no mutation)
+ Test Files  62 passed (62)
+      Tests  1420 passed (1420)
+clean exit=0
+
+### M4: scan and assessPeriod ignore a NULL activation instant (BC2 M4)
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+ FAIL  tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null, even for an account whose auto-submit is on
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1419 passed (1420)
+M4 exit=1
+restored; git status --porcelain lines: 0
+
+### M5: imported skip moved after the switch-on decision (BC2 M5)
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1419 passed (1420)
+M5 exit=1
+restored; git status --porcelain lines: 0
+
+### M5b: imported skip deleted (BC2 M5b)
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline
+ Test Files  1 failed | 61 passed (62)
+      Tests  2 failed | 1418 passed (1420)
+M5b exit=1
+restored; git status --porcelain lines: 0
+
+### Guard sweep: delete one skip line of assessPeriod each
+
+### G-inactive_user: line 'if (...) return { kind: 'skip', reason: 'inactive_user' };' deleted
+-  if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips the later periods of an account deactivated while the scan runs (inactive_user)
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1419 passed (1420)
+G-inactive_user exit=1
+restored; git status --porcelain lines: 0
+
+### G-before_activation: line 'if (...) return { kind: 'skip', reason: 'before_activation' };' deleted
+-  if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period that falls before an activation instant moved forward while the scan runs (before_activation)
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1419 passed (1420)
+G-before_activation exit=1
+restored; git status --porcelain lines: 0
+
+### G-not_due: line 'if (...) return { kind: 'skip', reason: 'not_due' };' deleted
+-  if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period whose deadline is still ahead of the clock when it is acted on (not_due)
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1419 passed (1420)
+G-not_due exit=1
+restored; git status --porcelain lines: 0
+
+### G-finalized: line 'if (...) return { kind: 'skip', reason: 'finalized' };' deleted
+-  if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one
+ Test Files  1 failed | 61 passed (62)
+      Tests  2 failed | 1418 passed (1420)
+G-finalized exit=1
+restored; git status --porcelain lines: 0
+
+### G-before_account: line 'if (...) return { kind: 'skip', reason: 'before_account' };' deleted
+-  if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+ Test Files  62 passed (62)
+      Tests  1420 passed (1420)
+G-before_account exit=0
+restored; git status --porcelain lines: 0
+
+### G-overdue_recorded: line 'if (...) return { kind: 'skip', reason: 'overdue_recorded' };' deleted
+-  if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved
+ FAIL  tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > records the overdue period once and exports nothing
+ FAIL  tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > submits the overdue period after the user explicitly applies the switch to overdue drafts
+ Test Files  1 failed | 61 passed (62)
+      Tests  3 failed | 1417 passed (1420)
+G-overdue_recorded exit=1
+restored; git status --porcelain lines: 0
+
+### Supplementary split of M4 (informational)
+
+### M4a: only the scan-level early return removed (runDeadlineScan; assessPeriod keeps not_active)
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+ Test Files  62 passed (62)
+      Tests  1420 passed (1420)
+M4a exit=0
+restored; git status --porcelain lines: 0
+
+### M4b: only assessPeriod's not_active skip removed with a 1970 fallback (the scan-level early return stays)
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+ Test Files  62 passed (62)
+      Tests  1420 passed (1420)
+M4b exit=0
+restored; git status --porcelain lines: 0
+
+### Differential: the same mutations against the 2d72d35 deadline.test.ts (old tests) vs the freeze's file, deadline.test.ts only
+
+### M4-old-tests: mutation M4 with the 2d72d35 deadline.test.ts copied in
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+ Test Files  1 passed (1)
+      Tests  40 passed (40)
+M4-old-tests exit=0
+restored; git status --porcelain lines: 0
+
+### M4-new-tests: mutation M4 with the freeze deadline.test.ts
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+ FAIL  tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null, even for an account whose auto-submit is on
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+M4-new-tests exit=1
+restored; git status --porcelain lines: 0
+
+### M5-old-tests: mutation M5 with the 2d72d35 deadline.test.ts copied in
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ Test Files  1 passed (1)
+      Tests  40 passed (40)
+M5-old-tests exit=0
+restored; git status --porcelain lines: 0
+
+### M5-new-tests: mutation M5 with the freeze deadline.test.ts
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+M5-new-tests exit=1
+restored; git status --porcelain lines: 0
+
+### M5B-old-tests: mutation M5B with the 2d72d35 deadline.test.ts copied in
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ Test Files  1 passed (1)
+      Tests  40 passed (40)
+M5B-old-tests exit=0
+restored; git status --porcelain lines: 0
+
+### M5B-new-tests: mutation M5B with the freeze deadline.test.ts
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline
+ Test Files  1 failed (1)
+      Tests  2 failed | 42 passed (44)
+M5B-new-tests exit=1
+restored; git status --porcelain lines: 0
+
+### final status
+49651c8bb91d56bf6c6966405257537ec7ca474b
+mutations-done

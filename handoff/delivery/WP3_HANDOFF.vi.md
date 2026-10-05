@@ -1,6 +1,6 @@
 # Bàn giao WP3 — Nộp, PDF, gửi, tự động và chia sẻ
 
-Hoàn thành theo [HANDOFF](../templates/HANDOFF.vi.md) với bằng chứng thực tế. Bản dịch của [WP3_HANDOFF.md](WP3_HANDOFF.md); tiếng Anh là nguồn chuẩn. Mọi con số dưới đây được chép từ một bản ghi tác vụ hoặc một file bằng chứng nêu bên cạnh; không có con số nào được chạy lại, trừ khi một dòng nói rõ. Số liệu chưa chạy hoặc chưa kiểm được đều ghi rõ. Gate cuối gói (WP3-GATE) và các audit độc lập mới chưa chạy: bản ghi chấp nhận ở cuối cố ý để trống và sẽ là căn cứ cho định danh gói và các kết luận của gate và audit khi bước chấp nhận điền vào.
+Hoàn thành theo [HANDOFF](../templates/HANDOFF.vi.md) với bằng chứng thực tế. Bản dịch của [WP3_HANDOFF.md](WP3_HANDOFF.md); tiếng Anh là nguồn chuẩn. Mọi con số dưới đây được chép từ một bản ghi tác vụ hoặc một file bằng chứng nêu bên cạnh; không có con số nào được chạy lại, trừ khi một dòng nói rõ. Số liệu chưa chạy hoặc chưa kiểm được đều ghi rõ. Các phần trước "Hành động tiếp theo" là trạng thái T15 như đã viết lúc đó (các phần vòng sửa giữ ngày riêng); gate và các audit mới sau đó đã chạy, và bản ghi chấp nhận ở cuối là căn cứ cho định danh gói và các kết luận của gate và audit. Chỗ nào một con số bên dưới khác bản ghi chấp nhận thì theo bản ghi chấp nhận.
 
 - **Gói/phạm vi, ngày và tác giả:** chỉ WP3, theo [WP3-PLAN](tasks/WP3-PLAN.md), [WP3-REQ](tasks/WP3-REQ.md), [WP3-REQ2](tasks/WP3-REQ2.md), [WP3_IMPLEMENT](../prompts/WP3_IMPLEMENT.vi.md) và [09 Lộ trình](../../docs/09_IMPLEMENTATION_ROADMAP.vi.md): xem lại và sign-off, chốt revision cùng sửa sau chốt, PDF, kho file riêng tư, gửi capture và SMTP, bộ chạy job bền, tự động nộp theo hạn, nhắc hạn, chia sẻ do chủ sở hữu cấp, màn hình tình trạng cho admin và bằng chứng đầu-cuối. 04/10/2026 → 05/10/2026 (mốc thời gian trong bằng chứng là UTC). Tác giả: các subagent Claude Code của mission điều phối timesheet (mỗi lúc một người ghi source); bản bàn giao này và các thay đổi tài liệu cho nhà phát triển do một `timesheet-worker` (WP3-T15) viết.
 - **Model/effort/speed thực tế, hoặc không quan sát được:** tự khai trong các bản ghi tác vụ. T01, T05, T08, T09 và T13B chạy trên `claude-opus-5-5` (profile `timesheet-worker-high`, override `opus`); T00, T02, T03, T04, T06, T07, T07B, T10, T11, T12, T13, T13A, T13C, T13D, T14, WP3-DOC và tác vụ này chạy trên `claude-sonnet-5-5`; audit GOV-WP3P chạy trên `claude-opus-5-5`. Effort và speed không quan sát được từ bên trong phiên; hãy xác nhận trong client.
@@ -94,7 +94,7 @@ Ghim chính xác trong `package.json` và `package-lock.json`. Runtime: `pdf-lib
 | `npm run verify` | typecheck, lint, test, build, smoke | Bản ghi T14: thoát 0, 60 file / 1384 test, không có dòng deprecation; lần chạy T15 bên dưới |
 | `npm run test:e2e` | build, rồi Playwright desktop và mobile trên kênh Edge đã cài | Bản ghi T14: 127 đạt, 5 bỏ qua (132 trên cả hai project, `evidence/WP3-T14/06-e2e.txt`) |
 | `npm run digest` | digest source, loại `handoff/` | T14: `677b9142…9b20c`; T15: `96870f7e…6e729` |
-| `npm run smoke` | server đã build qua HTTP với CSDL dùng một lần | Bằng chứng T14 `07-verify.txt`: SMOKE PASSED, 40 dòng `PASS` (bản ghi T14 nói "46 checks"; log chỉ có 40 dòng `PASS`, một chênh lệch ghi chép để gate xử lý) |
+| `npm run smoke` | server đã build qua HTTP với CSDL dùng một lần | Bằng chứng T14 `07-verify.txt`: SMOKE PASSED, 40 dòng `PASS` ("46 checks" trong bản ghi T14 là sai: log có 40 dòng `PASS`, và mọi lần chạy gate đều xác nhận 40; xem bản ghi chấp nhận) |
 | `node dist/server/cli.js run-jobs --once --now <instant UTC>` | một lượt chạy job xác định; bị từ chối khi production | được `tests/integration/jobs-restart.test.ts` và script smoke bao phủ |
 | `node scripts/precommit-check.mjs` | cổng riêng tư trên index tạm | mọi tác vụ freeze đều chạy, 0 phát hiện |
 
@@ -143,7 +143,7 @@ Còn mở tại bản bàn giao này, theo các bản ghi tác vụ (tác giả 
 11. **Màn admin:** bản nháp không được liệt kê, vì một dòng nháp sẽ lộ rằng người đó có mục (T13D). Spec e2e của admin chấp nhận một trong hai trạng thái gửi cuối khi fixture không có người gửi; T14 nay đặt `MAIL_FROM` cho fixture.
 12. **Môi trường E2E:** một lần chạy đầy đủ của T13A lỗi hai spec mobile vì lỗi console `net::ERR_NO_BUFFER_SPACE` của Windows; WP3-E2E-RECHECK chạy lại sạch (97 đạt, 3 bỏ qua ở commit đó). Coi tái diễn là do môi trường, chạy lại một lần và ghi nhận.
 13. **Mục WP2 còn mở:** **ADV-A-05** (đường append nội bộ bị lặp trong `otLeave.ts` và `ledger.ts`, Thông tin, backlog) và **các mục tùy chọn B4** (bản ghi chấp nhận trong [WP2_HANDOFF](WP2_HANDOFF.vi.md): `--space-6` không dùng, token cùng giá trị, chú thích truy vấn 767 px, giả định ±1 ngày của oracle, export `legacyPdtWallTime` và style tính toán chưa được ghim). R1, R2, R4 và A4-01 của WP2 đã đóng bởi T06, T00 và T05; A3-01 được danh sách cho phép của T13D tôn trọng vì nó không bao giờ đọc payload audit.
-14. **Ghi chép công cụ:** bản ghi T14 đếm 46 check smoke trong khi log verify của chính nó chỉ có 40 dòng `PASS` (xem Lệnh).
+14. **Ghi chép công cụ:** bản ghi T14 đếm 46 check smoke trong khi log verify của chính nó chỉ có 40 dòng `PASS` (xem Lệnh). Các gate đã chốt: 40 là số đúng (gate_notes của WP3-GATE trên bảng).
 15. **Cần có dấu ghi nhận "qua share" trước WP4** (WP3-FIX2; [WP3_RECHECK_BC](WP3_RECHECK_BC.md) mục 6, [WP3_RECHECK_A](WP3_RECHECK_A.md) R7): dòng audit không ghi đường dẫn yêu cầu, nên `SHARED_ACT_OPERATIONS` suy ra "thực hiện qua quyền chia sẻ" từ actor và mã thao tác. Như vậy đủ khi chỉ `/api/shared` ghi `day_entry.*`, `work_session.*` và `share.pdf_download` cho người khác. Trước khi WP4 cho bất kỳ route không phải share nào (ví dụ nhập liệu hoặc admin sửa) ghi dòng ngày hay phiên cho người khác, dòng audit phải mang dấu ghi nhận truy cập qua share (một trường cùng migration của nó), và phần gán tên cùng gợi ý Review phải đọc dấu đó.
 
 ## Hoãn lại
@@ -156,11 +156,79 @@ Các câu phạm vi và gate bắt buộc trong `handoff/prompts/WP3_IMPLEMENT.m
 
 ## Hành động tiếp theo
 
-Giao WP3-T15-FREEZE (commit và push qua `timesheet-committer` sau các kiểm tra), rồi WP3-GATE trên commit đó, rồi hai audit độc lập mới. Không bắt đầu WP4, và không đặt `PRODUCTION_SENDING_ENABLED`, cho đến khi gate và cả hai audit đạt và chủ sở hữu đã cho phép gói pilot.
+Được thay bằng bản ghi chấp nhận bên dưới: skill `.claude/skills/readme-md` của chủ sở hữu đi qua một chu trình GOV-SKILL, song song với lập kế hoạch WP4 (WP4-PLAN) khi quy tắc một người ghi cho phép. Không đặt `PRODUCTION_SENDING_ENABLED` cho đến khi chủ sở hữu đã cho phép gói pilot.
 
 ## Bản ghi chấp nhận (WP3-ACCEPT)
 
-(Để trống. Bước chấp nhận ghi commit freeze, digest, kết luận gate và audit tại đây.)
+Do WP3-ACCREC chuẩn bị (chỉ hồ sơ, không sửa source). Nguồn: các tác vụ WP3-GATE đến WP3-RECFIX trên bảng (`decision`, `findings`, `gate_notes`, `history`), `owner_decisions` của bảng ngày 04/10/2026 và 05/10/2026, và các báo cáo [WP3_REVIEW_A](WP3_REVIEW_A.vi.md), [WP3_REVIEW_B](WP3_REVIEW_B.vi.md), [WP3_REVIEW_C](WP3_REVIEW_C.vi.md), [WP3_RECHECK_A](WP3_RECHECK_A.vi.md), [WP3_RECHECK_BC](WP3_RECHECK_BC.vi.md), [WP3_RECHECK_A2](WP3_RECHECK_A2.vi.md), [WP3_RECHECK_BC2](WP3_RECHECK_BC2.vi.md), [WP3_RECHECK_A3](WP3_RECHECK_A3.vi.md) và [WP3_RECHECK_BC3](WP3_RECHECK_BC3.vi.md) (mỗi báo cáo có bản `.vi.md`). Bước chấp nhận trên bảng thuộc điều phối viên.
+
+- **Source được chấp nhận:** commit `49651c8bb91d56bf6c6966405257537ec7ca474b` (WP3-FIX3-FREEZE, đã push), digest source `c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72` theo dạng `git ls-tree` (WP3-REGATE3 PASS; blob của export và digest của committer khớp). Số liệu cuối: 62 file và 1420 test; smoke 40 `PASS`; e2e 127 đạt và 5 bỏ qua ([verify](evidence/WP3-REGATE3/02-verify.txt), [e2e](evidence/WP3-REGATE3/03-e2e.txt), [digest](evidence/WP3-REGATE3/digest-lstree-after.txt)).
+- **Danh sách freeze và số liệu được bản ghi này đính chính:**
+
+| Freeze | Commit | Digest chính thức | Verify (file / test) | Dòng `PASS` của smoke | E2E |
+|---|---|---|---|---:|---|
+| Freeze gói (T15) | `a1cd566` | `96870f7e…6e729` | 60 / 1384 | 40 | 127 đạt, 5 bỏ qua |
+| Vòng sửa 1 | `2f2520e` | `eeb417d3…48410` | 62 / 1407 | 40 | 127 đạt, 5 bỏ qua |
+| Vòng sửa 2 | `2d72d35` | `0d513fca…7ea92` | 62 / 1416 | 40 | 127 đạt, 5 bỏ qua |
+| Vòng sửa 3 (được chấp nhận) | `49651c8` | `c31c300c…4ec72` | 62 / 1420 | 40 | 127 đạt, 5 bỏ qua |
+
+  Nguồn: gate_notes của WP3-GATE, WP3-REGATE, WP3-REGATE2 và WP3-REGATE3. Đính chính: số smoke là 40 dòng `PASS` ("46 checks" trong bản ghi T14 là sai, như gate_notes của WP3-GATE nêu); số test là của các gate (con số 60 / 1384 ở các phần trước chỉ là trạng thái tại `a1cd566`); e2e là 127 đạt và 5 bỏ qua theo thiết kế ở mọi freeze. Digest T14 trước đó `677b9142…` thuộc `b083739`.
+- **Chuỗi gate** (verifier, export sạch ngoài Dropbox, Node 24.21.0, Edge, chỉ capture):
+  - WP3-GATE PASS trên `a1cd566` (`96870f7e`);
+  - WP3-REGATE PASS trên `2f2520e` (`eeb417d3`);
+  - WP3-REGATE2 PASS trên `2d72d35` (`0d513fca`);
+  - WP3-REGATE3 PASS trên `49651c8` (`c31c300c`). Lần 1 đạt mọi mục về source. Mục 12 chỉ lỗi trên cây làm việc, vì một file bằng chứng `.md` chưa được theo dõi (`evidence/WP3-FIX3-FREEZE/result.md`) không có bản `.vi.md` đi cặp. WP3-RECFIX đã đổi tên nó thành `result.txt` (một lần đổi tên bằng đường dẫn nguyên văn, không xóa gì). Lần 2 chạy lại mục 12: `validate_orchestration`, `check_recovery` và `validate_package.py --preflight` đều thoát 0. Lưu ý từ gate: `npm run digest` trên cây làm việc in ra giá trị khác trên 724 file, vì nó còn tính ba file chưa được theo dõi dưới `.claude/skills/readme-md/`; chúng không nằm trong freeze (xem H-Q3).
+- **Chuỗi audit:**
+
+| Tác vụ | Commit | Kết luận | Phát hiện |
+|---|---|---|---|
+| WP3-AUDIT-A | `a1cd566` | NOT VERIFIED | Chỉ về thủ tục, không có phát hiện: digest không được ghi sau một lần bị từ chối quyền; các kiểm tra chức năng đạt. Vùng A được auditor mới kiểm lại. |
+| WP3-AUDIT-B | `a1cd566` | FIX REQUIRED | WP3-B-01, B-02, B-03 |
+| WP3-AUDIT-C | `a1cd566` | FIX REQUIRED | WP3-C-01, C-02, C-03 |
+| WP3-RECHECK-A lần 1 | `2f2520e` | PASS | Không có phát hiện |
+| WP3-RECHECK-BC | `2f2520e` | FIX REQUIRED | WP3-RBC-01, WP3-RBC-02; B-03 sửa một phần |
+| WP3-RECHECK-A lần 2 | `2d72d35` | PASS | Không có phát hiện |
+| WP3-RECHECK-BC2 | `2d72d35` | FIX REQUIRED | WP3-RBC2-01 (chỉ về độ phủ test) |
+| WP3-RECHECK-A lần 3 (cuối) | `49651c8` | **PASS** | Không có phát hiện |
+| WP3-RECHECK-BC3 (cuối) | `49651c8` | **PASS** | Không có phát hiện; WP3-RBC2-01 đã sửa |
+
+  Hai recheck cuối do một auditor mới không tác giả của bất kỳ thay đổi WP3 nào thực hiện, trên `49651c8` (HEAD và digest không đổi lúc đầu và cuối). Lần 1 và lần 2 của vùng A là PASS tại digest riêng; các thay đổi sau đó khiến chỉ lần 3 có giá trị ràng buộc.
+- **Các vòng sửa và điều mỗi vòng đã đóng:**
+  - **Vòng 1:** WP3-LINKFIX (link hồ sơ), WP3-FIXB (B-01 giới hạn lúc tạo tài khoản, B-02 phục hồi sự cố ở lần thử cuối, B-03 tên thao tác), WP3-FIXC (C-01 gợi ý thay đổi của người được chia sẻ, C-02 quy gán, C-03 chú thích).
+  - **Vòng 2:** WP3-FIX2: RBC-01 (mọi sự kiện không có actor là sự kiện hệ thống), RBC-02 (thay đổi của người được chia sẻ trước khi kỳ bắt đầu được liệt kê), test trực tiếp cho nhánh `sending`, và quyết định của chủ H-Q1 (a) cùng docs/05 và docs/10 bằng EN và VI.
+  - **Vòng 3:** WP3-FIX3, chỉ sửa test: RBC2-01, cùng việc quét chốt chặn (phần "Vòng sửa 3" ở trên).
+- **Quyết định của chủ sở hữu** (`owner_decisions` của bảng):
+  - 04/10/2026: F-1 đến F-5, F-Q1 đến F-Q5, G-Q1 (b) và G-Q2 (a) (xem "Quyết định chủ sở hữu đã triển khai"); F-Q6 vẫn mở.
+  - 05/10/2026, **H-Q1 (a):** tự nộp chỉ áp dụng cho tài khoản đã lưu cài đặt nộp với tự nộp bật; lựa chọn tường minh áp dụng cho nháp quá hạn giữ như đã triển khai (vẫn bị chặn bởi lúc tạo tài khoản), như điều phối viên đã diễn giải trên bảng.
+  - 05/10/2026, **H-Q2 (a):** bản sao `.txt` đã che của đúng sáu log `.raw` được nêu tên trong `evidence/WP3-FIX2/`, rồi xóa sáu file đó.
+  - 05/10/2026, việc chuyển thư mục tạm: từ `D:\timesheet-tmp\<task>` sang `D:\.claude-tmp\timesheet\<task>`.
+  - 05/10/2026, **H-Q3 (a):** skill `.claude/skills/readme-md` của chủ sở hữu ở lại trong repo và đi qua một chu trình GOV-SKILL (freeze, gate của verifier, audit mới) sau commit chấp nhận WP3. Nó không thuộc source WP3.
+- **Mục không chặn được chuyển tiếp** (không mục nào chặn việc chấp nhận):
+  - **R1–R9 của [WP3_RECHECK_A](WP3_RECHECK_A.vi.md) và [WP3_RECHECK_A2](WP3_RECHECK_A2.vi.md):** R1 nhãn ngày lễ dài bị cắt bằng dấu ba chấm trên PDF; R2 giới hạn 50 chữ ký được đếm ngoài giao dịch; R3 đã đóng bởi H-Q1 (a); R4 hash đã xem lại gồm số dư khả dụng, nên một biến động OT ở nơi khác làm bản xem lại cũ; R5 sign-off trước khi kỳ kết thúc vẫn được chấp nhận; R6 gợi ý và payload được đọc trong hai giao dịch (tính toàn vẹn không bị ảnh hưởng); R7 quy gán dựa trên mã thao tác (xem mục dấu ghi nhận bên dưới); R8 tài khoản chưa từng cấu hình vẫn nhận nhắc hạn trước hạn gửi đến địa chỉ của chính họ; R9 sự kiện seed không có actor hiện là tự động trong Lịch sử.
+  - **Dấu ghi nhận "qua share"** là bắt buộc trước khi WP4 cho bất kỳ route không phải share nào ghi dòng ngày hay phiên cho người khác (mục chuyển tiếp 15).
+  - Gợi ý hiển thị một số đếm, không liệt kê ngày.
+  - Một yêu cầu `HEAD` trên route PDF được chia sẻ ghi một audit tải xuống ([WP3_REVIEW_C](WP3_REVIEW_C.vi.md) R1).
+  - Nhắc hạn lặp trên SMTP thật, lỗi TLS bị phân loại là tạm thời, và lần gửi trước khi PDF xong (mục chuyển tiếp 1 đến 3).
+  - **F-Q6** vẫn mở (giữ WP2-A-01).
+  - **ADV-A-05** và các mục tùy chọn B4 của WP2 (mục chuyển tiếp 13).
+  - **Rủi ro của các recheck cuối** ([WP3_RECHECK_BC3](WP3_RECHECK_BC3.vi.md), [WP3_RECHECK_BC2](WP3_RECHECK_BC2.vi.md)):
+    - không test nào bao phủ việc thời điểm kích hoạt bị xóa giữa lúc quét (probe H3 cho thấy cách làm);
+    - chốt chặn `not_active` (`automation.ts:191`) không có test riêng;
+    - `before_account` chỉ được bao phủ theo cặp (M6b);
+    - lần đọc cho gợi ý không có giới hạn thời gian (tăng theo lịch sử audit của chủ sở hữu; RBC2 R1);
+    - tài khoản chưa từng cấu hình không nhận cảnh báo quá hạn, và trạng thái admin không hiện "chưa cài đặt" (RBC2 R2);
+    - việc quét hạn kiểm lại các kỳ của chúng ở mỗi lượt (RBC2 R3).
+- **Chuyển tiếp sang WP4** (lập kế hoạch WP4 phải xử lý):
+  - dấu ghi nhận "qua share" (một trường cùng migration của nó) trước khi bất kỳ route không phải share nào ghi dòng ngày hay phiên cho người khác, với phần quy gán và gợi ý Review đọc dấu đó;
+  - việc tài khoản chưa từng cấu hình có nhận cảnh báo quá hạn hoặc trạng thái admin "chưa cài đặt" hay không, nêu rõ trong gói pilot dù theo hướng nào;
+  - quyết định lưu giữ dòng job và việc quét file mồ côi của kho file chưa được lên lịch (mục chuyển tiếp 4);
+  - các mục SMTP thật: nhắc hạn lặp, TLS-as-temporary và gửi-trước-PDF (mục chuyển tiếp 1 đến 3);
+  - một lần đọc tùy chọn theo chủ sở hữu hoặc bị chặn theo ngày làm việc cho gợi ý;
+  - ba khoảng trống độ phủ test ở trên, nếu chủ sở hữu muốn đóng;
+  - F-Q6, ADV-A-05 và các mục tùy chọn B4 của WP2;
+  - container Docker, backup/restore và gói pilot (Hoãn lại).
+- **Kiểm chứng bản ghi này:** `validate_package.py --preflight` và kiểm tra parity EN/VI nằm trong [preflight.txt](evidence/WP3-ACCREC/preflight.txt) và [parity.txt](evidence/WP3-ACCREC/parity.txt).
+- **Trạng thái:** WP3 đã triển khai, qua gate (WP3-REGATE3 PASS) và được audit độc lập (WP3-RECHECK-A lần 3 PASS, WP3-RECHECK-BC3 PASS) trên `49651c8`. Không có hành động production và không có việc chủ sở hữu cho phép pilot; không có gì được triển khai và không email thật nào được gửi. **Hành động tiếp theo:** chu trình GOV-SKILL cho skill `.claude/skills/readme-md` của chủ sở hữu (H-Q3 (a)), song song với lập kế hoạch WP4 (WP4-PLAN) khi quy tắc một người ghi cho phép.
 
 ## Vòng sửa 1 — WP3-FIXB (phát hiện vùng B)
 

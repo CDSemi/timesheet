@@ -1,0 +1,66 @@
+### HTTP probe run 1 (while the mutation suite ran in parallel): exit 1 after 25 PASS and 0 FAIL, on an uncaught 'fetch failed' / ECONNRESET in the probe client at the first request after the seven spawnSync run-jobs passes
+2026-10-05T22:44:28Z
+PASS  cli seed  [  capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured]
+PASS  built server listening (JOB_RUNNER off, capture mode, loopback)
+PASS  three logins
+PASS  E1 settings, signature, note and two sessions (weekday and Sunday)  [201/201/200/201/201]
+PASS  E1 grants E2 (edit, OT read, PDF) and the admin (view)  [201/201]
+PASS  E2 edits E1 day 2026-09-30 (session) and 2026-10-01 (day entry) through /api/shared  [201/200]
+PASS  RBC-02 setup: E2 records planned leave on E1 day 2026-10-13 through /api/shared before that period starts  [200 {"work_date":"2026-10-13","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"c3af485e-23c3-47cb-9ed7-97a6a8199a12"},"default_category":"Worked","cat]
+PASS  C-01 owner review carries the hint beside the payload: E2 by display name, days 2026-09-30 and 2026-10-01  [[{"display_name":"Example Employee Two","days":2,"work_dates":["2026-09-30","2026-10-01"]}]]
+PASS  C-01 the hint is not inside the payload (no grantee name, no grantee_changes, no E2 id)
+PASS  C-01 payload_hash = SHA-256 of the canonical JSON of the payload alone  [406e17fc2392 vs 406e17fc2392]
+INFO  an identical owner PUT of 2026-10-01 (same content, current version): status 200, E1 events 15->16, hint [{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]
+PASS  C-01 an owner change of 2026-10-01 takes the day over: the hint now lists only 2026-09-30  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]]
+PASS  C-01 shared review route 404 for the grantee and the admin (not on the allowlist)  [404/404]
+PASS  C-01 the shared timesheet view carries no hint  [200]
+PASS  C-01 E2 and the admin get their own review with an empty hint and nothing of E1
+PASS  RBC-02 E1 review of payroll 2026-10-30 lists E2 for 2026-10-13 (changed before the period started)  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-10-13"]}]]
+PASS  RBC-02 the 2026-10-30 hint is outside the payload: no grantee name or id, payload_hash = SHA-256 of the canonical payload alone
+PASS  RBC-02 grantee shared review 404; shared timesheet without hint; admin and E2 own reviews empty and without E1 data  [404/200/200/200]
+PASS  RBC-02 the 2026-10-30 hash shown with the hint equals the production builder hash without it
+PASS  C-01 the hash with the hint shown (GET review) equals the hash built without it (production builder)  [afa3d7ee92d9/afa3d7ee92d9]
+PASS  E1 signs off the hash shown with the hint (201)  [201]
+PASS  C-01 after the owner sign-off the hint window restarts (empty)  [[]]
+PASS  saving settings with an empty To list is refused (422), so every account that H-Q1 automates has a recipient  [422 recipients_required]
+PASS  H-Q1 setup: admin settings saved (auto-submit on, one recipient; an empty To list is refused at save, see INFO); E3 created, signed in, one session, settings never saved (is_default)  [201/201/201/true]
+PASS  E2 note line and auto-submit on, image authorized; admin records the activation  [201/201/200]
+PASS  seven production run-jobs passes exit 0 (the first three with the sender, so E1 manual send is captured)  [{"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0} | {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":8,"succeeded":4,"retried":1,"intervention":3,"lost":0} | {"claimed":3,"succeeded":2,"retried":0,"intervention":1,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+[TypeError: fetch failed] {
+  [cause]: Error: read ECONNRESET
+      at TCP.onStreamRead (node:internal/stream_base_commons:216:20) {
+    errno: -4077,
+    code: 'ECONNRESET',
+    syscall: 'read'
+  }
+}
+
+Node.js v24.21.0
+exit=1
+2026-10-05T22:44:44Z
+
+### HTTP probe run 2: my added catch block had a literal newline (SyntaxError); the probe never started
+2026-10-05T22:45:21Z
+<scratch>/probes/a/http-probe.mjs:492
+  console.log(`INFO  probe error: ${error?.message} cause=${error?.cause?.code ?? '-'}; server exit code so far=${server.exitCode}; server log tail: ${serverLog.trim().split('
+                                                                                                                                                                              ^
+
+SyntaxError: Invalid or unexpected token
+    at compileSourceTextModule (node:internal/modules/esm/utils:319:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:438:20)
+    at afterLoad (node:internal/modules/esm/loader:506:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:511:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:564:36)
+    at afterResolve (node:internal/modules/esm/loader:611:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:617:12)
+    at node:internal/modules/esm/loader:636:32
+    at TracingChannel.tracePromise (node:diagnostics_channel:362:14)
+
+Node.js v24.21.0
+exit=1
+2026-10-05T22:45:21Z

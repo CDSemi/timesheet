@@ -1,0 +1,57 @@
+# WP3-RECHECK-BC3 (+ WP3-RECHECK-A attempt 3) command log; auditor timesheet-auditor, agent a4e5c209ddf7091f5, self-reported claude-opus-5-5
+# Times UTC. <project> = <project> ; <W> = <scratch> ; Node 24 by full path.
+[1] <node24>/node.exe --version -> v24.21.0 (exit 0)
+[2] (project) git rev-parse HEAD; git rev-parse origin/main; date -u -> 49651c8bb91d56bf6c6966405257537ec7ca474b ; 49651c8bb91d56bf6c6966405257537ec7ca474b ; 2026-10-05T22:35:02Z (exit 0)
+[3] (project) git ls-tree -r --format='%(path) %(objectname)' 49651c8bb91d56bf6c6966405257537ec7ca474b | grep -v '^handoff/' | LC_ALL=C sort | sha256sum -> c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 (exit 0) = regate digest of record
+[4] read briefs/reports (cat): tasks/WP3-RECHECK-BC3.md, tasks/WP3-RECHECK-A.md, prompts/WP3_REVIEW.md, WP3_RECHECK_BC2.md, tasks/WP3-FIX3.md, tasks/WP3-REGATE3.md Results, WP3_RECHECK_A2.md, templates/REVIEW.md; board records (node -e read-only)
+[5] mkdir <W>/raw <W>/tmp; git clone --no-hardlinks -q <project> <W>/repo (exit 0); git -C repo checkout --detach 49651c8 (exit 0); status clean
+[6] wrote <W>/env.sh; ls npm-cli.js; node --version v24.21.0; npm --version 11.18.0; then `cmd.exe /c where npm`
+    PROCESS DEVIATION: Git Bash (MSYS) converted the `/c` argument into a path, so cmd.exe started INTERACTIVELY (banner + prompt shown,
+    no `where` output). The Bash call timed out at 120 s and was moved to background task b16y9jy1f, where cmd.exe waits on stdin.
+    Not killed (brief: never kill processes by PID). Reported to the coordinator for TaskStop. No file written by it; no effect on source.
+[7] tasklist /FI "IMAGENAME eq cmd.exe" (read-only listing) -> several cmd.exe of the session; mine not identifiable; nothing killed
+[8] (clone) <node24> scripts/source-digest.mjs -> c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 (721 files) exit 0; git ls-tree form in the clone -> same; 721 non-handoff paths
+[9] (clone) git diff --stat/--name-status 2d72d35 49651c8 -- . ':!handoff' -> 1 path: M tests/integration/deadline.test.ts (+65 -12); handoff paths changed: 141;
+    git diff --stat over src docs scripts package*.json tsconfig* eslint/vite/vitest/playwright configs .gitattributes .gitignore .editorconfig .npmrc AGENTS/CLAUDE .claude .agents reference README/DEVELOPMENT -> empty (exit 0). -> 17-delta.txt, 17b-test-diff.txt
+[10] read automation.ts (whole file) and tests/integration/deadline.test.ts (helpers, the changed tests)
+[11] (clone) npm ci -> exit 0 (160 packages, 0 vulnerabilities) -> 01-npm-ci.txt
+[12] (clone) npm exec -c "node --version" -> v24.21.0 (npm scripts resolve Node 24)
+[13] (clone) NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify -> exit 0; 62 files / 1420 tests; SMOKE PASSED, 40 PASS lines; 0 deprecation lines -> 02-verify.txt
+[14] git clone <project> <W>/mut; checkout --detach 49651c8; npm ci -> exit 0 (mutation clone)
+[15] bash probes/mutations.sh (background) -> 04-mutations.txt (see file)
+[16] copied the published probe sources: BC2 lib/h1/h2 (default source <W>/repo), RECHECK-A2 common/race/race-child/hint/http/pdftext (masked addresses rebuilt at run time with mail(); SCRATCH = <W>) -> *.mjs.txt
+[17] (probes/a) node http-probe.mjs, run 1 (while the mutation suite ran in parallel) -> exit 1: 25 PASS, then an uncaught `TypeError: fetch failed` cause ECONNRESET on the first request after the seven spawnSync run-jobs passes (probe client transport; no FAIL line) -> 12a-http-run1.txt
+[18] added a catch block to the probe that prints the error and the server log tail; run 2 -> exit 1, SyntaxError in my edit (literal newline), probe never started -> 12a (noted); fixed with an edit
+[19] node http-probe.mjs, run 3 -> exit 0, HTTP PROBE PASSED, 84 PASS -> 12-http.txt
+[20] (probes) node h2-guards.mjs (PROBE_REPO default <W>/repo) -> exit 0, 10 PASS -> 18-h2.txt
+[21] (probes) node h1-setup-bound.mjs -> exit 0, 50 PASS -> 06-h1.txt
+[22] probes/mutations.sh finished (exit 0) -> 04-mutations.txt:
+     clean 1420 passed (exit 0); M4 exit 1 (1 failed: F-4 test); M5 exit 1 (1 failed: imported auto-on test); M5b exit 1 (2 failed: imported auto-on + off-before-deadline);
+     sweep: inactive_user exit 1 (1 failed, new sweep test); before_activation exit 1 (1); not_due exit 1 (1); finalized exit 1 (2, recovery tests);
+     extended sweep: before_account exit 0 (1420 passed); overdue_recorded exit 1 (3 failed);
+     M4 split: M4a (scan-level early return only) exit 0; M4b (assessPeriod not_active only) exit 0;
+     differential (deadline.test.ts only): M4/M5/M5b with the 2d72d35 test file -> exit 0 (40 passed each); with the freeze file -> exit 1 (1/1/2 failed)
+     after each mutation: git checkout, status 0 lines; final HEAD 49651c8
+[23] wrote probes/h3-midscan.mjs (activation cleared during a running scan via a TEMP trigger); (probes) node h3-midscan.mjs -> exit 0, 4 PASS -> 18b-h3.txt
+[24] bash probes/mutations2.sh -> 04b-mutations2.txt: M6a (listCandidates creation clamp only) exit 0; M6b (both creation guards) exit 1 (3 failed: B-01 and H-Q1 clamp tests);
+     H3 on unmutated mut exit 0 (4 PASS); H3 under M4b exit 1 (1 FAIL: 2026-10-16 finalized after the clear)
+[25] (repo) 5 x vitest run tests/integration/deadline.test.ts --reporter=verbose -> exit 0 each, 44 passed each; the 6 round-3 tests pass every round -> 05b-deadline-repeat.txt
+[26] (repo) NODE_OPTIONS=trace/pending deprecation npm run test:e2e (Edge, capture; background) -> see 05-e2e.txt
+[26] result: npm run test:e2e exit 0; build then Playwright on the installed Edge (E2E_CHANNEL unset -> msedge), desktop + mobile: 127 passed, 5 skipped, 0 failed (5.9 min); 0 deprecation lines -> 05-e2e.txt
+[27] (probes/a) ROUNDS=20 node race-probe.mjs (4 OS processes per round: 2 manual sign-offs + 2 production cli.js run-jobs passes; then 2 drain passes) -> exit 0; manual_won 11, deadline_won 9, failed 0 -> 10-race.txt
+[28] (probes/a) ROUNDS=20 RUN_DIR=<W>/work/race2 node race-probe.mjs -> exit 0; manual_won 9, deadline_won 11, failed 0 -> 10b-race-rerun.txt
+[29] (probes/a) node hint-probe.mjs -> exit 0; HINT PROBE PASSED, 12 PASS -> 13-hint.txt
+[30] masked copies of raw logs and probe sources written to <project>/handoff/delivery/evidence/WP3-RECHECK-BC3/ with probes/mask.mjs (Node 24); reports and task Results written
+[31] wrote <project>/handoff/delivery/WP3_RECHECK_BC3.md/.vi.md, WP3_RECHECK_A3.md/.vi.md; appended the result blocks to tasks/WP3-RECHECK-BC3.md (BC3 + A attempt 3) and tasks/WP3-RECHECK-A.md (attempt 3)
+[32] node -e (read-only): ID-set parity EN/VI per the validate_package regex (BC3: WP3 = WP3; A3: AC-14,WP3 = AC-14,WP3), no U+FFFD; local links resolve except the three evidence files written next
+[33] powershell -NoProfile -Command Get-CimInstance Win32_Process (read-only listing) filtered on this task's paths and headless Edge:
+     no node.exe server/runner/probe and no msedge.exe of this task is running; the HTTP probe's server ended with SIGTERM (12-http.txt).
+     Still running: the stray interactive cmd.exe of step [6] (command line `cmd.exe C:/ where npm`, parent = the bash of background task b16y9jy1f), idle on stdin; NOT killed (no PID kills); reported.
+[34] <python> handoff/delivery/validate_package.py --preflight (project folder, live tree, workflow Python) -> exit 0; PASS; 69 translation pairs, 1487 local links, 91 scenarios -> 20-preflight.txt
+[35] FINAL IDENTITY (project) git rev-parse HEAD; git rev-parse origin/main; ls-tree digest of 49651c8 and of HEAD
+     -> HEAD 49651c8bb91d56bf6c6966405257537ec7ca474b ; origin/main 49651c8bb91d56bf6c6966405257537ec7ca474b
+     -> c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 (both forms) ; 2026-10-05T23:12:28Z
+[36] FINAL IDENTITY (clone <W>/repo) git rev-parse HEAD; <node24> scripts/source-digest.mjs; ls-tree digest; status
+     -> 49651c8bb91d56bf6c6966405257537ec7ca474b ; c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 (721 files) ; c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 ; repo status 0 lines ; mut HEAD 49651c8, status 0 lines
+     = the values at the start ([2], [3], [8]); unchanged.
+[37] then: precommit privacy check over this task's outputs on a temporary index (21-privacy.txt); no further source-related command.

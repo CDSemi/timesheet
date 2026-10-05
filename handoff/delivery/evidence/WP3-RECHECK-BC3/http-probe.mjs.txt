@@ -1,0 +1,501 @@
+// WP3-RECHECK-BC3 (area A attempt 3) HTTP probe, copied from WP3-RECHECK-A2 with the masked addresses rebuilt at run time; against the BUILT server of the reviewed clone (synthetic data, capture
+// mode, JOB_RUNNER off, loopback only, a free port chosen by the OS).
+// Accounts: E1 (employee), E2 (employee2), A (admin). E1 grants E2 a share (edit, OT read, PDF) and
+// grants A a view share; E2 edits two of E1's days through /api/shared; E1 edits one of them again.
+// Area-A checks: owner-only revisions/PDF/signatures (ID swap 404, anonymous 401, no static path,
+// no-store), the admin allowlist with recipients, no secret anywhere, and the fix-round effects:
+// C-01 hint owner-only, outside the payload/hash/PDF/mail, absent for grantee, shared view and admin,
+// same hash shown and hidden; C-02 history attribution leaks no other user's data.
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { m, mail, REPO, SCRATCH } from './common.mjs';
+import { readPdf } from './pdftext.mjs';
+
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+const canonical = await import(pathToFileURL(join(REPO, 'dist/domain/canonical.js')).href);
+
+const BASE_DIR = process.env.RUN_DIR ?? `${SCRATCH}/work/http`;
+if (existsSync(join(BASE_DIR, 't.db'))) throw new Error('Refusing to reuse a run folder');
+mkdirSync(BASE_DIR, { recursive: true });
+const dbPath = join(BASE_DIR, 't.db');
+const dataDir = join(BASE_DIR, 'private-data');
+const ZONE = 'America/Los_Angeles';
+const PRIVATE_NOTE = 'RECHECK-PRIVATE-NOTE-E1';
+const GRANTEE_NOTE = 'RECHECK-GRANTEE-NOTE';
+const SIGNER_ONE = 'Recheck Signer One';
+const E2_NAME = 'Example Employee Two';
+const PLANNED_NOTE = 'RECHECK-PLANNED-LEAVE';
+const E3_EMAIL = mail('synthetic-never');
+const E3_NAME = 'Synthetic Never Configured';
+
+const port = await new Promise((resolve, reject) => {
+  const probe = createServer();
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => {
+    const address = probe.address();
+    probe.close(() => resolve(address.port));
+  });
+});
+const base = `http://127.0.0.1:${port}`;
+const origin = `http://localhost:${port}`;
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: dbPath,
+  DATA_DIR: dataDir,
+  APP_ORIGINS: origin,
+  MAIL_FROM: mail('timesheet'),
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+
+let failures = 0;
+const corpus = [];
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
+  if (!condition) failures += 1;
+}
+function cli(args, cliEnv = env) {
+  const result = spawnSync(process.execPath, [join(REPO, 'dist/server/cli.js'), ...args], { env: cliEnv, encoding: 'utf8' });
+  const text = `${result.stdout}${result.stderr}`.trim();
+  corpus.push(['cli', text]);
+  return { status: result.status, text };
+}
+async function call(method, path, { cookie, body, raw, type, withOrigin = true } = {}) {
+  const headers = {};
+  if (withOrigin) headers.origin = origin;
+  if (cookie) headers.cookie = cookie;
+  let payload;
+  if (raw !== undefined) {
+    headers['content-type'] = type;
+    payload = raw;
+  } else if (body !== undefined) {
+    headers['content-type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+  const response = await fetch(`${base}${path}`, { method, headers, body: payload });
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const contentType = response.headers.get('content-type') ?? '';
+  const json = contentType.includes('json') ? JSON.parse(bytes.toString('utf8')) : null;
+  if (!contentType.includes('pdf') && !contentType.startsWith('image/')) corpus.push([`${method} ${path}`, bytes.toString('utf8')]);
+  return { status: response.status, json, bytes, text: bytes.toString('utf8'), headers: response.headers };
+}
+async function login(email, password) {
+  const response = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
+  corpus.push(['login', await response.text()]);
+  return response.headers.get('set-cookie')?.split(';')[0] ?? '';
+}
+const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+const sessionBody = (date, from, to) => ({ start: at(date, from), end: at(date, to), input_zone: ZONE, breaks: [], breaks_confirmed: true });
+
+const seed = cli(['seed']);
+check('cli seed', seed.status === 0, seed.text.split('\n').pop());
+const server = spawn(process.execPath, [join(REPO, 'dist/server/index.js')], { env });
+let serverLog = '';
+server.stdout.on('data', (d) => { serverLog += d; });
+server.stderr.on('data', (d) => { serverLog += d; });
+for (let i = 0; i < 100 && !serverLog.includes('listening'); i += 1) await new Promise((r) => setTimeout(r, 100));
+check('built server listening (JOB_RUNNER off, capture mode, loopback)', serverLog.includes('listening'));
+
+try {
+  const cookies = {
+    admin: await login(mail('admin'), passwords.admin),
+    e1: await login(mail('employee'), passwords.employee),
+    e2: await login(mail('employee2'), passwords.employee2),
+  };
+  check('three logins', Object.values(cookies).every((c) => c.includes('=')));
+  const me = async (cookie) => (await call('GET', '/api/auth/me', { cookie })).json.user;
+  const ids = { e1: (await me(cookies.e1)).id, e2: (await me(cookies.e2)).id, admin: (await me(cookies.admin)).id };
+
+  // E1: settings, signature, a private note, sessions incl. the Sunday 2026-10-04.
+  const s1 = await call('POST', '/api/settings/submission', { cookie: cookies.e1, body: { expected_seq: 0, to: [mail('payroll')], cc: [mail('manager')], auto_submit: false } });
+  const sig1 = await call('POST', '/api/signatures?authorize_auto_image=false', { cookie: cookies.e1, raw: m.seed.syntheticSignaturePng(7), type: 'image/png' });
+  const sig1Id = sig1.json?.signature?.id;
+  const day = await call('PUT', '/api/days/2026-09-29', { cookie: cookies.e1, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: PRIVATE_NOTE } });
+  const sa = await call('POST', '/api/days/2026-09-29/sessions', { cookie: cookies.e1, body: sessionBody('2026-09-29', '07:13', '18:47') });
+  const sb = await call('POST', '/api/days/2026-10-04/sessions', { cookie: cookies.e1, body: sessionBody('2026-10-04', '09:00', '12:00') });
+  check('E1 settings, signature, note and two sessions (weekday and Sunday)', s1.status === 201 && sig1.status === 201 && day.status < 300 && sa.status === 201 && sb.status === 201,
+    [s1, sig1, day, sa, sb].map((r) => r.status).join('/'));
+
+  // Shares: E1 -> E2 (edit, OT read, PDF), E1 -> admin (view).
+  const g2 = await call('POST', '/api/shares', { cookie: cookies.e1, body: { grantee_email: mail('employee2'), items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+  const gA = await call('POST', '/api/shares', { cookie: cookies.e1, body: { grantee_email: mail('admin'), items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+  check('E1 grants E2 (edit, OT read, PDF) and the admin (view)', g2.status === 201 && gA.status === 201, `${g2.status}/${gA.status}`);
+  const shareE2 = g2.json?.share?.id;
+  const shareA = gA.json?.share?.id;
+
+  // E2 changes two of E1's days through the grant; E1 then changes one of them again.
+  const ge1 = await call('POST', `/api/shared/${ids.e1}/days/2026-09-30/sessions`, { cookie: cookies.e2, body: sessionBody('2026-09-30', '08:00', '17:30') });
+  const ge2 = await call('PUT', `/api/shared/${ids.e1}/days/2026-10-01`, { cookie: cookies.e2, body: { category: 'Worked', leave_minutes: 0, wfh: true, notes: GRANTEE_NOTE } });
+  check('E2 edits E1 day 2026-09-30 (session) and 2026-10-01 (day entry) through /api/shared', ge1.status === 201 && ge2.status < 300, `${ge1.status}/${ge2.status}`);
+  // WP3-RBC-02: planned leave recorded by the grantee before its period (2026-10-12..10-25) has started (the server clock is real time).
+  const gePre = await call('PUT', `/api/shared/${ids.e1}/days/2026-10-13`, { cookie: cookies.e2, body: { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: PLANNED_NOTE } });
+  check('RBC-02 setup: E2 records planned leave on E1 day 2026-10-13 through /api/shared before that period starts', gePre.status < 300, `${gePre.status} ${gePre.text.slice(0, 200)}`);
+  const r1 = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e1 });
+  const hint1 = r1.json?.grantee_changes;
+  check('C-01 owner review carries the hint beside the payload: E2 by display name, days 2026-09-30 and 2026-10-01',
+    r1.status === 200 && Array.isArray(hint1) && hint1.length === 1 && hint1[0].display_name === E2_NAME && JSON.stringify(hint1[0].work_dates) === '["2026-09-30","2026-10-01"]' && hint1[0].days === 2,
+    JSON.stringify(hint1));
+  check('C-01 the hint is not inside the payload (no grantee name, no grantee_changes, no E2 id)',
+    !JSON.stringify(r1.json.payload).includes(E2_NAME) && !JSON.stringify(r1.json.payload).includes('grantee') && !JSON.stringify(r1.json.payload).includes(ids.e2));
+  check('C-01 payload_hash = SHA-256 of the canonical JSON of the payload alone',
+    r1.json.payload_hash === canonical.canonicalHash(r1.json.payload), `${r1.json.payload_hash.slice(0, 12)} vs ${canonical.canonicalHash(r1.json.payload).slice(0, 12)}`);
+  const findEntry = (value) => {
+    if (value === null || typeof value !== 'object') return null;
+    if (!Array.isArray(value) && value.work_date === '2026-10-01' && 'notes' in value && 'version' in value) return value;
+    for (const child of Object.values(value)) {
+      const hit = findEntry(child);
+      if (hit !== null) return hit;
+    }
+    return null;
+  };
+  const entryVersion = async () => findEntry((await call('GET', '/api/days/2026-10-01', { cookie: cookies.e1 })).json)?.version;
+  const eventsBefore = (await call('GET', '/api/history?limit=500', { cookie: cookies.e1 })).json.audit_events.length;
+  const same = await call('PUT', '/api/days/2026-10-01', { cookie: cookies.e1, body: { category: 'Worked', leave_minutes: 0, wfh: true, notes: GRANTEE_NOTE, expected_version: await entryVersion() } });
+  const eventsSame = (await call('GET', '/api/history?limit=500', { cookie: cookies.e1 })).json.audit_events.length;
+  const rSame = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e1 });
+  console.log(`INFO  an identical owner PUT of 2026-10-01 (same content, current version): status ${same.status}, E1 events ${eventsBefore}->${eventsSame}, hint ${JSON.stringify(rSame.json.grantee_changes)}`);
+  const own1 = await call('PUT', '/api/days/2026-10-01', { cookie: cookies.e1, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: 'RECHECK-OWNER-NOTE', expected_version: await entryVersion() } });
+  const r2 = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e1 });
+  check('C-01 an owner change of 2026-10-01 takes the day over: the hint now lists only 2026-09-30',
+    own1.status < 300 && r2.json.grantee_changes.length === 1 && JSON.stringify(r2.json.grantee_changes[0].work_dates) === '["2026-09-30"]', JSON.stringify(r2.json.grantee_changes));
+
+  // The grantee, the shared view and the administrator never receive the hint.
+  const sharedReview = await call('GET', `/api/shared/${ids.e1}/timesheets/2026-10-16/review`, { cookie: cookies.e2 });
+  const sharedReviewA = await call('GET', `/api/shared/${ids.e1}/timesheets/2026-10-16/review`, { cookie: cookies.admin });
+  const sharedTs = await call('GET', `/api/shared/${ids.e1}/timesheets/2026-10-16`, { cookie: cookies.e2 });
+  const e2Review = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e2 });
+  const adminReview = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.admin });
+  check('C-01 shared review route 404 for the grantee and the admin (not on the allowlist)', sharedReview.status === 404 && sharedReviewA.status === 404, `${sharedReview.status}/${sharedReviewA.status}`);
+  check('C-01 the shared timesheet view carries no hint', sharedTs.status === 200 && !sharedTs.text.includes('grantee_changes') && !sharedTs.text.includes(E2_NAME), String(sharedTs.status));
+  check('C-01 E2 and the admin get their own review with an empty hint and nothing of E1',
+    e2Review.status === 200 && JSON.stringify(e2Review.json.grantee_changes) === '[]' && adminReview.status === 200 && JSON.stringify(adminReview.json.grantee_changes) === '[]' &&
+      !e2Review.text.includes(PRIVATE_NOTE) && !adminReview.text.includes(PRIVATE_NOTE) && !e2Review.text.includes(ids.e1) && !adminReview.text.includes(ids.e1));
+
+  // WP3-RBC-02 over HTTP: the next period's review names the grantee for the pre-period change; nobody else sees it.
+  const rNext = await call('GET', '/api/timesheets/2026-10-30/review', { cookie: cookies.e1 });
+  const hintNext = rNext.json?.grantee_changes;
+  check('RBC-02 E1 review of payroll 2026-10-30 lists E2 for 2026-10-13 (changed before the period started)',
+    rNext.status === 200 && Array.isArray(hintNext) && hintNext.length === 1 && hintNext[0].display_name === E2_NAME && JSON.stringify(hintNext[0].work_dates) === '["2026-10-13"]', JSON.stringify(hintNext));
+  check('RBC-02 the 2026-10-30 hint is outside the payload: no grantee name or id, payload_hash = SHA-256 of the canonical payload alone',
+    !JSON.stringify(rNext.json.payload).includes(E2_NAME) && !JSON.stringify(rNext.json.payload).includes(ids.e2) && rNext.json.payload_hash === canonical.canonicalHash(rNext.json.payload));
+  const nextShared = await call('GET', `/api/shared/${ids.e1}/timesheets/2026-10-30/review`, { cookie: cookies.e2 });
+  const nextSharedTs = await call('GET', `/api/shared/${ids.e1}/timesheets/2026-10-30`, { cookie: cookies.e2 });
+  const nextAdmin = await call('GET', '/api/timesheets/2026-10-30/review', { cookie: cookies.admin });
+  const nextE2 = await call('GET', '/api/timesheets/2026-10-30/review', { cookie: cookies.e2 });
+  check('RBC-02 grantee shared review 404; shared timesheet without hint; admin and E2 own reviews empty and without E1 data',
+    nextShared.status === 404 && nextSharedTs.status === 200 && !nextSharedTs.text.includes('grantee_changes') && JSON.stringify(nextAdmin.json?.grantee_changes) === '[]' &&
+      JSON.stringify(nextE2.json?.grantee_changes) === '[]' && !nextAdmin.text.includes(ids.e1) && !nextE2.text.includes(ids.e1) && !nextAdmin.text.includes(PLANNED_NOTE),
+    `${nextShared.status}/${nextSharedTs.status}/${nextAdmin.status}/${nextE2.status}`);
+  {
+    const sideNext = m.db.openDatabase(dbPath);
+    const row = sideNext.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(ids.e1);
+    const builtNext = m.review.buildReviewPayload(sideNext, { now: () => new Date() }, { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'probe' }, '2026-10-30');
+    sideNext.close();
+    check('RBC-02 the 2026-10-30 hash shown with the hint equals the production builder hash without it', builtNext.payloadHash === rNext.json.payload_hash && builtNext.expectedVersion === rNext.json.expected_version);
+  }
+
+  // Hidden-hint computation: the production payload builder alone (no hint), on a separate connection.
+  const side = m.db.openDatabase(dbPath);
+  const e1Row = side.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(ids.e1);
+  const e1User = { id: e1Row.id, email: e1Row.email, displayName: e1Row.display_name, role: e1Row.role, calendarId: e1Row.calendar_id, sessionId: 'probe' };
+  const hidden = m.review.buildReviewPayload(side, { now: () => new Date() }, e1User, '2026-10-16');
+  side.close();
+  check('C-01 the hash with the hint shown (GET review) equals the hash built without it (production builder)', hidden.payloadHash === r2.json.payload_hash && hidden.expectedVersion === r2.json.expected_version,
+    `${hidden.payloadHash.slice(0, 12)}/${r2.json.payload_hash.slice(0, 12)}`);
+
+  // E1 signs the reviewed hash that was shown with the hint.
+  const signoff = await call('POST', '/api/timesheets/2026-10-16/signoff', {
+    cookie: cookies.e1,
+    body: { expected_version: r2.json.expected_version, reviewed_hash: r2.json.payload_hash, signer_name: SIGNER_ONE, incomplete_evidence_acknowledged: true },
+  });
+  const e1RevId = signoff.json?.revision?.id;
+  check('E1 signs off the hash shown with the hint (201)', signoff.status === 201, String(signoff.status));
+  const afterSign = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e1 });
+  check('C-01 after the owner sign-off the hint window restarts (empty)', afterSign.status === 200 && JSON.stringify(afterSign.json.grantee_changes) === '[]', JSON.stringify(afterSign.json.grantee_changes));
+
+  // E2 gets an automatic submission; the admin's own empty period too.
+  const cur2 = await call('GET', '/api/settings/submission', { cookie: cookies.e2 });
+  const s2 = await call('POST', '/api/settings/submission', {
+    cookie: cookies.e2,
+    body: { expected_seq: cur2.json.settings.seq, to: cur2.json.settings.recipients.to, cc: cur2.json.settings.recipients.cc, auto_submit: true, auto_note_enabled: true, auto_note_text: 'Nộp tự động' },
+  });
+  const sig2 = await call('POST', '/api/signatures?authorize_auto_image=true', { cookie: cookies.e2, raw: m.seed.syntheticSignaturePng(13), type: 'image/png' });
+  const sig2Id = sig2.json?.signature?.id;
+  // H-Q1 (a): the admin saves settings with auto-submit on and NO recipients (AC-14 fault path, a configured account);
+  // E3 is created by the admin, records a session and never saves submission settings (must get nothing automatic).
+  const curSetA = await call('GET', '/api/settings/submission', { cookie: cookies.admin });
+  const emptyTo = await call('POST', '/api/settings/submission', { cookie: cookies.admin, body: { expected_seq: curSetA.json.settings.seq, to: [], auto_submit: true } });
+  check('saving settings with an empty To list is refused (422), so every account that H-Q1 automates has a recipient', emptyTo.status === 422, `${emptyTo.status} ${emptyTo.json?.error?.code ?? emptyTo.text.slice(0, 120)}`);
+  const sA = await call('POST', '/api/settings/submission', { cookie: cookies.admin, body: { expected_seq: curSetA.json.settings.seq, to: [mail('payroll')], auto_submit: true } });
+  const calendarId = (await call('GET', '/api/admin/users', { cookie: cookies.admin })).json.users.find((u) => u.id === ids.e1).calendar_id;
+  passwords.e3 = randomBytes(18).toString('base64url');
+  const e3Create = await call('POST', '/api/admin/users', { cookie: cookies.admin, body: { email: E3_EMAIL, display_name: E3_NAME, role: 'employee', password: passwords.e3, calendar_id: calendarId } });
+  ids.e3 = e3Create.json?.user?.id;
+  cookies.e3 = await login(E3_EMAIL, passwords.e3);
+  const e3Session = await call('POST', '/api/days/2026-10-01/sessions', { cookie: cookies.e3, body: sessionBody('2026-10-01', '08:00', '18:30') });
+  const e3Settings = await call('GET', '/api/settings/submission', { cookie: cookies.e3 });
+  check('H-Q1 setup: admin settings saved (auto-submit on, one recipient; an empty To list is refused at save, see INFO); E3 created, signed in, one session, settings never saved (is_default)',
+    curSetA.json.settings.seq === 0 && sA.status === 201 && e3Create.status === 201 && cookies.e3.includes('=') && e3Session.status === 201 && e3Settings.json?.settings?.is_default === true,
+    `${sA.status}/${e3Create.status}/${e3Session.status}/${e3Settings.json?.settings?.is_default}`);
+  const act = await call('PUT', '/api/admin/automation/activation', { cookie: cookies.admin, body: { active_from: '2026-10-06T00:00:00Z', reason: 'Synthetic recheck activation' } });
+  check('E2 note line and auto-submit on, image authorized; admin records the activation', s2.status === 201 && sig2.status === 201 && act.status === 200, `${s2.status}/${sig2.status}/${act.status}`);
+  const envNoSender = { ...env };
+  delete envNoSender.MAIL_FROM;
+  // AC-14 sender fault: the deadline passes of 2026-10-14 run without MAIL_FROM, so the automatic sends meet sender_missing; the last pass has the sender again.
+  const passes = [['2026-10-05T23:00:00Z', env], ['2026-10-05T23:10:00Z', env], ['2026-10-06T01:00:00Z', env], ['2026-10-14T00:30:00Z', envNoSender], ['2026-10-14T00:40:00Z', envNoSender], ['2026-10-14T02:00:00Z', envNoSender], ['2026-10-14T04:00:00Z', env]].map(([now, e]) => cli(['run-jobs', '--once', '--now', now], e));
+  check('seven production run-jobs passes exit 0 (the first three with the sender, so E1 manual send is captured)', passes.every((p) => p.status === 0), passes.map((p) => p.text.split('\n').pop()).join(' | '));
+  {
+    const listE3 = await call('GET', '/api/revisions', { cookie: cookies.e3 });
+    const ro = new Database(dbPath, { readonly: true });
+    const n = (sql) => ro.prepare(sql).pluck().get(ids.e3);
+    const e3State = {
+      revisions: n('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?'),
+      lines: n('SELECT count(*) FROM revision_ledger_lines WHERE user_id = ?'),
+      finalizationLedger: n("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND (source_key LIKE 'finalization:%' OR source_key LIKE 'rev:%')"),
+      jobs: ro.prepare('SELECT kind FROM jobs WHERE user_id = ?').pluck().all(ids.e3),
+      attempts: n('SELECT count(*) FROM delivery_attempts WHERE user_id = ?'),
+      systemAudits: ro.prepare("SELECT operation FROM audit_events WHERE owner_user_id = ? AND (actor_user_id IS NULL OR operation LIKE 'deadline.%' OR operation LIKE 'timesheet.%')").pluck().all(ids.e3),
+      reminders: ro.prepare('SELECT kind FROM reminder_occurrences WHERE user_id = ?').pluck().all(ids.e3),
+      finalizedTimesheets: n('SELECT count(*) FROM timesheets WHERE user_id = ? AND finalized_revision_no IS NOT NULL'),
+    };
+    ro.close();
+    check('H-Q1 (a) E3 (never saved settings) after its 2026-10-14 deadline: no revision, no revision line, no finalization ledger entry, no job, no delivery attempt, no system or deadline event, no overdue reminder, nothing finalized',
+      listE3.status === 200 && listE3.json.revisions.length === 0 && e3State.revisions === 0 && e3State.lines === 0 && e3State.finalizationLedger === 0 && e3State.jobs.length === 0 &&
+        e3State.attempts === 0 && e3State.systemAudits.length === 0 && !e3State.reminders.includes('overdue') && e3State.finalizedTimesheets === 0, JSON.stringify(e3State));
+  }
+
+  // Owner-only revisions and downloads.
+  const list1 = await call('GET', '/api/revisions', { cookie: cookies.e1 });
+  const list2 = await call('GET', '/api/revisions', { cookie: cookies.e2 });
+  const listA = await call('GET', '/api/revisions', { cookie: cookies.admin });
+  const e2RevId = list2.json?.revisions?.[0]?.id;
+  check("GET /api/revisions lists only the caller's revisions",
+    list1.json.revisions.length === 1 && list1.json.revisions[0].id === e1RevId && list2.json.revisions.every((r) => r.id !== e1RevId) && listA.json.revisions.every((r) => r.id !== e1RevId && r.id !== e2RevId),
+    `e1=${list1.json.revisions.length} e2=${list2.json.revisions.length} admin=${listA.json.revisions.length}`);
+  const own = await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.e1 });
+  check('owner PDF download: 200 application/pdf, no-store, attachment, nosniff',
+    own.status === 200 && own.headers.get('content-type') === 'application/pdf' && own.headers.get('cache-control') === 'no-store' &&
+      /^attachment; filename="timesheet-2026-10-16-r1\.pdf"$/.test(own.headers.get('content-disposition') ?? '') && own.headers.get('x-content-type-options') === 'nosniff' && own.text.startsWith('%PDF-'),
+    `${own.status} ${own.headers.get('cache-control')} ${own.headers.get('content-disposition')}`);
+  writeFileSync(join(BASE_DIR, 'e1-manual.pdf'), own.bytes);
+  const pdf1 = await readPdf(own.bytes);
+  check('C-01 the signed PDF carries no hint: no grantee name, no "changed by", no "share"',
+    !pdf1.text.includes(E2_NAME) && !/changed by/i.test(pdf1.text) && !/share/i.test(pdf1.text), `${pdf1.lines.length} lines`);
+  check('the signed PDF prints the signer name and the Sunday 2026-10-04 row', pdf1.text.includes(SIGNER_ONE) && /10\/04\/2026|2026-10-04/.test(pdf1.text));
+  console.log(`INFO  E1 PDF lines: ${pdf1.lines.length}; first: ${pdf1.lines.slice(0, 3).join(' / ')}`);
+  const own2 = await call('GET', `/api/revisions/${e2RevId}/pdf`, { cookie: cookies.e2 });
+  check('E2 downloads its own automatic PDF', own2.status === 200 && own2.text.startsWith('%PDF-'), String(own2.status));
+
+  // Grantee download through the share (audited), then E1 history attribution (C-02).
+  const sharedPdf = await call('GET', `/api/shared/${ids.e1}/revisions/${e1RevId}/pdf`, { cookie: cookies.e2 });
+  check('E2 downloads E1 PDF through the PDF item (200, no-store)', sharedPdf.status === 200 && sharedPdf.headers.get('cache-control') === 'no-store', String(sharedPdf.status));
+  const adminShareRevoke = await call('POST', `/api/admin/shares/${shareA}/revoke`, { cookie: cookies.admin, body: { reason: 'Synthetic admin revocation' } });
+  check('the admin (also a grantee) revokes its own share of E1 through the admin route', adminShareRevoke.status === 200, String(adminShareRevoke.status));
+  const h1 = await call('GET', '/api/history?limit=500', { cookie: cookies.e1 });
+  const events = h1.json.audit_events;
+  const attributed = events.filter((e) => e.via_share);
+  const attributedOps = attributed.map((e) => e.operation).sort().join(',');
+  check('C-02 E1 history attributes exactly the five grantee acts through /api/shared (day entry created by the session POST, session, day PUT, pre-period leave PUT, PDF download) to the grantee name',
+    attributedOps === 'day_entry.create,day_entry.create,day_entry.create,share.pdf_download,work_session.create' && events.filter((e) => e.actor_is_self === false && !e.via_share).every((e) => e.actor_display_name === null),
+    attributedOps);
+  check('C-02 every attributed event names E2 only, with actor_user_id null', attributed.every((e) => e.actor_display_name === E2_NAME && e.actor_user_id === null && e.actor_is_self === false));
+  const adminRevokeEvent = events.find((e) => e.operation === 'share.revoke');
+  check('C-02 the admin-route revocation by an admin holding a share stays unattributed', adminRevokeEvent !== undefined && adminRevokeEvent.via_share === false && adminRevokeEvent.actor_display_name === null,
+    JSON.stringify(adminRevokeEvent && { via_share: adminRevokeEvent.via_share, name: adminRevokeEvent.actor_display_name }));
+  check("C-02 E1 history carries no other user's id or email (E2, admin), and E2's name only in attribution",
+    !h1.text.includes(ids.e2) && !h1.text.includes(ids.admin) && !h1.text.includes(mail('employee2')) && !h1.text.includes(mail('admin')) && !h1.text.includes(E3_EMAIL) &&
+      h1.text.split(E2_NAME).length - 1 === attributed.length);
+  const h2 = await call('GET', '/api/history?limit=500', { cookie: cookies.e2 });
+  const hA = await call('GET', '/api/history?limit=500', { cookie: cookies.admin });
+  const e1Secrets = [ids.e1, e1RevId, PRIVATE_NOTE, GRANTEE_NOTE, mail('employee'), SIGNER_ONE, shareE2, shareA];
+  check("C-02 E2's and the admin's own histories hold nothing of E1 (id, revision, notes, address, signer, share ids)",
+    e1Secrets.every((s) => !h2.text.includes(s) && !hA.text.includes(s)), e1Secrets.filter((s) => h2.text.includes(s) || hA.text.includes(s)).join(','));
+
+  // WP3-RBC-01: actor_is_system is true exactly for the caller's events without an actor, carries no identity, and
+  // never marks a person's event (the owner's, an administrator's or a grantee's) as automatic.
+  {
+    const hE3 = await call('GET', '/api/history?limit=500', { cookie: cookies.e3 });
+    const ro = new Database(dbPath, { readonly: true });
+    const actorOf = ro.prepare('SELECT actor_user_id, owner_user_id FROM audit_events WHERE id = ?');
+    const results = [];
+    for (const [who, response, ownerId] of [['E1', h1, ids.e1], ['E2', h2, ids.e2], ['admin', hA, ids.admin], ['E3', hE3, ids.e3]]) {
+      const list = response.json.audit_events;
+      const mismatches = [];
+      for (const e of list) {
+        const row = actorOf.get(e.id);
+        if (row === undefined || row.owner_user_id !== ownerId) mismatches.push(`${e.operation}:not-owner`);
+        else if (e.actor_is_system !== (row.actor_user_id === null)) mismatches.push(`${e.operation}:flag`);
+        else if (e.actor_is_system && (e.actor_user_id !== null || e.actor_display_name !== null || e.via_share || e.actor_is_self)) mismatches.push(`${e.operation}:identity`);
+      }
+      const system = list.filter((e) => e.actor_is_system).map((e) => e.operation);
+      const otherPeople = list.filter((e) => !e.actor_is_self && !e.actor_is_system).map((e) => `${e.operation}${e.via_share ? '(share)' : ''}`);
+      results.push({ who, events: list.length, system, otherPeople, mismatches, keys: [...new Set(list.flatMap((e) => Object.keys(e)))].sort().join(',') });
+    }
+    ro.close();
+    for (const r of results) console.log(`INFO  RBC-01 ${r.who}: ${r.events} events; system: ${r.system.join(',') || '-'}; by another person: ${r.otherPeople.join(',') || '-'}; keys: ${r.keys}`);
+    check('RBC-01 every history event: actor_is_system equals "no actor" in the database, the event is the caller\'s own, and a system event carries no id, name, share or self flag',
+      results.every((r) => r.mismatches.length === 0), results.flatMap((r) => r.mismatches).join(','));
+    const e2r = results.find((r) => r.who === 'E2');
+    check('RBC-01 E2 automatic submission: timesheet.auto_finalize and its OT postings are system events; nothing of E2 by a person is labelled system',
+      e2r.system.includes('timesheet.auto_finalize') && e2r.system.some((op) => op.startsWith('ot_ledger') || op.startsWith('ledger')), e2r.system.join(','));
+    const e1r = results.find((r) => r.who === 'E1');
+    check('RBC-01 E1: the admin revocation and the grantee leave are not system events; the only E1 system event is the CLI-seed account creation (no actor)',
+      e1r.system.every((op) => op === 'user.create') && e1r.otherPeople.includes('share.revoke'), `${e1r.system.join(',')} | ${e1r.otherPeople.join(',')}`);
+    const e3r = results.find((r) => r.who === 'E3');
+    check('RBC-01 / H-Q1: E3 (never configured) history has no system event (nothing automatic happened) and no other user\'s data',
+      e3r.system.length === 0 && !hE3.text.includes(ids.e1) && !hE3.text.includes(ids.e2) && !hE3.text.includes(mail('employee')) && !hE3.text.includes(E2_NAME), e3r.system.join(','));
+    check('RBC-01 the history answer adds only the boolean actor_is_system (key set of every event)',
+      results.every((r) => r.events === 0 || r.keys === 'actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share'), results.map((r) => r.keys).join(' | '));
+  }
+  const sharedHistory = await call('GET', `/api/shared/${ids.e1}/history`, { cookie: cookies.e2 });
+  check('history is not shared: /api/shared/<E1>/history 404', sharedHistory.status === 404, String(sharedHistory.status));
+  const leave = await call('POST', `/api/shares/${shareE2}/revoke`, { cookie: cookies.e2, body: {} });
+  const afterLeave = await call('GET', `/api/shared/${ids.e1}/revisions/${e1RevId}/pdf`, { cookie: cookies.e2 });
+  const h1b = await call('GET', '/api/history?limit=500', { cookie: cookies.e1 });
+  const leaveEvent = h1b.json.audit_events.find((e) => e.operation === 'share.revoke' && e.after?.revoked_by_role === 'grantee');
+  check('E2 leaves the share: the shared PDF is 404 at once and the leave stays unattributed in E1 history',
+    leave.status === 200 && afterLeave.status === 404 && leaveEvent !== undefined && leaveEvent.via_share === false && leaveEvent.actor_display_name === null, `${leave.status}/${afterLeave.status}`);
+
+  const e1UserId = ids.e1;
+  const swaps = [
+    ['E2 -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.e2 }), 404],
+    ['admin -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.admin }), 404],
+    ['anonymous -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, {}), 401],
+    ['E1 -> E2 PDF', await call('GET', `/api/revisions/${e2RevId}/pdf`, { cookie: cookies.e1 }), 404],
+    ['E1 upper-case id', await call('GET', `/api/revisions/${e1RevId.toUpperCase()}/pdf`, { cookie: cookies.e1 }), 404],
+    ['E1 traversal id', await call('GET', '/api/revisions/..%2F..%2Ft.db/pdf', { cookie: cookies.e1 }), 404],
+    ['admin shared path after its share was revoked', await call('GET', `/api/shared/${e1UserId}/revisions/${e1RevId}/pdf`, { cookie: cookies.admin }), 404],
+    ['E2 -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.e2 }), 404],
+    ['admin -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.admin }), 404],
+    ['E1 -> E2 signature', await call('GET', `/api/signatures/${sig2Id}`, { cookie: cookies.e1 }), 404],
+    ['anonymous -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, {}), 401],
+    ['anonymous -> signatures/current', await call('GET', '/api/signatures/current', {}), 401],
+    ['anonymous -> revisions', await call('GET', '/api/revisions', {}), 401],
+    ['anonymous -> E1 review', await call('GET', '/api/timesheets/2026-10-16/review', {}), 401],
+    ['admin -> E1 resend', await call('POST', `/api/revisions/${e1RevId}/resend`, { cookie: cookies.admin, body: {} }), 404],
+    ['E2 -> E1 resend', await call('POST', `/api/revisions/${e1RevId}/resend`, { cookie: cookies.e2, body: {} }), 404],
+  ];
+  for (const [label, response, expected] of swaps) check(`ID swap / anonymous: ${label} -> ${expected}`, response.status === expected && !response.text.startsWith('%PDF-'), String(response.status));
+  const mine = await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.e1 });
+  check('owner signature download 200 image/png, no-store, attachment', mine.status === 200 && mine.headers.get('content-type') === 'image/png' && mine.headers.get('cache-control') === 'no-store' && (mine.headers.get('content-disposition') ?? '').startsWith('attachment'), String(mine.status));
+  const cur1 = await call('GET', '/api/signatures/current', { cookie: cookies.e1 });
+  const curA = await call('GET', '/api/signatures/current', { cookie: cookies.admin });
+  check('signatures/current answers the caller only (E1 own id; admin null), no-store', cur1.json?.signature?.id === sig1Id && curA.json?.signature === null && cur1.headers.get('cache-control') === 'no-store');
+  const deliveries1 = await call('GET', `/api/deliveries?revision_id=${e1RevId}`, { cookie: cookies.e1 });
+  const deliveriesA = await call('GET', `/api/deliveries?revision_id=${e1RevId}`, { cookie: cookies.admin });
+  const e1Attempt = deliveries1.json?.deliveries?.[0];
+  const decA = await call('POST', `/api/deliveries/${e1Attempt?.id}/decision`, { cookie: cookies.admin, body: { decision: 'resend' } });
+  check('deliveries are owner-scoped: admin list empty, admin decision 404', deliveriesA.status === 200 && deliveriesA.json.deliveries.length === 0 && decA.status === 404, `${deliveriesA.json?.deliveries?.length}/${decA.status}`);
+
+  // Static paths never serve private files.
+  const probeDb = new Database(dbPath, { readonly: true });
+  const pdfKey = probeDb.prepare('SELECT a.storage_key FROM attachments a JOIN revision_files f ON f.attachment_id = a.id WHERE f.revision_id = ?').pluck().get(e1RevId);
+  const sigKey = probeDb.prepare('SELECT storage_key FROM attachments WHERE id = ?').pluck().get(sig1Id);
+  const attemptId = e1Attempt?.id;
+  for (const path of [`/${pdfKey}`, `/files/${pdfKey}`, `/private-data/files/${pdfKey}`, `/api/files/${pdfKey}`, `/${sigKey}`, `/files/${sigKey}`, `/private-data/mail-capture/${attemptId}/attachment.pdf`, `/mail-capture/${attemptId}/message.eml`, '/t.db', '/private-data/../t.db', '/t.db-wal']) {
+    const response = await call('GET', path, { cookie: cookies.e1 });
+    const isPrivate = response.text.startsWith('%PDF-') || response.bytes.subarray(1, 4).toString() === 'PNG' || response.text.startsWith('SQLite') || response.text.includes('Message-ID');
+    check(`no static path: GET ${path.replace(pdfKey, '<pdf-key>').replace(sigKey, '<sig-key>').replace(attemptId, '<attempt>')}`, !isPrivate, `${response.status} ${response.headers.get('content-type')}`);
+  }
+  const noStore = [];
+  for (const path of ['/api/revisions', '/api/revisions/pending-lines', '/api/timesheets/2026-10-16/finalization', '/api/timesheets/2026-10-16/review', '/api/settings/submission', '/api/deliveries', '/api/history']) {
+    noStore.push((await call('GET', path, { cookie: cookies.e1 })).headers.get('cache-control'));
+  }
+  check('no-store on the owner API answers (incl. the review with its hint)', noStore.every((v) => v === 'no-store'), noStore.join(','));
+
+  // Admin boundary.
+  const adminAnswers = {};
+  for (const path of ['/api/admin/operations', '/api/admin/submissions', '/api/admin/users', '/api/admin/shares', '/api/admin/automation']) adminAnswers[path] = await call('GET', path, { cookie: cookies.admin });
+  const keyPaths = (value, prefix = '') => {
+    if (Array.isArray(value)) return value.flatMap((item) => keyPaths(item, `${prefix}[]`));
+    if (value !== null && typeof value === 'object') return Object.entries(value).flatMap(([k, v]) => [`${prefix}.${k}`, ...keyPaths(v, `${prefix}.${k}`)]);
+    return [];
+  };
+  const ALLOW = new Set([
+    '.operations', '.operations.sender', '.operations.sender.configured', '.operations.sender.outbound_mode', '.operations.runner', '.operations.runner.heartbeat_at', '.operations.runner.state',
+    '.operations.activation', '.operations.activation.active_from', '.operations.activation.recorded_at', '.operations.activation.recorded_by',
+    '.operations.jobs', ...['queued', 'leased', 'succeeded', 'intervention', 'cancelled'].map((s) => `.operations.jobs.${s}`),
+    '.operations.deliveries', ...['preparing', 'sending', 'accepted', 'failed_temporary', 'failed_permanent', 'uncertain'].map((s) => `.operations.deliveries.${s}`),
+    '.submissions', ...['user_id', 'display_name', 'period', 'period.payroll_date', 'period.period_start', 'period.period_end', 'period.due_at', 'revision', 'revision.no', 'revision.origin',
+      'revision.review_state', 'revision.finalized_at', 'revision.send_requested', 'pdf', 'pdf.state', 'pdf.fault_code', 'delivery', 'delivery.state', 'delivery.attempts', 'delivery.accepted_at',
+      'delivery.fault_code', 'delivery.decision_required', 'delivery.job_state', 'delivery.job_fault_code', 'recipients', 'recipients.effective', 'recipients.effective.to', 'recipients.effective.cc',
+      'recipients.frozen', 'recipients.frozen.to', 'recipients.frozen.cc'].map((k) => `.submissions[].${k}`),
+    '.users', ...['id', 'email', 'display_name', 'role', 'status', 'calendar_id', 'created_at', 'updated_at'].map((k) => `.users[].${k}`),
+    '.shares', '.automation', '.automation.active_from', '.automation.recorded_at', '.automation.recorded_by',
+  ]);
+  const seen = new Set(Object.values(adminAnswers).flatMap((a) => keyPaths(a.json)));
+  const outside = [...seen].filter((k) => !ALLOW.has(k) && !k.startsWith('.shares[]'));
+  check('every admin answer field is in the allowlist (docs/03, operationsStatus.ts)', outside.length === 0, outside.join(','));
+  console.log(`INFO  admin key paths: ${[...seen].sort().join(' ')}`);
+  const adminText = Object.values(adminAnswers).map((a) => a.text).join('\n');
+  const privateStrings = [PRIVATE_NOTE, GRANTEE_NOTE, SIGNER_ONE, '07:13', '18:47', 'payload', 'snapshot', 'subject', 'body_text', 'message_id', 'storage_key', 'sha256', 'signature', 'Nộp tự động',
+    'credited', 'minutes', 'ledger', 'balance', 'grantee_changes', 'work_dates', 'via_share', 'actor_display_name', 'actor_is_system', PLANNED_NOTE];
+  const leaks = privateStrings.filter((s) => adminText.includes(s));
+  check('admin answers hold no timesheet detail, note, signer, template/subject/body, hash, key, review hint or history attribution', leaks.length === 0, leaks.join(','));
+  const subs = adminAnswers['/api/admin/submissions'].json.submissions;
+  const e1Sub = subs.find((row) => row.user_id === ids.e1);
+  check('admin sees E1 recipient addresses, effective and frozen (F-Q3 (b))', JSON.stringify(e1Sub?.recipients.effective.to) === JSON.stringify([mail('payroll')]) && JSON.stringify(e1Sub?.recipients.frozen?.cc) === JSON.stringify([mail('manager')]), JSON.stringify(e1Sub?.recipients));
+  console.log(`INFO  admin submission rows: ${subs.map((row) => `${row.display_name}|${row.period.payroll_date}|r${row.revision.no}|${row.revision.origin}|${row.revision.review_state}|pdf=${row.pdf.state}|delivery=${row.delivery.state}/${row.delivery.job_state}/${row.delivery.fault_code ?? row.delivery.job_fault_code}`).join(' ; ')}`);
+  const adminSub = subs.find((row) => row.user_id === ids.admin);
+  check('AC-14: the admin account (settings saved, auto-submit on) empty-period automatic submission sent without a configured sender shows the sender_missing fault, never accepted', adminSub !== undefined && adminSub.revision.origin === 'deadline' && adminSub.delivery.state !== 'accepted' && (adminSub.delivery.fault_code === 'sender_missing' || adminSub.delivery.job_fault_code === 'sender_missing'), JSON.stringify(adminSub?.delivery));
+  check('H-Q1 (a): the administrator submission status has no row for E3 (never configured)', subs.every((row) => row.user_id !== ids.e3), subs.map((row) => row.display_name).join(','));
+
+  // Capture: E1 message recipients, subject and PDF hash equal the frozen snapshot and the download; no hint.
+  const captureRoot = join(dataDir, 'mail-capture');
+  const folders = existsSync(captureRoot) ? readdirSync(captureRoot).filter((n) => !n.startsWith('.tmp')) : [];
+  const metas = folders.map((name) => ({ name, meta: JSON.parse(readFileSync(join(captureRoot, name, 'metadata.json'), 'utf8')), eml: readFileSync(join(captureRoot, name, 'message.eml'), 'utf8') }));
+  for (const item of metas) corpus.push([`capture ${item.name}`, JSON.stringify(item.meta) + item.eml]);
+  const e1PayloadJson = probeDb.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').pluck().get(e1RevId);
+  const e1Stored = probeDb.prepare('SELECT payload_sha256, reviewed_sha256 FROM timesheet_revisions WHERE id = ?').get(e1RevId);
+  const e1Payload = JSON.parse(e1PayloadJson);
+  const e1Capture = metas.find((item) => item.name === attemptId);
+  const ownSha = createHash('sha256').update(own.bytes).digest('hex');
+  check('E1 capture: recipients = frozen snapshot, PDF hash = download, subject frozen, capture mode',
+    e1Capture !== undefined && JSON.stringify(e1Capture.meta.envelope.to) === JSON.stringify([...e1Payload.recipients.to, ...e1Payload.recipients.cc]) && e1Capture.meta.pdf_sha256 === ownSha &&
+      e1Capture.eml.includes(`Subject: ${e1Payload.recipients.subject}`) && e1Capture.meta.mode === 'capture');
+  check('C-01 stored revision: payload and reviewed hashes equal the hash shown with the hint; the stored payload and the e-mail hold no hint or grantee name',
+    e1Stored.payload_sha256 === r2.json.payload_hash && e1Stored.reviewed_sha256 === r2.json.payload_hash && !e1PayloadJson.includes(E2_NAME) && !e1PayloadJson.includes('grantee') &&
+      !e1Capture?.eml.includes(E2_NAME) && !/changed by/i.test(e1Capture?.eml ?? ''));
+
+  for (const row of probeDb.prepare('SELECT before_json, after_json, reason FROM audit_events').all()) corpus.push(['audit', `${row.before_json} ${row.after_json} ${row.reason}`]);
+  for (const row of probeDb.prepare('SELECT last_error, payload_json FROM jobs').all()) corpus.push(['jobs', `${row.last_error} ${row.payload_json}`]);
+  for (const row of probeDb.prepare('SELECT provider_response, envelope_json FROM delivery_attempts').all()) corpus.push(['attempts', `${row.provider_response} ${row.envelope_json}`]);
+  for (const row of probeDb.prepare('SELECT payload_json FROM timesheet_revisions').all()) corpus.push(['payloads', row.payload_json]);
+  const hashes = probeDb.prepare('SELECT password_hash FROM users').pluck().all();
+  const tokenHashes = probeDb.prepare('SELECT token_hash FROM auth_sessions').pluck().all();
+  probeDb.close();
+  corpus.push(['server log', serverLog]);
+  const secrets = [
+    ...Object.values(passwords).map((v) => ['seed password', v]),
+    ...hashes.map((v) => ['password hash', v]),
+    ...Object.values(cookies).map((c) => ['session token', c.split('=')[1]]),
+    ...tokenHashes.map((v) => ['session token hash', v]),
+    ['scrypt prefix', 'scrypt$'],
+  ];
+  const found = [];
+  for (const [where, text] of corpus) for (const [kind, secret] of secrets) if (secret && text.includes(secret)) found.push(`${kind} in ${where}`);
+  check(`no password, hash, session token or token hash in ${corpus.length} responses, logs, captures, audit payloads, job errors, provider responses or payloads`, found.length === 0, found.slice(0, 5).join('; '));
+} catch (error) {
+  console.log(`INFO  probe error: ${error?.message} cause=${error?.cause?.code ?? '-'}; server exit code so far=${server.exitCode}; server log tail: ${serverLog.trim().split(String.fromCharCode(10)).slice(-12).join(' || ')}`);
+  throw error;
+} finally {
+  server.kill('SIGTERM');
+  await new Promise((r) => setTimeout(r, 1500));
+  if (server.exitCode === null) server.kill('SIGKILL');
+}
+console.log(`INFO  server exit code=${server.exitCode} signal=${server.signalCode}; server log lines: ${serverLog.trim().split('\n').length}`);
+console.log(failures === 0 ? 'HTTP PROBE PASSED' : `HTTP PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

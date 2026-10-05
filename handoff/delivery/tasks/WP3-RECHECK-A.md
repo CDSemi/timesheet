@@ -115,6 +115,14 @@ not the attempt 1 auditor.
   - Link only to files.
   - Verdict PASS, FIX REQUIRED or NOT VERIFIED. Give each finding an ID (WP3-RA2-nn).
 
+## Attempt 3 (coordinator note)
+
+Fix round 3 (WP3-FIX3) changed only tests/integration/deadline.test.ts, and the digest
+is now c31c300c… on 49651c8. Attempt 3 rebinds area A to that freeze. It is done by the
+fresh auditor of [WP3-RECHECK-BC3](WP3-RECHECK-BC3.md), whose brief holds the scope
+(items 5–7). Write the report to `WP3_RECHECK_A3.md` and its `.vi.md`, and append an
+"attempt 3" block here.
+
 ## Results
 
 (Auditor appends here.)
@@ -150,3 +158,15 @@ Decision: **PASS**. No finding. Report: [WP3_RECHECK_A2](../WP3_RECHECK_A2.md) (
 - Risks: R3 closed by H-Q1 (a); R7 now tracked as HANDOFF carry item 15; new R8 (never-configured accounts still get before-due reminders to their own address, Info, area B) and R9 (CLI-seed events without an actor read "automatic", Info, area C); R1, R2, R4, R5, R6 unchanged.
 - Process deviations of my own (recorded in 00-commands.txt, no effect on source or results): one accidental interactive `cmd.exe` (exited at once on end-of-file) and one `> /dev/null`.
 - Precommit check on a temporary index: see [18-precommit.txt](../evidence/WP3-RECHECK-A2/18-precommit.txt). No server, browser or runner process left (checked). Temporary files only under `D:\.claude-tmp\timesheet\WP3-RECHECK-A2`.
+
+### Auditor result - attempt 3 (timesheet-auditor; self-reported model claude-opus-5-5; 2026-10-05)
+
+Decision: **PASS**. No finding. Report: [WP3_RECHECK_A3](../WP3_RECHECK_A3.md) (+ [.vi.md](../WP3_RECHECK_A3.vi.md)). Evidence: `handoff/delivery/evidence/WP3-RECHECK-BC3/` (shared with WP3-RECHECK-BC3; masked, LF; probes `*.mjs.txt`); command log [00-commands.txt](../evidence/WP3-RECHECK-BC3/00-commands.txt). Fresh context (agent `a4e5c209ddf7091f5`, also the WP3-RECHECK-BC3 auditor); not the attempt 1 or 2 auditor; authored nothing in WP3 (all fix rounds included); no source edited. Node v24.21.0 by full path; private clone `D:\.claude-tmp\timesheet\WP3-RECHECK-BC3\repo` at `49651c8`; capture mode only; `PRODUCTION_SENDING_ENABLED` never set.
+
+- HEAD and digest, first two commands after `node --version` and again at the end: `49651c8bb91d56bf6c6966405257537ec7ca474b`, `c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72` = regate digest; the clone gives the same by script (721 files) and `git ls-tree`.
+- Delta `2d72d35..49651c8`: one non-handoff path, `tests/integration/deadline.test.ts` (+65 -12); no change under `src/`, `docs/`, `scripts/` or configuration; 141 handoff paths.
+- `npm ci` 0; verify 0 (62 files / 1420 tests, smoke 40 PASS, no deprecation line); e2e 0 (127 passed, 5 skipped).
+- Race (20 rounds x 4 OS processes), run twice: manual 11 / deadline 9 / failed 0, then 9 / 11 / 0; one revision, one ledger set (+60/-240), two lines, one PDF and one send, one accepted attempt and capture per round; no invented `signed_at`.
+- HTTP probe on the built server: 84 PASS (run 3; run 1 stopped on a probe-client ECONNRESET after 25 PASS and 0 FAIL, run 2 on my syntax error; both kept). Hint probe: 12 PASS (same hash, payload, PDF bytes, ledger and e-mail with the hint shown and hidden; pre-period change listed).
+- Attempt 2 conclusions carry over unchanged; R1, R2 and R4-R9 unchanged, R3 stays closed. Crash, PDF, H-Q1 differential and migration probes not rerun (outside the attempt 3 scope; byte-identical code; no migration added).
+- Process note: one accidental interactive `cmd.exe` (background task `b16y9jy1f`, not killed), see WP3_RECHECK_BC3 "Process notes". Precommit check on a temporary index: [21-privacy.txt](../evidence/WP3-RECHECK-BC3/21-privacy.txt). No server, browser or runner process of this task left.

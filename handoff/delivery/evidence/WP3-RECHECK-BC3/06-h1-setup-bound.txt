@@ -1,0 +1,80 @@
+### (<W>/probes) <node24>/node.exe h1-setup-bound.mjs (PROBE_REPO default <W>/repo at 49651c8)
+2026-10-05T22:46:00Z
+# H1 setup bound (H-Q1 (a)), creation bound and switch-off (source: repo)
+
+## 0. Accounts (created 2026-09-29T20:00Z unless stated) and activation
+PASS never: auto_deduct policy, so an automatic submission would post OT credits and deficit debits (201)
+INFO never: GET /api/settings/submission before any save: is_default true, auto_submit true, auto_submit_effective_from null
+INFO never: Settings rule text for the unsaved defaults: "Not saved yet. Nothing is submitted for you until you save these settings with automatic submission on. It then applies to periods that fall due after you save."
+PASS the unsaved-settings wording makes no claim that automation applies before setup
+PASS onEarly: saves auto-submit on (2026-09-30T12:00Z, before activation)
+PASS offUser: saves auto-submit on (2026-09-30T12:00Z)
+PASS offEarly: saves auto-submit off (2026-09-30T12:00Z, before activation)
+PASS activation 2026-10-01T00:00:00Z (200)
+PASS an activation instant in the past is refused (422 activation_in_past)
+PASS never: session 2026-10-03 09:00-12:00 (Saturday OT / short weekday) (201 )
+PASS never: session 2026-10-05 09:00-15:00 (Saturday OT / short weekday) (201 )
+PASS mid: a draft working day 2026-10-05 (201)
+PASS choice: a draft working day 2026-10-05 (201)
+PASS plain: a draft working day 2026-10-05 (201)
+PASS owner: a draft working day 2026-10-05 (201)
+
+## 1. Deadline 2026-10-14T00:00Z (payroll 2026-10-16)
+PASS runner passes up to 30 s before the deadline automate nothing
+INFO runner passes: [{"claimed":6,"succeeded":6,"retried":0,"intervention":0,"lost":0},{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0},{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}]
+PASS never (never saved settings): nothing automated, no overdue record, no PDF/send job, no delivery attempt, no ledger row ({"revisions":0,"finalized":0,"submissionJobs":0,"attempts":0,"ledger":0,"deadlineAudit":0,"overdueNotices":0})
+PASS admin (never saved settings): nothing automated, no overdue record, no PDF/send job, no delivery attempt, no ledger row ({"revisions":0,"finalized":0,"submissionJobs":0,"attempts":0,"ledger":0,"deadlineAudit":0,"overdueNotices":0})
+PASS owner (never saved settings): nothing automated, no overdue record, no PDF/send job, no delivery attempt, no ledger row ({"revisions":0,"finalized":0,"submissionJobs":0,"attempts":0,"ledger":0,"deadlineAudit":0,"overdueNotices":0})
+PASS offEarly (saved auto-submit off before the deadline): one overdue record for 2026-10-16 and no revision (["2026-10-16"])
+PASS onEarly and offUser (auto on before the deadline): 2026-10-16 submitted automatically ([["2026-10-16"],["2026-10-16"]])
+PASS mid (not set up yet): nothing automated
+PASS choice (not set up yet): nothing automated
+PASS plain (not set up yet): nothing automated
+INFO lateChoice created at 2026-10-15T00:00:00Z (after the 2026-10-14 deadline)
+
+## 2. Mid-period save (2026-10-20, inside 2026-10-12..10-25) and switching off (offUser)
+PASS mid: first save, auto-submit on, no overdue choice
+PASS offUser: turns auto-submit off
+PASS mid: the save itself reaches no period that was already due (2026-10-16 stays a draft)
+PASS mid: the current period (due 2026-10-28) is submitted at its deadline (["2026-10-30"])
+PASS offUser: after switching off, 2026-10-30 gets one overdue record and no revision ([["2026-10-16"],["2026-10-30"]])
+PASS never: still nothing automated after the 2026-10-28 deadline
+PASS admin: still nothing automated after the 2026-10-28 deadline
+PASS owner: still nothing automated after the 2026-10-28 deadline
+PASS choice: still nothing automated after the 2026-10-28 deadline
+PASS plain: still nothing automated after the 2026-10-28 deadline
+PASS lateChoice: still nothing automated after the 2026-10-28 deadline
+
+## 3. The explicit apply-to-overdue choice (clamped by account creation) and a plain first save
+PASS saves: choice + overdue choice (201, effective 1970-01-01T00:00:00Z), lateChoice + overdue choice (201), plain (201, effective 2026-10-29T12:00:00Z)
+PASS choice: the explicit choice submits the overdue periods due after activation (not 2026-10-02, due before activation): ["2026-10-16","2026-10-30"]
+PASS lateChoice (created 2026-10-15): the choice never reaches 2026-10-16 (due before the account existed): ["2026-10-30"]
+PASS plain: a first save without the choice reaches no overdue period
+PASS offUser: the overdue warning for 2026-10-30 is decided once by the reminder scan (1)
+PASS offUser: the overdue period can still be signed off manually (201  )
+PASS never: the manual path is unchanged for a never-configured account (sign-off of 2026-10-16: 201  )
+INFO never after its own sign-off: {"revisions":1,"finalized":1,"submissionJobs":2,"attempts":0,"ledger":1,"deadlineAudit":0,"overdueNotices":0} (manual revision, its PDF/send jobs and ledger rows are the employee's own act)
+
+## 4. Device-zone independence before the 2026-11-11 deadline (database copies scanned under four TZ values)
+PASS identical revisions and overdue records under America/Los_Angeles(480), Pacific/Kiritimati(-840), Asia/Ho_Chi_Minh(-420), UTC(0)
+PASS no device zone automates or records an overdue period for a never-configured account
+
+## 5. Several more deadlines (2026-11-11 .. 2027-01-20)
+PASS plain: automated from the first deadline after its save (["2026-11-13","2026-11-27","2026-12-11","2026-12-25","2027-01-08","2027-01-22"])
+PASS F-1 for a configured account: the empty period 2026-11-13 is submitted with 14 default-labelled days (Worked/Off), no OT, no deficit, no ledger row, review pending, no reviewed hash, no actor
+PASS admin (seeded, never saved settings): nothing automated across 8 deadlines ({"revisions":0,"finalized":0,"submissionJobs":0,"attempts":0,"ledger":0,"deadlineAudit":0,"overdueNotices":0})
+PASS owner (seeded, never saved settings): nothing automated across 8 deadlines ({"revisions":0,"finalized":0,"submissionJobs":0,"attempts":0,"ledger":0,"deadlineAudit":0,"overdueNotices":0})
+PASS never: only its own manual sign-off; no automatic revision, overdue record or extra job across 8 deadlines ({"revisions":1,"finalized":1,"submissionJobs":2,"attempts":1,"ledger":1,"deadlineAudit":0,"overdueNotices":0})
+PASS never: its History holds no automatic submission or deadline record
+INFO never: reminder decisions (before-deadline notices are not part of H-Q1): [{"kind":"before_due","n":2}]
+
+## 6. Administrator operations status
+INFO operations: activation 2026-10-01T00:00:00Z; jobs {"queued":0,"leased":0,"succeeded":182,"intervention":1,"cancelled":0}; deliveries {"preparing":0,"sending":0,"accepted":38,"failed_temporary":0,"failed_permanent":1,"uncertain":0}
+INFO jobs needing intervention (all origins): [{"who":"Probe Never","kind":"send_email","last_error":"recipient_missing"}]
+PASS no automatic submission stops with a fault (0; before H-Q1 the never-configured accounts' automatic sends failed recipient_missing)
+PASS the submission list holds no automatic row for a never-configured account (admin 0, employee 0, never ["employee"])
+INFO capture folders (submissions and notices of all probe accounts): 99
+
+SUMMARY H1 [repo]: 50 PASS, 0 FAIL
+exit=0
+2026-10-05T22:46:19Z

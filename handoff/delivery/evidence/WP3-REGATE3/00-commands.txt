@@ -1,0 +1,17 @@
+# WP3-REGATE3 attempt 1 - commands and exits (2026-10-05); Node v24.21.0 portable, full path; TEMP/TMP=<scratch>/tmp
+HEAD before/after: 49651c8bb91d56bf6c6966405257537ec7ca474b / same
+Digest of record (export blob IDs of 721 non-handoff paths, cross-checked with git ls-tree), before and after: c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72
+1  git archive 49651c8 | tar -x -C <scratch>/export                                  exit 0
+   npm ci                                                                            exit 0   (01-npmci.txt)
+2  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify          exit 0   62 files, 1420 tests; SMOKE PASSED, 40 PASS lines, 0 FAIL, 0 deprecation lines (02-verify.txt)
+3  npm run test:e2e (Edge)                                                           exit 0   127 passed, 5 skipped, 0 failed (03-e2e.txt)
+4  vitest run <file> x20 fresh processes: ot-leave-concurrency, finalization-concurrency, deadline-race, sharing -t revocation   20/20 each (11-races.txt)
+5  vitest run --reporter=verbose (all tests)                                         exit 0   1420 passed (04-vitest-verbose.txt)
+11 node <scratch>/tmp/mig.mjs (fresh; v3 = 0001-0003; upgrade; rerun)                exit 0   (05-migrations.txt)
+12 validate_orchestration.py (project folder, live board)                            exit 0   (07)
+   check_recovery.py                                                                 exit 0   (08)
+   validate_package.py --preflight (project folder, live board)                      exit 1   (09) record gap: untracked evidence/WP3-FIX3-FREEZE/result.md has no .vi.md
+   validate_package.py --preflight in the clean export (committed state, supplement) exit 0   (09b)
+16/18/21 git diff --name-status 3ead61e 49651c8 (10-diff-wp2); 2f2520e 49651c8 (10-diff-fix1); 2d72d35 49651c8 (10-diff-fix3)
+20 mutations M4, M5, M5b in <scratch>/mut (copy of the export): unmutated exit 0 (1420 passed); each mutation exit 1 (12-mutations.txt); restored identical to export (cmp)
+Renders and screenshots (viewed): pdf-*-synthetic.png (5), sharing-review-hint-{desktop,mobile}-synthetic.png

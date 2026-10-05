@@ -1,0 +1,51 @@
+// WP3-RECHECK-A: reads a PDF's text lines and image placements with the repository's pdfjs-dist
+// (dev dependency of the reviewed clone). Same approach as tests/support/pdfText.ts, written anew.
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { REPO } from './common.mjs';
+
+const { getDocument, OPS } = await import(pathToFileURL(join(REPO, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+
+const multiply = (m, n) => [
+  n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3], n[2] * m[0] + n[3] * m[2], n[2] * m[1] + n[3] * m[3],
+  n[4] * m[0] + n[5] * m[2] + m[4], n[4] * m[1] + n[5] * m[3] + m[5],
+];
+
+export async function readPdf(bytes) {
+  const task = getDocument({ data: new Uint8Array(bytes).slice(), useSystemFonts: false, verbosity: 0 });
+  const doc = await task.promise;
+  try {
+    const pages = [];
+    for (let number = 1; number <= doc.numPages; number += 1) {
+      const page = await doc.getPage(number);
+      const viewport = page.getViewport({ scale: 1 });
+      const content = await page.getTextContent();
+      const items = content.items.filter((item) => 'str' in item && item.str.trim() !== '').map((item) => ({ text: item.str, x: item.transform[4], y: item.transform[5] }));
+      const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+      const rows = [];
+      for (const item of sorted) {
+        const row = rows.at(-1);
+        if (row !== undefined && Math.abs(row[0].y - item.y) < 1.5) row.push(item);
+        else rows.push([item]);
+      }
+      const lines = rows.map((row) => row.sort((a, b) => a.x - b.x).map((item) => item.text).join(' '));
+      const ops = await page.getOperatorList();
+      let matrix = [1, 0, 0, 1, 0, 0];
+      const stack = [];
+      const images = [];
+      ops.fnArray.forEach((fn, index) => {
+        const args = ops.argsArray[index];
+        if (fn === OPS.save) stack.push(matrix);
+        else if (fn === OPS.restore) matrix = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+        else if (fn === OPS.transform) matrix = multiply(matrix, args);
+        else if (fn === OPS.paintImageXObject) images.push({ width: Math.hypot(matrix[0], matrix[1]), height: Math.hypot(matrix[2], matrix[3]) });
+      });
+      pages.push({ width: viewport.width, height: viewport.height, lines, images });
+      page.cleanup();
+    }
+    const lines = pages.flatMap((page) => page.lines);
+    return { pages, lines, text: lines.join('\n') };
+  } finally {
+    await task.destroy();
+  }
+}

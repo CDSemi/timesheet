@@ -1,0 +1,50 @@
+### Supplementary mutations (bash probes/mutations2.sh; source in mutations2.sh.txt): the account-creation guard pair, and probe H3 against M4b. Clone <W>/mut at 49651c8.
+
+### M6a: listCandidates no longer clamps by account creation (assessPeriod keeps before_account)
+-    const start = Math.max(activeFrom, parseUtcInstant(row.created_at));
++    const start = activeFrom;
+ Test Files  62 passed (62)
+      Tests  1420 passed (1420)
+M6a exit=0
+restored; git status --porcelain lines: 0
+
+### M6b: both creation guards removed (listCandidates clamp and assessPeriod before_account)
+-  if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+-    const start = Math.max(activeFrom, parseUtcInstant(row.created_at));
++    const start = activeFrom;
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never submits a period whose deadline passed before the account existed, even with the explicit overdue choice
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never puts the auto-submit effective instant of saved settings before the account existed
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation
+ Test Files  1 failed | 61 passed (62)
+      Tests  3 failed | 1417 passed (1420)
+M6b exit=1
+restored; git status --porcelain lines: 0
+
+### probe H3 on the unmutated mut clone (PROBE_REPO=<W>/mut)
+# H3 activation cleared during a running scan (in-loop F-4 recheck) (source: mut)
+PASS conf saves auto-submit on (201)
+PASS activation recorded at 2026-09-29T21:00:00Z (200)
+INFO scan summary {"activated":true,"examined":6,"finalized":1,"overdueRecorded":0,"skipped":5,"failed":0,"remaining":false}; activation after the scan null; automatic revisions ["2026-10-02"]
+PASS the candidate list holds both due periods of conf (examined 6)
+PASS only the period finalized before the clear exists; the later period due 2026-10-14 is not finalized after the activation was cleared (["2026-10-02"])
+
+SUMMARY H3 [mut]: 4 PASS, 0 FAIL
+H3-clean exit=0
+
+### M4b-H3: assessPeriod not_active removed with a 1970 fallback; probe H3
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+# H3 activation cleared during a running scan (in-loop F-4 recheck) (source: mut)
+PASS conf saves auto-submit on (201)
+PASS activation recorded at 2026-09-29T21:00:00Z (200)
+INFO scan summary {"activated":true,"examined":6,"finalized":2,"overdueRecorded":0,"skipped":4,"failed":0,"remaining":false}; activation after the scan null; automatic revisions ["2026-10-02","2026-10-16"]
+PASS the candidate list holds both due periods of conf (examined 6)
+FAIL only the period finalized before the clear exists; the later period due 2026-10-14 is not finalized after the activation was cleared (["2026-10-02","2026-10-16"])
+
+SUMMARY H3 [mut]: 3 PASS, 1 FAIL
+M4b-H3 exit=1
+restored; git status --porcelain lines: 0
+
+49651c8bb91d56bf6c6966405257537ec7ca474b
+mutations2-done

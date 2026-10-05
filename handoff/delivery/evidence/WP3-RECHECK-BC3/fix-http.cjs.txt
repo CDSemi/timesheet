@@ -1,0 +1,35 @@
+// Restores the masked addresses of the published WP3-RECHECK-A2 http-probe source (line-specific, runtime-built).
+const fs = require('fs');
+const [src, out] = process.argv.slice(2);
+const lines = fs.readFileSync(src, 'utf8').split('\n');
+const M = (l) => `mail('${l}')`;
+const plan = {
+  33: [M('synthetic-never')],
+  55: [M('timesheet')],
+  114: [M('admin')],
+  115: [M('employee')],
+  116: [M('employee2')],
+  123: [M('payroll'), M('manager')],
+  133: [M('employee2')],
+  134: [M('admin')],
+  242: [M('payroll')],
+  319: [M('employee2'), M('admin'), 'E3_EMAIL'],
+  323: [M('employee')],
+  359: [M('employee')],
+  450: ['__TO__', '__CC__'],
+};
+for (const [n, reps] of Object.entries(plan)) {
+  let line = lines[n - 1];
+  for (const r of reps) {
+    if (r === '__TO__') line = line.replace(`'["<email>"]'`, "JSON.stringify([mail('payroll')])");
+    else if (r === '__CC__') line = line.replace(`'["<email>"]'`, "JSON.stringify([mail('manager')])");
+    else line = line.replace(`'<email>'`, r);
+  }
+  lines[n - 1] = line;
+}
+let text = lines.join('\n');
+text = text.replace("import { m, REPO, SCRATCH } from './common.mjs';", "import { m, mail, REPO, SCRATCH } from './common.mjs';");
+text = text.replace('// WP3-RECHECK-A2 HTTP probe', '// WP3-RECHECK-BC3 (area A attempt 3) HTTP probe, copied from WP3-RECHECK-A2 with the masked addresses rebuilt at run time;');
+if (text.includes('<email>')) throw new Error('placeholders left: ' + text.split('\n').map((l, i) => l.includes('<email>') ? i + 1 : 0).filter(Boolean).join(','));
+fs.writeFileSync(out, text);
+console.log('ok');

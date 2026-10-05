@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# WP3-RECHECK-BC3: supplementary mutations in <W>/mut: the creation bound pair (listCandidates clamp vs assessPeriod
+# 'before_account') and probe H3 against M4b. Same method as mutations.sh.
+source <scratch>/env.sh
+OUT=$W/raw/04b-mutations2.log
+F=src/server/services/automation.ts
+cd $W/mut
+: > $OUT
+run_suite() { local label=$1; shift
+  "$NODE24" node_modules/vitest/vitest.mjs run "$@" > $W/tmp/mut-run.raw 2>&1; local code=$?
+  sed 's/\x1b\[[0-9;]*m//g' $W/tmp/mut-run.raw | grep -a -E "^ FAIL |Test Files|Tests  " >> $OUT
+  echo "$label exit=$code" >> $OUT; }
+apply() { echo "" >> $OUT; echo "### $1: $2" >> $OUT
+  perl -0pi -e "$3" $F
+  if git diff --quiet -- $F; then echo "MUTATION NOT APPLIED ($1)" >> $OUT; return 1; fi
+  git diff -U0 -- $F | grep -E '^[-+][^-+]' >> $OUT; return 0; }
+restore() { git checkout -- $F; echo "restored; git status --porcelain lines: $(git status --porcelain | wc -l)" >> $OUT; }
+SUITE="tests/integration tests/client tests/domain"
+M6A='s/const start = Math\.max\(activeFrom, parseUtcInstant\(row\.created_at\)\);/const start = activeFrom;/'
+M6B='s/const start = Math\.max\(activeFrom, parseUtcInstant\(row\.created_at\)\);/const start = activeFrom;/; s/^  if \(period\.dueAtUtc < parseUtcInstant\(account\.created_at\)\) return \{ kind: .skip., reason: .before_account. \};\n//m'
+M4B='s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return \{ kind: .skip., reason: .not_active. \};/  const activeFrom = getAutomationActivation(db).activeFrom ?? \x271970-01-01T00:00:00Z\x27;/'
+if apply M6a "listCandidates no longer clamps by account creation (assessPeriod keeps before_account)" "$M6A"; then run_suite M6a $SUITE; fi; restore
+if apply M6b "both creation guards removed (listCandidates clamp and assessPeriod before_account)" "$M6B"; then run_suite M6b $SUITE; fi; restore
+echo "" >> $OUT; echo "### probe H3 on the unmutated mut clone (PROBE_REPO=<W>/mut)" >> $OUT
+(cd $W/probes && PROBE_REPO=$W/mut "$NODE24" h3-midscan.mjs) >> $OUT 2>&1; echo "H3-clean exit=$?" >> $OUT
+if apply M4b-H3 "assessPeriod not_active removed with a 1970 fallback; probe H3" "$M4B"; then (cd $W/probes && PROBE_REPO=$W/mut "$NODE24" h3-midscan.mjs) >> $OUT 2>&1; echo "M4b-H3 exit=$?" >> $OUT; fi; restore
+echo "" >> $OUT; git status --porcelain >> $OUT; git rev-parse HEAD >> $OUT; echo mutations2-done >> $OUT

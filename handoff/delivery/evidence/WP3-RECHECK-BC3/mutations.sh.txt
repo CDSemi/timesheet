@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# WP3-RECHECK-BC3: coverage mutations for WP3-RBC2-01 and the guard sweep, in the scratch clone <W>/mut (freeze 49651c8).
+# Each mutation: apply with perl, show the diff (must be non-empty), run the vitest suite
+# (tests/integration tests/client tests/domain, as in WP3-RECHECK-BC2), keep FAIL lines and counts, restore with git checkout.
+source <scratch>/env.sh
+OUT=$W/raw/04-mutations.log
+F=src/server/services/automation.ts
+cd $W/mut
+: > $OUT
+run_suite() { # $1 label, $2... vitest args
+  local label=$1; shift
+  "$NODE24" node_modules/vitest/vitest.mjs run "$@" > $W/tmp/mut-run.raw 2>&1; local code=$?
+  sed 's/\x1b\[[0-9;]*m//g' $W/tmp/mut-run.raw | grep -a -E "^ FAIL |Test Files|Tests  " >> $OUT
+  echo "$label exit=$code" >> $OUT
+}
+apply() { # $1 label, $2 description, $3 perl program
+  echo "" >> $OUT; echo "### $1: $2" >> $OUT
+  perl -0pi -e "$3" $F
+  if git diff --quiet -- $F; then echo "MUTATION NOT APPLIED ($1)" >> $OUT; return 1; fi
+  git diff -U0 -- $F | grep -E '^[-+][^-+]' >> $OUT
+  return 0
+}
+restore() { git checkout -- $F; echo "restored; git status --porcelain lines: $(git status --porcelain | wc -l)" >> $OUT; }
+SUITE="tests/integration tests/client tests/domain"
+
+echo "### clean run at the freeze (no mutation)" >> $OUT
+run_suite clean $SUITE
+
+M4='s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return \{ kind: .skip., reason: .not_active. \};/  const activeFrom = getAutomationActivation(db).activeFrom ?? \x271970-01-01T00:00:00Z\x27;/; s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return summary;\n  summary\.activated = true;/  const stored = getAutomationActivation(db).activeFrom;\n  summary.activated = stored !== null;\n  const activeFrom = stored ?? \x271970-01-01T00:00:00Z\x27;/'
+M4A='s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return summary;\n  summary\.activated = true;/  const stored = getAutomationActivation(db).activeFrom;\n  summary.activated = stored !== null;\n  const activeFrom = stored ?? \x271970-01-01T00:00:00Z\x27;/'
+M4B='s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return \{ kind: .skip., reason: .not_active. \};/  const activeFrom = getAutomationActivation(db).activeFrom ?? \x271970-01-01T00:00:00Z\x27;/'
+M5='s/  if \(timesheet !== undefined && timesheet\.imported_unverified === 1\) return \{ kind: .skip., reason: .imported. \};\n//; s/  if \(governing\.autoSubmit\) return \{ kind: .finalize. \};\n/  if (governing.autoSubmit) return { kind: \x27finalize\x27 };\n  if (timesheet !== undefined \&\& timesheet.imported_unverified === 1) return { kind: \x27skip\x27, reason: \x27imported\x27 };\n/'
+M5B='s/  if \(timesheet !== undefined && timesheet\.imported_unverified === 1\) return \{ kind: .skip., reason: .imported. \};\n//'
+delguard() { echo "s/^  if \([^\n]*reason: '$1' \};\n//m"; }
+
+if apply M4 "scan and assessPeriod ignore a NULL activation instant (BC2 M4)" "$M4"; then run_suite M4 $SUITE; fi; restore
+if apply M5 "imported skip moved after the switch-on decision (BC2 M5)" "$M5"; then run_suite M5 $SUITE; fi; restore
+if apply M5b "imported skip deleted (BC2 M5b)" "$M5B"; then run_suite M5b $SUITE; fi; restore
+
+echo "" >> $OUT; echo "### Guard sweep: delete one skip line of assessPeriod each" >> $OUT
+for g in inactive_user before_activation not_due finalized before_account overdue_recorded; do
+  if apply "G-$g" "line 'if (...) return { kind: 'skip', reason: '$g' };' deleted" "$(delguard $g)"; then run_suite "G-$g" $SUITE; fi; restore
+done
+
+echo "" >> $OUT; echo "### Supplementary split of M4 (informational)" >> $OUT
+if apply M4a "only the scan-level early return removed (runDeadlineScan; assessPeriod keeps not_active)" "$M4A"; then run_suite M4a $SUITE; fi; restore
+if apply M4b "only assessPeriod's not_active skip removed with a 1970 fallback (the scan-level early return stays)" "$M4B"; then run_suite M4b $SUITE; fi; restore
+
+echo "" >> $OUT; echo "### Differential: the same mutations against the 2d72d35 deadline.test.ts (old tests) vs the freeze's file, deadline.test.ts only" >> $OUT
+git show 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714:tests/integration/deadline.test.ts > $W/tmp/deadline.old.test.ts
+for m in M4 M5 M5B; do
+  eval "P=\$$m"
+  if apply "$m-old-tests" "mutation $m with the 2d72d35 deadline.test.ts copied in" "$P"; then
+    cp $W/tmp/deadline.old.test.ts tests/integration/deadline.test.ts
+    run_suite "$m-old-tests" tests/integration/deadline.test.ts
+    git checkout -- tests/integration/deadline.test.ts
+  fi; restore
+  if apply "$m-new-tests" "mutation $m with the freeze deadline.test.ts" "$P"; then run_suite "$m-new-tests" tests/integration/deadline.test.ts; fi; restore
+done
+echo "" >> $OUT; echo "### final status" >> $OUT; git status --porcelain >> $OUT; git rev-parse HEAD >> $OUT
+echo mutations-done >> $OUT

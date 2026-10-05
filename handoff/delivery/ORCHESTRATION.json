@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP3",
-  "phase": "wp3-implementation",
+  "phase": "wp3-acceptance",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+  "current_source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-FIX3-FREEZE",
+  "next_task_id": "WP3-ACCEPT",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -116,7 +116,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+    "last_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
     "unpushed": []
   },
   "owner_decisions": [
@@ -201,9 +201,20 @@
       "source": "owner chat, direct instruction typed by the owner",
       "verbatim": "* Di chuyển thư mục tạm D:\\timesheet-tmp\\<task> vào D:\\.claude-tmp\\timesheet\\<task>",
       "decision": "The owner-authorized temporary work folder moves from D:\\timesheet-tmp\\<task> to D:\\.claude-tmp\\timesheet\\<task> (outside Dropbox). The existing folder is moved by WP3-TMPMOVE; every new brief uses the new path; completed records keep the old path as history."
+    },
+    {
+      "date": "2026-10-05",
+      "source": "owner chat, direct reply typed by the owner to pending question H-Q3",
+      "verbatim": "H-Q3: (a)",
+      "decision": "H-Q3 (a): keep the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) in the repository; it goes through a GOV cycle (freeze, verifier gate, fresh audit) as a governance-path change."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "Owner decision H-Q3 (a); docs/08 governance paths include .claude/; the source digest counts .claude/skills, so committing the skill changes the digest; the validator binds every PASS audit of the active package to current_source_digest",
+      "decision": "Order of work:\n1. Finish WP3 on its accepted digest c31c300c: the final rechecks, then WP3-ACCREC, then WP3-ACCEPT.\n2. WP3-ACCEPT changes only handoff/ and does not stage the three untracked .claude/skills/readme-md files. They are named in its brief as known owner files awaiting the GOV cycle. The committer checks the committed tree's digest in the git ls-tree form (c31c300c); the working-tree digest also counts the three files.\n3. After the WP3 accept commit, run a GOV-SKILL cycle: GOV-SKILL-FREEZE commits the three files, GOV-SKILL-GATE (verifier) runs, and a fresh GOV-SKILL-AUDIT checks the skill against AGENTS.md, docs/08, the privacy rules and licensing.\n4. WP4 planning (read-only) may run beside the GOV gate or audit, but never beside the GOV freeze."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP3-RECHECK-BC2 FIX REQUIRED (WP3-RBC2-01, Low, test coverage only; production behaviour correct); FIX_FINDINGS (package-final snapshots keep a separate verifier gate); validator rule that every WP3 PASS audit must match current_source_digest (a test change changes the digest)",
@@ -7494,29 +7505,31 @@
       "package": "WP3",
       "kind": "audit",
       "status": "done",
-      "reviewed_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "reviewed_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
       "depends_on": [
-        "WP3-REGATE2"
+        "WP3-REGATE3"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
       "requested_effort": "xhigh",
       "model_override_reason": null,
       "routing": {
-        "size": "M",
+        "size": "S",
         "risk": "H",
         "novelty": false
       },
       "actual_model": "claude-opus-5-5",
       "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": "a6dd03dfdd2f440e9",
+      "agent_id": "a4e5c209ddf7091f5",
       "previous_agent_ids": [
-        "a6f4a505bd38d735e"
+        "a6f4a505bd38d735e",
+        "a6dd03dfdd2f440e9"
       ],
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 2,
+      "attempt": 3,
       "history": [
+        "attempt 2 (agent a6dd03dfdd2f440e9, self-reported claude-opus-5-5) on 2d72d35: PASS, no finding, reviewed digest 0d513fca (WP3_RECHECK_A2.md, evidence/WP3-RECHECK-A2/); details in findings_attempt_2. Superseded for binding only: fix round 3 changed tests (digest c31c300c), so attempt 3 rebinds area A on 49651c8; the same fresh auditor also fills WP3-RECHECK-BC3 (brief tasks/WP3-RECHECK-BC3.md).",
         "attempt 1 (agent a6f4a505bd38d735e, self-reported claude-opus-5-5) on 2f2520e: PASS, no finding, reviewed digest eeb417d3 (WP3_RECHECK_A.md, evidence/WP3-RECHECK-A/). Own runs: verify 1407 tests; area files 393 passed; ledger 64 passed; race 20 x 4 processes twice; crash K1-K7 twice; HTTP 70; hint 7; PDF 34; migrations 26; SMTP secret 4. Risks R1-R7 stay risks. Superseded for binding only: fix round 2 changed the source (digest 0d513fca), and the validator requires every WP3 PASS to match the current digest, so attempt 2 is a fresh digest-bound area-A delta recheck on 2d72d35."
       ],
       "owned_paths": [
@@ -7524,6 +7537,8 @@
         "handoff/delivery/WP3_RECHECK_A.vi.md",
         "handoff/delivery/WP3_RECHECK_A2.md",
         "handoff/delivery/WP3_RECHECK_A2.vi.md",
+        "handoff/delivery/WP3_RECHECK_A3.md",
+        "handoff/delivery/WP3_RECHECK_A3.vi.md",
         "handoff/delivery/tasks/WP3-RECHECK-A.md",
         "handoff/delivery/evidence/WP3-RECHECK-A",
         "handoff/delivery/evidence/WP3-RECHECK-A2"
@@ -7550,12 +7565,31 @@
         "handoff/delivery/evidence/WP3-RECHECK-A/17-secret.txt",
         "handoff/delivery/evidence/WP3-RECHECK-A/18-precommit.txt"
       ],
-      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
-      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
-      "reviewed_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
       "author_agent_ids": [],
       "decision": "PASS",
       "findings": [
+        "Attempt 3 (fresh auditor a4e5c209ddf7091f5, also WP3-RECHECK-BC3; WP3_RECHECK_A3.md): no finding. HEAD 49651c8 = origin/main and digest c31c300c at start and end (project ls-tree, clone script over 721 files and clone ls-tree agree).",
+        "Delta 2d72d35..49651c8 outside handoff/: tests/integration/deadline.test.ts only, so the attempt 2 conclusions carry over. Reruns on the new freeze: race 20 x 4 processes twice (manual/deadline 11/9 then 9/11, 0 failed); HTTP probe 84 PASS on run 3 (run 1 a probe-client ECONNRESET, run 2 the auditor's own syntax error, both kept); hint probe 12 PASS; verify 1420 tests, smoke 40, 0 deprecation lines; e2e 127 passed, 5 skipped.",
+        "Process note: one 'cmd.exe /c' call started an idle interactive cmd.exe (Git Bash rewrote /c); the coordinator stopped that background task (b16y9jy1f) and the agent after hand-back. Evidence precommit twice PASS (41 files, 0 findings); preflight 0."
+      ],
+      "evidence_attempt_3": [
+        "handoff/delivery/WP3_RECHECK_A3.md",
+        "handoff/delivery/WP3_RECHECK_A3.vi.md",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/00-commands.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/02-verify.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/05-e2e.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/10-race.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/10b-race-rerun.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/12-http.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/12a-http-earlier-runs.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/13-hint.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/17-delta.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/19-identity-after.txt"
+      ],
+      "findings_attempt_2": [
         "Attempt 2 (fresh auditor, WP3_RECHECK_A2.md): no finding. HEAD 2d72d35 and digest 0d513fca recorded first and last, unchanged, equal to the regate digest.",
         "Delta 2f2520e..2d72d35: 18 paths outside handoff/ (automation.ts, history.ts, sharedActs.ts, four client files, docs 05 and 10 EN/VI, seven tests); the area-A core and src/server/db unchanged.",
         "Own runs: verify 0 (1416 tests, smoke 40); 27 area-A and round-2 files 584 passed; race 20 x 4 processes twice (manual 11 / deadline 9 / failed 0); new race of the first settings save against a deadline pass, 40 rounds, never a partial state; crash 14 PASS; HTTP 84 PASS; hint 12 PASS; PDF 34 PASS with Edge renders, PDF text identical to 2f2520e.",
@@ -7587,7 +7621,7 @@
         "handoff/delivery/evidence/WP3-RECHECK-A2/17-delta.txt",
         "handoff/delivery/evidence/WP3-RECHECK-A2/18-precommit.txt"
       ],
-      "next_action": "None; WP3 acceptance after WP3-RECHECK-BC2."
+      "next_action": "None; WP3-ACCREC and WP3-ACCEPT."
     },
     {
       "id": "WP3-RECHECK-BC",
@@ -7949,9 +7983,226 @@
       "id": "WP3-FIX3-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-FIX3"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aca480339f4624b19",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+        "handoff/delivery/evidence/WP3-FIX3-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-FIX3-FREEZE/result.txt",
+        "handoff/delivery/evidence/WP3-FIX3-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "branch": "main",
+      "commit_sha": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "pushed": true,
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1), the WP3 fix-round-3 freeze: digest c31c300c matched the WP3-FIX3 worker's; 142 paths including this brief and the WP3-FIX2-FREEZE brief; parent 2d72d35, remote SHA identical; 6 synthetic images viewed; scans: no .raw, pdf/eml/csv/db/nul or mail-capture/private-data staged; precommit 0 (twice), diff --cached --check 2 then 0 after removing one EOF blank line in tasks/WP3-FIX3.md (allowed fix), JSON parse, validator, check_recovery and preflight 0; no masking.",
+      "next_action": "None; WP3-REGATE3 on 49651c8."
+    },
+    {
+      "id": "WP3-REGATE3",
+      "package": "WP3",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "depends_on": [
+        "WP3-FIX3-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a41152818099fb8d5",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a41152818099fb8d5, self-reported claude-sonnet-5-5): every source item passed on 49651c8 (items 1-11 and 13-21). HEAD and digest c31c300c unchanged (export blobs = ls-tree = committer). Verify 1420 tests, smoke 40, 0 deprecation lines. e2e 127 passed, 5 skipped. Races 20/20 each; fault injection passes; migrations fresh and v3 to 6 clean. Item 20: the round-3 guard tests are named; M4, M5 and M5b each fail in a scratch copy and the unmutated copy passes; the repository was never mutated. Item 21: the only non-handoff path since 2d72d35 is tests/integration/deadline.test.ts. Item 12 failed on the live tree only: validate_package.py --preflight exit 1 'Missing translation' for the untracked handoff/delivery/evidence/WP3-FIX3-FREEZE/result.md (committer evidence written as .md); the same preflight on the committed export exits 0 (91 scenarios); validate_orchestration and check_recovery 0. A record gap, not a source failure. Coordinator: WP3-RECFIX renames that file to .txt (literal path, nothing deleted); then the same verifier reruns item 12 on the live tree."
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-REGATE3.md",
+        "handoff/delivery/evidence/WP3-REGATE3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-REGATE3.md",
+      "report": "handoff/delivery/tasks/WP3-REGATE3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-REGATE3/00-commands.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/head-before.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/digest-export-before.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/digest-lstree-before.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/01-npmci.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/02-verify.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/03-e2e.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/04-vitest-verbose.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/05-migrations.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/07-orch.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/08-recovery.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/09-preflight.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/09b-preflight-export.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/10-diff-wp2.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/10-diff-fix1.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/10-diff-fix3.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/11-races.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/12-mutations.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/13-precommit.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/digest-export-after.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/digest-lstree-after.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/head-after.txt",
+        "handoff/delivery/evidence/WP3-REGATE3/14-item12-rerun.txt"
+      ],
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "gate_notes": "Final decision PASS (attempt 2). Attempt 1 passed every source item on 49651c8; its numbers are in history. Attempt 2 reran item 12 only, after WP3-RECFIX: HEAD 49651c8, digest c31c300c in the ls-tree form unchanged; validate_orchestration 0, check_recovery 0, validate_package --preflight 0 (91 scenarios) on the live board. Caveat: npm run digest in the working tree prints aab8b32c over 724 files because it also counts 3 untracked files under .claude/skills/readme-md/ (not in the freeze, not created by any task; owner question H-Q3). The verifier did not touch them.",
+      "decision": "PASS",
+      "next_action": "None; one fresh auditor fills WP3-RECHECK-BC3 and WP3-RECHECK-A attempt 3 on 49651c8."
+    },
+    {
+      "id": "WP3-RECHECK-BC3",
+      "package": "WP3",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "depends_on": [
+        "WP3-REGATE3"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a4e5c209ddf7091f5",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_RECHECK_BC3.md",
+        "handoff/delivery/WP3_RECHECK_BC3.vi.md",
+        "handoff/delivery/tasks/WP3-RECHECK-BC3.md",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-RECHECK-BC3.md",
+      "report": "handoff/delivery/tasks/WP3-RECHECK-BC3.md",
+      "evidence": [
+        "handoff/delivery/WP3_RECHECK_BC3.md",
+        "handoff/delivery/WP3_RECHECK_BC3.vi.md",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/00-commands.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/02-verify.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/04b-mutations2.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/05-e2e.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/05b-deadline-repeat.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/06-h1-setup-bound.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/17b-test-diff.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/18-h2-guards.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/18b-h3-midscan.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/19-identity-after.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/20-preflight.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC3/21-privacy.txt"
+      ],
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "findings": [
+        "No finding. HEAD 49651c8 and digest c31c300c at start and end; WP3-RBC2-01 fixed.",
+        "Mutations on the whole suite in a scratch clone: the clean run passes 1420; M4, M5 and M5b fail 1, 1 and 2 tests on the intended tests (deadline.test.ts:271, :796, :809); with the 2d72d35 test file the same three still pass (40/40), so the new tests restored the coverage.",
+        "Guard sweep: inactive_user, before_activation and not_due now covered (1 failure each); finalized covered (2). before_account alone is uncovered but covered as a pair (M6b fails); not_active (automation.ts:191) alone is uncovered (M4b passes); recorded as risks, not findings.",
+        "Test quality: meaningful outcome assertions, each killed by its own guard's mutation; stable 5/5 repeats; no assertion removed (expect calls 235 -> 250).",
+        "B/C regression smoke: verify 1420 tests, smoke 40, 0 deprecation lines; e2e 127 passed, 5 skipped; probes H1 50 PASS, H2 10 PASS, H3 4 PASS.",
+        "Risks: R1 (Low, pre-existing) no test covers the activation instant being cleared mid-scan (probe H3 shows how); R2-R4 informational."
+      ],
+      "next_action": "None; WP3-ACCREC and WP3-ACCEPT."
+    },
+    {
+      "id": "WP3-ACCREC",
+      "package": "WP3",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP3-RECHECK-A",
+        "WP3-RECHECK-BC3"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8a772c15dec264ff",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_HANDOFF.md",
+        "handoff/delivery/WP3_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP3-ACCREC.md",
+        "handoff/delivery/evidence/WP3-ACCREC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-ACCREC.md",
+      "report": "handoff/delivery/tasks/WP3-ACCREC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-ACCREC/preflight.txt",
+        "handoff/delivery/evidence/WP3-ACCREC/parity.txt"
+      ],
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "done: WP3_HANDOFF.md and .vi.md acceptance record filled (intro paragraph, Commands smoke row, carry item 14, Next action); corrected figures: smoke 40 PASS (not 46), 62 files / 1420 tests, e2e 127 passed 5 skipped, freeze list a1cd566, 2f2520e, 2d72d35, 49651c8 with digests; carry items R1-R9, the through-a-share marker, count-only hint, HEAD audit, SMTP items, F-Q6, ADV-A-05/B4, final-recheck risks, WP4 carry-forward; preflight exit 0; parity 17 headings, 82 bullets, 87 table rows in both.",
+      "next_action": "None; WP3-ACCEPT."
+    },
+    {
+      "id": "WP3-ACCEPT",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-ACCREC"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -7969,13 +8220,13 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
-        "handoff/delivery/evidence/WP3-FIX3-FREEZE"
+        "handoff/delivery/tasks/WP3-ACCEPT.md",
+        "handoff/delivery/evidence/WP3-ACCEPT"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-ACCEPT.md",
+      "report": "handoff/delivery/tasks/WP3-ACCEPT.md",
       "evidence": [],
-      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -7983,7 +8234,47 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the round-3 test fix with the pending recheck reports and handoff records, including this brief."
+      "next_action": "Commit and push the WP3 acceptance record (handoff only; the three untracked owner skill files stay unstaged)."
+    },
+    {
+      "id": "WP3-RECFIX",
+      "package": "WP3",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP3-FIX3-FREEZE"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab52f4aa552c176a7",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-RECFIX.md",
+        "handoff/delivery/evidence/WP3-RECFIX",
+        "handoff/delivery/evidence/WP3-FIX3-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-RECFIX.md",
+      "report": "handoff/delivery/tasks/WP3-RECFIX.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-RECFIX/rename.txt"
+      ],
+      "baseline_commit": "49651c8bb91d56bf6c6966405257537ec7ca474b",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "done: evidence/WP3-FIX3-FREEZE/result.md renamed to result.txt by one literal-path Move-Item (exit 0; nothing deleted; content unchanged); Grep counts CR 0, unmasked email 0, Windows user name 0; live preflight exit 0 (91 scenarios). The board evidence path of WP3-FIX3-FREEZE now names result.txt.",
+      "next_action": "None; WP3-REGATE3 attempt 2 reruns item 12."
     },
     {
       "id": "WP3-TMPMOVE",
