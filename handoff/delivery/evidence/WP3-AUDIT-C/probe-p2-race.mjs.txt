@@ -1,0 +1,219 @@
+// WP3-AUDIT-C probe P2: the share is re-checked inside the write transaction (revocation race), on a
+// real SQLite file with a second connection. Part A: deterministic interleaving. The request's own
+// connection is wrapped so that, right after the guard has read the share and while it reads the
+// owner account, a SECOND connection commits the revocation (or a scope drop, or a deactivation).
+// The production app must refuse; a control app built from the same router factory without
+// shareCheckedDb must let the write land after the revocation (proves the window is hit).
+// Part B: real multi-process race, 20 rounds (see p2-race-child.mjs).
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { auth, createApp, finalizeWithPdf, Hono, LA, la, LoginRateLimiter, openDatabase, ORIGIN, request, routesApi, setup } from './lib.mjs';
+
+let failures = 0;
+let passes = 0;
+function check(cond, label) {
+  if (cond) passes++;
+  else failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`);
+}
+
+const ctx = await setup('p2');
+const G = await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const OWNER = ctx.ids.owner;
+const GRANTEE = ctx.ids.grantee;
+const sessionBody = (date, from, to) => ({ start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true });
+const revO = await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+const second = openDatabase(ctx.dbPath); // an independent connection to the same file
+
+const OWNER_SQL = /FROM users WHERE id = \? AND status = 'active'/;
+/** The request connection: fires `between` once, when the guard reads the owner account after the share row. */
+function hooked(between) {
+  let armed = false;
+  return {
+    arm() {
+      armed = true;
+    },
+    db: new Proxy(ctx.db, {
+      get(target, property) {
+        if (property === 'prepare') {
+          return (sql) => {
+            if (armed && OWNER_SQL.test(sql)) {
+              armed = false;
+              between();
+            }
+            return target.prepare(sql);
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }),
+  };
+}
+
+let shareId;
+function grantEdit(items = { timesheets: 'edit', ot_read: false, pdf_download: true }) {
+  ctx.db.prepare("UPDATE timesheet_shares SET revoked_by = owner_user_id, revoked_at = '2026-09-29T20:00:00Z' WHERE revoked_at IS NULL").run();
+  ctx.db.prepare("UPDATE users SET status = 'active' WHERE id IN (?, ?)").run(OWNER, GRANTEE);
+  shareId = `s-${Math.random().toString(16).slice(2)}`;
+  ctx.db
+    .prepare(
+      `INSERT INTO timesheet_shares (id, owner_user_id, grantee_user_id, timesheets_scope, ot_read, pdf_download, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, '2026-09-29T20:00:00Z')`,
+    )
+    .run(shareId, OWNER, GRANTEE, items.timesheets, items.ot_read ? 1 : 0, items.pdf_download ? 1 : 0, OWNER);
+}
+// The concurrent acts, all committed through the SECOND connection.
+const acts = {
+  revoke: () => second.prepare("UPDATE timesheet_shares SET revoked_by = owner_user_id, revoked_at = '2026-09-29T20:00:00Z' WHERE id = ?").run(shareId),
+  'drop to view': () =>
+    second.transaction(() => {
+      second.prepare("UPDATE timesheet_shares SET revoked_by = owner_user_id, revoked_at = '2026-09-29T20:00:00Z' WHERE id = ?").run(shareId);
+      second
+        .prepare(
+          `INSERT INTO timesheet_shares (id, owner_user_id, grantee_user_id, timesheets_scope, ot_read, pdf_download, created_by, created_at)
+           VALUES (?, ?, ?, 'view', 0, 0, ?, '2026-09-29T20:00:00Z')`,
+        )
+        .run(`v-${Math.random().toString(16).slice(2)}`, OWNER, GRANTEE, OWNER);
+    }).immediate(),
+  'owner deactivated': () => second.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(OWNER),
+  'grantee deactivated': () => second.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(GRANTEE),
+};
+
+const entryVersion = (date) => ctx.db.prepare('SELECT version FROM day_entries WHERE user_id = ? AND work_date = ?').pluck().get(OWNER, date) ?? null;
+let ownerSessionId = null;
+function ensureOwnerSession() {
+  const r = ctx.db.prepare("SELECT id, version FROM work_sessions WHERE user_id = ? AND work_date = '2026-09-28'").get(OWNER);
+  return r;
+}
+await (async () => {
+  const r = await ctx.request('POST', '/api/days/2026-09-28/sessions', { cookie: ctx.cookies.owner, body: sessionBody('2026-09-28', '09:00', '17:00') });
+  ownerSessionId = r.body.session.id;
+})();
+const WRITES = [
+  ['PUT', () => '/days/2026-09-30', () => ({ category: 'Off', leave_minutes: 0, wfh: false, notes: 'race', expected_version: entryVersion('2026-09-30') })],
+  ['POST', () => '/days/2026-09-29/sessions', () => sessionBody('2026-09-29', '06:00', '07:00')],
+  ['POST', () => '/days/batch', () => ({ mode: 'commit', entries: [{ work_date: '2026-10-01', category: 'Sick', expected_version: entryVersion('2026-10-01') }] })],
+  ['PUT', () => `/sessions/${ownerSessionId}`, () => ({ ...sessionBody('2026-09-28', '08:00', '17:00'), expected_version: ensureOwnerSession().version })],
+  ['DELETE', () => `/sessions/${ownerSessionId}`, () => ({ expected_version: ensureOwnerSession().version })],
+];
+const grantedWrites = () => ctx.db.prepare("SELECT count(*) FROM audit_events WHERE actor_user_id = ? AND owner_user_id = ? AND operation NOT LIKE 'share.%'").pluck().get(GRANTEE, OWNER);
+const personal = () =>
+  JSON.stringify([
+    ctx.db.prepare('SELECT * FROM work_sessions ORDER BY rowid').all(),
+    ctx.db.prepare('SELECT * FROM day_entries ORDER BY rowid').all(),
+    ctx.db.prepare('SELECT * FROM session_breaks ORDER BY rowid').all(),
+    ctx.db.prepare('SELECT * FROM timesheets ORDER BY rowid').all(),
+  ]);
+
+function productionApp(h) {
+  return createApp({ db: h.db, clock: ctx.clock, config: ctx.cfg, loginLimiter: new LoginRateLimiter(), staticDir: null }, { dataDir: ctx.dataDir });
+}
+/** CONTROL ONLY (probe-local): the same api router factory behind the same guard, but over the raw connection (no in-transaction re-check). */
+function controlApp(h) {
+  const deps = { db: h.db, clock: ctx.clock, config: ctx.cfg, loginLimiter: new LoginRateLimiter(), staticDir: null };
+  const app = new Hono();
+  app.route('/api/shared/:ownerId', routesApi.apiRoutes(deps, { access: auth.requireShare(deps, 'timesheets_edit') }));
+  return app;
+}
+
+console.log('## A. Deterministic interleaving: guard admits, a second connection commits, then the write transaction runs');
+for (const [actName, act] of Object.entries(acts)) {
+  for (const [method, path, body] of WRITES) {
+    grantEdit();
+    const h = hooked(act);
+    const app = productionApp(h);
+    const beforeState = personal();
+    const beforeWrites = grantedWrites();
+    h.arm();
+    const r = await request(app, method, `/api/shared/${OWNER}${path()}`, { cookie: G, body: body() });
+    const want = actName === 'drop to view' ? 403 : 404;
+    check(
+      r.status === want && personal() === beforeState && grantedWrites() === beforeWrites,
+      `production, ${actName} mid-request: ${method} ${path().replace(/[0-9a-f-]{36}/g, '<id>')} -> ${r.status} ${r.body?.error?.code ?? ''}, nothing written`,
+    );
+  }
+}
+// PDF download race: the download re-check refuses before bytes or audit.
+{
+  grantEdit({ timesheets: 'none', ot_read: false, pdf_download: true });
+  const h = hooked(acts.revoke);
+  const app = productionApp(h);
+  const auditBefore = ctx.db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+  h.arm();
+  const r = await request(app, 'GET', `/api/shared/${OWNER}/revisions/${revO}/pdf`, { cookie: G });
+  check(r.status === 404 && r.bytes.length < 200 && ctx.db.prepare('SELECT count(*) FROM audit_events').pluck().get() === auditBefore, `production, revoke mid-download: GET pdf -> ${r.status}, no bytes, no audit`);
+}
+// Control: without shareCheckedDb the same interleaving lets the write land after the revocation.
+{
+  grantEdit();
+  const h = hooked(acts.revoke);
+  const app = controlApp(h);
+  const beforeWrites = grantedWrites();
+  h.arm();
+  const r = await request(app, 'PUT', `/api/shared/${OWNER}/days/2026-09-30`, {
+    cookie: G,
+    body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: 'control', expected_version: entryVersion('2026-09-30') },
+  });
+  const revokedAt = ctx.db.prepare('SELECT revoked_at FROM timesheet_shares WHERE id = ?').pluck().get(shareId);
+  check(
+    r.status === 200 && grantedWrites() === beforeWrites + 1 && revokedAt !== null,
+    `CONTROL (no in-transaction re-check): the interleaving is real -- the write lands after the revocation (${r.status})`,
+  );
+}
+
+console.log('\n## B. Real multi-process race on the file: editors vs a revoker, 20 rounds');
+second.close();
+ctx.db.prepare("UPDATE users SET status = 'active' WHERE id IN (?, ?)").run(OWNER, GRANTEE);
+const child = fileURLToPath(new URL('./p2-race-child.mjs', import.meta.url));
+function run(args) {
+  return new Promise((resolve) => {
+    const p = spawn(process.execPath, [child, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    let err = '';
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (err += d));
+    p.on('close', (code) => resolve({ code, out, err }));
+  });
+}
+const cfgJson = JSON.stringify({ dbPath: ctx.dbPath, dataDir: ctx.dataDir, owner: OWNER, grantee: GRANTEE, granteeCookie: G, ownerCookie: ctx.cookies.owner });
+let roundsOk = 0;
+const stats = [];
+for (let round = 1; round <= 20; round++) {
+  shareId = null;
+  grantEdit();
+  const sid = shareId;
+  const grantRow = ctx.db.prepare('SELECT max(rowid) FROM audit_events').pluck().get();
+  const delay = String(5 + Math.floor(Math.random() * 60));
+  const [e1, e2, rv] = await Promise.all([run(['edit', cfgJson, '2026-09-30', 'day']), run(['edit', cfgJson, '2026-10-01', 'batch']), run(['revoke', cfgJson, sid, delay, String(grantRow)])]);
+  const parse = (x) => {
+    try {
+      return JSON.parse(x.out.trim().split('\n').pop());
+    } catch {
+      return { error: x.err || x.out };
+    }
+  };
+  const a = parse(e1);
+  const b = parse(e2);
+  const v = parse(rv);
+  const revokeRow = ctx.db
+    .prepare("SELECT rowid FROM audit_events WHERE operation = 'share.revoke' AND entity_id = ?")
+    .pluck()
+    .get(sid);
+  const writes = ctx.db
+    .prepare("SELECT rowid FROM audit_events WHERE actor_user_id = ? AND owner_user_id = ? AND operation NOT LIKE 'share.%' AND rowid > ?")
+    .pluck()
+    .all(GRANTEE, OWNER, grantRow);
+  const after = writes.filter((w) => w > revokeRow).length;
+  const ok2xx = (a.ok ?? 0) + (b.ok ?? 0);
+  const monotonic = a.monotonic === true && b.monotonic === true;
+  const good = e1.code === 0 && e2.code === 0 && rv.code === 0 && revokeRow !== undefined && after === 0 && writes.length === ok2xx && monotonic && a.refused > 0 && b.refused > 0;
+  if (good) roundsOk++;
+  stats.push(`round ${round}: delay ${delay} ms, editor writes committed ${ok2xx} (audit ${writes.length}), refused ${(a.refused ?? 0) + (b.refused ?? 0)}, writes after revoke ${after}, other statuses ${JSON.stringify([a.other, b.other])}${good ? '' : ` BAD ${JSON.stringify({ a, b, v, e: [e1.err, e2.err, rv.err] })}`}`);
+}
+for (const s of stats) console.log(s);
+check(roundsOk === 20, `20/20 rounds: no grantee write committed after the revocation; every 2xx has its audit event; after the first refusal every request is refused (${roundsOk}/20)`);
+
+console.log(`\nSUMMARY P2: ${passes} PASS, ${failures} FAIL`);
+ctx.db.close();
+process.exitCode = failures === 0 ? 0 : 1;

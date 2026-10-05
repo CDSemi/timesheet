@@ -1,0 +1,168 @@
+// WP3-AUDIT-C probe helpers (auditor-written; synthetic data only; capture mode; no network).
+// Imports the reviewed production source of the scratch clone by file URL; writes only under runs/.
+import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const REPO = new URL('../repo/', import.meta.url);
+const src = (p) => new URL(p, REPO).href;
+
+export const { createApp } = await import(src('src/server/app.ts'));
+export const { LoginRateLimiter } = await import(src('src/server/auth/rateLimit.ts'));
+export const { openDatabase } = await import(src('src/server/db/database.ts'));
+export const { migrate } = await import(src('src/server/db/migrations.ts'));
+export const { seedSynthetic, syntheticSignaturePng } = await import(src('src/server/seed.ts'));
+export const { createUser, deactivateUser, reactivateUser } = await import(src('src/server/services/users.ts'));
+export const { saveSignature } = await import(src('src/server/services/signatures.ts'));
+export const { FileStore } = await import(src('src/server/files/fileStore.ts'));
+export const { createPdfJobHandler } = await import(src('src/server/jobs/pdfJob.ts'));
+export const { runJobsOnce } = await import(src('src/server/jobs/runner.ts'));
+export const shares = await import(src('src/server/services/shares.ts'));
+export const auth = await import(src('src/server/http/auth.ts'));
+export const routesApi = await import(src('src/server/routes/api.ts'));
+export const { Hono } = await import(new URL('node_modules/hono/dist/index.js', REPO).href);
+
+export const ORIGIN = 'http://localhost:3000';
+export const LA = 'America/Los_Angeles';
+
+export class Clock {
+  constructor(iso) {
+    this.t = new Date(iso).getTime();
+  }
+  now() {
+    return new Date(this.t);
+  }
+  set(iso) {
+    this.t = new Date(iso).getTime();
+  }
+}
+
+export function runDir(name) {
+  const dir = join(fileURLToPath(new URL('../runs/', import.meta.url)), `${name}-${Date.now()}-${randomBytes(3).toString('hex')}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function config(dbPath) {
+  return {
+    host: '127.0.0.1',
+    port: 3000,
+    databasePath: dbPath,
+    allowedOrigins: [ORIGIN],
+    cookieSecure: false,
+    sessionTtlSeconds: 12 * 3600,
+    production: false,
+  };
+}
+
+/** Local LA wall clock (September/October 2026 is PDT, UTC-7) to a UTC instant string. */
+export function la(local) {
+  const [d, t] = local.split('T');
+  const [h, m] = t.split(':').map(Number);
+  const date = new Date(`${d}T00:00:00Z`);
+  date.setUTCHours(h + 7, m, 0, 0);
+  return date.toISOString().replace('.000Z', 'Z');
+}
+
+export async function request(app, method, path, opts = {}) {
+  const headers = { ...(opts.headers ?? {}) };
+  if (opts.origin !== null) headers.origin = opts.origin ?? ORIGIN;
+  if (opts.cookie !== undefined) headers.cookie = opts.cookie;
+  const init = { method, headers };
+  if (opts.body !== undefined) {
+    headers['content-type'] ??= 'application/json';
+    init.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+  }
+  const res = await app.request(path, init);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const text = buf.toString('utf8');
+  let body = null;
+  if ((res.headers.get('content-type') ?? '').includes('json') && text !== '') body = JSON.parse(text);
+  else body = text === '' ? null : `<${buf.length} bytes ${res.headers.get('content-type')}>`;
+  return { status: res.status, body, headers: res.headers, bytes: buf, text };
+}
+
+export async function setup(name, nowIso = '2026-09-29T20:00:00Z') {
+  const dir = runDir(name);
+  const dbPath = join(dir, 'probe.db');
+  const db = openDatabase(dbPath);
+  migrate(db);
+  const clock = new Clock(nowIso);
+  const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+  const seed = await seedSynthetic(db, clock, { passwords });
+  const byRole = (role) => seed.users.find((u) => u.role === role);
+  const cfg = config(dbPath);
+  const dataDir = join(dir, 'private-data');
+  const files = new FileStore(dataDir);
+  const app = createApp({ db, clock, config: cfg, loginLimiter: new LoginRateLimiter(), staticDir: null }, { dataDir });
+  const ctx = { dir, dbPath, db, clock, cfg, files, dataDir, app, calendarId: seed.calendarId, ids: {}, cookies: {}, emails: {}, passwords: {} };
+  ctx.ids.admin = byRole('admin').id;
+  ctx.emails.admin = byRole('admin').email;
+  ctx.passwords.admin = passwords.admin;
+  ctx.ids.owner = byRole('employee').id;
+  ctx.emails.owner = byRole('employee').email;
+  ctx.passwords.owner = passwords.employee;
+  ctx.request = (method, path, opts = {}) => request(ctx.app, method, path, opts);
+  ctx.signIn = async (who) => {
+    const r = await ctx.request('POST', '/api/auth/login', { body: { email: ctx.emails[who], password: ctx.passwords[who] } });
+    if (r.status !== 200) throw new Error(`login ${who} ${r.status} ${JSON.stringify(r.body)}`);
+    ctx.cookies[who] = r.headers.get('set-cookie').split(';')[0];
+    return ctx.cookies[who];
+  };
+  ctx.addUser = async (who, email, displayName, role = 'employee') => {
+    const password = randomBytes(18).toString('base64url');
+    ctx.ids[who] = await createUser(db, clock, { email, displayName, role, password, calendarId: ctx.calendarId }, ctx.ids.admin);
+    ctx.emails[who] = email;
+    ctx.passwords[who] = password;
+    return ctx.signIn(who);
+  };
+  await ctx.signIn('admin');
+  await ctx.signIn('owner');
+  return ctx;
+}
+
+/** A finalized revision with a ready PDF for `who` (settings, signature, sign-off, PDF job). */
+export async function finalizeWithPdf(ctx, who, displayName) {
+  const cookie = ctx.cookies[who];
+  const s = await ctx.request('POST', '/api/settings/submission', {
+    cookie,
+    body: { expected_seq: 0, to: ['<email>'], cc: [], auto_submit: false },
+  });
+  if (s.status !== 201) throw new Error(`settings ${s.status} ${JSON.stringify(s.body)}`);
+  saveSignature(ctx.db, ctx.clock, ctx.files, ctx.ids[who], syntheticSignaturePng(5), 'image/png');
+  const review = await ctx.request('GET', '/api/timesheets/2026-10-02/review', { cookie });
+  if (review.status !== 200) throw new Error(`review ${review.status}`);
+  const signed = await ctx.request('POST', '/api/timesheets/2026-10-02/signoff', {
+    cookie,
+    body: {
+      expected_version: review.body.expected_version,
+      reviewed_hash: review.body.payload_hash,
+      signer_name: displayName,
+      incomplete_evidence_acknowledged: true,
+    },
+  });
+  if (signed.status !== 201) throw new Error(`signoff ${signed.status} ${JSON.stringify(signed.body)}`);
+  await runJobsOnce({
+    db: ctx.db,
+    clock: ctx.clock,
+    owner: 'probe-pdf',
+    handlers: { render_pdf: createPdfJobHandler({ db: ctx.db, clock: ctx.clock, files: ctx.files }) },
+  });
+  return signed.body.revision.id;
+}
+
+export const changes = (db) => db.prepare('SELECT total_changes()').pluck().get();
+export const auditCount = (db) => db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+
+/** Every key and string value of a JSON value, for leak scans. */
+export function walk(value, out = { keys: new Set(), strings: new Set() }) {
+  if (Array.isArray(value)) value.forEach((v) => walk(v, out));
+  else if (value !== null && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      out.keys.add(k);
+      walk(v, out);
+    }
+  } else if (typeof value === 'string') out.strings.add(value);
+  return out;
+}

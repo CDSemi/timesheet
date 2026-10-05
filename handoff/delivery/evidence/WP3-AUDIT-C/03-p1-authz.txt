@@ -1,0 +1,116 @@
+WP3-AUDIT-C 03: probe P1, sharing authorization on a real SQLite file (probe-p1-authz.mjs.txt)
+$ node probes/p1-authz.mjs -> exit 0 (86 PASS, 0 FAIL)
+Run history: attempt 1 crashed in setup (probe read a storage key as a path); attempt 2 stopped in section 6 (probe used the owner cookie revoked by the owner deactivation); attempt 3 had 1 FAIL from a wrong probe expectation (3 edit sets instead of 4; observed 20 = 4 x 5 writes); the probe was corrected and this is attempt 4. No source changed.
+
+
+## 1. Route inventory from the mounted application
+registered (method, path) entries: 88; middleware wildcards: 3; under /api/shared: 17
+PASS the /api/shared routes are exactly the 17 auditor-matrix routes
+PASS every /api/shared route has exactly guard + handler
+PASS no wildcard middleware or ALL route under /api/shared
+
+## 2. Every other /api route is unreachable under /api/shared/:ownerId (full share, grantee/stranger/admin)
+probed 68 non-shared routes x 3 callers (minus allowlisted method/path pairs)
+PASS every non-allowlisted route under /api/shared is 404 with zero writes (153 probes)
+PASS POST /clock/in for a full grantee with a valid body -> 404, no write
+PASS POST /clock/out for a full grantee with a valid body -> 404, no write
+
+## 3. The 11 valid item sets x 17 routes, real requests (grantee), plus stranger/admin/anonymous
+PASS 11 valid item sets
+PASS item set ts=none ot=0 pdf=1: GET /calendar=403 GET /periods/current=403 GET /periods=403 GET /timesheets/:payrollDate=403 GET /days/:workDate=403 GET /sessions/:id=403 GET /policies=403 GET /ot/summary=403 GET /ot/ledger=403 GET /revisions/pending-lines=403 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=none ot=0 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=none ot=1 pdf=0: GET /calendar=403 GET /periods/current=403 GET /periods=403 GET /timesheets/:payrollDate=403 GET /days/:workDate=403 GET /sessions/:id=403 GET /policies=403 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=403 GET /revisions/:id/pdf=403 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=none ot=1 pdf=0: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=none ot=1 pdf=1: GET /calendar=403 GET /periods/current=403 GET /periods=403 GET /timesheets/:payrollDate=403 GET /days/:workDate=403 GET /sessions/:id=403 GET /policies=403 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=none ot=1 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=view ot=0 pdf=0: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=403 GET /ot/ledger=403 GET /revisions/pending-lines=403 GET /revisions=200 GET /revisions/:id/pdf=403 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=view ot=0 pdf=0: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=view ot=0 pdf=1: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=403 GET /ot/ledger=403 GET /revisions/pending-lines=403 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=view ot=0 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=view ot=1 pdf=0: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=200 GET /revisions/:id/pdf=403 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=view ot=1 pdf=0: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=view ot=1 pdf=1: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=403 POST /days/batch=403 POST /days/:workDate/sessions=403 PUT /sessions/:id=403 DELETE /sessions/:id=403
+PASS item set ts=view ot=1 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=edit ot=0 pdf=0: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=403 GET /ot/ledger=403 GET /revisions/pending-lines=403 GET /revisions=200 GET /revisions/:id/pdf=403 PUT /days/:workDate=200 POST /days/batch=200 POST /days/:workDate/sessions=201 PUT /sessions/:id=200 DELETE /sessions/:id=200
+PASS item set ts=edit ot=0 pdf=0: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=edit ot=0 pdf=1: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=403 GET /ot/ledger=403 GET /revisions/pending-lines=403 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=200 POST /days/batch=200 POST /days/:workDate/sessions=201 PUT /sessions/:id=200 DELETE /sessions/:id=200
+PASS item set ts=edit ot=0 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=edit ot=1 pdf=0: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=200 GET /revisions/:id/pdf=403 PUT /days/:workDate=200 POST /days/batch=200 POST /days/:workDate/sessions=201 PUT /sessions/:id=200 DELETE /sessions/:id=200
+PASS item set ts=edit ot=1 pdf=0: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+PASS item set ts=edit ot=1 pdf=1: GET /calendar=200 GET /periods/current=200 GET /periods=200 GET /timesheets/:payrollDate=200 GET /days/:workDate=200 GET /sessions/:id=200 GET /policies=200 GET /ot/summary=200 GET /ot/ledger=200 GET /revisions/pending-lines=200 GET /revisions=200 GET /revisions/:id/pdf=200 PUT /days/:workDate=200 POST /days/batch=200 POST /days/:workDate/sessions=201 PUT /sessions/:id=200 DELETE /sessions/:id=200
+PASS item set ts=edit ot=1 pdf=1: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store
+
+## 4. Responses: no password, hash, token or storage key; no-store everywhere
+PASS no sensitive key in shared JSON responses (keys seen: 128; flagged: none)
+PASS no session token, password or the internal owner principal session id in shared responses
+PASS no email address in shared JSON responses
+
+## 5. Live authorization: change, revoke, leave, admin revoke, deactivation on the next request
+PASS edit share: GET calendar 200
+PASS edit -> view change applies to the next write: 403
+PASS owner revokes
+PASS next request after owner revoke: 404 (same session cookie)
+PASS grantee leaves
+PASS next request after leave: 404
+PASS admin revokes
+PASS next request after admin revoke: 404
+PASS grantee deactivated: next request 401 (sessions revoked)
+PASS grantee reactivated: old cookie stays 401
+PASS grantee reactivated + new sign-in: share applies again (not revoked by deactivation)
+PASS owner deactivated: grantee next request 404
+PASS owner deactivated: grantee write 404
+PASS owner reactivated: grantee access restored on the next request
+
+## 6. Object ownership (IDOR), self-only routes and path tricks
+PASS another owner's object through the owner share: GET /sessions/<id> -> 404, zero writes
+PASS another owner's object through the owner share: PUT /sessions/<id> -> 404, zero writes
+PASS another owner's object through the owner share: DELETE /sessions/<id> -> 404, zero writes
+PASS another owner's object through the owner share: GET /revisions/<id>/pdf -> 404, zero writes
+PASS owner B (no share) under /api/shared: 404
+PASS own id under /api/shared: 404
+PASS self-only GET /api/sessions/<owner session> as grantee: 404
+PASS self-only owner PDF route with the owner revision id as grantee: 404
+PASS self-only GET /api/timesheets as grantee shows the grantee's own data only
+PASS path variant POST /api/shared/<id>/../clock/in -> 404, zero writes
+PASS path variant GET /api/shared/<id>/calendar -> 404, zero writes
+PASS path variant POST /api/shared/<id>%2F..%2Fclock/in -> 404, zero writes
+PASS path variant GET /api/shared/<id>/calendar/ -> 404, zero writes
+PASS path variant GET /api/shared/<id>//calendar -> 404, zero writes
+PASS path variant GET /api/SHARED/<id>/calendar -> 404, zero writes
+PASS path variant GET /api/shared/<id>/timesheets/2026-10-02/review -> 404, zero writes
+PASS path variant POST /api/shared/<id>/timesheets/2026-10-02/signoff -> 404, zero writes
+INFO HEAD on the shared PDF -> 200, audit events written: 1
+INFO OPTIONS on a shared write path -> 404
+
+## 7. No re-sharing; admin cannot create
+PASS grantee cannot change the owner's share: 404
+PASS stranger cannot change it: 404
+PASS stranger cannot revoke it: 404
+PASS grantee shares their OWN timesheets with the stranger
+PASS stranger still cannot reach the owner (never transitive)
+PASS stranger reaches only the grantee's own timesheets
+PASS POST /api/shared/:owner/shares -> 404
+PASS admin create attempt POST /api/admin/shares -> 404
+PASS admin create attempt PUT /api/admin/shares/<id> -> 404
+PASS admin create attempt POST /api/admin/shares/<id> -> 404
+PASS every share row was created by its owner
+
+## 8. Attribution in audit and the owner History; PDF download audit; owner download writes nothing
+INFO grantee write audit events on the owner: 20; share.pdf_download events: 7
+PASS five writes per edit set (4 edit sets) recorded with actor = grantee, owner = owner
+PASS owner History: 28 events show "Synthetic Grantee" via share, no grantee id
+PASS owner History shows each grantee PDF download with the grantee name
+PASS all PDF download events visible to the owner
+PASS owner own events are never marked via share
+PASS admin revocation (admin holds no share) is not attributed by name
+PASS owner PDF download writes nothing
+PASS grantee id never appears in the owner History
+
+## 9. Admin share list: allowlisted fields only, no timesheet details
+PASS admin list keys: created_at,display_name,grantee,id,items,ot_read,owner,pdf_download,revoked_at,revoked_by_role,shares,timesheets
+PASS admin list has no address, note text or revoke reason
+PASS employee GET /api/admin/shares -> 403
+PASS anonymous GET /api/admin/shares -> 401
+
+SUMMARY P1: 86 PASS, 0 FAIL
+exit=0

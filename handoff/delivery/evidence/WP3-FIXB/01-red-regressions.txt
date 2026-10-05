@@ -1,0 +1,174 @@
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/otModel.test.ts (12 tests | 2 failed) 8ms
+   ❯ history display (4)
+     × names known operations and falls back to a neutral plain label for unknown ones (WP3-B-03) 3ms
+     × words every operation an owner can see in the history, including the WP3 ones, without a raw code 1ms
+ ❯ tests/client/sharingModel.test.ts (24 tests | 1 failed) 8ms
+   ❯ history: shared edits and share events (4)
+     × labels the actor-less system events as automatic, never as someone else (WP3-B-03) 2ms
+ ❯ tests/integration/deadline.test.ts (35 tests | 4 failed) 5815ms
+   ❯ account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) (4)
+     × never submits a period whose deadline passed before the account existed (no saved settings) 147ms
+     × still automates the first deadline after the account was created, with the default labels (F-1) 153ms
+     × automates the period in which the account was created when its deadline is still ahead 145ms
+     × never puts the auto-submit effective instant of saved settings before the account existed 148ms
+ ❯ tests/integration/delivery.test.ts (24 tests | 1 failed) 7872ms
+   ❯ integrity and visible faults (6)
+     × a process lost during the LAST permitted attempt is uncertain with the owner decision, like any earlier attempt (WP3-B-02) 277ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/otModel.test.ts > history display > names known operations and falls back to a neutral plain label for unknown ones (WP3-B-03)
+AssertionError: expected 'day.save' to be 'Other change' // Object.is equality
+
+Expected: "Other change"
+Received: "day.save"
+
+ ❯ tests/client/otModel.test.ts:78:39
+     76|   it('names known operations and falls back to a neutral plain label f…
+     77|     expect(operationText('ot_leave.use')).toBe('OT leave use recorded'…
+     78|     expect(operationText('day.save')).toBe('Other change');
+       |                                       ^
+     79|     expect(operationText('some_future.op')).not.toContain('.');
+     80|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/client/otModel.test.ts > history display > words every operation an owner can see in the history, including the WP3 ones, without a raw code
+AssertionError: expected 'timesheet.auto_finalize' to be 'Submitted automatically' // Object.is equality
+
+Expected: "Submitted automatically"
+Received: "timesheet.auto_finalize"
+
+ ❯ tests/client/otModel.test.ts:83:54
+     81|
+     82|   it('words every operation an owner can see in the history, including…
+     83|     expect(operationText('timesheet.auto_finalize')).toBe('Submitted a…
+       |                                                      ^
+     84|     expect(operationText('timesheet.signoff')).toBe('Timesheet signed …
+     85|     expect(operationText('timesheet.correction')).toBe('Correction sig…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/client/sharingModel.test.ts > history: shared edits and share events > labels the actor-less system events as automatic, never as someone else (WP3-B-03)
+TypeError: isSystemOperation is not a function
+ ❯ tests/client/sharingModel.test.ts:206:14
+    204|   it('labels the actor-less system events as automatic, never as someo…
+    205|     for (const operation of ['timesheet.auto_finalize', 'deadline.over…
+    206|       expect(isSystemOperation(operation), operation).toBe(true);
+       |              ^
+    207|       expect(historyActorBadge(event({ operation, actor_is_self: false…
+    208|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never submits a period whose deadline passed before the account existed (no saved settings)
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/integration/deadline.test.ts:336:31
+    334|     t.clock.set('2026-11-12T00:00:30Z');
+    335|     const summary = scan();
+    336|     expect(summary.finalized).toBe(0);
+       |                               ^
+    337|     expect(revisions(late)).toEqual([]);
+    338|     expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > still automates the first deadline after the account was created, with the default labels (F-1)
+AssertionError: expected 4 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 4
+
+ ❯ tests/integration/deadline.test.ts:354:30
+    352|     const late = newUser('ignore', 0, '2026-11-12T00:00:00Z');
+    353|     t.clock.set(P5.dueAt);
+    354|     expect(scan().finalized).toBe(1);
+       |                              ^
+    355|     const rows = revisions(late);
+    356|     expect(rows.map((row) => [snapshotOf(row).period.payroll_date, row…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > automates the period in which the account was created when its deadline is still ahead
+AssertionError: expected 3 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 3
+
+ ❯ tests/integration/deadline.test.ts:364:30
+    362|     const mid = newUser('ignore', 0, '2026-11-05T00:00:00Z');
+    363|     t.clock.set(P4.dueAt);
+    364|     expect(scan().finalized).toBe(1);
+       |                              ^
+    365|     expect(revisions(mid).map((row) => snapshotOf(row).period.payroll_…
+    366|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never puts the auto-submit effective instant of saved settings before the account existed
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/integration/deadline.test.ts:383:30
+    381|     saveSettings(user, { autoSubmit: true, applyToOverdue: true, expec…
+    382|     t.clock.set('2026-10-29T00:00:00Z');
+    383|     expect(scan().finalized).toBe(1);
+       |                              ^
+    384|     expect(revisions(user).map((row) => snapshotOf(row).period.payroll…
+    385|     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > integrity and visible faults > a process lost during the LAST permitted attempt is uncertain with the owner decision, like any earlier attempt (WP3-B-02)
+AssertionError: expected { …(18) } to match object { attempt_no: 5, …(3) }
+(14 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "attempt_no": 5,
+    "decision": null,
+-   "provider_response": "lease_expired_while_sending",
+-   "state": "uncertain",
++   "provider_response": null,
++   "state": "sending",
+  }
+
+ ❯ tests/integration/delivery.test.ts:679:41
+    677|     t.clock.advanceSeconds(61);
+    678|     expect(await runSend(captureOutbound())).toMatchObject({ claimed: …
+    679|     expect(attempts(revisionId).at(-1)).toMatchObject({ attempt_no: 5,…
+       |                                         ^
+    680|     expect(job(sendJobId).state).toBe('intervention');
+    681|     const listed = await t.request('GET', '/api/deliveries', { cookie:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  4 failed (4)
+      Tests  8 failed | 87 passed (95)
+   Start at  04:52:29
+   Duration  9.05s (tests 85%, import 10%, transform 5%)
+

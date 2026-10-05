@@ -1,0 +1,22 @@
+PASS no OUTBOUND_MODE: capture, no sender ({"ok":true,"mode":"capture","sender":null})
+PASS OUTBOUND_MODE=smtp without the owner flag refused: OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag
+PASS owner flag value "TRUE" is not accepted (refused)
+PASS owner flag value "1" is not accepted (refused)
+PASS owner flag value "yes" is not accepted (refused)
+PASS owner flag value " true" is not accepted (refused)
+PASS unknown OUTBOUND_MODE refused (OUTBOUND_MODE must be capture or smtp)
+PASS production requires PUBLIC_BASE_URL (PUBLIC_BASE_URL is required in production (the public HTTPS URL for deep links))
+PASS invalid MAIL_FROM refused without echoing the value (MAIL_FROM must be a single email address)
+PASS empty MAIL_FROM means no sender (sends are blocked visibly)
+PASS a private data directory inside Dropbox is refused (DATA_DIR must be an absolute path)
+PASS SecretValue never renders through JSON, inspect or string conversion
+PASS no MAIL_FROM: attempt failed_permanent/sender_missing, job intervention, nothing captured
+PASS resend after configuring the sender (201)
+INFO after four temporary failures: job {"state":"queued","attempts":4}
+INFO fifth attempt after the crash: {"state":"sending","provider_response":null}
+INFO runner pass after the lease expired: job {"state":"intervention","attempts":5,"last_error":"delivery_uncertain"}; owner sees attempt uncertain, decision_required true
+INFO a new resend is answered 409 delivery_uncertain
+PASS a crash during the last attempt is shown as uncertain with a decision (docs/05 failure table)
+INFO the decision route itself still accepts a decision: 200 (it runs the recovery first)
+PASS nothing was captured in this section
+SUMMARY failures=0

@@ -19,6 +19,7 @@ import {
 } from '../services/finalization.ts';
 import { decideDelivery, decisionJson, deliveryJson, listDeliveries } from '../services/deliveries.ts';
 import { buildReviewPayload, reviewPayloadJson } from '../services/reviewPayload.ts';
+import { granteeChangesForReview } from '../services/sharedActs.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
 
 /** The owner's explicit decision on an uncertain delivery attempt (docs/05). */
@@ -135,9 +136,15 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
   const app = new Hono<AppEnv>();
   const auth = options.access ?? requireUser(deps);
 
-  app.get('/timesheets/:payrollDate/review', auth, (c) =>
-    c.json(reviewPayloadJson(buildReviewPayload(deps.db, deps.clock, c.get('subject'), c.req.param('payrollDate')))),
-  );
+  // `grantee_changes` is the owner's own hint (WP3-C-01), read from the audit next to the payload and never
+  // part of it: it is outside the snapshot, its hash and the PDF. Only the owner acting for themselves gets it.
+  app.get('/timesheets/:payrollDate/review', auth, (c) => {
+    const subject = c.get('subject');
+    const payrollDate = c.req.param('payrollDate');
+    const result = buildReviewPayload(deps.db, deps.clock, subject, payrollDate);
+    const own = c.get('actor').id === subject.id;
+    return c.json({ ...reviewPayloadJson(result), grantee_changes: own ? granteeChangesForReview(deps.db, subject, payrollDate) : [] });
+  });
 
   app.post('/timesheets/:payrollDate/signoff', auth, async (c) => {
     const body = await readJson(c, signoffBody);

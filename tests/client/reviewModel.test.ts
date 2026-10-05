@@ -89,7 +89,7 @@ function payload(overrides: Partial<ReviewSnapshot> = {}): ReviewSnapshot {
 }
 
 function review(overrides: Partial<ReviewSnapshot> = {}, version = 7): ReviewResponse {
-  return { payload: payload(overrides), payload_hash: HASH, expected_version: version };
+  return { payload: payload(overrides), payload_hash: HASH, expected_version: version, grantee_changes: [] };
 }
 
 const chooseDay = (workDate: string) => ({

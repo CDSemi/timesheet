@@ -651,6 +651,55 @@ describe('integrity and visible faults', () => {
     expect(job(sendJobId)).toMatchObject({ state: 'intervention', last_error: 'delivery_uncertain' });
     expect(target.transactions).toBe(0);
   });
+
+  it('a process lost during the LAST permitted attempt is uncertain with the owner decision, like any earlier attempt (WP3-B-02)', async () => {
+    const { revisionId, sendJobId } = await finalized();
+    const flaky: OutboundAdapter = { mode: 'capture', send: async () => ({ kind: 'failed_temporary', code: 'smtp_unavailable', providerResponse: '421' }) };
+    for (let round = 0; round < 4; round += 1) {
+      expect(await runSend(flaky)).toMatchObject({ claimed: 1, retried: 1 });
+      t.clock.set(job(sendJobId).next_run_at);
+    }
+    expect(job(sendJobId)).toMatchObject({ state: 'queued', attempts: 4 });
+    // The fifth (last) attempt: `sending` is committed, then the process dies without releasing the job.
+    const crash: SendJobHooks = {
+      beforeSend: () => {
+        throw new Error('simulated loss after the sending state was committed');
+      },
+    };
+    await runSend(captureOutbound(), { hooks: crash });
+    t.db
+      .prepare("UPDATE jobs SET state = 'leased', lease_owner = 'runner-dead', lease_expires_at = ?, last_error = NULL WHERE id = ?")
+      .run(new Date(t.clock.now().getTime() + 60_000).toISOString().replace('.000Z', 'Z'), sendJobId);
+    expect(attempts(revisionId).map((row) => row.state)).toEqual(['failed_temporary', 'failed_temporary', 'failed_temporary', 'failed_temporary', 'sending']);
+    expect(job(sendJobId)).toMatchObject({ state: 'leased', attempts: 5 });
+
+    // One ordinary runner pass after the lease expired (no other send job anywhere).
+    t.clock.advanceSeconds(61);
+    expect(await runSend(captureOutbound())).toMatchObject({ claimed: 0 });
+    expect(attempts(revisionId).at(-1)).toMatchObject({ attempt_no: 5, state: 'uncertain', provider_response: 'lease_expired_while_sending', decision: null });
+    expect(job(sendJobId).state).toBe('intervention');
+    const listed = await t.request('GET', '/api/deliveries', { cookie: employee });
+    const last = (listed.body.deliveries as Array<{ attempt_no: number; state: string; decision_required: boolean; id: string }>).find((row) => row.attempt_no === 5);
+    expect(last).toMatchObject({ state: 'uncertain', decision_required: true });
+
+    // Never resent automatically, however long we wait.
+    t.clock.advanceSeconds(6 * 3600);
+    expect(await runSend(captureOutbound())).toMatchObject({ claimed: 0 });
+    expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
+    // Without a decision a same-revision resend is refused with the decision prompt, not "in progress".
+    const refused = await t.request('POST', `/api/revisions/${revisionId}/resend`, { cookie: employee, body: {} });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('delivery_uncertain');
+
+    // One explicit decision resends exactly once.
+    const decided = await t.request('POST', `/api/deliveries/${last?.id}/decision`, { cookie: employee, body: { decision: 'resend' } });
+    expect(decided.status, JSON.stringify(decided.body)).toBe(201);
+    expect(await runSend(captureOutbound())).toMatchObject({ claimed: 1, succeeded: 1 });
+    expect(attempts(revisionId).map((row) => row.state).slice(-2)).toEqual(['uncertain', 'accepted']);
+    expect(readdirSync(join(dataDir, 'mail-capture'))).toHaveLength(1);
+    expect(await runSend(captureOutbound())).toMatchObject({ claimed: 0 });
+    expect(readdirSync(join(dataDir, 'mail-capture'))).toHaveLength(1);
+  });
 });
 
 describe('owner scoping', () => {

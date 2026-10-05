@@ -1,0 +1,209 @@
+// WP3-AUDIT-B probe 5: the built server (dist/) on a loopback port with JOB_RUNNER=off and capture
+// outbound; synthetic seed; an automatic submission produced through the run-jobs CLI with a fixed
+// instant; screenshots of the submission, automation and settings screens on desktop and mobile in
+// the installed Edge channel; accessible names, horizontal overflow, the deep link after login and
+// device-zone independence of the period grouping. Every child uses process.execPath.
+// Usage: node p5-ui.mjs <repoDir> <workDir> <shotDir> <port>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [repoDir, workDir, shotDir, portText] = process.argv.slice(2);
+const port = Number(portText);
+const ORIGIN = `http://127.0.0.1:${port}`;
+mkdirSync(shotDir, { recursive: true });
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+const credentials = {
+  admin: { email: '<email>', password: randomBytes(18).toString('base64url') },
+  employee: { email: '<email>', password: randomBytes(18).toString('base64url') },
+  employee2: { email: '<email>', password: randomBytes(18).toString('base64url') },
+};
+const env = {
+  ...process.env,
+  PORT: String(port),
+  DATABASE_PATH: join(workDir, 'p5.db'),
+  DATA_DIR: join(workDir, 'private-data'),
+  MAIL_FROM: '<email>',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: credentials.admin.password,
+  SEED_EMPLOYEE_PASSWORD: credentials.employee.password,
+  SEED_EMPLOYEE2_PASSWORD: credentials.employee2.password,
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+delete env.OUTBOUND_MODE;
+const cli = (...args) => spawnSync(process.execPath, [join(repoDir, 'dist/server/cli.js'), ...args], { cwd: repoDir, env, encoding: 'utf8' });
+const seeded = cli('seed');
+check(seeded.status === 0, `seed exit ${seeded.status}`);
+
+const server = spawn(process.execPath, [join(repoDir, 'dist/server/index.js')], { cwd: repoDir, env, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverOut = '';
+server.stdout.on('data', (d) => (serverOut += d));
+server.stderr.on('data', (d) => (serverOut += d));
+const stopServer = async () => {
+  if (server.exitCode === null) {
+    const exited = new Promise((resolve) => server.once('exit', resolve));
+    server.kill();
+    await exited;
+  }
+};
+let browser;
+try {
+  for (let i = 0; i < 100; i += 1) {
+    try {
+      if ((await fetch(`${ORIGIN}/api/health`)).ok) break;
+    } catch {
+      // not yet listening
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const api = async (cookie, method, path, body) => {
+    const headers = { origin: ORIGIN };
+    if (cookie) headers.cookie = cookie;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const r = await fetch(`${ORIGIN}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const text = await r.text();
+    return { status: r.status, body: text ? JSON.parse(text) : null, cookie: r.headers.get('set-cookie')?.split(';')[0] };
+  };
+  const loginApi = async (who) => (await api(undefined, 'POST', '/api/auth/login', credentials[who])).cookie;
+  const adminCookie = await loginApi('admin');
+  const employeeCookie = await loginApi('employee');
+  // The seed employee turns automatic submission on with recipients and the note line on.
+  const saved = await api(employeeCookie, 'POST', '/api/settings/submission', {
+    expected_seq: 0,
+    to: ['<email>'],
+    auto_submit: true,
+    auto_note_enabled: true,
+    auto_note_text: 'Nộp tự động theo lịch',
+  });
+  check(saved.status === 201, `employee settings saved (${saved.status})`);
+  const activeFrom = new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
+  const act = await api(adminCookie, 'PUT', '/api/admin/automation/activation', { active_from: activeFrom, reason: 'synthetic UI probe' });
+  check(act.status === 200, `activation recorded for ${activeFrom} (${act.status})`);
+  for (const now of ['2026-10-14T00:00:30Z', '2026-10-14T00:02:30Z', '2026-10-14T00:04:30Z']) {
+    const r = cli('run-jobs', '--once', '--now', now);
+    out(`INFO run-jobs --now ${now}: exit ${r.status} ${r.stdout.trim()}`);
+  }
+
+  const pw = await import(pathToFileURL(join(repoDir, 'node_modules/playwright-core/index.mjs')).href);
+  browser = await pw.chromium.launch({ channel: 'msedge', headless: true });
+  const viewports = {
+    desktop: { viewport: { width: 1280, height: 800 } },
+    mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+  };
+  const login = async (page, who) => {
+    await page.getByLabel('Email').fill(credentials[who].email);
+    await page.getByLabel('Password').fill(credentials[who].password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+  };
+  const unnamed = async (page) => {
+    const yaml = await page.locator('body').ariaSnapshot();
+    return yaml.split('\n').filter((l) => /^\s*- (button|link|textbox|checkbox|radio|combobox|switch|spinbutton)\s*(\[[^\]]*\])?\s*:?\s*$/.test(l));
+  };
+  const audit = async (page, name, kind) => {
+    await page.waitForLoadState('networkidle');
+    const file = `audit-b-${name}-${kind}-synthetic.png`;
+    await page.screenshot({ path: join(shotDir, file) });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const missing = await unnamed(page);
+    const small =
+      kind === 'mobile'
+        ? await page.evaluate(() =>
+            [...document.querySelectorAll('button, a.button-link, input:not([type=hidden]), select')]
+              .filter((el) => el.getBoundingClientRect().width > 0)
+              .filter((el) => {
+                const r = el.getBoundingClientRect();
+                return r.height < 44 && el.type !== 'checkbox' && el.type !== 'radio';
+              }).length,
+          )
+        : 0;
+    out(`SHOT ${file}: horizontal overflow ${overflow}px, unnamed controls ${missing.length}${missing.length ? ` ${JSON.stringify(missing)}` : ''}${kind === 'mobile' ? `, controls under 44px high ${small}` : ''}`);
+    if (overflow > 0) failures += 1;
+    if (missing.length > 0) failures += 1;
+  };
+
+  for (const [kind, options] of Object.entries(viewports)) {
+    // Deep link before login: the login screen, then the same review after signing in.
+    const context = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/#/review/2026-10-02`);
+    await page.getByLabel('Email').waitFor();
+    check((await page.locator('body').innerText()).includes('Sign in') && !(await page.locator('body').innerText()).includes('Review and sign off'), `${kind}: the deep link shows the login screen first`);
+    await login(page, 'employee2');
+    await page.getByRole('heading', { name: /Review and sign off/i }).waitFor();
+    check(page.url().endsWith('#/review/2026-10-02'), `${kind}: after login the deep link opens the review of 2026-10-02`);
+    await audit(page, 'submission-review', kind);
+    await page.getByRole('button', { name: /Sign off & Submit/i }).scrollIntoViewIfNeeded();
+    await audit(page, 'submission-signoff', kind);
+    await page.goto(`${ORIGIN}/#/settings`);
+    await page.getByText(/note line/i).first().waitFor();
+    await audit(page, 'settings-top', kind);
+    await page.getByText(/note line/i).first().scrollIntoViewIfNeeded();
+    await audit(page, 'settings-note-image', kind);
+    await context.close();
+
+    // The automatic submission as its owner sees it: origin and pending review.
+    const auto = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const ap = await auto.newPage();
+    await ap.goto(`${ORIGIN}/#/review/2026-10-16`);
+    await login(ap, 'employee');
+    await ap.getByRole('heading', { name: /Review and sign off/i }).waitFor();
+    const autoText = await ap.locator('body').innerText();
+    check(/automatic/i.test(autoText) && /pending/i.test(autoText), `${kind}: the owner's own screen says the period was submitted automatically and review is pending`);
+    await audit(ap, 'automation-owner-review', kind);
+    await ap.goto(`${ORIGIN}/#/history`);
+    await ap.waitForLoadState('networkidle');
+    await audit(ap, 'automation-owner-history', kind);
+    await auto.close();
+
+    // Administrator: activation and per-person status without timesheet details.
+    const adm = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const dp = await adm.newPage();
+    await dp.goto(`${ORIGIN}/#/admin`);
+    await login(dp, 'admin');
+    await dp.waitForLoadState('networkidle');
+    await dp.getByText('Automatic submission starts').waitFor();
+    await audit(dp, 'automation-admin', kind);
+    await dp.getByText('Automatic submission starts').scrollIntoViewIfNeeded();
+    await audit(dp, 'automation-admin-activation', kind);
+    await adm.close();
+  }
+
+  // Device zone: the same account and period grouping under two browser zones.
+  const grouping = {};
+  for (const zone of ['America/Los_Angeles', 'Pacific/Kiritimati']) {
+    const context = await browser.newContext({ ...viewports.desktop, timezoneId: zone });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/#/timesheet`);
+    await login(page, 'employee2');
+    await page.waitForLoadState('networkidle');
+    const text = await page.locator('main').innerText();
+    // Accounting dates of the grid rows ("Mon 2026-09-28"); the due instant is also shown in the viewer's zone, labelled.
+    grouping[zone] = {
+      range: /\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/.exec(text)?.[0] ?? null,
+      dates: [...text.matchAll(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d{4}-\d{2}-\d{2})/g)].map((m) => m[1]).join(','),
+      dueReportingZone: /Due \(America\/Los_Angeles\)\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/.exec(text)?.[1] ?? null,
+    };
+    await page.screenshot({ path: join(shotDir, `audit-b-zone-${zone.replace('/', '-')}-desktop-synthetic.png`) });
+    await context.close();
+  }
+  out(`INFO browser zone grouping: ${JSON.stringify(grouping)}`);
+  check(grouping['America/Los_Angeles'].range !== null && grouping['America/Los_Angeles'].range === grouping['Pacific/Kiritimati'].range && grouping['America/Los_Angeles'].dates === grouping['Pacific/Kiritimati'].dates && grouping['America/Los_Angeles'].dates.split(',').length === 14 && grouping['America/Los_Angeles'].dueReportingZone === grouping['Pacific/Kiritimati'].dueReportingZone, 'the browser zone does not regroup the period, its 14 accounting dates or the reporting-zone deadline');
+} finally {
+  await browser?.close();
+  await stopServer();
+}
+out(`INFO server output lines: ${serverOut.split('\n').filter(Boolean).length}; deprecation lines: ${serverOut.split('\n').filter((l) => /deprecat/i.test(l)).length}`);
+out(`SUMMARY failures=${failures}`);
+writeFileSync(join(workDir, 'p5-result.txt'), `${log.join('\n')}\n`);
+process.exit(failures === 0 ? 0 : 1);

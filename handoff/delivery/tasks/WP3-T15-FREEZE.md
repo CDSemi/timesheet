@@ -122,3 +122,14 @@ Put your evidence in handoff/delivery/evidence/WP3-T15-FREEZE/. Return at most 1
 ## Results
 
 (Committer appends here.)
+
+Attempt 1 (timesheet-committer, sonnet):
+- Pre-HEAD b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5; post-HEAD a1cd566e59253d19f53cfd5b3a81fd27a7e9a056.
+- Commit a1cd566e59253d19f53cfd5b3a81fd27a7e9a056; pushed yes; remote SHA a1cd566e59253d19f53cfd5b3a81fd27a7e9a056.
+- Digest 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 (matches); staged 25 planned paths.
+- Deviation: my own two evidence files (01-checks.txt, commit-message.txt) were also staged and
+  committed (27 files in the commit); the brief called them allowed but not staged. No content issue.
+- Scans: real email addresses 0; secret values 0.
+- Checks: node v24.21.0, digest, add, precommit, diff --check, JSON parse, orchestration
+  validator, check_recovery, preflight all exit 0.
+- Blockers: none.

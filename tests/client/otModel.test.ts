@@ -73,9 +73,69 @@ describe('mismatchDays (E-2)', () => {
 });
 
 describe('history display', () => {
-  it('names known operations and keeps unknown ones', () => {
+  it('names known operations and falls back to a neutral plain label for unknown ones (WP3-B-03)', () => {
     expect(operationText('ot_leave.use')).toBe('OT leave use recorded');
-    expect(operationText('day.save')).toBe('day.save');
+    expect(operationText('day.save')).toBe('Other change');
+    expect(operationText('some_future.op')).not.toContain('.');
+  });
+
+  it('words every operation an owner can see in the history, including the WP3 ones, without a raw code', () => {
+    expect(operationText('timesheet.auto_finalize')).toBe('Submitted automatically');
+    expect(operationText('timesheet.signoff')).toBe('Timesheet signed off');
+    expect(operationText('timesheet.correction')).toBe('Correction signed');
+    expect(operationText('timesheet.late_review')).toBe('Late review signed');
+    expect(operationText('revision.resend')).toBe('Revision resent');
+    expect(operationText('delivery.decision')).toBe('Delivery decision recorded');
+    expect(operationText('deadline.overdue')).toBe('Deadline passed with automatic submission off');
+    expect(operationText('deadline.finalize_failed')).toBe('Automatic submission could not complete');
+    expect(operationText('auth.login')).toBe('Signed in');
+    const known = [
+      'auth.login',
+      'auth.logout',
+      'calendar.create',
+      'calendar_version.create',
+      'payroll_exception.create',
+      'day_entry.create',
+      'day_entry.update',
+      'work_session.create',
+      'work_session.update',
+      'work_session.delete',
+      'work_session.clock_in',
+      'work_session.clock_out',
+      'work_policy.create',
+      'signature.upload',
+      'submission_settings.update',
+      'submission_settings.auto_image_authorize',
+      'submission_settings.auto_image_revoke',
+      'timesheet.signoff',
+      'timesheet.auto_finalize',
+      'timesheet.correction',
+      'timesheet.late_review',
+      'revision.resend',
+      'delivery.decision',
+      'deadline.overdue',
+      'deadline.finalize_failed',
+      'automation.activation',
+      'user.create',
+      'user.update',
+      'user.deactivate',
+      'user.reactivate',
+      'ot_leave.reserve',
+      'ot_leave.use',
+      'ot_leave.cancel',
+      'ot_leave.reverse',
+      'ot_ledger.credit',
+      'ot_ledger.leave_consumption',
+      'ot_ledger.leave_reversal',
+      'ot_ledger.correction',
+      'ot_ledger.deficit_debit',
+    ];
+    for (const operation of known) {
+      const text = operationText(operation);
+      expect(text, operation).not.toBe(operation);
+      expect(text, operation).not.toBe('Other change');
+      expect(text, operation).not.toMatch(/[._]/);
+    }
   });
 
   it('lists only changed fields, or all fields of a creation', () => {

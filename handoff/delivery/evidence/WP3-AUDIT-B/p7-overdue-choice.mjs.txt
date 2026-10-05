@@ -1,0 +1,73 @@
+// WP3-AUDIT-B probe 7: "changes default to future periods; applying them to already-overdue drafts
+// requires an explicit choice" (docs/05) on the deadline scan. Synthetic data, real SQLite file.
+// Usage: node p7-overdue-choice.mjs <repoDir> <workDir>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [repoDir, workDir] = process.argv.slice(2);
+const src = (p) => pathToFileURL(join(repoDir, 'src', p)).href;
+const DB = join(workDir, 'p7.db');
+const DATA = join(workDir, 'data');
+mkdirSync(DATA, { recursive: true });
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic } = await import(src('server/seed.ts'));
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { runDeadlineScan } = await import(src('server/services/automation.ts'));
+const db = openDatabase(DB);
+migrate(db);
+let nowIso = '2026-09-29T20:00:00Z';
+const clock = { now: () => new Date(nowIso) };
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+await seedSynthetic(db, clock, { passwords });
+const ORIGIN = 'http://localhost:4526';
+const config = { host: '127.0.0.1', port: 4526, databasePath: DB, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 60 * 86400, production: false };
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null, delivery: { dataDir: DATA, publicBaseUrl: ORIGIN, senderAddress: '<email>', outbound: { mode: 'capture' } } }, { dataDir: DATA });
+const request = async (method, path, { cookie, body } = {}) => {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const r = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await r.text();
+  return { status: r.status, body: text ? JSON.parse(text) : null, headers: r.headers };
+};
+const login = async (email, password) => (await request('POST', '/api/auth/login', { body: { email, password } })).headers.get('set-cookie').split(';')[0];
+const admin = await login('<email>', passwords.admin);
+const employee = await login('<email>', passwords.employee);
+nowIso = '2026-10-01T00:00:00Z';
+await request('PUT', '/api/admin/automation/activation', { cookie: admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic' } });
+let seq = (await request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['<email>'], auto_submit: false } })).body.settings.seq;
+const revisions = () => db.prepare("SELECT count(*) AS n FROM timesheet_revisions r JOIN users u ON u.id = r.user_id WHERE u.email = '<email>'").get().n;
+nowIso = '2026-10-14T00:00:30Z';
+const s1 = runDeadlineScan(db, clock);
+check(revisions() === 0 && s1.overdueRecorded >= 1, `switch off at the deadline: overdue, no revision (${JSON.stringify(s1)})`);
+nowIso = '2026-10-15T00:00:00Z';
+seq = (await request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: seq, to: ['<email>'], auto_submit: true } })).body.settings.seq;
+runDeadlineScan(db, clock);
+check(revisions() === 0, 'switching on later does not submit the already-overdue draft by default');
+nowIso = '2026-10-15T00:05:00Z';
+seq = (await request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: seq, to: ['<email>'], auto_submit: false } })).body.settings.seq;
+nowIso = '2026-10-15T00:10:00Z';
+const explicit = await request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: seq, to: ['<email>'], auto_submit: true, apply_to_overdue_drafts: true } });
+check(explicit.status === 201 && explicit.body.settings.auto_submit_effective_from === '1970-01-01T00:00:00Z', `explicit choice recorded (${explicit.status}, effective ${explicit.body.settings.auto_submit_effective_from})`);
+const s2 = runDeadlineScan(db, clock);
+check(revisions() === 1, `with the explicit choice the overdue draft is submitted on the next scan (${JSON.stringify(s2)})`);
+const before = db.prepare("SELECT count(*) AS n FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id WHERE p.payroll_date = '2026-10-02'").get().n;
+check(before === 0, 'the period due before the activation instant (payroll 2026-10-02) stays untouched even with the explicit choice');
+out(`SUMMARY failures=${failures}`);
+writeFileSync(join(workDir, 'p7-result.txt'), `${log.join('\n')}\n`);
+db.close();
+process.exit(failures === 0 ? 0 : 1);

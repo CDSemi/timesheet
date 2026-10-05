@@ -1,0 +1,104 @@
+PASS activation null: runner passes after the 2026-10-02 deadline write no job, revision or reminder ({"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0})
+PASS activation in the past refused (422 activation_in_past)
+PASS activation without a reason refused (422 reason_required)
+PASS activation by an employee refused (403)
+PASS activation recorded (200)
+PASS activation audited once: [{"before":"{\"active_from\":null}","after":"{\"active_from\":\"2026-10-01T00:00:00Z\"}"}]
+PASS note text "empty" refused (422 invalid_auto_note)
+PASS note text "two lines" refused (422 invalid_auto_note)
+PASS note text "braces" refused (422 invalid_auto_note)
+PASS note text "121 chars" refused (422 invalid_auto_note)
+PASS defaults: note off, text "Automatic submission", image off ({"enabled":false,"text":"Automatic submission"})
+PASS settings m00 saved (201 )
+PASS signature m00 uploaded with authorize_auto_image=false (201)
+PASS settings m10 saved (201 )
+PASS signature m10 uploaded with authorize_auto_image=false (201)
+PASS settings m01 saved (201 )
+PASS signature m01 uploaded with authorize_auto_image=true (201)
+PASS settings m11 saved (201 )
+PASS signature m11 uploaded with authorize_auto_image=true (201)
+PASS settings off saved (201 )
+PASS signature off uploaded with authorize_auto_image=false (201)
+PASS settings choose saved (201 )
+PASS signature choose uploaded with authorize_auto_image=false (201)
+PASS settings empty saved (201 )
+PASS signature empty uploaded with authorize_auto_image=false (201)
+PASS exactly two audited auto-image authorizations (m01, m11): 2
+PASS choose-mode policy for the 2026-10-16 period (201 )
+PASS auto_deduct policy for the empty user (201 )
+PASS choose user session 2026-10-05 (201 )
+PASS choose user session 2026-10-10 (201 )
+PASS 24 h reminder decided once for each of 9 active accounts (9)
+PASS rerun 10 minutes later decides no duplicate
+PASS seed employee signs off manually before the deadline (201 )
+PASS 2 h reminder for every unfinalized account and none after finalization (8)
+PASS deadline scan under TZ America/Los_Angeles(420), Pacific/Kiritimati(-840), Asia/Ho_Chi_Minh(-420), UTC(0) gives identical periods and payload hashes (8 revisions)
+INFO zone run revisions: [["admin@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["employee@<email>","2026-10-16","2026-09-28","2026-10-11","employee","signed"],["probe-choose@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["probe-empty@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["probe-m00@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["probe-m01@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["probe-m10@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"],["probe-m11@<email>","2026-10-16","2026-09-28","2026-10-11","deadline","pending"]]
+PASS nothing finalized 30 s before the deadline
+INFO deadline passes: [{"claimed":24,"succeeded":21,"retried":3,"intervention":0,"lost":0},{"claimed":4,"succeeded":3,"retried":0,"intervention":1,"lost":0},{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0},{"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}]
+INFO jobs in intervention: [{"kind":"send_email","last_error":"recipient_missing","email":"admin@<email>"}]
+PASS m00: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS m00: no signoffs row (signed_at empty)
+PASS m10: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS m10: no signoffs row (signed_at empty)
+PASS m01: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS m01: no signoffs row (signed_at empty)
+PASS m11: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS m11: no signoffs row (signed_at empty)
+PASS choose: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS choose: no signoffs row (signed_at empty)
+PASS empty: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash
+PASS empty: no signoffs row (signed_at empty)
+PASS switch off: no automatic revision
+PASS switch off: one overdue record (1)
+PASS manually finalized period is not finalized again
+INFO never-saved admin account automatic revision for 2026-10-16: true
+INFO owner finalization view (m11): {"origin":"deadline","review_state":"pending","signoff":null}
+PASS owner finalization view says pending and has no signed_at
+PASS F-1 empty period (auto_deduct): 14 days, labels Worked/Off, no OT, no deficit, no ledger row
+PASS F-1: exactly one revision
+PASS choose mode: pending_choice line, no debit; ledger [{"delta_minutes":120,"origin":"automatic"}]; lines [{"line_kind":"credit","outcome":"posted","proposed_minutes":120},{"line_kind":"deficit_debit","outcome":"pending_choice","proposed_minutes":-120}]
+PASS m00: submission captured
+PASS m00: PDF signature image count 0 (expected 0)
+PASS m00: note line absent on the PDF
+PASS m00: no automatic indicator on the PDF beyond the user's note ([])
+PASS m00: {SignOffStatus} = "Submitted" in subject and body
+PASS m00: no automatic indicator in the e-mail beyond the note ([])
+PASS m00: printed date is the automatic submission date in America/Los_Angeles (10/13/2026), not the UTC date
+PASS m00: employee name printed with Vietnamese diacritics
+PASS m10: submission captured
+PASS m10: PDF signature image count 0 (expected 0)
+PASS m10: note line "Automatic submission" present on the PDF
+PASS m10: no automatic indicator on the PDF beyond the user's note ([])
+PASS m10: {SignOffStatus} = "Automatic submission" in subject and body
+PASS m10: no automatic indicator in the e-mail beyond the note ([])
+PASS m10: printed date is the automatic submission date in America/Los_Angeles (10/13/2026), not the UTC date
+PASS m10: employee name printed with Vietnamese diacritics
+PASS m01: submission captured
+PASS m01: PDF signature image count 1 (expected 1)
+PASS m01: note line absent on the PDF
+PASS m01: no automatic indicator on the PDF beyond the user's note ([])
+PASS m01: {SignOffStatus} = "Submitted" in subject and body
+PASS m01: no automatic indicator in the e-mail beyond the note ([])
+PASS m01: printed date is the automatic submission date in America/Los_Angeles (10/13/2026), not the UTC date
+PASS m01: employee name printed with Vietnamese diacritics
+PASS m11: submission captured
+PASS m11: PDF signature image count 1 (expected 1)
+PASS m11: note line "Filed on schedule" present on the PDF
+PASS m11: no automatic indicator on the PDF beyond the user's note ([])
+PASS m11: {SignOffStatus} = "Filed on schedule" in subject and body
+PASS m11: no automatic indicator in the e-mail beyond the note ([])
+PASS m11: printed date is the automatic submission date in America/Los_Angeles (10/13/2026), not the UTC date
+PASS m11: employee name printed with Vietnamese diacritics
+INFO matrix: [{"key":"m00","note":false,"image":false,"images":0,"subject":"Timesheet 2026-10-16 <name> [Submitted]","statusLine":"Status: Submitted."},{"key":"m10","note":true,"image":false,"images":0,"subject":"Timesheet 2026-10-16 <name> [Automatic submission]","statusLine":"Status: Automatic submission."},{"key":"m01","note":false,"image":true,"images":1,"subject":"Timesheet 2026-10-16 <name> [Submitted]","statusLine":"Status: Submitted."},{"key":"m11","note":true,"image":true,"images":1,"subject":"Timesheet 2026-10-16 <name> [Filed on schedule]","statusLine":"Status: Filed on schedule."}]
+PASS manual revision: image present (1) and the real sign date 10/13/2026
+PASS outcome notice decided for every automatic submission (7)
+PASS overdue warning decided once for the switch-off account
+PASS reminder/notice captures (25) have no attachment.pdf, no PDF fields and one recipient
+PASS outcome notice says review pending and links only to the login-required deep link (<origin>/#/review/2026-10-16)
+PASS the review behind the deep link needs login (anonymous 401)
+PASS notices are not decided twice on later passes
+INFO account created 2026-11-12T00:00:00Z; automatic revisions one runner pass later: [{"payroll_date":"2026-10-16","period_start":"2026-09-28","origin":"deadline"},{"payroll_date":"2026-10-30","period_start":"2026-10-12","origin":"deadline"},{"payroll_date":"2026-11-13","period_start":"2026-10-26","origin":"deadline"}]
+FAIL no automatic submission of a period that started before the account existed (3 revisions, first period_start 2026-09-28)
+INFO late account send jobs: [{"kind":"send_email","state":"queued","last_error":"pdf_not_ready"},{"kind":"send_email","state":"intervention","last_error":"recipient_missing"},{"kind":"send_email","state":"queued","last_error":"pdf_not_ready"}]
+SUMMARY failures=1

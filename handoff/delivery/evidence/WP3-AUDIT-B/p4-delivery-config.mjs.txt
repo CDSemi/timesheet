@@ -1,0 +1,159 @@
+// WP3-AUDIT-B probe 4: outbound-mode gating (refusals only; the real-sending flag is never given a
+// true value), MAIL_FROM handling, the visible sender fault, and a crash during the last send attempt.
+// Usage: node p4-delivery-config.mjs <repoDir> <workDir> [child]
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { inspect } from 'node:util';
+
+const [repoDir, workDir, role] = process.argv.slice(2);
+const src = (p) => pathToFileURL(join(repoDir, 'src', p)).href;
+const DB = join(workDir, 'p4.db');
+const DATA = join(workDir, 'data');
+const SENDER = '<email>';
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { FileStore } = await import(src('server/files/fileStore.ts'));
+const { runJobsOnce } = await import(src('server/jobs/runner.ts'));
+const { createSendJobHandler } = await import(src('server/jobs/sendJob.ts'));
+const { createPdfJobHandler } = await import(src('server/jobs/pdfJob.ts'));
+const { createOutboundAdapter } = await import(src('server/mail/outbound.ts'));
+
+if (role === 'child') {
+  const db = openDatabase(DB);
+  const clock = { now: () => new Date(process.env.P_NOW) };
+  const outbound = createOutboundAdapter({ mode: 'capture' }, { dataDir: DATA });
+  const handlers = {
+    send_email: createSendJobHandler({ db, clock, files: new FileStore(DATA), outbound, senderAddress: SENDER, hooks: { beforeSend: () => process.kill(process.pid, 'SIGKILL') } }),
+  };
+  await runJobsOnce({ db, clock, handlers });
+  process.exit(0);
+}
+
+mkdirSync(DATA, { recursive: true });
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+
+/* ---- 1. Outbound gating and MAIL_FROM (pure configuration; no adapter, no network) ---- */
+const { loadDeliveryConfig } = await import(src('server/config.ts'));
+const base = { databasePath: join(workDir, 'cfg.db'), port: 4522, production: false };
+const attempt = (env) => {
+  try {
+    const c = loadDeliveryConfig({ DATA_DIR: DATA, ...env }, base);
+    return { ok: true, mode: c.outbound.mode, sender: c.senderAddress };
+  } catch (error) {
+    return { ok: false, message: error.message };
+  }
+};
+const def = attempt({});
+check(def.ok && def.mode === 'capture' && def.sender === null, `no OUTBOUND_MODE: capture, no sender (${JSON.stringify(def)})`);
+const smtpNoFlag = attempt({ OUTBOUND_MODE: 'smtp', SMTP_HOST: 'smtp.example.invalid' });
+check(!smtpNoFlag.ok && /PRODUCTION_SENDING_ENABLED/.test(smtpNoFlag.message), `OUTBOUND_MODE=smtp without the owner flag refused: ${smtpNoFlag.message}`);
+for (const value of ['TRUE', '1', 'yes', ' true']) {
+  const r = attempt({ OUTBOUND_MODE: 'smtp', SMTP_HOST: 'smtp.example.invalid', PRODUCTION_SENDING_ENABLED: value });
+  check(!r.ok, `owner flag value "${value}" is not accepted (${r.ok ? r.mode : 'refused'})`);
+}
+const bad = attempt({ OUTBOUND_MODE: 'Smtp' });
+check(!bad.ok, `unknown OUTBOUND_MODE refused (${bad.message})`);
+const prodNoUrl = (() => {
+  try {
+    loadDeliveryConfig({ DATA_DIR: DATA }, { ...base, production: true });
+    return 'accepted';
+  } catch (error) {
+    return error.message;
+  }
+})();
+check(/PUBLIC_BASE_URL/.test(prodNoUrl), `production requires PUBLIC_BASE_URL (${prodNoUrl})`);
+const secretLike = `synthetic-${randomBytes(6).toString('hex')}`;
+const badFrom = attempt({ MAIL_FROM: `${secretLike} <x>` });
+check(!badFrom.ok && !badFrom.message.includes(secretLike), `invalid MAIL_FROM refused without echoing the value (${badFrom.message})`);
+const emptyFrom = attempt({ MAIL_FROM: '' });
+check(emptyFrom.ok && emptyFrom.sender === null, 'empty MAIL_FROM means no sender (sends are blocked visibly)');
+const dropbox = attempt({ DATA_DIR: '<project>' });
+check(!dropbox.ok, `a private data directory inside Dropbox is refused (${dropbox.message})`);
+const { SecretValue } = await import(src('server/config.ts'));
+const s = new SecretValue(secretLike);
+check(!JSON.stringify({ s }).includes(secretLike) && !inspect({ s }).includes(secretLike) && !`${s}`.includes(secretLike), 'SecretValue never renders through JSON, inspect or string conversion');
+
+/* ---- 2. A submission with no MAIL_FROM: a visible permanent fault, never "sent" ---- */
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic, syntheticSignaturePng } = await import(src('server/seed.ts'));
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const db = openDatabase(DB);
+migrate(db);
+let nowIso = '2026-09-29T20:00:00Z';
+const clock = { now: () => new Date(nowIso) };
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+await seedSynthetic(db, clock, { passwords });
+const ORIGIN = 'http://localhost:4522';
+const config = { host: '127.0.0.1', port: 4522, databasePath: DB, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 30 * 86400, production: false };
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null, delivery: { dataDir: DATA, publicBaseUrl: ORIGIN, senderAddress: null, outbound: { mode: 'capture' } } }, { dataDir: DATA });
+const request = async (method, path, { cookie, body, type } = {}) => {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers['content-type'] = type ?? 'application/json';
+    init.body = type === undefined ? JSON.stringify(body) : body;
+  }
+  const response = await app.request(path, init);
+  const text = await response.text();
+  return { status: response.status, body: text === '' ? null : JSON.parse(text), headers: response.headers };
+};
+const login = await request('POST', '/api/auth/login', { body: { email: '<email>', password: passwords.employee } });
+const cookie = login.headers.get('set-cookie').split(';')[0];
+await request('POST', '/api/settings/submission', { cookie, body: { expected_seq: 0, to: ['<email>'], auto_submit: false } });
+await request('POST', '/api/signatures', { cookie, body: syntheticSignaturePng(), type: 'image/png' });
+const review = await request('GET', '/api/timesheets/2026-10-02/review', { cookie });
+await request('POST', '/api/timesheets/2026-10-02/signoff', { cookie, body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true } });
+const files = new FileStore(DATA);
+const capture = createOutboundAdapter({ mode: 'capture' }, { dataDir: DATA });
+await runJobsOnce({ db, clock, handlers: { render_pdf: createPdfJobHandler({ db, clock, files }) } });
+await runJobsOnce({ db, clock, handlers: { send_email: createSendJobHandler({ db, clock, files, outbound: capture, senderAddress: null }) } });
+const captures = () => (existsSync(join(DATA, 'mail-capture')) ? readdirSync(join(DATA, 'mail-capture')).length : 0);
+const list = await request('GET', '/api/deliveries', { cookie });
+const first = list.body.deliveries[0];
+check(first.state === 'failed_permanent' && first.provider_response === 'sender_missing' && first.job.state === 'intervention' && captures() === 0, `no MAIL_FROM: attempt ${first.state}/${first.provider_response}, job ${first.job.state}, nothing captured`);
+
+/* ---- 3. Four temporary failures, then a crash after `sending` on the fifth (last) attempt ---- */
+const revisionId = db.prepare('SELECT id FROM timesheet_revisions').get().id;
+nowIso = '2026-09-29T20:05:00Z';
+const resend = await request('POST', `/api/revisions/${revisionId}/resend`, { cookie, body: {} });
+check(resend.status === 201, `resend after configuring the sender (${resend.status})`);
+const flaky = { mode: 'capture', send: async () => ({ kind: 'failed_temporary', code: 'smtp_unavailable', providerResponse: '421' }) };
+const flakyHandlers = { send_email: createSendJobHandler({ db, clock, files, outbound: flaky, senderAddress: SENDER }) };
+for (let i = 0; i < 4; i += 1) {
+  await runJobsOnce({ db, clock, handlers: flakyHandlers });
+  const job = db.prepare('SELECT state, attempts, next_run_at FROM jobs WHERE id = ?').get(resend.body.job.id);
+  nowIso = job.next_run_at;
+}
+const before5 = db.prepare('SELECT state, attempts FROM jobs WHERE id = ?').get(resend.body.job.id);
+out(`INFO after four temporary failures: job ${JSON.stringify(before5)}`);
+spawnSync(process.execPath, [process.argv[1], repoDir, workDir, 'child'], { env: { ...process.env, P_NOW: nowIso }, encoding: 'utf8' });
+const lastAttempt = () => db.prepare('SELECT state, provider_response FROM delivery_attempts WHERE job_id = ? ORDER BY attempt_no DESC LIMIT 1').get(resend.body.job.id);
+out(`INFO fifth attempt after the crash: ${JSON.stringify(lastAttempt())}`);
+nowIso = new Date(new Date(nowIso).getTime() + 121_000).toISOString().replace('.000Z', 'Z');
+await runJobsOnce({ db, clock, handlers: { send_email: createSendJobHandler({ db, clock, files, outbound: capture, senderAddress: SENDER }) } });
+const job5 = db.prepare('SELECT state, attempts, last_error FROM jobs WHERE id = ?').get(resend.body.job.id);
+const listed = (await request('GET', '/api/deliveries', { cookie })).body.deliveries.find((d) => d.job_id === resend.body.job.id && d.attempt_no === 5);
+out(`INFO runner pass after the lease expired: job ${JSON.stringify(job5)}; owner sees attempt ${listed.state}, decision_required ${listed.decision_required}`);
+const resendAgain = await request('POST', `/api/revisions/${revisionId}/resend`, { cookie, body: {} });
+out(`INFO a new resend is answered ${resendAgain.status} ${resendAgain.body?.error?.code ?? ''}`);
+check(listed.state === 'uncertain' && listed.decision_required === true, 'a crash during the last attempt is shown as uncertain with a decision (docs/05 failure table)');
+const decide = await request('POST', `/api/deliveries/${listed.id}/decision`, { cookie, body: { decision: 'mark_delivered' } });
+out(`INFO the decision route itself still accepts a decision: ${decide.status} (it runs the recovery first)`);
+check(captures() === 0, 'nothing was captured in this section');
+out(`SUMMARY failures=${failures}`);
+writeFileSync(join(workDir, 'p4-result.txt'), `${log.join('\n')}\n`);
+db.close();
+process.exit(failures === 0 ? 0 : 1);

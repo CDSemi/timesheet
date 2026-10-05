@@ -1,0 +1,68 @@
+// WP3-AUDIT-B probe 6: the E-8 visual standard in src/client/styles.css and inline styles in the
+// client sources. Declarations outside :root must use custom properties for colour, length, radius,
+// shadow and transition; interactive states must use the shared transition token.
+// Usage: node p6-css-tokens.mjs <repoDir>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [repoDir] = process.argv.slice(2);
+const css = readFileSync(join(repoDir, 'src/client/styles.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const findings = [];
+const stats = { blocks: 0, declarations: 0, radius: [], transition: [], shadow: [] };
+// Walk blocks: a selector followed by { declarations }; @media/@supports wrappers are entered.
+const re = /([^{}]+)\{([^{}]*)\}/g;
+let match;
+while ((match = re.exec(css)) !== null) {
+  const selector = match[1].trim().replace(/\s+/g, ' ');
+  const body = match[2];
+  stats.blocks += 1;
+  if (/(^|\s|,):root\b/.test(selector) && !selector.includes(' ')) continue;
+  for (const decl of body.split(';')) {
+    const [prop, ...rest] = decl.split(':');
+    if (prop === undefined || rest.length === 0) continue;
+    const name = prop.trim();
+    const value = rest.join(':').trim();
+    if (name === '' || value === '') continue;
+    stats.declarations += 1;
+    if (name.startsWith('--')) {
+      findings.push(`custom property defined outside :root: ${selector} { ${name}: ${value} }`);
+      continue;
+    }
+    const literal = value
+      .replace(/var\([^)]*\)/g, '')
+      .match(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![\w-])-?\d*\.?\d+(px|rem|em|ms|s|vh|vw|dvh|%)\b/g);
+    if (literal !== null) findings.push(`literal ${literal.join(' ')} in ${selector} { ${name}: ${value} }`);
+    if (name === 'border-radius') stats.radius.push(value);
+    if (name === 'transition') stats.transition.push(`${selector} -> ${value}`);
+    if (name === 'box-shadow') stats.shadow.push(value);
+  }
+}
+const mediaLiterals = [...css.matchAll(/@media[^{]*/g)].map((m) => m[0].trim());
+const hoverSelectors = [...css.matchAll(/([^{}]*:(hover|active|focus|focus-visible)[^{}]*)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim().replace(/\s+/g, ' '), body: m[3] }));
+// The transition must be declared on the base rule of each interactive element; list hover rules whose
+// element has no var(--transition) anywhere in the sheet.
+const base = (sel) => sel.split(',')[0].replace(/:(hover|active|focus|focus-visible|not\([^)]*\)|disabled|enabled)/g, '').trim();
+const transitioned = new Set(
+  [...css.matchAll(/([^{}]+)\{[^{}]*transition:\s*var\(--transition\)[^{}]*\}/g)].flatMap((m) => m[1].split(',').map((s) => s.trim().replace(/\s+/g, ' '))),
+);
+const untransitioned = hoverSelectors.filter((h) => !h.selector.split(',').some((s) => [...transitioned].some((t) => base(s).startsWith(t) || t.startsWith(base(s)))));
+// Inline styles in TSX.
+const clientDir = join(repoDir, 'src/client');
+const tsx = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? tsx(join(dir, e.name)) : e.name.endsWith('.tsx') ? [join(dir, e.name)] : []));
+const inline = tsx(clientDir).flatMap((file) =>
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .map((line, i) => ({ file: file.slice(repoDir.length + 1).replace(/\\/g, '/'), line: i + 1, text: line.trim() }))
+    .filter((l) => /style=\{\{/.test(l.text)),
+);
+console.log(`blocks=${stats.blocks} declarations=${stats.declarations}`);
+console.log(`border-radius values: ${JSON.stringify([...new Set(stats.radius)])}`);
+console.log(`box-shadow values: ${JSON.stringify([...new Set(stats.shadow)])}`);
+console.log(`transition declarations (${stats.transition.length}): ${JSON.stringify([...new Set(stats.transition.map((t) => t.split(' -> ')[1]))])}`);
+console.log(`media queries: ${JSON.stringify([...new Set(mediaLiterals)])}`);
+console.log(`hover/active/focus rules: ${hoverSelectors.length}; without a var(--transition) base rule found by the heuristic: ${untransitioned.length}`);
+for (const u of untransitioned) console.log(`  CHECK ${u.selector}`);
+console.log(`literal findings outside :root: ${findings.length}`);
+for (const f of findings) console.log(`  ${f}`);
+console.log(`inline style attributes in TSX: ${inline.length}`);
+for (const l of inline) console.log(`  ${l.file}:${l.line} ${l.text}`);

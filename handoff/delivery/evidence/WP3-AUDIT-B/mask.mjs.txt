@@ -1,0 +1,24 @@
+// WP3-AUDIT-B evidence masking: strips ANSI codes, masks e-mail addresses as <email>, the scratch
+// directory as <scratch>, the user profile as <user-home> and the account name as <user>, converts
+// to LF and removes trailing whitespace. Usage: node mask.mjs <in> <out>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text
+  .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')
+  .replace(/\r\n?/g, '\n')
+  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>')
+  .replace(/[A-Za-z]:[\\/]+timesheet-tmp[\\/]+WP3-AUDIT-B/gi, '<scratch>')
+  .replace(/\/d\/timesheet-tmp\/WP3-AUDIT-B/gi, '<scratch>')
+  .replace(/file:\/\/\/<scratch>/g, 'file:///<scratch>')
+  .replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s'"]+/gi, '<user-home>')
+  .replace(/\/c\/Users\/[^/\s'"]+/gi, '<user-home>')
+  .replace(/[A-Za-z]:[\\/]+Dropbox[^\s'"]*/gi, '<project>')
+  .replace(/\/d\/Dropbox[^\s'"]*/gi, '<project>')
+  .replace(/<user>/gi, '<user>')
+  .split('\n')
+  .map((line) => line.replace(/[ \t]+$/, ''))
+  .join('\n');
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(output, text);

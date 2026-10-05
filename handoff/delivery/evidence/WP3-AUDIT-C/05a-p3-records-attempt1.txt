@@ -1,0 +1,72 @@
+WP3-AUDIT-C 05a: probe P3 attempt 1 (kept as evidence of the same-second History window boundary)
+$ node probes/p3-records.mjs -> exit 1 (42 PASS, 1 FAIL)
+The FAIL: the owner granted the admin a share at 20:05:00 after the admin had revoked another share of the owner with admin power at 20:05:00 (same second); the History window (created_at <= occurred_at, second resolution, inclusive) attributes that earlier admin act to the share. Attempt 2 (05-p3-records.txt) separates the two by a second.
+
+## 1. Schema constraints and triggers (direct SQL on the probe database)
+PASS owner grants view
+PASS UPDATE timesheets_scope on an active share refused: immutable_timesheet_share
+PASS UPDATE ot_read on an active share refused: immutable_timesheet_share
+PASS UPDATE pdf_download on an active share refused: immutable_timesheet_share
+PASS UPDATE owner_user_id on an active share refused: immutable_timesheet_share
+PASS UPDATE grantee_user_id on an active share refused: immutable_timesheet_share
+PASS UPDATE created_by on an active share refused: immutable_timesheet_share
+PASS UPDATE created_at on an active share refused: immutable_timesheet_share
+PASS UPDATE id on an active share refused: immutable_timesheet_share
+PASS a reason without a revocation is refused
+PASS revoked_at without revoked_by is refused
+PASS revoked_at before created_at is refused
+PASS DELETE refused (immutable_timesheet_share)
+PASS a second active share for the same pair is refused (partial UNIQUE)
+PASS owner = grantee refused
+PASS created_by <> owner refused (an admin can never create)
+PASS all items off refused
+PASS non-UTC created_at refused
+PASS unknown scope refused
+PASS owner revokes with a reason
+PASS revoked_at cannot be changed again
+PASS revoke_reason cannot be changed after revocation
+PASS revoking a revoked share again is 404
+
+## 2. A change of items: revoke + new grant in one transaction, share.change before/after
+PASS PUT returns a new share id, changed: true
+PASS old row revoked by the owner at the new row's creation instant (2026-09-29T20:05:00Z)
+PASS new row has the new items and is active
+PASS exactly one audit event: share.change
+PASS share.change before/after carry both share ids and items
+PASS share.change: actor = owner = owner, no address or name
+PASS equal items: changed false, nothing written
+PASS one active share for the pair
+Unhandled request error SqliteError: probe_injected_failure
+    at insertShare (file:///<scratch>/repo/src/server/services/shares.ts:133:5)
+    at sqliteTransaction.<anonymous> (file:///<scratch>/repo/src/server/services/shares.ts:262:16)
+    at sqliteTransaction (<scratch>\repo\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at writeTransaction (file:///<scratch>/repo/src/server/db/database.ts:23:31)
+    at changeShare (file:///<scratch>/repo/src/server/services/shares.ts:255:10)
+    at file:///<scratch>/repo/src/server/routes/shares.ts:81:19
+    at async dispatch (file:///<scratch>/repo/node_modules/hono/dist/compose.js:35:11)
+    at async file:///<scratch>/repo/src/server/http/auth.ts:31:5
+    at async dispatch (file:///<scratch>/repo/node_modules/hono/dist/compose.js:35:11)
+    at async file:///<scratch>/repo/src/server/http/security.ts:30:3 {
+  code: 'SQLITE_CONSTRAINT_TRIGGER'
+}
+PASS injected insert failure after the revoke: 500, the old share stays active, no audit (one transaction)
+PASS grantee access unchanged after the failed change
+
+## 3. Admin list and revoke
+INFO admin list: 4 rows; keys created_at,display_name,grantee,id,items,ot_read,owner,pdf_download,revoked_at,revoked_by_role,shares,timesheets
+PASS every admin row has exactly the allowlisted fields
+PASS no address or revoke reason in the admin list
+PASS admin revoke: row revoked_by admin, audit actor admin, owner owner
+PASS admin revoke response uses the same allowlisted fields
+
+## 4. History attribution edges
+OBSERVATION admin-power revocation by an administrator who also holds a share of the owner: via_share=true, actor_display_name="Example Admin"
+FAIL admin revocation while the admin held no share of the owner: not attributed
+PASS owner re-grants grantee2 (all items)
+PASS a second grantee never sees another grantee name or address
+PASS grantee received list: owner id, name and address, items, since
+PASS grantee given list is empty (the grantee has shared nothing)
+PASS owner given list: grantee name, address and active flag (no grantee id)
+
+SUMMARY P3: 42 PASS, 1 FAIL
+exit=1

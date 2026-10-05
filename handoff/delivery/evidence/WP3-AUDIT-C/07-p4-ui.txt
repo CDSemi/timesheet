@@ -1,0 +1,52 @@
+WP3-AUDIT-C 07: probe P4, the sharing UI on the built server in Edge, desktop and mobile (probe-p4-ui.mjs.txt); own screenshots audit-c-*-synthetic.png
+$ node probes/p4-ui.mjs -> exit 0 (25 PASS, 0 FAIL, 1 OBSERVATION = finding WP3-C-01)
+Run history: attempts 1-3 stopped on probe selectors/regex (strict-mode locator, native <dialog>, 'Preview' matched /review/); attempt 4 is this log. Server and browser were stopped by the probe each time (no process left; checked with Win32_Process).
+
+2026-10-05T11:31:48Z
+INFO built server on loopback, port chosen free at start; job runner off; outbound capture
+
+## desktop
+INFO view-only buttons: ["Previous period","Next period","Open day","View 2026-09-28","View 2026-09-29","View 2026-09-30","View 2026-10-01","View 2026-10-02","View 2026-10-03","View 2026-10-04","View 2026-10-05","View 2026-10-06","View 2026-10-07","View 2026-10-08","View 2026-10-09","View 2026-10-10","View 2026-10-11"]; inputs: ["input[date]"]; disabled: ["Open day"]
+PASS desktop view only: no Clock, Edit, batch, review, sign-off, add or delete control in the DOM
+PASS desktop view only: no selection checkbox
+PASS desktop view only: the only disabled control is "Open day" (empty date field)
+INFO view-only day dialog buttons: ["Close"]; inputs: []; disabled: []
+PASS desktop view-only day: only Close, no input, nothing disabled
+INFO edit buttons: ["Previous period","Next period","Open day","Select all","Clear","Preview changes","Edit 2026-09-28","Edit 2026-09-29","Edit 2026-09-30","Edit 2026-10-01","Edit 2026-10-02","Edit 2026-10-03","Edit 2026-10-04","Edit 2026-10-05","Edit 2026-10-06","Edit 2026-10-07","Edit 2026-10-08","Edit 2026-10-09","Edit 2026-10-10","Edit 2026-10-11"]; disabled: ["Open day","Clear","Preview changes"]
+PASS desktop edit: no Clock in/out, review, sign-off or send control in the DOM (word match; "Preview changes" is the batch preview)
+PASS desktop edit: Edit controls present
+INFO ot buttons: []; links in bar: ["OT","Revisions"]
+PASS desktop OT item: no leave, export or other action control
+PASS desktop OT+PDF share: no Timesheet view link
+PASS desktop PDF item: download timesheet-2026-10-02-r1.pdf
+PASS desktop without PDF item: no Download control (absent, nothing disabled)
+PASS desktop without OT item: no OT view link
+INFO grantee /api requests: ["GET /api/auth/me","GET /api/shared/<owner>/days/<date>","GET /api/shared/<owner>/ot/ledger","GET /api/shared/<owner>/ot/summary","GET /api/shared/<owner>/periods/current","GET /api/shared/<owner>/policies","GET /api/shared/<owner>/revisions","GET /api/shared/<owner>/revisions/<id>/pdf","GET /api/shared/<owner>/timesheets/<date>","GET /api/shares"]
+PASS desktop: every grantee data request is below /api/shared/<owner> (plus /api/shares and the session)
+
+## mobile
+INFO view-only buttons: ["Previous period","Next period","Open day","View 2026-09-28","View 2026-09-29","View 2026-09-30","View 2026-10-01","View 2026-10-02","View 2026-10-03","View 2026-10-04","View 2026-10-05","View 2026-10-06","View 2026-10-07","View 2026-10-08","View 2026-10-09","View 2026-10-10","View 2026-10-11"]; inputs: ["input[date]"]; disabled: ["Open day"]
+PASS mobile view only: no Clock, Edit, batch, review, sign-off, add or delete control in the DOM
+PASS mobile view only: no selection checkbox
+PASS mobile view only: the only disabled control is "Open day" (empty date field)
+INFO view-only day dialog buttons: ["Close"]; inputs: []; disabled: []
+PASS mobile view-only day: only Close, no input, nothing disabled
+INFO edit buttons: ["Previous period","Next period","Open day","Select all","Clear","Preview changes","Edit 2026-09-28","Edit 2026-09-29","Edit 2026-09-30","Edit 2026-10-01","Edit 2026-10-02","Edit 2026-10-03","Edit 2026-10-04","Edit 2026-10-05","Edit 2026-10-06","Edit 2026-10-07","Edit 2026-10-08","Edit 2026-10-09","Edit 2026-10-10","Edit 2026-10-11"]; disabled: ["Open day","Clear","Preview changes"]
+PASS mobile edit: no Clock in/out, review, sign-off or send control in the DOM (word match; "Preview changes" is the batch preview)
+PASS mobile edit: Edit controls present
+INFO ot buttons: []; links in bar: ["OT","Revisions"]
+PASS mobile OT item: no leave, export or other action control
+PASS mobile OT+PDF share: no Timesheet view link
+PASS mobile PDF item: download timesheet-2026-10-02-r1.pdf
+PASS mobile without PDF item: no Download control (absent, nothing disabled)
+PASS mobile without OT item: no OT view link
+INFO grantee /api requests: ["GET /api/auth/me","GET /api/shared/<owner>/days/<date>","GET /api/shared/<owner>/ot/ledger","GET /api/shared/<owner>/ot/summary","GET /api/shared/<owner>/periods/current","GET /api/shared/<owner>/policies","GET /api/shared/<owner>/revisions","GET /api/shared/<owner>/revisions/<id>/pdf","GET /api/shared/<owner>/timesheets/<date>","GET /api/shares"]
+PASS mobile: every grantee data request is below /api/shared/<owner> (plus /api/shares and the session)
+INFO owner History, grantee PDF downloads: 2; first: "Shared PDF downloaded2026-10-05 04:31Changed by Synthetic Grantee (shared access)Reason: none givenFieldBeforeAfterpayroll_datenone2026-10-02revision_nonone1"
+PASS owner History lists both grantee PDF downloads with the grantee name
+INFO grantee edit of 2026-09-29 through the share: 200
+OBSERVATION owner Review of 2026-10-16 after a grantee edit: grantee/changed-by hint present = false
+INFO server stopped: exitCode=null signal=SIGTERM
+
+SUMMARY P4: 25 PASS, 0 FAIL
+exit=0

@@ -89,11 +89,44 @@ const OPERATION_TEXT: Record<string, string> = {
   'ot_ledger.leave_reversal': 'Ledger: leave reversal',
   'ot_ledger.correction': 'OT credit corrected',
   'ot_ledger.deficit_debit': 'Deficit debit posted',
+  'auth.login': 'Signed in',
+  'auth.logout': 'Signed out',
+  'calendar.create': 'Calendar created',
+  'calendar_version.create': 'Calendar rules changed',
+  'payroll_exception.create': 'Payroll date exception added',
+  'day_entry.create': 'Day entry created',
+  'day_entry.update': 'Day entry changed',
+  'work_session.create': 'Work session added',
+  'work_session.update': 'Work session changed',
+  'work_session.delete': 'Work session removed',
+  'work_session.clock_in': 'Clocked in',
+  'work_session.clock_out': 'Clocked out',
+  'work_policy.create': 'Work policy saved',
+  'signature.upload': 'Signature uploaded',
+  'submission_settings.update': 'Submission settings saved',
+  'submission_settings.auto_image_authorize': 'Automatic signature image authorized',
+  'submission_settings.auto_image_revoke': 'Automatic signature image revoked',
+  'timesheet.signoff': 'Timesheet signed off',
+  'timesheet.auto_finalize': 'Submitted automatically',
+  'timesheet.correction': 'Correction signed',
+  'timesheet.late_review': 'Late review signed',
+  'revision.resend': 'Revision resent',
+  'delivery.decision': 'Delivery decision recorded',
+  'deadline.overdue': 'Deadline passed with automatic submission off',
+  'deadline.finalize_failed': 'Automatic submission could not complete',
+  'automation.activation': 'Automatic submission activation changed',
+  'user.create': 'Account created',
+  'user.update': 'Account changed',
+  'user.deactivate': 'Account deactivated',
+  'user.reactivate': 'Account reactivated',
 };
 
-/** A readable label for an audit operation; an unknown operation keeps its stored name. */
+/** The plain label of an operation this screen has no name for (never the stored code). */
+export const UNKNOWN_OPERATION_TEXT = 'Other change';
+
+/** A readable label for an audit operation; an unknown operation gets a neutral plain label, not its stored code. */
 export function operationText(operation: string): string {
-  return OPERATION_TEXT[operation] ?? operation;
+  return OPERATION_TEXT[operation] ?? UNKNOWN_OPERATION_TEXT;
 }
 
 export interface FieldChange {

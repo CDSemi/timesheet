@@ -1,0 +1,52 @@
+// WP3-AUDIT-A: creates a schema-v3 database with the ACCEPTED WP2 source (5fafeae, built in its own
+// clone) and synthetic rows in every WP2 table: seed with sample data, a second calendar version, a
+// payroll exception, day entries with notes and leave, sessions with breaks, an OT leave request
+// that is used, a created and deactivated account. argv: <wp2 repo> <dbPath>
+import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [wp2, dbPath] = process.argv.slice(2);
+const load = (rel) => import(pathToFileURL(join(wp2, 'dist', rel)).href);
+const { openDatabase } = await load('server/db/database.js');
+const { migrate } = await load('server/db/migrations.js');
+const { seedSynthetic } = await load('server/seed.js');
+const cmds = await load('server/services/timesheetCommands.js');
+const calendars = await load('server/services/calendars.js');
+const users = await load('server/services/users.js');
+const otLeave = await load('server/services/otLeave.js');
+
+const clockAt = (iso) => ({ now: () => new Date(iso) });
+const NOW = '2026-09-22T18:00:00Z';
+const clock = clockAt(NOW);
+const db = openDatabase(dbPath);
+const applied = migrate(db, undefined, new Date(NOW));
+const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') }, sampleData: true });
+const byEmail = (email) => db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE email = ?').get(email);
+const toUser = (row) => ({ id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'wp2-seed' });
+const admin = toUser(byEmail('<email>'));
+const employee = toUser(byEmail('<email>'));
+const zone = 'America/Los_Angeles';
+const at = (date, time) => ({ local: `${date}T${time}`, zone });
+
+const last = calendars.listCalendarVersions(db, seed.calendarId).at(-1);
+calendars.createCalendarVersion(db, clock, { calendarId: seed.calendarId, effectiveFrom: '2026-09-28', weekdays: [...last.weekdays], dates: [...last.dates, { date: '2026-12-31', kind: 'closure', name: 'Synthetic year-end closure' }], note: 'WP2 upgrade probe' }, admin.id);
+calendars.createPayrollException(db, clock, { calendarId: seed.calendarId, nominalPayrollDate: '2026-11-13', payrollDate: '2026-11-12', dueLocalDate: null, dueLocalTime: null, reason: 'Synthetic holiday shift' }, admin.id);
+const ctx = { db, clock, user: employee };
+cmds.upsertDayEntry(ctx, '2026-09-15', { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: 'Synthetic WP2 note one' });
+cmds.upsertDayEntry(ctx, '2026-09-16', { category: 'Sick', leave_minutes: 480, leave_kind: 'sick', wfh: false, notes: 'Synthetic WP2 note two' });
+cmds.createSession(ctx, '2026-09-15', { start: at('2026-09-15', '08:00'), end: at('2026-09-15', '12:30'), input_zone: zone, breaks: [{ start: at('2026-09-15', '10:00'), end: at('2026-09-15', '10:15'), counts_as_work: false }], breaks_confirmed: true });
+cmds.createSession(ctx, '2026-09-21', { start: at('2026-09-21', '07:00'), end: at('2026-09-21', '17:45'), input_zone: zone, breaks: [], breaks_confirmed: true });
+const e2 = toUser(byEmail('<email>'));
+const reserved = otLeave.reserveOtLeave({ db, clock }, {
+  userId: e2.id, actorUserId: e2.id, requestKey: 'wp2-probe-leave', leaveDate: '2026-09-21', requestedMinutes: 120,
+  permission: { approverName: 'Synthetic Manager', approvalDate: '2026-09-18', evidenceRef: 'Synthetic WP2 permission reference' },
+});
+const requestId = reserved.request.id;
+otLeave.recordOtLeaveUse({ db, clock }, { userId: e2.id, actorUserId: e2.id, requestId, useKey: 'wp2-probe-use', minutes: 60 });
+const extra = await users.createUser(db, clock, { email: '<email>', displayName: 'Synthetic WP2 Extra', role: 'employee', password: 'synthetic-wp2-password-1', calendarId: seed.calendarId }, admin.id);
+users.deactivateUser(db, clock, { actorUserId: admin.id, userId: extra, reason: 'Synthetic deactivation' });
+const version = db.pragma('user_version', { simple: true });
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+console.log(JSON.stringify({ applied: applied.applied, user_version: version, tables: Object.fromEntries(tables.map((t) => [t, db.prepare(`SELECT count(*) FROM "${t}"`).pluck().get()])) }));
+db.close();

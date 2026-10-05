@@ -1,0 +1,30 @@
+C1 before: revisions=[] signoffs=[] ledger_rows=1 non_opening=[] lines=[] jobs=[] attempts=[] finalized_no=null posted=300 submission_captures=0 other_captures=0 integrity=ok fk=0
+C1 child exit code=1 signal=null out={"operation":"signoff","killed":"inside the transaction before INSERT INTO jobs"}
+C1 after kill inside the transaction: revisions=[] signoffs=[] ledger_rows=1 non_opening=[] lines=[] jobs=[] attempts=[] finalized_no=null posted=300 submission_captures=0 other_captures=0 integrity=ok fk=0
+PASS  C1 a sign-off killed inside its transaction persists nothing (no revision, sign-off, ledger row, line or job)
+PASS  C1 integrity ok and no foreign-key violation after the kill
+PASS  C1 the reviewed hash is unchanged by the rolled-back attempt
+C1 commit-then-kill child exit code=1 signal=null out={"operation":"signoff","killed":"after the operation returned"}
+C1 after commit then kill: revisions=[{"revision_no":1,"origin":"employee","review_state":"signed"}] signoffs=["2026-09-30T00:30:05Z"] ledger_rows=3 non_opening=[-240,60] lines=["posted","posted"] jobs=["render_pdf:queued","send_email:queued"] attempts=[] finalized_no=1 posted=120 submission_captures=0 other_captures=0 integrity=ok fk=0
+PASS  C1 a committed sign-off survives the process kill (one revision, one sign-off at the real instant, two ledger rows, two lines, two jobs)
+C1 identical retry out={"operation":"signoff","status":"replayed","revision_no":1}
+PASS  C1 the identical retry after the crash replays and writes nothing
+C1 run-jobs passes: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+C1 drained: revisions=[{"revision_no":1,"origin":"employee","review_state":"signed"}] signoffs=["2026-09-30T00:30:05Z"] ledger_rows=3 non_opening=[-240,60] lines=["posted","posted"] jobs=["render_pdf:succeeded","send_email:succeeded"] attempts=["accepted"] finalized_no=1 posted=120 submission_captures=1 other_captures=0 integrity=ok fk=0
+PASS  C1 after three runner passes: one submission captured, one accepted attempt, ledger unchanged
+C2 child exit code=1 signal=null out={"operation":"deadline","killed":"inside the transaction before INSERT INTO jobs"}
+C2 after kill inside the automatic transaction: revisions=[] signoffs=[] ledger_rows=1 non_opening=[] lines=[] jobs=[] attempts=[] finalized_no=null posted=300 submission_captures=0 other_captures=0 integrity=ok fk=0
+PASS  C2 an automatic finalization killed inside its transaction persists nothing
+C2 run-jobs passes: {"claimed":5,"succeeded":4,"retried":1,"intervention":0,"lost":0} | {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+C2 after recovery passes: revisions=[{"revision_no":1,"origin":"deadline","review_state":"pending"}] signoffs=[] ledger_rows=3 non_opening=[-240,60] lines=["posted","posted"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded"] attempts=["accepted"] finalized_no=1 posted=120 submission_captures=1 other_captures=1 integrity=ok fk=0
+PASS  C2 the next passes finalize once: one automatic revision, review pending, no sign-off (signed_at empty), two ledger rows, one submission captured
+C3 late review (commit then kill) exit code=1 signal=null out={"operation":"late_review","killed":"after the operation returned"}
+C3 after late review: revisions=[{"revision_no":1,"origin":"deadline","review_state":"pending"},{"revision_no":2,"origin":"employee","review_state":"signed"}] signoffs=["2026-10-01T18:00:00Z"] ledger_rows=3 non_opening=[-240,60] lines=["posted","posted","unchanged","unchanged"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded","render_pdf:queued"] attempts=["accepted"] finalized_no=2 posted=120 submission_captures=1 other_captures=1 integrity=ok fk=0
+PASS  C3 the late review is durable: revision 2 signed (late review), one sign-off, zero new ledger rows (LG-09), its lines all unchanged
+C3 identical late-review retry out={"operation":"late_review","status":"replayed","revision_no":2,"lines":["correction:unchanged:0","correction:unchanged:0"]}
+PASS  C3 the identical late-review retry replays: no third revision, no ledger row
+C3 run-jobs pass: {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0}
+C3 final: revisions=[{"revision_no":1,"origin":"deadline","review_state":"pending"},{"revision_no":2,"origin":"employee","review_state":"signed"}] signoffs=["2026-10-01T18:00:00Z"] ledger_rows=3 non_opening=[-240,60] lines=["posted","posted","unchanged","unchanged"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded","render_pdf:succeeded"] attempts=["accepted"] finalized_no=2 posted=120 submission_captures=1 other_captures=1 integrity=ok fk=0
+PASS  C3 send_email false: the late review enqueues only its PDF, no second submission is captured, the ledger is unchanged
+CRASH PROBE PASSED
+exit=0

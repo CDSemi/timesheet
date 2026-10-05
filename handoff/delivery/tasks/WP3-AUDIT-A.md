@@ -88,4 +88,31 @@ Return at most 300 words, beginning with your self-reported model.
 
 ## Results
 
-(Auditor appends here.)
+Auditor: WP3-AUDIT-A attempt 1, 2026-10-05, agent `adc746b3b778914db`, self-reported model `claude-opus-5-5`
+(fresh context; authored nothing in WP3). Report: `handoff/delivery/WP3_REVIEW_A.md` (+ `.vi.md`). Evidence:
+`handoff/delivery/evidence/WP3-AUDIT-A/` (masked, LF; probe sources `*.mjs.txt`; renders `*-synthetic.png`).
+Node v24.21.0 by full path; scratch clone `D:\timesheet-tmp\WP3-AUDIT-A\repo`; capture mode only.
+
+Decision: **NOT VERIFIED** (procedural only). No defect found in area A; every functional check passed. The mandatory
+digest record could not be made: the digest command was refused by the permission classifier ("Interfere With
+Workloads") after an earlier refusal to stop an interactive `cmd.exe` the first call had opened by mistake; neither
+was retried. HEAD before: `a1cd566e59253d19f53cfd5b3a81fd27a7e9a056` (clone checkout). Digest before/after: not
+recomputed. Gate digest (claim): `96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729`.
+
+- `npm ci` exit 0; `npm run verify` (trace/pending deprecation) exit 0: 60 files / 1384 tests, smoke 40 PASS, no
+  deprecation line; 12 area-A test files verbose: 273 passed (incl. LG-01..LG-10).
+- Race probe (20 rounds, separate OS processes, production sign-off vs production `run-jobs`): manual 11, deadline 9,
+  failed 0; one revision, one ledger set, one send per round; automatic: no sign-off, review pending.
+- Crash probe: in-transaction kill persists nothing (manual and automatic); committed sign-off durable; identical
+  retries replay; late review zero ledger delta (LG-09).
+- HTTP probe (built server): owner-only revisions/PDF/signatures (404 swap, 401 anonymous, no static path,
+  `no-store`); admin keys within the allowlist, recipients present, no details; no password/hash/token anywhere.
+- PDF probe + Edge renders: 14 dates, both Sundays in 18:30, Vietnamese and long labels, bounded image, manual
+  name + local sign date, automatic name + submission date, no automatic indicator, note only when on.
+- Migrations: WP2-source (`5fafeae`) v3 database upgraded by `cli.js migrate` (4,5,6): rows preserved, 17
+  append-only refusals, integrity ok, FK empty; fresh database 1-6 ok.
+- Findings: none. Risks R1-R5 (truncated long holiday label, signature bound outside the transaction, auto-submit
+  default for users without settings (area B), hash includes balance, early sign-off). Carry items 4, 8, 9, 10, 11,
+  13, 14: acceptable backlog / not defects; 1-3, 5-7, 12 belong to area B.
+- Next: the coordinator records `npm run digest` of `a1cd566`; if it equals the gate digest, area A has no blocking
+  finding.

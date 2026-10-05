@@ -1,0 +1,19 @@
+WP3-AUDIT-C 08: probe P5, origin/CSRF on shared writes, cookie attributes, grantee-lookup rate limit, inventory vs the matrix test pins (probe-p5-extra.mjs.txt)
+$ node probes/p5-extra.mjs -> exit 0 (7 PASS, 0 FAIL)
+
+## Origin and cookie
+PASS shared write with foreign Origin: 403 origin_rejected, nothing written
+PASS shared write with no Origin: 403 origin_rejected, nothing written
+PASS shared write with Sec-Fetch-Site cross-site: 403
+PASS session cookie attributes: ts_session=<token>; Max-Age=43200; Path=/; HttpOnly; SameSite=Strict
+
+## Grantee lookup rate limit
+PASS 10 unknown addresses -> 422 each, the 11th -> 429 (422,422,422,422,422,422,422,422,422,422,429)
+PASS then every lookup is 429 with Retry-After (429, Retry-After 900)
+
+## Route inventory vs the matrix test pins
+INFO app entries 88; test pins 71 non-shared + 17 matrix routes
+PASS every registered (method, path, handler count) is pinned by the matrix test (missing: none; stale: none)
+
+SUMMARY P5: 7 PASS, 0 FAIL
+exit=0

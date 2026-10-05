@@ -328,6 +328,9 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
   // The server also refuses the live clock for an edit share.
   expect(await statusInPage(page, 'POST', `/api/shared/${owner.account.id}/clock/in`, { input_zone: 'America/Los_Angeles' })).toBe(404);
+  // The review hint belongs to the owner: the shared view and the review route show and serve none (WP3-C-01).
+  await expect(page.locator('[data-grantee-changes]')).toHaveCount(0);
+  expect(await statusInPage(page, 'GET', `/api/shared/${owner.account.id}/timesheets/${owner.payrollDate}/review`)).toBe(404);
 
   // The owner's History names the grantee for that change.
   await switchUser(page, signInPageAs, owner.account, '#/history');
@@ -336,6 +339,22 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await expect(attributed).toContainText(grantedNote);
   await expect(page.locator('[data-via-share="false"] [data-history-actor="grantee"]')).toHaveCount(0);
   await page.locator('[data-via-share="true"]').first().screenshot({ path: screenshotPath(`sharing-history-${project}-synthetic.png`) });
+
+  // The owner's Review says which days were last changed by the grantee, before Sign off (WP3-C-01).
+  await page.goto(`#/review/${owner.payrollDate}`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off' })).toBeVisible();
+  const hint = page.locator('[data-grantee-changes]');
+  await expect(hint).toBeVisible();
+  await expect(hint.locator('[data-grantee-change]')).toHaveText('1 day last changed by Synthetic Grantee');
+  await expect(hint).toContainText('not part of what you sign');
+  // Visible without scrolling on a phone as well: it sits above the day table and the sign-off form.
+  await expect(hint).toBeInViewport();
+  await page.screenshot({ path: screenshotPath(`sharing-review-hint-${project}-synthetic.png`), animations: 'disabled' });
+  // The owner's own change takes the day over: the hint goes once the owner changes that day again.
+  await owner.api.putDay(workDay, { notes: `${grantedNote}-owner` });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review and sign off' })).toBeVisible();
+  await expect(page.locator('[data-grantee-changes]')).toHaveCount(0);
 });
 
 /* ---- OT and PDF items on and off ----------------------------------------------------------------- */

@@ -31,6 +31,11 @@ import { ensurePayPeriodRow } from './periods.ts';
  * finalization transaction so a concurrent change by anyone else is seen:
  * - the owner is an active account and the activation instant is set;
  * - the deadline is on or after the activation instant and has passed;
+ * - the deadline is not before the account existed (`users.created_at`, WP3-B-01): the account
+ *   start is the effective start of automation for a user who never saved settings, and a bound
+ *   for saved settings too (even an explicit "apply to overdue drafts" never reaches back before
+ *   the account). A period whose deadline is on or after the account's creation, including the
+ *   one in which it was created, is automated at its deadline (F-1);
  * - the timesheet (when one exists) is unfinalized and not `imported_unverified`;
  * - the auto-submit switch that governs the deadline is on. Each saved version of a user's
  *   settings applies to deadlines on or after its own effective instant, so the governing
@@ -129,7 +134,7 @@ export function activationJson(activation: AutomationActivation) {
 
 /* ----------------------------------------------------------- eligibility ---- */
 
-type SkipReason = 'not_active' | 'inactive_user' | 'before_activation' | 'not_due' | 'finalized' | 'imported' | 'before_effective' | 'overdue_recorded';
+type SkipReason = 'not_active' | 'inactive_user' | 'before_activation' | 'before_account' | 'not_due' | 'finalized' | 'imported' | 'before_effective' | 'overdue_recorded';
 
 type Verdict = { kind: 'finalize' } | { kind: 'overdue' } | { kind: 'skip'; reason: SkipReason };
 
@@ -172,11 +177,13 @@ function storedPeriodId(db: Db, calendarId: string, period: PayPeriod): string |
 /** Decides what the scan does with one period right now (reads only; owner-scoped by `candidate.user.id`). */
 function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
   const { user, period } = candidate;
-  const status = db.prepare<[string], { status: string }>('SELECT status FROM users WHERE id = ?').get(user.id)?.status;
-  if (status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+  const account = db.prepare<[string], { status: string; created_at: string }>('SELECT status, created_at FROM users WHERE id = ?').get(user.id);
+  if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
   const { activeFrom } = getAutomationActivation(db);
   if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+  // A deadline that passed before the account existed is never automated (WP3-B-01).
+  if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
   if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
   const timesheet = db
     .prepare<[string, string, number], TimesheetState>(
@@ -202,6 +209,7 @@ interface UserRow {
   display_name: string;
   role: SessionUser['role'];
   calendar_id: string;
+  created_at: string;
 }
 
 /** The synthetic owner of an automatic action: the job acts for the owner but has no session. */
@@ -210,13 +218,13 @@ function ownerOf(row: UserRow): SessionUser {
 }
 
 /**
- * Every period of every active account whose deadline lies between the activation instant and
- * now, oldest deadline first (ties by account id, then period index). The deadline itself comes
+ * Every period of every active account whose deadline lies between the activation instant (or, for
+ * an account created later, its creation) and now, oldest deadline first (ties by account id, then period index). The deadline itself comes
  * from `payPeriodAt`, i.e. from the saved reporting zone with the production zone functions.
  */
 function listCandidates(db: Db, clock: Clock, activeFrom: EpochSeconds): Candidate[] {
   const now = nowEpoch(clock);
-  const users = db.prepare<[], UserRow>("SELECT id, email, display_name, role, calendar_id FROM users WHERE status = 'active' ORDER BY id").all();
+  const users = db.prepare<[], UserRow>("SELECT id, email, display_name, role, calendar_id, created_at FROM users WHERE status = 'active' ORDER BY id").all();
   const candidates: Candidate[] = [];
   const calendars = new Map<string, { schedule: ReturnType<typeof getCalendar>['schedule']; exceptions: ReturnType<typeof listPayrollExceptions>; indices: number[] }>();
   for (const row of users) {
@@ -238,9 +246,10 @@ function listCandidates(db: Db, clock: Clock, activeFrom: EpochSeconds): Candida
       calendars.set(row.calendar_id, calendar);
     }
     const owner = ownerOf(row);
+    const start = Math.max(activeFrom, parseUtcInstant(row.created_at));
     for (const index of calendar.indices) {
       const period = payPeriodAt(calendar.schedule, index, calendar.exceptions);
-      if (period.dueAtUtc >= activeFrom && period.dueAtUtc <= now) candidates.push({ user: owner, period });
+      if (period.dueAtUtc >= start && period.dueAtUtc <= now) candidates.push({ user: owner, period });
     }
   }
   return candidates.sort((a, b) => a.period.dueAtUtc - b.period.dueAtUtc || (a.user.id < b.user.id ? -1 : a.user.id > b.user.id ? 1 : 0) || a.period.index - b.period.index);

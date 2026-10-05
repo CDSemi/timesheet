@@ -1,0 +1,60 @@
+WP3-AUDIT-B attempt 1 - commands, exits and results (auditor: timesheet-auditor, self-reported model claude-opus-5-5)
+Date: 2026-10-05 (UTC). Host: Windows 11, Git Bash. Node: portable v24.21.0 called by full path for every node/npm step
+(first shell call: node.exe --version -> v24.21.0). npm 11.18.0 run through npm-cli.js on Node 24.
+Scratch clone: <scratch>\repo (git clone of the project folder, detached at the reviewed commit);
+TEMP/TMP/TMPDIR = <scratch>\tmp. PRODUCTION_SENDING_ENABLED unset everywhere; outbound capture only.
+
+Identity before
+  git -C <scratch>/repo rev-parse HEAD                      -> a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+  git ls-remote origin main (project folder)                -> a1cd566e59253d19f53cfd5b3a81fd27a7e9a056 refs/heads/main
+  git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+                                                            -> 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 (= gate digest)
+Author separation
+  board WP3 author tasks: actual models claude-opus-5-5 (PLAN, REQ, REQ2, T01, T05, T08, T09, T13B) and claude-sonnet-5-5 (others);
+  strongest author model = claude-opus-5-5 = this auditor's model. This auditor (agent aca7e1ccf879138f1) authored no WP3 change.
+
+Checks
+  1  npm ci                                                  exit 0  added 160 packages, 0 vulnerabilities (01-npm-ci.txt)
+  2  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify
+                                                             exit 0  60 files / 1384 tests passed; SMOKE PASSED with 40 PASS lines;
+                                                                     0 lines matching "deprecat" (02-verify.txt)
+  3  E2E_SCREENSHOT_DIR=<scratch>\e2e-shots npm run test:e2e (Edge channel, desktop 1280x800 + mobile 390x844)
+                                                             exit 0  127 passed, 5 skipped, 0 failed, 116 screenshots (03-e2e.txt)
+  4  node probes/p1-jobs-delivery.mjs <repo> <scratch>/work1  exit 0  46 PASS, 0 FAIL (04-p1-jobs-delivery.txt)
+  5  node probes/p2-automation.mjs <repo> <scratch>/work2d    exit 1  94 PASS, 1 FAIL = finding WP3-B-01 (05-p2-automation.txt)
+       earlier attempts of this probe failed on probe defects, not product defects, and were fixed before work2d:
+       work2  (policy body 08:00-17:00 without breaks -> 422 inconsistent_reference_schedule; pdfjs doc.destroy is not a function),
+       work2b (MIME-encoded subject and quoted-printable body not decoded; admin session expired after 30 days of probe clock),
+       work2c (syntax error in the patched decoder).
+  6  node probes/p3-get-safety.mjs <repo> <scratch>/work3     exit 0  6 PASS; 200 GET requests, 1 writing request = the audited grantee PDF download
+                                                                     (06-p3-get-safety.txt)
+  7  node probes/p4-delivery-config.mjs <repo> <scratch>/work4  exit 1  15 PASS, 1 FAIL = finding WP3-B-02 (07-p4-delivery-config.txt)
+  8  node probes/p5-ui.mjs <repo> <scratch>/work5c <scratch>/shots 4525
+                                                             exit 0  10 PASS, 0 FAIL; 16 screens audited + 2 zone screenshots (08-p5-ui.txt)
+       earlier attempts: work5 (port 4523; admin locator /activation|automation/ not visible -> timeout; server and browser closed by
+       the finally block), work5b (port 4524; the zone check compared every date on the page, including the labelled due instant in the
+       viewer's zone; fixed to compare the 14 accounting dates and the reporting-zone deadline).
+  9  node probes/p6-css-tokens.mjs <repo>                     exit 0  0 literal values outside :root, radius only var(--radius)/var(--shape-round),
+                                                                     transitions only var(--transition), 0 inline styles (09-p6-css-tokens.txt)
+  10 node probes/p7-overdue-choice.mjs <repo> <scratch>/work7  exit 0  5 PASS (10-p7-overdue-choice.txt)
+  11 5 rounds: vitest run tests/integration/deadline-race.test.ts tests/integration/delivery-crash.test.ts tests/integration/jobs-restart.test.ts
+                                                             exit 0 each; 3 files / 14 tests per round (11-race-rounds.txt)
+  12 Viewed images: WP3-GATE pdf-*-synthetic.png (3 of 5 renders), e2e automation-review-mobile, own audit-b-*-synthetic.png screenshots.
+
+Identity after
+  git -C <scratch>/repo status --porcelain                  -> (empty)
+  git -C <scratch>/repo rev-parse HEAD                      -> a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+  ls-tree digest (scratch)                                  -> 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729
+  node scripts/source-digest.mjs (scratch)                  -> 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 (717 files)
+  node scripts/source-digest.mjs (project folder)           -> 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 (717 files)
+  project folder: HEAD a1cd566, changes only under handoff/ (coordinator records and this task's outputs)
+
+Processes: every probe server, browser and runner was stopped by its probe (finally blocks / process exit); checked with ps afterwards.
+
+Privacy check (addendum)
+  GIT_INDEX_FILE=<scratch>\tmp\privacy-idx git read-tree HEAD; git add -- handoff/delivery/WP3_REVIEW_B.md handoff/delivery/WP3_REVIEW_B.vi.md
+    handoff/delivery/tasks/WP3-AUDIT-B.md handoff/delivery/evidence/WP3-AUDIT-B   (temporary index in the project folder; real index untouched)
+  node scripts/precommit-check.mjs                          exit 0  "PASS: 35 staged file(s), 0 blocking finding(s), 0 warning(s)" (12-privacy.txt);
+                                                                    re-run after this addendum with a fresh temporary index (12-privacy.txt keeps the last run)
+  Procedural note: one helper command in this step used a "2>/dev/null" redirect on a `touch` of 12-privacy.txt (no effect; the file
+  was created empty and then written below). Recorded for honesty; no other redirect to /dev/null or nul was used.

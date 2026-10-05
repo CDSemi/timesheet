@@ -1,0 +1,330 @@
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/sharingModel.test.ts (25 tests | 1 failed) 9ms
+   ❯ history: shared edits and share events (5)
+     × words a grantee PDF download as a download, never as a change (WP3-C-02 wording) 3ms
+ ❯ tests/integration/history.test.ts (13 tests | 3 failed) 3990ms
+   ❯ GET /api/history (13)
+     × WP3-C-02: a grantee leaving the share is not an act under it and stays unattributed 313ms
+     × WP3-C-02: an administrator who also holds a share keeps an admin-route revocation as an admin act 309ms
+     × WP3-C-02: an act in the same second as a later grant to its actor is not attributed retroactively 304ms
+ ❯ tests/integration/review-grantee-changes.test.ts (11 tests | 10 failed) 4493ms
+   ❯ the owner Review lists the days a grantee changed last (WP3-C-01) (8)
+     × names the grantee and counts the days whose last change was made through the share 479ms
+     × is empty when only the owner changed the period, and for a share that changed nothing 411ms
+     × counts a day once even after several grantee changes, and a later owner change clears that day 410ms
+     × groups by grantee: each day is attributed to whoever changed it last 399ms
+     × ignores a day outside the reviewed period 393ms
+     × counts only changes since the owner previous finalization of the period 403ms
+     × still lists a change after the share was revoked: the hint comes from the audit, not from the live share 402ms
+     × does not count an administrator revocation of a share as a change to a day 398ms
+   ❯ the hint is owner-only and outside the snapshot (WP3-C-01) (3)
+     × never reaches a grantee, a shared view or an administrator response 415ms
+     × keeps the hint out of the payload and the hash: the same payload is signed whether or not it is shown 409ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/sharingModel.test.ts > history: shared edits and share events > words a grantee PDF download as a download, never as a change (WP3-C-02 wording)
+AssertionError: expected 'Changed by Synthetic Grantee (shared …' to be 'Downloaded by Synthetic Grantee (shar…' // Object.is equality
+
+Expected: "Downloaded by Synthetic Grantee (shared access)"
+Received: "Changed by Synthetic Grantee (shared access)"
+
+ ❯ tests/client/sharingModel.test.ts:220:41
+    218|   it('words a grantee PDF download as a download, never as a change (W…
+    219|     const download = event({ operation: 'share.pdf_download', actor_is…
+    220|     expect(historyActorBadge(download)).toBe('Downloaded by Synthetic …
+       |                                         ^
+    221|     // A day or session edit under a share keeps the "Changed by" word…
+    222|     expect(historyActorBadge({ ...download, operation: 'work_session.u…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: a grantee leaving the share is not an act under it and stays unattributed
+AssertionError: expected { …(12) } to match object { actor_is_self: false, …(3) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "actor_display_name": null,
++   "actor_display_name": "Synthetic Grantee",
+    "actor_is_self": false,
+    "actor_user_id": null,
+-   "via_share": false,
++   "via_share": true,
+  }
+
+ ❯ tests/integration/history.test.ts:286:18
+    284|     expect((await t.request('POST', `/api/shares/${id}/revoke`, { cook…
+    285|     const left = (await historyEvents()).find((event) => event.operati…
+    286|     expect(left).toMatchObject(UNATTRIBUTED);
+       |                  ^
+    287|     expect(left?.after).toEqual({ revoked_by_role: 'grantee' });
+    288|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: an administrator who also holds a share keeps an admin-route revocation as an admin act
+AssertionError: expected { …(12) } to match object { actor_is_self: false, …(3) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "actor_display_name": null,
++   "actor_display_name": "Example Admin",
+    "actor_is_self": false,
+    "actor_user_id": null,
+-   "via_share": false,
++   "via_share": true,
+  }
+
+ ❯ tests/integration/history.test.ts:299:19
+    297|     const response = await t.request('GET', '/api/history', { cookie: …
+    298|     const event = (response.body.audit_events as Array<Record<string, …
+    299|     expect(event).toMatchObject(UNATTRIBUTED);
+       |                   ^
+    300|     expect(event?.after).toEqual({ revoked_by_role: 'admin' });
+    301|     expect(JSON.stringify(response.body)).not.toContain(t.userIds.admi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: an act in the same second as a later grant to its actor is not attributed retroactively
+AssertionError: expected { …(12) } to match object { actor_is_self: false, …(3) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "actor_display_name": null,
++   "actor_display_name": "Example Admin",
+    "actor_is_self": false,
+    "actor_user_id": null,
+-   "via_share": false,
++   "via_share": true,
+  }
+
+ ❯ tests/integration/history.test.ts:315:24
+    313|     const grantToAdmin = events.filter((event) => event.operation === …
+    314|     expect(revocation?.occurred_at).toBe(grantToAdmin?.occurred_at);
+    315|     expect(revocation).toMatchObject(UNATTRIBUTED);
+       |                        ^
+    316|   });
+    317|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > names the grantee and counts the days whose last change was made through the share
+AssertionError: expected undefined to deeply equal [ { …(3) } ]
+
+- Expected:
+[
+  {
+    "days": 2,
+    "display_name": "Synthetic Grantee",
+    "work_dates": [
+      "2026-09-22",
+      "2026-09-23",
+    ],
+  },
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:123:34
+    121|     await granteeSession(grantee, DAY_B);
+    122|     const body = await review();
+    123|     expect(body.grantee_changes).toEqual([{ display_name: GRANTEE_NAME…
+       |                                  ^
+    124|     // The server names the grantee, never identifies the account.
+    125|     expect(JSON.stringify(body.grantee_changes)).not.toContain(grantee…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > is empty when only the owner changed the period, and for a share that changed nothing
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:132:46
+    130|     await share('grantee@example.invalid');
+    131|     await ownerDay(DAY_A, 'synthetic owner note');
+    132|     expect((await review()).grantee_changes).toEqual([]);
+       |                                              ^
+    133|   });
+    134|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts a day once even after several grantee changes, and a later owner change clears that day
+AssertionError: expected undefined to deeply equal [ { …(3) } ]
+
+- Expected:
+[
+  {
+    "days": 2,
+    "display_name": "Synthetic Grantee",
+    "work_dates": [
+      "2026-09-22",
+      "2026-09-23",
+    ],
+  },
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:143:46
+    141|     expect(sessionId).not.toBe('');
+    142|     await granteeDay(grantee, DAY_B, 'second day');
+    143|     expect((await review()).grantee_changes).toEqual([{ display_name: …
+       |                                              ^
+    144|     t.clock.advanceSeconds(60);
+    145|     await ownerDay(DAY_A, 'the owner took this day back');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > groups by grantee: each day is attributed to whoever changed it last
+AssertionError: {"error":{"code":"stale_version","message":"This record changed since it was loaded; reload and review it again"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ granteeDay tests/integration/review-grantee-changes.test.ts:71:58
+     69|     body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes …
+     70|   });
+     71|   expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                          ^
+     72| }
+     73|
+ ❯ tests/integration/review-grantee-changes.test.ts:159:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > ignores a day outside the reviewed period
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:170:46
+    168|     await share('grantee@example.invalid');
+    169|     await granteeDay(grantee, '2026-09-30', 'belongs to the next perio…
+    170|     expect((await review()).grantee_changes).toEqual([]);
+       |                                              ^
+    171|   });
+    172|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts only changes since the owner previous finalization of the period
+AssertionError: Target cannot be null or undefined.
+ ❯ tests/integration/review-grantee-changes.test.ts:178:36
+    176|     await granteeDay(grantee, DAY_A, 'before the sign-off');
+    177|     const before = await review();
+    178|     expect(before.grantee_changes).toHaveLength(1);
+       |                                    ^
+    179|     t.clock.advanceSeconds(60);
+    180|     expect((await signOff(before)).status).toBe(201);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > still lists a change after the share was revoked: the hint comes from the audit, not from the live share
+AssertionError: expected undefined to deeply equal [ { …(3) } ]
+
+- Expected:
+[
+  {
+    "days": 1,
+    "display_name": "Synthetic Grantee",
+    "work_dates": [
+      "2026-09-22",
+    ],
+  },
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:197:46
+    195|     await granteeDay(grantee, DAY_A, 'before the revocation');
+    196|     expect((await t.request('POST', `/api/shares/${id}/revoke`, { cook…
+    197|     expect((await review()).grantee_changes).toEqual([{ display_name: …
+       |                                              ^
+    198|   });
+    199|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > does not count an administrator revocation of a share as a change to a day
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:205:46
+    203|     t.clock.advanceSeconds(60);
+    204|     expect((await t.request('POST', `/api/admin/shares/${id}/revoke`, …
+    205|     expect((await review()).grantee_changes).toEqual([]);
+       |                                              ^
+    206|   });
+    207| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the hint is owner-only and outside the snapshot (WP3-C-01) > never reaches a grantee, a shared view or an administrator response
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/review-grantee-changes.test.ts:230:38
+    228|     const own = await t.request('GET', reviewPath, { cookie: admin });
+    229|     expect(own.status).toBe(200);
+    230|     expect(own.body.grantee_changes).toEqual([]);
+       |                                      ^
+    231|     expect(JSON.stringify(own.body)).not.toContain(GRANTEE_NAME);
+    232|     // The owner does see it.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the hint is owner-only and outside the snapshot (WP3-C-01) > keeps the hint out of the payload and the hash: the same payload is signed whether or not it is shown
+AssertionError: Target cannot be null or undefined.
+ ❯ tests/integration/review-grantee-changes.test.ts:241:35
+    239|     await granteeDay(grantee, DAY_A, 'a synthetic grantee edit');
+    240|     const shown = await review();
+    241|     expect(shown.grantee_changes).toHaveLength(1);
+       |                                   ^
+    242|     // Nothing of the hint is inside what is hashed, and the hash is t…
+    243|     expect(JSON.stringify(shown.payload)).not.toContain(GRANTEE_NAME);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  14 failed | 35 passed (49)
+   Start at  05:15:55
+   Duration  5.48s (tests 82%, import 12%, transform 7%)
+

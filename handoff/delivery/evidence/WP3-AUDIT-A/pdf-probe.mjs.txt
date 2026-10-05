@@ -1,0 +1,244 @@
+// WP3-AUDIT-A PDF content probe (synthetic data, capture mode only). Real revisions made through the
+// production services and the production job handlers with fixed clocks:
+//  - manual: Vietnamese long employee name, a long Vietnamese holiday label, OT on both Sundays, a
+//    midpoint-down day, a large (1200x600) signature that must be bounded, signed at 23:30 local
+//    (06:30Z next day) so the printed date must be the local date;
+//  - automatic: another Vietnamese name, note line on (Vietnamese text), image authorized at upload,
+//    finalized by the deadline pass at 23:30 local (06:30Z next day).
+// The PDFs are read back as text and image placements (pdfjs-dist) and rendered page 1 in the
+// installed Edge (playwright-core channel msedge) to pdf-audit-*-synthetic.png.
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
+import { fixedClock, freshDb, m, policy, REPO, session, sessionUser } from './common.mjs';
+
+const BASE = process.env.RUN_DIR ?? '<scratch>/work/runs/pdf';
+const OUT = process.env.OUT_DIR ?? '<scratch>/work/renders';
+mkdirSync(BASE, { recursive: true });
+mkdirSync(OUT, { recursive: true });
+const requireRepo = createRequire(join(REPO, 'package.json'));
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const calendars = await import(pathToFileURL(join(REPO, 'dist/server/services/calendars.js')).href);
+const pdfjs = await import(pathToFileURL(join(REPO, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!condition) failures += 1;
+}
+
+const VI_NAME_MANUAL = 'Nguyễn Thị Hồng Ánh Trần Lê Phạm Hoàng Bảo Ngọc Quỳnh Như';
+const VI_SIGNER = 'Nguyễn Thị Hồng Ánh';
+const VI_NAME_AUTO = 'Trần Thị Bích Ngọc';
+const VI_HOLIDAY = 'Nghỉ lễ tổng kết năm công ty và họp mặt khách hàng đối tác';
+const VI_NOTE = 'Nộp tự động theo lịch công ty';
+
+function pngChunk(type, data) {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+/** A large synthetic signature: a dark sine stroke on white, 1200x600 (must be bounded in the PDF). */
+function bigSignature() {
+  const width = 1200;
+  const height = 600;
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows = [];
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 3, 0xff);
+    row[0] = 0;
+    for (let x = 0; x < width; x += 1) if (Math.abs(y - (300 + Math.round(220 * Math.sin(x / 70)))) <= 8) row.fill(0x20, 1 + x * 3, 4 + x * 3);
+    rows.push(row);
+  }
+  return new Uint8Array(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(Buffer.concat(rows))), pngChunk('IEND', Buffer.alloc(0))]));
+}
+
+const EARLY = '2026-09-14T15:00:00Z';
+const ENTRY = '2026-09-28T20:00:00Z';
+const SIGN = '2026-09-29T06:30:00Z'; // 2026-09-28 23:30 PDT
+const AUTO = '2026-09-30T06:30:00Z'; // 2026-09-29 23:30 PDT, after the 2026-09-29 17:00 PDT deadline
+const dbPath = join(BASE, 't.db');
+const dataDir = join(BASE, 'private-data');
+const s = await freshDb(dbPath, EARLY);
+const { db } = s;
+const files = new m.files.FileStore(dataDir);
+const early = fixedClock(EARLY);
+
+// Calendar: the existing rules plus a long Vietnamese holiday on Friday 2026-09-18.
+const versions = calendars.listCalendarVersions(db, s.calendarId);
+const last = versions.at(-1);
+calendars.createCalendarVersion(db, early, {
+  calendarId: s.calendarId, effectiveFrom: '2026-09-14', weekdays: [...last.weekdays],
+  dates: [...last.dates.filter((d) => d.date !== '2026-09-18'), { date: '2026-09-18', kind: 'holiday', name: VI_HOLIDAY }],
+  note: 'Synthetic audit holiday',
+}, s.admin.id);
+
+// Manual owner.
+users.updateUser(db, early, { actorUserId: s.admin.id, userId: s.employee.id, displayName: VI_NAME_MANUAL });
+const one = sessionUser(db, s.employee.id);
+policy(db, EARLY, one.id, s.calendarId, 'ignore');
+m.settings.saveSubmissionSettings(db, early, one.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: false });
+m.sigs.saveSignature(db, early, files, one.id, bigSignature(), 'image/png');
+// Automatic owner.
+const twoId = await users.createUser(db, early, { email: '<email>', displayName: VI_NAME_AUTO, role: 'employee', password: 'synthetic-audit-password-x1', calendarId: s.calendarId }, s.admin.id);
+const two = sessionUser(db, twoId);
+policy(db, EARLY, two.id, s.calendarId, 'ignore');
+const set2 = m.settings.saveSubmissionSettings(db, early, two.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true, autoNoteEnabled: true, autoNoteText: VI_NOTE });
+m.sigs.saveSignatureAndAuthorizeAutoImage(db, early, files, two.id, m.seed.syntheticSignaturePng(11), 'image/png');
+m.auto.setAutomationActivation(db, early, { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic audit activation' });
+db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+
+const entry = fixedClock(ENTRY);
+for (const user of [one, two]) {
+  const ctx = { db, clock: entry, user };
+  m.cmds.createSession(ctx, '2026-09-14', session('2026-09-14', '08:00', '19:00')); // R 660 -> 3:00
+  m.cmds.createSession(ctx, '2026-09-18', session('2026-09-18', '09:00', '11:15')); // holiday O 135 -> 2:00 (midpoint down)
+  m.cmds.createSession(ctx, '2026-09-20', session('2026-09-20', '10:00', '15:00')); // Sunday O 300 -> 5:00
+  m.cmds.createSession(ctx, '2026-09-22', session('2026-09-22', '09:00', '17:46')); // R 526 -> E 46 -> 1:00
+  m.cmds.createSession(ctx, '2026-09-27', session('2026-09-27', '08:00', '15:30')); // Sunday O 450 -> 7:30
+}
+
+const signClock = fixedClock(SIGN);
+const review = m.review.buildReviewPayload(db, signClock, one, '2026-10-02');
+const signed = m.fin.signOffTimesheet({ db, clock: signClock, user: one }, '2026-10-02', {
+  expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: VI_SIGNER, deficitChoices: [], incompleteEvidenceAcknowledged: true,
+});
+check('manual sign-off created', signed.status === 'created');
+const delivery = { senderAddress: '<email>', outbound: { mode: 'capture' }, publicBaseUrl: 'http://localhost:3000' };
+for (const now of [SIGN, AUTO, '2026-09-30T06:40:00Z', '2026-09-30T08:00:00Z']) {
+  const clock = fixedClock(now);
+  await m.runner.runJobsOnce({ db, clock, handlers: m.runner.createJobHandlers({ db, clock, files, delivery }) });
+}
+
+function pdfOf(userId) {
+  const row = db.prepare(
+    `SELECT r.id, r.origin, r.review_state, r.created_at, a.storage_key, a.sha256 FROM timesheet_revisions r
+       JOIN revision_files f ON f.revision_id = r.id AND f.user_id = r.user_id AND f.kind = 'pdf' AND f.state = 'ready'
+       JOIN attachments a ON a.id = f.attachment_id WHERE r.user_id = ?`,
+  ).get(userId);
+  const bytes = files.read(row.storage_key);
+  check(`stored PDF hash matches (${row.origin})`, createHash('sha256').update(bytes).digest('hex') === row.sha256);
+  return { row, bytes };
+}
+
+async function readPdf(bytes) {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, verbosity: 0 }).promise;
+  const page = await doc.getPage(1);
+  const text = await page.getTextContent();
+  const items = text.items.map((item) => ({ s: item.str, x: item.transform[4], y: item.transform[5] }));
+  const ops = await page.getOperatorList();
+  const images = [];
+  let matrix = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  for (let i = 0; i < ops.fnArray.length; i += 1) {
+    const fn = ops.fnArray[i];
+    if (fn === pdfjs.OPS.save) stack.push(matrix);
+    else if (fn === pdfjs.OPS.restore) matrix = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    else if (fn === pdfjs.OPS.transform) {
+      const [a, b, c, d, e, f] = ops.argsArray[i];
+      const p = matrix;
+      matrix = [a * p[0] + b * p[2], a * p[1] + b * p[3], c * p[0] + d * p[2], c * p[1] + d * p[3], e * p[0] + f * p[2] + p[4], e * p[1] + f * p[3] + p[5]];
+    } else if (fn === pdfjs.OPS.paintImageXObject) images.push({ width: matrix[0], height: matrix[3], x: matrix[4], y: matrix[5] });
+  }
+  const lines = [];
+  for (const item of [...items].sort((a, b) => b.y - a.y || a.x - b.x)) {
+    const lastLine = lines.at(-1);
+    if (lastLine && Math.abs(lastLine.y - item.y) < 1.5) lastLine.parts.push(item.s);
+    else lines.push({ y: item.y, parts: [item.s] });
+  }
+  return { pages: doc.numPages, lines: lines.map((l) => l.parts.join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean), all: items.map((i) => i.s).join(' ').replace(/\s+/g, ' ') };
+  // images returned separately below
+}
+
+async function imagesOf(bytes) {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise;
+  const page = await doc.getPage(1);
+  const ops = await page.getOperatorList();
+  const images = [];
+  let matrix = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  for (let i = 0; i < ops.fnArray.length; i += 1) {
+    const fn = ops.fnArray[i];
+    if (fn === pdfjs.OPS.save) stack.push(matrix);
+    else if (fn === pdfjs.OPS.restore) matrix = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    else if (fn === pdfjs.OPS.transform) {
+      const [a, b, c, d, e, f] = ops.argsArray[i];
+      const p = matrix;
+      matrix = [a * p[0] + b * p[2], a * p[1] + b * p[3], c * p[0] + d * p[2], c * p[1] + d * p[3], e * p[0] + f * p[2] + p[4], e * p[1] + f * p[3] + p[5]];
+    } else if (fn === pdfjs.OPS.paintImageXObject) images.push({ width: Math.round(matrix[0] * 100) / 100, height: Math.round(matrix[3] * 100) / 100 });
+  }
+  return images;
+}
+
+const dates = Array.from({ length: 14 }, (_, i) => {
+  const d = new Date(Date.UTC(2026, 8, 14 + i));
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
+});
+
+const manual = pdfOf(one.id);
+const auto = pdfOf(two.id);
+check('automatic revision recorded as origin deadline, review pending, no sign-off', auto.row.origin === 'deadline' && auto.row.review_state === 'pending' &&
+  db.prepare('SELECT count(*) FROM signoffs WHERE user_id = ?').pluck().get(two.id) === 0, `${auto.row.origin}/${auto.row.review_state}`);
+for (const [name, pdf, expectDate, expectName, origin] of [
+  ['manual', manual, '09/28/2026', VI_SIGNER, 'manual'],
+  ['automatic', auto, '09/29/2026', VI_NAME_AUTO, 'automatic'],
+]) {
+  const content = await readPdf(pdf.bytes);
+  const images = await imagesOf(pdf.bytes);
+  writeFileSync(join(BASE, `${name}.txt`), `${content.lines.join('\n')}\n`);
+  const missingDates = dates.filter((d) => !content.all.includes(d));
+  check(`${name}: one page, all 14 dates printed`, content.pages === 1 && missingDates.length === 0, missingDates.join(','));
+  check(`${name}: OT total 18:30 h:mm includes both Sundays (5:00 and 7:30), the midpoint-down 2:00 and the 1:00`, content.all.includes('18:30 h:mm') && content.all.includes('5:00') && content.all.includes('7:30') && content.all.includes('2:00') && content.all.includes('1:00'));
+  check(`${name}: Vietnamese employee name drawn with its diacritics (no ? substitution)`, !content.all.includes('?') && content.all.replace(/\s/g, '').includes((origin === 'manual' ? VI_NAME_MANUAL : VI_NAME_AUTO).replace(/\s/g, '').slice(0, 12)));
+  check(`${name}: the long Vietnamese holiday label is drawn (wrapped, not dropped)`, content.all.replace(/\s/g, '').includes('Nghỉlễtổng') || content.all.includes('Nghỉ lễ'));
+  check(`${name}: printed name under the signature line is ${origin === 'manual' ? 'the sign-off name' : 'the employee name'}`, content.lines.some((line) => line.includes(expectName)));
+  check(`${name}: printed date is ${expectDate} (local date of the ${origin === 'manual' ? 'real sign-off' : 'automatic submission'} instant, not the UTC date)`, content.all.includes(expectDate) && !content.all.includes(origin === 'manual' ? '09/29/2026' : '09/30/2026'), expectDate);
+  const indicator = /automatic|automatically|auto-submitted|pending review|not reviewed|unsigned|deadline/i;
+  const noteShown = content.all.includes(VI_NOTE);
+  check(`${name}: no automatic indicator; the note line ${origin === 'automatic' ? 'appears (on)' : 'is absent'}`, !indicator.test(content.all) && noteShown === (origin === 'automatic'));
+  check(`${name}: exactly one signature image, bounded to 210x54 pt`, images.length === 1 && images[0].width <= 210.01 && images[0].height <= 54.01, JSON.stringify(images));
+  console.log(`INFO  ${name} text lines: ${content.lines.join(' | ')}`);
+}
+
+// Render page 1 of each PDF in the installed Edge.
+const { chromium } = requireRepo('playwright-core');
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 920, height: 1240 } });
+  const VIEW = 'http://pdf-view.invalid';
+  const build = join(REPO, 'node_modules/pdfjs-dist/build');
+  for (const [name, pdf] of [['manual-vietnamese-sundays-bounded-signature', manual], ['automatic-note-on-image-on', auto]]) {
+    const assets = {
+      '/': { body: readFileSync(join(REPO, 'tests/e2e/assets/pdf-view.html')), type: 'text/html; charset=utf-8' },
+      '/pdf.mjs': { body: readFileSync(join(build, 'pdf.mjs')), type: 'text/javascript; charset=utf-8' },
+      '/pdf.worker.mjs': { body: readFileSync(join(build, 'pdf.worker.mjs')), type: 'text/javascript; charset=utf-8' },
+      '/doc.pdf': { body: pdf.bytes, type: 'application/pdf' },
+    };
+    await page.route(`${VIEW}/**`, (route) => {
+      const asset = assets[new URL(route.request().url()).pathname];
+      return asset === undefined ? route.fulfill({ status: 404, body: 'not found' }) : route.fulfill({ status: 200, contentType: asset.type, body: asset.body });
+    });
+    await page.goto(`${VIEW}/?page=1&scale=1.5`);
+    await page.waitForFunction('window.__pdfRender !== undefined', undefined, { timeout: 30000 });
+    const result = await page.evaluate('window.__pdfRender');
+    const target = join(OUT, `pdf-audit-${name}-synthetic.png`);
+    await page.locator('#page').screenshot({ path: target });
+    await page.unroute(`${VIEW}/**`);
+    check(`Edge render of ${name}`, result.ok === true && result.pages === 1, JSON.stringify(result));
+  }
+} finally {
+  await browser.close();
+}
+db.close();
+console.log(failures === 0 ? 'PDF PROBE PASSED' : `PDF PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

@@ -1,0 +1,17 @@
+// WP3-AUDIT-C: setup smoke and the route inventory from the mounted application (source, not tests).
+import { finalizeWithPdf, setup } from './lib.mjs';
+
+const ctx = await setup('p0');
+await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const rev = await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+console.log('revision ok', typeof rev === 'string');
+
+const counts = new Map();
+for (const r of ctx.app.routes) {
+  const key = `${r.method} ${r.path}`;
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+const lines = [...counts.entries()].map(([k, n]) => `${k} ${n}`).sort();
+console.log(`registered (method, path) entries: ${lines.length}`);
+for (const l of lines) console.log(l);
+ctx.db.close();

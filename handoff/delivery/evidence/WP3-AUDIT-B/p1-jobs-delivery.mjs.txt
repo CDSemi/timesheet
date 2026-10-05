@@ -1,0 +1,363 @@
+// WP3-AUDIT-B probe 1: durable jobs, PDF/send fault injection and the uncertain-send decision
+// on a real SQLite file. Synthetic data only; capture outbound only; children use process.execPath.
+// Usage: node p1-jobs-delivery.mjs <repoDir> <workDir>            (main)
+//        node p1-jobs-delivery.mjs <repoDir> <workDir> <role>     (child; started by main)
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [repoDir, workDir, role] = process.argv.slice(2);
+const src = (p) => pathToFileURL(join(repoDir, 'src', p)).href;
+const DB = join(workDir, 'p1.db');
+const DATA = join(workDir, 'data');
+const SENDER = '<email>';
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { FileStore } = await import(src('server/files/fileStore.ts'));
+const { runJobsOnce } = await import(src('server/jobs/runner.ts'));
+const jobStore = await import(src('server/jobs/jobStore.ts'));
+const { createPdfJobHandler } = await import(src('server/jobs/pdfJob.ts'));
+const { createSendJobHandler } = await import(src('server/jobs/sendJob.ts'));
+const { createOutboundAdapter } = await import(src('server/mail/outbound.ts'));
+
+const fixed = (iso) => ({ now: () => new Date(iso) });
+const kill = () => process.kill(process.pid, 'SIGKILL');
+
+/* ------------------------------------------------------------------ children ---- */
+if (role !== undefined) {
+  const db = openDatabase(DB);
+  const clock = fixed(process.env.P_NOW);
+  const files = new FileStore(DATA);
+  const hook = process.env.P_HOOK ?? '';
+  const capture = createOutboundAdapter({ mode: 'capture' }, { dataDir: DATA });
+  const handlers = {};
+  if (role === 'pdf') {
+    handlers.render_pdf = createPdfJobHandler({
+      db,
+      clock,
+      files,
+      hooks: {
+        beforeWrite: () => hook === 'beforeWrite' && kill(),
+        beforeRename: () => hook === 'beforeRename' && kill(),
+        afterRename: () => hook === 'afterRename' && kill(),
+      },
+    });
+  } else if (role === 'send') {
+    const outbound =
+      hook === 'afterCapture'
+        ? { mode: 'capture', send: async (message, context) => { const result = await capture.send(message, context); kill(); return result; } }
+        : capture;
+    handlers.send_email = createSendJobHandler({
+      db,
+      clock,
+      files,
+      outbound,
+      senderAddress: SENDER,
+      hooks: { afterPrepare: () => hook === 'afterPrepare' && kill(), beforeSend: () => hook === 'beforeSend' && kill() },
+    });
+  } else if (role === 'enqueue') {
+    for (let round = 0; round < 200; round += 1) {
+      for (let k = 0; k < 10; k += 1) jobStore.enqueueJob(db, clock, { kind: 'probe_dup', businessKey: `probe:dup:${k}` });
+    }
+    db.close();
+    process.exit(0);
+  } else if (role === 'claimer') {
+    const mine = [];
+    handlers.probe_noop = async ({ job }) => {
+      mine.push(job.id);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    };
+    await runJobsOnce({ db, clock, handlers, maxJobs: 1000 });
+    writeFileSync(join(workDir, `claims-${process.pid}.txt`), mine.join('\n'));
+    db.close();
+    process.exit(0);
+  } else if (role === 'hang') {
+    handlers.probe_hang = async () => kill();
+  }
+  const summary = await runJobsOnce({ db, clock, handlers });
+  console.log(JSON.stringify(summary));
+  db.close();
+  process.exit(0);
+}
+
+/* ---------------------------------------------------------------------- main ---- */
+mkdirSync(DATA, { recursive: true });
+const runChild = (childRole, now, hook = '') => {
+  const result = spawnSync(process.execPath, [process.argv[1], repoDir, workDir, childRole], {
+    env: { ...process.env, P_NOW: now, P_HOOK: hook },
+    encoding: 'utf8',
+  });
+  return { status: result.status, signal: result.signal, stdout: (result.stdout ?? '').trim(), stderr: (result.stderr ?? '').trim() };
+};
+const addSeconds = (iso, s) => new Date(new Date(iso).getTime() + s * 1000).toISOString().replace('.000Z', 'Z');
+
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic, syntheticSignaturePng } = await import(src('server/seed.ts'));
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+
+const db = openDatabase(DB);
+migrate(db);
+let nowIso = '2026-09-29T20:00:00Z';
+const clock = { now: () => new Date(nowIso) };
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+await seedSynthetic(db, clock, { passwords });
+const ORIGIN = 'http://localhost:4519';
+const config = { host: '127.0.0.1', port: 4519, databasePath: DB, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 43200, production: false };
+const delivery = { dataDir: DATA, publicBaseUrl: ORIGIN, senderAddress: SENDER, outbound: { mode: 'capture' } };
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null, delivery }, { dataDir: DATA });
+const request = async (method, path, { cookie, body, type } = {}) => {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers['content-type'] = type ?? 'application/json';
+    init.body = type === undefined ? JSON.stringify(body) : body;
+  }
+  const response = await app.request(path, init);
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text === '' ? null : JSON.parse(text);
+  } catch {
+    json = text;
+  }
+  return { status: response.status, body: json, headers: response.headers };
+};
+const login = await request('POST', '/api/auth/login', { body: { email: '<email>', password: passwords.employee } });
+const cookie = login.headers.get('set-cookie').split(';')[0];
+check(login.status === 200, 'employee login 200');
+
+const settings = await request('POST', '/api/settings/submission', {
+  cookie,
+  body: {
+    expected_seq: 0,
+    to: ['<email>'],
+    cc: ['<email>'],
+    auto_submit: false,
+    subject_template: 'Timesheet {EmployeeName} {PayrollDate} {SignOffStatus}',
+    body_template: 'Status: {SignOffStatus}\nRevision {Revision} of {SubmissionId}',
+  },
+});
+check(settings.status === 201, `settings saved 201 (got ${settings.status})`);
+// Saturday 2026-09-26 work: 3 h off-calendar OT; Sunday 2026-09-27: 2 h.
+for (const [start, end] of [
+  ['2026-09-26T16:00:00Z', '2026-09-26T19:00:00Z'],
+  ['2026-09-27T16:00:00Z', '2026-09-27T18:00:00Z'],
+]) {
+  const day = start.slice(0, 10);
+  const r = await request('POST', `/api/days/${day}/sessions`, { cookie, body: { start, end, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true } });
+  check(r.status === 201, `session on ${day} 201 (got ${r.status})`);
+}
+const sig = await request('POST', '/api/signatures', { cookie, body: syntheticSignaturePng(), type: 'image/png' });
+check(sig.status === 201, `signature upload 201 (got ${sig.status})`);
+const review = await request('GET', '/api/timesheets/2026-10-02/review', { cookie });
+const signoff = await request('POST', '/api/timesheets/2026-10-02/signoff', {
+  cookie,
+  body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true },
+});
+check(signoff.status === 201, `sign-off 201 (got ${signoff.status})`);
+const revisionId = db.prepare("SELECT id FROM timesheet_revisions WHERE revision_no = 1").get().id;
+const ledgerCount = () => db.prepare('SELECT count(*) AS n FROM ot_ledger').get().n;
+const ledgerBefore = ledgerCount();
+out(`INFO ledger rows after sign-off: ${ledgerBefore}; jobs: ${JSON.stringify(db.prepare('SELECT kind, state, attempts FROM jobs ORDER BY kind').all())}`);
+
+/* ---- A. PDF job: kill before write, before rename, after rename; then a normal run ---- */
+let t = '2026-09-29T20:01:00Z';
+for (const hook of ['beforeWrite', 'beforeRename', 'afterRename']) {
+  const child = runChild('pdf', t, hook);
+  const job = db.prepare("SELECT state, attempts FROM jobs WHERE kind = 'render_pdf'").get();
+  check(child.status !== 0 && job.state === 'leased', `PDF child killed at ${hook} (exit ${child.status}); job left leased, attempts ${job.attempts}`);
+  const early = runChild('pdf', addSeconds(t, 119));
+  check(JSON.parse(early.stdout).claimed === 0, `PDF job not reclaimed before lease expiry (119 s after ${hook})`);
+  t = addSeconds(t, 121);
+}
+const pdfRun = runChild('pdf', t);
+check(JSON.parse(pdfRun.stdout).succeeded === 1, `PDF job succeeds after three kills: ${pdfRun.stdout}`);
+const pdfRows = db.prepare("SELECT count(*) AS n FROM attachments WHERE kind = 'pdf'").get().n;
+const fileRow = db.prepare("SELECT state FROM revision_files WHERE revision_id = ?").get(revisionId);
+check(pdfRows === 1 && fileRow.state === 'ready', `one PDF attachment row (${pdfRows}) and revision file ready (${fileRow.state})`);
+const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+const pdfKey = db.prepare("SELECT storage_key FROM attachments WHERE kind = 'pdf'").get().storage_key;
+const allFiles = walk(DATA);
+const tmpLeft = allFiles.filter((f) => f.endsWith('.tmp'));
+check(allFiles.filter((f) => f.endsWith(pdfKey)).length === 1, 'exactly one stored PDF file for the revision key');
+out(`INFO orphan temporary files left by the kills (sweep not scheduled, carry item 4): ${tmpLeft.length}`);
+check(ledgerCount() === ledgerBefore, `ledger unchanged by PDF crashes (${ledgerCount()})`);
+const pdfJob = db.prepare("SELECT state, attempts FROM jobs WHERE kind = 'render_pdf'").get();
+out(`INFO render_pdf job: ${JSON.stringify(pdfJob)}`);
+
+/* ---- B. Send: kill after prepare (nothing sent), restart sends once ---- */
+const captureCount = () => (existsSync(join(DATA, 'mail-capture')) ? readdirSync(join(DATA, 'mail-capture')).filter((n) => !n.startsWith('.tmp')).length : 0);
+t = addSeconds(t, 10);
+let child = runChild('send', t, 'afterPrepare');
+let attempts = db.prepare('SELECT attempt_no, state FROM delivery_attempts ORDER BY attempt_no').all();
+check(child.status !== 0 && attempts.length === 1 && attempts[0].state === 'preparing' && captureCount() === 0, `send killed after prepare: attempt preparing, nothing captured (${JSON.stringify(attempts)})`);
+t = addSeconds(t, 121);
+child = runChild('send', t);
+attempts = db.prepare('SELECT attempt_no, state FROM delivery_attempts ORDER BY attempt_no').all();
+check(attempts.length === 1 && attempts[0].state === 'accepted' && captureCount() === 1, `restart reuses the preparing attempt and captures once (${JSON.stringify(attempts)}, captures ${captureCount()})`);
+
+// Capture content equals the frozen snapshot.
+const snapshot = JSON.parse(db.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').get(revisionId).payload_json);
+const firstAttempt = db.prepare("SELECT id FROM delivery_attempts WHERE attempt_no = 1").get().id;
+const folder = join(DATA, 'mail-capture', firstAttempt);
+const meta = JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8'));
+const eml = readFileSync(join(folder, 'message.eml'), 'utf8');
+const pdfBytes = readFileSync(join(folder, 'attachment.pdf'));
+const pdfSha = db.prepare("SELECT sha256 FROM attachments WHERE kind = 'pdf'").get().sha256;
+const { createHash } = await import('node:crypto');
+check(createHash('sha256').update(pdfBytes).digest('hex') === pdfSha && meta.pdf_sha256 === pdfSha, 'captured PDF SHA-256 equals the stored revision PDF');
+check(JSON.stringify(meta.envelope.to) === JSON.stringify([...snapshot.recipients.to, ...snapshot.recipients.cc]) && meta.envelope.from === SENDER, 'captured envelope = snapshot To+Cc and MAIL_FROM');
+check(eml.includes(`Subject: ${snapshot.recipients.subject}`), `captured subject equals the snapshot subject ("${snapshot.recipients.subject}")`);
+const textPart = eml.split('Content-Type: text/plain')[1] ?? '';
+check(textPart.includes('Status: Submitted'), 'captured body carries {SignOffStatus} = Submitted for the manual revision');
+check(!/password|secret|smtp_pass|token/i.test(JSON.stringify(meta)), 'capture metadata holds no secret-like field');
+out(`INFO capture metadata keys: ${Object.keys(meta).join(',')}`);
+
+/* ---- C. Resend, kill after `sending` committed -> uncertain, restart sends nothing ---- */
+const resend1 = await request('POST', `/api/revisions/${revisionId}/resend`, { cookie, body: {} });
+check(resend1.status === 201, `same-revision resend 201 (got ${resend1.status})`);
+t = addSeconds(t, 10);
+nowIso = t;
+child = runChild('send', t, 'beforeSend');
+let a2 = db.prepare('SELECT id, state FROM delivery_attempts WHERE job_id = ? ORDER BY attempt_no DESC LIMIT 1').get(resend1.body.job.id);
+check(child.status !== 0 && a2.state === 'sending' && captureCount() === 1, `send killed after 'sending' commit: attempt sending, captures still 1`);
+t = addSeconds(t, 121);
+child = runChild('send', t);
+a2 = db.prepare('SELECT id, state, provider_response FROM delivery_attempts WHERE id = ?').get(a2.id);
+const j2 = db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(resend1.body.job.id);
+check(a2.state === 'uncertain' && j2.state === 'intervention' && captureCount() === 1, `restart after lease expiry: attempt uncertain (${a2.provider_response}), job ${j2.state}/${j2.last_error}, nothing sent`);
+t = addSeconds(t, 3600);
+child = runChild('send', t);
+check(captureCount() === 1 && JSON.parse(child.stdout).claimed === 0, 'a later runner pass claims nothing and sends nothing');
+nowIso = t;
+const list = await request('GET', '/api/deliveries', { cookie });
+const listed = list.body.deliveries.find((d) => d.id === a2.id);
+check(listed.decision_required === true && listed.state === 'uncertain', 'GET /api/deliveries shows decision_required for the uncertain attempt');
+const decide = await request('POST', `/api/deliveries/${a2.id}/decision`, { cookie, body: { decision: 'resend' } });
+check(decide.status === 201 && decide.body.resend !== null, `explicit resend decision 201 creates one new job (got ${decide.status})`);
+const decideAgain = await request('POST', `/api/deliveries/${a2.id}/decision`, { cookie, body: { decision: 'resend' } });
+check(decideAgain.status === 409, `second decision refused 409 (${decideAgain.body?.error?.code ?? decideAgain.body?.code})`);
+t = addSeconds(t, 10);
+child = runChild('send', t);
+check(captureCount() === 2, `the decided resend is captured exactly once (captures ${captureCount()})`);
+child = runChild('send', addSeconds(t, 600));
+check(captureCount() === 2, 'another pass after the decided resend sends nothing more');
+const audit = db.prepare("SELECT count(*) AS n FROM audit_events WHERE operation = 'delivery.decision'").get().n;
+check(audit === 1, `the decision is audited once (${audit})`);
+
+/* ---- D. Crash after the adapter accepted (capture written) but before the outcome was recorded ---- */
+nowIso = addSeconds(t, 700);
+const resend2 = await request('POST', `/api/revisions/${revisionId}/resend`, { cookie, body: {} });
+t = addSeconds(nowIso, 10);
+child = runChild('send', t, 'afterCapture');
+check(captureCount() === 3, `adapter accepted then process killed: one capture written (${captureCount()})`);
+t = addSeconds(t, 121);
+child = runChild('send', t);
+const a3 = db.prepare('SELECT id, state, provider_response FROM delivery_attempts WHERE job_id = ?').get(resend2.body.job.id);
+check(a3.state === 'uncertain' && captureCount() === 3, `restart marks it uncertain (${a3.provider_response}) and does not resend (captures ${captureCount()})`);
+nowIso = t;
+const mark = await request('POST', `/api/deliveries/${a3.id}/decision`, { cookie, body: { decision: 'mark_delivered' } });
+check(mark.status === 200 && mark.body.resend === null, 'mark_delivered decision creates no job');
+runChild('send', addSeconds(t, 60));
+check(captureCount() === 3, 'nothing is sent after mark_delivered');
+check(ledgerCount() === ledgerBefore, `ledger unchanged by every send, resend and decision (${ledgerCount()})`);
+const revCount = db.prepare('SELECT count(*) AS n FROM timesheet_revisions').get().n;
+check(revCount === 1, `still one revision (${revCount})`);
+
+/* ---- E. Duplicate business keys from four concurrent processes ---- */
+const enqueuers = await Promise.all(
+  [0, 1, 2, 3].map(
+    () =>
+      new Promise((resolve) => {
+        const p = spawn(process.execPath, [process.argv[1], repoDir, workDir, 'enqueue'], { env: { ...process.env, P_NOW: '2026-10-01T00:00:00Z' } });
+        p.on('exit', resolve);
+      }),
+  ),
+);
+const dupRows = db.prepare("SELECT count(*) AS n FROM jobs WHERE kind = 'probe_dup'").get().n;
+check(enqueuers.every((code) => code === 0) && dupRows === 10, `4 processes x 200 rounds x 10 keys -> ${dupRows} rows (expected 10)`);
+db.prepare("UPDATE jobs SET state = 'cancelled' WHERE kind = 'probe_dup'").run();
+
+/* ---- F. Three runner processes claim 60 jobs; each exactly once ---- */
+const noopClock = fixed('2026-10-01T00:00:00Z');
+for (let i = 0; i < 60; i += 1) jobStore.enqueueJob(db, noopClock, { kind: 'probe_noop', businessKey: `probe:noop:${i}` });
+const claimers = await Promise.all(
+  [0, 1, 2].map(
+    () =>
+      new Promise((resolve) => {
+        const p = spawn(process.execPath, [process.argv[1], repoDir, workDir, 'claimer'], { env: { ...process.env, P_NOW: '2026-10-01T00:00:05Z' } });
+        p.on('exit', (code) => resolve({ code, pid: p.pid }));
+      }),
+  ),
+);
+const claimed = claimers.flatMap(({ pid }) => {
+  const f = join(workDir, `claims-${pid}.txt`);
+  return existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean) : [];
+});
+const perProcess = claimers.map(({ pid }) => (existsSync(join(workDir, `claims-${pid}.txt`)) ? readFileSync(join(workDir, `claims-${pid}.txt`), 'utf8').split('\n').filter(Boolean).length : 0));
+const noopRows = db.prepare("SELECT state, attempts, count(*) AS n FROM jobs WHERE kind = 'probe_noop' GROUP BY state, attempts").all();
+check(claimed.length === 60 && new Set(claimed).size === 60, `60 jobs claimed 60 times in total, no job twice (per process ${perProcess.join('/')})`);
+check(noopRows.length === 1 && noopRows[0].state === 'succeeded' && noopRows[0].attempts === 1, `every probe job succeeded on attempt 1: ${JSON.stringify(noopRows)}`);
+
+/* ---- G. Retry delays 1/5/15/60 minutes, then intervention ---- */
+let rt = '2026-10-02T00:00:00Z';
+const failClock = { now: () => new Date(rt) };
+jobStore.enqueueJob(db, failClock, { kind: 'probe_fail', businessKey: 'probe:fail:1' });
+const failHandlers = { probe_fail: async () => { throw new jobStore.JobError('probe_failure'); } };
+const delays = [];
+for (let i = 0; i < 5; i += 1) {
+  await runJobsOnce({ db, clock: failClock, handlers: failHandlers });
+  const row = db.prepare("SELECT state, attempts, next_run_at, last_error FROM jobs WHERE business_key = 'probe:fail:1'").get();
+  if (row.state === 'intervention') {
+    delays.push(`intervention@${row.attempts}:${row.last_error}`);
+    break;
+  }
+  const delay = (new Date(row.next_run_at) - new Date(rt)) / 1000;
+  delays.push(delay);
+  rt = addSeconds(row.next_run_at, -1);
+  const early = await runJobsOnce({ db, clock: failClock, handlers: failHandlers });
+  if (early.claimed !== 0) delays.push('claimed-early');
+  rt = row.next_run_at;
+}
+check(JSON.stringify(delays) === JSON.stringify([60, 300, 900, 3600, 'intervention@5:probe_failure']), `retry delays ${JSON.stringify(delays)}`);
+
+/* ---- H. Lease expiry: a runner that dies is reclaimed after the lease; the fifth expiry goes to intervention ---- */
+let ht = '2026-10-03T00:00:00Z';
+jobStore.enqueueJob(db, fixed(ht), { kind: 'probe_hang', businessKey: 'probe:hang:1' });
+const hangLog = [];
+for (let i = 0; i < 6; i += 1) {
+  runChild('hang', ht);
+  const row = db.prepare("SELECT state, attempts, last_error FROM jobs WHERE business_key = 'probe:hang:1'").get();
+  hangLog.push(`${row.state}/${row.attempts}${row.last_error ? `/${row.last_error}` : ''}`);
+  if (row.state === 'intervention') break;
+  ht = addSeconds(ht, 120);
+}
+check(hangLog.at(-1) === 'intervention/5/lease_expired', `dying runner: ${hangLog.join(' -> ')}`);
+
+/* ---- Secrets in the database ---- */
+const dump = db
+  .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
+  .all()
+  .map(({ name }) => JSON.stringify(db.prepare(`SELECT * FROM "${name}"`).all()))
+  .join('\n');
+check(!dump.includes(passwords.employee) && !dump.includes(passwords.admin), 'no plaintext password anywhere in the database');
+check(!/smtp_pass|SMTP_PASSWORD/i.test(dump), 'no SMTP credential field in the database');
+
+out(`SUMMARY failures=${failures}`);
+writeFileSync(join(workDir, 'p1-result.txt'), `${log.join('\n')}\n`);
+db.close();
+process.exit(failures === 0 ? 0 : 1);

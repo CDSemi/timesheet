@@ -22,8 +22,10 @@ export interface AppDeps {
 /**
  * Per-request principals. `user` is the signed-in session user. `actor` is who performs the action
  * (audit attribution) and `subject` is whose timesheet it concerns (the owner of every row read or
- * written). No grants exist yet, so the access guard sets all three to the session user on every
- * route; personal routers read the owner from `subject` and never from `user`.
+ * written). On the personal routes the access guard sets all three to the session user. Under
+ * /api/shared/:ownerId (`requireShare`) `user` and `actor` are the grantee and `subject` is the
+ * owner named in the path, whose share was checked live. Personal routers read the owner from
+ * `subject` and never from `user`.
  */
 export interface AppEnv {
   Variables: {

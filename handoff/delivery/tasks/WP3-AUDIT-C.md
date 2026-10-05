@@ -104,3 +104,50 @@ Return at most 300 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1, 2026-10-05)
+
+- Self-reported model: claude-opus-5-5 (profile timesheet-auditor; effort not observable). Fresh context. This auditor
+  authored nothing in WP3, and the WP3_REVIEW_A/B reports were not read. The strongest author model of the snapshot is
+  opus, so the reviewer is not weaker.
+- Target: `a1cd566e59253d19f53cfd5b3a81fd27a7e9a056` (= `origin/main`, WP3-GATE `freeze_commit`). Digest
+  `96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729` (717 files) before and after, in the clone and in
+  the project, equal to the gate digest. Report: [WP3_REVIEW_C](../WP3_REVIEW_C.md) (+ `.vi.md`). Evidence:
+  `handoff/delivery/evidence/WP3-AUDIT-C/` (start at [00-baseline.txt](../evidence/WP3-AUDIT-C/00-baseline.txt)).
+- **Verdict: FIX REQUIRED.**
+- Route inventory: 88 registered (method, path) entries = 85 routes + 3 middleware wildcards, read from
+  `createApp(...).routes`. 17 sit under `/api/shared/:ownerId`, exactly the auditor's own matrix. Every entry is
+  pinned by `sharing-matrix.test.ts`; no route is missing from it.
+- Checks run (all exit 0 unless stated):
+  - `npm ci`.
+  - `npm run verify` with deprecation tracing: 60 files / 1384 tests, SMOKE PASSED (40 PASS lines), 0 deprecation
+    lines.
+  - Playwright sharing, isolation and admin-status specs (Edge, desktop and mobile): 18 passed.
+  - Probes P1 authorization: 86/0. All 11 item sets × 17 routes as real requests; 153 probes of non-allowlisted
+    routes under the shared prefix all 404; live revoke/leave/admin revoke/scope drop/deactivations on the next
+    request; IDOR 404; no re-share.
+  - P2 race: 23/0. Deterministic second-connection interleavings on all 5 writes and the PDF, all refused with
+    nothing written; a positive control without `shareCheckedDb` lets the write land; 20/20 multi-process rounds with
+    0 writes after the revocation.
+  - P3 records: 43/0 (0006 constraints and triggers, change atomicity with an injected failure, admin allowlist).
+  - P4 UI: 25/0 (disallowed actions absent, not disabled; every grantee data call goes to `/api/shared`; 14
+    screenshots viewed).
+  - P5: 7/0 (origin/CSRF, cookie, rate limit, inventory pins).
+  - `validate_package.py --preflight`: exit 1, blocked by the area-A/B reports' directory links (not this task's
+    files). The same rules applied to this pair: PASS.
+- Findings:
+  - WP3-C-01 Medium. The review "changed by" hint planned in WP3-REQ C/E/G (`WP3-REQ.md:459,529,587`) is absent:
+    `ReviewScreen.tsx` shows no grantee change. Required change: implement an owner-only, write-free hint outside the
+    payload hash, or record a coordinator decision that drops it.
+  - WP3-C-02 Low. `services/history.ts:73-78` attributes an admin-route `share.revoke` as "shared access" when the
+    admin also holds a share of the owner, and a same-second earlier act retroactively. Required change: attribute
+    only acts performed through `/api/shared`.
+  - WP3-C-03 Info. Stale comment `types.ts:22-27`.
+- Carry items: 8a (optional actor/delivery) is acceptable backlog. 8b (window attribution) is acceptable for the
+  unattributed case, but its reverse effect is C-02. 7 (raw History operation names) is acceptable backlog. 12 (e2e
+  flake) was not observed. GOV R1 is acceptable backlog.
+- Risks: R1 HEAD on the shared PDF writes a download audit without bytes; R2 "Changed by" wording for downloads; R3
+  the hand-written NEVER list; R4 the in-memory lookup limiter; R5 the origin is visible in the shared status list;
+  R6 `actor` is optional.
+- Commands, exits and probe sources are in the evidence folder. No server, browser or job runner was left running.
+  Capture mode only, no real mail, no commit.

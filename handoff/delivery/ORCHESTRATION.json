@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
+  "current_source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T15-FREEZE",
+  "next_task_id": "WP3-FIX-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -85,6 +85,14 @@
     {
       "date": "2026-10-04",
       "observation": "WP3-T06-FREEZE attempt 2 succeeded (B: had space again). The permission check denied 'rm -rf' on a temp folder under D:\\timesheet-tmp; agents must not retry or work around it. Briefs now ask agents to reuse D:\\timesheet-tmp\\<task> and delete only the files they created, leaving the folder."
+    },
+    {
+      "date": "2026-10-05",
+      "observation": "WP3-AUDIT-A: the auditor's first shell call opened an interactive cmd.exe by mistake; the permission classifier ('Interfere With Workloads') refused its attempt to stop that process and then its digest command, leaving the audit NOT VERIFIED for digest binding although no finding existed. Briefs must forbid interactive shells (cmd.exe without /c, powershell without -Command or -File) and killing processes by PID, and require the digest before any long probe. WP3-GATE also handed back with leftover background work; the coordinator stopped it with TaskStop."
+    },
+    {
+      "date": "2026-10-05",
+      "observation": "Coordinator record pitfalls found by checks:\n- A done audit's decision must be exactly PASS, FIX REQUIRED or NOT VERIFIED, with the details in a findings array; a done gate's decision must be exactly PASS, FAIL or NOT VERIFIED, with the notes in gate_notes. Prose there failed WP3-FIX-FREEZE attempt 1.\n- Briefs must not contain markdown links to files that do not yet exist, or example links in link syntax; both failed preflight (WP3-T14-FREEZE attempt 1, WP3-LINKFIX attempt 1).\n- A running or done task may list an audit in depends_on only when that audit is PASS; fix work links to its audit through addresses_audit. Depending on non-PASS audits failed WP3-FIX-FREEZE attempt 2."
     }
   ],
   "pending_owner_question": null,
@@ -104,7 +112,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5",
+    "last_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
     "unpushed": []
   },
   "owner_decisions": [
@@ -174,6 +182,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "WP3-AUDIT-B FIX REQUIRED (B-01..03), WP3-AUDIT-C FIX REQUIRED (C-01..03), WP3-AUDIT-A NOT VERIFIED (procedural, no finding); FIX_FINDINGS; docs/08 one source writer; WP3-REQ:455-460 and 584-588",
+      "decision": "WP3 fix round 1, run in sequence:\n1. WP3-LINKFIX (light): turn the directory links in WP3_REVIEW_A/B (.md, .vi.md) into plain code paths, a format-only change; full preflight fails on them.\n2. WP3-FIXB (worker-high): B-01 bounds automation by users.created_at when no settings are saved, mirroring the activation bound, with no change to the auto-submit default; B-02 makes a crash in the final send attempt uncertain with the owner decision; B-03 labels system events and uses plain operation names.\n3. WP3-FIXC (worker-high): C-01 implements the planned owner-only review hint 'N day(s) last changed by <grantee>' outside the snapshot hash (implemented, not dropped, because it is the plan's fabricated-attestation mitigation); C-02 attributes only acts done through /api/shared; C-03 fixes the stale comment.\n4. One freeze, a full regate, then two fresh rechecks in parallel: area A with digest binding, and areas B+C on the findings. The refused digest command of WP3-AUDIT-A is not rerun by another agent."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP3-REQ section E allows an optional third area audit C (sharing only) if area A's context is too large; sharing (T13B) is a new opus-authored authorization surface with a 17-route allowlist and 11 item sets",
@@ -6910,7 +6923,7 @@
       "id": "WP3-T15-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T15"
       ],
@@ -6923,10 +6936,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ac3821831fba6b07a",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -6935,16 +6948,459 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T15-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T15-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T15-FREEZE/01-checks.txt",
+        "handoff/delivery/evidence/WP3-T15-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "pushed": true,
       "source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1), the WP3 package-final freeze: digest 96870f7e matched the worker's; 25 planned paths plus the committer's own two evidence files (01-checks.txt, commit-message.txt), which the brief said not to stage; handoff evidence only, outside the digest; accepted as a harmless deviation. Remote SHA identical. Secret/address scan of README, DEVELOPMENT and WP3_HANDOFF (EN/VI): 0 real addresses (example.invalid only), 0 secret values. Node 24, digest, add, precommit (0 blocking, 0 warnings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-GATE on a1cd566."
+    },
+    {
+      "id": "WP3-GATE",
+      "package": "WP3",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "depends_on": [
+        "WP3-T15-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2686d6f1fdc5362f",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-GATE.md",
+        "handoff/delivery/evidence/WP3-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-GATE.md",
+      "report": "handoff/delivery/tasks/WP3-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-GATE/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP3-GATE/02-verify.txt",
+        "handoff/delivery/evidence/WP3-GATE/03-e2e.txt",
+        "handoff/delivery/evidence/WP3-GATE/04-vitest-verbose.txt",
+        "handoff/delivery/evidence/WP3-GATE/05-migrations.txt",
+        "handoff/delivery/evidence/WP3-GATE/06-digest.txt",
+        "handoff/delivery/evidence/WP3-GATE/06b-digest-lstree.txt",
+        "handoff/delivery/evidence/WP3-GATE/07-validate-orchestration.txt",
+        "handoff/delivery/evidence/WP3-GATE/08-check-recovery.txt",
+        "handoff/delivery/evidence/WP3-GATE/09-validate-package-preflight.txt",
+        "handoff/delivery/evidence/WP3-GATE/10-diff-scope.txt",
+        "handoff/delivery/evidence/WP3-GATE/11-races.txt",
+        "handoff/delivery/evidence/WP3-GATE/pdf-manual-ot-sundays-vietnamese-synthetic.png",
+        "handoff/delivery/evidence/WP3-GATE/pdf-automatic-note-off-image-off-synthetic.png",
+        "handoff/delivery/evidence/WP3-GATE/pdf-automatic-note-off-image-on-synthetic.png",
+        "handoff/delivery/evidence/WP3-GATE/pdf-automatic-note-on-image-off-synthetic.png",
+        "handoff/delivery/evidence/WP3-GATE/pdf-automatic-note-on-image-on-empty-period-synthetic.png"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Author-reported by the verifier: clean export of a1cd566 on D:\\timesheet-tmp, Node 24, Edge channel; HEAD and digest unchanged before/after; digest of record 96870f7e (717 files) equals the committer's. verify exit 0 with deprecation flags, 0 lines, 60 files / 1384 tests; smoke 40 PASS lines (the T14 record's '46 checks' is wrong). e2e 127 passed, 5 skipped by design, 0 failed; five PDF renders viewed. Races ot-leave, finalization, deadline and sharing revocation 20/20 each. Fault injection (restart, kill, uncertain, resend once, duplicate key, two runners) passes. Migrations fresh and v3 (5fafeae) upgrade through 0004-0006; integrity ok, FK empty, rerun applies nothing. Items 13-15 hold (sharing 404 and revocation, admin allowlist and A3-01, every gate line mapped). Diff since 3ead61e 597 paths; governance paths only the GOV-WP3P prompts (EN+VI), board/STATE/checkpoint and new review/handoff records. No flakes; evidence precommit 18 files 0 findings. The coordinator stopped the agent after its hand-back because the harness reported leftover background work.",
+      "next_action": "None; WP3-AUDIT-A and WP3-AUDIT-B on a1cd566, then WP3-AUDIT-C."
+    },
+    {
+      "id": "WP3-AUDIT-A",
+      "package": "WP3",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "depends_on": [
+        "WP3-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "adc746b3b778914db",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_REVIEW_A.md",
+        "handoff/delivery/WP3_REVIEW_A.vi.md",
+        "handoff/delivery/tasks/WP3-AUDIT-A.md",
+        "handoff/delivery/evidence/WP3-AUDIT-A"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-AUDIT-A.md",
+      "report": "handoff/delivery/tasks/WP3-AUDIT-A.md",
+      "evidence": [
+        "handoff/delivery/WP3_REVIEW_A.md",
+        "handoff/delivery/WP3_REVIEW_A.vi.md",
+        "handoff/delivery/evidence/WP3-AUDIT-A/00-commands.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/02-verify.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/03-area-tests.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/10-race.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/11-crash.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/12-http.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/13-pdf.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/14a-wp2-source-db.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/14b-migrations.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-A/15-precommit.txt"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "NOT VERIFIED",
+      "findings": [
+        "Procedural only; no finding. The auditor's first shell call opened an interactive cmd.exe by mistake; the permission classifier ('Interfere With Workloads') refused its attempt to stop it and then its digest command; it retried neither, so the digest before/after and HEAD after were not recorded (HEAD before a1cd566 in the clone). Functional checks all passed: npm ci, verify 0 (1384 tests, smoke 40, 0 deprecation lines); 12 area files 273 tests incl. LG-01..LG-10; 20-round multi-process race (manual 11, production run-jobs deadline 9, one revision/ledger set/send each, no invented signed_at); crash probe (no partial persist, committed sign-off survives, idempotent replay, late review zero ledger rows); HTTP probe (owner-only PDF/signature 404/401, no static path, no-store, admin allowlist with recipients, no secret anywhere); Edge PDF renders (14 dates, both Sundays in 18:30, Vietnamese/long labels, bounded signature, no automatic indicator); WP2-source DB upgrade (rows preserved, 17 append-only refusals, integrity ok, FK empty) and fresh DB; privacy check 26 files 0 findings. Carry items 4, 8-11, 13, 14 acceptable backlog. Risks R1 ellipsized long holiday labels in the PDF, R2 signature-count limit checked outside the transaction, R3 never-saved settings default to auto-submit on (area B, see WP3-B-01), R4 reviewed hash includes the balance, R5 sign-off before period end allowed. Coordinator decision: the refused digest is not rerun by another agent; area A is rechecked by a fresh auditor on the fix-round freeze, binding its own digest."
+      ],
+      "next_action": "None; fresh area-A recheck on the WP3 fix-round freeze."
+    },
+    {
+      "id": "WP3-AUDIT-B",
+      "package": "WP3",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "depends_on": [
+        "WP3-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aca7e1ccf879138f1",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_REVIEW_B.md",
+        "handoff/delivery/WP3_REVIEW_B.vi.md",
+        "handoff/delivery/tasks/WP3-AUDIT-B.md",
+        "handoff/delivery/evidence/WP3-AUDIT-B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-AUDIT-B.md",
+      "report": "handoff/delivery/tasks/WP3-AUDIT-B.md",
+      "evidence": [
+        "handoff/delivery/WP3_REVIEW_B.md",
+        "handoff/delivery/WP3_REVIEW_B.vi.md",
+        "handoff/delivery/evidence/WP3-AUDIT-B/00-commands.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/02-verify.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/03-e2e.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/04-p1-jobs-delivery.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/05-p2-automation.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/06-p3-get-safety.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/07-p4-delivery-config.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/08-p5-ui.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/09-p6-css-tokens.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/10-p7-overdue-choice.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/11-race-rounds.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-B/12-privacy.txt"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "reviewed_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP3-B-01 (Medium) src/server/services/automation.ts:147-157: an account without saved submission settings has no auto-submit effective start, so an account created after activation gets every already-overdue period auto-finalized (3 revisions in one pass); fix: bound by users.created_at, red-first test. WP3-B-02 (Low) src/server/jobs/jobStore.ts:194-197 with deliveries.ts:28-53: a crash during the 5th (final) send attempt leaves the attempt 'sending' with no owner decision prompt and resend 409; fix: run recoverInterruptedSends in every runner pass. WP3-B-03 (Low) sharingModel.ts:179-182 and otModel.ts:82-97: History shows timesheet.auto_finalize as 'by someone else' and raw operation codes; fix: label system events and plain names. Carry items reminder repeat, TLS temporary, send before PDF: acceptable backlog (Low); raw history names folded into B-03. Own runs: npm ci 0; verify 0 (1384 tests, smoke 40, 0 deprecation lines); e2e 127 passed 5 skipped; race files 5 rounds; probes p1 jobs 46 PASS, p2 automation 94 PASS 1 FAIL, p3 GET safety (only the audited grantee PDF download writes), p4 outbound 15 PASS 1 FAIL, p5 UI 10 PASS, p6 CSS 0 hard-coded values, p7 overdue choice 5 PASS. HEAD and digest unchanged. Procedural: one touch used 2>/dev/null (no effect, recorded). Evidence privacy check on a temporary index 36 files 0 findings."
+      ],
+      "next_action": "None; fix round for WP3-B-01..03 after all WP3 area audits finish."
+    },
+    {
+      "id": "WP3-AUDIT-C",
+      "package": "WP3",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "depends_on": [
+        "WP3-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a891cec229b6d5755",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_REVIEW_C.md",
+        "handoff/delivery/WP3_REVIEW_C.vi.md",
+        "handoff/delivery/tasks/WP3-AUDIT-C.md",
+        "handoff/delivery/evidence/WP3-AUDIT-C"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-AUDIT-C.md",
+      "report": "handoff/delivery/tasks/WP3-AUDIT-C.md",
+      "evidence": [
+        "handoff/delivery/WP3_REVIEW_C.md",
+        "handoff/delivery/WP3_REVIEW_C.vi.md",
+        "handoff/delivery/evidence/WP3-AUDIT-C/00-baseline.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/01-verify.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/02-route-inventory.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/03-p1-authz.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/04-p2-race.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/05-p3-records.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/06-e2e-sharing.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/07-p4-ui.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/08-p5-extra.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/09-digest-after.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/10-preflight.txt",
+        "handoff/delivery/evidence/WP3-AUDIT-C/11-privacy-check.txt"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "reviewed_digest": "96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP3-C-01 (Medium): the review 'changed by' hint planned in WP3-REQ (:459, 529, 587) as the edit-share mitigation is missing from src/client/ReviewScreen.tsx; T13C dropped it without a recorded decision; fix: an owner-only hint outside the payload hash, or a recorded decision dropping it. WP3-C-02 (Low): src/server/services/history.ts:73-78 labels an admin-route revocation as shared access when that admin also holds a share of the owner, and attributes a same-second earlier act retroactively; fix: attribute only acts done through /api/shared. WP3-C-03 (Info): stale comment src/server/types.ts:22-27. Sharing authorization held under every probe: route inventory 88 entries (85 routes + 3 middleware wildcards), 17 under /api/shared/:ownerId, matrix test pins all 88; P1 authz 86/0 incl. 11 item sets x 17 routes and 153 out-of-matrix probes 404; P2 race 23/0 with a control proving the window, 20/20 multi-process; P3 records 43/0; P4 UI 25/0 (disallowed actions absent); P5 origin/cookie/rate limit 7/0; verify 1384 tests, smoke 40, 0 deprecation lines; sharing/isolation/admin e2e 18 passed. Carry items 8a, 7, 12 and GOV R1 acceptable backlog; 8b acceptable except the window logic behind C-02. Risks: HEAD on the shared PDF writes a download audit; 'Changed by' wording on downloads. The auditor reported that full preflight fails on directory links in WP3_REVIEW_A.md and WP3_REVIEW_B.md (and .vi.md)."
+      ],
+      "next_action": "None; fix round WP3-FIXB, WP3-FIXC."
+    },
+    {
+      "id": "WP3-LINKFIX",
+      "package": "WP3",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP3-GATE"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "haiku",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-haiku-4-5-20251001",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa8d12859eecab246",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent aa8d12859eecab246, self-reported claude-haiku-4-5-20251001): the four review lines were changed correctly; preflight exit 1 because the coordinator's brief contained example links in markdown-link syntax; the worker also wrote the Windows user name into its Results and evidence. Coordinator rewrote the brief examples in prose and masked the name in the Results; same agent resumed to mask its evidence and rerun the preflight."
+      ],
+      "owned_paths": [
+        "handoff/delivery/WP3_REVIEW_A.md",
+        "handoff/delivery/WP3_REVIEW_A.vi.md",
+        "handoff/delivery/WP3_REVIEW_B.md",
+        "handoff/delivery/WP3_REVIEW_B.vi.md",
+        "handoff/delivery/tasks/WP3-LINKFIX.md",
+        "handoff/delivery/evidence/WP3-LINKFIX"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-LINKFIX.md",
+      "report": "handoff/delivery/tasks/WP3-LINKFIX.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-LINKFIX/edits.txt",
+        "handoff/delivery/evidence/WP3-LINKFIX/grep-check.txt",
+        "handoff/delivery/evidence/WP3-LINKFIX/node-check.txt",
+        "handoff/delivery/evidence/WP3-LINKFIX/preflight-result.txt",
+        "handoff/delivery/evidence/WP3-LINKFIX/02-preflight.txt"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "done (attempt 2): line 3 of WP3_REVIEW_A/B (.md, .vi.md) now names the evidence directory as inline code (format only); no directory link remains in the review files; preflight exit 0 after the coordinator rewrote its own brief examples; the Windows user name is masked in evidence (coordinator Grep: 0 occurrences). The worker reported Node v24.19.0 (not the 24.21.0 portable); irrelevant for a docs-only change.",
+      "next_action": "None; WP3-FIXB."
+    },
+    {
+      "id": "WP3-FIXB",
+      "package": "WP3",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP3-AUDIT-B",
+      "depends_on": [
+        "WP3-LINKFIX"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a733c2b6b34235750",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/automation.ts",
+        "src/server/jobs/jobStore.ts",
+        "src/server/services/deliveries.ts",
+        "src/server/jobs",
+        "src/client/sharingModel.ts",
+        "src/client/otModel.ts",
+        "tests/integration",
+        "tests/client",
+        "handoff/delivery/WP3_HANDOFF.md",
+        "handoff/delivery/WP3_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP3-FIXB.md",
+        "handoff/delivery/evidence/WP3-FIXB"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIXB.md",
+      "report": "handoff/delivery/tasks/WP3-FIXB.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-FIXB/00-commands.txt",
+        "handoff/delivery/evidence/WP3-FIXB/01-red-regressions.txt",
+        "handoff/delivery/evidence/WP3-FIXB/02-green-targeted.txt",
+        "handoff/delivery/evidence/WP3-FIXB/03-probe-p2-automation-rerun.txt",
+        "handoff/delivery/evidence/WP3-FIXB/04-probe-p4-delivery-config-rerun.txt",
+        "handoff/delivery/evidence/WP3-FIXB/05-e2e.txt",
+        "handoff/delivery/evidence/WP3-FIXB/06-verify.txt",
+        "handoff/delivery/evidence/WP3-FIXB/07-digest.txt"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "d9fa55bda1c637b1e58f2b5de005941b3767d8ca6d676e8b4e89fce2c6004582",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: B-01 (docs/05 'Deadline and recovery', AC-07, F-4) automation.ts uses users.created_at as the account's automation start; earlier deadlines skipped, the creation period and later still auto-submit (F-1); the bound also clamps saved settings so apply-to-overdue never reaches before creation. B-02 (docs/05 failure table, AC-08) runner.ts calls recoverInterruptedSends at the start of every pass that owns the send handler. B-03 (docs/04 Screens, F-Q2) full operation-name map with an 'Other change' fallback; system events badged automatic. Tests red 8 failed / 87 passed, green 95 passed; 7 net new tests; auditor probes p2 and p4 now pass. Auto-submit default: docs/04, 05 and 10 D-09 say 'enabled after setup', none defines a never-configured account; unchanged. e2e exit 0 (127 passed, 5 skipped); verify exit 0 (60 files, 1391 tests, smoke passed); evidence precommit passed; digest d9fa55bd. Deviations: src/client/HistoryScreen.tsx and tests/integration/delivery-crash.test.ts outside the named paths, with one existing delivery-crash assertion changed to claimed 0 (to be judged by the recheck); creation bound clamps saved settings (accepted: equivalent to the decision); residual edge: a lease expiring mid-pass is recovered on the next pass; docs/05 not edited.",
+      "next_action": "None; WP3-FIXC on the same working tree."
+    },
+    {
+      "id": "WP3-FIXC",
+      "package": "WP3",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP3-AUDIT-C",
+      "depends_on": [
+        "WP3-FIXB"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3cd9ff3fef21b47a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/history.ts",
+        "src/server/types.ts",
+        "src/client/ReviewScreen.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "src/client/components/sharingModel.ts",
+        "tests/integration",
+        "tests/client",
+        "tests/e2e/sharing.spec.ts",
+        "handoff/delivery/WP3_HANDOFF.md",
+        "handoff/delivery/WP3_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP3-FIXC.md",
+        "handoff/delivery/evidence/WP3-FIXC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIXC.md",
+      "report": "handoff/delivery/tasks/WP3-FIXC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-FIXC/00-commands.txt",
+        "handoff/delivery/evidence/WP3-FIXC/01-red-regressions.txt",
+        "handoff/delivery/evidence/WP3-FIXC/01a-red-first-run.txt",
+        "handoff/delivery/evidence/WP3-FIXC/05-e2e.txt",
+        "handoff/delivery/evidence/WP3-FIXC/06-verify.txt",
+        "handoff/delivery/evidence/WP3-FIXC/07-digest.txt",
+        "handoff/delivery/evidence/WP3-FIXC/08-precommit-check.txt",
+        "handoff/delivery/evidence/WP3-FIXC/sharing-review-hint-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP3-FIXC/sharing-review-hint-mobile-synthetic.png"
+      ],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "source_digest": "eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: C-01 new src/server/services/sharedActs.ts granteeChangesForReview (days whose last day_entry/work_session event was written through a grant since the owner's latest own finalization, else period start in the reporting zone); routes/submission.ts returns grantee_changes beside the payload only when actor = subject, outside the hash and PDF; ReviewScreen shows 'N day(s) last changed by <name>' (E-8 tokens). C-02 history.ts: through a grant = actor is not the owner and the operation is in SHARED_ACT_OPERATIONS (no time window); 'Downloaded by' for PDF downloads. C-03 types.ts comment. No field or migration. Tests red 13/50 (first run 14/49), green 62 files / 1407 tests; e2e 127 passed 5 skipped (hint on desktop/mobile, absent on shared view); verify exit 0, smoke 40 PASS, 0 deprecation lines; digest eeb417d3 (721 files); precommit over evidence PASS. Deviations: (1) operation-plus-actor rule instead of a recorded path/flag, residual risk if a future non-shared route writes those codes for another actor (drift-guard test covers the shared routes); (2) new sharedActs.ts and granteeChangesModel.ts plus two new test files; (3) reviewModel.test.ts fixture line and e2e sharing.spec.ts; (4) a grantee leaving a share is no longer named in the owner's History ('Share ended' by someone else); (5) the old time-window test replaced. Coordinator: deviations accepted provisionally; WP3-RECHECK-BC judges (1), (4) and (5).",
+      "next_action": "None; WP3-FIX-FREEZE."
+    },
+    {
+      "id": "WP3-FIX-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-FIXB",
+        "WP3-FIXC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a53d1c0a0a86519c5",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 3,
+      "history": [
+        "attempt 1 (agent a53d1c0a0a86519c5, self-reported claude-sonnet-5-5): no commit; validate_orchestration.py and check_recovery.py exit 1 ('Audit verdict missing: WP3-AUDIT-A', line 287: a done audit's decision must be exactly PASS, FIX REQUIRED or NOT VERIFIED); the coordinator had written prose into the decision of WP3-AUDIT-A/B/C. Digest eeb417d3 matched; 177 paths left staged; precommit, diff --cached --check, JSON parse and preflight exit 0. Coordinator moved the details to findings arrays; same committer resumed for attempt 2.",
+        "attempt 2 (same agent): no commit; validate_orchestration.py exit 1 ('Dependency audit not PASS: WP3-LINKFIX', line 311: a running or done task may depend on an audit only when it is PASS; fix tasks use addresses_audit). The coordinator had made WP3-LINKFIX depend on WP3-AUDIT-A/B/C; it now depends on WP3-GATE (PASS). Digest matched; 177 paths left staged; precommit, diff --cached --check and JSON parse exit 0. Same committer resumed for attempt 3."
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-FIX-FREEZE.md",
+        "handoff/delivery/evidence/WP3-FIX-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIX-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-FIX-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "a1cd566e59253d19f53cfd5b3a81fd27a7e9a056",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3 package-final set (HANDOFF, developer docs, audit briefs, pending handoff records)."
+      "next_action": "Commit and push the WP3 fix-round set with the audit reports and pending handoff records."
     },
     {
       "id": "WP3-REQ2",

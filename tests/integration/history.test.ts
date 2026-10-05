@@ -262,30 +262,102 @@ describe('GET /api/history', () => {
     expect(JSON.stringify(own.body)).not.toContain(shared.body.session.id);
   });
 
-  it('stops naming a former grantee for events after the share ended', async () => {
-    const grantee = await addGrantee();
-    const granted = await t.request('POST', '/api/shares', {
-      cookie: employee,
-      body: { grantee_email: 'grantee@example.invalid', items: { timesheets: 'view', ot_read: false, pdf_download: false } },
-    });
-    expect(granted.status).toBe(201);
-    t.clock.advanceSeconds(60);
-    expect((await t.request('POST', `/api/shares/${granted.body.share.id}/revoke`, { cookie: employee, body: {} })).status).toBe(200);
-    // A synthetic event by the former grantee one minute after the revocation (no route can cause one).
-    t.db
-      .prepare(
-        `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id)
-         VALUES ('synthetic-after-share', '2026-10-02T18:02:00Z', ?, ?, 'day_entry.update', 'day_entry', 'synthetic-entry')`,
-      )
-      .run(grantee.id, t.userIds.employee);
+  const UNATTRIBUTED = { actor_is_self: false, actor_user_id: null, via_share: false, actor_display_name: null };
+  const VIEW = { timesheets: 'view', ot_read: false, pdf_download: false };
+
+  async function shareWith(email: string, items: Record<string, unknown> = VIEW): Promise<string> {
+    const response = await t.request('POST', '/api/shares', { cookie: employee, body: { grantee_email: email, items } });
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    return response.body.share.id as string;
+  }
+
+  async function historyEvents(): Promise<Array<Record<string, any>>> {
     const response = await t.request('GET', '/api/history', { cookie: employee });
-    const events = response.body.audit_events as Array<Record<string, any>>;
-    expect(events.find((event) => event.id === 'synthetic-after-share')).toMatchObject({
-      actor_is_self: false,
-      actor_user_id: null,
-      via_share: false,
-      actor_display_name: null,
+    expect(response.status).toBe(200);
+    return response.body.audit_events as Array<Record<string, any>>;
+  }
+
+  it('WP3-C-02: a grantee leaving the share is not an act under it and stays unattributed', async () => {
+    const grantee = await addGrantee();
+    const id = await shareWith('grantee@example.invalid');
+    t.clock.advanceSeconds(60);
+    expect((await t.request('POST', `/api/shares/${id}/revoke`, { cookie: grantee.cookie, body: {} })).status).toBe(200);
+    const left = (await historyEvents()).find((event) => event.operation === 'share.revoke');
+    expect(left).toMatchObject(UNATTRIBUTED);
+    expect(left?.after).toEqual({ revoked_by_role: 'grantee' });
+  });
+
+  it('WP3-C-02: an administrator who also holds a share keeps an admin-route revocation as an admin act', async () => {
+    await addGrantee();
+    const granteeShare = await shareWith('grantee@example.invalid');
+    await shareWith(t.emails.admin);
+    t.clock.advanceSeconds(60);
+    const revoked = await t.request('POST', `/api/admin/shares/${granteeShare}/revoke`, { cookie: admin, body: { reason: 'Synthetic security reason' } });
+    expect(revoked.status, JSON.stringify(revoked.body)).toBe(200);
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    const event = (response.body.audit_events as Array<Record<string, any>>).find((row) => row.operation === 'share.revoke');
+    expect(event).toMatchObject(UNATTRIBUTED);
+    expect(event?.after).toEqual({ revoked_by_role: 'admin' });
+    expect(JSON.stringify(response.body)).not.toContain(t.userIds.admin);
+  });
+
+  it('WP3-C-02: an act in the same second as a later grant to its actor is not attributed retroactively', async () => {
+    await addGrantee();
+    const granteeShare = await shareWith('grantee@example.invalid');
+    // One clock reading for all three steps: the admin revokes, then the owner grants the admin a share.
+    const revoked = await t.request('POST', `/api/admin/shares/${granteeShare}/revoke`, { cookie: admin, body: {} });
+    expect(revoked.status, JSON.stringify(revoked.body)).toBe(200);
+    await shareWith(t.emails.admin);
+    const events = await historyEvents();
+    const revocation = events.find((event) => event.operation === 'share.revoke');
+    const grantToAdmin = events.filter((event) => event.operation === 'share.grant').at(0);
+    expect(revocation?.occurred_at).toBe(grantToAdmin?.occurred_at);
+    expect(revocation).toMatchObject(UNATTRIBUTED);
+  });
+
+  it('WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is', async () => {
+    const grantee = await addGrantee();
+    await shareWith('grantee@example.invalid', { timesheets: 'edit', ot_read: false, pdf_download: false });
+    await shareWith(t.emails.admin, { timesheets: 'edit', ot_read: false, pdf_download: false });
+    t.clock.advanceSeconds(60);
+    const base = `/api/shared/${t.userIds.employee}`;
+    const body = (date: string) => ({ start: la(`${date}T09:00`), end: la(`${date}T17:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true });
+    const created = await t.request('POST', `${base}/days/2026-09-22/sessions`, { cookie: grantee.cookie, body: body('2026-09-22') });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const sessionId = created.body.session.id as string;
+    const updated = await t.request('PUT', `${base}/sessions/${sessionId}`, {
+      cookie: grantee.cookie,
+      body: { ...body('2026-09-22'), expected_version: 1 },
     });
+    expect(updated.status, JSON.stringify(updated.body)).toBe(200);
+    const day = await t.request('PUT', `${base}/days/2026-09-23`, {
+      cookie: grantee.cookie,
+      body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: '' },
+    });
+    expect(day.status, JSON.stringify(day.body)).toBe(200);
+    const batch = await t.request('POST', `${base}/days/batch`, {
+      cookie: grantee.cookie,
+      body: { mode: 'commit', entries: [{ work_date: '2026-09-24', category: 'Sick', expected_version: null }] },
+    });
+    expect(batch.status, JSON.stringify(batch.body)).toBe(200);
+    const deleted = await t.request('DELETE', `${base}/sessions/${sessionId}`, { cookie: grantee.cookie, body: { expected_version: 2 } });
+    expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
+
+    const events = await historyEvents();
+    const written = events.filter((event) => event.entity_type === 'work_session' || event.entity_type === 'day_entry');
+    expect(written.map((event) => event.operation).sort()).toEqual([
+      'day_entry.create',
+      'day_entry.create',
+      'day_entry.create',
+      'work_session.create',
+      'work_session.delete',
+      'work_session.update',
+    ]);
+    for (const event of written) {
+      expect(event, event.operation).toMatchObject({ actor_is_self: false, actor_user_id: null, via_share: true, actor_display_name: 'Synthetic Grantee' });
+    }
+    // Everything else by another person (the grant to the grantee is the owner's own act) stays unattributed.
+    for (const event of events.filter((row) => !written.includes(row))) expect(event.via_share, event.operation).toBe(false);
   });
 
   it('is read-only, immutable and requires a session', async () => {

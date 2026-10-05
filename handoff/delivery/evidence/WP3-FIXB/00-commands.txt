@@ -1,0 +1,29 @@
+WP3-FIXB attempt 1 - commands, exits and results (timesheet-worker-high, self-reported model claude-sonnet-5-5)
+Date: 2026-10-05 (UTC). Host: Windows 11, Git Bash. Baseline: main at a1cd566e59253d19f53cfd5b3a81fd27a7e9a056.
+Node: portable v24.21.0 called by full path for every node/npm step (first shell call: node --version -> v24.21.0).
+TEMP/TMP = <scratch>. Capture outbound only; PRODUCTION_SENDING_ENABLED unset. All data synthetic.
+
+Reproduction and red-first (against the unfixed source, regression tests already written):
+  node node_modules/vitest/vitest.mjs run tests/integration/deadline.test.ts tests/integration/delivery.test.ts \
+       tests/client/otModel.test.ts tests/client/sharingModel.test.ts
+      -> exit 1; 8 failed | 87 passed (95)                                         01-red-regressions.txt
+      B-01: 4 tests (finalized 3/4/3/2 instead of 0/1/1/1)
+      B-02: 1 test (attempt stays "sending" after the pass, expected "uncertain")
+      B-03: 3 tests (raw code and "by someone else"; isSystemOperation missing)
+  Auditor probes p2 (WP3-B-01) and p4 (WP3-B-02) re-run on the fixed tree from the unmasked copies of
+  handoff/delivery/evidence/WP3-AUDIT-B/p2-automation.mjs.txt and p4-delivery-config.mjs.txt:
+      p2 -> exit 0, 95 PASS, 0 FAIL (was 94 PASS, 1 FAIL)                          03-probe-p2-automation-rerun.txt
+      p4 -> exit 0, 16 PASS, 0 FAIL (was 15 PASS, 1 FAIL)                          04-probe-p4-delivery-config-rerun.txt
+
+Fix and green:
+  same vitest command (verbose) -> exit 0; 4 files, 95 passed                     02-green-targeted.txt
+  A full run found one existing assertion that pinned the old pass summary (delivery-crash.test.ts:223,
+  claimed 1/intervention 1); it was updated to claimed 0 (the recovery now runs before the claim) and its
+  following outcome assertions (uncertain, intervention delivery_uncertain, nothing sent) are unchanged.
+
+Final checks after the last edit:
+  npm run typecheck                        exit 0
+  npm run lint                             exit 0
+  npm run test:e2e (Edge, desktop+mobile)  exit 0; 127 passed, 5 skipped, 0 failed   05-e2e.txt
+  npm run verify                           exit 0; 60 files / 1391 tests (was 1384 + 7 new); SMOKE PASSED, 40 PASS lines; 0 deprecation lines   06-verify.txt
+  npm run digest                           exit 0; d9fa55bda1c637b1e58f2b5de005941b3767d8ca6d676e8b4e89fce2c6004582 (717 files, handoff/ excluded)   07-digest.txt

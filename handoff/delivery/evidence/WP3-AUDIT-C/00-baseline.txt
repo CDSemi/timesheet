@@ -1,0 +1,24 @@
+WP3-AUDIT-C baseline (before), 2026-10-05T11:13:42Z
+Auditor: timesheet-auditor, self-reported model claude-opus-5-5; authored nothing in WP3.
+
+$ node.exe --version   (portable Node 24, full path)
+v24.21.0
+
+Scratch clone: <scratch>/repo (<scratch> = the scratch folder named in the brief, on D: outside Dropbox), TEMP/TMP=<scratch>/tmp
+$ git clone --no-hardlinks <project> repo; git checkout a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+$ git rev-parse HEAD
+a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+$ npm ci            -> exit 0 (added 160 packages, 0 vulnerabilities)
+
+$ node scripts/source-digest.mjs   (scratch clone)
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729  (717 files, handoff/ excluded)
+exit=0
+
+$ node scripts/source-digest.mjs   (project folder; HEAD = origin/main = a1cd566)
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729  (717 files, handoff/ excluded)
+$ git diff --stat a1cd566 -- . ':!handoff'   (project folder)
+(empty: the project folder differs from a1cd566 only in handoff/)
+$ git ls-tree -r --format='%(path) %(objectname)' a1cd566 | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729
+
+Gate digest of record: 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 -> MATCH

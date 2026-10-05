@@ -1,0 +1,176 @@
+// WP3-AUDIT-A crash-injection probe for finalization (synthetic data, capture mode only).
+// C1 manual sign-off killed inside its IMMEDIATE transaction -> nothing persisted; retry creates
+//    one revision; a committed sign-off whose process dies before replying is durable; an identical
+//    retry replays (no second revision, ledger set, job or send).
+// C2 deadline finalization killed inside its transaction -> nothing persisted; the next production
+//    run-jobs pass finalizes once; further passes add nothing.
+// C3 late review of that automatic revision (unchanged content) -> zero ledger delta (LG-09), one
+//    signed revision 2, and a crash right after it commits is durable and replays.
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { count, fixedClock, freshDb, m, png, policy, REPO, session, sessionUser } from './common.mjs';
+
+const BASE = process.env.RUN_DIR ?? '<scratch>/work/runs/crash';
+const EARLY = '2026-09-20T12:00:00Z';
+const NOW = '2026-09-30T00:30:00Z';
+const HERE = import.meta.dirname;
+let failures = 0;
+
+const run = (args, env = {}) =>
+  new Promise((resolve) => {
+    const child = spawn(process.execPath, args, { env: { ...process.env, ...env }, cwd: REPO });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d) => {
+      out += d;
+    });
+    child.stderr.on('data', (d) => {
+      err += d;
+    });
+    child.on('close', (code, signal) => resolve({ code, signal, out: out.trim(), err: err.trim() }));
+  });
+
+async function setup(name) {
+  const dir = join(BASE, name);
+  mkdirSync(dir, { recursive: true });
+  const dbPath = join(dir, 't.db');
+  const dataDir = join(dir, 'private-data');
+  const s = await freshDb(dbPath, EARLY);
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const early = fixedClock(EARLY);
+  policy(db, EARLY, owner.id, s.calendarId, 'auto_deduct');
+  m.ledger.postCredit(
+    { db, clock: early },
+    { userId: owner.id, sourceKey: 'audit-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' },
+  );
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  m.sigs.saveSignature(db, early, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, early, owner.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true });
+  m.auto.setAutomationActivation(db, early, { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic audit activation' });
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  db.close();
+  return { dbPath, dataDir, ownerId: owner.id };
+}
+
+function state(dbPath, ownerId, dataDir) {
+  const db = m.db.openDatabase(dbPath);
+  const out = {
+    revisions: db.prepare('SELECT revision_no, origin, review_state FROM timesheet_revisions WHERE user_id = ? ORDER BY revision_no').all(ownerId),
+    signoffs: db.prepare('SELECT signed_at FROM signoffs WHERE user_id = ?').pluck().all(ownerId),
+    ledger: count(db, 'SELECT count(*) FROM ot_ledger WHERE user_id = ?', ownerId),
+    finalizationEntries: db.prepare("SELECT delta_minutes FROM ot_ledger WHERE user_id = ? AND source_key NOT LIKE 'audit-opening' ORDER BY rowid").pluck().all(ownerId),
+    lines: db.prepare('SELECT outcome FROM revision_ledger_lines WHERE user_id = ? ORDER BY rowid').pluck().all(ownerId),
+    jobs: db.prepare("SELECT kind || ':' || state FROM jobs WHERE user_id = ? ORDER BY rowid").pluck().all(ownerId),
+    attempts: db.prepare('SELECT state FROM delivery_attempts WHERE user_id = ?').pluck().all(ownerId),
+    finalizedNo: db.prepare('SELECT finalized_revision_no FROM timesheets WHERE user_id = ?').pluck().get(ownerId) ?? null,
+    posted: m.ledger.getBalance(db, ownerId).postedMinutes,
+    integrity: db.prepare('PRAGMA integrity_check').pluck().get(),
+    fk: db.prepare('PRAGMA foreign_key_check').all().length,
+  };
+  const review = m.review.buildReviewPayload(db, fixedClock(NOW), sessionUser(db, ownerId), '2026-10-02');
+  out.hash = review.payloadHash;
+  out.version = review.expectedVersion;
+  db.close();
+  const captureDir = join(dataDir, 'mail-capture');
+  const metas = existsSync(captureDir)
+    ? readdirSync(captureDir)
+        .filter((name) => !name.startsWith('.tmp'))
+        .map((name) => JSON.parse(readFileSync(join(captureDir, name, 'metadata.json'), 'utf8')))
+    : [];
+  out.submissionCaptures = metas.filter((meta) => meta.pdf_sha256 !== undefined).length;
+  out.otherCaptures = metas.length - out.submissionCaptures;
+  return out;
+}
+
+function show(label, s) {
+  return `${label}: revisions=${JSON.stringify(s.revisions)} signoffs=${JSON.stringify(s.signoffs)} ledger_rows=${s.ledger} non_opening=${JSON.stringify(s.finalizationEntries)} lines=${JSON.stringify(s.lines)} jobs=${JSON.stringify(s.jobs)} attempts=${JSON.stringify(s.attempts)} finalized_no=${s.finalizedNo} posted=${s.posted} submission_captures=${s.submissionCaptures} other_captures=${s.otherCaptures} integrity=${s.integrity} fk=${s.fk}`;
+}
+
+function expect(label, condition) {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}`);
+  if (!condition) failures += 1;
+}
+
+const runJobs = (env, instant) => run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], env);
+
+/* C1 ----------------------------------------------------------------------------------------- */
+{
+  const c = await setup('c1-manual');
+  const env = { DATABASE_PATH: c.dbPath, DATA_DIR: c.dataDir, MAIL_FROM: '<email>' };
+  const before = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C1 before', before));
+  const killed = await run([join(HERE, 'crash-child.mjs'), 'signoff', c.dbPath, 'kill-in-tx', before.hash, String(before.version)]);
+  console.log(`C1 child exit code=${killed.code} signal=${killed.signal} out=${killed.out}`);
+  const afterKill = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C1 after kill inside the transaction', afterKill));
+  expect('C1 a sign-off killed inside its transaction persists nothing (no revision, sign-off, ledger row, line or job)',
+    afterKill.revisions.length === 0 && afterKill.signoffs.length === 0 && afterKill.ledger === before.ledger && afterKill.lines.length === 0 && afterKill.jobs.length === 0 && afterKill.finalizedNo === null);
+  expect('C1 integrity ok and no foreign-key violation after the kill', afterKill.integrity === 'ok' && afterKill.fk === 0);
+  expect('C1 the reviewed hash is unchanged by the rolled-back attempt', afterKill.hash === before.hash);
+  const committed = await run([join(HERE, 'crash-child.mjs'), 'signoff', c.dbPath, 'kill-after', afterKill.hash, String(afterKill.version)]);
+  console.log(`C1 commit-then-kill child exit code=${committed.code} signal=${committed.signal} out=${committed.out}`);
+  const afterCommit = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C1 after commit then kill', afterCommit));
+  expect('C1 a committed sign-off survives the process kill (one revision, one sign-off at the real instant, two ledger rows, two lines, two jobs)',
+    afterCommit.revisions.length === 1 && afterCommit.signoffs.length === 1 && afterCommit.signoffs[0] === '2026-09-30T00:30:05Z' && afterCommit.ledger === before.ledger + 2 && afterCommit.lines.length === 2 && afterCommit.jobs.length === 2);
+  const replay = await run([join(HERE, 'crash-child.mjs'), 'signoff', c.dbPath, 'none', afterKill.hash, String(afterKill.version)]);
+  console.log(`C1 identical retry out=${replay.out}`);
+  const afterReplay = state(c.dbPath, c.ownerId, c.dataDir);
+  expect('C1 the identical retry after the crash replays and writes nothing',
+    replay.out.includes('"status":"replayed"') && JSON.stringify(afterReplay.revisions) === JSON.stringify(afterCommit.revisions) && afterReplay.ledger === afterCommit.ledger && afterReplay.jobs.length === 2);
+  const pass1 = await runJobs(env, '2026-09-30T00:40:00Z');
+  const pass2 = await runJobs(env, '2026-09-30T00:50:00Z');
+  const pass3 = await runJobs(env, '2026-09-30T01:50:00Z');
+  console.log(`C1 run-jobs passes: ${pass1.out} | ${pass2.out} | ${pass3.out}`);
+  const drained = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C1 drained', drained));
+  expect('C1 after three runner passes: one submission captured, one accepted attempt, ledger unchanged',
+    drained.submissionCaptures === 1 && drained.attempts.length === 1 && drained.attempts[0] === 'accepted' && drained.ledger === afterCommit.ledger && drained.integrity === 'ok');
+}
+
+/* C2 + C3 ------------------------------------------------------------------------------------ */
+{
+  const c = await setup('c2-deadline');
+  const env = { DATABASE_PATH: c.dbPath, DATA_DIR: c.dataDir, MAIL_FROM: '<email>' };
+  const before = state(c.dbPath, c.ownerId, c.dataDir);
+  const killed = await run([join(HERE, 'crash-child.mjs'), 'deadline', c.dbPath, 'kill-in-tx']);
+  console.log(`C2 child exit code=${killed.code} signal=${killed.signal} out=${killed.out}`);
+  const afterKill = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C2 after kill inside the automatic transaction', afterKill));
+  expect('C2 an automatic finalization killed inside its transaction persists nothing',
+    afterKill.revisions.length === 0 && afterKill.ledger === before.ledger && afterKill.lines.length === 0 && afterKill.jobs.length === 0 && afterKill.finalizedNo === null && afterKill.integrity === 'ok');
+  const pass1 = await runJobs(env, '2026-09-30T00:31:00Z');
+  const pass2 = await runJobs(env, '2026-09-30T00:41:00Z');
+  const pass3 = await runJobs(env, '2026-09-30T01:41:00Z');
+  console.log(`C2 run-jobs passes: ${pass1.out} | ${pass2.out} | ${pass3.out}`);
+  const auto = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C2 after recovery passes', auto));
+  expect('C2 the next passes finalize once: one automatic revision, review pending, no sign-off (signed_at empty), two ledger rows, one submission captured',
+    auto.revisions.length === 1 && auto.revisions[0].origin === 'deadline' && auto.revisions[0].review_state === 'pending' && auto.signoffs.length === 0 && auto.ledger === before.ledger + 2 && auto.submissionCaptures === 1 && auto.attempts.length === 1);
+
+  // C3: late review with unchanged content (LG-09) and a crash right after its commit.
+  const late = await run([join(HERE, 'crash-child.mjs'), 'late_review', c.dbPath, 'kill-after', auto.hash, String(auto.version)]);
+  console.log(`C3 late review (commit then kill) exit code=${late.code} signal=${late.signal} out=${late.out}`);
+  const reviewed = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(show('C3 after late review', reviewed));
+  expect('C3 the late review is durable: revision 2 signed (late review), one sign-off, zero new ledger rows (LG-09), its lines all unchanged',
+    reviewed.revisions.length === 2 && reviewed.revisions[1].review_state === 'signed' && reviewed.signoffs.length === 1 && reviewed.ledger === auto.ledger && reviewed.posted === auto.posted &&
+      reviewed.lines.slice(auto.lines.length).every((outcome) => outcome === 'unchanged') && reviewed.lines.length > auto.lines.length);
+  const replay = await run([join(HERE, 'crash-child.mjs'), 'late_review', c.dbPath, 'none', auto.hash, String(auto.version)]);
+  console.log(`C3 identical late-review retry out=${replay.out}`);
+  const after = state(c.dbPath, c.ownerId, c.dataDir);
+  expect('C3 the identical late-review retry replays: no third revision, no ledger row',
+    replay.out.includes('"status":"replayed"') && after.revisions.length === 2 && after.ledger === auto.ledger);
+  const pass4 = await runJobs(env, '2026-10-01T18:05:00Z');
+  const final = state(c.dbPath, c.ownerId, c.dataDir);
+  console.log(`C3 run-jobs pass: ${pass4.out}`);
+  console.log(show('C3 final', final));
+  expect('C3 send_email false: the late review enqueues only its PDF, no second submission is captured, the ledger is unchanged',
+    final.submissionCaptures === 1 && final.ledger === auto.ledger && final.jobs.filter((job) => job.startsWith('send_email')).length === 1);
+}
+
+console.log(failures === 0 ? 'CRASH PROBE PASSED' : `CRASH PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

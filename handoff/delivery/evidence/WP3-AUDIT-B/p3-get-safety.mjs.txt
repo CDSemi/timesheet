@@ -1,0 +1,153 @@
+// WP3-AUDIT-B probe 3: every registered GET route, called as owner, grantee, admin and anonymous,
+// against a populated real SQLite file; per-table content hashes and data_version (second
+// connection) before/after each request. Also the deep link and the static index. Synthetic data.
+// Usage: node p3-get-safety.mjs <repoDir> <workDir>
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [repoDir, workDir] = process.argv.slice(2);
+const src = (p) => pathToFileURL(join(repoDir, 'src', p)).href;
+const DB = join(workDir, 'p3.db');
+const DATA = join(workDir, 'data');
+mkdirSync(DATA, { recursive: true });
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+
+const { openDatabase } = await import(src('server/db/database.ts'));
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic, syntheticSignaturePng } = await import(src('server/seed.ts'));
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { FileStore } = await import(src('server/files/fileStore.ts'));
+const { createJobHandlers, runJobsOnce } = await import(src('server/jobs/runner.ts'));
+
+const db = openDatabase(DB);
+migrate(db);
+let nowIso = '2026-09-29T20:00:00Z';
+const clock = { now: () => new Date(nowIso) };
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const files = new FileStore(DATA);
+const seed = await seedSynthetic(db, clock, { passwords, files, sampleData: true });
+const ORIGIN = 'http://localhost:4521';
+const config = { host: '127.0.0.1', port: 4521, databasePath: DB, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 43200, production: false };
+const delivery = { dataDir: DATA, publicBaseUrl: ORIGIN, senderAddress: '<email>', outbound: { mode: 'capture' } };
+const staticDir = join(repoDir, 'dist', 'client');
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir, delivery }, { dataDir: DATA });
+const request = async (method, path, { cookie, body, type } = {}) => {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers['content-type'] = type ?? 'application/json';
+    init.body = type === undefined ? JSON.stringify(body) : body;
+  }
+  const response = await app.request(path, init);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  let json = null;
+  try {
+    json = JSON.parse(buffer.toString('utf8'));
+  } catch {
+    json = null;
+  }
+  return { status: response.status, body: json, headers: response.headers, bytes: buffer.length };
+};
+const loginAs = async (email, password) => {
+  const r = await request('POST', '/api/auth/login', { body: { email, password } });
+  if (r.status !== 200) throw new Error(`login ${email} ${r.status}`);
+  return r.headers.get('set-cookie').split(';')[0];
+};
+
+// Population: employee2 has sample data; employee signs off, shares everything with employee2.
+const owner = await loginAs('<email>', passwords.employee);
+const grantee = await loginAs('<email>', passwords.employee2);
+const admin = await loginAs('<email>', passwords.admin);
+await request('POST', '/api/settings/submission', { cookie: owner, body: { expected_seq: 0, to: ['<email>'], auto_submit: true } });
+await request('POST', '/api/days/2026-09-26/sessions', { cookie: owner, body: { start: '2026-09-26T16:00:00Z', end: '2026-09-26T19:00:00Z', input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true } });
+const sig = await request('POST', '/api/signatures?authorize_auto_image=true', { cookie: owner, body: syntheticSignaturePng(), type: 'image/png' });
+const review = await request('GET', '/api/timesheets/2026-10-02/review', { cookie: owner });
+const so = await request('POST', '/api/timesheets/2026-10-02/signoff', {
+  cookie: owner,
+  body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true },
+});
+check(so.status === 201, `owner sign-off (${so.status})`);
+const share = await request('POST', '/api/shares', { cookie: owner, body: { grantee_email: '<email>', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+check(share.status === 201, `owner shares all items with employee2 (${share.status})`);
+await runJobsOnce({ db, clock, handlers: createJobHandlers({ db, clock, files, delivery }) });
+nowIso = '2026-09-29T20:02:00Z';
+await runJobsOnce({ db, clock, handlers: createJobHandlers({ db, clock, files, delivery }) });
+// Fresh sessions at the fixed probe minute so session bookkeeping is already current.
+const sessions = {
+  owner: await loginAs('<email>', passwords.employee),
+  grantee: await loginAs('<email>', passwords.employee2),
+  admin: await loginAs('<email>', passwords.admin),
+  anonymous: undefined,
+};
+
+const ownerId = seed.users.find((u) => u.email === '<email>').id;
+const revisionId = db.prepare('SELECT id FROM timesheet_revisions WHERE user_id = ?').get(ownerId).id;
+const sessionId = db.prepare('SELECT id FROM work_sessions WHERE user_id = ? LIMIT 1').get(ownerId).id;
+const settingsId = db.prepare('SELECT id FROM submission_settings WHERE user_id = ? LIMIT 1').get(ownerId).id;
+const signatureId = sig.body.signature.id;
+const fill = (path) =>
+  path
+    .replace(':payrollDate', '2026-10-02')
+    .replace(':workDate', '2026-09-26')
+    .replace(':ownerId', ownerId)
+    .replace(/\/sessions\/:id$/, `/sessions/${sessionId}`)
+    .replace(/\/revisions\/:id\/pdf$/, `/revisions/${revisionId}/pdf`)
+    .replace(/\/signatures\/:id$/, `/signatures/${signatureId}`)
+    .replace(/\/versions\/:id$/, `/versions/${settingsId}`);
+
+const getRoutes = [...new Set(app.routes.filter((r) => r.method === 'GET').map((r) => r.path))].filter((p) => !p.includes('*') || p === '/*' || p === '*');
+out(`INFO registered GET paths (${getRoutes.length}): ${getRoutes.join(' ')}`);
+const targets = getRoutes.flatMap((p) => (p === '*' || p === '/*' ? ['/', '/index.html', '/#/review/2026-10-02', '/assets/does-not-exist.js'] : [fill(p)]));
+targets.push(`/api/deliveries?revision_id=${revisionId}`, '/api/history?limit=5', '/api/admin/submissions?limit=5');
+
+const monitor = openDatabase(DB);
+const tables = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
+const snapshot = () =>
+  Object.fromEntries(tables.map((t) => [t, createHash('sha256').update(JSON.stringify(db.prepare(`SELECT * FROM "${t}" ORDER BY rowid`).all())).digest('hex')]));
+const diff = (a, b) => tables.filter((t) => a[t] !== b[t]);
+const results = [];
+let writes = 0;
+for (const target of targets) {
+  for (const [who, cookie] of Object.entries(sessions)) {
+    const before = snapshot();
+    const version = monitor.pragma('data_version', { simple: true });
+    const r = await request('GET', target, { cookie });
+    const changed = diff(before, snapshot());
+    const versionAfter = monitor.pragma('data_version', { simple: true });
+    if (changed.length > 0 || versionAfter !== version) writes += 1;
+    results.push({ target: target.replace(ownerId, '<owner>').replace(revisionId, '<rev>').replace(sessionId, '<session>').replace(settingsId, '<settings>').replace(signatureId, '<sig>'), who, status: r.status, changed, dataVersionChanged: versionAfter !== version });
+  }
+}
+for (const r of results) out(`ROW ${r.who.padEnd(9)} ${String(r.status).padEnd(3)} ${r.changed.length === 0 && !r.dataVersionChanged ? 'no-change' : `CHANGED ${r.changed.join(',')} data_version=${r.dataVersionChanged}`} GET ${r.target}`);
+const writing = results.filter((r) => r.changed.length > 0 || r.dataVersionChanged);
+const expected = writing.filter((r) => r.who === 'grantee' && r.target.includes('/api/shared/') && r.target.endsWith('/pdf') && r.changed.join() === 'audit_events');
+check(writing.length === expected.length, `GET requests that changed the database: ${writing.length}; all of them are the audited grantee PDF download (${expected.length})`);
+const anonymousApi = results.filter((r) => r.who === 'anonymous' && r.target.startsWith('/api/') && r.target !== '/api/health');
+check(anonymousApi.every((r) => r.status === 401 || r.status === 404), `anonymous API GETs answer 401/404 (${[...new Set(anonymousApi.map((r) => r.status))].join(',')})`);
+const deepLink = results.find((r) => r.who === 'anonymous' && r.target === '/#/review/2026-10-02');
+check(deepLink?.status === 200, 'the deep link path serves only the static client shell to an anonymous caller (the review data needs login)');
+// Session bookkeeping: one minute later the first authenticated GET updates last_seen_at once (no business table).
+nowIso = '2026-09-29T20:03:30Z';
+const before = snapshot();
+await request('GET', '/api/periods/current', { cookie: sessions.owner });
+const minuteDiff = diff(before, snapshot());
+out(`INFO a GET in a new minute changes only: ${JSON.stringify(minuteDiff)} (session last_seen_at bookkeeping)`);
+check(minuteDiff.every((t) => t === 'auth_sessions'), 'the only other GET write is session last_seen_at (auth_sessions)');
+out(`SUMMARY failures=${failures} requests=${results.length} writing=${writes}`);
+writeFileSync(join(workDir, 'p3-result.txt'), `${log.join('\n')}\n`);
+monitor.close();
+db.close();
+process.exit(failures === 0 ? 0 : 1);

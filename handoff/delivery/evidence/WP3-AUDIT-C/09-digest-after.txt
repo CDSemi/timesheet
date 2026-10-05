@@ -1,0 +1,20 @@
+WP3-AUDIT-C 09: HEAD and source digest after the audit (2026-10-05T11:40:49Z)
+
+Scratch clone:
+$ git rev-parse HEAD
+a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+$ git status --short   (empty = clean; probes, runs, logs and screenshots live outside the clone)
+$ node scripts/source-digest.mjs
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729  (717 files, handoff/ excluded)
+
+Project folder:
+$ git rev-parse HEAD origin/main
+a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+$ node scripts/source-digest.mjs
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729  (717 files, handoff/ excluded)
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729
+$ git status --short -- . ':!handoff'   (empty = no change outside handoff/)
+
+Gate digest of record: 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729 -> MATCH before and after

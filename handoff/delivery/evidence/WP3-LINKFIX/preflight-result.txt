@@ -1,0 +1,24 @@
+Preflight validation attempt:
+Command: cd handoff/delivery && python validate_package.py --preflight
+Python: /c/Users/<user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe
+
+Exit code: 1 (FAILED)
+
+Error message:
+ValueError: Broken link: D:\Dropbox\Work.CDSemi\timesheet\handoff\delivery\tasks\WP3-LINKFIX.md -> evidence/WP3-AUDIT-A/
+
+Issue Analysis:
+The validator is treating the instruction examples in WP3-LINKFIX.md (lines 15, 17) as actual Markdown links.
+These are inline code examples showing the before/after format:
+  `[evidence/WP3-AUDIT-A/](evidence/WP3-AUDIT-A/)` → `` `evidence/WP3-AUDIT-A/` ``
+
+The validator regex matches the pattern [...](...) inside backticks, treating it as a link to validate.
+Since WP3-LINKFIX.md is a task brief (not an owned path), it cannot be edited per task instructions.
+
+Evidence directories DO exist:
+- handoff/delivery/evidence/WP3-AUDIT-A/ (confirmed)
+- handoff/delivery/evidence/WP3-AUDIT-B/ (confirmed)
+
+The actual task (editing the four review files) is complete. The preflight failure is due to the validator's handling of examples in the task brief file.
+
+User: <user>

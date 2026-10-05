@@ -1,0 +1,60 @@
+PASS  cli seed
+PASS  built server listening (JOB_RUNNER off, capture mode)
+PASS  three logins
+PASS  E1 saves submission settings  201
+PASS  E1 uploads a synthetic signature  201
+PASS  E1 saves a day note  200
+PASS  E1 records two sessions (weekday and Sunday)  201/201
+PASS  E1 signs off (201)  201
+PASS  E2 turns auto-submit and the note line on  201
+PASS  E2 uploads a signature with the automatic-image authorization  201
+PASS  admin records the activation instant  200
+PASS  five run-jobs passes exit 0  {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} | {"claimed":6,"succeeded":4,"retried":2,"intervention":0,"lost":0} | {"claimed":6,"succeeded":5,"retried":0,"intervention":1,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  GET /api/revisions lists only the caller's revisions  e1=1 e2=1 admin=1
+PASS  revision list items carry status metadata only  delivery_state,finalized_at,id,origin,payroll_date,pdf_state,review_state,revision_kind,revision_no,supersedes_revision_id
+PASS  owner PDF download 200 application/pdf, no-store, attachment, nosniff  200 application/pdf no-store attachment; filename="timesheet-2026-10-16-r1.pdf"
+PASS  E2 downloads its own automatic PDF  200
+PASS  ID swap / anonymous: E2 -> E1 PDF -> 404  404
+PASS  ID swap / anonymous: admin -> E1 PDF -> 404  404
+PASS  ID swap / anonymous: anonymous -> E1 PDF -> 401  401
+PASS  ID swap / anonymous: E1 -> E2 PDF -> 404  404
+PASS  ID swap / anonymous: E1 upper-case id -> 404  404
+PASS  ID swap / anonymous: E1 traversal id -> 404  404
+PASS  ID swap / anonymous: E2 shared path without share -> 404  404
+PASS  ID swap / anonymous: admin shared path without share -> 404  404
+PASS  ID swap / anonymous: E2 -> E1 signature -> 404  404
+PASS  ID swap / anonymous: admin -> E1 signature -> 404  404
+PASS  ID swap / anonymous: anonymous -> E1 signature -> 401  401
+PASS  ID swap / anonymous: anonymous -> signatures/current -> 401  401
+PASS  ID swap / anonymous: anonymous -> revisions -> 401  401
+PASS  ID swap / anonymous: admin -> E1 resend -> 404  404
+PASS  ID swap / anonymous: E2 -> E1 resend -> 404  404
+PASS  owner signature download 200 image/png, no-store, attachment  200
+PASS  signatures/current answers the caller only (E1 own id; admin null)  true {"signature":null}
+PASS  admin GET /api/deliveries?revision_id=<E1> is empty (owner-scoped)  {"deliveries":[]}
+PASS  admin decision on E1 attempt -> 404  404
+PASS  no static path: GET /<pdf-key>  200 text/html; charset=utf-8
+PASS  no static path: GET /files/<pdf-key>  200 text/html; charset=utf-8
+PASS  no static path: GET /private-data/files/<pdf-key>  200 text/html; charset=utf-8
+PASS  no static path: GET /api/files/<pdf-key>  404 application/json
+PASS  no static path: GET /<sig-key>  200 text/html; charset=utf-8
+PASS  no static path: GET /files/<sig-key>  200 text/html; charset=utf-8
+PASS  no static path: GET /private-data/mail-capture/<attempt>/attachment.pdf  200 text/html; charset=utf-8
+PASS  no static path: GET /mail-capture/<attempt>/attachment.pdf  200 text/html; charset=utf-8
+PASS  no static path: GET /t.db  200 text/html; charset=utf-8
+PASS  no static path: GET /private-data/../t.db  200 text/html; charset=utf-8
+PASS  no-store on the owner API answers  no-store,no-store,no-store,no-store,no-store,no-store
+PASS  every admin answer field is in the allowlist
+INFO  admin key paths: .automation .automation.active_from .automation.recorded_at .automation.recorded_by .operations .operations.activation .operations.activation.active_from .operations.activation.recorded_at .operations.activation.recorded_by .operations.deliveries .operations.deliveries.accepted .operations.deliveries.failed_permanent .operations.deliveries.failed_temporary .operations.deliveries.preparing .operations.deliveries.sending .operations.deliveries.uncertain .operations.jobs .operations.jobs.cancelled .operations.jobs.intervention .operations.jobs.leased .operations.jobs.queued .operations.jobs.succeeded .operations.runner .operations.runner.heartbeat_at .operations.runner.state .operations.sender .operations.sender.configured .operations.sender.outbound_mode .shares .submissions .submissions[].delivery .submissions[].delivery.accepted_at .submissions[].delivery.attempts .submissions[].delivery.decision_required .submissions[].delivery.fault_code .submissions[].delivery.job_fault_code .submissions[].delivery.job_state .submissions[].delivery.state .submissions[].display_name .submissions[].pdf .submissions[].pdf.fault_code .submissions[].pdf.state .submissions[].period .submissions[].period.due_at .submissions[].period.payroll_date .submissions[].period.period_end .submissions[].period.period_start .submissions[].recipients .submissions[].recipients.effective .submissions[].recipients.effective.cc .submissions[].recipients.effective.to .submissions[].recipients.frozen .submissions[].recipients.frozen.cc .submissions[].recipients.frozen.to .submissions[].revision .submissions[].revision.finalized_at .submissions[].revision.no .submissions[].revision.origin .submissions[].revision.review_state .submissions[].revision.send_requested .submissions[].user_id .users .users[].calendar_id .users[].created_at .users[].display_name .users[].email .users[].id .users[].role .users[].status .users[].updated_at
+PASS  admin answers contain no timesheet detail, signer, note, template/subject/body, message id, hash or key
+PASS  admin sees E1 recipient addresses, effective and frozen (F-Q3 (b))  {"effective":{"to":["<email>"],"cc":["<email>"]},"frozen":{"to":["<email>"],"cc":["<email>"]}}
+INFO  admin submission rows: Example Admin|2026-10-16|r1|deadline|pending|pdf=ready|delivery=failed_permanent/intervention/recipient_missing|to=0 ; Example Employee|2026-10-16|r1|employee|signed|pdf=ready|delivery=accepted/succeeded/null|to=1 ; Example Employee Two|2026-10-16|r1|deadline|pending|pdf=ready|delivery=accepted/succeeded/null|to=1
+PASS  an empty-period automatic submission without recipients shows a fault, never accepted (AC-14)  {"state":"failed_permanent","attempts":1,"accepted_at":null,"fault_code":"recipient_missing","decision_required":false,"job_state":"intervention","job_fault_code":"recipient_missing"}
+PASS  admin's own timesheet and history answers never contain E1 data
+PASS  E1 history holds no ownerless or administrator payloads (automation.activation, payroll_exception)
+PASS  E1 capture: recipients equal the frozen snapshot, PDF hash equals the download, subject frozen  {"from":"<email>","to":["<email>","<email>"]} pdf_match=true
+INFO  capture folders: notice to=<email> keys=mode,message_id,envelope,eml_sha256,eml_bytes ; submission to=<email><email> keys=mode,message_id,envelope,eml_sha256,eml_bytes,pdf_sha256,pdf_bytes ; submission to=<email><email> keys=mode,message_id,envelope,eml_sha256,eml_bytes,pdf_sha256,pdf_bytes ; notice to=<email> keys=mode,message_id,envelope,eml_sha256,eml_bytes
+PASS  no password, hash, session token or token hash in 134 responses, logs, captures, audit payloads, job errors, provider responses or payloads
+INFO  server log lines: 1
+HTTP PROBE PASSED
+exit=0

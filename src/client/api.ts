@@ -578,11 +578,22 @@ export interface HistoryPage {
  * client shows its values and computes no business minutes from them.
  */
 
-/** GET /api/timesheets/:payrollDate/review: the exact payload, its SHA-256 and the version it was read at. */
+/** The days of the reviewed period whose last change was made by one grantee, through a share (owner-only hint). */
+export interface GranteeChange {
+  display_name: string;
+  days: number;
+  work_dates: string[];
+}
+
+/**
+ * GET /api/timesheets/:payrollDate/review: the exact payload, its SHA-256 and the version it was read
+ * at. `grantee_changes` sits beside the payload, never inside it: it is not signed, hashed or printed.
+ */
 export interface ReviewResponse {
   payload: ReviewSnapshot;
   payload_hash: string;
   expected_version: number;
+  grantee_changes: GranteeChange[];
 }
 
 export interface RevisionSummary {

@@ -1,0 +1,227 @@
+// WP3-AUDIT-C probe P4: the sharing UI on the BUILT server (dist/) in the installed Edge channel,
+// desktop 1280x800 and mobile 390x844. Checks that disallowed actions are ABSENT from the DOM (not
+// only disabled), lists every disabled control, records the grantee's /api requests, and takes the
+// auditor's own synthetic screenshots. Synthetic data, capture mode, job runner off, loopback only.
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { finalizeWithPdf, LA, la, REPO, setup } from './lib.mjs';
+
+const { chromium } = await import(new URL('node_modules/playwright/index.mjs', REPO).href);
+const SHOTS = fileURLToPath(new URL('../shots-audit/', import.meta.url));
+let failures = 0;
+let passes = 0;
+function check(cond, label) {
+  if (cond) passes++;
+  else failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`);
+}
+
+// ---- Data on a file database (production source), then the built server on it.
+const ctx = await setup('p4');
+await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const OWNER = ctx.ids.owner;
+const sb = (date, from, to) => ({ start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true });
+await ctx.request('POST', '/api/days/2026-09-21/sessions', { cookie: ctx.cookies.owner, body: sb('2026-09-21', '09:00', '17:00') });
+await ctx.request('PUT', '/api/days/2026-09-22', { cookie: ctx.cookies.owner, body: { category: 'Worked', leave_minutes: 0, wfh: true, notes: 'owner-private-note-synthetic' } });
+await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+await ctx.request('POST', '/api/days/2026-09-28/sessions', { cookie: ctx.cookies.owner, body: sb('2026-09-28', '09:00', '17:30') });
+const grant = await ctx.request('POST', '/api/shares', {
+  cookie: ctx.cookies.owner,
+  body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } },
+});
+let shareId = grant.body.share.id;
+const creds = { owner: { email: ctx.emails.owner, password: ctx.passwords.owner }, grantee: { email: ctx.emails.grantee, password: ctx.passwords.grantee } };
+ctx.db.close();
+
+const port = await new Promise((resolve) => {
+  const s = createServer();
+  s.listen(0, '127.0.0.1', () => {
+    const p = s.address().port;
+    s.close(() => resolve(p));
+  });
+});
+const origin = `http://127.0.0.1:${port}`;
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: ctx.dbPath,
+  APP_ORIGINS: origin,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: '<email>',
+  DATA_DIR: ctx.dataDir,
+  JOB_RUNNER: 'off',
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+const server = spawn(process.execPath, ['dist/server/index.js'], { cwd: fileURLToPath(REPO), env, stdio: 'ignore' });
+for (let i = 0; i < 100; i++) {
+  try {
+    if ((await fetch(`${origin}/api/health`)).ok) break;
+  } catch {
+    /* not up yet */
+  }
+  await new Promise((r) => setTimeout(r, 100));
+}
+console.log(`INFO built server on loopback, port chosen free at start; job runner off; outbound capture`);
+
+async function apiLogin(who) {
+  const r = await fetch(`${origin}/api/auth/login`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(creds[who]) });
+  return r.headers.get('set-cookie').split(';')[0];
+}
+const ownerCookie = await apiLogin('owner');
+async function setItems(items) {
+  const r = await fetch(`${origin}/api/shares/${shareId}`, { method: 'PUT', headers: { origin, cookie: ownerCookie, 'content-type': 'application/json' }, body: JSON.stringify({ items }) });
+  const body = await r.json();
+  shareId = body.share.id;
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+try {
+const PROJECTS = {
+  desktop: { viewport: { width: 1280, height: 800 } },
+  mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+};
+
+/** Buttons, links, inputs and disabled controls inside the shared area. */
+async function inventory(page, selector) {
+  return page.evaluate((sel) => {
+    const root = document.querySelector(sel);
+    if (root === null) return null;
+    const text = (el) => (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ');
+    return {
+      buttons: [...root.querySelectorAll('button')].map(text),
+      inputs: [...root.querySelectorAll('input, select, textarea')].map((el) => `${el.tagName.toLowerCase()}[${el.getAttribute('type') ?? ''}]`),
+      disabled: [...root.querySelectorAll('[disabled], [aria-disabled="true"]')].map(text),
+      text: root.textContent ?? '',
+    };
+  }, selector);
+}
+const FORBIDDEN = /clock in|clock out|sign off|submit|resend|send|reserve|record use|cancel leave|reverse|export|upload|authorize|share|delete|add session|save/i;
+
+for (const [project, options] of Object.entries(PROJECTS)) {
+  console.log(`\n## ${project}`);
+  await setItems({ timesheets: 'view', ot_read: false, pdf_download: false });
+  const context = await browser.newContext(options);
+  const apiPaths = new Set();
+  const page = await context.newPage();
+  page.on('request', (req) => {
+    const u = new URL(req.url());
+    if (u.pathname.startsWith('/api/')) apiPaths.add(`${req.method()} ${u.pathname.replace(OWNER, '<owner>').replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '<id>').replace(/\d{4}-\d{2}-\d{2}/g, '<date>')}`);
+  });
+  await context.request.post(`${origin}/api/auth/login`, { headers: { origin }, data: creds.grantee });
+
+  // View only.
+  await page.goto(`${origin}/#/shared/${OWNER}`);
+  await page.locator('[data-share-bar]').waitFor();
+  await page.getByRole('heading', { name: "Example Employee's timesheet" }).waitFor();
+  await page.waitForLoadState('networkidle');
+  let inv = await inventory(page, '[data-shared-owner]');
+  console.log(`INFO view-only buttons: ${JSON.stringify(inv.buttons.filter((b, i, a) => a.indexOf(b) === i))}; inputs: ${JSON.stringify(inv.inputs)}; disabled: ${JSON.stringify(inv.disabled)}`);
+  check(!inv.buttons.some((b) => /clock|edit|preview changes|select all|sign|review|delete|add/i.test(b)), `${project} view only: no Clock, Edit, batch, review, sign-off, add or delete control in the DOM`);
+  check(!inv.inputs.some((i) => i.includes('checkbox')), `${project} view only: no selection checkbox`);
+  check(inv.disabled.every((d) => /open day/i.test(d)), `${project} view only: the only disabled control is "Open day" (empty date field)`);
+  await page.screenshot({ path: join(SHOTS, `audit-c-view-only-${project}-synthetic.png`), animations: 'disabled' });
+  await page.getByRole('button', { name: /^View/ }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor();
+  const dlg = await inventory(page, 'dialog[open], [role="dialog"]');
+  console.log(`INFO view-only day dialog buttons: ${JSON.stringify(dlg.buttons)}; inputs: ${JSON.stringify(dlg.inputs)}; disabled: ${JSON.stringify(dlg.disabled)}`);
+  check(dlg.buttons.every((b) => /close/i.test(b)) && dlg.inputs.length === 0 && dlg.disabled.length === 0, `${project} view-only day: only Close, no input, nothing disabled`);
+  await page.screenshot({ path: join(SHOTS, `audit-c-view-only-day-${project}-synthetic.png`), animations: 'disabled' });
+  await page.keyboard.press('Escape');
+
+  // Edit.
+  await setItems({ timesheets: 'edit', ot_read: false, pdf_download: false });
+  await page.reload();
+  await page.locator('[data-share-bar]').waitFor();
+  await page.getByRole('button', { name: /^Edit/ }).first().waitFor();
+  await page.waitForLoadState('networkidle');
+  inv = await inventory(page, '[data-shared-owner]');
+  console.log(`INFO edit buttons: ${JSON.stringify(inv.buttons.filter((b, i, a) => a.indexOf(b) === i))}; disabled: ${JSON.stringify(inv.disabled)}`);
+  check(!inv.buttons.some((b) => /clock|sign|sign off|review|resend|send/i.test(b)), `${project} edit: no Clock in/out, review, sign-off or send control in the DOM (word match; "Preview changes" is the batch preview)`);
+  check(inv.buttons.some((b) => /^edit/i.test(b)), `${project} edit: Edit controls present`);
+  await page.screenshot({ path: join(SHOTS, `audit-c-edit-${project}-synthetic.png`), animations: 'disabled' });
+
+  // OT and PDF items without timesheets.
+  await setItems({ timesheets: 'none', ot_read: true, pdf_download: true });
+  await page.goto(`${origin}/#/shared/${OWNER}/ot`);
+  await page.reload();
+  await page.locator('[data-shared-view="ot"]').waitFor();
+  await page.waitForLoadState('networkidle');
+  inv = await inventory(page, '[data-shared-owner]');
+  console.log(`INFO ot buttons: ${JSON.stringify(inv.buttons)}; links in bar: ${JSON.stringify(await page.locator('[data-share-bar] nav a').allTextContents())}`);
+  check(!inv.buttons.some((b) => FORBIDDEN.test(b)), `${project} OT item: no leave, export or other action control`);
+  check(!(await page.locator('[data-share-bar] nav a').allTextContents()).includes('Timesheet'), `${project} OT+PDF share: no Timesheet view link`);
+  await page.screenshot({ path: join(SHOTS, `audit-c-ot-${project}-synthetic.png`), fullPage: true, animations: 'disabled' });
+  await page.goto(`${origin}/#/shared/${OWNER}/revisions`);
+  await page.locator('[data-shared-view="revisions"]').waitFor();
+  await page.waitForLoadState('networkidle');
+  const dl = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Download PDF/ }).first().click();
+  const download = await dl;
+  check(/^timesheet-\d{4}-\d{2}-\d{2}-r\d+\.pdf$/.test(download.suggestedFilename()), `${project} PDF item: download ${download.suggestedFilename()}`);
+  await download.cancel();
+  await page.screenshot({ path: join(SHOTS, `audit-c-revisions-pdf-${project}-synthetic.png`), fullPage: true, animations: 'disabled' });
+
+  // View without the PDF item: the revision list stays, the Download button is absent.
+  await setItems({ timesheets: 'view', ot_read: false, pdf_download: false });
+  await page.reload();
+  await page.locator('[data-shared-view="revisions"]').waitFor();
+  await page.waitForLoadState('networkidle');
+  inv = await inventory(page, '[data-shared-owner]');
+  check(!inv.buttons.some((b) => /download/i.test(b)) && inv.disabled.length === 0, `${project} without PDF item: no Download control (absent, nothing disabled)`);
+  check(!(await page.locator('[data-share-bar] nav a').allTextContents()).includes('OT'), `${project} without OT item: no OT view link`);
+  await page.screenshot({ path: join(SHOTS, `audit-c-revisions-no-pdf-${project}-synthetic.png`), fullPage: true, animations: 'disabled' });
+
+  const paths = [...apiPaths].sort();
+  console.log(`INFO grantee /api requests: ${JSON.stringify(paths)}`);
+  check(paths.every((p) => / \/api\/shared\/<owner>\//.test(p) || / \/api\/(shares|auth\/me|auth\/login)$/.test(p)), `${project}: every grantee data request is below /api/shared/<owner> (plus /api/shares and the session)`);
+  await context.close();
+}
+
+// The owner's History (grantee download attributed) and the owner's Review (the planned "changed by" hint).
+{
+  const context = await browser.newContext(PROJECTS.desktop);
+  await context.request.post(`${origin}/api/auth/login`, { headers: { origin }, data: creds.owner });
+  const page = await context.newPage();
+  await page.goto(`${origin}/#/history`);
+  await page.locator('[data-operation="share.pdf_download"]').first().waitFor();
+  const items = await page.locator('[data-operation="share.pdf_download"]').allTextContents();
+  console.log(`INFO owner History, grantee PDF downloads: ${items.length}; first: ${JSON.stringify(items[0]?.replace(/\s+/g, ' ').slice(0, 160))}`);
+  check(items.length === 2 && items.every((t) => t.includes('Synthetic Grantee')), 'owner History lists both grantee PDF downloads with the grantee name');
+  await page.locator('[data-operation="share.pdf_download"]').first().screenshot({ path: join(SHOTS, 'audit-c-owner-history-download-desktop-synthetic.png') });
+  // A grantee edit in the current period, then the owner's Review of that period.
+  await setItems({ timesheets: 'edit', ot_read: false, pdf_download: false });
+  const gCookie = await apiLogin('grantee');
+  const edit = await fetch(`${origin}/api/shared/${OWNER}/days/2026-09-29`, {
+    method: 'PUT',
+    headers: { origin, cookie: gCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: 'set by grantee' }),
+  });
+  console.log(`INFO grantee edit of 2026-09-29 through the share: ${edit.status}`);
+  await page.goto(`${origin}/#/review/2026-10-16`);
+  await page.waitForLoadState('networkidle');
+  await page.locator('main').first().waitFor();
+  await page.waitForTimeout(500);
+  const reviewText = (await page.locator('body').textContent()) ?? '';
+  const hint = /Synthetic Grantee|changed by|shared access/i.test(reviewText);
+  console.log(`OBSERVATION owner Review of 2026-10-16 after a grantee edit: grantee/changed-by hint present = ${hint}`);
+  await page.screenshot({ path: join(SHOTS, 'audit-c-owner-review-after-grantee-edit-desktop-synthetic.png'), fullPage: true, animations: 'disabled' });
+  await context.close();
+}
+
+} catch (error) {
+  failures++;
+  console.log(`FAIL probe error: ${String(error?.message ?? error).split(/\r?\n/)[0]}`);
+} finally {
+  await browser.close();
+  const exited = new Promise((r) => server.once('exit', r));
+  server.kill();
+  await exited;
+}
+console.log(`INFO server stopped: exitCode=${server.exitCode} signal=${server.signalCode}`);
+console.log(`\nSUMMARY P4: ${passes} PASS, ${failures} FAIL`);
+process.exitCode = failures === 0 ? 0 : 1;

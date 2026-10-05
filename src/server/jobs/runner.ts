@@ -2,6 +2,7 @@ import type { Clock } from '../clock.ts';
 import type { Db } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
 import { createOutboundAdapter } from '../mail/outbound.ts';
+import { recoverInterruptedSends } from '../services/deliveries.ts';
 import type { DeliveryConfig } from '../types.ts';
 import { createDeadlineJobHandler, enqueueDeadlineScan, JOB_DEADLINE_SCAN } from './deadlineJob.ts';
 import {
@@ -23,6 +24,10 @@ import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
  * Job runner (docs/03, docs/05 "Durable delivery"). `runJobsOnce` writes the heartbeat, then
  * claims and runs due jobs of the kinds it has handlers for until none is due (or `maxJobs`).
  * Each handler runs outside any database transaction; its lease is renewed while it works.
+ * Every pass that owns the send handler first recovers interrupted sends (WP3-B-02): a send whose
+ * runner died after `sending` was committed becomes `uncertain` with the owner's decision prompt on
+ * every attempt, including the last one, whose expired lease the claim sweep would otherwise move
+ * straight to intervention without ever running the handler (the attempt would stay `sending`).
  * `startJobRunner` is the in-process loop the server entry starts; tests and the run-jobs CLI
  * call `runJobsOnce` directly with an injected clock, so nothing runs in the background there.
  */
@@ -95,6 +100,9 @@ export async function runJobsOnce(options: RunnerOptions): Promise<RunSummary> {
   if (kinds.includes(JOB_DEADLINE_SCAN)) enqueueDeadlineScan(db, clock);
   // This bucket's reminder scan (idempotent; nothing at all while the activation instant is null).
   if (kinds.includes(JOB_REMINDER_SCAN)) enqueueReminderScan(db, clock);
+
+  // Before the claim sweep below can end the job of a dead runner (docs/05 failure table: uncertain, never resent).
+  if (kinds.includes(JOB_SEND_EMAIL)) recoverInterruptedSends(db, clock);
 
   while (summary.claimed < maxJobs) {
     const job = claimNextJob(db, clock, { owner, kinds, leaseSeconds });

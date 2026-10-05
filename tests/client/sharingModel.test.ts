@@ -8,6 +8,7 @@ import {
   grantFailureText,
   hasAnyItem,
   historyActorBadge,
+  isSystemOperation,
   itemsProblem,
   itemsSummary,
   parseSharedHash,
@@ -195,9 +196,30 @@ describe('history: shared edits and share events', () => {
     );
   });
 
-  it('keeps "by someone else" for any other event of another actor and shows nothing for the owner', () => {
+  it('keeps "by someone else" for any other event of another person and shows nothing for the owner', () => {
     expect(historyActorBadge(event({ actor_is_self: false }))).toBe('by someone else');
     expect(historyActorBadge(event({}))).toBeNull();
+  });
+
+  it('labels the actor-less system events as automatic, never as someone else (WP3-B-03)', () => {
+    for (const operation of ['timesheet.auto_finalize', 'deadline.overdue', 'deadline.finalize_failed']) {
+      expect(isSystemOperation(operation), operation).toBe(true);
+      expect(historyActorBadge(event({ operation, actor_is_self: false })), operation).toBe('automatic');
+    }
+    // A person's operation is never a system event, and the grantee attribution is unchanged.
+    expect(isSystemOperation('timesheet.signoff')).toBe(false);
+    expect(isSystemOperation('day_entry.update')).toBe(false);
+    expect(historyActorBadge(event({ operation: 'day_entry.update', actor_is_self: false }))).toBe('by someone else');
+    expect(
+      historyActorBadge(event({ operation: 'day_entry.update', actor_is_self: false, via_share: true, actor_display_name: 'Synthetic Grantee' })),
+    ).toBe('Changed by Synthetic Grantee (shared access)');
+  });
+
+  it('words a grantee PDF download as a download, never as a change (WP3-C-02 wording)', () => {
+    const download = event({ operation: 'share.pdf_download', actor_is_self: false, via_share: true, actor_display_name: 'Synthetic Grantee' });
+    expect(historyActorBadge(download)).toBe('Downloaded by Synthetic Grantee (shared access)');
+    // A day or session edit under a share keeps the "Changed by" wording.
+    expect(historyActorBadge({ ...download, operation: 'work_session.update' })).toBe('Changed by Synthetic Grantee (shared access)');
   });
 
   it('words the share events and leaves other operations to the existing labels', () => {

@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5 (WP3-T14-FREEZE).
+  - HEAD = origin/main = a1cd566e59253d19f53cfd5b3a81fd27a7e9a056 (WP3-T15-FREEZE, the
+    WP3 package-final freeze).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
-  - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 677b9142… (T14, committer-checked; no WP3
-    gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint and the T14-FREEZE results
-    and evidence.
+  - Gate digest of record 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729
+    (WP3-GATE PASS on a1cd566). The WP2 gate digest was e61fa914… (WP2-GATE4).
+  - Uncommitted (handoff only): the board, this checkpoint, the T15-FREEZE results and
+    the WP3-GATE results and evidence.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -269,10 +269,71 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   package.json description; parity ok; preflight 0; verify 0 with 1384 tests; digest
   96870f7e…. Observation for the gate: the T14 record says 46 smoke checks, its log
   shows 40.
-- Running: WP3-T15-FREEZE (committer), the WP3 package-final freeze.
+- WP3-T15-FREEZE is committed and pushed as a1cd566, the WP3 package-final freeze
+  (attempt 1; 25 planned paths plus the committer's two own evidence files, a harmless
+  deviation outside the digest; all checks 0; no secret or real address in the docs).
+- WP3-GATE PASS on a1cd566 (all 16 items; verifier-reported):
+  - verify 0 with 1384 tests; smoke 40 PASS (the T14 record's 46 was wrong);
+  - e2e 127 passed, 5 skipped, 0 failed;
+  - races 20/20 each; fault injection passes;
+  - migrations fresh and upgraded from 5fafeae; validators 0;
+  - diff scope clean.
+
+  The coordinator stopped the agent after hand-back (leftover background work).
+- WP3-AUDIT-B: FIX REQUIRED (fresh opus auditor):
+  - WP3-B-01 (Medium): an account created after activation, with no saved settings,
+    gets every already-overdue period auto-finalized; bound by `users.created_at`.
+  - WP3-B-02 (Low): a crash during the final send attempt leaves it `sending` with no
+    owner decision; recover interrupted sends in every runner pass.
+  - WP3-B-03 (Low): History labels system auto-finalize as "someone else" and shows raw
+    operation codes.
+  - The other carry items are acceptable backlog.
+- WP3-AUDIT-A: NOT VERIFIED, procedural only, with no finding. Every functional check
+  passed (races, crash, HTTP, PDF, migrations, privacy). The classifier refused its
+  digest command after it tried to stop an interactive cmd.exe it had opened by mistake.
+  The coordinator does not rerun the refused command through another agent. A fresh
+  area-A recheck binds its own digest on the fix-round freeze.
+- WP3-AUDIT-C: FIX REQUIRED (fresh opus auditor). Sharing authorization held under every
+  probe: 88 inventory entries, 17 shared routes, 11 item sets, the race window proven,
+  disallowed UI actions absent.
+  - WP3-C-01 (Medium): the planned owner review hint "changed by <grantee>" is missing.
+  - WP3-C-02 (Low): History attributes admin-route or same-second acts to a grantee.
+  - WP3-C-03 (Info): a stale comment.
+  - The full preflight fails on directory links in WP3_REVIEW_A/B.
+- Fix round 1 (coordinator decision 2026-10-05), in sequence:
+  1. WP3-LINKFIX (light): done at attempt 2, preflight 0. Attempt 1 failed on the
+     coordinator's own example links in the brief.
+  2. WP3-FIXB (B-01..03): done (author-reported). Fixes:
+     - B-01: automation starts at account creation;
+     - B-02: recover interrupted sends in every pass;
+     - B-03: plain operation names and a system badge.
+
+     Results: red 8 → green; verify 1391 tests; e2e 127 passed; digest d9fa55bd….
+     Deviations: HistoryScreen.tsx, and one changed assertion in delivery-crash.test.ts
+     (to be judged by the recheck).
+  3. WP3-FIXC (C-01..03): done (author-reported).
+     - C-01: the owner-only hint, derived from the audit and kept outside the hash and
+       the PDF.
+     - C-02: an act is attributed to a grantee only when the actor is not the owner and
+       the operation is a shared-route operation. No migration was added.
+     - C-03: the comment is fixed.
+     - Checks: verify 1407 tests; e2e 127 passed; digest eeb417d3….
+     - Deviations for the recheck: the operation-based rule; a grantee leaving a share
+       is now unattributed; a replaced test.
+     - WP3-FIX-FREEZE attempt 3 is running (same committer). Attempts 1 and 2 stopped on
+       validator rules that the coordinator's records broke:
+       - prose in the audit decisions;
+       - WP3-LINKFIX depending on non-PASS audits.
+
+       Both are corrected.
+  4. One freeze, a full regate.
+  5. Two fresh rechecks in parallel: A with digest binding, and B+C.
+
+  Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
+  WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record the package-final freeze; then WP3-GATE (brief ready) on that SHA, then
-     three fresh opus area audits (briefs ready): A and B in parallel, then C (sharing).
+  1. Record WP3-FIX-FREEZE, then dispatch WP3-REGATE on its SHA.
+  2. Then the WP3 acceptance record and the accept commit after the rechecks pass.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -290,5 +351,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T15-FREEZE only.
+- Live processes: WP3-FIX-FREEZE only.
 - Usage/reset: not observable.

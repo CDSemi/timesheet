@@ -75,14 +75,14 @@ function setSeededStatus(status: 'active' | 'deactivated'): void {
 type Mode = 'ignore' | 'auto_deduct' | 'choose_at_signoff';
 
 /** A fresh synthetic employee with a known policy (B 480, N 30, M 30, 08:00-16:00, no breaks). */
-function newUser(mode: Mode = 'ignore', balance = 0): SessionUser {
+function newUser(mode: Mode = 'ignore', balance = 0, createdAt = EARLY): SessionUser {
   const id = randomUUID();
   t.db
     .prepare(
       `INSERT INTO users (id, email, display_name, role, status, password_hash, calendar_id, created_at, updated_at)
        VALUES (?, ?, 'Synthetic Employee', 'employee', 'active', 'login-disabled-synthetic', ?, ?, ?)`,
     )
-    .run(id, `user-${id}@example.invalid`, t.calendarId, EARLY, EARLY);
+    .run(id, `user-${id}@example.invalid`, t.calendarId, createdAt, createdAt);
   createPolicyVersion(
     t.db,
     t.clock,
@@ -320,6 +320,77 @@ describe('activation boundary (F-4)', () => {
     scan();
     expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P1.payroll]);
     expect(listOverdueRecords(t.db, user.id).map((row) => row.payrollDate)).toEqual([P2.payroll]);
+  });
+});
+
+describe('account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4)', () => {
+  const P5 = { payroll: '2026-11-27', dueAt: '2026-11-26T01:00:00Z' }; // 17:00 PST
+
+  it('never submits a period whose deadline passed before the account existed (no saved settings)', () => {
+    activate('2026-10-01T00:00:00Z');
+    // The account is created after P1..P4 are all due; it never saves settings (default: on).
+    t.clock.set('2026-11-12T00:00:00Z');
+    const late = newUser('ignore', 0, '2026-11-12T00:00:00Z');
+    t.clock.set('2026-11-12T00:00:30Z');
+    const summary = scan();
+    expect(summary.finalized).toBe(0);
+    expect(revisions(late)).toEqual([]);
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', late.id)).toBe(0);
+    expect(jobKinds(late)).toEqual([]);
+    expect(ledger(late)).toEqual([]);
+    expect(listOverdueRecords(t.db, late.id)).toEqual([]);
+    expect(count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND (operation LIKE 'deadline.%' OR operation LIKE 'timesheet.%')", late.id)).toBe(0);
+    // Later passes before the next deadline change nothing either.
+    t.clock.set('2026-11-20T12:00:00Z');
+    expect(scan().finalized).toBe(0);
+    expect(revisions(late)).toEqual([]);
+  });
+
+  it('still automates the first deadline after the account was created, with the default labels (F-1)', () => {
+    activate('2026-10-01T00:00:00Z');
+    t.clock.set('2026-11-12T00:00:00Z');
+    const late = newUser('ignore', 0, '2026-11-12T00:00:00Z');
+    t.clock.set(P5.dueAt);
+    expect(scan().finalized).toBe(1);
+    const rows = revisions(late);
+    expect(rows.map((row) => [snapshotOf(row).period.payroll_date, row.origin, row.review_state])).toEqual([[P5.payroll, 'deadline', 'pending']]);
+  });
+
+  it('automates the period in which the account was created when its deadline is still ahead', () => {
+    activate('2026-10-01T00:00:00Z');
+    // P4 starts 2026-10-26 and is due 2026-11-11T01:00Z; the account appears in the middle of it.
+    const mid = newUser('ignore', 0, '2026-11-05T00:00:00Z');
+    t.clock.set(P4.dueAt);
+    expect(scan().finalized).toBe(1);
+    expect(revisions(mid).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P4.payroll]);
+  });
+
+  it('never puts the auto-submit effective instant of saved settings before the account existed', () => {
+    activate('2026-10-01T00:00:00Z');
+    const created = '2026-10-20T00:00:00Z';
+    t.clock.set(created);
+    const user = newUser('ignore', 0, created);
+    t.clock.set('2026-10-21T00:00:00Z');
+    const off = saveSettings(user, { autoSubmit: false });
+    t.clock.set('2026-10-21T01:00:00Z');
+    const on = saveSettings(user, { autoSubmit: true, expectedSeq: off.seq });
+    t.clock.set('2026-10-21T02:00:00Z');
+    const off2 = saveSettings(user, { autoSubmit: false, expectedSeq: on.seq });
+    t.clock.set('2026-10-21T03:00:00Z');
+    // The explicit "apply to overdue drafts" choice reaches back, but never before the account existed.
+    saveSettings(user, { autoSubmit: true, applyToOverdue: true, expectedSeq: off2.seq });
+    t.clock.set('2026-10-29T00:00:00Z');
+    expect(scan().finalized).toBe(1);
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P3.payroll]);
+    expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+    const accountCreated = t.db.prepare('SELECT created_at FROM users WHERE id = ?').pluck().get(user.id) as string;
+    const effective = t.db.prepare('SELECT seq, auto_submit_effective_from FROM submission_settings WHERE user_id = ? ORDER BY seq').all(user.id) as Array<{
+      seq: number;
+      auto_submit_effective_from: string;
+    }>;
+    expect(effective).toHaveLength(4);
+    // The three ordinary saves take effect at their own instant, never before the account existed.
+    for (const row of effective.slice(0, 3)) expect(row.auto_submit_effective_from >= accountCreated).toBe(true);
   });
 });
 

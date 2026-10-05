@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiRequestError, type ReviewResponse, type SignOffResponse } from './api.ts';
 import { describeError } from './components/errors.ts';
 import { instantText, periodRange } from './components/format.ts';
+import { granteeChangeText } from './components/granteeChangesModel.ts';
 import { ReviewDays } from './components/ReviewDays.tsx';
 import { ReviewEnvelope } from './components/ReviewEnvelope.tsx';
 import { ReviewDeficits, ReviewEvidence, ReviewOtProposals, ReviewReservations } from './components/ReviewFindings.tsx';
@@ -202,6 +203,20 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
         <p className="card muted" data-mode={mode}>
           {MODE_INTRO[mode]}
         </p>
+      )}
+
+      {done === null && review.grantee_changes.length > 0 && (
+        <section className="card stack review-grantee-changes" aria-labelledby="review-grantee-changes-title" data-grantee-changes>
+          <h2 id="review-grantee-changes-title">Changed by someone you share with</h2>
+          <ul className="plain">
+            {review.grantee_changes.map((change) => (
+              <li key={`${change.display_name}:${change.work_dates.join(',')}`} data-grantee-change>
+                {granteeChangeText(change)}
+              </li>
+            ))}
+          </ul>
+          <p className="hint">Check these days before you sign. This note is not part of what you sign, and it is not in the PDF.</p>
+        </section>
       )}
 
       <ReviewDays days={payload.days} zone={payload.reporting_zone} totalCredited={payload.totals.credited_minutes} pendingDays={payload.totals.pending_days} />

@@ -1,0 +1,74 @@
+// WP3-AUDIT-A crash child. Runs one production operation in its own OS process and, when asked,
+// kills itself (TerminateProcess on Windows) at a chosen point:
+//   kill-in-tx   : when the operation prepares `INSERT INTO jobs` (inside the IMMEDIATE transaction,
+//                  after the revision, sign-off, ledger postings and lines were written)
+//   kill-after   : right after the operation returned (committed; no response delivered)
+//   none         : normal run
+// argv: <signoff|deadline|late_review> <dbPath> <mode> [hash version]
+const [operation, dbPath, mode, hash, versionText] = process.argv.slice(2);
+const { m, sessionUser, fixedClock } = await import('./common.mjs');
+
+const SIGN_INSTANT = '2026-09-30T00:30:05Z';
+const raw = m.db.openDatabase(dbPath);
+const die = (where) => {
+  console.log(JSON.stringify({ operation, killed: where }));
+  process.kill(process.pid, 'SIGKILL');
+};
+const db =
+  mode === 'kill-in-tx'
+    ? new Proxy(raw, {
+        get(target, property) {
+          if (property === 'prepare') {
+            return (sql) => {
+              const statement = target.prepare(sql);
+              if (!/^\s*INSERT INTO jobs/.test(sql)) return statement;
+              return new Proxy(statement, {
+                get(st, key) {
+                  if (key === 'run') return () => die('inside the transaction before INSERT INTO jobs');
+                  const value = Reflect.get(st, key, st);
+                  return typeof value === 'function' ? value.bind(st) : value;
+                },
+              });
+            };
+          }
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      })
+    : raw;
+
+const ownerId = raw.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get();
+const user = sessionUser(raw, ownerId);
+let result;
+try {
+  if (operation === 'signoff') {
+    const out = m.fin.signOffTimesheet({ db, clock: fixedClock(SIGN_INSTANT), user }, '2026-10-02', {
+      expectedVersion: Number(versionText),
+      reviewedHash: hash,
+      signerName: 'Synthetic Signer',
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    result = { status: out.status, revision_no: out.finalizedRevisionNo };
+  } else if (operation === 'late_review') {
+    const out = m.fin.reviseTimesheet({ db, clock: fixedClock('2026-10-01T18:00:00Z'), user }, '2026-10-02', {
+      kind: 'late_review',
+      reason: null,
+      sendEmail: false,
+      expectedVersion: Number(versionText),
+      reviewedHash: hash,
+      signerName: 'Synthetic Signer',
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    result = { status: out.status, revision_no: out.finalizedRevisionNo, lines: out.lines.map((line) => `${line.lineKind}:${line.outcome}:${line.proposedMinutes}`) };
+  } else {
+    const out = m.auto.runDeadlineScan(db, fixedClock('2026-09-30T00:30:00Z'));
+    result = { finalized: out.finalized, failed: out.failed, skipped: out.skipped };
+  }
+} catch (error) {
+  result = { error: error.code ?? String(error.message).slice(0, 80), status: error.status ?? null };
+}
+if (mode === 'kill-after') die('after the operation returned');
+console.log(JSON.stringify({ operation, ...result }));
+raw.close();

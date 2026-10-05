@@ -1,0 +1,36 @@
+WP3-AUDIT-A attempt 1 - command log (auditor: Claude Code subagent, self-reported model claude-opus-5-5)
+Date: 2026-10-05 (America/Los_Angeles 03:40-04:30; UTC 10:40-11:30)
+Reviewed commit: a1cd566e59253d19f53cfd5b3a81fd27a7e9a056 (WP3-GATE freeze_commit)
+Gate digest of record (claim, not recomputed here): 96870f7eaf5a0e892a9682e28931b3c46cf2888a4bfae3abd242b541e6a6e729
+Runtime: portable Node v24.21.0 called by full path; npm 11.18.0 through the user-level npm-cli.js on that Node.
+TEMP/TMP: <scratch>\tmp. Capture mode only; PRODUCTION_SENDING_ENABLED never set (unset in env.sh).
+
+1. node --version (full path)                                   exit 0  v24.21.0
+2. git clone --no-checkout <project> repo; git checkout a1cd566  exit 0  HEAD printed a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+   (clone under <scratch>\repo, checked out with core.autocrlf=false; project HEAD also a1cd566)
+3. Combined env setup + `cmd.exe /c where npm` + digest command: the `cmd.exe /c` form opened an interactive
+   cmd.exe (Git Bash turned /c into a path) and the call moved to the background; the digest part never ran.
+4. Stop-Process of that cmd.exe (own child, PID recorded in the review): DENIED by the permission classifier
+   ("Interfere With Workloads"). Not retried.
+5. Re-run of the digest only (scripts/source-digest.mjs and the git ls-tree form, in the clone and the project):
+   DENIED by the permission classifier ("Interfere With Workloads"). Not retried or rephrased, per the dispatch rule.
+   => The source digest before/after was NOT recomputed by this audit.
+6. npm ci (clone)                                               exit 0  added 160 packages, 0 vulnerabilities (01-npm-ci.txt)
+7. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify
+                                                                exit 0  60 files / 1384 tests; SMOKE PASSED, 40 PASS lines,
+                                                                        0 FAIL, 0 "deprecat" lines (02-verify.txt)
+8. vitest run (12 area-A files, verbose)                        exit 0  12 files / 273 tests (03-area-tests.txt)
+9. node race-probe.mjs (ROUNDS=20)                              exit 0  manual won 11, deadline won 9, failed 0 (10-race.txt)
+10. node crash-probe.mjs                                        exit 0  CRASH PROBE PASSED (11-crash.txt)
+11. node http-probe.mjs (built server, free loopback port)      exit 0  HTTP PROBE PASSED (12-http.txt; two earlier attempts
+    failed on probe field names - settings `recipients.to`, `auto_image.authorized`, capture envelope to=to+cc - and were fixed in the probe)
+12. node pdf-probe.mjs (+ Edge render)                          exit 0  PDF PROBE PASSED (13-pdf.txt, two pdf-audit-*-synthetic.png)
+13. WP2 source clone at 5fafeae: npm ci exit 0; npm run build:server exit 0; node mig-wp2-seed.mjs exit 0 (schema v3, rows in 14 tables)
+14. node mig-upgrade.mjs                                        exit 0  MIGRATION PROBE PASSED, 41 PASS (14-migrations.txt; the
+    first attempt counted schema_migrations rows 4-6 as a loss - a probe error, fixed by comparing the WP2 rows only)
+15. Leftover-process check (Get-CimInstance, read only): no node.exe with WP3-AUDIT-A in its command line after the probes.
+Note: probe sources are stored as *.mjs.txt with every email address masked as <email>; they ran with synthetic
+example.invalid addresses, which must be restored to run them again (the clone path is set by AUDIT_REPO).
+16. Repeat runs (not separately logged): vitest deadline-race + finalization-concurrency exit 0 (2 files / 5 tests);
+    race-probe 6 + 10 more rounds: manual 10, deadline 6, failed 0; crash-probe repeat: CRASH PROBE PASSED.
+17. The interactive cmd.exe of step 3 was stopped by the client's background-task limit; checked gone at 04:14 PDT.

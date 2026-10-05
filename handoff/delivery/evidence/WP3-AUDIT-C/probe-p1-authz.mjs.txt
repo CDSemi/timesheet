@@ -1,0 +1,358 @@
+// WP3-AUDIT-C probe P1: sharing authorization (FR-17, AC-16) against the mounted production app on a
+// real SQLite file. Auditor-written; the matrix below is the auditor's own reading of WP3-REQ C as
+// amended by WP3-REQ2 item 4 and docs/10 (F-Q4 (b), F-Q5 (a)), not copied from the tests.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { auditCount, changes, deactivateUser, finalizeWithPdf, LA, la, reactivateUser, setup, walk } from './lib.mjs';
+
+let failures = 0;
+let passes = 0;
+function check(cond, label) {
+  if (cond) passes++;
+  else failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`);
+}
+const section = (s) => console.log(`\n## ${s}`);
+
+const ctx = await setup('p1');
+const db = ctx.db;
+const G = await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const S = await ctx.addUser('stranger', '<email>', 'Synthetic Stranger');
+const B = await ctx.addUser('ownerB', '<email>', 'Synthetic Owner B');
+const O = ctx.cookies.owner;
+const A = ctx.cookies.admin;
+const OWNER = ctx.ids.owner;
+
+const sessionBody = (date, from, to) => ({ start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true });
+async function mustStatus(p, status, label) {
+  const r = await p;
+  if (r.status !== status) throw new Error(`${label}: ${r.status} ${JSON.stringify(r.body)}`);
+  return r;
+}
+// Owner data in the finalized period, then the finalized revision with a ready PDF.
+await mustStatus(ctx.request('POST', '/api/days/2026-09-21/sessions', { cookie: O, body: sessionBody('2026-09-21', '09:00', '17:00') }), 201, 'owner old session');
+const revO = await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+await mustStatus(ctx.request('POST', '/api/days/2026-09-22/sessions', { cookie: B, body: sessionBody('2026-09-22', '09:00', '17:00') }), 201, 'B session');
+const revB = await finalizeWithPdf(ctx, 'ownerB', 'Synthetic Owner B');
+// Owner and B sessions in the current (draft) period.
+const ownerSession = (await mustStatus(ctx.request('POST', '/api/days/2026-09-28/sessions', { cookie: O, body: sessionBody('2026-09-28', '09:00', '17:00') }), 201, 'owner draft session')).body.session.id;
+const sessionB = (await mustStatus(ctx.request('POST', '/api/days/2026-09-28/sessions', { cookie: B, body: sessionBody('2026-09-28', '09:00', '17:00') }), 201, 'B draft session')).body.session.id;
+const ownerPdf = db
+  .prepare("SELECT a.storage_key FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.revision_id = ? AND f.kind = 'pdf'")
+  .pluck()
+  .get(revO);
+const ownerPdfBytes = ctx.files.read(ownerPdf);
+
+const shared = (path, owner = OWNER) => `/api/shared/${owner}${path}`;
+let shareId = null;
+async function setItems(items) {
+  const r = shareId === null
+    ? await ctx.request('POST', '/api/shares', { cookie: ctx.cookies.owner, body: { grantee_email: '<email>', items } })
+    : await ctx.request('PUT', `/api/shares/${shareId}`, { cookie: ctx.cookies.owner, body: { items } });
+  if (r.status >= 300) throw new Error(`share ${r.status} ${JSON.stringify(r.body)}`);
+  shareId = r.body.share.id;
+  return r;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+section('1. Route inventory from the mounted application');
+const inv = new Map();
+for (const r of ctx.app.routes) inv.set(`${r.method} ${r.path}`, (inv.get(`${r.method} ${r.path}`) ?? 0) + 1);
+const sharedRoutes = [...inv.keys()].filter((k) => k.includes(' /api/shared/')).sort();
+const MATRIX = [
+  ['GET', '/calendar', 'view'], ['GET', '/periods/current', 'view'], ['GET', '/periods', 'view'],
+  ['GET', '/timesheets/:payrollDate', 'view'], ['GET', '/days/:workDate', 'view'], ['GET', '/sessions/:id', 'view'],
+  ['GET', '/policies', 'view'],
+  ['PUT', '/days/:workDate', 'edit'], ['POST', '/days/:workDate/sessions', 'edit'], ['PUT', '/sessions/:id', 'edit'],
+  ['DELETE', '/sessions/:id', 'edit'], ['POST', '/days/batch', 'edit'],
+  ['GET', '/ot/summary', 'ot'], ['GET', '/ot/ledger', 'ot'], ['GET', '/revisions/pending-lines', 'ot'],
+  ['GET', '/revisions', 'list'], ['GET', '/revisions/:id/pdf', 'pdf'],
+];
+const expectedShared = MATRIX.map(([m, p]) => `${m} /api/shared/:ownerId${p}`).sort();
+console.log(`registered (method, path) entries: ${inv.size}; middleware wildcards: ${[...inv.keys()].filter((k) => k.startsWith('ALL ')).length}; under /api/shared: ${sharedRoutes.length}`);
+check(JSON.stringify(sharedRoutes) === JSON.stringify(expectedShared), 'the /api/shared routes are exactly the 17 auditor-matrix routes');
+check(sharedRoutes.every((k) => inv.get(k) === 2), 'every /api/shared route has exactly guard + handler');
+check(![...inv.keys()].some((k) => k.startsWith('ALL /api/shared')), 'no wildcard middleware or ALL route under /api/shared');
+
+/* ---------------------------------------------------------------------------------------------- */
+section('2. Every other /api route is unreachable under /api/shared/:ownerId (full share, grantee/stranger/admin)');
+await setItems({ timesheets: 'edit', ot_read: true, pdf_download: true });
+const deliveryId = db.prepare('SELECT id FROM delivery_attempts WHERE user_id = ? LIMIT 1').pluck().get(OWNER) ?? '00000000-0000-4000-8000-000000000000';
+const sigId = db.prepare("SELECT id FROM attachments WHERE user_id = ? AND kind = 'signature' LIMIT 1").pluck().get(OWNER);
+const settingsVersion = db.prepare('SELECT id FROM submission_settings WHERE user_id = ? LIMIT 1').pluck().get(OWNER);
+function fill(path) {
+  return path
+    .replace(':payrollDate', '2026-10-02')
+    .replace(':workDate', '2026-09-28')
+    .replace(/^\/sessions\/:id/, `/sessions/${ownerSession}`)
+    .replace(/^\/revisions\/:id/, `/revisions/${revO}`)
+    .replace(/^\/deliveries\/:id/, `/deliveries/${deliveryId}`)
+    .replace(/^\/signatures\/:id/, `/signatures/${sigId}`)
+    .replace(/^\/settings\/submission\/versions\/:id/, `/settings/submission/versions/${settingsVersion}`)
+    .replace(/^\/admin\/users\/:id/, `/admin/users/${OWNER}`)
+    .replace(/^\/admin\/shares\/:id/, `/admin/shares/${shareId}`)
+    .replace(/^\/shares\/:id/, `/shares/${shareId}`)
+    .replace(':id', 'x');
+}
+const others = [...inv.keys()]
+  .filter((k) => !k.startsWith('ALL ') && !k.includes(' /api/shared/'))
+  .map((k) => k.split(' '))
+  .filter(([, p]) => p.startsWith('/api/'));
+let unreachable = 0;
+let reachedSomething = [];
+for (const [method, path] of others) {
+  const rel = fill(path.slice('/api'.length));
+  // Skip paths that are also allowlisted shared paths (same method and relative path).
+  if (MATRIX.some(([m, p]) => m === method && fill(p) === rel)) continue;
+  for (const cookie of [G, S, A]) {
+    const before = changes(db);
+    const r = await ctx.request(method, shared(rel), method === 'GET' || method === 'HEAD' ? { cookie } : { cookie, body: {} });
+    if (r.status === 404 && changes(db) === before) unreachable++;
+    else reachedSomething.push(`${method} ${rel} -> ${r.status}`);
+  }
+}
+console.log(`probed ${others.length} non-shared routes x 3 callers (minus allowlisted method/path pairs)`);
+check(reachedSomething.length === 0, `every non-allowlisted route under /api/shared is 404 with zero writes (${unreachable} probes)${reachedSomething.length ? ` -- ${reachedSomething.join('; ')}` : ''}`);
+// Clock in/out with every share item on.
+for (const p of ['/clock/in', '/clock/out']) {
+  const before = changes(db);
+  const r = await ctx.request('POST', shared(p), { cookie: G, body: p.endsWith('in') ? { input_zone: LA } : { breaks_confirmed: true, expected_version: 1 } });
+  check(r.status === 404 && changes(db) === before, `POST ${p} for a full grantee with a valid body -> ${r.status}, no write`);
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+section('3. The 11 valid item sets x 17 routes, real requests (grantee), plus stranger/admin/anonymous');
+const ITEM_SETS = [];
+for (const timesheets of ['none', 'view', 'edit'])
+  for (const ot of [false, true])
+    for (const pdf of [false, true]) if (timesheets !== 'none' || ot || pdf) ITEM_SETS.push({ timesheets, ot_read: ot, pdf_download: pdf });
+check(ITEM_SETS.length === 11, '11 valid item sets');
+const allows = (set, item) =>
+  item === 'view' ? set.timesheets !== 'none'
+    : item === 'edit' ? set.timesheets === 'edit'
+      : item === 'ot' ? set.ot_read
+        : item === 'pdf' ? set.pdf_download
+          : set.timesheets !== 'none' || set.pdf_download;
+const entryVersion = (date) => db.prepare('SELECT version FROM day_entries WHERE user_id = ? AND work_date = ?').pluck().get(OWNER, date) ?? null;
+const lastAudit = () => db.prepare('SELECT operation, actor_user_id, owner_user_id FROM audit_events ORDER BY rowid DESC LIMIT 1').get();
+let n = 0;
+const responses = [];
+for (const set of ITEM_SETS) {
+  await setItems(set);
+  const label = `ts=${set.timesheets} ot=${set.ot_read ? 1 : 0} pdf=${set.pdf_download ? 1 : 0}`;
+  const results = [];
+  let ok = true;
+  // Reads.
+  for (const [method, path, item] of MATRIX.filter(([m]) => m === 'GET')) {
+    const url = path === '/periods' ? shared('/periods?from=2026-09-14&to=2026-10-11') : shared(fill(path));
+    const beforeC = changes(db);
+    const beforeA = auditCount(db);
+    const r = await ctx.request('GET', url, { cookie: G });
+    responses.push(r);
+    const allowed = allows(set, item);
+    let good = allowed ? r.status === 200 : r.status === 403 && r.body?.error?.code === 'grant_scope';
+    if (item === 'pdf' && allowed) {
+      const audited = auditCount(db) === beforeA + 1 && lastAudit().operation === 'share.pdf_download' && lastAudit().actor_user_id === ctx.ids.grantee && lastAudit().owner_user_id === OWNER;
+      good = good && audited && Buffer.compare(r.bytes, ownerPdfBytes) === 0 && r.headers.get('cache-control') === 'no-store' && /^attachment; filename="timesheet-2026-10-02-r1\.pdf"$/.test(r.headers.get('content-disposition') ?? '');
+    } else good = good && changes(db) === beforeC;
+    good = good && r.headers.get('cache-control') === 'no-store';
+    if (!good) ok = false;
+    results.push(`${method} ${path}=${r.status}`);
+  }
+  // Writes with valid bodies.
+  const day = (n++ % 2 === 0) ? 'Off' : 'Worked';
+  const writeProbes = [
+    ['PUT', '/days/:workDate', () => ['/days/2026-09-30', { category: day, leave_minutes: 0, wfh: false, notes: `grantee note ${n}`, expected_version: entryVersion('2026-09-30') }]],
+    ['POST', '/days/batch', () => ['/days/batch', { mode: 'commit', entries: [{ work_date: '2026-10-01', category: day, expected_version: entryVersion('2026-10-01') }] }]],
+    ['POST', '/days/:workDate/sessions', () => ['/days/2026-09-28/sessions', sessionBody('2026-09-28', '06:00', '07:00')]],
+  ];
+  let created = null;
+  for (const [method, path, make] of writeProbes) {
+    const [rel, body] = make();
+    const beforeC = changes(db);
+    const r = await ctx.request(method, shared(rel), { cookie: G, body });
+    responses.push(r);
+    const allowed = allows(set, 'edit');
+    let good;
+    if (allowed) {
+      const a = lastAudit();
+      good = r.status < 300 && a.actor_user_id === ctx.ids.grantee && a.owner_user_id === OWNER;
+      if (path.endsWith('/sessions')) created = r.body.session.id;
+    } else good = r.status === 403 && r.body?.error?.code === 'grant_scope' && changes(db) === beforeC;
+    if (!good) ok = false;
+    results.push(`${method} ${path}=${r.status}`);
+  }
+  for (const [method, body] of [['PUT', (v) => ({ ...sessionBody('2026-09-28', '06:00', '07:30'), expected_version: v })], ['DELETE', (v) => ({ expected_version: v })]]) {
+    const target = created ?? ownerSession;
+    const v = db.prepare('SELECT version FROM work_sessions WHERE id = ?').pluck().get(target);
+    const beforeC = changes(db);
+    const r = await ctx.request(method, shared(`/sessions/${target}`), { cookie: G, body: body(v) });
+    responses.push(r);
+    const allowed = allows(set, 'edit');
+    let good;
+    if (allowed) {
+      const a = lastAudit();
+      good = r.status === 200 && a.actor_user_id === ctx.ids.grantee && a.owner_user_id === OWNER;
+    } else good = r.status === 403 && r.body?.error?.code === 'grant_scope' && changes(db) === beforeC;
+    if (!good) ok = false;
+    results.push(`${method} /sessions/:id=${r.status}`);
+  }
+  // Non-grantee, admin without a share, anonymous: every matrix route.
+  let others404 = true;
+  for (const [method, path] of MATRIX) {
+    const rel = path === '/periods' ? '/periods?from=2026-09-14&to=2026-10-11' : fill(path);
+    for (const [cookie, want] of [[S, 404], [A, 404], [undefined, 401]]) {
+      const beforeC = changes(db);
+      const r = await ctx.request(method, shared(rel), method === 'GET' ? { cookie } : { cookie, body: {} });
+      if (r.status !== want || changes(db) !== beforeC || r.headers.get('cache-control') !== 'no-store') others404 = false;
+    }
+  }
+  check(ok, `item set ${label}: ${results.join(' ')}`);
+  check(others404, `item set ${label}: stranger 404, admin-without-share 404, anonymous 401 on all 17, zero writes, no-store`);
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+section('4. Responses: no password, hash, token or storage key; no-store everywhere');
+const scan = walk(responses.filter((r) => r.body !== null && typeof r.body === 'object').map((r) => r.body));
+const badKeys = [...scan.keys].filter((k) => /pass|hash|token|secret|storage|cookie|session_id|signature/i.test(k));
+check(badKeys.length === 0, `no sensitive key in shared JSON responses (keys seen: ${scan.keys.size}; flagged: ${badKeys.join(',') || 'none'})`);
+const cookieTokens = Object.values(ctx.cookies).map((c) => c.split('=')[1]);
+const leakedValues = [...scan.strings].filter((s) => cookieTokens.includes(s) || Object.values(ctx.passwords).includes(s) || s === 'shared-access');
+check(leakedValues.length === 0, 'no session token, password or the internal owner principal session id in shared responses');
+check(![...scan.strings].some((s) => s.includes('@')), 'no email address in shared JSON responses');
+
+/* ---------------------------------------------------------------------------------------------- */
+section('5. Live authorization: change, revoke, leave, admin revoke, deactivation on the next request');
+await setItems({ timesheets: 'edit', ot_read: false, pdf_download: false });
+check((await ctx.request('GET', shared('/calendar'), { cookie: G })).status === 200, 'edit share: GET calendar 200');
+await setItems({ timesheets: 'view', ot_read: false, pdf_download: false });
+const wr = await ctx.request('PUT', shared('/days/2026-09-30'), { cookie: G, body: { category: 'Off', leave_minutes: 0, wfh: false, notes: 'x', expected_version: entryVersion('2026-09-30') } });
+check(wr.status === 403 && wr.body.error.code === 'grant_scope', `edit -> view change applies to the next write: ${wr.status}`);
+let rv = await ctx.request('POST', `/api/shares/${shareId}/revoke`, { cookie: O, body: {} });
+check(rv.status === 200, 'owner revokes');
+check((await ctx.request('GET', shared('/calendar'), { cookie: G })).status === 404, 'next request after owner revoke: 404 (same session cookie)');
+shareId = null;
+await setItems({ timesheets: 'view', ot_read: true, pdf_download: false });
+rv = await ctx.request('POST', `/api/shares/${shareId}/revoke`, { cookie: G, body: { reason: 'leaving' } });
+check(rv.status === 200 && rv.body.revoked.role === 'grantee', 'grantee leaves');
+check((await ctx.request('GET', shared('/ot/summary'), { cookie: G })).status === 404, 'next request after leave: 404');
+shareId = null;
+await setItems({ timesheets: 'view', ot_read: false, pdf_download: false });
+rv = await ctx.request('POST', `/api/admin/shares/${shareId}/revoke`, { cookie: A, body: { reason: 'security' } });
+check(rv.status === 200 && rv.body.share.revoked_by_role === 'admin', 'admin revokes');
+check((await ctx.request('GET', shared('/calendar'), { cookie: G })).status === 404, 'next request after admin revoke: 404');
+shareId = null;
+await setItems({ timesheets: 'edit', ot_read: false, pdf_download: false });
+deactivateUser(db, ctx.clock, { actorUserId: ctx.ids.admin, userId: ctx.ids.grantee, reason: null });
+check((await ctx.request('GET', shared('/calendar'), { cookie: G })).status === 401, 'grantee deactivated: next request 401 (sessions revoked)');
+reactivateUser(db, ctx.clock, { actorUserId: ctx.ids.admin, userId: ctx.ids.grantee, reason: null });
+check((await ctx.request('GET', shared('/calendar'), { cookie: G })).status === 401, 'grantee reactivated: old cookie stays 401');
+const G2 = await ctx.signIn('grantee');
+check((await ctx.request('GET', shared('/calendar'), { cookie: G2 })).status === 200, 'grantee reactivated + new sign-in: share applies again (not revoked by deactivation)');
+deactivateUser(db, ctx.clock, { actorUserId: ctx.ids.admin, userId: OWNER, reason: null });
+check((await ctx.request('GET', shared('/calendar'), { cookie: G2 })).status === 404, 'owner deactivated: grantee next request 404');
+const ownerDeactWrite = await ctx.request('PUT', shared('/days/2026-09-30'), { cookie: G2, body: { category: 'Off', leave_minutes: 0, wfh: false, notes: 'y', expected_version: entryVersion('2026-09-30') } });
+check(ownerDeactWrite.status === 404, 'owner deactivated: grantee write 404');
+reactivateUser(db, ctx.clock, { actorUserId: ctx.ids.admin, userId: OWNER, reason: null });
+const O2 = await ctx.signIn('owner');
+check((await ctx.request('GET', shared('/calendar'), { cookie: G2 })).status === 200, 'owner reactivated: grantee access restored on the next request');
+
+/* ---------------------------------------------------------------------------------------------- */
+section('6. Object ownership (IDOR), self-only routes and path tricks');
+await setItems({ timesheets: 'edit', ot_read: true, pdf_download: true });
+for (const [method, path, body] of [
+  ['GET', `/sessions/${sessionB}`, undefined],
+  ['PUT', `/sessions/${sessionB}`, { ...sessionBody('2026-09-28', '09:00', '16:00'), expected_version: 1 }],
+  ['DELETE', `/sessions/${sessionB}`, { expected_version: 1 }],
+  ['GET', `/revisions/${revB}/pdf`, undefined],
+]) {
+  const beforeC = changes(db);
+  const r = await ctx.request(method, shared(path), body === undefined ? { cookie: G2 } : { cookie: G2, body });
+  check(r.status === 404 && changes(db) === beforeC, `another owner's object through the owner share: ${method} ${path.replace(/[0-9a-f-]{36}/g, '<id>')} -> ${r.status}, zero writes`);
+}
+check((await ctx.request('GET', shared('/calendar', ctx.ids.ownerB), { cookie: G2 })).status === 404, 'owner B (no share) under /api/shared: 404');
+check((await ctx.request('GET', shared('/calendar', ctx.ids.grantee), { cookie: G2 })).status === 404, 'own id under /api/shared: 404');
+check((await ctx.request('GET', `/api/sessions/${ownerSession}`, { cookie: G2 })).status === 404, 'self-only GET /api/sessions/<owner session> as grantee: 404');
+check((await ctx.request('GET', `/api/revisions/${revO}/pdf`, { cookie: G2 })).status === 404, 'self-only owner PDF route with the owner revision id as grantee: 404');
+const ownTs = await ctx.request('GET', '/api/timesheets/2026-10-16', { cookie: G2 });
+check(ownTs.status === 200 && !JSON.stringify(ownTs.body).includes(ownerSession), 'self-only GET /api/timesheets as grantee shows the grantee\'s own data only');
+for (const [method, path] of [
+  ['POST', `/api/shared/${OWNER}/../clock/in`],
+  ['GET', `/api/shared/${OWNER.toUpperCase()}/calendar`],
+  ['POST', `/api/shared/${OWNER}%2F..%2Fclock/in`],
+  ['GET', `/api/shared/${OWNER}/calendar/`],
+  ['GET', `/api/shared/${OWNER}//calendar`],
+  ['GET', `/api/SHARED/${OWNER}/calendar`],
+  ['GET', `/api/shared/${encodeURIComponent(OWNER)}/timesheets/2026-10-02/review`],
+  ['POST', `/api/shared/${OWNER}/timesheets/2026-10-02/signoff`],
+]) {
+  const beforeC = changes(db);
+  const r = await ctx.request(method, path, method === 'GET' ? { cookie: G2 } : { cookie: G2, body: { input_zone: LA } });
+  const okStatus = r.status === 404 || (r.status === 200 && path.endsWith('//calendar'));
+  check(okStatus && changes(db) === beforeC, `path variant ${method} ${path.replace(/[0-9a-f-]{36}/gi, '<id>')} -> ${r.status}, zero writes`);
+}
+{
+  const beforeA = auditCount(db);
+  const head = await ctx.app.request(shared(`/revisions/${revO}/pdf`), { method: 'HEAD', headers: { cookie: G2, origin: 'http://localhost:3000' } });
+  console.log(`INFO HEAD on the shared PDF -> ${head.status}, audit events written: ${auditCount(db) - beforeA}`);
+  const opt = await ctx.app.request(shared('/days/2026-09-30'), { method: 'OPTIONS', headers: { cookie: G2 } });
+  console.log(`INFO OPTIONS on a shared write path -> ${opt.status}`);
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+section('7. No re-sharing; admin cannot create');
+let r = await ctx.request('PUT', `/api/shares/${shareId}`, { cookie: G2, body: { items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+check(r.status === 404, `grantee cannot change the owner's share: ${r.status}`);
+r = await ctx.request('PUT', `/api/shares/${shareId}`, { cookie: S, body: { items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+check(r.status === 404, `stranger cannot change it: ${r.status}`);
+r = await ctx.request('POST', `/api/shares/${shareId}/revoke`, { cookie: S, body: {} });
+check(r.status === 404, `stranger cannot revoke it: ${r.status}`);
+r = await ctx.request('POST', '/api/shares', { cookie: G2, body: { grantee_email: '<email>', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+check(r.status === 201, 'grantee shares their OWN timesheets with the stranger');
+check((await ctx.request('GET', shared('/calendar'), { cookie: S })).status === 404, 'stranger still cannot reach the owner (never transitive)');
+check((await ctx.request('GET', shared('/calendar', ctx.ids.grantee), { cookie: S })).status === 200, 'stranger reaches only the grantee\'s own timesheets');
+r = await ctx.request('POST', shared('/shares'), { cookie: G2, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+check(r.status === 404, `POST /api/shared/:owner/shares -> ${r.status}`);
+for (const [m, p] of [['POST', '/api/admin/shares'], ['PUT', `/api/admin/shares/${shareId}`], ['POST', `/api/admin/shares/${shareId}`]]) {
+  const before = changes(db);
+  r = await ctx.request(m, p, { cookie: A, body: { owner_user_id: OWNER, grantee_user_id: ctx.ids.admin, items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+  check(r.status === 404 && changes(db) === before, `admin create attempt ${m} ${p.replace(/[0-9a-f-]{36}/g, '<id>')} -> ${r.status}`);
+}
+check(db.prepare('SELECT count(*) FROM timesheet_shares WHERE created_by <> owner_user_id').pluck().get() === 0, 'every share row was created by its owner');
+
+/* ---------------------------------------------------------------------------------------------- */
+section('8. Attribution in audit and the owner History; PDF download audit; owner download writes nothing');
+const viaShareWrites = db
+  .prepare("SELECT count(*) FROM audit_events WHERE actor_user_id = ? AND owner_user_id = ? AND operation NOT LIKE 'share.%'")
+  .pluck()
+  .get(ctx.ids.grantee, OWNER);
+const pdfAudits = db.prepare("SELECT count(*) FROM audit_events WHERE operation = 'share.pdf_download' AND actor_user_id = ? AND owner_user_id = ?").pluck().get(ctx.ids.grantee, OWNER);
+console.log(`INFO grantee write audit events on the owner: ${viaShareWrites}; share.pdf_download events: ${pdfAudits}`);
+check(viaShareWrites === ITEM_SETS.filter((s) => s.timesheets === 'edit').length * 5, `five writes per edit set (${ITEM_SETS.filter((s) => s.timesheets === 'edit').length} edit sets) recorded with actor = grantee, owner = owner`);
+const hist = await ctx.request('GET', '/api/history?limit=500', { cookie: O2 });
+const ev = hist.body.audit_events;
+const byGrantee = ev.filter((e) => e.via_share);
+check(byGrantee.length > 0 && byGrantee.every((e) => e.actor_display_name === 'Synthetic Grantee' && e.actor_user_id === null && e.actor_is_self === false), `owner History: ${byGrantee.length} events show "Synthetic Grantee" via share, no grantee id`);
+check(ev.filter((e) => e.operation === 'share.pdf_download').every((e) => e.via_share && e.actor_display_name === 'Synthetic Grantee'), 'owner History shows each grantee PDF download with the grantee name');
+check(ev.filter((e) => e.operation === 'share.pdf_download').length === pdfAudits, 'all PDF download events visible to the owner');
+check(ev.filter((e) => e.actor_is_self).every((e) => !e.via_share), 'owner own events are never marked via share');
+const adminRevoke = ev.find((e) => e.operation === 'share.revoke' && e.after?.revoked_by_role === 'admin');
+check(adminRevoke !== undefined && adminRevoke.via_share === false && adminRevoke.actor_display_name === null, 'admin revocation (admin holds no share) is not attributed by name');
+const beforeOwnerDl = changes(db);
+const ownDl = await ctx.request('GET', `/api/revisions/${revO}/pdf`, { cookie: O2 });
+check(ownDl.status === 200 && changes(db) === beforeOwnerDl, 'owner PDF download writes nothing');
+check(!JSON.stringify(hist.body).includes(ctx.ids.grantee), 'grantee id never appears in the owner History');
+
+/* ---------------------------------------------------------------------------------------------- */
+section('9. Admin share list: allowlisted fields only, no timesheet details');
+const list = await ctx.request('GET', '/api/admin/shares', { cookie: A });
+const allowed = new Set(['shares', 'id', 'owner', 'grantee', 'display_name', 'items', 'timesheets', 'ot_read', 'pdf_download', 'created_at', 'revoked_at', 'revoked_by_role']);
+const listScan = walk(list.body);
+check(list.status === 200 && [...listScan.keys].every((k) => allowed.has(k)), `admin list keys: ${[...listScan.keys].sort().join(',')}`);
+check(![...listScan.strings].some((s) => s.includes('@') || s.includes('grantee note') || s === 'leaving' || s === 'security'), 'admin list has no address, note text or revoke reason');
+check((await ctx.request('GET', '/api/admin/shares', { cookie: O2 })).status === 403, 'employee GET /api/admin/shares -> 403');
+check((await ctx.request('GET', '/api/admin/shares')).status === 401, 'anonymous GET /api/admin/shares -> 401');
+
+console.log(`\nSUMMARY P1: ${passes} PASS, ${failures} FAIL`);
+db.close();
+process.exitCode = failures === 0 ? 0 : 1;

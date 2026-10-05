@@ -4,7 +4,7 @@ import { DeliveryHistory } from './components/DeliveryHistory.tsx';
 import { describeError } from './components/errors.ts';
 import { displayZone, instantText } from './components/format.ts';
 import { changedFields, operationText } from './components/otModel.ts';
-import { historyActorBadge, shareOperationText } from './components/sharingModel.ts';
+import { historyActorBadge, isSystemOperation, shareOperationText } from './components/sharingModel.ts';
 
 const PAGE_SIZE = 25;
 
@@ -18,7 +18,7 @@ function EventItem({ event }: { event: HistoryEvent }) {
         <strong>{label}</strong>
         <span className="mono muted">{instantText(event.occurred_at, displayZone)}</span>
         {actor !== null && (
-          <span className="badge" data-history-actor={event.via_share ? 'grantee' : 'other'}>
+          <span className="badge" data-history-actor={event.via_share ? 'grantee' : isSystemOperation(event.operation) ? 'system' : 'other'}>
             {actor}
           </span>
         )}

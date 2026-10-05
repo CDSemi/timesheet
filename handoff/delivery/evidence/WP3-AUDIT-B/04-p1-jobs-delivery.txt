@@ -1,0 +1,51 @@
+PASS employee login 200
+PASS settings saved 201 (got 201)
+PASS session on 2026-09-26 201 (got 201)
+PASS session on 2026-09-27 201 (got 201)
+PASS signature upload 201 (got 201)
+PASS sign-off 201 (got 201)
+INFO ledger rows after sign-off: 2; jobs: [{"kind":"render_pdf","state":"queued","attempts":0},{"kind":"send_email","state":"queued","attempts":0}]
+PASS PDF child killed at beforeWrite (exit 1); job left leased, attempts 1
+PASS PDF job not reclaimed before lease expiry (119 s after beforeWrite)
+PASS PDF child killed at beforeRename (exit 1); job left leased, attempts 2
+PASS PDF job not reclaimed before lease expiry (119 s after beforeRename)
+PASS PDF child killed at afterRename (exit 1); job left leased, attempts 3
+PASS PDF job not reclaimed before lease expiry (119 s after afterRename)
+PASS PDF job succeeds after three kills: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+PASS one PDF attachment row (1) and revision file ready (ready)
+PASS exactly one stored PDF file for the revision key
+INFO orphan temporary files left by the kills (sweep not scheduled, carry item 4): 1
+PASS ledger unchanged by PDF crashes (2)
+INFO render_pdf job: {"state":"succeeded","attempts":4}
+PASS send killed after prepare: attempt preparing, nothing captured ([{"attempt_no":1,"state":"preparing"}])
+PASS restart reuses the preparing attempt and captures once ([{"attempt_no":1,"state":"accepted"}], captures 1)
+PASS captured PDF SHA-256 equals the stored revision PDF
+PASS captured envelope = snapshot To+Cc and MAIL_FROM
+PASS captured subject equals the snapshot subject ("Timesheet Example Employee 2026-10-02 Submitted")
+PASS captured body carries {SignOffStatus} = Submitted for the manual revision
+PASS capture metadata holds no secret-like field
+INFO capture metadata keys: mode,message_id,envelope,eml_sha256,eml_bytes,pdf_sha256,pdf_bytes
+PASS same-revision resend 201 (got 201)
+PASS send killed after 'sending' commit: attempt sending, captures still 1
+PASS restart after lease expiry: attempt uncertain (lease_expired_while_sending), job intervention/delivery_uncertain, nothing sent
+PASS a later runner pass claims nothing and sends nothing
+PASS GET /api/deliveries shows decision_required for the uncertain attempt
+PASS explicit resend decision 201 creates one new job (got 201)
+PASS second decision refused 409 (delivery_decision_recorded)
+PASS the decided resend is captured exactly once (captures 2)
+PASS another pass after the decided resend sends nothing more
+PASS the decision is audited once (1)
+PASS adapter accepted then process killed: one capture written (3)
+PASS restart marks it uncertain (lease_expired_while_sending) and does not resend (captures 3)
+PASS mark_delivered decision creates no job
+PASS nothing is sent after mark_delivered
+PASS ledger unchanged by every send, resend and decision (2)
+PASS still one revision (1)
+PASS 4 processes x 200 rounds x 10 keys -> 10 rows (expected 10)
+PASS 60 jobs claimed 60 times in total, no job twice (per process 21/14/25)
+PASS every probe job succeeded on attempt 1: [{"state":"succeeded","attempts":1,"n":60}]
+PASS retry delays [60,300,900,3600,"intervention@5:probe_failure"]
+PASS dying runner: leased/1 -> leased/2 -> leased/3 -> leased/4 -> leased/5 -> intervention/5/lease_expired
+PASS no plaintext password anywhere in the database
+PASS no SMTP credential field in the database
+SUMMARY failures=0

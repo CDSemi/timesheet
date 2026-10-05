@@ -1,0 +1,42 @@
+// WP3-AUDIT-A race child: one racer in its own OS process with its own SQLite connection.
+// argv: <manual|deadline> <dbPath> <dataDir> <startAtMs> <delayMs> [hash version]
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [role, dbPath, dataDir, startAtText, delayText, hash, versionText] = process.argv.slice(2);
+const { m, REPO, sessionUser, fixedClock } = await import('./common.mjs');
+const waitUntil = async (ms) => {
+  while (Date.now() < ms) await new Promise((resolve) => setTimeout(resolve, 1));
+};
+const SIGN_INSTANT = '2026-09-30T00:30:05Z';
+const NOW = '2026-09-30T00:30:00Z';
+
+if (role === 'manual') {
+  const db = m.db.openDatabase(dbPath);
+  const ownerId = db.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get();
+  const user = sessionUser(db, ownerId);
+  await waitUntil(Number(startAtText) + Number(delayText));
+  try {
+    const result = m.fin.signOffTimesheet({ db, clock: fixedClock(SIGN_INSTANT), user }, '2026-10-02', {
+      expectedVersion: Number(versionText),
+      reviewedHash: hash,
+      signerName: 'Synthetic Racer',
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    console.log(JSON.stringify({ role, outcome: result.status, revision_no: result.finalizedRevisionNo }));
+  } catch (error) {
+    console.log(JSON.stringify({ role, outcome: 'error', status: error.status ?? null, code: error.code ?? String(error.message).slice(0, 60) }));
+  } finally {
+    db.close();
+  }
+} else {
+  process.env.DATABASE_PATH = dbPath;
+  process.env.DATA_DIR = dataDir;
+  process.env.MAIL_FROM = '<email>';
+  delete process.env.OUTBOUND_MODE;
+  delete process.env.PRODUCTION_SENDING_ENABLED;
+  process.argv = [process.argv[0], join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', NOW];
+  await waitUntil(Number(startAtText) + Number(delayText));
+  await import(pathToFileURL(join(REPO, 'dist/server/cli.js')).href);
+}

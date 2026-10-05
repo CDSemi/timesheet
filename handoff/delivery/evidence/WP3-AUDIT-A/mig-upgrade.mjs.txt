@@ -1,0 +1,141 @@
+// WP3-AUDIT-A migration probe: upgrade a schema-v3 database created by the accepted WP2 source
+// (5fafeae) with the reviewed production CLI (`cli.js migrate`), then check that every WP2 row is
+// preserved column for column, that the append-only triggers of 0001-0003 and the new 0004-0006
+// tables refuse UPDATE/DELETE, integrity and foreign keys, the recorded checksums, idempotency, a
+// real WP3 sign-off and job pass on the upgraded file, and a fresh database.
+// argv: <wp2 db (read only)> <work dir>
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { fixedClock, m, REPO, sessionUser } from './common.mjs';
+
+const [source, work] = process.argv.slice(2);
+mkdirSync(work, { recursive: true });
+const upgraded = join(work, 'upgraded.db');
+const fresh = join(work, 'fresh.db');
+copyFileSync(source, upgraded);
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+const shares = await import(pathToFileURL(join(REPO, 'dist/server/services/shares.js')).href);
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!condition) failures += 1;
+}
+
+function snapshot(path) {
+  const db = new Database(path, { readonly: true });
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  const out = {};
+  for (const table of tables) {
+    const columns = db.prepare(`PRAGMA table_info("${table}")`).all().map((c) => c.name);
+    const rows = db.prepare(`SELECT rowid AS __rowid, * FROM "${table}" ORDER BY rowid`).all();
+    out[table] = { columns, rows };
+  }
+  const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").pluck().all();
+  const checksums = db.prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version').all();
+  const version = db.pragma('user_version', { simple: true });
+  db.close();
+  return { tables: out, triggers, checksums, version };
+}
+const digestRows = (rows, columns) => createHash('sha256').update(JSON.stringify(rows.map((row) => columns.map((c) => row[c])))).digest('hex').slice(0, 16);
+
+const before = snapshot(upgraded);
+check('source database is schema v3 from the WP2 source', before.version === 3, `user_version=${before.version}`);
+const env = { ...process.env, DATABASE_PATH: upgraded, NODE_ENV: 'development' };
+delete env.PRODUCTION_SENDING_ENABLED;
+const cli = (args, path) => spawnSync(process.execPath, [join(REPO, 'dist/server/cli.js'), ...args], { env: { ...env, DATABASE_PATH: path }, encoding: 'utf8' });
+const first = cli(['migrate'], upgraded);
+const firstOut = JSON.parse(first.stdout.trim());
+check('cli migrate on the WP2 database applies exactly 4, 5 and 6', first.status === 0 && JSON.stringify(firstOut.applied) === '[4,5,6]' && firstOut.version === 6, JSON.stringify({ applied: firstOut.applied, version: firstOut.version }));
+const after = snapshot(upgraded);
+for (const [table, data] of Object.entries(before.tables)) {
+  const next = after.tables[table];
+  // schema_migrations gains rows 4-6 by design: compare the WP2 rows only.
+  const nextRows = table === 'schema_migrations' ? (next?.rows ?? []).slice(0, data.rows.length) : (next?.rows ?? []);
+  const same = next !== undefined && nextRows.length === data.rows.length && digestRows(nextRows, ['__rowid', ...data.columns]) === digestRows(data.rows, ['__rowid', ...data.columns]);
+  const added = next === undefined ? [] : next.columns.filter((c) => !data.columns.includes(c));
+  check(`rows preserved column for column: ${table}`, same, `rows=${data.rows.length} digest=${digestRows(data.rows, ['__rowid', ...data.columns])}${added.length ? ` new columns=${added.join(',')}` : ''}`);
+}
+check('every trigger of 0001-0003 is still present', before.triggers.every((t) => after.triggers.includes(t)), `${before.triggers.length} before, ${after.triggers.length} after`);
+check('the recorded checksums of 0001-0003 are unchanged', JSON.stringify(after.checksums.slice(0, 3)) === JSON.stringify(before.checksums));
+console.log(`INFO  new tables: ${Object.keys(after.tables).filter((t) => before.tables[t] === undefined).join(', ')}`);
+
+// A real WP3 sign-off and job pass on the upgraded file (employee2 has WP2 sample sessions).
+const db = m.db.openDatabase(upgraded);
+const e2 = sessionUser(db, db.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get());
+const e1 = sessionUser(db, db.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get());
+const at = fixedClock('2026-09-29T20:00:00Z');
+const dataDir = join(work, 'private-data');
+const files = new m.files.FileStore(dataDir);
+m.settings.saveSubmissionSettings(db, at, e2.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: false });
+m.sigs.saveSignature(db, at, files, e2.id, m.seed.syntheticSignaturePng(5), 'image/png');
+const review = m.review.buildReviewPayload(db, at, e2, '2026-10-02');
+const signed = m.fin.signOffTimesheet({ db, clock: at, user: e2 }, '2026-10-02', {
+  expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Synthetic WP2 Upgrade', deficitChoices: [], incompleteEvidenceAcknowledged: true,
+});
+const delivery = { senderAddress: '<email>', outbound: { mode: 'capture' }, publicBaseUrl: 'http://localhost:3000' };
+for (const now of ['2026-09-29T20:01:00Z', '2026-09-29T20:05:00Z']) {
+  const clock = fixedClock(now);
+  await m.runner.runJobsOnce({ db, clock, handlers: m.runner.createJobHandlers({ db, clock, files, delivery }) });
+}
+const pdfState = db.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(signed.revision.id);
+const attempt = db.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().get(signed.revision.id);
+check('WP3 works on the upgraded file: sign-off created, PDF ready, one accepted capture', signed.status === 'created' && pdfState === 'ready' && attempt === 'accepted', `${signed.status}/${pdfState}/${attempt}`);
+const share = shares.grantShare(db, at, { ownerUserId: e2.id, granteeEmail: '<email>', items: { timesheets: 'view', otRead: true, pdfDownload: false } });
+check('a share can be granted on the upgraded file', share !== undefined && e1.id !== e2.id);
+
+// Append-only and immutability triggers, old and new: each statement must be refused.
+const refused = [
+  ['UPDATE ot_ledger SET delta_minutes = delta_minutes + 1', 'ot_ledger update'],
+  ['DELETE FROM ot_ledger', 'ot_ledger delete'],
+  ["UPDATE audit_events SET operation = 'x'", 'audit_events update'],
+  ['DELETE FROM audit_events', 'audit_events delete'],
+  ["UPDATE calendar_versions SET note = 'x'", 'calendar_versions update'],
+  ['DELETE FROM work_policies', 'work_policies delete'],
+  ['DELETE FROM ot_leave_requests', 'ot_leave_requests delete'],
+  ["UPDATE timesheet_revisions SET payload_json = '{}'", 'timesheet_revisions update'],
+  ['DELETE FROM timesheet_revisions', 'timesheet_revisions delete'],
+  ["UPDATE signoffs SET signed_at = '2026-01-01T00:00:00Z'", 'signoffs update'],
+  ['DELETE FROM signoffs', 'signoffs delete'],
+  ['UPDATE revision_ledger_lines SET proposed_minutes = 0', 'revision_ledger_lines update'],
+  ['DELETE FROM revision_ledger_lines', 'revision_ledger_lines delete'],
+  ["UPDATE attachments SET sha256 = 'x'", 'attachments update'],
+  ['DELETE FROM attachments', 'attachments delete'],
+  ['DELETE FROM timesheet_shares', 'timesheet_shares delete'],
+  ['DELETE FROM submission_settings', 'submission_settings delete'],
+];
+for (const [sql, label] of refused) {
+  let error = null;
+  const savepoint = db.transaction(() => db.prepare(sql).run());
+  try {
+    const info = savepoint();
+    error = info.changes === 0 ? 'no rows to change' : null;
+  } catch (caught) {
+    error = caught.message;
+  }
+  check(`refused: ${label}`, error !== null && error !== 'no rows to change', error ?? 'ALLOWED');
+}
+const integrity = db.prepare('PRAGMA integrity_check').pluck().get();
+const fk = db.prepare('PRAGMA foreign_key_check').all();
+db.close();
+check('upgraded file: integrity_check ok and foreign_key_check empty', integrity === 'ok' && fk.length === 0, `${integrity} fk=${fk.length}`);
+const again = cli(['migrate'], upgraded);
+check('a second cli migrate applies nothing', again.status === 0 && JSON.parse(again.stdout.trim()).applied.length === 0, again.stdout.trim().replace(/"database":"[^"]*",/, ''));
+const final = snapshot(upgraded);
+for (const [table, data] of Object.entries(before.tables)) {
+  if (['users', 'audit_events', 'ot_ledger', 'timesheets', 'pay_periods', 'auth_sessions', 'calendar_versions', 'work_policies', 'day_entries', 'work_sessions', 'session_breaks', 'ot_leave_requests'].includes(table)) {
+    const kept = data.rows.every((row) => final.tables[table].rows.some((next) => next.__rowid === row.__rowid));
+    if (!kept) check(`no WP2 row lost after WP3 use: ${table}`, false);
+  }
+}
+const freshRun = cli(['migrate'], fresh);
+const freshDb = new Database(fresh, { readonly: true });
+const freshIntegrity = freshDb.prepare('PRAGMA integrity_check').pluck().get();
+const freshFk = freshDb.prepare('PRAGMA foreign_key_check').all().length;
+freshDb.close();
+check('fresh database: cli migrate applies 1-6, integrity ok, no foreign-key violation', freshRun.status === 0 && JSON.stringify(JSON.parse(freshRun.stdout.trim()).applied) === '[1,2,3,4,5,6]' && freshIntegrity === 'ok' && freshFk === 0);
+console.log(failures === 0 ? 'MIGRATION PROBE PASSED' : `MIGRATION PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

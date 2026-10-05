@@ -1,0 +1,32 @@
+# WP3-AUDIT-C evidence masking: strip ANSI codes, mask addresses and local paths, LF endings,
+# no trailing whitespace, exactly one final newline. Usage: python mask.py <src> <dst> [header-line ...]
+import os
+import re
+import sys
+
+src, dst, *header = sys.argv[1:]
+with open(src, 'rb') as handle:
+    text = handle.read().decode('utf-8', errors='replace')
+text = re.sub(r'\x1b\[[0-9;?]*[ -/]*[@-~]', '', text)
+text = text.replace('\r\n', '\n').replace('\r', '\n')
+rules = [
+    (r'(?i)[A-Za-z]:[\\/]+timesheet-tmp[\\/]+WP3-AUDIT-C', '<scratch>'),
+    (r'(?i)file:///[A-Za-z]:/timesheet-tmp/WP3-AUDIT-C', 'file:///<scratch>'),
+    (r'(?i)/[a-z]/timesheet-tmp/WP3-AUDIT-C', '<scratch>'),
+    (r'(?i)[A-Za-z]:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet', '<project>'),
+    (r'(?i)/[a-z]/Dropbox/Work\.CDSemi/timesheet', '<project>'),
+    (r'(?i)[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"\']+', '<user-home>'),
+    (r'(?i)/[a-z]/Users/[^/\s"\']+', '<user-home>'),
+    (r'(?i)B:[\\/]+Temp[\\/]+[^\s"\']*', '<tmp>'),
+    (r'[\w.%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b', '<email>'),
+]
+# The Windows account name comes from the environment, so it never appears in this file.
+account = os.environ.get('USERNAME', '')
+if account:
+    rules.append((r'(?i)\b' + re.escape(account) + r'\b', '<user>'))
+for pattern, replacement in rules:
+    text = re.sub(pattern, replacement, text)
+lines = [line.rstrip() for line in text.split('\n')]
+body = '\n'.join(header + lines).rstrip('\n') + '\n'
+with open(dst, 'w', encoding='utf-8', newline='\n') as handle:
+    handle.write(body)

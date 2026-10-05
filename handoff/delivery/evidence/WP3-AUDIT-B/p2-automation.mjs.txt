@@ -1,0 +1,378 @@
+// WP3-AUDIT-B probe 2: activation boundary, deadline automation, F-1 empty periods, the note-line x
+// signature-image matrix, {SignOffStatus}, reminders and device-zone independence. Synthetic data,
+// capture outbound only, a real SQLite file and the production job handlers.
+// Usage: node p2-automation.mjs <repoDir> <workDir>          (main)
+//        node p2-automation.mjs <repoDir> <workDir> scan <db> <now>  (child: one deadline scan)
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { randomBytes } from 'node:crypto';
+
+const [repoDir, workDir, role, childDb, childNow] = process.argv.slice(2);
+const src = (p) => pathToFileURL(join(repoDir, 'src', p)).href;
+const { openDatabase } = await import(src('server/db/database.ts'));
+
+if (role === 'scan') {
+  const { runDeadlineScan } = await import(src('server/services/automation.ts'));
+  const db = openDatabase(childDb);
+  const summary = runDeadlineScan(db, { now: () => new Date(childNow) }, { batchSize: 1000 });
+  const rows = db
+    .prepare(
+      `SELECT u.email, p.payroll_date, p.period_start, p.period_end, p.due_at_utc, r.payload_sha256, r.origin, r.review_state
+         FROM timesheet_revisions r JOIN users u ON u.id = r.user_id JOIN timesheets t ON t.id = r.timesheet_id
+         JOIN pay_periods p ON p.id = t.pay_period_id ORDER BY u.email, p.payroll_date`,
+    )
+    .all();
+  console.log(JSON.stringify({ tz: process.env.TZ, offsetMinutes: new Date('2026-10-14T00:00:30Z').getTimezoneOffset(), summary, rows }));
+  db.close();
+  process.exit(0);
+}
+
+const DB = join(workDir, 'p2.db');
+const DATA = join(workDir, 'data');
+mkdirSync(DATA, { recursive: true });
+const SENDER = '<email>';
+const log = [];
+const out = (line) => {
+  log.push(line);
+  console.log(line);
+};
+let failures = 0;
+const check = (ok, label) => {
+  if (!ok) failures += 1;
+  out(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+
+const { migrate } = await import(src('server/db/migrations.ts'));
+const { seedSynthetic, syntheticSignaturePng } = await import(src('server/seed.ts'));
+const { createApp } = await import(src('server/app.ts'));
+const { LoginRateLimiter } = await import(src('server/auth/rateLimit.ts'));
+const { FileStore } = await import(src('server/files/fileStore.ts'));
+const { createJobHandlers, runJobsOnce } = await import(src('server/jobs/runner.ts'));
+const pdfjs = await import(pathToFileURL(join(repoDir, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+
+const db = openDatabase(DB);
+migrate(db);
+let nowIso = '2026-09-29T20:00:00Z';
+const clock = { now: () => new Date(nowIso) };
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await seedSynthetic(db, clock, { passwords });
+const calendarId = seed.calendarId;
+const ORIGIN = 'http://localhost:4520';
+const config = { host: '127.0.0.1', port: 4520, databasePath: DB, allowedOrigins: [ORIGIN], cookieSecure: false, sessionTtlSeconds: 30 * 86400, production: false };
+const delivery = { dataDir: DATA, publicBaseUrl: ORIGIN, senderAddress: SENDER, outbound: { mode: 'capture' } };
+const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null, delivery }, { dataDir: DATA });
+const files = new FileStore(DATA);
+const handlers = createJobHandlers({ db, clock, files, delivery });
+const request = async (method, path, { cookie, body, type } = {}) => {
+  const headers = { origin: ORIGIN };
+  if (cookie) headers.cookie = cookie;
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers['content-type'] = type ?? 'application/json';
+    init.body = type === undefined ? JSON.stringify(body) : body;
+  }
+  const response = await app.request(path, init);
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text === '' ? null : JSON.parse(text);
+  } catch {
+    json = text;
+  }
+  return { status: response.status, body: json, headers: response.headers };
+};
+const loginAs = async (email, password) => {
+  const r = await request('POST', '/api/auth/login', { body: { email, password } });
+  if (r.status !== 200) throw new Error(`login ${r.status}`);
+  return r.headers.get('set-cookie').split(';')[0];
+};
+const passes = async (iso, count = 3, stepSeconds = 120) => {
+  const summaries = [];
+  for (let i = 0; i < count; i += 1) {
+    nowIso = new Date(new Date(iso).getTime() + i * stepSeconds * 1000).toISOString().replace('.000Z', 'Z');
+    summaries.push(await runJobsOnce({ db, clock, handlers }));
+  }
+  return summaries;
+};
+const count = (sql, ...args) => db.prepare(sql).get(...args).n;
+
+const admin = await loginAs('<email>', passwords.admin);
+const employee = await loginAs('<email>', passwords.employee);
+
+/* ---- 1. Nothing automated before activation ---- */
+const beforeRuns = await passes('2026-09-30T01:00:00Z', 2);
+check(
+  count('SELECT count(*) AS n FROM jobs') === 0 && count('SELECT count(*) AS n FROM timesheet_revisions') === 0 && count('SELECT count(*) AS n FROM reminder_occurrences') === 0,
+  `activation null: runner passes after the 2026-10-02 deadline write no job, revision or reminder (${JSON.stringify(beforeRuns[0])})`,
+);
+
+/* ---- 2. Recording the activation ---- */
+nowIso = '2026-10-01T00:00:00Z';
+const past = await request('PUT', '/api/admin/automation/activation', { cookie: admin, body: { active_from: '2026-09-30T00:00:00Z', reason: 'probe' } });
+check(past.status === 422 && past.body.error.code === 'activation_in_past', `activation in the past refused (${past.status} ${past.body?.error?.code})`);
+const noReason = await request('PUT', '/api/admin/automation/activation', { cookie: admin, body: { active_from: '2026-10-01T00:00:00Z', reason: ' ' } });
+check(noReason.status === 422, `activation without a reason refused (${noReason.status} ${noReason.body?.error?.code})`);
+const byEmployee = await request('PUT', '/api/admin/automation/activation', { cookie: employee, body: { active_from: '2026-10-01T00:00:00Z', reason: 'probe' } });
+check(byEmployee.status === 403 || byEmployee.status === 404, `activation by an employee refused (${byEmployee.status})`);
+const act = await request('PUT', '/api/admin/automation/activation', { cookie: admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic pilot activation' } });
+check(act.status === 200 && act.body.automation.active_from === '2026-10-01T00:00:00Z', `activation recorded (${act.status})`);
+const actAudit = db.prepare("SELECT actor_user_id, owner_user_id, reason, before_json, after_json FROM audit_events WHERE operation = 'automation.activation'").all();
+check(actAudit.length === 1 && actAudit[0].actor_user_id === seed.users.find((u) => u.role === 'admin').id && actAudit[0].owner_user_id === null && actAudit[0].reason === 'synthetic pilot activation', `activation audited once: ${JSON.stringify(actAudit.map((a) => ({ before: a.before_json, after: a.after_json })))}`);
+
+/* ---- 3. Accounts and settings (all saved at the activation instant) ---- */
+const people = {
+  m00: { note: false, text: undefined, image: false, auto: true },
+  m10: { note: true, text: undefined, image: false, auto: true },
+  m01: { note: false, text: undefined, image: true, auto: true },
+  m11: { note: true, text: 'Filed on schedule', image: true, auto: true },
+  off: { note: false, text: undefined, image: false, auto: false },
+  choose: { note: false, text: undefined, image: false, auto: true },
+  empty: { note: false, text: undefined, image: false, auto: true },
+};
+const cookies = { employee };
+const ids = {};
+for (const key of Object.keys(people)) {
+  const email = `<email>`;
+  const password = randomBytes(18).toString('base64url');
+  const created = await request('POST', '/api/admin/users', { cookie: admin, body: { email, display_name: `Probe ${key.toUpperCase()} Nguyễn`, role: 'employee', password, calendar_id: calendarId } });
+  if (created.status !== 201) throw new Error(`create ${key}: ${created.status} ${JSON.stringify(created.body)}`);
+  ids[key] = created.body.user?.id ?? created.body.account?.id ?? created.body.id;
+  cookies[key] = await loginAs(email, password);
+}
+// Note-text validation (F-Q2): empty, two lines, braces and over-long text are refused.
+for (const [label, text] of [
+  ['empty', '   '],
+  ['two lines', 'one\ntwo'],
+  ['braces', 'Status {SignOffStatus}'],
+  ['121 chars', 'x'.repeat(121)],
+]) {
+  const r = await request('POST', '/api/settings/submission', { cookie: cookies.m00, body: { expected_seq: 0, to: ['<email>'], auto_submit: true, auto_note_enabled: true, auto_note_text: text } });
+  check(r.status === 422 && r.body.error.code === 'invalid_auto_note', `note text "${label}" refused (${r.status} ${r.body?.error?.code})`);
+}
+const defaults = await request('GET', '/api/settings/submission', { cookie: cookies.m00 });
+check(defaults.body.settings.auto_note.enabled === false && defaults.body.settings.auto_note.text === 'Automatic submission' && defaults.body.settings.auto_image.authorized === false, `defaults: note off, text "Automatic submission", image off (${JSON.stringify(defaults.body.settings.auto_note)})`);
+
+const BODY = 'Hello,\nTimesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd}.\nStatus: {SignOffStatus}.\nRevision {Revision}.';
+for (const [key, p] of Object.entries(people)) {
+  const body = { expected_seq: 0, to: [`<email>`], auto_submit: p.auto, subject_template: 'Timesheet {PayrollDate} {EmployeeName} [{SignOffStatus}]', body_template: BODY };
+  if (p.note) body.auto_note_enabled = true;
+  if (p.text !== undefined) body.auto_note_text = p.text;
+  const r = await request('POST', '/api/settings/submission', { cookie: cookies[key], body });
+  check(r.status === 201, `settings ${key} saved (${r.status} ${r.body?.error?.code ?? ''})`);
+  const up = await request('POST', `/api/signatures?authorize_auto_image=${p.image}`, { cookie: cookies[key], body: syntheticSignaturePng(3 + Object.keys(people).indexOf(key)), type: 'image/png' });
+  check(up.status === 201, `signature ${key} uploaded with authorize_auto_image=${p.image} (${up.status})`);
+}
+const authAudit = count("SELECT count(*) AS n FROM audit_events WHERE operation LIKE '%auto_image%'");
+check(authAudit === 2, `exactly two audited auto-image authorizations (m01, m11): ${authAudit}`);
+// Seed employee: settings and signature, signs off manually before the deadline.
+await request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['<email>'], auto_submit: true, body_template: BODY } });
+await request('POST', '/api/signatures', { cookie: employee, body: syntheticSignaturePng(2), type: 'image/png' });
+
+// Work records: choose-mode user has a short complete weekday (deficit 120) and a Saturday OT session.
+const pol = await request('POST', '/api/policies', {
+  cookie: cookies.choose,
+  body: { effective_from: '2026-09-28', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'choose_at_signoff' },
+});
+check(pol.status === 201, `choose-mode policy for the 2026-10-16 period (${pol.status} ${pol.body?.error?.code ?? ''})`);
+const polEmpty = await request('POST', '/api/policies', {
+  cookie: cookies.empty,
+  body: { effective_from: '2026-09-28', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'auto_deduct' },
+});
+check(polEmpty.status === 201, `auto_deduct policy for the empty user (${polEmpty.status} ${polEmpty.body?.error?.code ?? ''})`);
+nowIso = '2026-10-12T20:00:00Z';
+for (const [day, start, end] of [
+  ['2026-10-05', '2026-10-05T15:00:00Z', '2026-10-05T21:00:00Z'],
+  ['2026-10-10', '2026-10-10T16:00:00Z', '2026-10-10T18:00:00Z'],
+]) {
+  const r = await request('POST', `/api/days/${day}/sessions`, { cookie: cookies.choose, body: { start, end, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true } });
+  check(r.status === 201, `choose user session ${day} (${r.status} ${r.body?.error?.code ?? ''})`);
+}
+
+/* ---- 4. Reminders before the deadline (due 2026-10-14T00:00:00Z for payroll 2026-10-16) ---- */
+const users = db.prepare("SELECT id, email FROM users WHERE status = 'active'").all();
+await passes('2026-10-13T00:00:30Z', 2);
+const r24 = db.prepare("SELECT user_id, occurrence_key, disposition FROM reminder_occurrences WHERE kind = 'before_due'").all();
+check(r24.length === users.length && r24.every((r) => r.occurrence_key === 'offset-1440' && r.disposition === 'enqueued'), `24 h reminder decided once for each of ${users.length} active accounts (${r24.length})`);
+await passes('2026-10-13T00:10:30Z', 2);
+check(count("SELECT count(*) AS n FROM reminder_occurrences WHERE kind = 'before_due'") === users.length, 'rerun 10 minutes later decides no duplicate');
+// Manual sign-off by the seed employee before the 2 h mark.
+nowIso = '2026-10-13T21:00:00Z';
+const rev = await request('GET', '/api/timesheets/2026-10-16/review', { cookie: employee });
+const so = await request('POST', '/api/timesheets/2026-10-16/signoff', { cookie: employee, body: { expected_version: rev.body.expected_version, reviewed_hash: rev.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true } });
+check(so.status === 201, `seed employee signs off manually before the deadline (${so.status} ${so.body?.error?.code ?? ''})`);
+await passes('2026-10-13T22:00:30Z', 2);
+const r2 = db.prepare("SELECT user_id FROM reminder_occurrences WHERE kind = 'before_due' AND occurrence_key = 'offset-120'").all().map((r) => r.user_id);
+const employeeId = seed.users.find((u) => u.role === 'employee').id;
+check(r2.length === users.length - 1 && !r2.includes(employeeId), `2 h reminder for every unfinalized account and none after finalization (${r2.length})`);
+
+/* ---- 5. Device-zone independence of the deadline scan (copies of the same database) ---- */
+const zoneRuns = [];
+for (const tz of ['America/Los_Angeles', 'Pacific/Kiritimati', 'Asia/Ho_Chi_Minh', 'UTC']) {
+  const copy = join(workDir, `zone-${tz.replace(/\//g, '_')}.db`);
+  db.pragma('wal_checkpoint(TRUNCATE)');
+  copyFileSync(DB, copy);
+  const r = spawnSync(process.execPath, [process.argv[1], repoDir, workDir, 'scan', copy, '2026-10-14T00:00:30Z'], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });
+  zoneRuns.push(JSON.parse(r.stdout.trim()));
+}
+const zoneKey = (run) => JSON.stringify(run.rows);
+check(
+  zoneRuns.every((run) => zoneKey(run) === zoneKey(zoneRuns[0])) && new Set(zoneRuns.map((r) => r.offsetMinutes)).size === 4,
+  `deadline scan under TZ ${zoneRuns.map((r) => `${r.tz}(${r.offsetMinutes})`).join(', ')} gives identical periods and payload hashes (${zoneRuns[0].rows.length} revisions)`,
+);
+out(`INFO zone run revisions: ${JSON.stringify(zoneRuns[0].rows.map((r) => [r.email.replace(/@.*/, '@<email>'), r.payroll_date, r.period_start, r.period_end, r.origin, r.review_state]))}`);
+
+/* ---- 6. The deadline: automatic submissions, overdue, PDFs, sends and notices ---- */
+const before13 = count("SELECT count(*) AS n FROM timesheet_revisions WHERE origin = 'deadline'");
+await passes('2026-10-13T23:59:30Z', 1);
+check(count("SELECT count(*) AS n FROM timesheet_revisions WHERE origin = 'deadline'") === before13, 'nothing finalized 30 s before the deadline');
+const atDeadline = await passes('2026-10-14T00:00:30Z', 4, 120);
+out(`INFO deadline passes: ${JSON.stringify(atDeadline)}`);
+out(`INFO jobs in intervention: ${JSON.stringify(db.prepare("SELECT j.kind, j.last_error, u.email FROM jobs j LEFT JOIN users u ON u.id = j.user_id WHERE j.state = 'intervention'").all().map((r) => ({ ...r, email: String(r.email).replace(/@.*/, '@<email>') })))}`);
+const autoRevs = db
+  .prepare(
+    `SELECT r.id, r.user_id, u.email, r.origin, r.review_state, r.actor_user_id, r.reviewed_sha256, r.created_at, p.payroll_date, r.payload_json
+       FROM timesheet_revisions r JOIN users u ON u.id = r.user_id JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+      WHERE r.origin = 'deadline' ORDER BY u.email`,
+  )
+  .all();
+const autoBy = Object.fromEntries(autoRevs.map((r) => [r.user_id, r]));
+for (const key of ['m00', 'm10', 'm01', 'm11', 'choose', 'empty']) {
+  const r = autoBy[ids[key]];
+  check(r !== undefined && r.payroll_date === '2026-10-16' && r.review_state === 'pending' && r.actor_user_id === null && r.reviewed_sha256 === null, `${key}: automatic revision for 2026-10-16, review pending, no actor, no reviewed hash`);
+  check(count('SELECT count(*) AS n FROM signoffs WHERE revision_id = ?', r.id) === 0, `${key}: no signoffs row (signed_at empty)`);
+}
+check(autoBy[ids.off] === undefined, 'switch off: no automatic revision');
+const overdue = db.prepare("SELECT owner_user_id, after_json FROM audit_events WHERE operation = 'deadline.overdue'").all();
+check(overdue.length === 1 && overdue[0].owner_user_id === ids.off, `switch off: one overdue record (${overdue.length})`);
+check(autoBy[employeeId] === undefined && count("SELECT count(*) AS n FROM timesheet_revisions WHERE user_id = ?", employeeId) === 1, 'manually finalized period is not finalized again');
+const adminId = seed.users.find((u) => u.role === 'admin').id;
+out(`INFO never-saved admin account automatic revision for 2026-10-16: ${autoBy[adminId] !== undefined}`);
+
+// Finalization status shown to the owner: review pending, signed_at empty.
+const fin = await request('GET', '/api/timesheets/2026-10-16/finalization', { cookie: cookies.m11 });
+out(`INFO owner finalization view (m11): ${JSON.stringify({ origin: fin.body.revision?.origin, review_state: fin.body.revision?.review_state, signoff: fin.body.signoff ?? null })}`);
+check(fin.status === 200 && JSON.stringify(fin.body).includes('pending') && !/"signed_at":"\d/.test(JSON.stringify(fin.body)), 'owner finalization view says pending and has no signed_at');
+
+// F-1: the empty period with auto_deduct posts nothing and shows default labels.
+const emptySnap = JSON.parse(autoBy[ids.empty].payload_json);
+const labels = [...new Set(emptySnap.days.map((d) => `${d.category}`))];
+check(count('SELECT count(*) AS n FROM ot_ledger WHERE user_id = ?', ids.empty) === 0 && emptySnap.ot_proposals.length === 0 && emptySnap.deficit_proposals.length === 0 && emptySnap.days.length === 14, `F-1 empty period (auto_deduct): 14 days, labels ${labels.join('/')}, no OT, no deficit, no ledger row`);
+check(count('SELECT count(*) AS n FROM timesheet_revisions WHERE user_id = ?', ids.empty) === 1, 'F-1: exactly one revision');
+// Choose mode on the automatic path: pending choice, no debit; the Saturday credit posts.
+const lines = db.prepare('SELECT line_kind, outcome, proposed_minutes FROM revision_ledger_lines WHERE revision_id = ? ORDER BY line_kind').all(autoBy[ids.choose].id);
+const chooseLedger = db.prepare('SELECT delta_minutes, origin FROM ot_ledger WHERE user_id = ?').all(ids.choose);
+check(lines.some((l) => l.line_kind === 'deficit_debit' && l.outcome === 'pending_choice') && chooseLedger.every((l) => l.delta_minutes > 0), `choose mode: pending_choice line, no debit; ledger ${JSON.stringify(chooseLedger)}; lines ${JSON.stringify(lines)}`);
+
+/* ---- 7. The 2x2 matrix: outgoing PDF and e-mail ---- */
+const INDICATOR = /automat|pending|unsigned|not signed|review|deadline|system/i;
+const readPdf = async (bytes) => {
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 });
+  const doc = await task.promise;
+  let text = '';
+  let images = 0;
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    const page = await doc.getPage(n);
+    const content = await page.getTextContent();
+    text += `${content.items.map((i) => i.str).join('\n')}\n`;
+    const ops = await page.getOperatorList();
+    images += ops.fnArray.filter((f) => f === pdfjs.OPS.paintImageXObject || f === pdfjs.OPS.paintInlineImageXObject).length;
+  }
+  await task.destroy();
+  return { text, images };
+};
+
+const qpDecode = (text) => {
+  const joined = text.replace(/=\r?\n/g, "");
+  const bytes = [];
+  for (let i = 0; i < joined.length; i += 1) {
+    if (joined[i] === "=" && /^[0-9A-F]{2}$/.test(joined.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(joined.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else bytes.push(...Buffer.from(joined[i], "utf8"));
+  }
+  return Buffer.from(bytes).toString("utf8");
+};
+const headerOf = (eml, name) => {
+  const head = eml.split(/\r?\n\r?\n/)[0].replace(/\r?\n[ \t]+/g, " ");
+  const raw = new RegExp("^" + name + ": (.*)$", "m").exec(head)?.[1] ?? "";
+  return raw
+    .replace(/\?= =\?UTF-8\?/gi, "?==?UTF-8?")
+    .replace(/=\?UTF-8\?([QB])\?([^?]*)\?=/gi, (_, enc, data) =>
+      enc.toUpperCase() === "B" ? Buffer.from(data, "base64").toString("utf8") : qpDecode(data.replace(/_/g, " ")));
+};
+const captureRoot = join(DATA, 'mail-capture');
+const captureOf = (revisionId) => {
+  const a = db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'accepted' ORDER BY attempt_no LIMIT 1").get(revisionId);
+  return a === undefined ? null : join(captureRoot, a.id);
+};
+const matrix = [];
+for (const key of ['m00', 'm10', 'm01', 'm11']) {
+  const p = people[key];
+  const r = autoBy[ids[key]];
+  const folder = captureOf(r.id);
+  check(folder !== null && existsSync(join(folder, 'attachment.pdf')), `${key}: submission captured`);
+  if (folder === null) continue;
+  const pdf = await readPdf(readFileSync(join(folder, 'attachment.pdf')));
+  const eml = readFileSync(join(folder, 'message.eml'), 'utf8');
+  const subject = headerOf(eml, 'Subject');
+  const textBody = (eml.split('Content-Type: text/plain')[1] ?? '').split('\r\n--')[0];
+  const noteText = p.text ?? 'Automatic submission';
+  const pdfIndicators = pdf.text.split('\n').filter((l) => INDICATOR.test(l));
+  const mailIndicators = `${subject}\n${textBody}`.split(/\r?\n/).filter((l) => INDICATOR.test(l));
+  const expectedStatus = p.note ? noteText : 'Submitted';
+  matrix.push({ key, note: p.note, image: p.image, images: pdf.images, pdfIndicators, mailIndicators, subject, statusLine: textBody.split(/\r?\n/).find((l) => l.startsWith('Status:')) });
+  check(pdf.images === (p.image ? 1 : 0), `${key}: PDF signature image count ${pdf.images} (expected ${p.image ? 1 : 0})`);
+  check(p.note ? pdf.text.includes(noteText) : !pdf.text.includes('Automatic submission'), `${key}: note line ${p.note ? `"${noteText}" present` : 'absent'} on the PDF`);
+  const unexpectedPdf = pdfIndicators.filter((l) => !(p.note && l.includes(noteText)));
+  check(unexpectedPdf.length === 0, `${key}: no automatic indicator on the PDF beyond the user's note (${JSON.stringify(unexpectedPdf)})`);
+  check(subject.includes(`[${expectedStatus}]`) && textBody.includes(`Status: ${expectedStatus}.`), `${key}: {SignOffStatus} = "${expectedStatus}" in subject and body`);
+  const unexpectedMail = mailIndicators.filter((l) => !(p.note && l.includes(noteText)));
+  check(unexpectedMail.length === 0, `${key}: no automatic indicator in the e-mail beyond the note (${JSON.stringify(unexpectedMail)})`);
+  check(pdf.text.includes('10/13/2026') && !pdf.text.includes('10/14/2026'), `${key}: printed date is the automatic submission date in America/Los_Angeles (10/13/2026), not the UTC date`);
+  check(pdf.text.includes(`Probe ${key.toUpperCase()} Nguyễn`), `${key}: employee name printed with Vietnamese diacritics`);
+}
+out(`INFO matrix: ${JSON.stringify(matrix.map(({ key, note, image, images, subject, statusLine }) => ({ key, note, image, images, subject: subject.replace(/Probe \S+ \S+/, '<name>'), statusLine })))}`);
+// Manual revision of the seed employee: {SignOffStatus} Submitted and the real sign date 10/13/2026.
+const manualRev = db.prepare("SELECT id FROM timesheet_revisions WHERE user_id = ? AND origin = 'employee'").get(employeeId);
+const manualFolder = captureOf(manualRev.id);
+const manualPdf = await readPdf(readFileSync(join(manualFolder, 'attachment.pdf')));
+check(manualPdf.images === 1 && manualPdf.text.includes('10/13/2026'), `manual revision: image present (${manualPdf.images}) and the real sign date 10/13/2026`);
+
+/* ---- 8. Notices after the deadline ---- */
+const notices = db.prepare("SELECT o.kind, o.user_id, o.disposition FROM reminder_occurrences o WHERE o.kind IN ('overdue','outcome_notice')").all();
+const outcomeUsers = new Set(notices.filter((n) => n.kind === 'outcome_notice').map((n) => n.user_id));
+check(['m00', 'm10', 'm01', 'm11', 'choose', 'empty'].every((k) => outcomeUsers.has(ids[k])), `outcome notice decided for every automatic submission (${outcomeUsers.size})`);
+check(notices.filter((n) => n.kind === 'overdue').length === 1 && notices.find((n) => n.kind === 'overdue').user_id === ids.off, 'overdue warning decided once for the switch-off account');
+const reminderFolders = readdirSync(captureRoot).map((name) => join(captureRoot, name)).filter((f) => !existsSync(join(f, 'attachment.pdf')));
+const reminderMeta = reminderFolders.map((f) => JSON.parse(readFileSync(join(f, 'metadata.json'), 'utf8')));
+check(reminderMeta.length > 0 && reminderMeta.every((m) => m.pdf_sha256 === undefined && m.envelope.to.length === 1), `reminder/notice captures (${reminderMeta.length}) have no attachment.pdf, no PDF fields and one recipient`);
+const outcomeEml = reminderFolders.map((f) => qpDecode(readFileSync(join(f, 'message.eml'), 'utf8'))).find((e) => /submitted automatically/.test(e));
+const link = /(http\S+#\/review\/\d{4}-\d{2}-\d{2})/.exec(outcomeEml ?? '')?.[1] ?? '';
+check(/Review is pending/.test(outcomeEml ?? '') && link === `${ORIGIN}/#/review/2026-10-16`, `outcome notice says review pending and links only to the login-required deep link (${link.replace(ORIGIN, '<origin>')})`);
+const anon = await request('GET', '/api/timesheets/2026-10-16/review');
+check(anon.status === 401, `the review behind the deep link needs login (anonymous ${anon.status})`);
+await passes('2026-10-14T00:20:30Z', 2);
+check(count("SELECT count(*) AS n FROM reminder_occurrences WHERE kind IN ('overdue','outcome_notice')") === notices.length, 'notices are not decided twice on later passes');
+
+/* ---- 9. Late-created account (never saved settings) after activation: carry item 6 ---- */
+nowIso = '2026-11-12T00:00:00Z';
+const admin2 = await loginAs('<email>', passwords.admin);
+const latePassword = randomBytes(18).toString('base64url');
+const late = await request('POST', '/api/admin/users', { cookie: admin2, body: { email: '<email>', display_name: 'Probe Late', role: 'employee', password: latePassword, calendar_id: calendarId } });
+const lateId = late.body.user.id;
+const lateCreated = db.prepare('SELECT created_at FROM users WHERE id = ?').get(lateId).created_at;
+await passes('2026-11-12T00:00:30Z', 1);
+const lateRevs = db
+  .prepare(`SELECT p.payroll_date, p.period_start, r.origin FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id WHERE r.user_id = ? ORDER BY p.payroll_date`)
+  .all(lateId);
+out(`INFO account created ${lateCreated}; automatic revisions one runner pass later: ${JSON.stringify(lateRevs)}`);
+check(lateRevs.every((r) => r.period_start >= lateCreated.slice(0, 10)), `no automatic submission of a period that started before the account existed (${lateRevs.length} revisions, first period_start ${lateRevs[0]?.period_start ?? '-'})`);
+const lateJobs = db.prepare("SELECT kind, state, last_error FROM jobs WHERE user_id = ? AND kind = 'send_email'").all(lateId);
+out(`INFO late account send jobs: ${JSON.stringify(lateJobs)}`);
+
+out(`SUMMARY failures=${failures}`);
+writeFileSync(join(workDir, 'p2-result.txt'), `${log.join('\n')}\n`);
+db.close();
+process.exit(failures === 0 ? 0 : 1);

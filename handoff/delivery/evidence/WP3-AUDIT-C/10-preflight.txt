@@ -1,0 +1,23 @@
+WP3-AUDIT-C 10: package validator preflight and the review-pair check (2026-10-05)
+
+$ python handoff/delivery/validate_package.py --preflight   (project folder, after writing WP3_REVIEW_C.md/.vi.md)
+ValueError: Broken link: <project>\handoff\delivery\WP3_REVIEW_A.md -> evidence/WP3-AUDIT-A/
+exit=1  (stops at the first error; the link target is a directory in another task's report, not in this audit's files; not touched)
+
+$ python handoff/delivery/validate_package.py --preflight   (scratch copy of git ls-files -co, without WP3_REVIEW_A.md/.vi.md)
+ValueError: Broken link: <scratch>\preflight-copy\handoff\delivery\WP3_REVIEW_B.md -> evidence/WP3-AUDIT-B/
+exit=1
+
+$ (same copy, also without WP3_REVIEW_B.md/.vi.md)
+ValueError: Broken link: <scratch>\preflight-copy\handoff\delivery\tasks\WP3-AUDIT-B.md -> ../WP3_REVIEW_B.md
+exit=1  (expected once B's report is removed from the copy; the full preflight is therefore blocked by the area A/B reports' directory links, reported to the coordinator)
+
+$ python <inline check using the validator's own rules: links resolve to files, no U+FFFD, equal ID sets EN/VI>   (project folder)
+handoff/delivery/WP3_REVIEW_C.md: links 1, broken [], U+FFFD False
+handoff/delivery/WP3_REVIEW_C.vi.md: links 1, broken [], U+FFFD False
+handoff/delivery/tasks/WP3-AUDIT-C.md: links 2, broken [], U+FFFD False
+IDs EN: ['AC-01', 'AC-06', 'AC-16', 'FR-17', 'WP3']
+IDs VI: ['AC-01', 'AC-06', 'AC-16', 'FR-17', 'WP3']
+equal: True
+PAIR CHECK PASS
+exit=0

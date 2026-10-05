@@ -1,0 +1,35 @@
+WP3-FIXC attempt 1 - commands, exits and results (timesheet-worker-high, self-reported model claude-sonnet-5-5)
+Date: 2026-10-05 (UTC). Host: Windows 11, Git Bash. Baseline: main at a1cd566e59253d19f53cfd5b3a81fd27a7e9a056 plus the uncommitted WP3-FIXB changes (kept as they were).
+Node: portable v24.21.0 called by full path for every node/npm step (first shell call: node --version -> v24.21.0).
+TEMP/TMP = <scratch>. Capture outbound only; PRODUCTION_SENDING_ENABLED unset. All data synthetic (example.invalid).
+
+Reproduction and red-first:
+  Regression tests were written first. Run against the unfixed behaviour:
+  01a-red-first-run.txt (first run, whole set incl. the client wording test):
+      node node_modules/vitest/vitest.mjs run tests/integration/history.test.ts tests/integration/review-grantee-changes.test.ts tests/client/sharingModel.test.ts
+      -> exit 1; 14 failed | 35 passed (49)
+         (the later edits to the review test were helpers only: a day version for a second grantee, and recipients plus a signature before sign-off)
+  01-red-regressions.txt (final tests; src/server/services/history.ts and src/server/routes/submission.ts temporarily put back to HEAD, then my fixed versions restored):
+      node node_modules/vitest/vitest.mjs run tests/integration/history.test.ts tests/integration/review-grantee-changes.test.ts tests/client/sharingModel.test.ts tests/client/granteeChangesModel.test.ts
+      -> exit 1; 13 failed | 37 passed (50)
+      C-02 (3): admin-route revocation by an admin who also holds a share (received via_share true, "Example Admin"); same-second act before a later grant to its actor; a grantee leaving the share.
+      C-01 (10): the Review response has no grantee_changes (every hint and owner-only/hash test).
+      Wording (1, in 01a): "Downloaded by" for a grantee PDF download.
+      Guards that were already green and stay green: all five shared writes are attributed; reading the Review writes nothing.
+
+Fix and green:
+  first green run of the same files plus sharing.test.ts and sharing-matrix.test.ts: 101 passed, 3 failed, all three in my new review test (a second grantee needed the day version;
+  sign-off needed recipients and a signature); the test helpers were corrected, no source change; then tests/integration/review-grantee-changes.test.ts -> exit 0, 11 passed.
+  Full unit/integration suite: node node_modules/vitest/vitest.mjs run -> exit 0; 62 files, 1407 tests passed.
+
+Final checks after the last source edit:
+  npm run typecheck                          exit 0
+  npm run lint                               exit 0 (also inside verify)
+  npm run test:e2e (Edge, desktop+mobile)    exit 0; 127 passed, 5 skipped, 0 failed (5.2 m)     05-e2e.txt
+  NODE_OPTIONS='--trace-deprecation --pending-deprecation' npm run verify
+                                             exit 0; 62 files / 1407 tests (was 1391 + 16 new); SMOKE PASSED, 40 PASS lines, 0 FAIL, 0 deprecation lines   06-verify.txt
+  npm run digest                             exit 0; eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410 (721 files, handoff/ excluded)   07-digest.txt
+  node scripts/precommit-check.mjs on a temporary index holding only this evidence folder   see 08-precommit-check.txt
+
+Screenshots (synthetic accounts, viewed): sharing-review-hint-desktop-synthetic.png (1280x800), sharing-review-hint-mobile-synthetic.png (390x844 at 2x). They were written by the e2e test that
+opens the owner Review after the grantee edit and asserts the hint, its text, that it is in the viewport, and that the owner's own later edit clears it.

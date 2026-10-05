@@ -1,0 +1,319 @@
+// WP3-AUDIT-A HTTP privacy probe against the BUILT server (synthetic data, capture mode only).
+// Two employees and one administrator; one manual and two automatic submissions; then owner-only
+// downloads, ID swaps, anonymous access, static paths, no-store, the admin field allowlist, recipient
+// addresses, and a secret scan over every response, the server log, CLI output, capture files and
+// the stored audit payloads, job errors and provider responses.
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { m, REPO } from './common.mjs';
+
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+
+const BASE_DIR = process.env.RUN_DIR ?? '<scratch>/work/runs/http';
+mkdirSync(BASE_DIR, { recursive: true });
+const dbPath = join(BASE_DIR, 't.db');
+const dataDir = join(BASE_DIR, 'private-data');
+const ZONE = 'America/Los_Angeles';
+const PRIVATE_NOTE = 'AUDIT-PRIVATE-NOTE-E1';
+const SIGNER_ONE = 'Audit Signer One';
+
+const port = await new Promise((resolve, reject) => {
+  const probe = createServer();
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => {
+    const address = probe.address();
+    probe.close(() => resolve(address.port));
+  });
+});
+const base = `http://127.0.0.1:${port}`;
+const origin = `http://localhost:${port}`;
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: dbPath,
+  DATA_DIR: dataDir,
+  APP_ORIGINS: origin,
+  MAIL_FROM: '<email>',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+
+let failures = 0;
+const corpus = []; // every response body and log text, scanned for secrets at the end
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!condition) failures += 1;
+}
+function cli(args) {
+  const result = spawnSync(process.execPath, [join(REPO, 'dist/server/cli.js'), ...args], { env, encoding: 'utf8' });
+  const text = `${result.stdout}${result.stderr}`.trim();
+  corpus.push(['cli', text]);
+  return { status: result.status, text };
+}
+
+async function call(method, path, { cookie, body, raw, type, withOrigin = true } = {}) {
+  const headers = {};
+  if (withOrigin) headers.origin = origin;
+  if (cookie) headers.cookie = cookie;
+  let payload;
+  if (raw !== undefined) {
+    headers['content-type'] = type;
+    payload = raw;
+  } else if (body !== undefined) {
+    headers['content-type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+  const response = await fetch(`${base}${path}`, { method, headers, body: payload });
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const contentType = response.headers.get('content-type') ?? '';
+  let json = null;
+  if (contentType.includes('json')) json = JSON.parse(bytes.toString('utf8'));
+  if (!contentType.includes('pdf') && !contentType.startsWith('image/')) corpus.push([`${method} ${path}`, bytes.toString('utf8')]);
+  return { status: response.status, json, bytes, headers: response.headers };
+}
+
+async function login(email, password) {
+  const response = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { origin, 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  corpus.push(['login', await response.text()]);
+  return response.headers.get('set-cookie')?.split(';')[0] ?? '';
+}
+
+const seed = cli(['seed']);
+check('cli seed', seed.status === 0);
+const server = spawn(process.execPath, [join(REPO, 'dist/server/index.js')], { env });
+let serverLog = '';
+server.stdout.on('data', (d) => {
+  serverLog += d;
+});
+server.stderr.on('data', (d) => {
+  serverLog += d;
+});
+for (let i = 0; i < 100 && !serverLog.includes('listening'); i += 1) await new Promise((r) => setTimeout(r, 100));
+check('built server listening (JOB_RUNNER off, capture mode)', serverLog.includes('listening'));
+
+try {
+  const cookies = {
+    admin: await login('<email>', passwords.admin),
+    e1: await login('<email>', passwords.employee),
+    e2: await login('<email>', passwords.employee2),
+  };
+  check('three logins', Object.values(cookies).every((c) => c.startsWith('timesheet_session=') || c.includes('=')));
+
+  // E1: settings, signature, a private note, sessions incl. a Sunday, review, sign-off.
+  const s1 = await call('POST', '/api/settings/submission', {
+    cookie: cookies.e1,
+    body: { expected_seq: 0, to: ['<email>'], cc: ['<email>'], auto_submit: false },
+  });
+  check('E1 saves submission settings', s1.status === 201, String(s1.status));
+  const png = m.seed.syntheticSignaturePng(7);
+  const sig1 = await call('POST', '/api/signatures?authorize_auto_image=false', { cookie: cookies.e1, raw: png, type: 'image/png' });
+  check('E1 uploads a synthetic signature', sig1.status === 201, String(sig1.status));
+  const sig1Id = sig1.json?.signature?.id;
+  const day = await call('PUT', '/api/days/2026-09-29', { cookie: cookies.e1, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: PRIVATE_NOTE } });
+  check('E1 saves a day note', day.status === 200 || day.status === 201, String(day.status));
+  const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+  const sess1 = await call('POST', '/api/days/2026-09-29/sessions', {
+    cookie: cookies.e1,
+    body: { start: at('2026-09-29', '07:13'), end: at('2026-09-29', '18:47'), input_zone: ZONE, breaks: [], breaks_confirmed: true },
+  });
+  const sess2 = await call('POST', '/api/days/2026-10-04/sessions', {
+    cookie: cookies.e1,
+    body: { start: at('2026-10-04', '09:00'), end: at('2026-10-04', '12:00'), input_zone: ZONE, breaks: [], breaks_confirmed: true },
+  });
+  check('E1 records two sessions (weekday and Sunday)', sess1.status === 201 && sess2.status === 201, `${sess1.status}/${sess2.status}`);
+  const review = await call('GET', '/api/timesheets/2026-10-16/review', { cookie: cookies.e1 });
+  const signoff = await call('POST', '/api/timesheets/2026-10-16/signoff', {
+    cookie: cookies.e1,
+    body: { expected_version: review.json.expected_version, reviewed_hash: review.json.payload_hash, signer_name: SIGNER_ONE, incomplete_evidence_acknowledged: true },
+  });
+  check('E1 signs off (201)', signoff.status === 201, String(signoff.status));
+  const e1RevId = signoff.json?.revision?.id;
+
+  // E2: note line on with a Vietnamese text, auto-submit on, image authorized at upload.
+  const cur2 = await call('GET', '/api/settings/submission', { cookie: cookies.e2 });
+  const s2 = await call('POST', '/api/settings/submission', {
+    cookie: cookies.e2,
+    body: { expected_seq: cur2.json.settings.seq, to: cur2.json.settings.recipients.to, cc: cur2.json.settings.recipients.cc, auto_submit: true, auto_note_enabled: true, auto_note_text: 'Nộp tự động' },
+  });
+  check('E2 turns auto-submit and the note line on', s2.status === 201, String(s2.status));
+  const sig2 = await call('POST', '/api/signatures?authorize_auto_image=true', { cookie: cookies.e2, raw: m.seed.syntheticSignaturePng(13), type: 'image/png' });
+  check('E2 uploads a signature with the automatic-image authorization', sig2.status === 201 && sig2.json?.settings?.auto_image?.authorized === true, String(sig2.status));
+  const sig2Id = sig2.json?.signature?.id;
+
+  const act = await call('PUT', '/api/admin/automation/activation', { cookie: cookies.admin, body: { active_from: '2026-10-06T00:00:00Z', reason: 'Synthetic audit activation' } });
+  check('admin records the activation instant', act.status === 200, String(act.status));
+
+  const passes = ['2026-10-05T23:00:00Z', '2026-10-14T00:30:00Z', '2026-10-14T00:40:00Z', '2026-10-14T02:00:00Z', '2026-10-14T04:00:00Z'].map((now) => cli(['run-jobs', '--once', '--now', now]));
+  check('five run-jobs passes exit 0', passes.every((p) => p.status === 0), passes.map((p) => p.text).join(' | '));
+
+  // Owner-only revisions and downloads.
+  const list1 = await call('GET', '/api/revisions', { cookie: cookies.e1 });
+  const list2 = await call('GET', '/api/revisions', { cookie: cookies.e2 });
+  const listA = await call('GET', '/api/revisions', { cookie: cookies.admin });
+  const e2RevId = list2.json?.revisions?.[0]?.id;
+  check('GET /api/revisions lists only the caller\'s revisions', list1.json.revisions.length === 1 && list1.json.revisions[0].id === e1RevId && list2.json.revisions.every((r) => r.id !== e1RevId) && listA.json.revisions.every((r) => r.id !== e1RevId && r.id !== e2RevId),
+    `e1=${list1.json.revisions.length} e2=${list2.json.revisions.length} admin=${listA.json.revisions.length}`);
+  const revKeys = Object.keys(list1.json.revisions[0]).sort().join(',');
+  check('revision list items carry status metadata only', revKeys === 'delivery_state,finalized_at,id,origin,payroll_date,pdf_state,review_state,revision_kind,revision_no,supersedes_revision_id', revKeys);
+  const own = await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.e1 });
+  check('owner PDF download 200 application/pdf, no-store, attachment, nosniff', own.status === 200 && own.headers.get('content-type') === 'application/pdf' && own.headers.get('cache-control') === 'no-store' &&
+    /^attachment; filename="timesheet-2026-10-16-r1\.pdf"$/.test(own.headers.get('content-disposition') ?? '') && own.headers.get('x-content-type-options') === 'nosniff' && own.bytes.subarray(0, 5).toString() === '%PDF-',
+    `${own.status} ${own.headers.get('content-type')} ${own.headers.get('cache-control')} ${own.headers.get('content-disposition')}`);
+  writeFileSync(join(BASE_DIR, 'e1-manual.pdf'), own.bytes);
+  const own2 = await call('GET', `/api/revisions/${e2RevId}/pdf`, { cookie: cookies.e2 });
+  if (own2.status === 200) writeFileSync(join(BASE_DIR, 'e2-automatic.pdf'), own2.bytes);
+  check('E2 downloads its own automatic PDF', own2.status === 200, String(own2.status));
+  const e1UserId = (await call('GET', '/api/auth/me', { cookie: cookies.e1 })).json.user.id;
+  const swaps = [
+    ['E2 -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.e2 }), 404],
+    ['admin -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, { cookie: cookies.admin }), 404],
+    ['anonymous -> E1 PDF', await call('GET', `/api/revisions/${e1RevId}/pdf`, {}), 401],
+    ['E1 -> E2 PDF', await call('GET', `/api/revisions/${e2RevId}/pdf`, { cookie: cookies.e1 }), 404],
+    ['E1 upper-case id', await call('GET', `/api/revisions/${e1RevId.toUpperCase()}/pdf`, { cookie: cookies.e1 }), 404],
+    ['E1 traversal id', await call('GET', '/api/revisions/..%2F..%2Ft.db/pdf', { cookie: cookies.e1 }), 404],
+    ['E2 shared path without share', await call('GET', `/api/shared/${e1UserId}/revisions/${e1RevId}/pdf`, { cookie: cookies.e2 }), 404],
+    ['admin shared path without share', await call('GET', `/api/shared/${e1UserId}/revisions/${e1RevId}/pdf`, { cookie: cookies.admin }), 404],
+    ['E2 -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.e2 }), 404],
+    ['admin -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.admin }), 404],
+    ['anonymous -> E1 signature', await call('GET', `/api/signatures/${sig1Id}`, {}), 401],
+    ['anonymous -> signatures/current', await call('GET', '/api/signatures/current', {}), 401],
+    ['anonymous -> revisions', await call('GET', '/api/revisions', {}), 401],
+    ['admin -> E1 resend', await call('POST', `/api/revisions/${e1RevId}/resend`, { cookie: cookies.admin, body: {} }), 404],
+    ['E2 -> E1 resend', await call('POST', `/api/revisions/${e1RevId}/resend`, { cookie: cookies.e2, body: {} }), 404],
+  ];
+  for (const [label, response, expected] of swaps) check(`ID swap / anonymous: ${label} -> ${expected}`, response.status === expected && response.bytes.subarray(0, 5).toString() !== '%PDF-', String(response.status));
+  const mine = await call('GET', `/api/signatures/${sig1Id}`, { cookie: cookies.e1 });
+  check('owner signature download 200 image/png, no-store, attachment', mine.status === 200 && mine.headers.get('content-type') === 'image/png' && mine.headers.get('cache-control') === 'no-store' && (mine.headers.get('content-disposition') ?? '').startsWith('attachment'), String(mine.status));
+  const cur1 = await call('GET', '/api/signatures/current', { cookie: cookies.e1 });
+  const curA = await call('GET', '/api/signatures/current', { cookie: cookies.admin });
+  check('signatures/current answers the caller only (E1 own id; admin null)', cur1.json?.signature?.id === sig1Id && curA.json?.signature === null && cur1.headers.get('cache-control') === 'no-store', `${cur1.json?.signature?.id === sig1Id} ${JSON.stringify(curA.json)}`);
+  const deliveriesA = await call('GET', `/api/deliveries?revision_id=${e1RevId}`, { cookie: cookies.admin });
+  check('admin GET /api/deliveries?revision_id=<E1> is empty (owner-scoped)', deliveriesA.status === 200 && deliveriesA.json.deliveries.length === 0, JSON.stringify(deliveriesA.json));
+  const deliveries1 = await call('GET', `/api/deliveries?revision_id=${e1RevId}`, { cookie: cookies.e1 });
+  const e1Attempt = deliveries1.json?.deliveries?.[0];
+  const decA = await call('POST', `/api/deliveries/${e1Attempt?.id}/decision`, { cookie: cookies.admin, body: { decision: 'resend' } });
+  check('admin decision on E1 attempt -> 404', decA.status === 404, String(decA.status));
+
+  // Static paths never serve private files.
+  const probeDb = new Database(dbPath, { readonly: true });
+  const pdfKey = probeDb.prepare("SELECT a.storage_key FROM attachments a JOIN revision_files f ON f.attachment_id = a.id WHERE f.revision_id = ?").pluck().get(e1RevId);
+  const sigKey = probeDb.prepare('SELECT storage_key FROM attachments WHERE id = ?').pluck().get(sig1Id);
+  const attemptId = e1Attempt?.id;
+  const staticPaths = [
+    `/${pdfKey}`, `/files/${pdfKey}`, `/private-data/files/${pdfKey}`, `/api/files/${pdfKey}`, `/${sigKey}`, `/files/${sigKey}`,
+    `/private-data/mail-capture/${attemptId}/attachment.pdf`, `/mail-capture/${attemptId}/attachment.pdf`, '/t.db', '/private-data/../t.db',
+  ];
+  for (const path of staticPaths) {
+    const response = await call('GET', path, { cookie: cookies.e1 });
+    const isPrivate = response.bytes.subarray(0, 5).toString() === '%PDF-' || response.bytes.subarray(1, 4).toString() === 'PNG' || response.bytes.subarray(0, 6).toString() === 'SQLite';
+    check(`no static path: GET ${path.replace(pdfKey, '<pdf-key>').replace(sigKey, '<sig-key>').replace(attemptId, '<attempt>')}`, !isPrivate, `${response.status} ${response.headers.get('content-type')}`);
+  }
+
+  // no-store on every /api answer collected so far plus a few more.
+  const apiPaths = ['/api/revisions', '/api/revisions/pending-lines', '/api/timesheets/2026-10-16/finalization', '/api/settings/submission', '/api/deliveries', '/api/history'];
+  const noStore = [];
+  for (const path of apiPaths) noStore.push((await call('GET', path, { cookie: cookies.e1 })).headers.get('cache-control'));
+  check('no-store on the owner API answers', noStore.every((v) => v === 'no-store'), noStore.join(','));
+
+  // Admin boundary: every admin answer, key paths against the allowlist, no private strings, recipients present.
+  const adminAnswers = {};
+  for (const path of ['/api/admin/operations', '/api/admin/submissions', '/api/admin/users', '/api/admin/shares', '/api/admin/automation']) {
+    adminAnswers[path] = await call('GET', path, { cookie: cookies.admin });
+  }
+  const keyPaths = (value, prefix = '') => {
+    if (Array.isArray(value)) return value.flatMap((item) => keyPaths(item, `${prefix}[]`));
+    if (value !== null && typeof value === 'object') return Object.entries(value).flatMap(([k, v]) => [`${prefix}.${k}`, ...keyPaths(v, `${prefix}.${k}`)]);
+    return [];
+  };
+  const ALLOW = new Set([
+    '.operations', '.operations.sender', '.operations.sender.configured', '.operations.sender.outbound_mode', '.operations.runner', '.operations.runner.heartbeat_at', '.operations.runner.state',
+    '.operations.activation', '.operations.activation.active_from', '.operations.activation.recorded_at', '.operations.activation.recorded_by',
+    '.operations.jobs', ...['queued', 'leased', 'succeeded', 'intervention', 'cancelled'].map((s) => `.operations.jobs.${s}`),
+    '.operations.deliveries', ...['preparing', 'sending', 'accepted', 'failed_temporary', 'failed_permanent', 'uncertain'].map((s) => `.operations.deliveries.${s}`),
+    '.submissions', '.submissions[].user_id', '.submissions[].display_name', '.submissions[].period', '.submissions[].period.payroll_date', '.submissions[].period.period_start',
+    '.submissions[].period.period_end', '.submissions[].period.due_at', '.submissions[].revision', '.submissions[].revision.no', '.submissions[].revision.origin',
+    '.submissions[].revision.review_state', '.submissions[].revision.finalized_at', '.submissions[].revision.send_requested', '.submissions[].pdf', '.submissions[].pdf.state',
+    '.submissions[].pdf.fault_code', '.submissions[].delivery', '.submissions[].delivery.state', '.submissions[].delivery.attempts', '.submissions[].delivery.accepted_at',
+    '.submissions[].delivery.fault_code', '.submissions[].delivery.decision_required', '.submissions[].delivery.job_state', '.submissions[].delivery.job_fault_code',
+    '.submissions[].recipients', '.submissions[].recipients.effective', '.submissions[].recipients.effective.to', '.submissions[].recipients.effective.cc',
+    '.submissions[].recipients.frozen', '.submissions[].recipients.frozen.to', '.submissions[].recipients.frozen.cc',
+    '.users', ...['id', 'email', 'display_name', 'role', 'status', 'calendar_id', 'created_at', 'updated_at'].map((k) => `.users[].${k}`),
+    '.shares', '.automation', '.automation.active_from', '.automation.recorded_at', '.automation.recorded_by',
+  ]);
+  const seen = new Set(Object.values(adminAnswers).flatMap((a) => keyPaths(a.json)));
+  const outside = [...seen].filter((k) => !ALLOW.has(k) && !k.startsWith('.shares[]'));
+  check('every admin answer field is in the allowlist', outside.length === 0, outside.join(','));
+  console.log(`INFO  admin key paths: ${[...seen].sort().join(' ')}`);
+  const adminText = Object.values(adminAnswers).map((a) => a.bytes.toString('utf8')).join('\n');
+  const privateStrings = [PRIVATE_NOTE, SIGNER_ONE, '07:13', '18:47', '2026-09-29T14:13', 'payload', 'snapshot', 'subject', 'body_text', 'message_id', 'storage_key', 'sha256', 'signature', 'Nộp tự động', 'credited', 'minutes', 'ledger', 'balance'];
+  const leaks = privateStrings.filter((s) => adminText.includes(s));
+  check('admin answers contain no timesheet detail, signer, note, template/subject/body, message id, hash or key', leaks.length === 0, leaks.join(','));
+  const subs = adminAnswers['/api/admin/submissions'].json.submissions;
+  const e1Row = subs.find((row) => row.display_name === 'Example Employee');
+  check('admin sees E1 recipient addresses, effective and frozen (F-Q3 (b))', JSON.stringify(e1Row?.recipients.effective.to) === '["<email>"]' && JSON.stringify(e1Row?.recipients.frozen?.cc) === '["<email>"]', JSON.stringify(e1Row?.recipients));
+  console.log(`INFO  admin submission rows: ${subs.map((row) => `${row.display_name}|${row.period.payroll_date}|r${row.revision.no}|${row.revision.origin}|${row.revision.review_state}|pdf=${row.pdf.state}|delivery=${row.delivery.state}/${row.delivery.job_state}/${row.delivery.fault_code ?? row.delivery.job_fault_code}|to=${row.recipients.effective.to.length}`).join(' ; ')}`);
+  const adminRow = subs.find((row) => row.display_name === 'Example Admin');
+  check('an empty-period automatic submission without recipients shows a fault, never accepted (AC-14)', adminRow !== undefined && adminRow.delivery.state !== 'accepted' && (adminRow.delivery.fault_code !== null || adminRow.delivery.job_fault_code !== null),
+    JSON.stringify(adminRow?.delivery));
+  const adminOwn = await call('GET', '/api/timesheets/2026-10-16', { cookie: cookies.admin });
+  const adminHist = await call('GET', '/api/history?limit=500', { cookie: cookies.admin });
+  check('admin\'s own timesheet and history answers never contain E1 data', !adminOwn.bytes.toString().includes(PRIVATE_NOTE) && !adminHist.bytes.toString().includes(e1RevId) && !adminHist.bytes.toString().includes(PRIVATE_NOTE));
+  const e1Hist = await call('GET', '/api/history?limit=500', { cookie: cookies.e1 });
+  check('E1 history holds no ownerless or administrator payloads (automation.activation, payroll_exception)', !e1Hist.bytes.toString().includes('automation.activation') && !e1Hist.bytes.toString().includes('payroll_exception'));
+
+  // Capture inspection for E1: recipients, subject and PDF hash equal the frozen snapshot and the download.
+  const captureRoot = join(dataDir, 'mail-capture');
+  const folders = existsSync(captureRoot) ? readdirSync(captureRoot).filter((n) => !n.startsWith('.tmp')) : [];
+  const metas = folders.map((name) => ({ name, meta: JSON.parse(readFileSync(join(captureRoot, name, 'metadata.json'), 'utf8')), eml: readFileSync(join(captureRoot, name, 'message.eml'), 'utf8') }));
+  for (const item of metas) corpus.push([`capture ${item.name}`, JSON.stringify(item.meta) + item.eml]);
+  const e1Payload = JSON.parse(probeDb.prepare('SELECT payload_json FROM timesheet_revisions WHERE id = ?').pluck().get(e1RevId));
+  const e1Capture = metas.find((item) => item.name === attemptId);
+  const ownSha = createHash('sha256').update(own.bytes).digest('hex');
+  check('E1 capture: recipients equal the frozen snapshot, PDF hash equals the download, subject frozen',
+    e1Capture !== undefined && JSON.stringify(e1Capture.meta.envelope.to) === JSON.stringify([...e1Payload.recipients.to, ...e1Payload.recipients.cc]) && e1Capture.eml.includes("To: <email>") && e1Capture.eml.includes("Cc: <email>") &&
+      e1Capture.meta.pdf_sha256 === ownSha && e1Capture.eml.includes(`Subject: ${e1Payload.recipients.subject}`) && e1Capture.meta.mode === 'capture',
+    `${JSON.stringify(e1Capture?.meta.envelope)} pdf_match=${e1Capture?.meta.pdf_sha256 === ownSha}`);
+  console.log(`INFO  capture folders: ${metas.map((item) => `${item.meta.pdf_sha256 ? 'submission' : 'notice'} to=${(item.meta.envelope.to ?? []).join('+')} keys=${Object.keys(item.meta).join(',')}`).join(' ; ')}`);
+
+  // Stored records scanned for secrets as well.
+  for (const row of probeDb.prepare('SELECT before_json, after_json, reason FROM audit_events').all()) corpus.push(['audit', `${row.before_json} ${row.after_json} ${row.reason}`]);
+  for (const row of probeDb.prepare('SELECT last_error, payload_json FROM jobs').all()) corpus.push(['jobs', `${row.last_error} ${row.payload_json}`]);
+  for (const row of probeDb.prepare('SELECT provider_response, envelope_json FROM delivery_attempts').all()) corpus.push(['attempts', `${row.provider_response} ${row.envelope_json}`]);
+  for (const row of probeDb.prepare('SELECT payload_json FROM timesheet_revisions').all()) corpus.push(['payloads', row.payload_json]);
+  const hashes = probeDb.prepare('SELECT password_hash FROM users').pluck().all();
+  const tokenHashes = probeDb.prepare('SELECT token_hash FROM auth_sessions').pluck().all();
+  probeDb.close();
+  corpus.push(['server log', serverLog]);
+  const secrets = [
+    ...Object.values(passwords).map((v) => ['seed password', v]),
+    ...hashes.map((v) => ['password hash', v]),
+    ...Object.values(cookies).map((c) => ['session token', c.split('=')[1]]),
+    ...tokenHashes.map((v) => ['session token hash', v]),
+    ['scrypt prefix', 'scrypt$'],
+  ];
+  const found = [];
+  for (const [where, text] of corpus) for (const [kind, secret] of secrets) if (secret && text.includes(secret)) found.push(`${kind} in ${where}`);
+  check(`no password, hash, session token or token hash in ${corpus.length} responses, logs, captures, audit payloads, job errors, provider responses or payloads`, found.length === 0, found.slice(0, 5).join('; '));
+} finally {
+  server.kill('SIGTERM');
+  await new Promise((r) => setTimeout(r, 1500));
+  if (server.exitCode === null) server.kill('SIGKILL');
+}
+console.log(`INFO  server log lines: ${serverLog.trim().split('\n').length}`);
+console.log(failures === 0 ? 'HTTP PROBE PASSED' : `HTTP PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

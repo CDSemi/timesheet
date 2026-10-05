@@ -218,9 +218,10 @@ describe('a runner process killed during the send', () => {
     expect(await run('runner-early')).toMatchObject({ claimed: 0 });
     expect(attemptRows(revisionId).map((row) => row.state)).toEqual(['sending']);
 
-    // After the lease expired the restarted runner marks it uncertain and sends nothing.
+    // After the lease expired the restarted runner marks it uncertain and sends nothing. The recovery runs at
+    // the start of the pass (WP3-B-02), before any claim, so the job is already in intervention and none is claimed.
     t.clock.set('2026-09-29T20:06:00Z');
-    expect(await run('runner-restart')).toEqual({ claimed: 1, succeeded: 0, retried: 0, intervention: 1, lost: 0 });
+    expect(await run('runner-restart')).toEqual({ claimed: 0, succeeded: 0, retried: 0, intervention: 0, lost: 0 });
     expect(attemptRows(revisionId).map((row) => [row.state, row.provider_response])).toEqual([['uncertain', 'lease_expired_while_sending']]);
     expect(t.db.prepare('SELECT state, last_error FROM jobs WHERE id = ?').get(sendJobId)).toEqual({ state: 'intervention', last_error: 'delivery_uncertain' });
     t.clock.set('2026-09-29T23:00:00Z');

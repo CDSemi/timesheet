@@ -1,0 +1,64 @@
+// WP3-AUDIT-C probe P5: CSRF/origin on shared writes, cookie attributes, the grantee-lookup rate limit,
+// and the route inventory compared with the matrix test's pinned lists (does any route escape the test?).
+import { readFileSync } from 'node:fs';
+import { changes, REPO, setup } from './lib.mjs';
+
+let failures = 0;
+let passes = 0;
+function check(cond, label) {
+  if (cond) passes++;
+  else failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`);
+}
+const ctx = await setup('p5');
+const G = await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const OWNER = ctx.ids.owner;
+await ctx.request('POST', '/api/shares', { cookie: ctx.cookies.owner, body: { grantee_email: '<email>', items: { timesheets: 'edit', ot_read: false, pdf_download: false } } });
+const body = { category: 'Off', leave_minutes: 0, wfh: false, notes: 'csrf' };
+
+console.log('## Origin and cookie');
+for (const [origin, label] of [['https://evil.example.invalid', 'foreign Origin'], [null, 'no Origin']]) {
+  const before = changes(ctx.db);
+  const r = await ctx.request('PUT', `/api/shared/${OWNER}/days/2026-09-30`, { cookie: G, body, origin });
+  check(r.status === 403 && r.body.error.code === 'origin_rejected' && changes(ctx.db) === before, `shared write with ${label}: ${r.status} ${r.body.error.code}, nothing written`);
+}
+{
+  const before = changes(ctx.db);
+  const r = await ctx.request('PUT', `/api/shared/${OWNER}/days/2026-09-30`, { cookie: G, body, headers: { 'sec-fetch-site': 'cross-site' } });
+  check(r.status === 403 && changes(ctx.db) === before, `shared write with Sec-Fetch-Site cross-site: ${r.status}`);
+}
+const login = await ctx.request('POST', '/api/auth/login', { body: { email: ctx.emails.grantee, password: ctx.passwords.grantee } });
+const setCookie = login.headers.get('set-cookie') ?? '';
+check(/HttpOnly/i.test(setCookie) && /SameSite=Strict/i.test(setCookie), `session cookie attributes: ${setCookie.replace(/=[^;]+;/, '=<token>;')}`);
+
+console.log('\n## Grantee lookup rate limit');
+const statuses = [];
+for (let i = 0; i < 11; i++) {
+  const r = await ctx.request('POST', '/api/shares', { cookie: ctx.cookies.owner, body: { grantee_email: `nobody${i}@example.invalid`, items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+  statuses.push(r.status);
+}
+const after = await ctx.request('POST', '/api/shares', { cookie: ctx.cookies.owner, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+check(statuses.slice(0, 10).every((s) => s === 422) && statuses[10] === 429, `10 unknown addresses -> 422 each, the 11th -> 429 (${statuses.join(',')})`);
+check(after.status === 429 && after.headers.get('retry-after') !== null, `then every lookup is 429 with Retry-After (${after.status}, Retry-After ${after.headers.get('retry-after')})`);
+
+console.log('\n## Route inventory vs the matrix test pins');
+const test = readFileSync(new URL('tests/integration/sharing-matrix.test.ts', REPO), 'utf8');
+const block = (name) => {
+  const start = test.indexOf(`const ${name} = [`);
+  const end = test.indexOf('];', start);
+  return [...test.slice(start, end).matchAll(/'([A-Z]+ [^']+ \d+)'/g)].map((m) => m[1]);
+};
+const pinned = [...block('SELF_ONLY_BEFORE'), ...block('SHARING_ADDED')];
+const matrix = [...test.matchAll(/\['(GET|PUT|POST|DELETE)', '([^']+)', '(view|edit|ot|pdf|list)'\]/g)].map((m) => `${m[1]} /api/shared/:ownerId${m[2]} 2`);
+const inv = new Map();
+for (const r of ctx.app.routes) inv.set(`${r.method} ${r.path}`, (inv.get(`${r.method} ${r.path}`) ?? 0) + 1);
+const actual = [...inv.entries()].map(([k, n]) => `${k} ${n}`).sort();
+const expected = [...pinned, ...matrix].sort();
+const missing = actual.filter((x) => !expected.includes(x));
+const extra = expected.filter((x) => !actual.includes(x));
+console.log(`INFO app entries ${actual.length}; test pins ${pinned.length} non-shared + ${matrix.length} matrix routes`);
+check(missing.length === 0 && extra.length === 0, `every registered (method, path, handler count) is pinned by the matrix test (missing: ${missing.join('; ') || 'none'}; stale: ${extra.join('; ') || 'none'})`);
+
+console.log(`\nSUMMARY P5: ${passes} PASS, ${failures} FAIL`);
+ctx.db.close();
+process.exitCode = failures === 0 ? 0 : 1;

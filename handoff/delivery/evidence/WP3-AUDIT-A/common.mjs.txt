@@ -1,0 +1,62 @@
+// WP3-AUDIT-A probe helpers (synthetic data only). Imports the BUILT production modules of the
+// reviewed clone (dist/), so every probe exercises production code, not test doubles.
+import { randomBytes } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+export const REPO = process.env.AUDIT_REPO ?? '<scratch>/repo';
+const dist = (rel) => pathToFileURL(join(REPO, 'dist', rel)).href;
+
+export const m = {
+  db: await import(dist('server/db/database.js')),
+  mig: await import(dist('server/db/migrations.js')),
+  seed: await import(dist('server/seed.js')),
+  fin: await import(dist('server/services/finalization.js')),
+  review: await import(dist('server/services/reviewPayload.js')),
+  ledger: await import(dist('server/services/ledger.js')),
+  policies: await import(dist('server/services/policies.js')),
+  cmds: await import(dist('server/services/timesheetCommands.js')),
+  sigs: await import(dist('server/services/signatures.js')),
+  settings: await import(dist('server/services/submissionSettings.js')),
+  auto: await import(dist('server/services/automation.js')),
+  files: await import(dist('server/files/fileStore.js')),
+  runner: await import(dist('server/jobs/runner.js')),
+};
+
+export const LA = 'America/Los_Angeles';
+export const fixedClock = (iso) => ({ now: () => new Date(iso) });
+export const la = (local) => ({ local, zone: LA });
+export const session = (date, from, to, breaks = []) => ({
+  start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks, breaks_confirmed: true,
+});
+
+/** Opens a fresh DB file, migrates and seeds the synthetic calendar and accounts. */
+export async function freshDb(path, iso) {
+  const db = m.db.openDatabase(path);
+  m.mig.migrate(db);
+  const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+  const seed = await m.seed.seedSynthetic(db, fixedClock(iso), { passwords });
+  const byRole = (role) => seed.users.find((u) => u.role === role);
+  return { db, seed, calendarId: seed.calendarId, admin: byRole('admin'), employee: byRole('employee'), passwords };
+}
+
+export function sessionUser(db, id) {
+  const row = db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(id);
+  return { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'probe' };
+}
+
+export function policy(db, iso, userId, calendarId, deficitMode) {
+  return m.policies.createPolicyVersion(db, fixedClock(iso), {
+    userId, calendarId, effectiveFrom: process.env.POLICY_FROM ?? '2026-09-14', note: 'Synthetic audit policy',
+    rules: { requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30, referenceStart: '08:00', referenceEnd: '16:00', deficitMode, breaks: [] },
+  }, userId);
+}
+
+export function png(width, height, seed = 90) {
+  // Same construction as a minimal valid RGB PNG; synthetic gradient.
+  return new Uint8Array(m.seed.syntheticSignaturePng(seed));
+}
+
+export function count(db, sql, ...args) {
+  return Number(db.prepare(sql).pluck().get(...args));
+}

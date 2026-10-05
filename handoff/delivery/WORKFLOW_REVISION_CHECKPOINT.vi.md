@@ -6,14 +6,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5 (WP3-T14-FREEZE).
+  - HEAD = origin/main = a1cd566e59253d19f53cfd5b3a81fd27a7e9a056 (WP3-T15-FREEZE, commit
+    đóng băng cuối package WP3).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 677b9142… (T14, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T14-FREEZE.
+    cuối package WP3 là 96870f7e… (T15, committer đã đối chiếu; WP3-GATE đang chạy).
+  - Digest chính thức của gate WP3: 96870f7e… (WP3-GATE PASS trên a1cd566).
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả của T15-FREEZE, kết
+    quả và bằng chứng của WP3-GATE.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -287,11 +289,73 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   về job, capture, cờ gửi thật, thời điểm kích hoạt, chia sẻ và MAIL_FROM; mô tả trong
   package.json; bản dịch khớp; preflight 0; verify 0 với 1384 test; digest 96870f7e….
   Điểm cần gate kiểm tra: bản ghi T14 ghi 46 kiểm tra smoke, nhưng log chỉ có 40.
-- Đang chạy: WP3-T15-FREEZE (committer), commit đóng băng cuối package WP3.
+- WP3-T15-FREEZE đã commit và push thành a1cd566, là commit đóng băng cuối package WP3
+  (lần 1). Commit gồm 25 đường dẫn theo kế hoạch, cộng thêm 2 tệp bằng chứng của chính
+  committer; đây là sai lệch vô hại, nằm ngoài digest. Mọi kiểm tra trả về 0; tài liệu
+  không chứa secret hay địa chỉ thật.
+- WP3-GATE PASS trên a1cd566 (đạt cả 16 mục; do verifier tự báo):
+  - verify 0 với 1384 test; smoke có 40 dòng PASS (con số 46 trong bản ghi T14 là sai);
+  - e2e 127 đạt, 5 bỏ qua, 0 lỗi;
+  - các phép thử đua dữ liệu đạt 20/20 mỗi loại; giả lập sự cố đạt;
+  - migration đạt trên cả CSDL mới và CSDL nâng cấp từ 5fafeae; các validator trả về 0;
+  - phạm vi thay đổi sạch.
+
+  Điều phối viên đã dừng agent sau khi nhận kết quả vì còn tác vụ nền sót lại.
+- WP3-AUDIT-B: FIX REQUIRED (auditor opus mới):
+  - WP3-B-01 (Medium): tài khoản tạo sau thời điểm kích hoạt mà chưa lưu cài đặt sẽ bị tự
+    chốt mọi kỳ đã quá hạn; cần giới hạn theo `users.created_at`.
+  - WP3-B-02 (Low): nếu sập trong lần gửi cuối cùng, lượt gửi đó kẹt ở `sending` và chủ
+    không được hỏi quyết định; cần phục hồi các lượt gửi bị ngắt ở mỗi vòng runner.
+  - WP3-B-03 (Low): History ghi việc tự chốt của hệ thống là "người khác" và hiện mã thao
+    tác thô.
+  - Các mục mang theo khác chấp nhận để lại backlog.
+- WP3-AUDIT-A: NOT VERIFIED, chỉ vì lý do thủ tục, không có finding nào. Mọi kiểm tra
+  chức năng đều đạt (đua dữ liệu, sự cố, HTTP, PDF, migration, quyền riêng tư). Auditor
+  lỡ mở một cmd.exe tương tác rồi định dừng nó; sau đó classifier từ chối lệnh digest của
+  nó. Điều phối viên không nhờ agent khác chạy lại lệnh đã bị từ chối. Thay vào đó, một
+  auditor mới sẽ kiểm tra lại mảng A và tự gắn digest trên commit đóng băng của vòng sửa.
+- WP3-AUDIT-C: FIX REQUIRED (auditor opus mới). Phân quyền chia sẻ đứng vững trước mọi
+  probe: 88 mục trong danh mục route, 17 route chia sẻ, 11 tổ hợp quyền; đã chứng minh
+  khe đua dữ liệu là có thật; các thao tác không được phép bị ẩn hẳn trên giao diện.
+  - WP3-C-01 (Medium): thiếu dòng gợi ý "đã sửa bởi <người được chia sẻ>" trên màn
+    Review của chủ, dù kế hoạch đã có.
+  - WP3-C-02 (Low): History gán nhầm cho người được chia sẻ các thao tác qua route admin
+    hoặc xảy ra trong cùng giây.
+  - WP3-C-03 (Info): một chú thích đã lỗi thời.
+  - Preflight đầy đủ bị lỗi vì có liên kết tới thư mục trong WP3_REVIEW_A/B.
+- Vòng sửa 1 (quyết định điều phối 2026-10-05), chạy tuần tự:
+  1. WP3-LINKFIX (light): xong ở lần 2, preflight trả về 0. Lần 1 lỗi do chính các
+     liên kết ví dụ trong brief của điều phối viên.
+  2. WP3-FIXB (B-01..03): đã xong (tác giả tự báo). Các bản sửa:
+     - B-01: chỉ tự động hóa từ thời điểm tạo tài khoản;
+     - B-02: phục hồi các lượt gửi bị ngắt ở mỗi vòng runner;
+     - B-03: tên thao tác dễ đọc và nhãn hệ thống.
+
+     Kết quả: 8 test đỏ chuyển xanh; verify 1391 test; e2e 127 đạt; digest d9fa55bd….
+     Sai lệch: sửa thêm HistoryScreen.tsx, và đổi một assertion cũ trong
+     delivery-crash.test.ts (đợt kiểm tra lại sẽ đánh giá).
+  3. WP3-FIXC (C-01..03): đã xong (tác giả tự báo).
+     - C-01: dòng gợi ý chỉ chủ thấy, lấy từ audit, nằm ngoài hash và PDF.
+     - C-02: chỉ gán thao tác cho người được chia sẻ khi người thực hiện không phải chủ
+       và đó là thao tác của route chia sẻ; không thêm migration.
+     - C-03: đã sửa chú thích.
+     - Kiểm tra: verify 1407 test; e2e 127 đạt; digest eeb417d3….
+     - Sai lệch để đợt kiểm tra lại đánh giá: quy tắc dựa trên thao tác; việc người được
+       chia sẻ tự rời quyền không còn ghi tên; một test được thay thế.
+     - WP3-FIX-FREEZE lần 3 đang chạy (cùng committer). Lần 1 và lần 2 bị validator chặn
+       do bản ghi của điều phối viên vi phạm quy tắc:
+       - ghi văn xuôi vào trường decision của các audit;
+       - cho WP3-LINKFIX phụ thuộc vào các audit chưa PASS.
+
+       Cả hai đã được sửa.
+  4. Một commit đóng băng, chạy lại toàn bộ gate.
+  5. Hai đợt kiểm tra lại song song bằng auditor mới: A có gắn digest, và B+C.
+
+  Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
+  WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng cuối package; rồi WP3-GATE (brief đã sẵn) trên SHA đó,
-     sau đó ba audit theo mảng bằng auditor opus mới (brief đã sẵn): A và B song song,
-     rồi C (chia sẻ).
+  1. Ghi kết quả WP3-FIX-FREEZE, rồi giao WP3-REGATE trên SHA đó.
+  2. Ghi biên bản nghiệm thu WP3 và commit nghiệm thu sau khi các đợt kiểm tra lại đạt.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -310,5 +374,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T15-FREEZE.
+- Process còn sống: chỉ WP3-FIX-FREEZE.
 - Usage/reset: không quan sát được.

@@ -1,0 +1,144 @@
+// WP3-AUDIT-C probe P3: share records (migration 0006), change = revoke + new grant in one
+// transaction, admin list/revoke, History attribution edges and where names appear.
+import { auditCount, finalizeWithPdf, setup, walk } from './lib.mjs';
+
+let failures = 0;
+let passes = 0;
+function check(cond, label) {
+  if (cond) passes++;
+  else failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`);
+}
+const ctx = await setup('p3');
+const db = ctx.db;
+const G = await ctx.addUser('grantee', '<email>', 'Synthetic Grantee');
+const G2 = await ctx.addUser('grantee2', '<email>', 'Synthetic Second Grantee');
+const S = await ctx.addUser('stranger', '<email>', 'Synthetic Stranger');
+const O = ctx.cookies.owner;
+const A = ctx.cookies.admin;
+const OWNER = ctx.ids.owner;
+await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+
+function sqlError(fn) {
+  try {
+    fn();
+    return null;
+  } catch (e) {
+    return String(e.message);
+  }
+}
+
+console.log('## 1. Schema constraints and triggers (direct SQL on the probe database)');
+const grant = await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+check(grant.status === 201, 'owner grants view');
+let id = grant.body.share.id;
+for (const [col, val] of [
+  ['timesheets_scope', "'edit'"], ['ot_read', '1'], ['pdf_download', '1'], ['owner_user_id', `'${ctx.ids.stranger}'`],
+  ['grantee_user_id', `'${ctx.ids.stranger}'`], ['created_by', `'${ctx.ids.grantee}'`], ['created_at', "'2026-09-29T21:00:00Z'"], ['id', "'other'"],
+]) {
+  const e = sqlError(() => db.prepare(`UPDATE timesheet_shares SET ${col} = ${val} WHERE id = ?`).run(id));
+  check(e !== null && /immutable_timesheet_share|constraint/i.test(e), `UPDATE ${col} on an active share refused: ${e}`);
+}
+check(/CHECK constraint/.test(sqlError(() => db.prepare("UPDATE timesheet_shares SET revoke_reason = 'x' WHERE id = ?").run(id)) ?? ''), 'a reason without a revocation is refused');
+check(/CHECK constraint/.test(sqlError(() => db.prepare("UPDATE timesheet_shares SET revoked_at = '2026-09-29T21:00:00Z' WHERE id = ?").run(id)) ?? ''), 'revoked_at without revoked_by is refused');
+check(/CHECK constraint/.test(sqlError(() => db.prepare("UPDATE timesheet_shares SET revoked_at = '2020-01-01T00:00:00Z', revoked_by = owner_user_id WHERE id = ?").run(id)) ?? ''), 'revoked_at before created_at is refused');
+check(/immutable_timesheet_share/.test(sqlError(() => db.prepare('DELETE FROM timesheet_shares WHERE id = ?').run(id)) ?? ''), 'DELETE refused (immutable_timesheet_share)');
+const ins = (row) =>
+  sqlError(() =>
+    db
+      .prepare(
+        `INSERT INTO timesheet_shares (id, owner_user_id, grantee_user_id, timesheets_scope, ot_read, pdf_download, created_by, created_at)
+         VALUES (@id, @owner, @grantee, @scope, @ot, @pdf, @by, @at)`,
+      )
+      .run({ id: `x${Math.random()}`, owner: OWNER, grantee: ctx.ids.grantee, scope: 'view', ot: 0, pdf: 0, by: OWNER, at: '2026-09-29T20:00:00Z', ...row }),
+  );
+check(/UNIQUE/.test(ins({}) ?? ''), 'a second active share for the same pair is refused (partial UNIQUE)');
+check(/CHECK/.test(ins({ grantee: OWNER }) ?? ''), 'owner = grantee refused');
+check(/CHECK/.test(ins({ grantee: ctx.ids.stranger, by: ctx.ids.admin }) ?? ''), 'created_by <> owner refused (an admin can never create)');
+check(/CHECK/.test(ins({ grantee: ctx.ids.stranger, scope: 'none' }) ?? ''), 'all items off refused');
+check(/CHECK/.test(ins({ grantee: ctx.ids.stranger, at: '2026-09-29 20:00:00' }) ?? ''), 'non-UTC created_at refused');
+check(/CHECK/.test(ins({ grantee: ctx.ids.stranger, scope: 'admin' }) ?? ''), 'unknown scope refused');
+// Revocation is set once.
+const rv = await ctx.request('POST', `/api/shares/${id}/revoke`, { cookie: O, body: { reason: 'synthetic reason' } });
+check(rv.status === 200, 'owner revokes with a reason');
+check(/immutable_timesheet_share/.test(sqlError(() => db.prepare("UPDATE timesheet_shares SET revoked_at = '2026-09-29T22:00:00Z' WHERE id = ?").run(id)) ?? ''), 'revoked_at cannot be changed again');
+check(/immutable_timesheet_share/.test(sqlError(() => db.prepare("UPDATE timesheet_shares SET revoke_reason = 'other' WHERE id = ?").run(id)) ?? ''), 'revoke_reason cannot be changed after revocation');
+check((await ctx.request('POST', `/api/shares/${id}/revoke`, { cookie: O, body: {} })).status === 404, 'revoking a revoked share again is 404');
+
+console.log('\n## 2. A change of items: revoke + new grant in one transaction, share.change before/after');
+let g = await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+id = g.body.share.id;
+ctx.clock.set('2026-09-29T20:05:00Z');
+const auditBefore = auditCount(db);
+const ch = await ctx.request('PUT', `/api/shares/${id}`, { cookie: O, body: { items: { timesheets: 'edit', ot_read: true, pdf_download: false } } });
+const newId = ch.body.share.id;
+const oldRow = db.prepare('SELECT * FROM timesheet_shares WHERE id = ?').get(id);
+const newRow = db.prepare('SELECT * FROM timesheet_shares WHERE id = ?').get(newId);
+check(ch.status === 200 && ch.body.changed === true && newId !== id, 'PUT returns a new share id, changed: true');
+check(oldRow.revoked_at === newRow.created_at && oldRow.revoked_by === OWNER && oldRow.revoke_reason === null, `old row revoked by the owner at the new row's creation instant (${oldRow.revoked_at})`);
+check(newRow.timesheets_scope === 'edit' && newRow.ot_read === 1 && newRow.pdf_download === 0 && newRow.revoked_at === null, 'new row has the new items and is active');
+const events = db.prepare('SELECT operation, actor_user_id, owner_user_id, entity_id, before_json, after_json FROM audit_events WHERE rowid > (SELECT max(rowid) - ? FROM audit_events) ORDER BY rowid').all(auditCount(db) - auditBefore);
+check(events.length === 1 && events[0].operation === 'share.change', `exactly one audit event: ${events.map((e) => e.operation).join(',')}`);
+const before = JSON.parse(events[0].before_json);
+const after = JSON.parse(events[0].after_json);
+check(before.share_id === id && before.timesheets === 'view' && after.share_id === newId && after.timesheets === 'edit' && after.ot_read === true, 'share.change before/after carry both share ids and items');
+check(events[0].actor_user_id === OWNER && events[0].owner_user_id === OWNER && !events[0].before_json.includes('@') && !events[0].after_json.includes('Grantee'), 'share.change: actor = owner = owner, no address or name');
+const same = await ctx.request('PUT', `/api/shares/${newId}`, { cookie: O, body: { items: { timesheets: 'edit', ot_read: true, pdf_download: false } } });
+check(same.status === 200 && same.body.changed === false && auditCount(db) === auditBefore + 1, 'equal items: changed false, nothing written');
+check(db.prepare('SELECT count(*) FROM timesheet_shares WHERE owner_user_id = ? AND grantee_user_id = ? AND revoked_at IS NULL').pluck().get(OWNER, ctx.ids.grantee) === 1, 'one active share for the pair');
+// Atomicity: a probe-only TEMP trigger (this connection only) makes the insert fail after the revoke.
+db.exec(`CREATE TEMP TRIGGER probe_fail_insert BEFORE INSERT ON main.timesheet_shares WHEN NEW.pdf_download = 1 BEGIN SELECT RAISE(ABORT, 'probe_injected_failure'); END;`);
+const auditMid = auditCount(db);
+const failing = await ctx.request('PUT', `/api/shares/${newId}`, { cookie: O, body: { items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+const stillActive = db.prepare('SELECT revoked_at FROM timesheet_shares WHERE id = ?').pluck().get(newId);
+check(failing.status >= 500 && stillActive === null && auditCount(db) === auditMid, `injected insert failure after the revoke: ${failing.status}, the old share stays active, no audit (one transaction)`);
+db.exec('DROP TRIGGER temp.probe_fail_insert');
+check((await ctx.request('GET', `/api/shared/${OWNER}/calendar`, { cookie: G })).status === 200, 'grantee access unchanged after the failed change');
+
+console.log('\n## 3. Admin list and revoke');
+await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+const strangerShare = db.prepare('SELECT id FROM timesheet_shares WHERE grantee_user_id = ? AND revoked_at IS NULL').pluck().get(ctx.ids.stranger);
+const list = await ctx.request('GET', '/api/admin/shares', { cookie: A });
+const sc = walk(list.body);
+console.log(`INFO admin list: ${list.body.shares.length} rows; keys ${[...sc.keys].sort().join(',')}`);
+check(list.body.shares.every((s) => Object.keys(s).sort().join(',') === 'created_at,grantee,id,items,owner,revoked_at,revoked_by_role' && Object.keys(s.owner).sort().join(',') === 'display_name,id' && Object.keys(s.grantee).sort().join(',') === 'display_name,id'), 'every admin row has exactly the allowlisted fields');
+check(![...sc.strings].some((v) => v.includes('@') || v === 'synthetic reason'), 'no address or revoke reason in the admin list');
+const ar = await ctx.request('POST', `/api/admin/shares/${strangerShare}/revoke`, { cookie: A, body: { reason: 'admin synthetic' } });
+const arRow = db.prepare('SELECT revoked_by, revoke_reason FROM timesheet_shares WHERE id = ?').get(strangerShare);
+const arAudit = db.prepare("SELECT actor_user_id, owner_user_id, after_json FROM audit_events WHERE operation = 'share.revoke' AND entity_id = ?").get(strangerShare);
+check(ar.status === 200 && arRow.revoked_by === ctx.ids.admin && arAudit.actor_user_id === ctx.ids.admin && arAudit.owner_user_id === OWNER && JSON.parse(arAudit.after_json).revoked_by_role === 'admin', 'admin revoke: row revoked_by admin, audit actor admin, owner owner');
+check(Object.keys(ar.body.share).sort().join(',') === 'created_at,grantee,id,items,owner,revoked_at,revoked_by_role', 'admin revoke response uses the same allowlisted fields');
+
+console.log('\n## 4. History attribution edges');
+// The admin also holds a share from the owner (granted at a later second than the stranger revocation above),
+// then revokes another share of the owner with admin power.
+ctx.clock.set('2026-09-29T20:07:00Z');
+await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+const g2 = await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'view', ot_read: false, pdf_download: false } } });
+ctx.clock.set('2026-09-29T20:10:00Z');
+await ctx.request('POST', `/api/admin/shares/${g2.body.share.id}/revoke`, { cookie: A, body: {} });
+const hist = (await ctx.request('GET', '/api/history?limit=500', { cookie: O })).body.audit_events;
+const adminAct = hist.find((e) => e.operation === 'share.revoke' && e.entity_id === g2.body.share.id);
+console.log(`OBSERVATION admin-power revocation by an administrator who also holds a share of the owner: via_share=${adminAct.via_share}, actor_display_name=${JSON.stringify(adminAct.actor_display_name)}`);
+const strangerAct = hist.find((e) => e.operation === 'share.revoke' && e.entity_id === strangerShare);
+check(strangerAct.via_share === false && strangerAct.actor_display_name === null, 'admin revocation while the admin held no share of the owner: not attributed');
+// Names: a second grantee of the same owner never sees the first grantee's name or address.
+const g2b = await ctx.request('POST', '/api/shares', { cookie: O, body: { grantee_email: '<email>', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+check(g2b.status === 201, 'owner re-grants grantee2 (all items)');
+const seen = [];
+for (const p of ['/calendar', '/periods/current', '/periods?from=2026-09-14&to=2026-10-11', '/timesheets/2026-10-02', '/timesheets/2026-10-16', '/days/2026-09-28', '/policies', '/ot/summary', '/ot/ledger', '/revisions/pending-lines', '/revisions']) {
+  const r = await ctx.request('GET', `/api/shared/${OWNER}${p}`, { cookie: G2 });
+  seen.push(r.text);
+}
+const sharesOfG2 = await ctx.request('GET', '/api/shares', { cookie: G2 });
+seen.push(sharesOfG2.text);
+check(!seen.some((t) => t.includes('Synthetic Grantee"') || t.includes('<email>') || t.includes('Synthetic Stranger')), 'a second grantee never sees another grantee name or address');
+const recv = sharesOfG2.body.received;
+check(recv.length === 1 && Object.keys(recv[0]).sort().join(',') === 'created_at,id,items,owner' && Object.keys(recv[0].owner).sort().join(',') === 'display_name,email,id', 'grantee received list: owner id, name and address, items, since');
+check(sharesOfG2.body.given.length === 0, 'grantee given list is empty (the grantee has shared nothing)');
+const own = await ctx.request('GET', '/api/shares', { cookie: O });
+check(own.body.given.every((s) => Object.keys(s).sort().join(',') === 'created_at,grantee,id,items' && Object.keys(s.grantee).sort().join(',') === 'active,display_name,email'), 'owner given list: grantee name, address and active flag (no grantee id)');
+
+console.log(`\nSUMMARY P3: ${passes} PASS, ${failures} FAIL`);
+db.close();
+process.exitCode = failures === 0 ? 0 : 1;
