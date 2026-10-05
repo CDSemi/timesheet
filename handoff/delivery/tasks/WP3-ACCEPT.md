@@ -138,3 +138,10 @@ most 150 words.
 ## Results
 
 (Committer appends here.)
+Self-reported model: claude-sonnet-5-5
+- Node: v24.21.0 (portable). Pre-HEAD 49651c8bb91d56bf6c6966405257537ec7ca474b; post-HEAD b103923d7f412860b189f692cf23c11ee2915e86.
+- Commit b103923d7f412860b189f692cf23c11ee2915e86, pushed to origin main, remote SHA identical.
+- ls-tree digest c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 (match); worktree npm run digest aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d (724 files, recorded only). Staged: 92 files.
+- Images viewed: 7. No .claude/ path staged. Masking: none needed. Unstaged extras: none.
+- Exit codes: precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0, check_recovery 0, preflight 0, push 0.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP3-ACCEPT/ (unstaged).

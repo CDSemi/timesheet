@@ -1,4 +1,4 @@
-# Mission checkpoint (WP3 acceptance commit)
+# Mission checkpoint (WP3 accepted; GOV-SKILL cycle and WP4 planning)
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
@@ -6,14 +6,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 49651c8bb91d56bf6c6966405257537ec7ca474b (WP3-FIX3-FREEZE, the
-    fix-round-3 freeze). Earlier WP3 freezes were a1cd566, 2f2520e and 2d72d35.
+  - HEAD = origin/main = b103923d7f412860b189f692cf23c11ee2915e86 (WP3-ACCEPT). The
+    accepted WP3 source is 49651c8, digest c31c300c…. Earlier WP3 freezes were a1cd566,
+    2f2520e and 2d72d35.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410
     (WP3-REGATE PASS on 2f2520e). The first WP3 gate digest was 96870f7e… (WP3-GATE on
     a1cd566); the WP2 gate digest was e61fa914… (WP2-GATE4).
-  - Uncommitted (handoff only): the board, this checkpoint, and the WP3-FIX3-FREEZE
-    results and evidence. The committed round-3 digest is c31c300c….
+  - Uncommitted:
+    - handoff: the board, STATE, this checkpoint, and the WP3-ACCEPT results and
+      evidence;
+    - the three untracked owner skill files under `.claude/skills/readme-md/`, which
+      GOV-SKILL-FREEZE commits.
 
     The gate digest of record is 0d513fca… (WP3-REGATE2 PASS).
   - No unpushed commits.
@@ -450,8 +454,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
      - STATE now marks WP3 passed with its carried risks. The active package stays WP3
        until after the accept commit, because the validator allows running tasks only
        in the active package or GOV. NEXT_ACTION (EN/VI) points to GOV-SKILL and WP4.
-     - Running: WP3-ACCEPT (committer). It commits handoff/ only; the three untracked
-       owner skill files stay unstaged.
+     - **WP3-ACCEPT is committed and pushed as b103923.** It holds 92 handoff paths;
+       the ls-tree digest c31c300c… matched, and all checks returned 0. The three owner
+       skill files were left untracked. **WP3 is accepted.**
+     - The board and STATE now name WP4 as the active package (phase
+       wp4-planning-gov-skill). WP4-PLAN is pending.
+     - Running: GOV-SKILL-FREEZE (committer, package GOV). It commits the three owner
+       skill files, plus the WP3-ACCEPT results and the board switch.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -491,7 +500,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-ACCEPT only.
+- Live processes: GOV-SKILL-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

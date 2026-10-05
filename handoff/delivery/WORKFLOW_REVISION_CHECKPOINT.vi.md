@@ -1,4 +1,4 @@
-# Checkpoint nhiệm vụ (commit nghiệm thu WP3)
+# Checkpoint nhiệm vụ (WP3 đã nghiệm thu; vòng GOV-SKILL và lập kế hoạch WP4)
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
@@ -6,16 +6,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 49651c8bb91d56bf6c6966405257537ec7ca474b (WP3-FIX3-FREEZE,
-    commit đóng băng của vòng sửa 3). Các commit đóng băng WP3 trước đó là a1cd566,
-    2f2520e và 2d72d35.
+  - HEAD = origin/main = b103923d7f412860b189f692cf23c11ee2915e86 (WP3-ACCEPT). Mã
+    nguồn WP3 được nghiệm thu là 49651c8, digest c31c300c…. Các commit đóng băng WP3
+    trước đó là a1cd566, 2f2520e và 2d72d35.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate: eeb417d3… (WP3-REGATE PASS trên 2f2520e). Digest gate
     WP3 đầu tiên là 96870f7e… (WP3-GATE trên a1cd566); digest gate WP2 là e61fa914…
     (WP2-GATE4).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    WP3-FIX3-FREEZE. Digest của vòng sửa 3 đã commit là c31c300c….
+  - Chưa commit:
+    - trong handoff: board, STATE, checkpoint này, kết quả và bằng chứng của WP3-ACCEPT;
+    - 3 tệp skill chưa track của chủ dự án trong `.claude/skills/readme-md/`, sẽ do
+      GOV-SKILL-FREEZE commit.
 
     Digest chính thức của gate là 0d513fca… (WP3-REGATE2 PASS).
   - Không có commit chưa push.
@@ -477,8 +479,13 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
      - STATE giờ ghi WP3 đã đạt, kèm các rủi ro mang theo. Gói đang làm vẫn để là WP3
        cho đến sau commit nghiệm thu, vì validator chỉ cho task đang chạy thuộc gói đang
        làm hoặc GOV. NEXT_ACTION (EN/VI) trỏ tới GOV-SKILL và WP4.
-     - Đang chạy: WP3-ACCEPT (committer). Commit chỉ gồm tệp trong handoff/; 3 tệp skill
-       chưa track của chủ dự án không được stage.
+     - **WP3-ACCEPT đã commit và push thành b103923.** Commit gồm 92 đường dẫn handoff;
+       digest dạng ls-tree c31c300c… khớp; mọi kiểm tra trả về 0. 3 tệp skill của chủ
+       dự án vẫn để chưa track. **WP3 đã được nghiệm thu.**
+     - Board và STATE giờ ghi gói đang làm là WP4 (pha wp4-planning-gov-skill). WP4-PLAN
+       đang chờ.
+     - Đang chạy: GOV-SKILL-FREEZE (committer, gói GOV). Commit này gồm 3 tệp skill của
+       chủ dự án, kết quả của WP3-ACCEPT và việc chuyển board sang WP4.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -518,7 +525,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-ACCEPT.
+- Process còn sống: chỉ GOV-SKILL-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

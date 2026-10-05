@@ -31,12 +31,15 @@ content exactly as the owner left it:
 No other path outside handoff/ may change. That includes `.claude/settings.json`,
 `.claude/agents/`, other skills, AGENTS.md, CLAUDE.md, docs/ and src/.
 
-Handoff files:
-- New: this brief (stage it before you append results); handoff/delivery/tasks/
-  GOV-SKILL-GATE.md and GOV-SKILL-AUDIT.md; and any other new handoff path that the
-  coordinator lists in the dispatch prompt.
-- Modified: handoff/delivery/ORCHESTRATION.json; the checkpoint pair; and any record the
-  coordinator lists in the dispatch prompt.
+Handoff files to stage:
+- New: every file under handoff/delivery/evidence/WP3-ACCEPT/.
+- Modified:
+  - handoff/delivery/ORCHESTRATION.json;
+  - handoff/delivery/STATE.json (active package WP4);
+  - handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md and .vi.md;
+  - handoff/delivery/tasks/WP3-ACCEPT.md (its results);
+  - this brief, staged as it stands before you append results. It was committed
+    earlier, so it is already tracked.
 
 Your appended results and your evidence in handoff/delivery/evidence/GOV-SKILL-FREEZE/
 stay unstaged. Any other changed or untracked path stops the commit; report it.
