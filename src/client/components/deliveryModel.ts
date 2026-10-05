@@ -8,6 +8,7 @@ import {
   type FinalizationResponse,
   type Period,
   type RecipientAddresses,
+  type RevisionListItem,
   type RevisionSummary,
 } from '../api.ts';
 import { describeError } from './errors.ts';
@@ -23,8 +24,7 @@ import { type DeliveryStatus, deliveryStatus, periodStatus, type PeriodStatus, t
 
 /* ---- PDF state ------------------------------------------------------------------------ */
 
-/** `unknown` is an earlier revision: only the download itself can tell (the server answers 409 if not ready). */
-export type PdfState = 'ready' | 'pending' | 'failed' | 'unknown';
+export type PdfState = 'ready' | 'pending' | 'failed';
 
 /** The PDF state of the current revision, read from its render job. */
 export function pdfStateOf(jobs: readonly FinalizationJob[]): PdfState {
@@ -38,12 +38,14 @@ const PDF_TEXT: Record<PdfState, string> = {
   ready: 'PDF ready',
   pending: 'PDF is being prepared',
   failed: 'PDF needs attention',
-  unknown: 'PDF of an earlier revision',
 };
 
 export const pdfStateText = (state: PdfState): string => PDF_TEXT[state];
 
 /* ---- Origin and review state -------------------------------------------------------------- */
+
+/** The PDF state the revision list reports for a revision; a missing PDF row is still being prepared. */
+export const listedPdfState = (state: RevisionListItem['pdf_state']): PdfState => state ?? 'pending';
 
 export function revisionOriginText(revision: Pick<RevisionSummary, 'revision_kind' | 'origin'>): string {
   if (revision.revision_kind === 'late_review') return 'Automatic submission, reviewed by you later';
@@ -114,12 +116,15 @@ export interface RevisionRow {
   payrollDate: string;
   periodStart: string | null;
   periodEnd: string | null;
-  /** Null only for an earlier revision that the supersedes link reveals without any attempt. */
-  revisionNo: number | null;
+  revisionNo: number;
   /** True for the period's current (finalized) revision, the only one that can be resent or corrected. */
   current: boolean;
-  /** The server's revision summary; known for the current revision only. */
+  /** True when a later revision replaced this one (the revision list's supersedes link). */
+  superseded: boolean;
+  /** The server's revision summary; known for the current revision only (it comes with the finalization). */
   revision: RevisionSummary | null;
+  /** The revision list's status row; the source of every other revision's origin, review state and PDF. */
+  listed: RevisionListItem | null;
   signoff: FinalizationResponse['signoff'];
   pdf: PdfState;
   jobs: FinalizationJob[];
@@ -134,15 +139,39 @@ const recipientsOf = (attempts: readonly DeliveryRecord[]): RecipientAddresses |
   return newest === undefined ? null : { to: newest.to, cc: newest.cc };
 };
 
+/** The revisions of loaded windows: those whose payroll date is on or after `since` (no upper bound). */
+export function revisionsSince(revisions: readonly RevisionListItem[], since: string): RevisionListItem[] {
+  return revisions.filter((item) => item.payroll_date >= since);
+}
+
+/** Origin of a row in words, from the finalization summary when known, else from the revision list. */
+export function rowOrigin(row: RevisionRow): string | null {
+  const source = row.revision ?? row.listed;
+  return source === null ? null : revisionOriginText(source);
+}
+
+/** Review state of a row in words, from the finalization summary when known, else from the revision list. */
+export function rowReview(row: RevisionRow): { text: string; tone: Tone } | null {
+  const source = row.revision ?? row.listed;
+  return source === null ? null : revisionReviewText(source);
+}
+
 /**
- * The owner's revisions as list rows: the current revision of each finalized period, plus every
- * earlier revision that is known (through a delivery attempt, or the supersedes link of a later
- * one). No other route lists superseded revisions, so an earlier revision that never had an attempt
- * and is not the direct predecessor of a current one cannot be shown. Newest period first.
+ * The owner's revisions as list rows: every revision `GET /api/revisions` lists (the caller passes
+ * the ones in the loaded windows), newest period first. A period's current revision is enriched from
+ * its finalization (jobs, sign-off, correction reason); every other revision, superseded or not,
+ * takes its origin, review state and PDF state from the list itself. Delivery attempts attach by
+ * revision id; they never create a row.
  */
-export function buildRevisionRows(periods: readonly HistoryPeriod[], deliveries: readonly DeliveryRecord[]): RevisionRow[] {
+export function buildRevisionRows(
+  periods: readonly HistoryPeriod[],
+  deliveries: readonly DeliveryRecord[],
+  revisions: readonly RevisionListItem[],
+): RevisionRow[] {
   const rows: RevisionRow[] = [];
-  const known = new Set<string>();
+  const shown = new Set<string>();
+  const listedById = new Map(revisions.map((item) => [item.id, item]));
+  const supersededIds = new Set(revisions.flatMap((item) => (item.supersedes_revision_id === null ? [] : [item.supersedes_revision_id])));
   const byRevision = (revisionId: string) => deliveries.filter((item) => item.revision_id === revisionId);
   const periodOf = (payrollDate: string) => periods.find((item) => item.period.payroll_date === payrollDate)?.period ?? null;
 
@@ -150,7 +179,7 @@ export function buildRevisionRows(periods: readonly HistoryPeriod[], deliveries:
     const revision = finalization.revision;
     if (revision === null || finalization.finalized_revision_no === null) continue;
     const attempts = byRevision(revision.id);
-    known.add(revision.id);
+    shown.add(revision.id);
     rows.push({
       key: revision.id,
       revisionId: revision.id,
@@ -159,7 +188,9 @@ export function buildRevisionRows(periods: readonly HistoryPeriod[], deliveries:
       periodEnd: period.period_end,
       revisionNo: revision.revision_no,
       current: true,
+      superseded: false,
       revision,
+      listed: listedById.get(revision.id) ?? null,
       signoff: finalization.signoff,
       pdf: pdfStateOf(finalization.jobs),
       jobs: finalization.jobs,
@@ -168,55 +199,31 @@ export function buildRevisionRows(periods: readonly HistoryPeriod[], deliveries:
     });
   }
 
-  const earlier = new Map<string, RevisionRow>();
-  for (const item of deliveries) {
-    if (item.revision_id === null || known.has(item.revision_id) || earlier.has(item.revision_id)) continue;
-    const payrollDate = item.payroll_date ?? '';
-    const attempts = byRevision(item.revision_id);
-    const window = periodOf(payrollDate);
-    earlier.set(item.revision_id, {
-      key: item.revision_id,
-      revisionId: item.revision_id,
-      payrollDate,
+  for (const item of revisions) {
+    if (shown.has(item.id)) continue;
+    shown.add(item.id);
+    const attempts = byRevision(item.id);
+    const window = periodOf(item.payroll_date);
+    rows.push({
+      key: item.id,
+      revisionId: item.id,
+      payrollDate: item.payroll_date,
       periodStart: window?.period_start ?? null,
       periodEnd: window?.period_end ?? null,
       revisionNo: item.revision_no,
       current: false,
+      superseded: supersededIds.has(item.id),
       revision: null,
+      listed: item,
       signoff: null,
-      pdf: 'unknown',
+      pdf: listedPdfState(item.pdf_state),
       jobs: [],
       attempts,
       recipients: recipientsOf(attempts),
     });
   }
-  for (const row of [...rows]) {
-    const previousId = row.revision?.supersedes_revision_id ?? null;
-    if (previousId === null || known.has(previousId) || earlier.has(previousId)) continue;
-    earlier.set(previousId, {
-      key: previousId,
-      revisionId: previousId,
-      payrollDate: row.payrollDate,
-      periodStart: row.periodStart,
-      periodEnd: row.periodEnd,
-      revisionNo: null,
-      current: false,
-      revision: null,
-      signoff: null,
-      pdf: 'unknown',
-      jobs: [],
-      attempts: [],
-      recipients: null,
-    });
-  }
-  rows.push(...earlier.values());
 
-  return rows.sort(
-    (a, b) =>
-      b.payrollDate.localeCompare(a.payrollDate) ||
-      Number(b.current) - Number(a.current) ||
-      (b.revisionNo ?? -1) - (a.revisionNo ?? -1),
-  );
+  return rows.sort((a, b) => b.payrollDate.localeCompare(a.payrollDate) || Number(b.current) - Number(a.current) || b.revisionNo - a.revisionNo);
 }
 
 /* ---- Resend and the uncertain decision ----------------------------------------------------- */

@@ -7,9 +7,9 @@ import {
   type DeliveryAction,
   pdfStateText,
   resendState,
-  revisionOriginText,
   type RevisionRow,
-  revisionReviewText,
+  rowOrigin,
+  rowReview,
 } from './deliveryModel.ts';
 import { displayZone, instantText } from './format.ts';
 import { deliveryStatus, reviewHash, type Tone } from './reviewModel.ts';
@@ -54,11 +54,13 @@ export function DeliveryRevision({
 }) {
   const resend = resendState(row);
   const correction = correctionLinkLabel(row);
-  const review = row.revision === null ? null : revisionReviewText(row.revision);
+  const review = rowReview(row);
+  const origin = rowOrigin(row);
+  const recorded = row.revision?.created_at ?? row.listed?.finalized_at ?? null;
   const delivery = row.current ? deliveryStatus(row.revision, row.jobs, row.attempts) : null;
   const period = row.periodStart === null || row.periodEnd === null ? `Payroll date ${row.payrollDate}` : `${row.periodStart} to ${row.periodEnd}`;
-  const label = `payroll date ${row.payrollDate}${row.revisionNo === null ? ', earlier revision' : `, revision ${row.revisionNo}`}`;
-  const canDownload = !row.current || row.pdf === 'ready';
+  const label = `payroll date ${row.payrollDate}, revision ${row.revisionNo}`;
+  const canDownload = row.pdf === 'ready';
   const reasonId = `resend-reason-${row.key}`;
 
   return (
@@ -67,9 +69,9 @@ export function DeliveryRevision({
         <h3 tabIndex={-1}>Period {period}</h3>
         <span className="mono muted">payroll {row.payrollDate}</span>
         <span className="badge" data-revision-badge="number">
-          {row.revisionNo === null ? 'Earlier revision' : `Revision ${row.revisionNo}`}
+          Revision {row.revisionNo}
         </span>
-        {!row.current && (
+        {row.superseded && (
           <span className="badge" data-revision-badge="superseded">
             Superseded
           </span>
@@ -90,16 +92,20 @@ export function DeliveryRevision({
       </div>
 
       <dl className="facts">
+        {origin !== null && (
+          <div>
+            <dt>Origin</dt>
+            <dd data-fact="origin">{origin}</dd>
+          </div>
+        )}
+        {recorded !== null && (
+          <div>
+            <dt>Recorded</dt>
+            <dd>{instantText(recorded, displayZone)}</dd>
+          </div>
+        )}
         {row.revision !== null && (
           <>
-            <div>
-              <dt>Origin</dt>
-              <dd data-fact="origin">{revisionOriginText(row.revision)}</dd>
-            </div>
-            <div>
-              <dt>Recorded</dt>
-              <dd>{instantText(row.revision.created_at, displayZone)}</dd>
-            </div>
             <div>
               <dt>Signed</dt>
               <dd data-fact="signed">

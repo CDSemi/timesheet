@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type CurrentPeriods, type DeliveryRecord, type FinalizationResponse, type Period, requestFailure } from '../api.ts';
+import {
+  api,
+  ApiRequestError,
+  type CurrentPeriods,
+  type DeliveryRecord,
+  type FinalizationResponse,
+  type Period,
+  requestFailure,
+  type RevisionListItem,
+} from '../api.ts';
 import { DeliveryRevision, type PendingAction } from './DeliveryRevision.tsx';
 import {
   buildRevisionRows,
@@ -10,6 +19,7 @@ import {
   historyWindow,
   resendFailureText,
   type RevisionRow,
+  revisionsSince,
 } from './deliveryModel.ts';
 import { describeError } from './errors.ts';
 import { displayZone } from './format.ts';
@@ -17,13 +27,16 @@ import { displayZone } from './format.ts';
 /*
  * The owner's submissions: every revision with its origin and review state, the PDF, the delivery
  * attempts, an explicit resend and the decision on an uncertain delivery. Everything shown is a
- * server field. A few windows of periods are read at a time (the server lists periods, never
- * revisions), and every action asks the server and then reads the state again: nothing is assumed.
+ * server field. Every revision comes from the revision list (`GET /api/revisions`); a few windows of
+ * periods are read at a time to enrich the current revision of each period, and every action asks
+ * the server and then reads the state again: nothing is assumed.
  */
 
 interface Loaded {
   periods: HistoryPeriod[];
   deliveries: DeliveryRecord[];
+  /** Every revision of the owner, newest period first; the rows show those inside the loaded windows. */
+  revisions: RevisionListItem[];
   /** The end of the period that contains today: the anchor the windows walk back from. */
   currentEnd: string;
   windows: number;
@@ -55,25 +68,30 @@ async function fetchDeliveries(): Promise<DeliveryRecord[]> {
   return (await api<{ deliveries: DeliveryRecord[] }>('GET', '/api/deliveries')).deliveries;
 }
 
+async function fetchRevisions(): Promise<RevisionListItem[]> {
+  return (await api<{ revisions: RevisionListItem[] }>('GET', '/api/revisions')).revisions;
+}
+
 async function fetchAll(windows: number): Promise<Loaded> {
   const current = await api<CurrentPeriods>('GET', '/api/periods/current');
   const currentEnd = current.in_progress.period_end;
-  const [deliveries, ...pages] = await Promise.all([
+  const [deliveries, revisions, ...pages] = await Promise.all([
     fetchDeliveries(),
+    fetchRevisions(),
     ...Array.from({ length: windows }, (_, index) => fetchWindow(currentEnd, index)),
   ]);
-  return { periods: pages.flat(), deliveries: deliveries ?? [], currentEnd, windows };
+  return { periods: pages.flat(), deliveries: deliveries ?? [], revisions: revisions ?? [], currentEnd, windows };
 }
 
 const RELEASE_DELAY_MS = 1000;
 
 /**
- * Fetches a revision's final PDF through the owner-only route and hands it to the browser as a
- * download. Nothing is cached or kept: the object URL is released right after the click. The
+ * Fetches a revision's final PDF (through the owner's route, or the shared route of a share with the
+ * PDF item when `base` is its `/api/shared/:ownerId`) and hands it to the browser as a download. Nothing is cached or kept: the object URL is released right after the click. The
  * saved name comes from the response's Content-Disposition, reduced to a safe name.
  */
-async function downloadRevisionPdf(revisionId: string): Promise<string> {
-  const response = await fetch(`/api/revisions/${revisionId}/pdf`, { credentials: 'same-origin' });
+export async function downloadRevisionPdf(revisionId: string, base = '/api'): Promise<string> {
+  const response = await fetch(`${base}/revisions/${revisionId}/pdf`, { credentials: 'same-origin' });
   if (!response.ok) throw await requestFailure(response);
   const blob = await response.blob();
   const name = filenameFromDisposition(response.headers.get('content-disposition'));
@@ -146,8 +164,9 @@ export function DeliveryHistory() {
   /** Reads the deliveries and the one period again after an action (or a refusal that shows the list is stale). */
   async function refreshAround(payrollDate: string) {
     try {
-      const [deliveries, finalization] = await Promise.all([
+      const [deliveries, revisions, finalization] = await Promise.all([
         fetchDeliveries(),
+        fetchRevisions(),
         api<FinalizationResponse>('GET', `/api/timesheets/${payrollDate}/finalization`).catch(() => null),
       ]);
       setData((current) =>
@@ -156,6 +175,7 @@ export function DeliveryHistory() {
           : {
               ...current,
               deliveries,
+              revisions,
               periods: current.periods.map((item) =>
                 item.period.payroll_date === payrollDate && finalization !== null ? { ...item, finalization } : item,
               ),
@@ -222,7 +242,10 @@ export function DeliveryHistory() {
     }
   }
 
-  const rows = data === null ? [] : buildRevisionRows(data.periods, data.deliveries);
+  const rows =
+    data === null
+      ? []
+      : buildRevisionRows(data.periods, data.deliveries, revisionsSince(data.revisions, historyWindow(data.currentEnd, data.windows - 1).from));
 
   return (
     <section className="stack" aria-labelledby="submissions-title" data-history="submissions">

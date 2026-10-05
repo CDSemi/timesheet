@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { api, type User } from '../api.ts';
+import { api, type ReceivedShare, type User } from '../api.ts';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
+import { SharingSwitcher } from './SharingSwitcher.tsx';
+import { parseSharedHash, type SharedView } from './sharingModel.ts';
 
 /**
  * The screens reachable from the navigation. Settings is for everyone; Admin is listed for
@@ -21,27 +23,37 @@ export function routesFor(role: User['role']) {
   return ROUTES.filter((route) => !route.adminOnly || role === 'admin');
 }
 
-/** A navigation screen, or the review of one payroll period (`#/review/{payrollDate}`). */
-export type AppRoute = { id: RouteId; payrollDate: null } | { id: 'review'; payrollDate: string };
+/**
+ * A navigation screen, the review of one payroll period (`#/review/{payrollDate}`), or another
+ * person's shared items (`#/shared/{ownerId}[/view]`, FR-17).
+ */
+export type AppRoute =
+  | { id: RouteId; payrollDate: null }
+  | { id: 'review'; payrollDate: string }
+  | { id: 'shared'; payrollDate: null; ownerId: string; view: SharedView | null };
 
 /** The canonical hash of the screen a hash asks for; an unknown or empty hash is the first route. */
 function canonicalHash(hash: string, role: User['role']): string {
   const payrollDate = parseReviewHash(hash);
   if (payrollDate !== null) return reviewHash(payrollDate);
+  if (parseSharedHash(hash) !== null) return hash;
   return (routesFor(role).find((route) => route.hash === hash) ?? ROUTES[0]).hash;
 }
 
 function routeOfHash(hash: string): AppRoute {
   const payrollDate = parseReviewHash(hash);
   if (payrollDate !== null) return { id: 'review', payrollDate };
+  const shared = parseSharedHash(hash);
+  if (shared !== null) return { id: 'shared', payrollDate: null, ownerId: shared.ownerId, view: shared.view };
   return { id: ROUTES.find((route) => route.hash === hash)?.id ?? ROUTES[0].id, payrollDate: null };
 }
 
 /**
  * Hash routing without a router dependency: the server needs no route table and the
  * browser's back button works. An unknown or empty hash is rewritten to the first route.
- * The review hash carries a payroll date only, so it survives sign-in (the sign-in form does
- * not touch the address) and holds no token.
+ * The review and shared hashes carry a payroll date or an owner id only, so they survive sign-in
+ * (the sign-in form does not touch the address) and hold no token; a shared address needs a login
+ * and a live share before the server shows anything.
  */
 export function useHashRoute(role: User['role']): AppRoute {
   const [hash, setHash] = useState<string>(() => canonicalHash(window.location.hash, role));
@@ -64,12 +76,23 @@ export function useHashRoute(role: User['role']): AppRoute {
 export function AppShell({
   user,
   route,
+  sharedOwnerId,
+  received,
+  flash,
+  onDismissFlash,
   onSignedOut,
   children,
 }: {
   user: User;
-  /** The navigation entry to mark as current (the review belongs under Timesheet). */
-  route: RouteId;
+  /** The navigation entry to mark as current (the review belongs under Timesheet); none for a shared view. */
+  route: RouteId | 'shared';
+  /** The owner of the shared view being shown, or null on the user's own screens. */
+  sharedOwnerId: string | null;
+  /** The shares other people gave this user: the "Shared with me" switcher lists them. */
+  received: readonly ReceivedShare[];
+  /** A message that must outlive a redirect (a share that ended), or null. */
+  flash: string | null;
+  onDismissFlash: () => void;
   onSignedOut: () => void;
   children: ReactNode;
 }) {
@@ -89,6 +112,7 @@ export function AppShell({
             </a>
           ))}
         </nav>
+        <SharingSwitcher received={received} ownerId={sharedOwnerId} />
         <div className="shell-user">
           <span className="muted">{user.display_name}</span>
           <button type="button" className="secondary" onClick={signOut}>
@@ -96,7 +120,17 @@ export function AppShell({
           </button>
         </div>
       </header>
-      <main className="page">{children}</main>
+      <main className="page">
+        {flash !== null && (
+          <div className="flash" role="status" data-flash="share-ended">
+            <p>{flash}</p>
+            <button type="button" className="secondary" onClick={onDismissFlash}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
     </>
   );
 }

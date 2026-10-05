@@ -1,0 +1,83 @@
+# WP3-T13C mutation checks. Stored as .py.txt; run as: python mutations.py <vitest.mjs> <playwright cli.js> <npm-cli.js>
+# Each mutation is computed in memory before its target file is opened for writing; the file is restored
+# byte-identical (SHA-256 compared) after every run, also when the run fails.
+import hashlib
+import subprocess
+import sys
+
+VITEST, PLAYWRIGHT, NPM = sys.argv[1], sys.argv[2], sys.argv[3]
+
+MODEL = 'src/client/components/sharingModel.ts'
+DELIVERY = 'src/client/components/deliveryModel.ts'
+SIGNATURES = 'src/server/routes/signatures.ts'
+TIMESHEET = 'src/client/TimesheetScreen.tsx'
+SHARING_UNIT = ['tests/client/sharingModel.test.ts']
+DELIVERY_UNIT = ['tests/client/deliveryModel.test.ts']
+
+# (name, target, kind, test files, old text, new text)
+MUTATIONS = [
+    ('S1 an edit share is read as a view share (edit controls would show for view)', MODEL, 'unit', SHARING_UNIT,
+     "editTimesheets: items.timesheets === 'edit',", "editTimesheets: items.timesheets !== 'none',"),
+    ('S2 the grant form defaults the PDF switch on', MODEL, 'unit', SHARING_UNIT,
+     "export const DEFAULT_SHARE_ITEMS: ShareItems = { timesheets: 'view', ot_read: false, pdf_download: false };",
+     "export const DEFAULT_SHARE_ITEMS: ShareItems = { timesheets: 'view', ot_read: false, pdf_download: true };"),
+    ('S3 any 404 counts as an ended share (a missing object would send the user home)', MODEL, 'unit', SHARING_UNIT,
+     "if (caught.status === 404 && stillShared === false) return 'ended';", "if (caught.status === 404) return 'ended';"),
+    ('S4 the PDF button no longer needs the PDF item', MODEL, 'unit', SHARING_UNIT,
+     "canDownload: items.pdf_download && pdf === 'ready',", "canDownload: pdf === 'ready',"),
+    ('S5 an edit under a share is no longer attributed to the grantee', MODEL, 'unit', SHARING_UNIT,
+     "if (event.via_share && event.actor_display_name !== null) return", "if (false) return"),
+    ('S6 a PDF-only share no longer opens the revision list', MODEL, 'unit', SHARING_UNIT,
+     "const viewRevisions = viewTimesheets || items.pdf_download;", "const viewRevisions = viewTimesheets;"),
+    ('D1 the loaded window drops the revision of its first date', DELIVERY, 'unit', DELIVERY_UNIT,
+     "return revisions.filter((item) => item.payroll_date >= since);", "return revisions.filter((item) => item.payroll_date > since);"),
+    ('D2 a replaced revision is no longer marked superseded', DELIVERY, 'unit', DELIVERY_UNIT,
+     "superseded: supersededIds.has(item.id),", "superseded: false,"),
+    ('D3 the history lists a revision only when a delivery attempt exists', DELIVERY, 'unit', DELIVERY_UNIT,
+     "    if (shown.has(item.id)) continue;\n    shown.add(item.id);\n    const attempts = byRevision(item.id);",
+     "    if (shown.has(item.id)) continue;\n    shown.add(item.id);\n    const attempts = byRevision(item.id);\n    if (attempts.length === 0) continue;"),
+    ('G1 no signature answers an error again instead of an empty value', SIGNATURES, 'unit', ['tests/integration/signatures.test.ts'],
+     "c.json({ signature: currentSignature(deps.db, c.get('user').id) }));", "c.json({ signature: currentSignature(deps.db, c.get('user').id) ?? undefined }));"),
+    ('E1 Clock in/out is shown in a shared view (browser test)', TIMESHEET, 'e2e', [],
+     "{own && <ClockBar", "{<ClockBar"),
+]
+
+
+def run_unit(files):
+    return subprocess.run(['node.exe', VITEST, 'run', *files], capture_output=True, text=True, encoding='utf-8', errors='replace')
+
+
+def run_e2e():
+    built = subprocess.run(['node.exe', NPM, 'run', 'build'], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if built.returncode != 0:
+        return built
+    return subprocess.run(
+        ['node.exe', PLAYWRIGHT, 'test', 'tests/e2e/sharing.spec.ts', '--project=desktop', '-g', 'Settings, Sharing'],
+        capture_output=True, text=True, encoding='utf-8', errors='replace',
+    )
+
+
+caught = 0
+for name, target, kind, files, old, new in MUTATIONS:
+    original = open(target, 'rb').read()
+    base_hash = hashlib.sha256(original).hexdigest()
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, f'{name}: pattern found {text.count(old)} times'
+    mutated = text.replace(old, new, 1).encode('utf-8')
+    assert mutated != original
+    try:
+        open(target, 'wb').write(mutated)
+        run = run_unit(files) if kind == 'unit' else run_e2e()
+    finally:
+        open(target, 'wb').write(original)
+    restored = hashlib.sha256(open(target, 'rb').read()).hexdigest() == base_hash
+    out = run.stdout + run.stderr
+    failed = [line.strip() for line in out.splitlines() if line.strip().startswith(('FAIL', 'x '))]
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests', '1 failed', '1 passed'))]
+    ok = run.returncode != 0
+    caught += ok
+    print(f'{name}: {"CAUGHT" if ok else "SURVIVED"}; restored byte-identical: {restored}; {summary[0] if summary else ""}')
+    for line in failed[:2]:
+        print('    ' + line)
+print(f'caught {caught} of {len(MUTATIONS)}')
+sys.exit(0 if caught == len(MUTATIONS) else 1)

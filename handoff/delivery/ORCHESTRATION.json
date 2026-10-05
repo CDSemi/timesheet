@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T13B-FREEZE",
+  "next_task_id": "WP3-T13C-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -104,7 +104,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
+    "last_commit": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
     "unpushed": []
   },
   "owner_decisions": [
@@ -6590,7 +6590,7 @@
       "id": "WP3-T13B-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T13B"
       ],
@@ -6623,16 +6623,128 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T13B-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T13B-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13B-FREEZE/masking.txt",
+        "handoff/delivery/evidence/WP3-T13B-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
+      "pushed": true,
       "source_digest": "f3df3b86f5d0008f838f593aafd26631e93b3a476831744e3f9fad56809548ab",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): 38 paths, parent 5b90d30, remote SHA identical; 7 email tokens masked as <email> in WP3-T13B evidence (02-red.txt lines 165 and 655; 07-verify.txt lines 58 and 59), none remaining, no source or test touched; digest f3df3b86 matched; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T13C starts on c3c35de."
+    },
+    {
+      "id": "WP3-T13C",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T13B-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a37e19e72cc08db17",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/SettingsScreen.tsx",
+        "src/client/HistoryScreen.tsx",
+        "src/client/App.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "src/client/components/AppShell.tsx",
+        "src/client/components/sharingModel.ts",
+        "src/client/components/deliveryModel.ts",
+        "src/client/SharedTimesheetScreen.tsx",
+        "src/server/routes/signatures.ts",
+        "tests/integration/signatures.test.ts",
+        "tests/client/sharingModel.test.ts",
+        "tests/client/deliveryModel.test.ts",
+        "tests/e2e/sharing.spec.ts",
+        "handoff/delivery/tasks/WP3-T13C.md",
+        "handoff/delivery/evidence/WP3-T13C"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13C.md",
+      "report": "handoff/delivery/tasks/WP3-T13C.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13C/01-red-unit.txt",
+        "handoff/delivery/evidence/WP3-T13C/02-red-current-image.txt",
+        "handoff/delivery/evidence/WP3-T13C/03-literal-scan.txt",
+        "handoff/delivery/evidence/WP3-T13C/04-green.txt",
+        "handoff/delivery/evidence/WP3-T13C/05-mutations.txt",
+        "handoff/delivery/evidence/WP3-T13C/06-e2e.txt",
+        "handoff/delivery/evidence/WP3-T13C/07-verify.txt",
+        "handoff/delivery/evidence/WP3-T13C/08-digest.txt",
+        "handoff/delivery/evidence/WP3-T13C/sharing-settings-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP3-T13C/sharing-view-only-mobile-synthetic.png"
+      ],
+      "baseline_commit": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
+      "source_digest": "9b8d6b26dd05436f3aca8546520087e4af095950efc6741cddb54fa2a187240a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: Settings > Sharing with per-item switches (defaults view on, OT off, PDF off) and the PDF note; change, end and leave behind confirmations. Shared with me: AppShell switcher, persistent owner bar, deep links; every shared view uses /api/shared/:ownerId; disallowed actions absent; a revoked share returns the user to their own view with a message on the next request. The owner's history lists every revision from GET /api/revisions and names the grantee for edits under a share. GET /api/signatures/current now answers 200 with a null value (client and tests adapted). e2e: 4 new tests per project, total 119 passed, 3 skipped; 18 screenshots viewed; literal scan 0; 23 new unit tests plus 5 changed; red-first; 11/11 mutations; verify exit 0, 60 files/1383 tests; precommit on a temporary index 0 findings. Deviations: minimal shared-mode props in DeliveryHistory, DeliveryRevision, SubmissionSettings, ReviewStatus, PeriodHeader, TimesheetGrid, DayList, DayEditor, SessionForm, DayFieldsForm (defaults keep old behaviour); one line in tests/e2e/history-settings.spec.ts (the 404 pin became the null value). Carry item: History still shows raw operation names (for example day_entry.update) for unknown operations (otModel.ts not owned).",
+      "next_action": "None; WP3-T13C-FREEZE."
+    },
+    {
+      "id": "WP3-T13C-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T13C"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a516f51db62e27a92",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "a516f51db62e27a92",
+          "outcome": "stopped before staging: src/client/TimesheetScreen.tsx modified but not in the expected set (omitted from the worker's deviation list); nothing staged; HEAD c3c35de unchanged. Attempt 2 adds it on condition that the digest equals the worker's 9b8d6b26."
+        }
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T13C-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T13C-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13C-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T13C-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "9b8d6b26dd05436f3aca8546520087e4af095950efc6741cddb54fa2a187240a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T13B set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T13C set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

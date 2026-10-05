@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 5b90d30d7e4b5410770b01d04bd9ff8ee2663149 (WP3-T13-FREEZE).
+  - HEAD = origin/main = c3c35de41ee5c1afff0e602601bdb27bb0a19bc1 (WP3-T13B-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 7b04f0b1… (T13, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là f3df3b86… (T13B, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T13-FREEZE.
+    T13B-FREEZE.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -266,10 +266,17 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   quyền ở mỗi request và kiểm lại trong transaction ghi), `GET /api/revisions`, lịch sử ghi
   tên người được chia sẻ; ma trận 11 × 17 cộng 31 đường dẫn không bao giờ chia sẻ; 10/10
   bản đối chứng; e2e 111 đạt; verify 1356 test; digest f3df3b86….
-- Đang chạy: WP3-T13B-FREEZE (committer).
+- WP3-T13B-FREEZE đã commit và push, SHA c3c35de (attempt 2; attempt 1 bị chặn vì có địa
+  chỉ email trong file log bằng chứng, đã che 7 địa chỉ thành `<email>`; mọi kiểm tra 0).
+- WP3-T13C đã xong (tác giả tự báo): settings chia sẻ bật/tắt từng mục kèm ghi chú về PDF,
+  nút chuyển sang timesheet được chia sẻ và thanh báo chủ sở hữu, màn chia sẻ không hiện
+  thao tác không được phép, lịch sử lấy từ danh sách bản nộp và ghi tên người được chia sẻ,
+  signatures/current trả 200 null; e2e 119 đạt; 11/11 bản đối chứng; verify 1383 test;
+  digest 9b8d6b26…. Việc chuyển tiếp: lịch sử còn hiện tên thao tác thô với thao tác lạ.
+- Đang chạy: WP3-T13C-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T13B; rồi T13C (giao diện chia sẻ; brief đã sẵn), T14
-     (brief đã sẵn), T15, WP3-GATE và các audit.
+  1. Ghi kết quả commit đóng băng T13C; rồi T14 (brief đã sẵn), T15 (brief đã sẵn),
+     WP3-GATE và các audit.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -288,5 +295,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T13B-FREEZE.
+- Process còn sống: chỉ WP3-T13C-FREEZE.
 - Usage/reset: không quan sát được.

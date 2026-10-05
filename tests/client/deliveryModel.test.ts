@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ApiRequestError, type DeliveryRecord, type FinalizationJob, type FinalizationResponse, type RevisionSummary } from '../../src/client/api.ts';
+import {
+  ApiRequestError,
+  type DeliveryRecord,
+  type FinalizationJob,
+  type FinalizationResponse,
+  type RevisionListItem,
+  type RevisionSummary,
+} from '../../src/client/api.ts';
 import {
   attemptFault,
   attemptStateText,
@@ -21,6 +28,9 @@ import {
   revisionOriginText,
   revisionReviewText,
   type RevisionRow,
+  revisionsSince,
+  rowOrigin,
+  rowReview,
 } from '../../src/client/components/deliveryModel.ts';
 
 /*
@@ -82,6 +92,22 @@ function finalization(overrides: Partial<FinalizationResponse> = {}): Finalizati
   };
 }
 
+function listed(overrides: Partial<RevisionListItem> = {}): RevisionListItem {
+  return {
+    id: 'rev-1',
+    payroll_date: '2026-10-16',
+    revision_no: 1,
+    revision_kind: 'original',
+    origin: 'employee',
+    review_state: 'signed',
+    supersedes_revision_id: null,
+    finalized_at: '2026-10-12T18:00:00Z',
+    pdf_state: 'ready',
+    delivery_state: 'accepted',
+    ...overrides,
+  };
+}
+
 const period = (payrollDate: string, start: string, end: string): HistoryPeriod['period'] => ({ payroll_date: payrollDate, period_start: start, period_end: end });
 
 function historyPeriod(overrides: Partial<FinalizationResponse> = {}, payrollDate = '2026-10-16'): HistoryPeriod {
@@ -99,11 +125,10 @@ describe('PDF state from the render job', () => {
     expect(pdfStateOf([])).toBe('pending');
   });
 
-  it('words every state, with the earlier-revision state unknown', () => {
+  it('words every state', () => {
     expect(pdfStateText('ready')).toBe('PDF ready');
     expect(pdfStateText('pending')).toBe('PDF is being prepared');
     expect(pdfStateText('failed')).toBe('PDF needs attention');
-    expect(pdfStateText('unknown')).toBe('PDF of an earlier revision');
   });
 });
 
@@ -164,6 +189,7 @@ describe('revision rows for the history list', () => {
         historyPeriod({ revision: revision({ id: 'rev-b' }) }, '2026-10-30'),
       ],
       [],
+      [],
     );
     expect(rows.map((row) => row.payrollDate)).toEqual(['2026-10-30', '2026-10-02']);
     expect(rows[0]).toMatchObject({ revisionId: 'rev-b', current: true, revisionNo: 1, pdf: 'ready', periodStart: '2026-09-28', periodEnd: '2026-10-11' });
@@ -173,42 +199,76 @@ describe('revision rows for the history list', () => {
     const rows = buildRevisionRows(
       [historyPeriod()],
       [attempt({ id: 'att-2', attempt_no: 2 }), attempt({ id: 'att-1' }), attempt({ id: 'other', revision_id: 'rev-x', revision_no: 3, payroll_date: '2026-10-02' })],
+      [],
     );
     expect(rows.find((row) => row.revisionId === 'rev-1')?.attempts.map((item) => item.id)).toEqual(['att-2', 'att-1']);
   });
 
-  it('adds an earlier (superseded) revision that only a delivery attempt or the supersedes link reveals', () => {
-    const current = revision({ id: 'rev-2', revision_no: 2, revision_kind: 'correction', correction_reason: 'Late sick day', supersedes_revision_id: 'rev-1' });
-    const rows = buildRevisionRows([historyPeriod({ finalized_revision_no: 2, revision: current })], [attempt({ revision_id: 'rev-1', revision_no: 1 })]);
-    expect(rows.map((row) => [row.revisionId, row.current, row.revisionNo])).toEqual([
-      ['rev-2', true, 2],
-      ['rev-1', false, 1],
+  it('lists every earlier revision from the revision list, whether or not it ever had a delivery attempt', () => {
+    const current = revision({ id: 'rev-3', revision_no: 3, revision_kind: 'correction', correction_reason: 'Late sick day', supersedes_revision_id: 'rev-2' });
+    const revisions = [
+      listed({ id: 'rev-3', revision_no: 3, revision_kind: 'correction', supersedes_revision_id: 'rev-2' }),
+      listed({ id: 'rev-2', revision_no: 2, revision_kind: 'correction', supersedes_revision_id: 'rev-1', pdf_state: 'failed' }),
+      listed({ id: 'rev-1', revision_no: 1, origin: 'deadline', review_state: 'pending', pdf_state: 'pending' }),
+    ];
+    const rows = buildRevisionRows([historyPeriod({ finalized_revision_no: 3, revision: current })], [attempt({ revision_id: 'rev-2', revision_no: 2 })], revisions);
+    expect(rows.map((row) => [row.revisionId, row.current, row.revisionNo, row.superseded])).toEqual([
+      ['rev-3', true, 3, false],
+      ['rev-2', false, 2, true],
+      ['rev-1', false, 1, true],
     ]);
-    expect(rows[1]).toMatchObject({ pdf: 'unknown', revision: null });
-    // Without any attempt the supersedes link still gives the owner the earlier PDF.
-    const linked = buildRevisionRows([historyPeriod({ finalized_revision_no: 2, revision: current })], []);
-    expect(linked.map((row) => [row.revisionId, row.revisionNo])).toEqual([
-      ['rev-2', 2],
-      ['rev-1', null],
-    ]);
+    expect(rows[1]).toMatchObject({ pdf: 'failed', revision: null });
+    expect(rows[1]?.attempts.map((item) => item.id)).toEqual(['att-1']);
+    expect(rows[2]).toMatchObject({ pdf: 'pending', attempts: [] });
+    expect(rows[2]?.listed).toMatchObject({ origin: 'deadline', review_state: 'pending' });
+  });
+
+  it('does not invent a revision from a delivery attempt that the revision list does not hold', () => {
+    const rows = buildRevisionRows([historyPeriod()], [attempt({ revision_id: 'rev-ghost', revision_no: 9 })], [listed()]);
+    expect(rows.map((row) => row.revisionId)).toEqual(['rev-1']);
+  });
+
+  it('shows a listed revision whose period is outside the loaded windows as an earlier row with its own state', () => {
+    const rows = buildRevisionRows([], [], [listed({ id: 'old-1', payroll_date: '2025-01-03', pdf_state: 'ready' })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ revisionId: 'old-1', payrollDate: '2025-01-03', current: false, superseded: false, pdf: 'ready', periodStart: null });
+  });
+
+  it('keeps only the revisions from the start of the loaded window, with no upper bound', () => {
+    const all = [listed({ id: 'a', payroll_date: '2026-10-30' }), listed({ id: 'b', payroll_date: '2026-04-13' }), listed({ id: 'c', payroll_date: '2026-04-10' })];
+    expect(revisionsSince(all, '2026-04-13').map((item) => item.id)).toEqual(['a', 'b']);
+    expect(revisionsSince(all, '2000-01-01')).toHaveLength(3);
+  });
+
+  it('words the origin and review state of a listed-only row like a current one', () => {
+    const [row] = buildRevisionRows([], [], [listed({ origin: 'deadline', review_state: 'pending' })]);
+    expect(row === undefined ? null : rowOrigin(row)).toBe('Submitted automatically');
+    expect(row === undefined ? null : rowReview(row)).toMatchObject({ text: 'Review pending', tone: 'warn' });
+    const current = buildRevisionRows([historyPeriod()], [], [])[0];
+    expect(current === undefined ? null : rowOrigin(current)).toBe('Signed by you');
+    expect(current === undefined ? null : rowReview(current)).toMatchObject({ text: 'Signed' });
   });
 
   it('takes the recipients from the newest attempt envelope', () => {
-    const [row] = buildRevisionRows([historyPeriod()], [attempt({ to: ['a@example.invalid'], cc: ['b@example.invalid'] })]);
+    const [row] = buildRevisionRows([historyPeriod()], [attempt({ to: ['a@example.invalid'], cc: ['b@example.invalid'] })], []);
     expect(row?.recipients).toEqual({ to: ['a@example.invalid'], cc: ['b@example.invalid'] });
-    expect(buildRevisionRows([historyPeriod()], [])[0]?.recipients).toBeNull();
+    expect(buildRevisionRows([historyPeriod()], [], [])[0]?.recipients).toBeNull();
   });
 });
 
 function currentRow(overrides: Partial<FinalizationResponse> = {}, attempts: DeliveryRecord[] = []): RevisionRow {
-  const row = buildRevisionRows([historyPeriod(overrides)], attempts)[0];
+  const row = buildRevisionRows([historyPeriod(overrides)], attempts, [])[0];
   if (row === undefined) throw new Error('row expected');
   return row;
 }
 
 describe('explicit resend', () => {
   it('is available only for the current revision', () => {
-    const rows = buildRevisionRows([historyPeriod({ finalized_revision_no: 2, revision: revision({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }) })], []);
+    const rows = buildRevisionRows(
+      [historyPeriod({ finalized_revision_no: 2, revision: revision({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }) })],
+      [],
+      [listed({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }), listed()],
+    );
     expect(resendState(rows[0] as RevisionRow)).toMatchObject({ available: true, enabled: true });
     expect(resendState(rows[1] as RevisionRow)).toMatchObject({ available: false });
   });
@@ -277,7 +337,11 @@ describe('correction entry point', () => {
   it('leads an automatic submission to its review and every other current revision to a correction', () => {
     expect(correctionLinkLabel(currentRow({ revision: revision({ origin: 'deadline', review_state: 'pending' }) }))).toBe('Review now');
     expect(correctionLinkLabel(currentRow())).toBe('Correct this period');
-    const earlier = buildRevisionRows([historyPeriod({ finalized_revision_no: 2, revision: revision({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }) })], [])[1];
+    const earlier = buildRevisionRows(
+      [historyPeriod({ finalized_revision_no: 2, revision: revision({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }) })],
+      [],
+      [listed({ id: 'rev-2', revision_no: 2, supersedes_revision_id: 'rev-1' }), listed()],
+    )[1];
     expect(correctionLinkLabel(earlier as RevisionRow)).toBeNull();
   });
 });

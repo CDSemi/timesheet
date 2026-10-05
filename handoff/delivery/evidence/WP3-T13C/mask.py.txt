@@ -1,0 +1,25 @@
+# WP3-T13C evidence masking. Stored as .py.txt; run as: python mask.py <header> <input> <output>
+# Strips ANSI codes, masks local paths and every email address (as <email>), converts to LF,
+# trims trailing whitespace and ends with exactly one newline.
+import re
+import sys
+
+header, source, target = sys.argv[1], sys.argv[2], sys.argv[3]
+text = open(source, encoding='utf-8', errors='replace').read()
+text = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', text)
+text = text.replace('\r\n', '\n').replace('\r', '\n')
+rules = [
+    (r'[A-Za-z]:[\/]+Dropbox[\/]+Work\.CDSemi[\/]+timesheet', '<project>'),
+    (r'/d/Dropbox/Work\.CDSemi/timesheet', '<project>'),
+    (r'[A-Za-z]:[\/]+timesheet-tmp[\/]+WP3-T13C', '<tmp>'),
+    (r'/d/timesheet-tmp/WP3-T13C', '<tmp>'),
+    (r'[A-Za-z]:[\/]+Users[\/]+[^\/\s]+', '<user>'),
+    (r'/c/Users/[^/\s]+', '<user>'),
+    (r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '<email>'),
+]
+for pattern, replacement in rules:
+    text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+lines = [line.rstrip() for line in (header.rstrip('\n') + '\n\n' + text).split('\n')]
+while lines and lines[-1] == '':
+    lines.pop()
+open(target, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines) + '\n')

@@ -410,12 +410,19 @@ describe('private download', () => {
     expect(response.bytes.includes(Buffer.from('tampered'))).toBe(false);
   });
 
-  it('reports the caller’s current signature as metadata and 404 when there is none', async () => {
-    expect((await send(app, 'GET', '/api/signatures/current', { cookie: employeeCookie })).status).toBe(404);
+  it('reports the caller’s current signature as metadata and a 200 with an empty value when there is none', async () => {
+    // No signature is not an error: the answer is 200 with a null value, so a browser logs no failed resource.
+    const none = await send(app, 'GET', '/api/signatures/current', { cookie: employeeCookie });
+    expect(none.status).toBe(200);
+    expect(none.json).toEqual({ signature: null });
     const id = await uploadAs(employeeCookie, makePng());
     const current = await send(app, 'GET', '/api/signatures/current', { cookie: employeeCookie });
+    expect(current.status).toBe(200);
     expect(current.json.signature.id).toBe(id);
-    expect((await send(app, 'GET', '/api/signatures/current', { cookie: adminCookie })).status).toBe(404);
+    // The administrator has uploaded nothing: never the employee's image, only the same empty value.
+    const admin = await send(app, 'GET', '/api/signatures/current', { cookie: adminCookie });
+    expect(admin.status).toBe(200);
+    expect(admin.json).toEqual({ signature: null });
   });
 });
 

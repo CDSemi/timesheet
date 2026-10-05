@@ -31,13 +31,8 @@ interface Loaded {
 async function loadAll(): Promise<Loaded> {
   const [saved, signature] = await Promise.all([
     api<{ settings: SubmissionSettings }>('GET', '/api/settings/submission'),
-    api<{ signature: SignatureMetadata }>('GET', '/api/signatures/current').then(
-      (answer) => answer.signature,
-      (caught: unknown) => {
-        if (caught instanceof ApiRequestError && caught.status === 404) return null;
-        throw caught;
-      },
-    ),
+    // 200 with a null value when no image was uploaded (nothing is logged as a failed resource).
+    api<{ signature: SignatureMetadata | null }>('GET', '/api/signatures/current').then((answer) => answer.signature),
   ]);
   return { settings: saved.settings, signature };
 }

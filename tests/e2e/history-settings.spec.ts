@@ -622,5 +622,5 @@ test('a refused consent is never dropped: the 422 submission_settings_required k
   // Nothing is lost silently: the file is still chosen, the consent still ticked, and nothing was stored.
   await expect(upload.locator('[data-signature-state="chosen"] img')).toBeVisible();
   await expect(upload.getByRole('checkbox', { name: 'Use this image on automatic submissions' })).toBeChecked();
-  expect(await statusInPage(page, 'GET', '/api/signatures/current')).toBe(404);
+  expect((await person.api.call<{ signature: unknown }>('GET', '/api/signatures/current')).signature).toBeNull();
 });

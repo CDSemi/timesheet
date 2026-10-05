@@ -1,0 +1,27 @@
+WP3-T13C mutation checks (mutations.py.txt): each mutation is computed in memory, written, tested, and the file restored byte-identical (SHA-256 compared). E1 runs the browser test on the desktop project after a build. Exit 0.
+
+S1 an edit share is read as a view share (edit controls would show for view): CAUGHT; restored byte-identical: True; Tests  1 failed | 22 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > which actions a share shows > shows the timesheet reads with view, and the edit controls only with edit
+S2 the grant form defaults the PDF switch on: CAUGHT; restored byte-identical: True; Tests  1 failed | 22 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > the grant form defaults and the item rules > starts with timesheets view on, OT off and PDF off
+S3 any 404 counts as an ended share (a missing object would send the user home): CAUGHT; restored byte-identical: True; Tests  1 failed | 22 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > the persistent bar and the end of a share > classifies a refused shared request by asking whether the share still exists
+S4 the PDF button no longer needs the PDF item: CAUGHT; restored byte-identical: True; Tests  1 failed | 22 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > the revision status list of a shared view > offers the PDF download only with the PDF item and only for a ready PDF
+S5 an edit under a share is no longer attributed to the grantee: CAUGHT; restored byte-identical: True; Tests  1 failed | 22 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > history: shared edits and share events > attributes an edit made under a share to the grantee by name
+S6 a PDF-only share no longer opens the revision list: CAUGHT; restored byte-identical: True; Tests  2 failed | 21 passed (23)
+    FAIL  tests/client/sharingModel.test.ts > which actions a share shows > lists the revision status for timesheets or PDF, as the server does
+    FAIL  tests/client/sharingModel.test.ts > which actions a share shows > opens the views in a fixed order for every valid set
+D1 the loaded window drops the revision of its first date: CAUGHT; restored byte-identical: True; Tests  1 failed | 27 passed (28)
+    FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > keeps only the revisions from the start of the loaded window, with no upper bound
+D2 a replaced revision is no longer marked superseded: CAUGHT; restored byte-identical: True; Tests  1 failed | 27 passed (28)
+    FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > lists every earlier revision from the revision list, whether or not it ever had a delivery attempt
+D3 the history lists a revision only when a delivery attempt exists: CAUGHT; restored byte-identical: True; Tests  5 failed | 23 passed (28)
+    FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > lists every earlier revision from the revision list, whether or not it ever had a delivery attempt
+    FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > shows a listed revision whose period is outside the loaded windows as an earlier row with its own state
+G1 no signature answers an error again instead of an empty value: CAUGHT; restored byte-identical: True; Tests  1 failed | 34 passed (35)
+    FAIL  tests/integration/signatures.test.ts > private download > reports the caller�s current signature as metadata and a 200 with an empty value when there is none
+E1 Clock in/out is shown in a shared view (browser test): CAUGHT; restored byte-identical: True; 1 failed
+    x  1 [desktop] � tests\e2e\sharing.spec.ts:175:1 � Settings, Sharing: the form defaults, the PDF note, a view-only grantee without any edit control, only /api/shared requests, and leaving (8.4s)
+caught 11 of 11

@@ -3,6 +3,7 @@ import { api, ApiRequestError, type CurrentPeriods, type PolicyPreview as Policy
 import { describeError } from './components/errors.ts';
 import { PolicyFields } from './components/PolicyFields.tsx';
 import { PolicyPreview } from './components/PolicyPreview.tsx';
+import { SharingSection } from './components/SharingSettings.tsx';
 import { SubmissionSettingsSection } from './components/SubmissionSettings.tsx';
 import { canCreate, DEFICIT_MODE_LABELS, draftFromPolicy, draftToRequest, type PolicyDraft, requestSignature } from './components/policyModel.ts';
 
@@ -70,8 +71,8 @@ function PolicyHistory({ policies }: { policies: PolicyVersion[] }) {
   );
 }
 
-/** Personal submission settings and the signature image, then the policy versions (FR-05): a new version is previewed on the server, then created. */
-export function SettingsScreen() {
+/** Personal submission settings and the signature image, sharing (FR-17), then the policy versions (FR-05): a new version is previewed on the server, then created. */
+export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => void }) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
@@ -155,6 +156,7 @@ export function SettingsScreen() {
     <div className="stack">
       <h1>Settings</h1>
       <SubmissionSettingsSection />
+      <SharingSection onChanged={onSharesChanged} />
       <section className="card stack" aria-label="Current policy versions">
         <h2>Your work policy</h2>
         <p className="hint muted">

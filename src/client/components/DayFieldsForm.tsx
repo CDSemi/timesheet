@@ -1,5 +1,5 @@
 import { type SubmitEvent, useState } from 'react';
-import { api, type DayCategory, type DayView, type LeaveKind } from '../api.ts';
+import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
 import { describeError, isStaleVersion } from './errors.ts';
 import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
 
@@ -16,12 +16,15 @@ export function DayFieldsForm({
   reasonRequired,
   onSaved,
   onStale,
+  request = ownRequest,
 }: {
   day: DayView;
   reason: string;
   reasonRequired: boolean;
   onSaved: (day: DayView) => void;
   onStale: () => void;
+  /** The route set the write goes through: the caller's own by default, a share's when editing for an owner. */
+  request?: Requester;
 }) {
   const [draft, setDraft] = useState(() => dayFieldsDraft(day));
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +44,7 @@ export function DayFieldsForm({
     setBusy(true);
     setError(null);
     try {
-      onSaved(await api<DayView>('PUT', `/api/days/${day.work_date}`, built.request));
+      onSaved(await request<DayView>('PUT', `/days/${day.work_date}`, built.request));
     } catch (caught) {
       if (isStaleVersion(caught)) onStale();
       else setError(describeError(caught));

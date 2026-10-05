@@ -6,12 +6,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 5b90d30d7e4b5410770b01d04bd9ff8ee2663149 (WP3-T13-FREEZE).
+  - HEAD = origin/main = c3c35de41ee5c1afff0e602601bdb27bb0a19bc1 (WP3-T13B-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 7b04f0b1… (T13, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest f3df3b86… (T13B, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint and the T13-FREEZE results
+  - Uncommitted (handoff only): the board, this checkpoint and the T13B-FREEZE results
     and evidence.
   - No unpushed commits.
 - Completed scope:
@@ -247,10 +247,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   re-check), `GET /api/revisions`, grantee attribution in history; matrix 11 × 17 plus 31
   never-shared paths; 10/10 mutations; e2e 111 passed; verify 1356 tests; digest
   f3df3b86….
-- Running: WP3-T13B-FREEZE (committer).
+- WP3-T13B-FREEZE is committed and pushed as c3c35de (attempt 2; attempt 1 was blocked by
+  email addresses in an evidence log, 7 masked as `<email>`; all checks 0).
+- WP3-T13C is done (author-reported): sharing settings with per-item switches and the PDF
+  note, shared-with-me switcher and owner bar, shared views with absent disallowed
+  actions, history from the revision list with grantee names, signatures/current 200
+  null; e2e 119 passed; 11/11 mutations; verify 1383 tests; digest 9b8d6b26…. Carry item:
+  raw operation names in the history for unknown operations.
+- Running: WP3-T13C-FREEZE (committer).
 - Next action:
-  1. Record the T13B freeze; then T13C (sharing UI; brief ready), T14 (brief ready), T15,
-     WP3-GATE and the audits.
+  1. Record the T13C freeze; then T14 (brief ready), T15 (brief ready), WP3-GATE and the
+     audits.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -268,5 +275,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T13B-FREEZE only.
+- Live processes: WP3-T13C-FREEZE only.
 - Usage/reset: not observable.

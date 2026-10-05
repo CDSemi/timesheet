@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, type DayView, type PolicyVersion, type Session } from './api.ts';
+import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
 import { DayFieldsForm } from './components/DayFieldsForm.tsx';
 import { DayFigures } from './components/DayFigures.tsx';
 import { describeError, isStaleVersion } from './components/errors.ts';
@@ -15,7 +15,9 @@ type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: s
  * Day editor: actual sessions with an explicit input zone and end date, breaks, category,
  * partial leave with its kind, WFH and the server's figures. It is a native modal dialog,
  * like the batch dialog. Every write carries the version the editor loaded and, for an old or
- * finalized period, a reason; a stale version reloads the day and says so.
+ * finalized period, a reason; a stale version reloads the day and says so. In a view-only shared
+ * view (`readOnly`) the dialog only shows the day: the reason, the add, edit and delete controls and
+ * the day fields form are absent, not disabled.
  */
 export function DayEditor({
   workDate,
@@ -24,6 +26,8 @@ export function DayEditor({
   todayLocal,
   onChanged,
   onClose,
+  request = ownRequest,
+  readOnly = false,
 }: {
   workDate: string;
   displayZone: string;
@@ -32,6 +36,10 @@ export function DayEditor({
   /** Called after every successful write so the period behind the dialog can refresh. */
   onChanged: () => void;
   onClose: () => void;
+  /** The route set every read and write goes through: the caller's own by default, a share's for an owner. */
+  request?: Requester;
+  /** True for a share without edit rights: nothing on the dialog can change the day. */
+  readOnly?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [day, setDay] = useState<DayView | null>(null);
@@ -54,8 +62,8 @@ export function DayEditor({
   const load = useCallback(async () => {
     try {
       const [loaded, policyList] = await Promise.all([
-        api<DayView>('GET', `/api/days/${workDate}`),
-        api<{ policies: PolicyVersion[] }>('GET', '/api/policies'),
+        request<DayView>('GET', `/days/${workDate}`),
+        request<{ policies: PolicyVersion[] }>('GET', '/policies'),
       ]);
       setDay(loaded);
       setPolicies(policyList.policies);
@@ -63,7 +71,7 @@ export function DayEditor({
     } catch (caught) {
       setLoadError(describeError(caught));
     }
-  }, [workDate]);
+  }, [workDate, request]);
 
   useEffect(() => {
     void load();
@@ -109,7 +117,7 @@ export function DayEditor({
     try {
       const body: { expected_version: number; reason?: string } = { expected_version: session.version };
       if (reason.trim() !== '') body.reason = reason.trim();
-      const response = await api<{ deleted: boolean; day: DayView }>('DELETE', `/api/sessions/${session.id}`, body);
+      const response = await request<{ deleted: boolean; day: DayView }>('DELETE', `/sessions/${session.id}`, body);
       setDeleting(null);
       saved(response.day, 'Session deleted.');
     } catch (caught) {
@@ -128,7 +136,7 @@ export function DayEditor({
       <div className="stack">
         <header className="editor-head">
           <h2 id="day-editor-title">
-            Day editor <span className="mono">{`${weekday} ${workDate}`}</span>
+            {readOnly ? 'Day' : 'Day editor'} <span className="mono">{`${weekday} ${workDate}`}</span>
           </h2>
           <button type="button" className="secondary" onClick={() => dialog.current?.close()}>
             Close
@@ -145,11 +153,12 @@ export function DayEditor({
         {day !== null && (
           <>
             <p className="muted hint">
-              Accounting date {workDate} in the reporting zone {reportingZone}. Times below are typed in an input zone you choose;
-              they are shown in {displayZone} elsewhere. Period: {day.edit.period_relation}.
+              {readOnly
+                ? `Accounting date ${workDate} in the reporting zone ${reportingZone}. Times are shown in ${displayZone}. Period: ${day.edit.period_relation}.`
+                : `Accounting date ${workDate} in the reporting zone ${reportingZone}. Times below are typed in an input zone you choose; they are shown in ${displayZone} elsewhere. Period: ${day.edit.period_relation}.`}
             </p>
 
-            {reasonRequired && (
+            {reasonRequired && !readOnly && (
               <label>
                 Reason for editing an old or finalized period
                 <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} maxLength={500} required />
@@ -188,36 +197,38 @@ export function DayEditor({
                       {session.source} session, entered in {session.input_zone}
                       {session.end_utc === null ? '' : `, ${session.breaks.length} break(s) recorded`}
                     </span>
-                    <span className="button-row">
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => startEditing({ kind: 'edit', sessionId: session.id })}
-                        aria-label={`Edit session ${session.id}`}
-                      >
-                        Edit
-                      </button>
-                      {deleting === session.id ? (
-                        <button type="button" onClick={() => void remove(session)}>
-                          Confirm delete
+                    {!readOnly && (
+                      <span className="button-row">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => startEditing({ kind: 'edit', sessionId: session.id })}
+                          aria-label={`Edit session ${session.id}`}
+                        >
+                          Edit
                         </button>
-                      ) : (
-                        <button type="button" className="secondary" onClick={() => setDeleting(session.id)} aria-label={`Delete session ${session.id}`}>
-                          Delete
-                        </button>
-                      )}
-                    </span>
+                        {deleting === session.id ? (
+                          <button type="button" onClick={() => void remove(session)}>
+                            Confirm delete
+                          </button>
+                        ) : (
+                          <button type="button" className="secondary" onClick={() => setDeleting(session.id)} aria-label={`Delete session ${session.id}`}>
+                            Delete
+                          </button>
+                        )}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
-              {editing.kind === 'none' && (
+              {!readOnly && editing.kind === 'none' && (
                 <div className="button-row">
                   <button type="button" onClick={() => startEditing({ kind: 'new' })}>
                     Add session
                   </button>
                 </div>
               )}
-              {editing.kind === 'new' && (
+              {!readOnly && editing.kind === 'new' && (
                 <SessionForm
                   key={`new-${generation}`}
                   workDate={workDate}
@@ -228,9 +239,10 @@ export function DayEditor({
                   onSaved={(next) => saved(next, 'Session saved.')}
                   onStale={stale}
                   onCancel={() => setEditing({ kind: 'none' })}
+                  request={request}
                 />
               )}
-              {editingSession !== undefined && (
+              {!readOnly && editingSession !== undefined && (
                 <SessionForm
                   key={`${editingSession.id}-${editingSession.version}-${generation}`}
                   workDate={workDate}
@@ -242,18 +254,44 @@ export function DayEditor({
                   onSaved={(next) => saved(next, 'Session saved.')}
                   onStale={stale}
                   onCancel={() => setEditing({ kind: 'none' })}
+                  request={request}
                 />
               )}
             </section>
 
-            <DayFieldsForm
-              key={`fields-${generation}`}
-              day={day}
-              reason={reason}
-              reasonRequired={reasonRequired}
-              onSaved={(next) => saved(next, 'Day fields saved.')}
-              onStale={stale}
-            />
+            {readOnly ? (
+              <section className="stack" aria-label="Day fields">
+                <h3>Day fields</h3>
+                <dl className="facts" data-day-fields="read-only">
+                  <div>
+                    <dt>Category</dt>
+                    <dd>{day.category ?? 'none'}</dd>
+                  </div>
+                  <div>
+                    <dt>Partial leave</dt>
+                    <dd>{day.leave_minutes === 0 ? 'none' : `${day.leave_minutes} min${day.leave_kind === null ? '' : ` (${day.leave_kind})`}`}</dd>
+                  </div>
+                  <div>
+                    <dt>Worked from home</dt>
+                    <dd>{day.wfh ? 'yes' : 'no'}</dd>
+                  </div>
+                  <div>
+                    <dt>Notes</dt>
+                    <dd>{day.entry?.notes === undefined || day.entry.notes === '' ? 'none' : day.entry.notes}</dd>
+                  </div>
+                </dl>
+              </section>
+            ) : (
+              <DayFieldsForm
+                key={`fields-${generation}`}
+                day={day}
+                reason={reason}
+                reasonRequired={reasonRequired}
+                onSaved={(next) => saved(next, 'Day fields saved.')}
+                onStale={stale}
+                request={request}
+              />
+            )}
           </>
         )}
       </div>

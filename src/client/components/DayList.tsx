@@ -11,6 +11,7 @@ export function DayList({
   selected,
   onToggle,
   onEdit,
+  editable = true,
 }: {
   days: readonly DayView[];
   zone: string;
@@ -18,6 +19,8 @@ export function DayList({
   selected: ReadonlySet<string>;
   onToggle: (workDate: string) => void;
   onEdit: (workDate: string) => void;
+  /** False in a view-only shared view: no selection box, and the day button only opens the day to read. */
+  editable?: boolean;
 }) {
   return (
     <div className="day-list">
@@ -27,14 +30,16 @@ export function DayList({
           <ul className="plain">
             {group.days.map((day) => (
               <li key={day.workDate} data-day={day.workDate} className={`day-item ${day.nonworking ? 'nonworking' : ''}`}>
-                <label className="pick">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(day.workDate)}
-                    onChange={() => onToggle(day.workDate)}
-                    aria-label={`Select ${day.workDate}`}
-                  />
-                </label>
+                {editable && (
+                  <label className="pick">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(day.workDate)}
+                      onChange={() => onToggle(day.workDate)}
+                      aria-label={`Select ${day.workDate}`}
+                    />
+                  </label>
+                )}
                 <div className="day-body">
                   <div className="day-head">
                     <span className="mono">
@@ -58,8 +63,13 @@ export function DayList({
                     <span>Credit {minutesText(day.creditedMinutes)}</span>
                   </div>
                   <div>
-                    <button type="button" className="secondary" onClick={() => onEdit(day.workDate)} aria-label={`Edit ${day.workDate}`}>
-                      Edit day
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => onEdit(day.workDate)}
+                      aria-label={`${editable ? 'Edit' : 'View'} ${day.workDate}`}
+                    >
+                      {editable ? 'Edit day' : 'View day'}
                     </button>
                   </div>
                 </div>

@@ -21,10 +21,12 @@ export async function loadPeriodState(payrollDate: string): Promise<PeriodState>
  * version, so an edit or a sign-off updates the badges). null while loading or when the server
  * could not be asked; the caller then shows its own fallback.
  */
-export function usePeriodState(payrollDate: string, refreshKey: unknown): PeriodState | null {
+export function usePeriodState(payrollDate: string, refreshKey: unknown, enabled = true): PeriodState | null {
   const [state, setState] = useState<{ payrollDate: string; value: PeriodState } | null>(null);
 
   useEffect(() => {
+    // The finalization and delivery routes are the caller's own: a shared view never asks them.
+    if (!enabled) return;
     let current = true;
     loadPeriodState(payrollDate)
       .then((value) => {
@@ -36,9 +38,9 @@ export function usePeriodState(payrollDate: string, refreshKey: unknown): Period
     return () => {
       current = false;
     };
-  }, [payrollDate, refreshKey]);
+  }, [payrollDate, refreshKey, enabled]);
 
-  return state !== null && state.payrollDate === payrollDate ? state.value : null;
+  return enabled && state !== null && state.payrollDate === payrollDate ? state.value : null;
 }
 
 const TONE_CLASS: Record<Tone, string> = { neutral: '', ok: 'badge-ok', warn: 'badge-warn', error: 'badge-error' };

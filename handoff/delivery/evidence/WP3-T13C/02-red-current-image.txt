@@ -1,0 +1,27 @@
+WP3-T13C red: the changed signatures test (no signature answers 200 with an empty value) against the unchanged route.
+Command: node vitest run tests/integration/signatures.test.ts. Exit 1. Result: 1 failed, 34 passed.
+
+ FAIL  tests/integration/signatures.test.ts > private download > reports the caller’s current signature as metadata and a 200 with an empty value when there is none
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/signatures.test.ts:416:25
+    414|     // No signature is not an error: the answer is 200 with a null val…
+    415|     const none = await send(app, 'GET', '/api/signatures/current', { c…
+    416|     expect(none.status).toBe(200);
+       |                         ^
+    417|     expect(none.json).toEqual({ signature: null });
+    418|     const id = await uploadAs(employeeCookie, makePng());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 34 passed (35)
+   Start at  02:18:01
+   Duration  8.72s (tests 88%, import 8%, transform 4%)

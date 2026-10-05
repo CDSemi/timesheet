@@ -17,6 +17,7 @@ export function TimesheetGrid({
   onToggle,
   onEdit,
   status,
+  editable = true,
 }: {
   days: readonly DayView[];
   zone: string;
@@ -25,6 +26,8 @@ export function TimesheetGrid({
   onToggle: (workDate: string) => void;
   onEdit: (workDate: string) => void;
   status: GridStatus | null;
+  /** False in a view-only shared view: no selection column, and the row button only opens the day to read. */
+  editable?: boolean;
 }) {
   return (
     <div className="table-wrap">
@@ -36,9 +39,11 @@ export function TimesheetGrid({
         )}
         <thead>
           <tr>
-            <th>
-              <span className="sr-only">Select</span>
-            </th>
+            {editable && (
+              <th>
+                <span className="sr-only">Select</span>
+              </th>
+            )}
             <th>Accounting date</th>
             <th>Category</th>
             <th>Sessions ({zone})</th>
@@ -48,7 +53,7 @@ export function TimesheetGrid({
             <th>Completeness</th>
             <th>Pending OT</th>
             <th>
-              <span className="sr-only">Edit</span>
+              <span className="sr-only">{editable ? 'Edit' : 'View'}</span>
             </th>
           </tr>
         </thead>
@@ -60,16 +65,18 @@ export function TimesheetGrid({
                 data-day={day.workDate}
                 className={`${day.nonworking ? 'nonworking' : ''} ${index === 0 ? 'week-start' : ''}`}
               >
-                <td>
-                  <label className="pick">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(day.workDate)}
-                      onChange={() => onToggle(day.workDate)}
-                      aria-label={`Select ${day.workDate}`}
-                    />
-                  </label>
-                </td>
+                {editable && (
+                  <td>
+                    <label className="pick">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(day.workDate)}
+                        onChange={() => onToggle(day.workDate)}
+                        aria-label={`Select ${day.workDate}`}
+                      />
+                    </label>
+                  </td>
+                )}
                 <td>
                   {index === 0 && <span className="week-tag">Week of {group.weekStart}</span>}
                   <span className="mono">
@@ -99,8 +106,13 @@ export function TimesheetGrid({
                   <PendingOtBadge day={day} />
                 </td>
                 <td>
-                  <button type="button" className="secondary" onClick={() => onEdit(day.workDate)} aria-label={`Edit ${day.workDate}`}>
-                    Edit
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => onEdit(day.workDate)}
+                    aria-label={`${editable ? 'Edit' : 'View'} ${day.workDate}`}
+                  >
+                    {editable ? 'Edit' : 'View'}
                   </button>
                 </td>
               </tr>

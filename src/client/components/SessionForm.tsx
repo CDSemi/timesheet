@@ -1,5 +1,5 @@
 import { type SubmitEvent, useId, useState } from 'react';
-import { api, ApiRequestError, type DayView, type PolicyVersion, type Session, type SessionResponse } from '../api.ts';
+import { ApiRequestError, type DayView, ownRequest, type PolicyVersion, type Requester, type Session, type SessionResponse } from '../api.ts';
 import { BreaksEditor, newRowKey } from './BreaksEditor.tsx';
 import { describeError, isStaleVersion } from './errors.ts';
 import { LocalTimeField } from './LocalTimeField.tsx';
@@ -36,6 +36,7 @@ export function SessionForm({
   onSaved,
   onStale,
   onCancel,
+  request = ownRequest,
 }: {
   workDate: string;
   /** The session being edited; absent for a new one. */
@@ -48,6 +49,8 @@ export function SessionForm({
   onSaved: (day: DayView) => void;
   onStale: () => void;
   onCancel: () => void;
+  /** The route set the write goes through: the caller's own by default, a share's when editing for an owner. */
+  request?: Requester;
 }) {
   const formId = useId();
   const [draft, setDraft] = useState<SessionDraft>(() =>
@@ -93,8 +96,8 @@ export function SessionForm({
       const body = buildSessionRequest(draft, { expectedVersion: session?.version, reason });
       const response =
         session === undefined
-          ? await api<SessionResponse>('POST', `/api/days/${workDate}/sessions`, body)
-          : await api<SessionResponse>('PUT', `/api/sessions/${session.id}`, body);
+          ? await request<SessionResponse>('POST', `/days/${workDate}/sessions`, body)
+          : await request<SessionResponse>('PUT', `/sessions/${session.id}`, body);
       onSaved(response.day);
     } catch (caught) {
       if (isStaleVersion(caught)) {

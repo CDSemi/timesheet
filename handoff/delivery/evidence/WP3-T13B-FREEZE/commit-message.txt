@@ -1,0 +1,23 @@
+Add owner-granted timesheet sharing with live per-item access
+
+- feat(db): migration 0006 timesheet_shares with per-item columns (timesheets
+  none/view/edit, OT read-only, final PDF download), one active share per pair,
+  no deletes, revoke once
+- feat(api): /api/shares to grant, change, revoke and leave (audited; generic
+  422 for an unknown grantee, rate-limited); admin list and revoke, never create
+- feat(auth): allowlisted /api/shared/:ownerId mount over 17 routes with a live
+  share check on every request and a re-check inside each write transaction;
+  never-shared actions stay unreachable; grantee PDF downloads audited
+- feat(api): owner-only GET /api/revisions (status fields only); history names
+  the grantee for events under a share
+- test: route-inventory matrix (11 item sets x 17 routes plus 31 never-shared
+  paths), revocation race, 10 mutations caught
+- docs(handoff): WP3-T13 freeze result, WP3-T13B record and evidence, WP3-T13C
+  and WP3-T14 briefs, board and checkpoint (+ vi)
+
+Task: WP3-T13B-FREEZE
+Gate: WP3-T13B checks recorded in handoff/delivery/evidence/WP3-T13B/
+Audit: pending (WP3-T13C)
+Digest: f3df3b86f5d0008f838f593aafd26631e93b3a476831744e3f9fad56809548ab
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

@@ -42,6 +42,30 @@ export interface User {
   role: 'admin' | 'employee';
 }
 
+/**
+ * A request to an API route written relative to `/api` (for example `/periods/current`). The own
+ * requester goes to the caller's own data; a shared requester goes to `/api/shared/:ownerId` for one
+ * owner, so a screen cannot reach another person's data by any other path.
+ */
+export type Requester = <T>(method: string, path: string, body?: unknown) => Promise<T>;
+
+export const ownRequest: Requester = (method, path, body) => api(method, `/api${path}`, body);
+
+/**
+ * A requester for one owner's shared timesheets. A refusal is passed to `onRefused` before it is
+ * thrown again, so the caller can find out (from the server) whether the share has ended.
+ */
+export function sharedRequest(ownerId: string, onRefused: (caught: unknown) => Promise<void>): Requester {
+  return async (method, path, body) => {
+    try {
+      return await api(method, `/api/shared/${encodeURIComponent(ownerId)}${path}`, body);
+    } catch (caught) {
+      if (caught instanceof ApiRequestError && (caught.status === 404 || caught.status === 403)) await onRefused(caught);
+      throw caught;
+    }
+  };
+}
+
 export type PeriodRelation = 'old' | 'current' | 'future';
 
 export interface Period {
@@ -535,6 +559,10 @@ export interface HistoryEvent {
   entity_id: string | null;
   reason: string | null;
   actor_is_self: boolean;
+  /** True for an event the owner's grantee performed while holding an active share (FR-17). */
+  via_share: boolean;
+  /** The grantee's display name for such an event; null for every other event. */
+  actor_display_name: string | null;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
 }
@@ -569,6 +597,23 @@ export interface RevisionSummary {
   created_at: string;
   /** The revision this one replaced (a correction or a late review); null for the first revision. */
   supersedes_revision_id?: string | null;
+}
+
+/** One row of GET /api/revisions (and of the shared mount): status metadata only, newest period first. */
+export interface RevisionListItem {
+  id: string;
+  payroll_date: string;
+  revision_no: number;
+  revision_kind: 'original' | 'correction' | 'late_review';
+  /** `deadline` is the automatic submission at the due time. */
+  origin: 'employee' | 'deadline';
+  review_state: 'pending' | 'signed';
+  supersedes_revision_id: string | null;
+  finalized_at: string;
+  /** The stored PDF state; null while no PDF row exists yet. */
+  pdf_state: 'pending' | 'ready' | 'failed' | null;
+  /** The state of the latest delivery attempt; null before any attempt. */
+  delivery_state: DeliveryAttemptState | null;
 }
 
 export interface FinalizationJob {
@@ -713,4 +758,39 @@ export async function uploadSignature(file: Blob, authorizeAutoImage: boolean): 
   });
   if (!response.ok) throw await requestFailure(response);
   return (await response.json()) as SignatureUploadResult;
+}
+
+/*
+ * Sharing (FR-17, WP3-T13B). The server owns every rule (who may grant, what an item allows); these
+ * types only describe what it sends. The caller never sends an owner id for its own shares.
+ */
+
+export type TimesheetsScope = 'none' | 'view' | 'edit';
+
+/** The three per-item switches of a share, as the API names them. */
+export interface ShareItems {
+  timesheets: TimesheetsScope;
+  ot_read: boolean;
+  pdf_download: boolean;
+}
+
+/** A share the caller gave: the grantee's name and address are shown to the owner only. */
+export interface GivenShare {
+  id: string;
+  grantee: { display_name: string; email: string; active: boolean };
+  items: ShareItems;
+  created_at: string;
+}
+
+/** A share the caller received: `owner.id` is the `:ownerId` of the `/api/shared` paths. */
+export interface ReceivedShare {
+  id: string;
+  owner: { id: string; display_name: string; email: string };
+  items: ShareItems;
+  created_at: string;
+}
+
+export interface SharesResponse {
+  given: GivenShare[];
+  received: ReceivedShare[];
 }

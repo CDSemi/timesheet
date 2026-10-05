@@ -1,0 +1,148 @@
+WP3-T13C red (before any source edit): the new sharingModel test and the changed deliveryModel test against the unchanged sources.
+Command: node vitest run tests/client/sharingModel.test.ts tests/client/deliveryModel.test.ts. Exit 1.
+Result: sharingModel.test.ts did not load (module missing, 1 file failed); deliveryModel.test.ts: 5 failed, 23 passed (the pre-existing tests).
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/sharingModel.test.ts (0 test)
+ ❯ tests/client/deliveryModel.test.ts (28 tests | 5 failed) 13ms
+   ❯ revision rows for the history list (8)
+     × lists every earlier revision from the revision list, whether or not it ever had a delivery attempt 4ms
+     × does not invent a revision from a delivery attempt that the revision list does not hold 0ms
+     × shows a listed revision whose period is outside the loaded windows as an earlier row with its own state 1ms
+     × keeps only the revisions from the start of the loaded window, with no upper bound 0ms
+     × words the origin and review state of a listed-only row like a current one 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/sharingModel.test.ts [ tests/client/sharingModel.test.ts ]
+Error: Cannot find module '../../src/client/components/sharingModel.ts' imported from <project>/tests/client/sharingModel.test.ts
+ ❯ tests/client/sharingModel.test.ts:3:1
+      1| import { describe, expect, it } from 'vitest';
+      2| import { ApiRequestError, type HistoryEvent, type RevisionListItem } f…
+      3| import {
+       | ^
+      4|   abilitiesOf,
+      5|   barTitle,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > lists every earlier revision from the revision list, whether or not it ever had a delivery attempt
+AssertionError: expected [ …(2) ] to deeply equal [ [ 'rev-3', true, 3, false ], …(2) ]
+
+- Expected
++ Received
+
+  [
+    [
+      "rev-3",
+      true,
+      3,
+-     false,
++     undefined,
+    ],
+    [
+      "rev-2",
+      false,
+      2,
+-     true,
+-   ],
+-   [
+-     "rev-1",
+-     false,
+-     1,
+-     true,
++     undefined,
+    ],
+  ]
+
+ ❯ tests/client/deliveryModel.test.ts:215:94
+    213|     ];
+    214|     const rows = buildRevisionRows([historyPeriod({ finalized_revision…
+    215|     expect(rows.map((row) => [row.revisionId, row.current, row.revisio…
+       |                                                                                              ^
+    216|       ['rev-3', true, 3, false],
+    217|       ['rev-2', false, 2, true],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > does not invent a revision from a delivery attempt that the revision list does not hold
+AssertionError: expected [ 'rev-1', 'rev-ghost' ] to deeply equal [ 'rev-1' ]
+
+- Expected
++ Received
+
+  [
+    "rev-1",
++   "rev-ghost",
+  ]
+
+ ❯ tests/client/deliveryModel.test.ts:228:47
+    226|   it('does not invent a revision from a delivery attempt that the revi…
+    227|     const rows = buildRevisionRows([historyPeriod()], [attempt({ revis…
+    228|     expect(rows.map((row) => row.revisionId)).toEqual(['rev-1']);
+       |                                               ^
+    229|   });
+    230|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > shows a listed revision whose period is outside the loaded windows as an earlier row with its own state
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/client/deliveryModel.test.ts:233:18
+    231|   it('shows a listed revision whose period is outside the loaded windo…
+    232|     const rows = buildRevisionRows([], [], [listed({ id: 'old-1', payr…
+    233|     expect(rows).toHaveLength(1);
+       |                  ^
+    234|     expect(rows[0]).toMatchObject({ revisionId: 'old-1', payrollDate: …
+    235|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > keeps only the revisions from the start of the loaded window, with no upper bound
+TypeError: revisionsSince is not a function
+ ❯ tests/client/deliveryModel.test.ts:239:12
+    237|   it('keeps only the revisions from the start of the loaded window, wi…
+    238|     const all = [listed({ id: 'a', payroll_date: '2026-10-30' }), list…
+    239|     expect(revisionsSince(all, '2026-04-13').map((item) => item.id)).t…
+       |            ^
+    240|     expect(revisionsSince(all, '2000-01-01')).toHaveLength(3);
+    241|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/client/deliveryModel.test.ts > revision rows for the history list > words the origin and review state of a listed-only row like a current one
+AssertionError: expected null to be 'Submitted automatically' // Object.is equality
+
+- Expected:
+"Submitted automatically"
+
++ Received:
+null
+
+ ❯ tests/client/deliveryModel.test.ts:245:55
+    243|   it('words the origin and review state of a listed-only row like a cu…
+    244|     const [row] = buildRevisionRows([], [], [listed({ origin: 'deadlin…
+    245|     expect(row === undefined ? null : rowOrigin(row)).toBe('Submitted …
+       |                                                       ^
+    246|     expect(row === undefined ? null : rowReview(row)).toMatchObject({ …
+    247|     const current = buildRevisionRows([historyPeriod()], [], [])[0];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  5 failed | 23 passed (28)
+   Start at  02:12:03
+   Duration  243ms (transform 44%, import 44%, tests 8%, worker 3%)

@@ -82,12 +82,9 @@ export function signatureRoutes(deps: AppDeps, files: FileStore, maxBytes: numbe
     },
   );
 
-  // Metadata of the caller's current signature (no image bytes).
-  app.get('/current', auth, (c) => {
-    const signature = currentSignature(deps.db, c.get('user').id);
-    if (signature === null) throw notFound('Signature');
-    return c.json({ signature });
-  });
+  // Metadata of the caller's current signature (no image bytes). Having none is not an error: the answer is
+  // 200 with a null value, so the settings screen makes no request that a browser logs as failed.
+  app.get('/current', auth, (c) => c.json({ signature: currentSignature(deps.db, c.get('user').id) }));
 
   app.get('/:id', auth, (c) => {
     const id = c.req.param('id');

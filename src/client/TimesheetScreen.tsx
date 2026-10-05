@@ -8,7 +8,9 @@ import {
   type DayBatchPreview,
   type DayBatchResult,
   type DayCategory,
+  ownRequest,
   type Period,
+  type Requester,
   type Session,
   type TimesheetView,
   type User,
@@ -42,7 +44,22 @@ function useDesktop(): boolean {
   );
 }
 
-export function TimesheetScreen({ user }: { user: User }) {
+/**
+ * Another person's timesheets, opened through a share (FR-17). Every read and write goes through
+ * `request` (below `/api/shared/:ownerId`). Clock in/out, the review and the submission status are
+ * the owner's own: they are absent here, and the batch and day edit controls are absent without an
+ * edit share (never merely disabled).
+ */
+export interface SharedMode {
+  ownerName: string;
+  canEdit: boolean;
+  request: Requester;
+}
+
+export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedMode }) {
+  const own = shared === undefined;
+  const request: Requester = shared?.request ?? ownRequest;
+  const canEdit = shared === undefined || shared.canEdit;
   const desktop = useDesktop();
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
   /** The server's current local date and periods; days after that date show as upcoming. */
@@ -59,29 +76,30 @@ export function TimesheetScreen({ user }: { user: User }) {
   const [editDate, setEditDate] = useState<string | null>(null);
   const [clockOutSession, setClockOutSession] = useState<Session | null>(null);
   // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
-  const periodStatus = useGridStatus(view?.period.payroll_date ?? null, view?.timesheet.version);
+  // A shared view has no status line: the finalization and delivery routes are the owner's own.
+  const periodStatus = useGridStatus(own ? (view?.period.payroll_date ?? null) : null, view?.timesheet.version);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
   useEffect(() => {
-    api<CurrentPeriods>('GET', '/api/periods/current')
+    request<CurrentPeriods>('GET', '/periods/current')
       .then((response) => {
         setPeriods(response);
         setPayrollDate(response.current.payroll_date);
       })
       .catch(report);
-  }, []);
+  }, [request]);
 
   const load = useCallback(() => {
     if (payrollDate === null) return;
-    api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`)
+    request<TimesheetView>('GET', `/timesheets/${payrollDate}`)
       .then(setView)
       .catch((caught: unknown) => setMessage(describeError(caught)));
     // The server's date can move on while the page stays open, so it is read again with the period.
-    api<CurrentPeriods>('GET', '/api/periods/current')
+    request<CurrentPeriods>('GET', '/periods/current')
       .then(setPeriods)
       .catch(() => undefined);
-  }, [payrollDate]);
+  }, [payrollDate, request]);
 
   useEffect(load, [load]);
 
@@ -89,7 +107,7 @@ export function TimesheetScreen({ user }: { user: User }) {
     if (view === null) return;
     const date = direction < 0 ? addDays(view.period.period_start, -1) : addDays(view.period.period_end, 1);
     try {
-      const response = await api<{ periods: Period[] }>('GET', `/api/periods?from=${date}&to=${date}`);
+      const response = await request<{ periods: Period[] }>('GET', `/periods?from=${date}&to=${date}`);
       setPayrollDate(response.periods[0]?.payroll_date ?? payrollDate);
       setSelected(new Set());
       setStaleNotice(null);
@@ -153,7 +171,7 @@ export function TimesheetScreen({ user }: { user: User }) {
     setBusy(true);
     try {
       const entries = batchEntries(view.days, selected, category);
-      setPreview(await api<DayBatchPreview>('POST', '/api/days/batch', { mode: 'preview', entries }));
+      setPreview(await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries }));
     } catch (caught) {
       report(caught);
     } finally {
@@ -167,7 +185,7 @@ export function TimesheetScreen({ user }: { user: User }) {
     setBusy(true);
     try {
       const entries = batchEntries(view.days, selected, category);
-      const result = await api<DayBatchResult>('POST', '/api/days/batch', {
+      const result = await request<DayBatchResult>('POST', '/days/batch', {
         mode: 'commit',
         entries,
         ...(input.reason === '' ? {} : { reason: input.reason }),
@@ -201,15 +219,15 @@ export function TimesheetScreen({ user }: { user: User }) {
     <div>
       <header className="toolbar">
         <div>
-          <h1>Timesheet</h1>
-          <p className="muted">{user.display_name}</p>
+          <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
+          <p className="muted">{shared === undefined ? user.display_name : `Signed in as ${user.display_name}`}</p>
         </div>
       </header>
 
       {view !== null && (
         <section className="card stack">
-          <PeriodHeader view={view} zone={displayZone} onMove={move} />
-          <ClockBar onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />
+          <PeriodHeader view={view} zone={displayZone} onMove={move} showStatus={own} />
+          {own && <ClockBar onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />}
           <OpenDay onOpen={setEditDate} />
           {message !== null && <p className="error">{message}</p>}
           {notice !== null && (
@@ -226,15 +244,17 @@ export function TimesheetScreen({ user }: { user: User }) {
             </div>
           )}
 
-          <BatchBar
-            selectedCount={selected.size}
-            category={category}
-            busy={busy}
-            onCategory={setCategory}
-            onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
-            onClear={() => setSelected(new Set())}
-            onPreview={previewBatch}
-          />
+          {canEdit && (
+            <BatchBar
+              selectedCount={selected.size}
+              category={category}
+              busy={busy}
+              onCategory={setCategory}
+              onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
+              onClear={() => setSelected(new Set())}
+              onPreview={previewBatch}
+            />
+          )}
 
           {desktop ? (
             <TimesheetGrid
@@ -245,6 +265,7 @@ export function TimesheetScreen({ user }: { user: User }) {
               onToggle={toggle}
               onEdit={setEditDate}
               status={periodStatus}
+              editable={canEdit}
             />
           ) : (
             <>
@@ -256,6 +277,7 @@ export function TimesheetScreen({ user }: { user: User }) {
                 selected={selected}
                 onToggle={toggle}
                 onEdit={setEditDate}
+                editable={canEdit}
               />
             </>
           )}
@@ -287,10 +309,12 @@ export function TimesheetScreen({ user }: { user: User }) {
           todayLocal={todayLocal}
           onChanged={load}
           onClose={() => setEditDate(null)}
+          request={request}
+          readOnly={!canEdit}
         />
       )}
 
-      {clockOutSession !== null && (
+      {own && clockOutSession !== null && (
         <ClockOutDialog
           session={clockOutSession}
           displayZone={displayZone}

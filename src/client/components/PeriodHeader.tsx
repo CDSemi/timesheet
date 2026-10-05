@@ -11,14 +11,17 @@ export function PeriodHeader({
   view,
   zone,
   onMove,
+  showStatus = true,
 }: {
   view: TimesheetView;
   zone: string;
   onMove: (direction: -1 | 1) => void;
+  /** False in a shared view: the review state and its link belong to the owner. */
+  showStatus?: boolean;
 }) {
   const { period } = view;
   // Review and delivery state come from the server; the timesheet version changes with every edit and sign-off.
-  const state = usePeriodState(period.payroll_date, view.timesheet.version);
+  const state = usePeriodState(period.payroll_date, view.timesheet.version, showStatus);
   return (
     <div className="period-head">
       <button type="button" className="secondary" onClick={() => onMove(-1)} aria-label="Previous period">
@@ -29,7 +32,7 @@ export function PeriodHeader({
           <strong>{periodRange(period)}</strong>
           <span className={`badge ${period.relation ?? ''}`}>{period.relation}</span>
           <ReviewBadges state={state} fallback={reviewStatus(view.timesheet)} />
-          <ReviewLink payrollDate={period.payroll_date} state={state} />
+          {showStatus && <ReviewLink payrollDate={period.payroll_date} state={state} />}
         </div>
         <dl className="facts">
           <div>

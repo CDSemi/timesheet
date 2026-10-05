@@ -4,24 +4,31 @@ import { DeliveryHistory } from './components/DeliveryHistory.tsx';
 import { describeError } from './components/errors.ts';
 import { displayZone, instantText } from './components/format.ts';
 import { changedFields, operationText } from './components/otModel.ts';
+import { historyActorBadge, shareOperationText } from './components/sharingModel.ts';
 
 const PAGE_SIZE = 25;
 
 function EventItem({ event }: { event: HistoryEvent }) {
   const changes = changedFields(event.before, event.after);
+  const actor = historyActorBadge(event);
+  const label = shareOperationText(event.operation) ?? operationText(event.operation);
   return (
-    <li className="history-item" data-operation={event.operation}>
+    <li className="history-item" data-operation={event.operation} data-via-share={event.via_share}>
       <div className="history-head">
-        <strong>{operationText(event.operation)}</strong>
+        <strong>{label}</strong>
         <span className="mono muted">{instantText(event.occurred_at, displayZone)}</span>
-        {!event.actor_is_self && <span className="badge">by someone else</span>}
+        {actor !== null && (
+          <span className="badge" data-history-actor={event.via_share ? 'grantee' : 'other'}>
+            {actor}
+          </span>
+        )}
       </div>
       <p className="history-reason" data-reason={event.reason ?? ''}>
         Reason: {event.reason ?? 'none given'}
       </p>
       {changes.length > 0 && (
         <div className="table-wrap">
-          <table aria-label={`Changes for ${operationText(event.operation)}`}>
+          <table aria-label={`Changes for ${label}`}>
             <thead>
               <tr>
                 <th>Field</th>
@@ -81,7 +88,10 @@ export function HistoryScreen() {
       <DeliveryHistory />
       <section className="stack" aria-labelledby="changes-title">
         <h2 id="changes-title">Recorded changes</h2>
-        <p className="hint">Your own changes, newest first, with the values before and after and the reason given.</p>
+        <p className="hint">
+          Changes to your days, sessions, OT leave and sharing, newest first, with the values before and after and the reason given. A change made by someone you share with
+          names them.
+        </p>
         {message !== null && (
           <p className="error" role="alert">
             {message}
