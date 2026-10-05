@@ -4,6 +4,7 @@ import { AdminScreen } from './AdminScreen.tsx';
 import { AppShell, useHashRoute } from './components/AppShell.tsx';
 import { HistoryScreen } from './HistoryScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
+import { ReviewScreen } from './ReviewScreen.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
 import { TimesheetScreen } from './TimesheetScreen.tsx';
 
@@ -25,12 +26,14 @@ export function App() {
 function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const route = useHashRoute(user.role);
   return (
-    <AppShell user={user} route={route} onSignedOut={onSignedOut}>
-      {route === 'timesheet' && <TimesheetScreen user={user} />}
-      {route === 'ot' && <OtScreen />}
-      {route === 'history' && <HistoryScreen />}
-      {route === 'settings' && <SettingsScreen />}
-      {route === 'admin' && user.role === 'admin' && <AdminScreen user={user} />}
+    // The review of a period belongs under Timesheet in the navigation.
+    <AppShell user={user} route={route.id === 'review' ? 'timesheet' : route.id} onSignedOut={onSignedOut}>
+      {route.id === 'timesheet' && <TimesheetScreen user={user} />}
+      {route.id === 'review' && <ReviewScreen key={route.payrollDate} payrollDate={route.payrollDate} />}
+      {route.id === 'ot' && <OtScreen />}
+      {route.id === 'history' && <HistoryScreen />}
+      {route.id === 'settings' && <SettingsScreen />}
+      {route.id === 'admin' && user.role === 'admin' && <AdminScreen user={user} />}
     </AppShell>
   );
 }

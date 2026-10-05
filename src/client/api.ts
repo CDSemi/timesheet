@@ -1,3 +1,5 @@
+import type { ReviewSnapshot } from '../domain/snapshot.ts';
+
 /** Same-origin JSON calls; the session cookie is HttpOnly and never read by scripts. */
 
 export class ApiRequestError extends Error {
@@ -503,4 +505,59 @@ export interface HistoryPage {
   audit_events: HistoryEvent[];
   /** Per-user cursor for the next older page, or null at the end. */
   next_before: string | null;
+}
+
+/*
+ * Review and submission (WP3). The review payload is the server's frozen snapshot type: the
+ * client shows its values and computes no business minutes from them.
+ */
+
+/** GET /api/timesheets/:payrollDate/review: the exact payload, its SHA-256 and the version it was read at. */
+export interface ReviewResponse {
+  payload: ReviewSnapshot;
+  payload_hash: string;
+  expected_version: number;
+}
+
+export interface RevisionSummary {
+  id: string;
+  revision_no: number;
+  revision_kind: 'original' | 'correction' | 'late_review';
+  /** `deadline` is the automatic submission at the due time. */
+  origin: 'employee' | 'deadline';
+  review_state: 'pending' | 'signed';
+  correction_reason: string | null;
+  send_requested: boolean;
+  created_at: string;
+}
+
+export interface FinalizationJob {
+  id: string;
+  kind: string;
+  state: string;
+}
+
+/** GET /api/timesheets/:payrollDate/finalization and the body of a sign-off response (plus `status`). */
+export interface FinalizationResponse {
+  payroll_date: string;
+  finalized_revision_no: number | null;
+  revision: RevisionSummary | null;
+  signoff: { signer_name: string; signed_at: string } | null;
+  ledger_lines: Array<{ work_date: string | null; line_kind: string; proposed_minutes: number; outcome: string }>;
+  jobs: FinalizationJob[];
+}
+
+export interface SignOffResponse extends Omit<FinalizationResponse, 'payroll_date'> {
+  status: 'created' | 'replayed';
+}
+
+/** One delivery attempt (GET /api/deliveries, newest first). */
+export interface DeliveryAttempt {
+  id: string;
+  revision_id: string | null;
+  attempt_no: number;
+  state: 'preparing' | 'sending' | 'accepted' | 'failed_temporary' | 'failed_permanent' | 'uncertain';
+  decision: 'mark_delivered' | 'resend' | 'abandon' | null;
+  decision_required: boolean;
+  job: { state: string; last_error: string | null };
 }

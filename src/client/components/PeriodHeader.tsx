@@ -1,6 +1,7 @@
 import type { TimesheetView } from '../api.ts';
 import { reviewStatus } from './dayModel.ts';
 import { instantText, periodRange } from './format.ts';
+import { ReviewBadges, ReviewLink, usePeriodState } from './ReviewStatus.tsx';
 
 /**
  * Period navigation with the due date in both zones. The reporting zone owns the accounting
@@ -16,6 +17,8 @@ export function PeriodHeader({
   onMove: (direction: -1 | 1) => void;
 }) {
   const { period } = view;
+  // Review and delivery state come from the server; the timesheet version changes with every edit and sign-off.
+  const state = usePeriodState(period.payroll_date, view.timesheet.version);
   return (
     <div className="period-head">
       <button type="button" className="secondary" onClick={() => onMove(-1)} aria-label="Previous period">
@@ -25,7 +28,8 @@ export function PeriodHeader({
         <div className="period-title">
           <strong>{periodRange(period)}</strong>
           <span className={`badge ${period.relation ?? ''}`}>{period.relation}</span>
-          <span className="badge">{reviewStatus(view.timesheet)}</span>
+          <ReviewBadges state={state} fallback={reviewStatus(view.timesheet)} />
+          <ReviewLink payrollDate={period.payroll_date} state={state} />
         </div>
         <dl className="facts">
           <div>

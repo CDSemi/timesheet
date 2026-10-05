@@ -6,12 +6,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 0321be6e82c770eaca5fc1293b9ac230b22263ff (WP3-T10-FREEZE).
+  - HEAD = origin/main = c3d32b9f72ebaa1bb0e96e35c7f4f61ad9ab40ce (WP3-T11-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 5f16dab1… (T10, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest e7f00cd0… (T11, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T10-FREEZE results and
+  - Uncommitted (handoff only): the board, this checkpoint, the T11-FREEZE results and
     evidence. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
@@ -187,10 +187,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   login-required links; 16/16 mutations; verify 1095 tests; digest e7f00cd0…. Carry
   items: a zero-byte attachment.pdf in reminder captures (fix later); a possible repeated
   reminder after a crash on real SMTP (documented limitation).
-- Running: WP3-T11-FREEZE (committer).
+- WP3-T11-FREEZE is committed and pushed as c3d32b9 (21 paths, all checks 0).
+- WP3-T12 is done (author-reported): review screen, stale handling, deep link, header
+  badges; literal scan 0; 8/8 mutations; e2e 93 passed/3 skipped; verify 1135 tests;
+  digest 160bb78c…. Carry item for T13: status in the grid (its parent was not owned).
+- Running: WP3-T12-FREEZE (committer).
 - Next action:
-  1. Record the T11 freeze; then WP3-DOC and T07B if G-Q1/G-Q2 are answered, otherwise
-     T12 (review UI; brief ready).
+  1. Record the T12 freeze; then WP3-DOC and T07B if G-Q1/G-Q2 are answered; otherwise
+     T13D (admin status per the F-3 boundary) and T13A (actor/subject seam), which do not
+     depend on G-Q1/G-Q2; T13 (settings UI) waits for T07B.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -208,5 +213,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T11-FREEZE only.
+- Live processes: WP3-T12-FREEZE only.
 - Usage/reset: not observable.

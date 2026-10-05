@@ -104,6 +104,8 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
   employeeSeed,
   signInThroughUi,
 }, testInfo) => {
+  // Other specs of the same worker may have left clock sessions today; start this test from none.
+  await employeeSeed.clearSessions((await employeeSeed.today()).todayLocal);
   const { workDate, sessionId } = await employeeSeed.seedClockSessionToday();
   const before = await employeeSeed.dayView(workDate);
   expect(before.sessions.map((session) => session.source)).toEqual(['clock']);

@@ -36,6 +36,8 @@
     0 24px 64px rgb(28 36 48 / 0.08);
   --focus-ring: 0 0 0 3px rgb(31 95 191 / 0.35);
   --scrim: rgb(18 22 28 / 0.5);
+  /* A sheet of white paper: the signature image is dark ink on it in both themes (as on the PDF) */
+  --paper: #ffffff;
 
   /* Spacing, density and layout */
   --space-0: 2px;
@@ -75,6 +77,9 @@
   --figures-min: 9rem;
   --counter-min: 6rem;
   --action-min: 14rem;
+  --signature-max-width: 16rem;
+  --signature-max-height: 6rem;
+  --mail-body-max-height: 18rem;
 
   /* Type: the system stack only (the CSP allows no web fonts) */
   --root-font-size: 15px;
@@ -315,6 +320,7 @@ button:disabled {
 
   button,
   .nav-link,
+  .button-link,
   .pick {
     min-width: var(--tap-min);
   }
@@ -406,6 +412,7 @@ tbody tr:hover {
   background: var(--off);
 }
 
+tr.nonworking th,
 tr.nonworking td {
   background: var(--off);
 }
@@ -928,7 +935,8 @@ textarea {
   gap: var(--space-2);
 }
 
-.ot-line {
+.ot-line,
+.review-line {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
@@ -1050,4 +1058,165 @@ textarea.mono {
 
 .admin-screen input[type='file'] {
   max-width: 100%;
+}
+
+/* ---- Review and sign-off screen --------------------------------------------------------- */
+
+.badge-ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.badge-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.badge-error {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.error-box {
+  color: var(--error);
+}
+
+.review-screen {
+  min-width: 0;
+}
+
+.review-screen h3 {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.choice-set {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-set legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-weight: var(--font-weight-strong);
+}
+
+.review-deficits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.review-deficit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.review-note {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.review-table .review-date {
+  color: var(--text);
+  font-weight: inherit;
+}
+
+.review-table td.review-sessions {
+  white-space: normal;
+}
+
+.review-table td > span:not(.status),
+.review-table .review-date > span {
+  display: block;
+}
+
+.review-mail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--off);
+}
+
+.review-subject {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-body {
+  max-height: var(--mail-body-max-height);
+  margin: 0;
+  overflow: auto;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-signature {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.signature-preview {
+  max-width: min(var(--signature-max-width), 100%);
+  max-height: var(--signature-max-height);
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Below 768px each day is a labelled block instead of a table row, so nothing scrolls sideways. */
+@media (max-width: 767px) {
+  .review-table,
+  .review-table tbody,
+  .review-table th,
+  .review-table td {
+    display: block;
+  }
+
+  .review-table thead {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+  }
+
+  .review-table tr {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-2), var(--track));
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: var(--hairline) solid var(--line-soft);
+  }
+
+  .review-table th,
+  .review-table td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .review-table .review-date,
+  .review-table td[data-label='Category'],
+  .review-table td[data-label='Sessions'] {
+    grid-column: span var(--cols-2);
+  }
+
+  .review-table td::before {
+    display: block;
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+  }
 }

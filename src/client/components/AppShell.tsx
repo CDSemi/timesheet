@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { api, type User } from '../api.ts';
+import { parseReviewHash, reviewHash } from './reviewModel.ts';
 
 /**
  * The screens reachable from the navigation. Settings is for everyone; Admin is listed for
@@ -20,33 +21,44 @@ export function routesFor(role: User['role']) {
   return ROUTES.filter((route) => !route.adminOnly || role === 'admin');
 }
 
-function routeFromHash(hash: string, role: User['role']): RouteId {
-  return routesFor(role).find((route) => route.hash === hash)?.id ?? ROUTES[0].id;
+/** A navigation screen, or the review of one payroll period (`#/review/{payrollDate}`). */
+export type AppRoute = { id: RouteId; payrollDate: null } | { id: 'review'; payrollDate: string };
+
+/** The canonical hash of the screen a hash asks for; an unknown or empty hash is the first route. */
+function canonicalHash(hash: string, role: User['role']): string {
+  const payrollDate = parseReviewHash(hash);
+  if (payrollDate !== null) return reviewHash(payrollDate);
+  return (routesFor(role).find((route) => route.hash === hash) ?? ROUTES[0]).hash;
+}
+
+function routeOfHash(hash: string): AppRoute {
+  const payrollDate = parseReviewHash(hash);
+  if (payrollDate !== null) return { id: 'review', payrollDate };
+  return { id: ROUTES.find((route) => route.hash === hash)?.id ?? ROUTES[0].id, payrollDate: null };
 }
 
 /**
  * Hash routing without a router dependency: the server needs no route table and the
  * browser's back button works. An unknown or empty hash is rewritten to the first route.
+ * The review hash carries a payroll date only, so it survives sign-in (the sign-in form does
+ * not touch the address) and holds no token.
  */
-export function useHashRoute(role: User['role']): RouteId {
-  const [route, setRoute] = useState<RouteId>(() => routeFromHash(window.location.hash, role));
+export function useHashRoute(role: User['role']): AppRoute {
+  const [hash, setHash] = useState<string>(() => canonicalHash(window.location.hash, role));
 
   useEffect(() => {
-    // Keep the address bar on a known route even when the id did not change (an unknown hash).
+    // Keep the address bar on a known route even when the route did not change (an unknown hash).
     const sync = () => {
-      const id = routeFromHash(window.location.hash, role);
-      const target = ROUTES.find((item) => item.id === id);
-      if (target !== undefined && window.location.hash !== target.hash) {
-        window.history.replaceState(null, '', target.hash);
-      }
-      setRoute(id);
+      const target = canonicalHash(window.location.hash, role);
+      if (window.location.hash !== target) window.history.replaceState(null, '', target);
+      setHash(target);
     };
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }, [role]);
 
-  return route;
+  return routeOfHash(hash);
 }
 
 export function AppShell({
@@ -56,6 +68,7 @@ export function AppShell({
   children,
 }: {
   user: User;
+  /** The navigation entry to mark as current (the review belongs under Timesheet). */
   route: RouteId;
   onSignedOut: () => void;
   children: ReactNode;
