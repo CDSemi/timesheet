@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-REC1",
+  "next_task_id": "WP3-DOC-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -83,7 +83,7 @@
       "observation": "WP3-T06-FREEZE attempt 2 succeeded (B: had space again). The permission check denied 'rm -rf' on a temp folder under D:\\timesheet-tmp; agents must not retry or work around it. Briefs now ask agents to reuse D:\\timesheet-tmp\\<task> and delete only the files they created, leaving the folder."
     }
   ],
-  "pending_owner_question": "WP3-REQ2 (asked 2026-10-04; needed before WP3-DOC, after the T08 freeze): G-Q1 is the signature image on automatic submissions off by default, switched on only by the user's existing audited auto-image authorization (recommended), or on by default once a signature exists? G-Q2 what {SignOffStatus} says in emails: 'Submitted' for both manual and automatic, or the note text when the note line is on (recommended), versus 'Signed by employee' for both (states a falsehood on automatic emails). Optional: F-Q6 re-explained (restore the per-date counts of affected employee days in the admin holiday-import preview, removed in WP2 for privacy? default keeps the WP2 behaviour). The B: blocker cleared for WP3-T06-FREEZE attempt 2. History — WP3-REQ section F (asked 2026-10-04, answered except F-Q6; needed before WP3-DOC, which runs after the T06 freeze): F-Q1 the 'show employee review pending' setting governs every automatic submission (recommended) or only periods with no saved entries? F-Q2 with the notice off, keep a small factual 'automatic submission' label, a blank sign date and {SignOffStatus} 'Automatic submission' (recommended), or also force the notice on whenever the auto-image is included, or remove every automatic indicator (not recommended)? F-Q3 the admin sees flags and redacted fault codes but not recipient addresses, templates or message content (recommended), or also recipient addresses? F-Q4 a share covers timesheets only (periods, day views, sessions, calculations, revision status), not OT balances/ledger/leave, evidence export, history, review payload, PDFs or signatures (recommended), or also OT read-only and final PDFs? F-Q5 edit access = manual day/session/break/batch edits (with a reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares but not create them (recommended), or also Clock in/out? F-Q6 (optional) keep the WP2-A-01 removal of employee-derived holiday-preview counts (recommended).",
+  "pending_owner_question": null,
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -98,7 +98,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c1e4bb2c161561cfa3827028837a087303352718",
+    "last_commit": "632092d730f84bc10b3bee1f7ae61f96edec35eb",
     "unpushed": []
   },
   "owner_decisions": [
@@ -159,9 +159,20 @@
       "source": "owner chat, direct reply typed by the owner to WP3-REQ section F and the B: blocker",
       "verbatim": "- F-Q1: (a) - F-Q2: bỏ mọi dấu hiệu tự động, bản gửi đi vẫn phải có chữ ký đầy đủ. chỉ cần keep track trên hệ thống là đủ. Nhưng để phù hợp với nhu cầu sử dụng thực tế thì cho các tùy chọn như: + dòng ghi chú (mặc định là \"Automatic submission\" hoặc gì đó, và cho phép người dùng thay đổi theo ý riêng) + có kèm chữ ký ãnh hay không. - F-Q3:(b) - F-Q4: (b), nhưng nên cho phép on/off được từng mục. - F-Q5: (a) - F-Q6: chưa rõ ý bạn muốn hỏi (nếu ổ B: đầy thì có thể work trên ổ D:, tạo 1 thư mục tạm để làm việc)",
       "decision": "F-Q1 (a): the note setting governs every automatic submission. F-Q2 (owner choice, overriding the recommendation): outgoing automatic submissions carry no automatic indicator and a complete signature block; the system alone tracks the automatic origin; per-user options: a note line (default text 'Automatic submission', editable by the user; shown only when enabled, default off per F-1) and whether the signature image is included. F-Q3 (b): the admin also sees recipient addresses (not templates or message content). F-Q4 (b) with per-item toggles: a share can include timesheets, read-only OT summary/ledger and final PDF downloads, each item switched on or off per grant. F-Q5 (a): edit = manual day/session/break/batch edits (reason for old periods), no Clock in/out on the owner's behalf, never sign-off or sending; the admin may list and revoke shares, not create them. F-Q6: the owner did not understand the question; the coordinator re-explains it and keeps the WP2-A-01 removal meanwhile. Agents may use a temporary work folder on D: outside Dropbox."
+    },
+    {
+      "date": "2026-10-04",
+      "source": "owner chat, direct reply typed by the owner to WP3-REQ2 item 7",
+      "verbatim": "* G-Q1: b * G-Q2: a",
+      "decision": "G-Q1 (b): when a user uploads a signature, the app asks for the auto-image authorization ('use this image on automatic submissions') with the option pre-selected; confirming is still one explicit, audited authorization act; a user who unticks it gets no image on automatic submissions until they authorize later in Settings. G-Q2 (a): {SignOffStatus} renders 'Submitted' for manual and automatic submissions, or the user's note text for an automatic submission whose note line is on. F-Q6 stays unanswered; WP2-A-01 stays as accepted."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "docs/08 governance scope: handoff/prompts/ is a governance path; WP3-DOC edited WP3_IMPLEMENT and WP3_REVIEW (EN and VI) at the coordinator's request",
+      "decision": "Split the WP3-DOC result: WP3-DOC-FREEZE commits the canonical docs and the policy example (records, not governance paths); the four prompt files form a separate GOV change: GOV-WP3P-FREEZE, GOV-WP3P-GATE (verifier) and GOV-WP3P-AUDIT (fresh opus auditor; the WP3-DOC worker is the author). T07B starts only after the GOV audit passes, because no source writer may run beside a gate or audit. The GOV records ride in the next WP3 freeze (no separate accept commit). Lesson: briefs must not put governance paths in a WP task's owned paths."
+    },
     {
       "date": "2026-10-04",
       "basis": "G-Q1/G-Q2 still pending after the T12 freeze; T13D and T13A do not depend on them",
@@ -6014,7 +6025,7 @@
       "id": "WP3-REC1",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-E2E-RECHECK"
       ],
@@ -6027,10 +6038,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a2dc29522f784a0a1",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -6039,16 +6050,106 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-REC1.md",
       "report": "handoff/delivery/tasks/WP3-REC1.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-REC1/commit-message.txt"
+      ],
       "baseline_commit": "c1e4bb2c161561cfa3827028837a087303352718",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "632092d730f84bc10b3bee1f7ae61f96edec35eb",
+      "pushed": true,
       "source_digest": "0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed: 8 handoff-only paths (expected set), parent c1e4bb2, remote SHA identical; source digest 0edefc94 unchanged; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; pause for the owner's G-Q1/G-Q2 answers, then WP3-DOC."
+    },
+    {
+      "id": "WP3-DOC",
+      "package": "WP3",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP3-REC1"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3f90533c00057935",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "docs",
+        "handoff/prompts/WP3_IMPLEMENT.md",
+        "handoff/prompts/WP3_IMPLEMENT.vi.md",
+        "handoff/prompts/WP3_REVIEW.md",
+        "handoff/prompts/WP3_REVIEW.vi.md",
+        "reference/examples/policy.example.json",
+        "handoff/delivery/tasks/WP3-DOC.md",
+        "handoff/delivery/evidence/WP3-DOC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-DOC.md",
+      "report": "handoff/delivery/tasks/WP3-DOC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-DOC/01-parity.txt",
+        "handoff/delivery/evidence/WP3-DOC/02-preflight.txt",
+        "handoff/delivery/evidence/WP3-DOC/03-verify.txt",
+        "handoff/delivery/evidence/WP3-DOC/04-digest.txt"
+      ],
+      "baseline_commit": "632092d730f84bc10b3bee1f7ae61f96edec35eb",
+      "source_digest": "4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: docs 01-07, 09, 10 with 30 edits per language (EN and matching .vi.md); WP3_IMPLEMENT (scope and gate) and WP3_REVIEW (gate) with 3 edits per language; policy.example.json gains auto_note_enabled/auto_note_text and the 'Status: {SignOffStatus}.' email line. G-Q1 (b) in the docs/04 defaults row, docs/05:24 and D-09; G-Q2 (a) in docs/04:50 and the policy example. docs/10 gains a final 'Owner decisions - 2026-10-04' section (F-1, F-Q1/F-Q2 with D-09 and R-07 reworded, G-Q1/G-Q2, F-2, F-3/F-Q3, F-3/F-Q4/F-Q5, F-4, F-5, WP2-A-01 unchanged with F-Q6 re-asked). Parity per edited line; preflight exit 0; policy JSON ok; verify exit 0, 1164 tests; digest 4d4c4863 (docs are in the digest; handoff/ is not). Deviations: evidence as .txt (the validator requires .vi.md for evidence .md); the AC-16 gate clause sits before the closing dry-run sentence. Coordinator note: handoff/prompts/ is a governance path (docs/08), so the four prompt files go through a separate GOV freeze, gate and fresh audit (GOV-WP3P); WP3-DOC-FREEZE commits the docs and the policy example only.",
+      "next_action": "None; WP3-DOC-FREEZE (docs and policy example), then the GOV-WP3P cycle for the prompt files."
+    },
+    {
+      "id": "WP3-DOC-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-DOC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-DOC-FREEZE.md",
+        "handoff/delivery/evidence/WP3-DOC-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-DOC-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-DOC-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "632092d730f84bc10b3bee1f7ae61f96edec35eb",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the pending handoff records (no source change) before the pause for the owner's G-Q answers."
+      "next_action": "Commit and push the canonical docs, the policy example and the pending handoff records; leave the four handoff/prompts files unstaged for the GOV cycle."
     },
     {
       "id": "WP3-REQ2",

@@ -6,13 +6,14 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = c1e4bb2c161561cfa3827028837a087303352718 (WP3-T13A-FREEZE).
+  - HEAD = origin/main = 632092d730f84bc10b3bee1f7ae61f96edec35eb (WP3-REC1, records only;
+    last source freeze c1e4bb2, WP3-T13A).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
     (WP2-GATE4). Current WP3 working digest 0edefc94… (T13A, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T13A-FREEZE results and
-    evidence, the e2e recheck results; WP3-REC1 commits them.
+  - Uncommitted (handoff only): the board, this checkpoint and the WP3-REC1 results; they
+    go into the next commit.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -207,14 +208,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - WP3-T13A-FREEZE is committed and pushed as c1e4bb2 (34 paths, all checks 0).
 - WP3-E2E-RECHECK is done: full e2e on c1e4bb2 exit 0 (97 passed, 3 skipped, 0 failed);
   the T13A failures were environmental.
-- Running: WP3-REC1 (committer): records-only commit of the pending handoff files.
-- **Pause:** every remaining task (WP3-DOC, T07B, T13, T13B, T13C, T14, T15) needs the
-  owner's G-Q1/G-Q2 answers (board `pending_owner_question`).
+- WP3-REC1 is committed and pushed as 632092d (8 handoff-only paths, all checks 0).
+- The owner answered G-Q1 (b) and G-Q2 (a) (board `owner_decisions`): the signature
+  upload asks for the auto-image authorization pre-selected (one explicit, audited act);
+  `{SignOffStatus}` is "Submitted" for both origins, or the note text when the note line
+  is on. The WP3-DOC and T07B briefs carry the answers.
+- WP3-DOC is done (author-reported): 30 edits per language in docs 01–07, 09, 10; the WP3
+  prompt gate lines; the policy example; parity table; preflight 0; verify 1164 tests;
+  digest 4d4c4863….
+- Governance split (coordinator decision): `handoff/prompts/` is a governance path, so
+  WP3-DOC-FREEZE commits only the docs and the policy example; the four WP3 prompt files
+  go through GOV-WP3P-FREEZE, GOV-WP3P-GATE and a fresh GOV-WP3P-AUDIT before T07B.
+- Running: WP3-DOC-FREEZE (committer), prompt files left unstaged.
 - Next action:
-  1. When the owner answers G-Q1/G-Q2: record them in `owner_decisions`, fill the G-Q
-     line of the WP3-DOC and T07B briefs and dispatch WP3-DOC (worker, sonnet), then its
-     freeze, then T07B, then T13 (brief to write; include the carried grid status), T13B
-     (opus), T13C, T14, T15, WP3-GATE and the audits.
+  1. Record the DOC freeze; then GOV-WP3P-FREEZE, GOV-WP3P-GATE, GOV-WP3P-AUDIT (fresh
+     opus); then T07B, T13 (brief ready), T13B (opus), T13C, T14, T15, WP3-GATE and the
+     audits.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -232,5 +241,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-REC1 only (then none while waiting for the owner).
+- Live processes: WP3-DOC-FREEZE only.
 - Usage/reset: not observable.

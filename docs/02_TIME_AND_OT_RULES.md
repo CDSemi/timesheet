@@ -53,7 +53,7 @@ Only complete confirmed actual work on a scheduled work date with attendance exp
 
 A non-worked full-day Off/Holiday/Vacation/Sick/Shutdown creates no credit or debit. Missing records remain incomplete. Four hours work + four hours leave has neither deficit nor OT.
 
-Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit minutes without N/M. Manual review shows the decision; automatic submission in choose mode leaves it pending with no debit. Insufficient available balance leaves the proposed debit pending, not silently negative. Known credits may still post. A correction that raises a posted debit is a new debit of the increase and follows the same rule.
+Modes: `ignore` default, `auto_deduct`, `choose_at_signoff`. Debit exact deficit minutes without N/M. Manual review shows the decision; automatic submission in choose mode leaves it pending with no debit. Insufficient available balance leaves the proposed debit pending, not silently negative. A pending debit stays a recorded line of its revision, shown on the review and OT screens; only a later finalized revision (correction or late review) re-evaluates it, and no background process posts it. Known credits may still post. A correction that raises a posted debit is a new debit of the increase and follows the same rule.
 
 ## R-06 — ledger and OT leave
 
@@ -71,6 +71,6 @@ Policies/calendars are versioned with effective dates; changes apply prospective
 
 Current means the earliest configured payroll date on/after today's date in the reporting zone. Older unsent periods are still old. Current/future drafts need no edit reason; any old or finalized revision needs one. Always audit actor, UTC time and before/after.
 
-Use actual `signed_at`, never TODAY(). Manual time entry must show and use its selected input zone, defaulting to the current display zone; conversion must preserve the saved accounting date. Display instants in the viewer's current zone while keeping accounting dates unchanged. PDF/deadline use the saved reporting zone. Reject nonexistent DST local times; require explicit offset/fold for ambiguous times. Duration is elapsed UTC time.
+The PDF date is the actual `signed_at` of a manual revision, or the date of an automatic revision's submission instant in the saved reporting zone (its `signed_at` stays empty); never TODAY(). Manual time entry must show and use its selected input zone, defaulting to the current display zone; conversion must preserve the saved accounting date. Display instants in the viewer's current zone while keeping accounting dates unchanged. PDF/deadline use the saved reporting zone. Reject nonexistent DST local times; require explicit offset/fold for ambiguous times. Duration is elapsed UTC time.
 
 See [fixture guide](../reference/fixtures/README.md) for independent expected examples.

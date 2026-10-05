@@ -6,7 +6,17 @@
 - Profile/routing: timesheet-worker-high, requested sonnet/high, no override. Routing:
   size M, risk H (what payroll receives; a schema migration; snapshot version), novelty
   no.
-- **G-Q answers:** (filled by the coordinator at dispatch).
+- **G-Q answers** (owner, 2026-10-04, verbatim "* G-Q1: b * G-Q2: a"; board
+  `owner_decisions`):
+  - G-Q1 (b): the image option remains the existing explicit, audited auto-image
+    authorization; the change is that the signature-upload flow asks for it with the
+    option pre-selected. If the server needs support for that (for example an optional
+    `authorize_auto_image` flag on the upload that performs the same audited authorization
+    in the same transaction), add it here with tests; the UI checkbox itself is T13. No
+    authorization exists until the user confirms (schema default unchanged).
+  - G-Q2 (a): one domain function returns "Submitted" for manual and automatic
+    submissions, or the note text for an automatic submission whose note line is on; it
+    replaces the hardcoded "Signed by employee" found by T10.
 - Read AGENTS.md from disk first. Then read:
   - [WP3-REQ2](WP3-REQ2.md) items 2 and 3 (binding: the revised T07B scope, schema,
     validation, snapshot v2, renderer inputs, `{SignOffStatus}`, the tests that must
@@ -51,8 +61,10 @@ As listed in WP3-REQ2 item 3: `src/server/db/migrations/0005_automatic_presentat
 `src/domain/emailTemplate.ts` (the `{SignOffStatus}` text function only),
 `src/server/services/reviewPayload.ts`, `src/server/services/finalization.ts` (only if
 the automatic snapshot builder needs the new fields), `src/server/pdf/timesheetPdf.ts`,
-`src/server/pdf/layout.ts`, `src/server/jobs/pdfJob.ts` (input mapping only), the tests
-named there (migrations, submission-settings, review-payload, pdf-render, canonical,
+`src/server/pdf/layout.ts`, `src/server/jobs/pdfJob.ts` (input mapping only),
+`src/server/routes/signatures.ts` and `src/server/services/signatures.ts` (only for the
+optional G-Q1 upload-time authorization) with `tests/integration/signatures.test.ts`, the
+tests named there (migrations, submission-settings, review-payload, pdf-render, canonical,
 email-template, jobs input mapping), this report and handoff/delivery/evidence/WP3-T07B/.
 
 List any other minimal edit as a deviation.

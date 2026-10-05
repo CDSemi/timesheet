@@ -6,21 +6,22 @@ This package contains specifications, not a running app. Package checks do not c
 
 | ID | Required evidence | Package |
 |---|---|---|
-| AC-01 | Two users cannot read/edit each other's times, ledger, PDFs, signatures or tokens by swapping IDs | WP1–WP3 |
+| AC-01 | Without a share item, two users cannot read/edit each other's times, ledger, PDFs, signatures or tokens by swapping IDs; admins see no timesheet details | WP1–WP3 |
 | AC-02 | Time/OT fixtures pass: N/M boundaries, off days, flexible arrival, overnight, seconds aggregation, DST, invalid intervals | WP1 |
 | AC-03 | Repeated/concurrent posting and leave consumption cannot duplicate events or double-spend reservations | WP2/WP3 |
 | AC-04 | Current draft no reason; old/finalized reason required; audit/history/policies and original PDF retained | WP2/WP3 |
 | AC-05 | Holiday import previews/validates duplicates/dates, preserves overrides and finalized history | WP2 |
 | AC-06 | Sign-off requires name/image and binds reviewed payload; concurrent edit causes conflict | WP3 |
-| AC-07 | Auto-submit on/off, pending-review disclosure and image settings behave correctly | WP3 |
+| AC-07 | Auto-submit on/off, the automatic note line (default off, editable text) and image authorization behave correctly; outgoing automatic submissions show no automatic indicator while the record keeps origin automatic, review pending, empty signed_at and no sign-off; a period without saved entries is submitted with default labels, no OT and no deficit | WP3 |
 | AC-08 | Restart before/after PDF and around sending preserves jobs; uncertain acceptance is not blindly retried | WP3 |
 | AC-09 | GET/scanners never sign; auth links and any implemented tokens reject stale/replayed/wrong-user access | WP3 |
-| AC-10 | PDF has 14 dates, both Sundays in total, real sign date, Unicode, long labels, bounded image and revision IDs | WP3 |
+| AC-10 | PDF has 14 dates, the credited OT total (h:mm) includes both Sundays, the real sign date (manual) or the automatic submission date (automatic), Unicode, long labels, bounded image and revision IDs | WP3 |
 | AC-11 | Clean Docker install/restart/upgrade; consistent backup under writes restores DB/files/hashes in isolated dry-run | WP4 |
 | AC-12 | Workbook import preview (the tracked template with synthetic dated sheets) flags defects; repeated identical import adds no records, OT, sign-offs or sends | WP4 |
 | AC-13 | End-to-end two-week scenario, historical correction, approved partial OT leave and overdue case | WP5 |
 | AC-14 | Sender/channel faults visible, no leaked secrets, exact local-captured recipients/body/PDF | WP3/WP5 |
 | AC-15 | Safe health/backup status and compatible rollback; restored instance has outbound paused | WP4/WP5 |
+| AC-16 | A share reaches only its enabled items (timesheet view or edit, read-only OT summary and ledger, final PDF download), never sign-off, signature image files, sending, settings, leave actions or re-sharing; edits are attributed to the grantee; a change, revocation or deactivation applies on the next request | WP3 |
 
 ## Layers
 

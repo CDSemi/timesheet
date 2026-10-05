@@ -33,7 +33,7 @@ Trước nâng cấp, kiểm backup và chạy migration có phiên bản một 
 
 ## Bảo trì
 
-Health/readiness không lộ riêng tư. Màn hình có auth hiện heartbeat runner, backup thành công, dung lượng, backlog/lỗi/chưa rõ và sender. Dùng báo host độc lập khi có; SMTP hỏng không thể đáng tin báo lỗi qua chính SMTP đó.
+Health/readiness không lộ riêng tư. Màn hình admin hiện heartbeat runner, backup thành công, dung lượng, sender và backlog/lỗi/chưa rõ theo từng người và kỳ, kèm địa chỉ người nhận, không có chi tiết timesheet hay nội dung thư. Dùng báo host độc lập khi có; SMTP hỏng không thể đáng tin báo lỗi qua chính SMTP đó.
 
 Xem lễ công ty năm tới trước kỳ đầu bị ảnh hưởng; preview/kiểm rồi xuất bản phiên bản hiệu lực mới. Giữ override/lịch sử. Không tự thay bằng lễ liên bang Mỹ. Xem certificate, dependency, retention và dung lượng.
 

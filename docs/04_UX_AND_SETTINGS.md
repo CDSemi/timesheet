@@ -9,7 +9,8 @@
 | Review | Exact content, OT proposals, missing evidence, deficit choices, recipients/email preview, signature preview, explicit Sign off & Submit |
 | OT ledger/leave | Posted/provisional/reserved/available balance, daily evidence, adjustments; record permission, reserve, "record use" (explicit, idempotent, on or after the leave date, partial allowed), cancel/reverse |
 | History | Immutable revisions/PDFs, manual/auto origin, delivery attempts, reasoned correction and explicit resend |
-| Settings/admin | Personal policy/templates; users, annual holidays, sender and operational status with scoped access |
+| Settings/admin | Personal policy/templates and sharing (grant, change or revoke per item); users, annual holidays, sender, sharing grants and per-person submission/delivery status with recipients, without timesheet details |
+| Shared timesheets | A grantee opens an owner's shared items from "Shared with me" under a persistent bar naming the owner and the shared items; actions outside the share are absent and refused by the server |
 
 Use hours/minutes, never 1.30 for 1h30. Display current viewing zone and saved accounting date. Keep ordinary flows free of DB/job terminology. Actual clock values are not seeded from a schedule.
 
@@ -27,7 +28,8 @@ Use hours/minutes, never 1.30 for 1h30. Display current viewing zone and saved a
 | Payroll / due | Anchor 2026-10-02, every 14 days; prior Tuesday 17:00 |
 | Reminder offsets | 24 hours and 2 hours |
 | Unsigned auto-submit | Enabled preference after sender setup; real sending remains disabled until activation |
-| Automatic signature image | Off; explicit prior authorization may enable |
+| Automatic signature image | Asked at signature upload as one explicit, audited authorization, pre-selected; if unticked, no image on automatic submissions until the user authorizes it later in Settings |
+| Automatic submission note line | Off; when on, the PDF and email show the user's text (default "Automatic submission") |
 | Show OT on PDF | On; can hide without erasing ledger |
 | Notifications / outbound | Email, optional ntfy / dry-run initially |
 
@@ -37,7 +39,7 @@ These are declared design defaults, not claims that every value was user-confirm
 
 Clock out/save confirms suggested/actual/no breaks. Unknown breaks or open intervals keep OT pending. Show explicit end date for overnight entry. Batch category changes must expose existing work conflicts and never silently delete clock evidence. Holiday work retains holiday classification and actual intervals.
 
-Current/future draft edits audit automatically without a reason; old/finalized edits require one. Review flags attendance assumptions, incomplete OT and proposed deficits. The employee may acknowledge incomplete optional clock evidence and submit attendance. Invalid records require correction or explicit audited exclusion. Automatic submission uses valid saved attendance and marks unresolved OT pending.
+Current/future draft edits audit automatically without a reason; old/finalized edits require one. Review flags attendance assumptions, incomplete OT and proposed deficits. The employee may acknowledge incomplete optional clock evidence and submit attendance. Invalid records require correction or explicit audited exclusion. Automatic submission uses valid saved attendance; for a period with no saved entries it uses the default labels (FR-03). Days without records credit no OT and create no deficit; incomplete days keep OT pending. The employee may add records later and correct the period (document 05).
 
 Leave: the Day editor shows a non-blocking warning when the day's `ot`-kind leave minutes differ from the linked leave request's consumed minutes. It never spends or releases OT. The only way to consume reserved OT leave is the employee's "Record use" action; reservations not yet used stay visible as reserved.
 
@@ -47,10 +49,10 @@ Plain CSS custom properties in `src/client/styles.css`; 4px corner radius; 300 m
 
 ## Email and PDF
 
-Variables: {EmployeeName}, {PeriodStart}, {PeriodEnd}, {PayrollDate}, {SignOffStatus}, {SubmissionId}, {Revision}. Reject unknown variables; escape HTML values and validate recipients. Show setup/review previews. Normal email does not automatically include private OT notes or approval evidence.
+Variables: {EmployeeName}, {PeriodStart}, {PeriodEnd}, {PayrollDate}, {SignOffStatus}, {SubmissionId}, {Revision}. Reject unknown variables; escape HTML values and validate recipients. Show setup/review previews. Normal email does not automatically include private OT notes or approval evidence. {SignOffStatus} renders "Submitted" for every submission, or the note text when an automatic submission's note line is on.
 
-PDF: company header, salaried-exempt timesheet title, employee, payroll date, two Monday–Sunday blocks, dates/categories, optional time/OT rows, total including both Sundays, employee name/image/date and blank manager signature/date unless a real future approval exists. Use US Letter portrait, embedded Unicode fonts, readable long labels and bounded signature image. Remove stale year headers. Add submission/revision identifiers and sanitized filenames.
+PDF: company header, salaried-exempt timesheet title, employee, payroll date, two Monday–Sunday blocks, dates/categories, optional time/OT rows, the credited OT total in h:mm over all 14 days, including both Sundays (hidden with the OT rows when Show OT on PDF is off), employee name/image/date and blank manager signature/date unless a real future approval exists. Use US Letter portrait, embedded Unicode fonts, readable long labels and bounded signature image. Remove stale year headers. Add submission/revision identifiers and sanitized filenames.
 
 Manual sign-off requires both the employee name and a validated uploaded signature image. The unsigned automatic-image setting is separate.
 
-Automatic PDF/email visibly says employee review is pending. Even a preauthorized signature image creates no signed_at or real sign-off. A separate OT evidence report can be exported when the user chooses.
+The outgoing PDF and email of an automatic submission show no automatic indicator: the signature block prints the employee name and the date of the automatic submission in the saved reporting zone; the signature image appears only when the user has authorized automatic image use; a note line appears only when the user turns it on (default off; the user edits its text, default "Automatic submission"). The system still records the revision as automatic with employee review pending, empty signed_at and no sign-off, and the employee's own screens show that. Even a preauthorized signature image creates no signed_at or real sign-off. A separate OT evidence report can be exported when the user chooses.

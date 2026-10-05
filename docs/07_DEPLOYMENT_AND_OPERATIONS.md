@@ -33,7 +33,7 @@ Before upgrade, verify a backup and apply versioned migrations once. Downgrade b
 
 ## Maintenance
 
-Health/readiness expose no private data. An authenticated status view shows runner heartbeat, backup success, disk capacity, delivery backlog/faults/uncertainty and sender setup. Use an independent host alert where available; broken SMTP cannot reliably report itself over that same SMTP.
+Health/readiness expose no private data. An administrator status view shows runner heartbeat, backup success, disk capacity, sender setup and delivery backlog/faults/uncertainty per person and period, including recipient addresses, without timesheet details or message content. Use an independent host alert where available; broken SMTP cannot reliably report itself over that same SMTP.
 
 Review next year's company holidays before the first affected period; preview/validate and publish a new effective version. Preserve overrides/history. Do not blindly substitute US federal holidays. Review certificates, dependencies, retention and available disk.
 

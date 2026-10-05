@@ -6,14 +6,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = c1e4bb2c161561cfa3827028837a087303352718 (WP3-T13A-FREEZE).
+  - HEAD = origin/main = 632092d730f84bc10b3bee1f7ae61f96edec35eb (WP3-REC1, chỉ có record;
+    commit đóng băng mã nguồn gần nhất là c1e4bb2, WP3-T13A).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
     hiện tại của WP3 là 0edefc94… (T13A, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T13A-FREEZE, kết quả chạy lại e2e; WP3-REC1 sẽ commit các file này.
+  - Chưa commit (chỉ trong handoff): board, checkpoint này và kết quả WP3-REC1; các file
+    này vào commit kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -225,14 +226,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 - WP3-T13A-FREEZE đã commit và push, SHA c1e4bb2 (34 đường dẫn, mọi kiểm tra 0).
 - WP3-E2E-RECHECK đã xong: chạy toàn bộ e2e trên c1e4bb2 trả về 0 (97 đạt, 3 bỏ qua, 0
   lỗi); lỗi ở T13A là do môi trường.
-- Đang chạy: WP3-REC1 (committer): commit riêng các record handoff đang chờ.
-- **Tạm dừng:** mọi task còn lại (WP3-DOC, T07B, T13, T13B, T13C, T14, T15) cần câu trả
-  lời G-Q1/G-Q2 của chủ dự án (`pending_owner_question` trên board).
+- WP3-REC1 đã commit và push, SHA 632092d (8 đường dẫn, chỉ trong handoff, mọi kiểm tra 0).
+- Chủ dự án đã trả lời G-Q1 (b) và G-Q2 (a) (`owner_decisions` trên board): lúc upload
+  chữ ký, ứng dụng hỏi quyền dùng ảnh cho bản nộp tự động với lựa chọn chọn sẵn (vẫn là
+  một bước đồng ý rõ ràng, có ghi audit); `{SignOffStatus}` là "Submitted" cho cả hai loại
+  bản nộp, hoặc câu ghi chú khi bật dòng ghi chú. Brief WP3-DOC và T07B đã ghi câu trả lời.
+- WP3-DOC đã xong (tác giả tự báo): 30 chỗ sửa mỗi ngôn ngữ ở tài liệu 01–07, 09, 10;
+  dòng gate trong prompt WP3; file policy mẫu; bảng đối chiếu EN/VI; preflight 0; verify
+  1164 test; digest 4d4c4863….
+- Tách phần quản trị (quyết định của coordinator): `handoff/prompts/` là đường dẫn quản
+  trị, nên WP3-DOC-FREEZE chỉ commit tài liệu gốc và file policy; bốn file prompt WP3 đi
+  qua GOV-WP3P-FREEZE, GOV-WP3P-GATE và một GOV-WP3P-AUDIT độc lập trước T07B.
+- Đang chạy: WP3-DOC-FREEZE (committer), để nguyên các file prompt chưa stage.
 - Bước tiếp:
-  1. Khi chủ dự án trả lời G-Q1/G-Q2: ghi vào `owner_decisions`, điền dòng G-Q trong brief
-     WP3-DOC và T07B rồi giao WP3-DOC (worker, sonnet), commit đóng băng, rồi T07B, rồi T13
-     (brief chưa viết; gồm phần trạng thái trên lưới còn chuyển tiếp), T13B (opus), T13C,
-     T14, T15, WP3-GATE và các audit.
+  1. Ghi kết quả commit đóng băng tài liệu; rồi GOV-WP3P-FREEZE, GOV-WP3P-GATE,
+     GOV-WP3P-AUDIT (opus mới); rồi T07B, T13 (brief đã sẵn), T13B (opus), T13C, T14, T15,
+     WP3-GATE và các audit.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -251,5 +260,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-REC1 (sau đó không còn gì trong lúc chờ chủ dự án).
+- Process còn sống: chỉ WP3-DOC-FREEZE.
 - Usage/reset: không quan sát được.

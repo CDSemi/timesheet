@@ -28,13 +28,14 @@ Một repo, một ứng dụng Node.js, một DB SQLite cục bộ. Hono phục 
 | ot_leave_requests | Phút xin/duyệt/giữ/tiêu, ngày, bằng chứng, nguồn duyệt, đảo; chỉ tiêu qua thao tác record use rõ ràng, idempotent vào hoặc sau ngày nghỉ (cho phép một phần); WP2 không có job runner tiêu hay hết hạn giữ chỗ |
 | jobs/delivery_attempts | Chủ/revision/kênh, hạn/thử lại, trạng thái, số lần, lease, ID đối chiếu/nhà cung cấp |
 | attachments/audit_events | Key riêng khó đoán/hash/loại/kích thước; người, UTC, thao tác, trước/sau, lý do |
+| timesheet_shares | Chủ, người được chia sẻ, các mục (timesheet không/xem/sửa, OT chỉ đọc, tải PDF đã chốt), người/lúc tạo, người/lúc thu hồi; mỗi cặp chủ–người nhận một quyền hiệu lực; đổi mục thì thu hồi và thay dòng; không chia sẻ tiếp |
 | imports | SHA-256 nguồn, phiên bản ánh xạ, chủ, đợt preview/commit; khóa chống trùng |
 
-Kỳ chung không chứa cờ signed/sent của một user. Tên/email/path không phải khóa danh tính. Admin quản tài khoản/cấu hình; xem dữ liệu riêng cần quyền riêng rõ ràng. Admin có thể sửa tên hiển thị và vai trò của user bất cứ lúc nào, nhưng chỉ đổi lịch của user khi user chưa có timesheet, ngày, phiên làm việc, dòng sổ cái hay yêu cầu nghỉ nào (nếu có thì trả 409 `calendar_in_use` và không ghi gì). Manager tương lai dùng gán nhân viên.
+Kỳ chung không chứa cờ signed/sent của một user. Tên/email/path không phải khóa danh tính. Admin quản tài khoản/cấu hình và thấy thông tin vận hành: tài khoản, lịch, quyền chia sẻ, vòng đời timesheet của từng người, nguồn và trạng thái xác nhận của revision, trạng thái PDF và gửi kèm địa chỉ người nhận, mã lỗi đã che, cờ setting và sức khỏe job/runner. Chi tiết timesheet vẫn riêng tư: ngày, phiên và nghỉ, phép, ghi chú, phép tính, quy tắc cá nhân, sổ và số dư OT, yêu cầu nghỉ và bằng chứng cho phép, file xuất bằng chứng, payload/snapshot review, PDF, ảnh chữ ký, template email, nội dung email đã dựng và payload audit của bản ghi cá nhân. Xem chúng cần quyền chia sẻ rõ ràng của chủ, kể cả với admin. Admin có thể sửa tên hiển thị và vai trò của user bất cứ lúc nào, nhưng chỉ đổi lịch của user khi user chưa có timesheet, ngày, phiên làm việc, dòng sổ cái hay yêu cầu nghỉ nào (nếu có thì trả 409 `calendar_in_use` và không ghi gì). Manager tương lai dùng gán nhân viên.
 
 ## Nguyên tử và snapshot
 
-Bật foreign keys, WAL, busy timeout và transaction ngắn. Kiểm chủ/phiên bản ở mỗi thao tác. Giữ/tiêu số dư nguyên tử. Nhận job bằng update nguyên tử và lease gia hạn. Không gọi mạng trong transaction ghi DB.
+Bật foreign keys, WAL, busy timeout và transaction ngắn. Kiểm chủ sở hữu hoặc quyền chia sẻ còn hiệu lực đủ phạm vi, và phiên bản, ở mỗi thao tác; user của session là người thực hiện, chủ timesheet là đối tượng. Giữ/tiêu số dư nguyên tử. Nhận job bằng update nguyên tử và lease gia hạn. Không gọi mạng trong transaction ghi DB.
 
 Chốt tạo revision bất biến, sign-off thật nếu có, sự kiện sổ và outbox nguyên tử. PDF/mạng chạy sau. Dùng file tạm rồi rename nguyên tử, hash đã lưu và phục hồi file mồ côi; không xóa file lưu trữ còn được tham chiếu.
 
@@ -42,7 +43,7 @@ Serialization chuẩn có thứ tự key/array ổn định, phút nguyên, ngà
 
 ## API và ranh giới hosting
 
-Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, user/import và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại.
+Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, chia sẻ (cấp quyền và truy cập ủy quyền dưới path chủ rõ ràng), user/import và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại.
 
 Dùng cookie session an toàn, CSRF/origin, rate limit login/token, kiểm loại/kích thước upload và tải file có quyền. Không phục vụ PDF/chữ ký từ path public. Health không có dữ liệu cá nhân.
 

@@ -1,0 +1,83 @@
+$ npm run verify   # Node 24.21.0 portable by full path; TEMP/TMP outside Dropbox
+
+> timesheet@0.1.0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> timesheet@0.1.0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> timesheet@0.1.0 lint
+> eslint .
+
+
+> timesheet@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+
+ Test Files  54 passed (54)
+      Tests  1164 passed (1164)
+   Start at  23:43:48
+   Duration  28.82s (tests 91%, import 6%, transform 3%)
+
+
+> timesheet@0.1.0 build
+> npm run build:server && npm run build:client
+
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json
+
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 72 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:   0.25 kB
+dist/client/assets/index-DeciGtj6.css   18.36 kB │ gzip:   4.13 kB
+dist/client/assets/index-r5SkSjk6.js   350.20 kB │ gzip: 101.81 kB │ map: 1,503.94 kB
+
+✓ built in 118ms
+
+> timesheet@0.1.0 smoke
+> node scripts/smoke-built-server.mjs
+
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3,4],"version":4}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":4}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid |   employee employee2@example.invalid |   sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes
+PASS  cli seed lists employee2@example.invalid and its sample data
+PASS  built server starts  Timesheet listening on http://127.0.0.1:52058 (schema v4)
+PASS  GET /api/health has no personal data  {"status":"ok"}
+PASS  GET / serves the built React client with CSP
+PASS  SPA fallback serves index.html
+PASS  employee login sets an HttpOnly SameSite=Strict cookie
+PASS  GET /api/periods/current  today 2026-10-04, current payroll 2026-10-16, due 2026-10-14T00:00:00Z
+PASS  POST 09:00–18:00 on 2026-09-28 with shifted breaks  status 201, R 480, O 0, credited 0
+PASS  admin cannot read the employee session by id (404)  404
+PASS  employee gets 403 on the admin area and anonymous gets 401  403/403/401
+PASS  admin lists the three accounts with account fields only  id,email,display_name,role,status,calendar_id,created_at,updated_at
+PASS  employee2 signs in with the environment password  200
+PASS  employee2 OT summary: posted 600, reserved 240, available 360, not negative  posted 600, reserved 240, available 360, provisional 120
+PASS  employee OT summary is separate (posted 0, reserved 0)  posted 0, reserved 0
+PASS  employee2 lists the one seeded leave request  status 200, count 1
+PASS  admin sees no employee leave requests
+PASS  another employee and the admin get 404 on the employee2 leave request by id  404/404
+PASS  the refused cancels changed nothing
+PASS  evidence CSV: text/csv, no-store, safe filename, export header, seven sections in order  sections export,policy_versions,intervals,breaks,daily,ledger,leave_permissions
+PASS  evidence CSV carries the seeded setup credit and the leave permission of employee2 only
+PASS  employee evidence CSV has no employee2 ledger or permission rows
+PASS  employee2 evidence lists the 3 seeded sample sessions  3
+PASS  employee cannot read an employee2 session by id (404)  string, 404
+PASS  state change without Origin is rejected (403)  403
+PASS  logout revokes the session  200/401
+SMOKE PASSED
+exit=0

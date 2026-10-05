@@ -72,4 +72,14 @@ handoff/delivery/evidence/WP3-REC1/. Return at most 120 words.
 
 ## Results
 
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5
+
+- Node: v24.21.0 (Node 24 runtime by full path). Branch main; no merge or rebase.
+- Pre-HEAD c1e4bb2c161561cfa3827028837a087303352718 (= origin/main); post-HEAD and commit
+  632092d730f84bc10b3bee1f7ae61f96edec35eb; pushed yes; remote SHA the same.
+- Source digest 0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299 (matches).
+- Staged: 8 files (the expected set; no extras, nothing unstaged, no masking, no EOF fix).
+- Check exits: digest 0; git add 0; precommit-check 0 (PASS, 0 findings);
+  diff --cached --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0;
+  validate_package --preflight 0 (workflow Python under C:\Users\<user>\...).
+- Blockers: none. Message file: handoff/delivery/evidence/WP3-REC1/commit-message.txt.

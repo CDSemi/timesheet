@@ -16,14 +16,14 @@ Incomplete optional clock evidence may remain pending after explicit acknowledge
 
 Persist due_at UTC from the reporting-zone due rule. The runner operates without a browser.
 
-- Unsigned draft + enabled switch: finalize valid attendance as **automatic; employee review pending**; post only computable credits/authorized deficits; enqueue PDF/email.
+- Unsigned draft + enabled switch: finalize valid saved attendance—or the default labels when the period has no saved entries—as **automatic** (the record keeps employee review pending); post only computable credits/authorized deficits (days without records post no OT and no deficit); enqueue PDF/email, presented as document 04 describes.
 - Switch off: keep draft, mark overdue and notify; no automatic export/send.
 - Already finalized: continue its existing job, never finalize/post again.
 - Manual/deadline race: one transaction wins; the other reloads. No duplicate revision, ledger posting or send.
 
-Automatic image inclusion is separately off by default. Explicit prior authorization may enable it, but signed_at stays empty and pending review remains visible.
+Automatic image inclusion is a separate explicit, audited authorization of one stored signature image, asked for at signature upload with the option pre-selected; a user who unticks it gets no image on automatic submissions until they authorize it later in Settings. Outgoing automatic PDF/email follow document 04 (no automatic indicator, optional note line). signed_at stays empty and no sign-off is recorded; the employee's own screens and the outcome notice always show that review is pending.
 
-Record automation_active_from. By default only periods with due_at on/after activation are eligible; imported history is excluded. Recover missed eligible deadlines chronologically in bounded batches after downtime. Changes default to future periods; applying them to already-overdue drafts requires an explicit choice. Missing sender/recipient blocks delivery and shows a fault, never “sent.”
+Record one system-wide automation_active_from at the owner's activation (empty until then, so nothing is finalized automatically before it). A period is eligible only when its due_at is on/after both that instant and the user's auto-submit effective instant; imported history is excluded. Recover missed eligible deadlines chronologically in bounded batches after downtime. Changes default to future periods; applying them to already-overdue drafts requires an explicit choice. Missing sender/recipient blocks delivery and shows a fault, never “sent.”
 
 ## Reminders and review links
 
@@ -51,6 +51,6 @@ SMTP is not exactly-once delivery. Stable Message-ID helps correlation but canno
 
 Old/finalized edits require a reason and correction draft, preserving original snapshots/PDF/sign-off/attempts. Finalize a new revision and post only ledger differences. Editing does not silently resend.
 
-Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. Let the employee explicitly choose whether to email that reviewed revision. Unchanged-PDF resend creates another attempt on the same revision and no ledger movement. Changed report content or recipient envelope needs a new immutable reviewed revision.
+Late review of an automatic revision creates a new genuinely signed revision; unchanged calculation posts zero delta. Let the employee explicitly choose whether to email that reviewed revision. Unchanged-PDF resend creates another attempt on the same revision and no ledger movement. Changed report content or recipient envelope needs a new immutable reviewed revision. After an automatic submission the employee may add records for days that credited no OT and finalize a reasoned correction; a day without an earlier credit posts a first credit, any other day only the difference.
 
-Archived downloads require ownership. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.

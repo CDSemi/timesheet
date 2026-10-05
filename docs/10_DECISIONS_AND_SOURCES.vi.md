@@ -4,7 +4,7 @@ Yêu cầu rõ mới nhất của người dùng ưu tiên hơn đề xuất đ�
 
 ## Yêu cầu đã chốt
 
-Tám giờ/ngày; chỉnh giờ vào/ra và N/M; vào linh hoạt; ví dụ đúng giữa xuống 75→60 và 76→90; tính ngày không bù tuần/kỳ; mọi giờ ngoài lịch đủ điều kiện OT; nghỉ không làm không trừ. Thiếu giờ tùy chọn, manager cho dùng OT đổi nghỉ, UTC/hiển thị múi giờ hiện tại, qua đêm, lý do sửa cũ và audit tự động. Sign-off cùng tự nộp chưa ký cấu hình được, setting email/template/thông báo/ảnh, dữ liệu riêng và manager tương lai. Docker Synology; PDF Excel quen thuộc. Docs song ngữ, prompt theo giai đoạn, ưu tiên subscription.
+Tám giờ/ngày; chỉnh giờ vào/ra và N/M; vào linh hoạt; ví dụ đúng giữa xuống 75→60 và 76→90; tính ngày không bù tuần/kỳ; mọi giờ ngoài lịch đủ điều kiện OT; nghỉ không làm không trừ. Thiếu giờ tùy chọn, manager cho dùng OT đổi nghỉ, UTC/hiển thị múi giờ hiện tại, qua đêm, lý do sửa cũ và audit tự động. Sign-off cùng tự nộp chưa ký cấu hình được, setting email/template/thông báo/ảnh, dữ liệu riêng và manager tương lai. Docker Synology; PDF Excel quen thuộc. Docs song ngữ, prompt theo giai đoạn, ưu tiên subscription. Chia sẻ timesheet của chính mình theo từng mục do chủ cấp.
 
 ## Mặc định thiết kế
 
@@ -20,7 +20,7 @@ Tám giờ/ngày; chỉnh giờ vào/ra và N/M; vào linh hoạt; ví dụ đú
 | D-06 | Mặc định bỏ thiếu; trừ phút chính xác, không âm thầm quá số dư. Giờ qua đêm đáp ứng công; thiếu bản ghi/nghỉ cả ngày không làm không bị trừ. |
 | D-07 | Ghi OT lúc chốt bất biến; tách tạm tính. Giữ phép đã duyệt, tiêu ngày nghỉ, tỷ lệ phút 1:1. |
 | D-08 | Thứ Hai–Sáu, America/Los_Angeles, thứ Ba trước payroll 17:00; giờ/múi giờ là đề xuất, không do workbook xác lập. |
-| D-09 | Bật tùy chọn tự nộp sau setup; dry-run tới kích hoạt; ảnh tự động tắt; không sign-off giả. |
+| D-09 | Bật tùy chọn tự nộp sau setup; dry-run tới kích hoạt; ảnh tự động chỉ khi user cho phép rõ, có audit (được hỏi, chọn sẵn, lúc tải ảnh chữ ký); bản ghi không bao giờ chứa sign-off giả (nguồn tự động, chờ xác nhận, signed_at trống); PDF/email tự nộp gửi đi theo quyết định của chủ ngày 2026-10-04. |
 | D-10 | Email trước, ntfy tùy chọn, hoãn SMS; link review có login đủ ban đầu. |
 | D-11 | Phiên bản lễ công ty hằng năm rõ; nghỉ cá nhân tách phân loại lịch. |
 | D-12 | Hiện tại = payroll sớm nhất bằng/sau hôm nay theo múi giờ báo cáo; ưu tiên kỳ cũ chưa xử lý không làm nó thành hiện tại. |
@@ -35,7 +35,7 @@ Ngày 30/09/2026, người dùng cung cấp ảnh gói Max ghi usage gấp 20 l�
 
 [Mẫu đã làm sạch](../reference/inputs/Timesheet_Rev8_2026.xlsx) hỗ trợ mẫu 14 ngày, payroll thứ Sáu/hạn thứ Ba. Không xác lập quy tắc lương pháp lý, ngày ký cũ thật, email đã gửi hoặc số dư OT đầu. [Ghi chú nguồn](../reference/inputs/README.vi.md) ghi những gì đã xóa, hash và lỗi công thức. Ngày 2026-09-30 chủ dự án xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên, chữ ký và metadata) và công khai mẫu này; không giữ bản gốc cá nhân.
 
-Thay công thức/khoản trừ 8,5 giờ, cách nói tự ký, giả định scheduler chỉ trong RAM và shortcut backup chỉ file đang chạy của đề xuất trước. Không giả định SMTP thường gửi đúng một lần.
+Thay công thức/khoản trừ 8,5 giờ, cách nói tự ký, giả định scheduler chỉ trong RAM và shortcut backup chỉ file đang chạy của đề xuất trước. Không giả định SMTP thường gửi đúng một lần. Quyết định của chủ ngày 2026-10-04 quy định hình thức bản tự nộp gửi đi; nó không đưa lại sign-off tự động trong bản ghi.
 
 ## Nguồn chính thức
 
@@ -120,3 +120,17 @@ Cơ sở: mục E của WP2-PLAN; không quyết định nào đổi yêu cầu 
 - Lý do: probe WP2-T08 cho thấy gán lại lịch cho user đã có dữ liệu làm kỳ nháp bị nhóm lại, nhãn mặc định đổi và tính lại, timesheet đã lưu bị mồ côi, timesheet đã chốt bị che và cho phép tạo timesheet chồng kỳ, trong khi ngày của phiên đã lưu không đổi (AGENTS quy tắc 7, R-07). Không văn bản chuẩn nào yêu cầu đổi lịch của user đã có dữ liệu hay áp dụng đổi lịch cho kỳ đã có.
 - Lựa chọn cho chủ (ngoài WP2): gán lại lịch có hiệu lực từ ngày trong tương lai cần schema và thiết kế tra cứu kỳ riêng.
 - Nguồn: phát hiện chỉ-báo-cáo của WP2-T08, task WP2-CALFIX.
+
+## Quyết định của chủ — 2026-10-04 (WP3-PLAN F-1..F-5, WP3-REQ F-Q1..F-Q6 và WP3-REQ2 G-Q1..G-Q2)
+
+Nguồn: các câu trả lời trực tiếp của chủ ghi trong bảng task, 2026-10-04.
+
+- F-1: đến hạn, kỳ chưa lưu dữ liệu nào vẫn được tự nộp theo nhãn mặc định. Ngày không có bản ghi không được tính OT (nhân viên có thể bổ sung bản ghi và sửa sau) và không tính thiếu giờ.
+- F-Q1, F-Q2: bản tự nộp gửi đi không có dấu hiệu tự động, theo quyết định rõ ràng của chủ; cách nói của D-09 và R-07 được đổi tương ứng. Khối chữ ký trên PDF in tên nhân viên và ngày tự nộp theo múi giờ báo cáo đã lưu; ảnh chữ ký chỉ xuất hiện khi user cho phép dùng ảnh rõ ràng; dòng ghi chú tùy chọn (user sửa được, mặc định "Automatic submission", mặc định tắt) áp dụng cho mọi lần tự nộp khi bật. Chỉ hệ thống theo dõi nguồn tự động: revision giữ nguồn tự động, chờ xác nhận, signed_at trống và không sign-off, và màn hình cùng thông báo kết quả của chính nhân viên hiện là chờ xác nhận. Điều này thay quy tắc cũ "vẫn hiện chờ xác nhận" cho bản gửi đi.
+- G-Q1, G-Q2: khi user tải ảnh chữ ký lên, app hỏi phép dùng ảnh tự động với tùy chọn chọn sẵn; xác nhận vẫn là một thao tác cho phép rõ ràng, có audit, và user bỏ chọn thì tự nộp không có ảnh cho tới khi user cho phép sau trong Settings. {SignOffStatus} hiển thị "Submitted" cho cả bản nộp tay và tự nộp, hoặc nội dung ghi chú của user cho bản tự nộp bật dòng ghi chú.
+- F-2: khoản trừ thiếu giờ đang chờ là một dòng chờ được ghi của revision đó, hiện trên màn review và OT, chỉ được đánh giá lại bởi một revision chốt sau; không ghi nền.
+- F-3, F-Q3: admin thấy mọi thứ trừ chi tiết timesheet của từng người (tài liệu 03), gồm địa chỉ người nhận nhưng không gồm template hay nội dung thư.
+- F-3, F-Q4, F-Q5: cá nhân có thể chia sẻ timesheet của mình cho một tài khoản khác theo từng mục (xem, sửa, xem sổ và tổng OT chỉ đọc, tải PDF đã chốt). Quyền sửa gồm sửa tay ngày, phiên, nghỉ và sửa hàng loạt (kỳ cũ cần lý do), không bao giờ Clock in/out thay chủ, sign-off hay gửi. Quyền chia sẻ thu hồi được, có audit, không chia sẻ tiếp; admin xem danh sách và thu hồi được nhưng không tạo được.
+- F-4: một thời điểm kích hoạt toàn hệ thống (trống tới pilot của chủ) kết hợp thời điểm hiệu lực tự nộp của từng user.
+- F-5: tổng trên PDF là tổng OT được ghi dạng h:mm của cả 14 ngày, ẩn khi tắt Hiện OT trên PDF.
+- Tạm thời không đổi: việc WP2 đã bỏ số đếm suy từ dữ liệu nhân viên trong preview lịch lễ (WP2-A-01); F-Q6 được hỏi lại.

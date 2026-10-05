@@ -4,7 +4,7 @@ Latest explicit user requirements outrank the earlier quoted proposal and workbo
 
 ## Confirmed requirements
 
-Eight hours/day; configurable start/end and N/M; flexible arrival; midpoint-down examples 75→60 and 76→90; daily calculations without week/period netting; all off-calendar work OT-eligible; non-worked leave/off no debit. Optional deficit handling, manager-permitted OT leave conversion, UTC/current-zone display, overnight support, old-edit reasons and automatic audit. Sign-off plus configurable unsigned deadline submission, email/template/notification/image settings, individual ownership and later manager access. Docker on Synology; familiar Excel PDF. Bilingual docs, phase prompts and subscription-first usage.
+Eight hours/day; configurable start/end and N/M; flexible arrival; midpoint-down examples 75→60 and 76→90; daily calculations without week/period netting; all off-calendar work OT-eligible; non-worked leave/off no debit. Optional deficit handling, manager-permitted OT leave conversion, UTC/current-zone display, overnight support, old-edit reasons and automatic audit. Sign-off plus configurable unsigned deadline submission, email/template/notification/image settings, individual ownership and later manager access. Docker on Synology; familiar Excel PDF. Bilingual docs, phase prompts and subscription-first usage. Owner-granted sharing of one's own timesheets, item by item.
 
 ## Design defaults
 
@@ -20,7 +20,7 @@ These close gaps without another interview; they are not invented user confirmat
 | D-06 | Deficits default ignore; exact deductions, no silent overdraft. Overnight actual minutes fulfill attendance; missing/full non-worked leave does not cause debit. |
 | D-07 | Post OT at immutable finalization; provisional separate. Reserve approved leave, consume on leave date, 1:1 minutes. |
 | D-08 | Mon–Fri, America/Los_Angeles, prior Tuesday 17:00; hour/zone are proposed, not established by workbook. |
-| D-09 | Auto-submit preference enabled after setup; dry-run until activation; auto-image off; no fabricated sign-off. |
+| D-09 | Auto-submit preference enabled after setup; dry-run until activation; automatic image only after the user's explicit, audited authorization (asked, pre-selected, at signature upload); the record never contains a fabricated sign-off (automatic origin, review pending, empty signed_at); outgoing automatic PDF/email follow the 2026-10-04 owner decision. |
 | D-10 | Email first, ntfy optional, SMS deferred; authenticated review links sufficient initially. |
 | D-11 | Explicit annual company holiday versions; personal absence is separate from calendar classification. |
 | D-12 | Current = earliest payroll on/after reporting-zone today; highlighting an old unresolved period does not make it current. |
@@ -35,7 +35,7 @@ On 2026-09-30, the user supplied a plan screenshot showing Max with 20x Pro usag
 
 The [sanitized template](../reference/inputs/Timesheet_Rev8_2026.xlsx) supports the 14-day Friday-payroll/Tuesday-due form. It does not establish legal payroll policy, true past signature dates, email delivery or opening OT balance. [Input notes](../reference/inputs/README.md) record what was removed, its hash and formula defects. On 2026-09-30 the owner removed all personal data (dated attendance sheets, name, signature and metadata) and published the template as a public sample; the personal original is not retained.
 
-Replace the earlier proposal's 8.5-hour calculation/debit, auto-sign wording, in-memory-only scheduling assumption and live-file-only backup shortcut. Exactly-once ordinary SMTP delivery must not be assumed.
+Replace the earlier proposal's 8.5-hour calculation/debit, auto-sign wording, in-memory-only scheduling assumption and live-file-only backup shortcut. Exactly-once ordinary SMTP delivery must not be assumed. The 2026-10-04 owner decision sets how outgoing automatic submissions look; it does not reintroduce a recorded automatic sign-off.
 
 ## Official references
 
@@ -119,3 +119,17 @@ Basis: WP2-PLAN section E; none changes a confirmed requirement.
 - Reason: the WP2-T08 probe showed that reassigning a user who has data regroups the draft period, relabels and recalculates default-labelled days, orphans stored timesheets, hides a finalized timesheet and lets an overlapping timesheet be created, while stored session dates stay put (AGENTS rule 7, R-07). No canonical text requires changing the calendar of a user with data or applying a calendar change to existing periods.
 - Owner option (out of WP2): a prospective, effective-dated calendar reassignment needs its own schema and period-lookup design.
 - Source: WP2-T08 report-only finding, task WP2-CALFIX.
+
+## Owner decisions — 2026-10-04 (WP3-PLAN F-1..F-5, WP3-REQ F-Q1..F-Q6 and WP3-REQ2 G-Q1..G-Q2)
+
+Source: the owner's direct replies recorded in the task board, 2026-10-04.
+
+- F-1: at the deadline a period with no saved entries is still submitted automatically with the default labels. Days without records credit no OT (the employee may add records and correct later) and create no deficit.
+- F-Q1, F-Q2: outgoing automatic submissions carry no automatic indicator, by explicit owner decision; the D-09 and R-07 wording is changed accordingly. The PDF signature block prints the employee name and the automatic submission date in the saved reporting zone; the signature image appears only with the user's explicit image authorization; an optional note line (user-editable, default "Automatic submission", off by default) applies to every automatic submission when on. Only the system tracks the automatic origin: the revision keeps origin automatic, review pending, empty signed_at and no sign-off, and the employee's own screens and outcome notice show that review is pending. This supersedes the earlier "pending review remains visible" rule for outgoing artefacts.
+- G-Q1, G-Q2: when a user uploads a signature, the app asks for the automatic-image authorization with the option pre-selected; confirming is still one explicit, audited authorization act, and a user who unticks it gets no image on automatic submissions until they authorize it later in Settings. {SignOffStatus} renders "Submitted" for manual and automatic submissions, or the user's note text for an automatic submission whose note line is on.
+- F-2: a pending deficit debit stays a recorded pending line of its revision, shown on the review and OT screens, re-evaluated only by a later finalized revision; no background posting.
+- F-3, F-Q3: administrators see everything except each person's timesheet details (document 03), including recipient addresses but not templates or message content.
+- F-3, F-Q4, F-Q5: an individual may share their own timesheets with another account item by item (view, edit, read-only OT summary and ledger, final PDF downloads). Edit covers manual day, session, break and batch edits (reasons for old periods), never Clock in/out for the owner, sign-off or sending. Shares are revocable, audited and never transitive; administrators may list and revoke them but not create them.
+- F-4: one system-wide activation instant (empty until the owner's pilot) combined with each user's auto-submit effective instant.
+- F-5: the PDF total is the credited OT total in h:mm over all 14 days, hidden when Show OT on PDF is off.
+- Unchanged meanwhile: the accepted WP2 removal of employee-derived holiday-preview counts (WP2-A-01); F-Q6 is re-asked.

@@ -22,6 +22,7 @@ A personal timesheet tool, ready for isolated coworker accounts later. Record at
 | FR-14 | Audit actor/time/before-after; require reasons for old/finalized edits | WP1/WP2 |
 | FR-15 | Docker, persistence, backup/restore and operational recovery | WP4 |
 | FR-16 | Controlled Excel import and evidenced opening OT balance | WP4 |
+| FR-17 | Owner-granted, revocable sharing of one's own timesheets with per-item toggles (view, edit, read-only OT, final PDFs); admin status without timesheet details | WP3 |
 
 ## Calendar and attendance
 
@@ -29,11 +30,11 @@ The workbook has Friday payroll every 14 days. For payroll P, the period is P−
 
 The dashboard highlights the oldest unresolved period without redefining “current.” R-07 defines current by the next configured payroll on/after reporting-zone today. Older unsent periods still require edit reasons.
 
-WFH is a location property that may render as the familiar label. Personal Off/Vacation/Sick does not turn a normal-calendar Tuesday into weekend OT. Full/partial leave is expressed in minutes. Planned attendance labels are not actual clock records or employee attestations. Missing clock data creates no invented hours, OT or deficit. Attendance submission may proceed while optional OT evidence remains pending.
+WFH is a location property that may render as the familiar label. Personal Off/Vacation/Sick does not turn a normal-calendar Tuesday into weekend OT. Full/partial leave is expressed in minutes. Planned attendance labels are not actual clock records or employee attestations. An automatic submission may present them in its outgoing PDF without an automatic indicator (document 04); the system still records them as unattested. Missing clock data creates no invented hours, OT or deficit. Attendance submission may proceed while optional OT evidence remains pending.
 
 ## Initial boundary
 
-Two isolated test users must work throughout the first release. Administrator status does not automatically grant private timesheet/signature access. Future manager access needs explicit assignment.
+Two isolated test users must work throughout the first release. Administrators see accounts, configuration and operational status, including each person's submission and delivery status and recipients, but never the details of anyone's timesheets (document 03 defines them). Each person may share their own timesheets with another account item by item—view, edit, read-only OT summary and ledger, final PDF downloads—and change or revoke the share; sign-off, signature image files, sending and personal settings stay with the owner. Future manager access needs explicit assignment.
 
 Initial scope includes holiday CSV import, basic user administration, email notifications and OT evidence export. Optional ntfy may remain disabled. Deferred: paid payroll calculations, HR synchronization, SMS, public registration, native mobile apps, manager portal, arbitrary report designer and multi-node hosting.
 

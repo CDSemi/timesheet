@@ -30,11 +30,11 @@ Prompt: [Triển khai](../handoff/prompts/WP2_IMPLEMENT.vi.md) / [Review](../han
 
 Điều kiện: bàn giao trước đã đạt và source hiện tại đầy đủ. 
 
-Làm snapshot/hash bất biến, review/sign-off rõ, chốt sổ/outbox nguyên tử, báo cáo pdf-lib và ảnh ký riêng, template/người nhận, job/nhắc bền vững, tự động đến hạn, adapter capture/provider và lịch sử gửi. Bao phủ OT thiếu, chọn khoản thiếu, mốc kích hoạt, review muộn/sửa/gửi lại và SMTP chưa rõ. Deep link có login bắt buộc; magic link giới hạn tùy chọn, nếu làm phải đủ bảo vệ.
+Làm snapshot/hash bất biến, review/sign-off rõ, chốt sổ/outbox nguyên tử, báo cáo pdf-lib và ảnh ký riêng, template/người nhận, job/nhắc bền vững, tự động đến hạn, adapter capture/provider và lịch sử gửi. Bao phủ OT thiếu, chọn khoản thiếu, mốc kích hoạt, review muộn/sửa/gửi lại và SMTP chưa rõ. Deep link có login bắt buộc; magic link giới hạn tùy chọn, nếu làm phải đủ bảo vệ. Thêm chia sẻ timesheet do chủ cấp, bật/tắt từng mục, và ranh giới tình trạng cho admin.
 
 Checkpoint: (1) Snapshot/review/PDF/transaction sổ; (2) job/nhắc/adapter/phục hồi lỗi; (3) tích hợp/xem PDF còn lại nếu cần.
 
-Gate: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật. Mọi gửi ở dry-run/capture.
+Gate: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật; AC-16, dòng ghi chú và tùy chọn ảnh khi tự nộp, bản tự nộp gửi đi không dấu hiệu tự động, tự nộp kỳ chưa có dữ liệu và tình trạng admin không có chi tiết timesheet. Mọi gửi ở dry-run/capture.
 
 Prompt: [Triển khai](../handoff/prompts/WP3_IMPLEMENT.vi.md) / [Review](../handoff/prompts/WP3_REVIEW.vi.md).
 

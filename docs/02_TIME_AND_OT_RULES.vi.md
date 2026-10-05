@@ -53,7 +53,7 @@ Chỉ giờ thực đầy đủ/đã xác nhận trên ngày theo lịch có yê
 
 Off/Holiday/Vacation/Sick/Shutdown cả ngày không làm không cộng/trừ. Thiếu bản ghi vẫn là chưa đủ. Làm bốn giờ + nghỉ bốn giờ không thiếu và không OT.
 
-Chế độ: `ignore` mặc định, `auto_deduct`, `choose_at_signoff`. Trừ đúng phút thiếu, không dùng N/M. Review tay hiện quyết định; tự nộp ở chế độ chọn để chờ, không trừ. Thiếu số dư khả dụng thì đề xuất trừ chờ, không âm thầm âm. Các khoản cộng đã biết vẫn có thể ghi. Sửa làm tăng một khoản trừ đã ghi là khoản trừ mới bằng phần tăng và theo cùng quy tắc.
+Chế độ: `ignore` mặc định, `auto_deduct`, `choose_at_signoff`. Trừ đúng phút thiếu, không dùng N/M. Review tay hiện quyết định; tự nộp ở chế độ chọn để chờ, không trừ. Thiếu số dư khả dụng thì đề xuất trừ chờ, không âm thầm âm. Khoản trừ chờ là một dòng được ghi của revision đó, hiện trên màn review và OT; chỉ một revision chốt sau (sửa hoặc review muộn) đánh giá lại nó, và không tiến trình nền nào ghi nó. Các khoản cộng đã biết vẫn có thể ghi. Sửa làm tăng một khoản trừ đã ghi là khoản trừ mới bằng phần tăng và theo cùng quy tắc.
 
 ## R-06 — sổ và nghỉ bằng OT
 
@@ -71,7 +71,7 @@ Quy tắc/lịch có phiên bản và ngày hiệu lực; thay đổi áp dụng
 
 Hiện tại là payroll được cấu hình sớm nhất bằng/sau hôm nay theo múi giờ báo cáo. Kỳ cũ chưa gửi vẫn là cũ. Nháp hiện tại/tương lai không cần lý do; kỳ cũ hoặc revision đã chốt đều cần. Luôn audit người sửa, UTC và trước/sau.
 
-Dùng `signed_at` thật, không TODAY(). Nhập giờ tay phải hiện và dùng múi giờ nhập đã chọn, mặc định múi giờ hiển thị hiện tại; quy đổi phải giữ ngày ghi sổ đã lưu. Hiển thị thời điểm theo múi giờ người xem nhưng giữ ngày ghi sổ. PDF/hạn dùng múi giờ báo cáo đã lưu. Từ chối giờ DST không tồn tại; yêu cầu offset/fold rõ cho giờ mơ hồ. Thời lượng là thời gian UTC trôi qua.
+Ngày trên PDF là `signed_at` thật của revision thủ công, hoặc ngày của thời điểm tự nộp của revision tự động theo múi giờ báo cáo đã lưu (`signed_at` của nó vẫn trống); không TODAY(). Nhập giờ tay phải hiện và dùng múi giờ nhập đã chọn, mặc định múi giờ hiển thị hiện tại; quy đổi phải giữ ngày ghi sổ đã lưu. Hiển thị thời điểm theo múi giờ người xem nhưng giữ ngày ghi sổ. PDF/hạn dùng múi giờ báo cáo đã lưu. Từ chối giờ DST không tồn tại; yêu cầu offset/fold rõ cho giờ mơ hồ. Thời lượng là thời gian UTC trôi qua.
 
 Xem [hướng dẫn fixture](../reference/fixtures/README.vi.md) cho kết quả mẫu độc lập.
 

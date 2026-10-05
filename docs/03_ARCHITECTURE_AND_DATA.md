@@ -28,13 +28,14 @@ These are project-fit judgments, not a claim that C# or Next.js cannot be lightw
 | ot_leave_requests | Requested/approved/reserved/consumed minutes, date, evidence, approval origin, reversals; consumption only through an explicit idempotent record-use action on or after the leave date (partial allowed); no WP2 job runner consumes or expires reservations |
 | jobs/delivery_attempts | Owner/revision/channel, due/retry time, state, attempts, lease, correlation/provider identifiers |
 | attachments/audit_events | Private opaque keys/hash/type/size; actor, UTC, operation, before/after, reason |
+| timesheet_shares | Owner, grantee, items (timesheets none/view/edit, OT read-only, final PDF download), created by/at, revoked by/at; one active share per owner and grantee; a change of items revokes and replaces the row; never transitive |
 | imports | Source SHA-256, mapping version, owner, preview/commit batch; idempotency key |
 
-Shared pay periods do not contain a single user's signed/sent flag. Names/emails/paths are not identity keys. Admin manages accounts/configuration; access to private employee data requires a separate explicit permission. An admin edit may change a user's display name and role at any time, but the user's calendar only while the user has no timesheet, day entry, session, ledger entry or leave request (otherwise 409 `calendar_in_use`, nothing written). Future manager access uses employee assignments.
+Shared pay periods do not contain a single user's signed/sent flag. Names/emails/paths are not identity keys. Admin manages accounts/configuration and sees operational information: accounts, calendars, sharing grants, each person's timesheet lifecycle, revision origin and review state, PDF and delivery states with recipient addresses, redacted fault codes, settings flags and job/runner health. Timesheet details stay private: day entries, sessions and breaks, leave, notes, calculations, personal policies, OT ledger and balances, leave requests and permission evidence, evidence exports, review payloads and snapshots, PDFs, signature images, email templates, rendered email content and the audit payloads of personal records. Access to them requires the owner's explicit grant, also for an administrator. An admin edit may change a user's display name and role at any time, but the user's calendar only while the user has no timesheet, day entry, session, ledger entry or leave request (otherwise 409 `calendar_in_use`, nothing written). Future manager access uses employee assignments.
 
 ## Atomicity and snapshots
 
-Enable foreign keys, WAL, busy timeout and short transactions. Validate ownership/version on each action. Reserve/consume balances atomically. Claim jobs with an atomic update and renewable lease. No network call inside a DB write transaction.
+Enable foreign keys, WAL, busy timeout and short transactions. Validate ownership or an active grant of sufficient scope, and the version, on each action; the session user is the actor and the timesheet owner is the subject. Reserve/consume balances atomically. Claim jobs with an atomic update and renewable lease. No network call inside a DB write transaction.
 
 Finalization atomically creates the immutable revision, real sign-off if any, ledger events and outbox job. PDF/network work follows. Use temporary files plus atomic rename, recorded hashes and recovery of orphan files; never remove referenced archived files.
 
@@ -42,7 +43,7 @@ Canonical serialization uses stable object keys/array order, integer minutes, IS
 
 ## API and hosting boundary
 
-Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, users/import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review.
+Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users/import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review.
 
 Use secure cookie sessions, CSRF/origin protection, login/token rate limits, validated upload types/sizes and private file retrieval. Do not serve PDFs/signatures from public static paths. Health contains no personal data.
 
