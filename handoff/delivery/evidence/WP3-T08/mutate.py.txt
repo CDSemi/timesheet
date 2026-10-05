@@ -1,0 +1,132 @@
+"""Mutation checks for WP3-T08.
+
+Each mutation is computed in memory first (every pattern must match exactly once); only then
+is the file opened for writing. The two test files are run, and the original bytes are
+restored in a finally block and compared with the saved SHA-256. Usage (repository root,
+NODE_EXE pointing at the Node 24 binary):
+python mutate.py.txt <out-file>
+"""
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+TESTS = ['tests/integration/jobs.test.ts', 'tests/integration/jobs-restart.test.ts']
+STORE = 'src/server/jobs/jobStore.ts'
+RUNNER = 'src/server/jobs/runner.ts'
+PDF = 'src/server/jobs/pdfJob.ts'
+CLI = 'src/server/cli.ts'
+INDEX = 'src/server/index.ts'
+
+MUTATIONS = [
+    ('M1 a live lease can be claimed by another runner', STORE, [
+        ("(state = 'leased' AND lease_expires_at <= ?))", "(state = 'leased' AND ? <> ''))"),
+    ]),
+    ('M2 every retry waits one minute (delays 1, 5, 15, 60 not applied)', STORE, [
+        ('    const delay = RETRY_DELAYS_MINUTES[row.attempts - 1];', '    const delay = RETRY_DELAYS_MINUTES[0];'),
+    ]),
+    ('M3 an exhausted expired lease is reclaimed instead of intervention', STORE, [
+        ("WHERE state = 'leased' AND lease_expires_at <= ? AND attempts >= ? AND kind", "WHERE state = 'leased' AND lease_expires_at <= ? AND attempts >= ? + 1000 AND kind"),
+    ]),
+    ('M4 a duplicate business key overwrites the queued job', STORE, [
+        ('       ON CONFLICT (business_key) DO NOTHING`,', '       ON CONFLICT (business_key) DO UPDATE SET payload_json = excluded.payload_json`,'),
+    ]),
+    ('M5 the error message is stored instead of a redacted code', STORE, [
+        ("  return error instanceof JobError && ERROR_CODE.test(error.code) ? error.code : 'internal_error';", "  return error instanceof Error ? error.message.slice(0, 500) : 'internal_error';"),
+    ]),
+    ('M6 the claim ignores the handler kinds', STORE, [
+        ('             WHERE kind IN (${kindList})\n', "             WHERE (kind IN (${kindList}) OR kind <> '')\n"),
+    ]),
+    ('M7 the runner writes no heartbeat', RUNNER, [
+        ('  recordHeartbeat(db, clock, owner);\n', '  void recordHeartbeat;\n'),
+    ]),
+    ('M8 the PDF goes to a random key (a resumed runner writes a second file)', PDF, [
+        ('      const storageKey = pdfStorageKey(revision.id, pdfSha256);', "      const storageKey = randomBytes(24).toString('base64url');"),
+    ]),
+    ('M9 the signature bytes are not checked against the hash', PDF, [
+        ("  if (sha256(bytes) !== row.sha256) throw new JobError('signature_hash_mismatch', { permanent: true });\n", ''),
+    ]),
+    ('M10 a failed PDF attempt is not recorded on the revision file', PDF, [
+        ('      markFailed(db, clock, revision, redactJobError(error));\n', '      void markFailed;\n'),
+    ]),
+    ('M11 the CLI runs jobs in production', CLI, [
+        ("  if (process.env.NODE_ENV === 'production') {\n    console.error('Refusing to run jobs", "  if (process.env.NODE_ENV === 'never') {\n    console.error('Refusing to run jobs"),
+    ]),
+    ('M12 the server entry does not pass DATA_DIR to the app (T02 carry)', INDEX, [
+        ('  { dataDir: delivery.dataDir },\n', '  {},\n'),
+    ]),
+    ('M13 JOB_RUNNER=off is ignored', INDEX, [
+        ("  process.env.JOB_RUNNER === 'off'", "  process.env.JOB_RUNNER === 'never'"),
+    ]),
+]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run_tests() -> tuple[int, str]:
+    node = os.environ.get('NODE_EXE', 'node')
+    result = subprocess.run([node, 'node_modules/vitest/vitest.mjs', 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=ROOT)
+    out = result.stdout + result.stderr
+    summary = [line.strip() for line in out.splitlines() if line.strip().startswith(('Tests ', 'Test Files'))]
+    failing = sorted({line.strip().split(' > ')[-1][:110] for line in out.splitlines() if line.strip().startswith('FAIL ') and ' > ' in line})
+    detail = ' | '.join(summary)
+    if failing:
+        detail += '\n    failing: ' + '\n    failing: '.join(failing[:6])
+    return result.returncode, detail
+
+
+def main() -> int:
+    out_path = Path(sys.argv[1])
+    lines = []
+    caught_total = 0
+    names = sorted({name for _, name, _ in MUTATIONS})
+    originals = {name: (ROOT / name).read_bytes() for name in names}
+    baseline = {name: sha(data) for name, data in originals.items()}
+    for name in names:
+        lines.append(f'baseline sha256 {name} {baseline[name]}')
+    code, summary = run_tests()
+    lines.append(f'baseline exit={code} {summary}')
+    if code != 0:
+        out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+        return 1
+    for label, name, edits in MUTATIONS:
+        original = originals[name].decode('utf-8')
+        mutated = original
+        ok = True
+        for old, new in edits:
+            if mutated.count(old) != 1:
+                lines.append(f'{label}: PATTERN COUNT {mutated.count(old)} (not run)')
+                ok = False
+                break
+            mutated = mutated.replace(old, new)
+        if not ok:
+            continue
+        mutated_bytes = mutated.encode('utf-8')
+        target = ROOT / name
+        try:
+            target.write_bytes(mutated_bytes)
+            code, summary = run_tests()
+        finally:
+            target.write_bytes(originals[name])
+        restored = sha(target.read_bytes()) == baseline[name]
+        caught = code != 0
+        caught_total += 1 if caught else 0
+        lines.append(f'{label}: exit={code} {"CAUGHT" if caught else "SURVIVED"} restored={"byte-identical" if restored else "MISMATCH"}\n    {summary}')
+        if not restored:
+            out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+            return 2
+    code, summary = run_tests()
+    lines.append(f'after restore exit={code} {summary}')
+    lines.append(f'caught {caught_total} of {len(MUTATIONS)}')
+    for name in names:
+        lines.append(f'final sha256 {name} {sha((ROOT / name).read_bytes())}')
+    out_path.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+    return 0 if caught_total == len(MUTATIONS) and code == 0 else 3
+
+
+if __name__ == '__main__':
+    sys.exit(main())

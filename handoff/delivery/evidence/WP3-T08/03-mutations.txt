@@ -1,0 +1,67 @@
+# Mutation checks (WP3-T08): python handoff/delivery/evidence/WP3-T08/mutate.py.txt <out> (NODE_EXE = Node 24.21.0 by full path). Each mutation is computed in memory before the file is opened for writing; the original bytes are restored and compared by SHA-256. Exit 0.
+
+baseline sha256 src/server/cli.ts c9b3656b8cfc88a753a2a999d1102349233f617fb409794c2487924bc2cbb6f1
+baseline sha256 src/server/index.ts 079a512cea6f016751384b401fe08a56f1538191d88a0dbe629481a30d01f6a8
+baseline sha256 src/server/jobs/jobStore.ts 1efdc2526d8df689dc85a9ee0bd20ef9607029ce41b1e30ae17d6b3acdccb7ba
+baseline sha256 src/server/jobs/pdfJob.ts 715153c5c7ac639abd5ea34c404c187a110a3455175bbf429d1cbe57b542406e
+baseline sha256 src/server/jobs/runner.ts 2c3e2c9051476e60bb16a04537b0f933d8302ef418403e7c5fdace44755fcb15
+baseline exit=0 Test Files  2 passed (2) | Tests  21 passed (21)
+M1 a live lease can be claimed by another runner: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  5 failed | 16 passed (21)
+    failing: claim every job exactly once
+    failing: claims with an atomic lease that a second connection cannot take until it expires
+    failing: resumes after a kill after rename without duplicate files or ledger rows
+    failing: resumes after a kill before rename without duplicate files or ledger rows
+    failing: resumes after a kill before write without duplicate files or ledger rows
+M2 every retry waits one minute (delays 1, 5, 15, 60 not applied): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: retries after 1, 5, 15 and 60 minutes, then moves the job to intervention
+M3 an exhausted expired lease is reclaimed instead of intervention: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: an expired lease on the last attempt goes to intervention instead of a sixth attempt
+M4 a duplicate business key overwrites the queued job: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 19 passed (21)
+    failing: a key already enqueued by the sign-off transaction is not enqueued again
+    failing: enqueues a business key once; a duplicate returns the existing job unchanged
+M5 the error message is stored instead of a redacted code: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: stores only a redacted error code, never an error message
+M6 the claim ignores the handler kinds: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  9 failed | 12 passed (21)
+    failing: a render failure is retried later with the same snapshot and posts nothing
+    failing: a signature hash mismatch fails the job without writing a PDF
+    failing: claims only the kinds it has handlers for and records the runner heartbeat
+    failing: passes DATA_DIR to the file store and starts the in-process runner
+    failing: renders the stored snapshot, writes the file atomically, records hash and state, and posts nothing
+    failing: resumes after a kill after rename without duplicate files or ledger rows
+M7 the runner writes no heartbeat: exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  2 failed | 19 passed (21)
+    failing: claims only the kinds it has handlers for and records the runner heartbeat
+    failing: passes DATA_DIR to the file store and starts the in-process runner
+M8 the PDF goes to a random key (a resumed runner writes a second file): exit=1 CAUGHT restored=byte-identical
+    Test Files  2 failed (2) | Tests  2 failed | 19 passed (21)
+    failing: renders the stored snapshot, writes the file atomically, records hash and state, and posts nothing
+    failing: resumes after a kill after rename without duplicate files or ledger rows
+M9 the signature bytes are not checked against the hash: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: a signature hash mismatch fails the job without writing a PDF
+M10 a failed PDF attempt is not recorded on the revision file: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  2 failed | 19 passed (21)
+    failing: a render failure is retried later with the same snapshot and posts nothing
+    failing: a signature hash mismatch fails the job without writing a PDF
+M11 the CLI runs jobs in production: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: is refused in production and touches nothing
+M12 the server entry does not pass DATA_DIR to the app (T02 carry): exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: passes DATA_DIR to the file store and starts the in-process runner
+M13 JOB_RUNNER=off is ignored: exit=1 CAUGHT restored=byte-identical
+    Test Files  1 failed | 1 passed (2) | Tests  1 failed | 20 passed (21)
+    failing: does not start the runner when JOB_RUNNER=off
+after restore exit=0 Test Files  2 passed (2) | Tests  21 passed (21)
+caught 13 of 13
+final sha256 src/server/cli.ts c9b3656b8cfc88a753a2a999d1102349233f617fb409794c2487924bc2cbb6f1
+final sha256 src/server/index.ts 079a512cea6f016751384b401fe08a56f1538191d88a0dbe629481a30d01f6a8
+final sha256 src/server/jobs/jobStore.ts 1efdc2526d8df689dc85a9ee0bd20ef9607029ce41b1e30ae17d6b3acdccb7ba
+final sha256 src/server/jobs/pdfJob.ts 715153c5c7ac639abd5ea34c404c187a110a3455175bbf429d1cbe57b542406e
+final sha256 src/server/jobs/runner.ts 2c3e2c9051476e60bb16a04537b0f933d8302ef418403e7c5fdace44755fcb15

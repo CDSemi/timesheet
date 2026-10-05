@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 72f1920fce178b95a9d51e665d69af3fd05117f4 (WP3-T05-FREEZE).
+  - HEAD = origin/main = 2f8011ac1a8e2eadc031e6654714454efe1126f1 (WP3-T06-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest c380f302… (T05, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest b47d30da… (T06, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T05-FREEZE results and
-    evidence. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T06-FREEZE results and
+    evidence, the WP3-REQ2 brief and the T08 brief edit. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -144,16 +144,30 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   per-item toggles; F-Q5 (a). F-Q6 needs a clearer question (WP2-A-01 stays meanwhile).
   The owner authorized a temporary work folder on D: (D:\timesheet-tmp, outside
   Dropbox). The coordinator interpretation is in board `coordinator_decisions`.
-- Running: WP3-T06-FREEZE attempt 2 (committer); it stops at once if B: is still full.
+- WP3-T06-FREEZE is committed and pushed as 2f8011a (attempt 2, 23 paths, all checks 0;
+  B: had space again). A recursive delete of its empty D: temp folder was denied and not
+  retried; the folder stays.
+- WP3-REQ2 is done ([addendum](tasks/WP3-REQ2.md)): the notice is replaced by an
+  optional note line (default off, editable, default text "Automatic submission") and the
+  existing auto-image authorization; the PDF origin labels go too; the manual PDF must
+  print the stored signer name (a T07 defect fixed in T07B); revised T07B scope (also
+  owns the pdfJob input mapping); sharing with three per-grant items; a doc-edit list of
+  10 canonical docs in both languages, 4 prompts and the policy example.
+- Owner question pending: G-Q1 (signature image default on automatic submissions) and
+  G-Q2 ({SignOffStatus} wording); F-Q6 optional.
+- WP3-T08 is done (author-reported): atomic claims with leases, retries 1/5/15/60 then
+  intervention, runner and CLI, PDF job from the stored snapshot with signature-hash
+  check, crash recovery tests, DATA_DIR wiring; 13/13 mutations caught; verify 980
+  tests; digest 706c1619…. T09 must own `src/server/jobs/runner.ts` to register the send
+  handler.
+- Running: WP3-T08-FREEZE (committer).
 - Next action:
-  1. Record the T06 freeze; then the WP3-REQ addendum (resume the planner, read-only)
-     beside WP3-T08; then WP3-DOC, T07B (note line, image option, no automatic
-     indicators) and T09 onward.
+  1. Record the T08 freeze; then WP3-DOC (after G-Q1/G-Q2), T07B and T09 onward.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
-- Blocker: the B: scratch drive is full (see above). Risk: the classifier may deny a
-  committer `git add`; the coordinator does
+- Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
+  Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its
   danger, or a manual commit with `git add -A`).
 - Unchanged constraints: synthetic data and dry-run mail only; no real sending or
@@ -166,5 +180,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T06-FREEZE attempt 2 only.
+- Live processes: WP3-T08-FREEZE only.
 - Usage/reset: not observable.

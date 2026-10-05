@@ -6,14 +6,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 72f1920fce178b95a9d51e665d69af3fd05117f4 (WP3-T05-FREEZE).
+  - HEAD = origin/main = 2f8011ac1a8e2eadc031e6654714454efe1126f1 (WP3-T06-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là c380f302… (T05, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là b47d30da… (T06, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T05-FREEZE. Các file này vào commit đóng băng kế tiếp.
+    T06-FREEZE, brief WP3-REQ2 và phần sửa brief T08. Các file này vào commit đóng băng
+    kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -158,15 +159,31 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   F-Q6 cần hỏi lại cho rõ (WP2-A-01 giữ nguyên trong lúc chờ). Chủ dự án cho phép dùng
   thư mục tạm trên ổ D: (D:\timesheet-tmp, ngoài Dropbox). Cách hiểu của coordinator ghi
   trong `coordinator_decisions` trên board.
-- Đang chạy: WP3-T06-FREEZE attempt 2 (committer); dừng ngay nếu B: vẫn đầy.
+- WP3-T06-FREEZE đã commit và push, SHA 2f8011a (attempt 2, 23 đường dẫn, mọi kiểm tra 0;
+  ổ B: đã có chỗ trở lại). Lệnh xóa đệ quy thư mục tạm rỗng trên D: bị chặn, không thử
+  lại; thư mục vẫn còn.
+- WP3-REQ2 đã xong ([phần bổ sung](tasks/WP3-REQ2.md)): bỏ dòng "chưa duyệt", thay bằng
+  dòng ghi chú tùy chọn (mặc định tắt, sửa được, câu mặc định "Automatic submission") và
+  quyền dùng ảnh chữ ký tự động đã có; nhãn nguồn gốc trên PDF cũng phải bỏ; PDF ký tay
+  phải in đúng tên người ký đã lưu (lỗi của T07, sửa trong T07B); phạm vi T07B sửa đổi
+  (gồm cả phần chuyển dữ liệu trong pdfJob); chia sẻ có ba mục cho mỗi quyền; danh sách
+  sửa gồm 10 tài liệu gốc cả hai ngôn ngữ, 4 prompt và file policy mẫu.
+- Câu hỏi đang chờ chủ dự án: G-Q1 (ảnh chữ ký mặc định trên bản nộp tự động) và G-Q2
+  (câu chữ của {SignOffStatus}); F-Q6 không bắt buộc.
+- WP3-T08 đã xong (tác giả tự báo): nhận việc nguyên tử có lease, thử lại sau 1/5/15/60
+  phút rồi chuyển sang chờ can thiệp, bộ chạy job và CLI, job tạo PDF từ snapshot đã lưu
+  có kiểm hash chữ ký, test phục hồi khi tiến trình bị kill, nối DATA_DIR; 13/13 bản đối
+  chứng bị phát hiện; verify 980 test; digest 706c1619…. T09 phải sở hữu
+  `src/server/jobs/runner.ts` để đăng ký job gửi mail.
+- Đang chạy: WP3-T08-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T06; sau đó phần bổ sung của WP3-REQ (giao lại cho chính
-     planner đó, chỉ đọc) chạy song song với WP3-T08; rồi WP3-DOC, T07B (dòng ghi chú, tùy
-     chọn ảnh chữ ký, bỏ dấu hiệu tự động) và từ T09 trở đi.
+  1. Ghi kết quả commit đóng băng T08; rồi WP3-DOC (sau G-Q1/G-Q2), T07B và từ T09 trở
+     đi.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
-- Vướng mắc: ổ tạm B: đã đầy (xem ở trên). Rủi ro: bộ phân loại có thể chặn `git add` của committer;
+- Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
+  Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động
   và rủi ro, hoặc tự commit bằng `git add -A`).
 - Ràng buộc không đổi: chỉ dùng dữ liệu giả lập và mail dry-run; không gửi hay triển khai
@@ -180,5 +197,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T06-FREEZE attempt 2.
+- Process còn sống: chỉ WP3-T08-FREEZE.
 - Usage/reset: không quan sát được.
