@@ -6,14 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2 (WP3-T13C-FREEZE).
+  - HEAD = origin/main = b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5 (WP3-T14-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 9b8d6b26… (T13C, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là 677b9142… (T14, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T13C-FREEZE.
+    T14-FREEZE.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -280,11 +280,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   fixture e2e, sửa capture cho thư không có tệp đính kèm, thêm kiểm tra smoke, e2e 127 đạt
   (submission, automation, pdf-visual), đã xem 5 ảnh trang PDF, bảng đối chiếu gate;
   verify 1384 test; digest 677b9142….
-- Đang chạy: WP3-T14-FREEZE lần 2 (cùng committer). Lần 1 dừng ở preflight do brief
-  WP3-GATE có liên kết hỏng; điều phối viên đã sửa liên kết đó.
+- WP3-T14-FREEZE đã commit và push thành b083739 (lần 2; lần 1 dừng ở preflight do brief
+  WP3-GATE có liên kết hỏng, điều phối viên đã sửa; 42 đường dẫn; mọi kiểm tra trả về 0;
+  đã xem 8 ảnh, tất cả là dữ liệu giả lập).
+- WP3-T15 đã xong (tác giả tự báo): WP3_HANDOFF (EN/VI), README và DEVELOPMENT (EN/VI)
+  về job, capture, cờ gửi thật, thời điểm kích hoạt, chia sẻ và MAIL_FROM; mô tả trong
+  package.json; bản dịch khớp; preflight 0; verify 0 với 1384 test; digest 96870f7e….
+  Điểm cần gate kiểm tra: bản ghi T14 ghi 46 kiểm tra smoke, nhưng log chỉ có 40.
+- Đang chạy: WP3-T15-FREEZE (committer), commit đóng băng cuối package WP3.
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T14; rồi T15 (brief đã sẵn; commit đóng băng cuối
-     package), WP3-GATE (brief đã sẵn) và hai audit theo mảng bằng auditor mới.
+  1. Ghi kết quả commit đóng băng cuối package; rồi WP3-GATE (brief đã sẵn) trên SHA đó,
+     sau đó ba audit theo mảng bằng auditor opus mới (brief đã sẵn): A và B song song,
+     rồi C (chia sẻ).
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -303,5 +310,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T14-FREEZE.
+- Process còn sống: chỉ WP3-T15-FREEZE.
 - Usage/reset: không quan sát được.

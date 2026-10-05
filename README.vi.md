@@ -1,6 +1,6 @@
 # Timesheet Web — bộ tài liệu triển khai
 
-Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **WP1 đã được chấp nhận độc lập; WP2 đã triển khai (T01–T13), đang chờ gate cuối gói và các audit độc lập; chưa được chấp nhận**.
+Bản tài liệu gốc: **2026-09-30-r1.1**. Trạng thái repo: **WP1 và WP2 đã được chấp nhận độc lập; WP3 đã triển khai (T00–T14 và tác vụ tài liệu T15), đang chờ gate cuối gói và các audit độc lập; chưa được chấp nhận**.
 
 File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch của file tiếng Anh tương ứng. Khóa JSON và enum giữ tiếng Anh. Các manifest trong `handoff/delivery/` là snapshot lịch sử của gói docs r1.1, không chứng nhận repo hiện tại; xem [VALIDATION](handoff/delivery/VALIDATION.vi.md).
 
@@ -8,8 +8,8 @@ File `.md` tiếng Anh là nguồn chuẩn. Mỗi `.vi.md` là bản dịch củ
 
 1. Đọc [NEXT_ACTION](handoff/NEXT_ACTION.vi.md).
 2. Đọc [yêu cầu](docs/01_PRODUCT_REQUIREMENTS.vi.md), [quy tắc giờ/OT](docs/02_TIME_AND_OT_RULES.vi.md) và [lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md).
-3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md), [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md) và [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md); các tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
-4. WP1 đã được chấp nhận sau lần kiểm lại F-01 ([review WP1](handoff/delivery/WP1_REVIEW.vi.md), [kiểm lại](handoff/delivery/WP1_RECHECK.vi.md)). Bước tiếp theo là gate cuối gói WP2 và hai audit độc lập; không bắt đầu WP3 trước khi các bước đó đạt.
+3. Đọc [DEVELOPMENT](DEVELOPMENT.vi.md), [bàn giao WP1](handoff/delivery/WP1_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) và [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md); các tài liệu này mô tả source đầy đủ trong repo và cách kiểm chứng.
+4. WP1 đã được chấp nhận sau lần kiểm lại F-01 ([review WP1](handoff/delivery/WP1_REVIEW.vi.md), [kiểm lại](handoff/delivery/WP1_RECHECK.vi.md)). WP2 đã được chấp nhận sau gate và hai audit độc lập (xem bàn giao WP2). Bước tiếp theo là gate cuối gói WP3 và các audit độc lập mới; không bắt đầu WP4 trước khi các bước đó đạt.
 
 Giao Claude prompt đầu vào duy nhất trong NEXT_ACTION; coordinator resume [task đã lưu](handoff/delivery/ORCHESTRATION.json), chỉ tiến sau gate độc lập. Profile ở `.claude/agents/`, coordinator mặc định ở `.claude/settings.json`.
 
@@ -17,7 +17,7 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 
 ## Hướng đã chọn
 
-- Node.js LTS + TypeScript + Hono + React/Vite + SQLite, đã có trong WP1; một container ứng dụng Docker là đích WP4, chưa được bàn giao.
+- Node.js LTS + TypeScript + Hono + React/Vite + SQLite, đã có trong WP1; một container ứng dụng Docker là đích WP4, chưa được bàn giao. WP3 đã thêm sign-off, chốt revision, PDF, các adapter mail capture/SMTP, bộ chạy job, tự động nộp theo hạn, nhắc hạn, chia sẻ do chủ sở hữu cấp và màn hình tình trạng cho admin.
 - Tám giờ thực làm/ngày, giờ vào linh hoạt, nghỉ cấu hình được, quy tắc OT N/M theo ngày.
 - Mọi giờ làm ngoài lịch ngày làm bình thường đủ điều kiện OT, không trừ tám giờ hay áp dụng N ngày thường; vẫn làm tròn theo M.
 - Tách sign-off của nhân viên, tự nộp, ảnh chữ ký, dịch vụ chấp nhận email và sự cho phép của manager.
@@ -49,6 +49,6 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 
 [Excel mẫu](reference/inputs/Timesheet_Rev8_2026.xlsx) là mẫu công khai: gồm biểu mẫu, sheet thông tin làm việc và ngày lễ của workbook gốc, đã xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên nhân viên, ảnh chữ ký, metadata tác giả và đường dẫn máy). Không giữ bản gốc cá nhân. Không đưa workbook vào image production; dùng dữ liệu giả để demo.
 
-Nền tảng WP1 và source WP2 đã có cùng bằng chứng kiểm tra của bên triển khai (WP2 chưa được chấp nhận độc lập); xem DEVELOPMENT và các bàn giao. Chưa triển khai production hay gửi email thật. Docs song ngữ không bắt buộc UI bản đầu song ngữ. Thông tin model được kiểm lại ngày 30/09/2026; khả dụng và usage thực tế cần xem trong client.
+WP1 và WP2 đã được chấp nhận; source WP3 đã có cùng bằng chứng kiểm tra của bên triển khai và của từng tác vụ (WP3 chưa qua gate và audit độc lập); xem DEVELOPMENT và các bàn giao. Chưa triển khai production hay gửi email thật: mail đi ra chỉ là capture cho đến khi chủ sở hữu cho phép pilot, và cờ gửi production không bao giờ được đặt khi phát triển. Docs song ngữ không bắt buộc UI bản đầu song ngữ. Thông tin model được kiểm lại ngày 30/09/2026; khả dụng và usage thực tế cần xem trong client.
 
 Bản dịch của [README.md](README.md); tiếng Anh là nguồn chuẩn.

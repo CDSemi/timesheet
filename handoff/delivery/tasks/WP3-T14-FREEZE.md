@@ -116,3 +116,4 @@ evidence as a new file (02-checks.txt).
 (Committer appends here.)
 
 - Attempt 1: no commit. Preflight failed: broken link in tasks/WP3-GATE.md -> ../WP3_HANDOFF.md (exit 1). Other checks passed. See evidence/WP3-T14-FREEZE/01-checks.txt.
+- Attempt 2: committed and pushed b083739bb8f1d7e8b932c8d5463bfb271ac5b1e5 to origin/main (pre-HEAD 8ad2e4f). Digest 677b9142...; 42 staged; all checks exit 0 (node by full path v24.21.0). See evidence/WP3-T14-FREEZE/02-checks.txt.

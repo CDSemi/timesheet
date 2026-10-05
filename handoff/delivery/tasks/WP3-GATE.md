@@ -25,7 +25,9 @@
 
 1. Clean `git archive` export of the freeze outside Dropbox; Node 24; `npm ci`.
 2. `npm run verify` with `NODE_OPTIONS=--trace-deprecation --pending-deprecation`: exit 0,
-   no deprecation line; record the test count.
+   no deprecation line; record the test count and the smoke `PASS` count (WP3-T15 noted
+   that the T14 record says 46 smoke checks while its log shows 40; record the actual
+   count and which record is wrong).
 3. `npm run test:e2e` (desktop and mobile): all pass; collect screenshots and PDF renders.
 4. Race files 20 times each: `ot-leave-concurrency`, `finalization-concurrency`,
    `deadline-race` (each round: one winner, one revision, one ledger set, one send), and
