@@ -1,0 +1,86 @@
+# WP3-T13B mutation checks. Stored as .py.txt; run with the repository as the working directory:
+#   python mutations.py <node.exe> <log file>
+# Each mutation is computed in memory from the current file bytes before the file is opened for
+# writing; the original bytes are restored after the run and compared by SHA-256.
+import hashlib
+import re
+import subprocess
+import sys
+
+NODE = sys.argv[1]
+LOG = sys.argv[2]
+VITEST = 'node_modules/vitest/vitest.mjs'
+SUITES = [
+    'tests/integration/sharing.test.ts',
+    'tests/integration/sharing-matrix.test.ts',
+    'tests/integration/history.test.ts',
+    'tests/integration/isolation.test.ts',
+]
+
+MUTATIONS = [
+    ('M1 guard ignores the item (no 403 grant_scope at the door)', 'src/server/http/auth.ts',
+     "    if (!shareAllows(share.items, access)) throw grantScope();\n    c.set('user', user);",
+     "    c.set('user', user);"),
+    ('M2 no re-check inside the write transaction', 'src/server/http/auth.ts',
+     '      recheckShare(db);\n      return work(...params);',
+     '      return work(...params);'),
+    ('M3 subject taken from the session instead of the owner', 'src/server/http/auth.ts',
+     "    c.set('subject', ownerPrincipal(share.owner));",
+     "    c.set('subject', user);"),
+    ('M4 owner account status not checked live', 'src/server/services/users.ts',
+     "SELECT ${ACCOUNT_COLUMNS} FROM users WHERE id = ? AND status = 'active'",
+     'SELECT ${ACCOUNT_COLUMNS} FROM users WHERE id = ?'),
+    ('M5 grantee PDF download not audited', 'src/server/routes/submission.ts',
+     '      options.beforePdfSend?.(c, { id, payrollDate: row.payroll_date, revisionNo: row.revision_no });\n',
+     ''),
+    ('M6 Clock in added to the shared allowlist', 'src/server/routes/shares.ts',
+     "  { router: 'api', method: 'POST', path: '/days/batch', access: 'timesheets_edit' },\n",
+     "  { router: 'api', method: 'POST', path: '/days/batch', access: 'timesheets_edit' },\n"
+     "  { router: 'api', method: 'POST', path: '/clock/in', access: 'timesheets_edit' },\n"),
+    ('M7 history names any other actor while a share ever existed (window dropped)', 'src/server/services/history.ts',
+     '                                AND s.created_at <= a.occurred_at AND (s.revoked_at IS NULL OR a.occurred_at <= s.revoked_at))',
+     ')'),
+    ('M8 anyone may revoke a share (third party treated as the grantee)', 'src/server/services/shares.ts',
+     "    else if (row.grantee_user_id === input.actorUserId) role = 'grantee';\n    else throw notFound('Share');",
+     "    else role = 'grantee';"),
+    ('M9 revision list not scoped to the owner', 'src/server/routes/submission.ts',
+     '        WHERE r.user_id = ?\n        ORDER BY p.payroll_date DESC, r.revision_no DESC\n        LIMIT ?`,',
+     "        WHERE r.user_id <> ?\n        ORDER BY p.payroll_date DESC, r.revision_no DESC\n        LIMIT ?`,"),
+    ('M10 view items admit writes (edit check widened)', 'src/server/services/shares.ts',
+     "    case 'timesheets_edit':\n      return items.timesheets === 'edit';",
+     "    case 'timesheets_edit':\n      return items.timesheets !== 'none';"),
+]
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+out = []
+caught = 0
+for title, path, old, new in MUTATIONS:
+    original = open(path, 'rb').read()
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, (title, 'anchor not unique')
+    mutated = text.replace(old, new).encode('utf-8')
+    assert mutated != original
+    try:
+        with open(path, 'wb') as handle:
+            handle.write(mutated)
+        result = subprocess.run([NODE, VITEST, 'run', *SUITES], capture_output=True, text=True, encoding='utf-8')
+    finally:
+        with open(path, 'wb') as handle:
+            handle.write(original)
+    restored = sha(open(path, 'rb').read()) == sha(original)
+    summary = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout + result.stderr)
+    tests = [line.strip() for line in summary.splitlines() if line.strip().startswith('Tests ')]
+    failed = [line.strip() for line in summary.splitlines() if line.strip().startswith('FAIL ')]
+    is_caught = result.returncode != 0
+    caught += 1 if is_caught else 0
+    out.append(f'{title}\n  file: {path}\n  exit: {result.returncode} -> {"CAUGHT" if is_caught else "SURVIVED"}\n'
+               f'  {tests[-1] if tests else "no summary"}\n  restored byte-identical: {restored} (sha256 {sha(original)[:16]})')
+    for line in failed[:4]:
+        out.append(f'    {line}')
+out.append(f'\n{caught} of {len(MUTATIONS)} mutations caught')
+open(LOG, 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')
+print('\n'.join(out))

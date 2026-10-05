@@ -12,6 +12,7 @@ import { authRoutes } from './routes/auth.ts';
 import { historyRoutes } from './routes/history.ts';
 import { otRoutes } from './routes/ot.ts';
 import { settingsRoutes } from './routes/settings.ts';
+import { sharedRoutes, sharesRoutes } from './routes/shares.ts';
 import { DEFAULT_SIGNATURE_MAX_BYTES, isSignatureUpload, signatureRoutes } from './routes/signatures.ts';
 import { submissionRoutes } from './routes/submission.ts';
 import type { AppDeps, AppEnv } from './types.ts';
@@ -91,6 +92,10 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.route('/api/history', historyRoutes(deps));
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+  // Sharing (FR-17): the caller's own grants, and delegated access only under an explicit owner path
+  // through an allowlist; every other /api route stays self-only.
+  app.route('/api/shares', sharesRoutes(deps));
+  app.route('/api/shared/:ownerId', sharedRoutes(deps, files));
   app.route('/api', submissionRoutes(deps, { files }));
   app.route('/api', apiRoutes(deps));
   app.all('/api/*', () => {

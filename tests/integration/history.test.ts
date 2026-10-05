@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import { postCredit } from '../../src/server/services/ledger.ts';
+import { createUser } from '../../src/server/services/users.ts';
 import { createTestContext, la, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 /*
  * E-13: WP2 history is the user's own audit trail plus the policy and calendar versions
- * (AC-04, FR-14). Revisions, PDFs and delivery attempts belong to WP3.
+ * (AC-04, FR-14). Revisions, PDFs and delivery attempts belong to WP3. WP3-T13B (FR-17, AC-16):
+ * an event performed under a share shows the grantee's display name in the owner's history;
+ * every other event by someone else stays unattributed.
  */
 
 let t: TestContext;
@@ -63,13 +67,17 @@ describe('GET /api/history', () => {
       entity_type: 'ot_leave_request',
       entity_id: reserved.body.request.id,
       actor_is_self: true,
+      via_share: false,
+      actor_display_name: null,
       before: null,
     });
     expect(reserve?.after).toMatchObject({ approved_minutes: 60, reserved_minutes: 60, evidence_ref: 'Synthetic reference' });
     expect(events.some((event) => event.entity_id === sessionId)).toBe(true);
-    // Every event belongs to the caller.
+    // Every event belongs to the caller; without a share nobody else is ever named.
     for (const event of events) {
       expect(event.actor_is_self === true || event.actor_user_id === null).toBe(true);
+      expect(event.via_share, event.operation).toBe(false);
+      expect(event.actor_display_name, event.operation).toBeNull();
     }
     expect(JSON.stringify(response.body)).not.toContain(t.userIds.admin);
   });
@@ -197,6 +205,87 @@ describe('GET /api/history', () => {
       const bad = await t.request('GET', `/api/history?${query}`, { cookie: employee });
       expect(bad.status, query).toBe(422);
     }
+  });
+
+  async function addGrantee(): Promise<{ id: string; cookie: string }> {
+    const password = randomBytes(18).toString('base64url');
+    const id = await createUser(
+      t.db,
+      t.clock,
+      { email: 'grantee@example.invalid', displayName: 'Synthetic Grantee', role: 'employee', password, calendarId: t.calendarId },
+      t.userIds.admin,
+    );
+    const login = await t.request('POST', '/api/auth/login', { body: { email: 'grantee@example.invalid', password } });
+    expect(login.status).toBe(200);
+    return { id, cookie: login.headers.get('set-cookie')?.split(';')[0] ?? '' };
+  }
+
+  it('names the grantee for events performed under a share and nobody else (WP3-T13B)', async () => {
+    const grantee = await addGrantee();
+    const items = { timesheets: 'edit', ot_read: false, pdf_download: false };
+    const granted = await t.request('POST', '/api/shares', { cookie: employee, body: { grantee_email: 'grantee@example.invalid', items } });
+    expect(granted.status, JSON.stringify(granted.body)).toBe(201);
+    // The administrator also holds a share of the employee, yet account administration is never done under a share.
+    const toAdmin = await t.request('POST', '/api/shares', { cookie: employee, body: { grantee_email: t.emails.admin, items } });
+    expect(toAdmin.status, JSON.stringify(toAdmin.body)).toBe(201);
+    t.clock.advanceSeconds(60);
+    const shared = await t.request('POST', `/api/shared/${t.userIds.employee}/days/2026-09-22/sessions`, {
+      cookie: grantee.cookie,
+      body: { start: la('2026-09-22T09:00'), end: la('2026-09-22T17:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+    });
+    expect(shared.status, JSON.stringify(shared.body)).toBe(201);
+    const renamed = await t.request('PATCH', `/api/admin/users/${t.userIds.employee}`, { cookie: admin, body: { display_name: 'Renamed Employee' } });
+    expect(renamed.status).toBe(200);
+
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    expect(response.status).toBe(200);
+    const events = response.body.audit_events as Array<Record<string, any>>;
+    const created = events.find((event) => event.operation === 'work_session.create');
+    expect(created).toMatchObject({
+      entity_id: shared.body.session.id,
+      actor_is_self: false,
+      actor_user_id: null,
+      via_share: true,
+      actor_display_name: 'Synthetic Grantee',
+    });
+    const update = events.find((event) => event.operation === 'user.update');
+    expect(update).toMatchObject({ actor_is_self: false, actor_user_id: null, via_share: false, actor_display_name: null });
+    const grant = events.find((event) => event.operation === 'share.grant');
+    expect(grant).toMatchObject({ actor_is_self: true, via_share: false, actor_display_name: null });
+    // The grantee is named, never identified.
+    const text = JSON.stringify(response.body);
+    expect(text).not.toContain(grantee.id);
+    expect(text).not.toContain(t.userIds.admin);
+    expect(text).not.toContain('grantee@example.invalid');
+    // The grantee's own history holds none of the owner's events.
+    const own = await t.request('GET', '/api/history', { cookie: grantee.cookie });
+    expect(JSON.stringify(own.body)).not.toContain(shared.body.session.id);
+  });
+
+  it('stops naming a former grantee for events after the share ended', async () => {
+    const grantee = await addGrantee();
+    const granted = await t.request('POST', '/api/shares', {
+      cookie: employee,
+      body: { grantee_email: 'grantee@example.invalid', items: { timesheets: 'view', ot_read: false, pdf_download: false } },
+    });
+    expect(granted.status).toBe(201);
+    t.clock.advanceSeconds(60);
+    expect((await t.request('POST', `/api/shares/${granted.body.share.id}/revoke`, { cookie: employee, body: {} })).status).toBe(200);
+    // A synthetic event by the former grantee one minute after the revocation (no route can cause one).
+    t.db
+      .prepare(
+        `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id)
+         VALUES ('synthetic-after-share', '2026-10-02T18:02:00Z', ?, ?, 'day_entry.update', 'day_entry', 'synthetic-entry')`,
+      )
+      .run(grantee.id, t.userIds.employee);
+    const response = await t.request('GET', '/api/history', { cookie: employee });
+    const events = response.body.audit_events as Array<Record<string, any>>;
+    expect(events.find((event) => event.id === 'synthetic-after-share')).toMatchObject({
+      actor_is_self: false,
+      actor_user_id: null,
+      via_share: false,
+      actor_display_name: null,
+    });
   });
 
   it('is read-only, immutable and requires a session', async () => {

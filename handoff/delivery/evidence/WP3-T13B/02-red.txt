@@ -1,0 +1,1150 @@
+WP3-T13B red run: the new and changed tests against the unchanged baseline source (only test files edited).
+Command: node node_modules/vitest/vitest.mjs run tests/integration/sharing.test.ts tests/integration/sharing-matrix.test.ts tests/integration/history.test.ts tests/integration/isolation.test.ts tests/integration/migrations.test.ts
+Result: exit 1, 68 failed / 55 passed. Note: 'migration 0004 ... creates STRICT tables' failed here only because the new
+EXPECTED_TABLES entry entered its count; the test was then scoped to the pre-0006 tables (V5_TABLES) before any source edit.
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/sharing-matrix.test.ts (25 tests | 24 failed) 665ms
+   ❯ route inventory (3)
+     × registers exactly the matrix routes under /api/shared, each behind its guard 5ms
+     × keeps every self-only /api route unchanged and adds only the reviewed sharing routes 1ms
+   ❯ item set 0 (2)
+     × answers every matrix route by item for timesheets=none ot=false pdf=true 1ms
+     × never reaches the owner-only routes for timesheets=none ot=false pdf=true 0ms
+   ❯ item set 1 (2)
+     × answers every matrix route by item for timesheets=none ot=true pdf=false 0ms
+     × never reaches the owner-only routes for timesheets=none ot=true pdf=false 0ms
+   ❯ item set 2 (2)
+     × answers every matrix route by item for timesheets=none ot=true pdf=true 0ms
+     × never reaches the owner-only routes for timesheets=none ot=true pdf=true 0ms
+   ❯ item set 3 (2)
+     × answers every matrix route by item for timesheets=view ot=false pdf=false 0ms
+     × never reaches the owner-only routes for timesheets=view ot=false pdf=false 0ms
+   ❯ item set 4 (2)
+     × answers every matrix route by item for timesheets=view ot=false pdf=true 0ms
+     × never reaches the owner-only routes for timesheets=view ot=false pdf=true 0ms
+   ❯ item set 5 (2)
+     × answers every matrix route by item for timesheets=view ot=true pdf=false 0ms
+     × never reaches the owner-only routes for timesheets=view ot=true pdf=false 0ms
+   ❯ item set 6 (2)
+     × answers every matrix route by item for timesheets=view ot=true pdf=true 0ms
+     × never reaches the owner-only routes for timesheets=view ot=true pdf=true 0ms
+   ❯ item set 7 (2)
+     × answers every matrix route by item for timesheets=edit ot=false pdf=false 0ms
+     × never reaches the owner-only routes for timesheets=edit ot=false pdf=false 0ms
+   ❯ item set 8 (2)
+     × answers every matrix route by item for timesheets=edit ot=false pdf=true 0ms
+     × never reaches the owner-only routes for timesheets=edit ot=false pdf=true 0ms
+   ❯ item set 9 (2)
+     × answers every matrix route by item for timesheets=edit ot=true pdf=false 0ms
+     × never reaches the owner-only routes for timesheets=edit ot=true pdf=false 0ms
+   ❯ item set 10 (2)
+     × answers every matrix route by item for timesheets=edit ot=true pdf=true 0ms
+     × never reaches the owner-only routes for timesheets=edit ot=true pdf=true 0ms
+ ❯ tests/integration/history.test.ts (10 tests | 3 failed) 3631ms
+   ❯ GET /api/history (10)
+     × returns the caller’s audit events newest first with parsed before/after snapshots 310ms
+     × names the grantee for events performed under a share and nobody else (WP3-T13B) 321ms
+     × stops naming a former grantee for events after the share ended 320ms
+ ❯ tests/integration/isolation.test.ts (19 tests | 2 failed) 5143ms
+   ❯ admin router is account administration, not private-data access (AC-01, FR-01) (7)
+     × exposes exactly the reviewed account and company-calendar routes 322ms
+     × has no admin route that creates or uses a share (WP3-T13B) 227ms
+ ❯ tests/integration/migrations.test.ts (40 tests | 10 failed) 5687ms
+   ❯ fresh SQLite migrations (6)
+     × applies every migration to an empty file database with the required pragmas 22ms
+   ❯ upgrade from a populated WP1 (version 1) database (2)
+     × applies 0002-0006, keeps every WP1 row unchanged and leaves a consistent, usable schema 250ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 140ms
+   ❯ upgrade from a populated version 3 database (accepted WP2 source 5fafeae) (1)
+     × applies 0004-0006 with unchanged rows and counts, a consistent schema and safe defaults 328ms
+   ❯ migration 0004 submission schema (12)
+     × creates STRICT tables whose columns hold no secret, credential or image body 184ms
+   ❯ migration 0006 timesheet shares (5)
+     × creates one STRICT table with the item columns, the one-active index and the immutability triggers 28ms
+     × accepts every valid item set and refuses an empty, self, foreign-created or malformed share 239ms
+     × keeps at most one active share per owner and grantee; revoked rows stay as history 202ms
+     × refuses DELETE, any change of identity or items, and a second revocation 177ms
+     × upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 189ms
+ ❯ tests/integration/sharing.test.ts (29 tests | 29 failed) 11893ms
+   ❯ grant, list, change, revoke and leave (FR-17) (8)
+     × grants by exact account email and lists the share for both parties, audited without personal content 505ms
+     × answers the same generic 422 for an unknown or inactive address and refuses self and empty shares, writing nothing 427ms
+     × rate-limits repeated grantee_not_found answers per account, also for an existing address 419ms
+     × refuses a second active share for the same grantee 432ms
+     × changes items by revoking and replacing the row in one step, audited with before and after 456ms
+     × lets the owner revoke, effective on the next request, audited once 452ms
+     × lets the grantee leave, attributed to the grantee in the owner audit 423ms
+     × refuses revocation by anyone but the two parties, and never re-shares 475ms
+   ❯ access through /api/shared (AC-16) (7)
+     × shows a view grantee the owner timesheet, never the grantee own data 459ms
+     × lets an edit grantee write into the owner timesheet, attributed to the grantee; a view grantee gets 403 grant_scope 414ms
+     × never offers Clock in/out, sign-off, signatures, review, settings, leave, evidence, history or policies to a full grantee 446ms
+     × requires every object id to belong to the owner 408ms
+     × suspends access while the owner is deactivated, without revoking, and restores it on reactivation 387ms
+     × suspends access while the grantee is deactivated and restores it after reactivation and a new sign-in 374ms
+     × applies a change of items on the next request 367ms
+   ❯ the grant is re-checked inside the write transaction (revocation race) (7)
+     × refuses POST /days/2026-09-22/sessions with 404 and writes nothing when the share is revoked mid-request 376ms
+     × refuses PUT /days/2026-09-23 with 404 and writes nothing when the share is revoked mid-request 377ms
+     × refuses POST /days/batch with 404 and writes nothing when the share is revoked mid-request 370ms
+     × refuses PUT /sessions/:id with 404 and writes nothing when the share is revoked mid-request 383ms
+     × refuses DELETE /sessions/:id with 404 and writes nothing when the share is revoked mid-request 375ms
+     × refuses a write with 403 grant_scope when the share drops to view mid-request 390ms
+     × refuses a write with 404 when the owner is deactivated mid-request 372ms
+   ❯ final PDF downloads (pdf_download) (3)
+     × sends the owner PDF to a grantee with the PDF item and audits every download 471ms
+     × refuses the download without the PDF item, without a share and after revocation, and audits nothing 426ms
+     × finds only the owner revisions: another owner revision id is 404 for a PDF grantee 422ms
+   ❯ revision status list GET /api/revisions (owner-only, write-free) (1)
+     × lists the owner revisions as status metadata only, writes nothing and is empty for another user 378ms
+   ❯ administrator: list and revoke, never create or use (3)
+     × lists every share with names, items and instants, and revokes one with a reason 372ms
+     × refuses an employee, an anonymous caller and every create attempt 368ms
+     × lets an administrator use a share only like any grantee, once the owner grants one 370ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 68 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > returns the caller’s audit events newest first with parsed before/after snapshots
+AssertionError: expected { …(10) } to match object { …(6) }
+(21 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "actor_display_name": null,
+    "actor_is_self": true,
+    "before": null,
+    "entity_id": "d8ce3e72-8b01-4461-b30b-d907f317c7d2",
+    "entity_type": "ot_leave_request",
+-   "via_share": false,
+  }
+
+ ❯ tests/integration/history.test.ts:66:21
+     64|     expect(times).toEqual([...times].sort().reverse());
+     65|     const reserve = events.find((event) => event.operation === 'ot_lea…
+     66|     expect(reserve).toMatchObject({
+       |                     ^
+     67|       entity_type: 'ot_leave_request',
+     68|       entity_id: reserved.body.request.id,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/68]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > names the grantee for events performed under a share and nobody else (WP3-T13B)
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/history.test.ts:227:58
+    225|     const items = { timesheets: 'edit', ot_read: false, pdf_download: …
+    226|     const granted = await t.request('POST', '/api/shares', { cookie: e…
+    227|     expect(granted.status, JSON.stringify(granted.body)).toBe(201);
+       |                                                          ^
+    228|     // The administrator also holds a share of the employee, yet accou…
+    229|     const toAdmin = await t.request('POST', '/api/shares', { cookie: e…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/68]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > stops naming a former grantee for events after the share ended
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/history.test.ts:271:28
+    269|       body: { grantee_email: '<email>', items: { times…
+    270|     });
+    271|     expect(granted.status).toBe(201);
+       |                            ^
+    272|     t.clock.advanceSeconds(60);
+    273|     expect((await t.request('POST', `/api/shares/${granted.body.share.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/68]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > exposes exactly the reviewed account and company-calendar routes
+AssertionError: expected [ 'GET /api/admin/automation', …(11) ] to deeply equal [ 'GET /api/admin/automation', …(13) ]
+
+- Expected
++ Received
+
+  [
+    "GET /api/admin/automation",
+    "GET /api/admin/operations",
+-   "GET /api/admin/shares",
+    "GET /api/admin/submissions",
+    "GET /api/admin/users",
+    "PATCH /api/admin/users/:id",
+    "POST /api/admin/calendar/import/commit",
+    "POST /api/admin/calendar/import/preview",
+    "POST /api/admin/payroll-exceptions",
+-   "POST /api/admin/shares/:id/revoke",
+    "POST /api/admin/users",
+    "POST /api/admin/users/:id/deactivate",
+    "POST /api/admin/users/:id/reactivate",
+    "PUT /api/admin/automation/activation",
+  ]
+
+ ❯ tests/integration/isolation.test.ts:301:27
+    299|
+    300|   it('exposes exactly the reviewed account and company-calendar routes…
+    301|     expect(adminRoutes()).toEqual(
+       |                           ^
+    302|       [
+    303|         'GET /api/admin/users',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/68]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > has no admin route that creates or uses a share (WP3-T13B)
+SqliteError: no such table: timesheet_shares
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/isolation.test.ts:431:17
+    429|       expect(response.status, `${method} ${path}`).toBe(404);
+    430|     }
+    431|     expect(t.db.prepare('SELECT count(*) FROM timesheet_shares').pluck…
+       |                 ^
+    432|   });
+    433|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 5 to be 6 // Object.is equality
+
+- Expected
++ Received
+
+- 6
++ 5
+
+ ❯ tests/integration/migrations.test.ts:89:20
+     87| describe('fresh SQLite migrations', () => {
+     88|   it('applies every migration to an empty file database with the requi…
+     89|     expect(LATEST).toBe(6);
+       |                    ^
+     90|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATE…
+     91|     const tables = db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0006, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [ 2, 3, 4, 5 ], version: 5 } to deeply equal { applied: [ 2, 3, 4, 5, 6 ], …(1) }
+
+- Expected
++ Received
+
+@@ -2,9 +2,8 @@
+    "applied": [
+      2,
+      3,
+      4,
+      5,
+-     6,
+    ],
+-   "version": 6,
++   "version": 5,
+  }
+
+ ❯ tests/integration/migrations.test.ts:236:71
+    234|     }
+    235|
+    236|     expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).…
+       |                                                                       ^
+    237|
+    238|     const after = snapshot(db);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { applied: [ 3, 4, 5 ], version: 5 } to deeply equal { applied: [ 3, 4, 5, 6 ], version: 6 }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      3,
+      4,
+      5,
+-     6,
+    ],
+-   "version": 6,
++   "version": 5,
+  }
+
+ ❯ tests/integration/migrations.test.ts:282:37
+    280|       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, wo…
+    281|     );
+    282|     expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6], v…
+       |                                     ^
+    283|     expect(getBalance(db, employee).postedMinutes).toBe(45);
+    284|     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0006 with unchanged rows and counts, a consistent schema and safe defaults
+AssertionError: expected { applied: [ 4, 5 ], version: 5 } to deeply equal { applied: [ 4, 5, 6 ], version: 6 }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      4,
+      5,
+-     6,
+    ],
+-   "version": 6,
++   "version": 5,
+  }
+
+ ❯ tests/integration/migrations.test.ts:471:71
+    469|     const balances = seed.users.map((user) => getBalance(db, user.id));
+    470|
+    471|     expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).…
+       |                                                                       ^
+    472|
+    473|     expect(snapshotV3(db)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0004 submission schema > creates STRICT tables whose columns hold no secret, credential or image body
+AssertionError: expected [ 'attachments', …(10) ] to have a length of 10 but got 11
+
+- Expected
++ Received
+
+- 10
++ 11
+
+ ❯ tests/integration/migrations.test.ts:724:19
+    722|   it('creates STRICT tables whose columns hold no secret, credential o…
+    723|     const added = EXPECTED_TABLES.filter((name) => !V3_TABLES.includes…
+    724|     expect(added).toHaveLength(10);
+       |                   ^
+    725|     for (const table of added) {
+    726|       const columns = db.prepare('SELECT name, type FROM pragma_table_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > creates one STRICT table with the item columns, the one-active index and the immutability triggers
+AssertionError: expected [] to deeply equal [ …(11) ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "name": "id",
+-     "notnull": 0,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "owner_user_id",
+-     "notnull": 1,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "grantee_user_id",
+-     "notnull": 1,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "timesheets_scope",
+-     "notnull": 1,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "ot_read",
+-     "notnull": 1,
+-     "type": "INTEGER",
+-   },
+-   {
+-     "name": "pdf_download",
+-     "notnull": 1,
+-     "type": "INTEGER",
+-   },
+-   {
+-     "name": "created_by",
+-     "notnull": 1,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "created_at",
+-     "notnull": 1,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "revoked_by",
+-     "notnull": 0,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "revoked_at",
+-     "notnull": 0,
+-     "type": "TEXT",
+-   },
+-   {
+-     "name": "revoke_reason",
+-     "notnull": 0,
+-     "type": "TEXT",
+-   },
+- ]
++ []
+
+ ❯ tests/integration/migrations.test.ts:1258:21
+    1256|     migrate(db);
+    1257|     const columns = db.prepare('SELECT name, type, "notnull" FROM prag…
+    1258|     expect(columns).toEqual([
+       |                     ^
+    1259|       { name: 'id', type: 'TEXT', notnull: 0 },
+    1260|       { name: 'owner_user_id', type: 'TEXT', notnull: 1 },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > accepts every valid item set and refuses an empty, self, foreign-created or malformed share
+AssertionError: none/0/1: expected [Function] to not throw an error but 'SqliteError: no such table: timesheet…' was thrown
+
+- Expected:
+undefined
+
++ Received:
+"SqliteError: no such table: timesheet_shares"
+
+ ❯ tests/integration/migrations.test.ts:1300:135
+    1298|         for (const pdf of [0, 1]) {
+    1299|           if (timesheets === 'none' && otRead === 0 && pdf === 0) cont…
+    1300|           expect(attempt({ timesheets_scope: timesheets, ot_read: otRe…
+       |                                                                                                                                       ^
+    1301|         }
+    1302|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > keeps at most one active share per owner and grantee; revoked rows stay as history
+SqliteError: no such table: timesheet_shares
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insert tests/integration/migrations.test.ts:1220:8
+    1218|     const columns = Object.keys(row);
+    1219|     target
+    1220|       .prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES ($…
+       |        ^
+    1221|       .run(...Object.values(row));
+    1222|   }
+ ❯ tests/integration/migrations.test.ts:1326:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > refuses DELETE, any change of identity or items, and a second revocation
+SqliteError: no such table: timesheet_shares
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insert tests/integration/migrations.test.ts:1220:8
+    1218|     const columns = Object.keys(row);
+    1219|     target
+    1220|       .prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES ($…
+       |        ^
+    1221|       .run(...Object.values(row));
+    1222|   }
+ ❯ tests/integration/migrations.test.ts:1357:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/68]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live
+AssertionError: expected { applied: [], version: 5 } to deeply equal { applied: [ 6 ], version: 6 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     6,
+-   ],
+-   "version": 6,
++   "applied": [],
++   "version": 5,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1450:71
+    1448|     const balance = getBalance(db, ids.owner);
+    1449|
+    1450|     expect(migrate(db, MIGRATIONS, new Date('2026-10-06T18:00:00Z'))).…
+       |                                                                       ^
+    1451|
+    1452|     expect(rowsOf()).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/68]⎯
+
+ FAIL  tests/integration/sharing-matrix.test.ts > route inventory > registers exactly the matrix routes under /api/shared, each behind its guard
+AssertionError: expected [] to deeply equal [ …(17) ]
+
+- Expected
++ Received
+
+- [
+-   "DELETE /api/shared/:ownerId/sessions/:id 2",
+-   "GET /api/shared/:ownerId/calendar 2",
+-   "GET /api/shared/:ownerId/days/:workDate 2",
+-   "GET /api/shared/:ownerId/ot/ledger 2",
+-   "GET /api/shared/:ownerId/ot/summary 2",
+-   "GET /api/shared/:ownerId/periods 2",
+-   "GET /api/shared/:ownerId/periods/current 2",
+-   "GET /api/shared/:ownerId/policies 2",
+-   "GET /api/shared/:ownerId/revisions 2",
+-   "GET /api/shared/:ownerId/revisions/:id/pdf 2",
+-   "GET /api/shared/:ownerId/revisions/pending-lines 2",
+-   "GET /api/shared/:ownerId/sessions/:id 2",
+-   "GET /api/shared/:ownerId/timesheets/:payrollDate 2",
+-   "POST /api/shared/:ownerId/days/:workDate/sessions 2",
+-   "POST /api/shared/:ownerId/days/batch 2",
+-   "PUT /api/shared/:ownerId/days/:workDate 2",
+-   "PUT /api/shared/:ownerId/sessions/:id 2",
+- ]
++ []
+
+ ❯ tests/integration/sharing-matrix.test.ts:291:24
+    289|       expect(expected, `no matrix entry for ${route}`).toContain(route…
+    290|     }
+    291|     expect(registered).toEqual(expected);
+       |                        ^
+    292|     expect(app.routes.filter((route) => route.path.startsWith('/api/sh…
+    293|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/68]⎯
+
+ FAIL  tests/integration/sharing-matrix.test.ts > route inventory > keeps every self-only /api route unchanged and adds only the reviewed sharing routes
+AssertionError: expected [ 'ALL /* 1', 'ALL /api/* 5', …(62) ] to deeply equal [ 'ALL /* 1', 'ALL /api/* 5', …(69) ]
+
+- Expected
++ Received
+
+@@ -3,11 +3,10 @@
+    "ALL /api/* 5",
+    "ALL /api/admin/* 1",
+    "DELETE /api/sessions/:id 2",
+    "GET /api/admin/automation 1",
+    "GET /api/admin/operations 1",
+-   "GET /api/admin/shares 1",
+    "GET /api/admin/submissions 1",
+    "GET /api/admin/users 1",
+    "GET /api/auth/me 2",
+    "GET /api/calendar 2",
+    "GET /api/days/:workDate 2",
+@@ -19,28 +18,25 @@
+    "GET /api/ot/ledger 2",
+    "GET /api/ot/summary 2",
+    "GET /api/periods 2",
+    "GET /api/periods/current 2",
+    "GET /api/policies 2",
+-   "GET /api/revisions 2",
+    "GET /api/revisions/:id/pdf 2",
+    "GET /api/revisions/pending-lines 2",
+    "GET /api/sessions/:id 2",
+    "GET /api/settings/submission 2",
+    "GET /api/settings/submission/versions 2",
+    "GET /api/settings/submission/versions/:id 2",
+-   "GET /api/shares 2",
+    "GET /api/signatures/:id 2",
+    "GET /api/signatures/current 2",
+    "GET /api/timesheets/:payrollDate 2",
+    "GET /api/timesheets/:payrollDate/finalization 2",
+    "GET /api/timesheets/:payrollDate/review 2",
+    "PATCH /api/admin/users/:id 1",
+    "POST /api/admin/calendar/import/commit 1",
+    "POST /api/admin/calendar/import/preview 1",
+    "POST /api/admin/payroll-exceptions 1",
+-   "POST /api/admin/shares/:id/revoke 1",
+    "POST /api/admin/users 1",
+    "POST /api/admin/users/:id/deactivate 1",
+    "POST /api/admin/users/:id/reactivate 1",
+    "POST /api/auth/login 1",
+    "POST /api/auth/logout 2",
+@@ -58,16 +54,13 @@
+    "POST /api/revisions/:id/resend 2",
+    "POST /api/settings/submission 2",
+    "POST /api/settings/submission/auto-image/authorize 2",
+    "POST /api/settings/submission/auto-image/revoke 2",
+    "POST /api/settings/submission/preview 2",
+-   "POST /api/shares 2",
+-   "POST /api/shares/:id/revoke 2",
+    "POST /api/signatures 4",
+    "POST /api/timesheets/:payrollDate/late-review 2",
+    "POST /api/timesheets/:payrollDate/revisions 2",
+    "POST /api/timesheets/:payrollDate/signoff 2",
+    "PUT /api/admin/automation/activation 1",
+    "PUT /api/days/:workDate 2",
+    "PUT /api/sessions/:id 2",
+-   "PUT /api/shares/:id 2",
+  ]
+
+ ❯ tests/integration/sharing-matrix.test.ts:297:21
+    295|   it('keeps every self-only /api route unchanged and adds only the rev…
+    296|     const outside = inventory().filter((route) => !route.includes(' /a…
+    297|     expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED].so…
+       |                     ^
+    298|   });
+    299|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/68]⎯
+
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 0 > answers every matrix route by item for timesheets=none ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 1 > answers every matrix route by item for timesheets=none ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 2 > answers every matrix route by item for timesheets=none ot=true pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 4 > answers every matrix route by item for timesheets=view ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 5 > answers every matrix route by item for timesheets=view ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 6 > answers every matrix route by item for timesheets=view ot=true pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 7 > answers every matrix route by item for timesheets=edit ot=false pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 8 > answers every matrix route by item for timesheets=edit ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 9 > answers every matrix route by item for timesheets=edit ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 10 > answers every matrix route by item for timesheets=edit ot=true pdf=true
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be less than 300
+ ❯ share tests/integration/sharing-matrix.test.ts:280:58
+    278|       ? await t.request('POST', '/api/shares', { cookie: owner, body: …
+    279|       : await t.request('PUT', `/api/shares/${shareId}`, { cookie: own…
+    280|   expect(response.status, JSON.stringify(response.body)).toBeLessThan(…
+       |                                                          ^
+    281|   shareId = response.body.share.id as string;
+    282| }
+ ❯ tests/integration/sharing-matrix.test.ts:308:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/68]⎯
+
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 0 > never reaches the owner-only routes for timesheets=none ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 1 > never reaches the owner-only routes for timesheets=none ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 2 > never reaches the owner-only routes for timesheets=none ot=true pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 3 > never reaches the owner-only routes for timesheets=view ot=false pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 4 > never reaches the owner-only routes for timesheets=view ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 5 > never reaches the owner-only routes for timesheets=view ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 6 > never reaches the owner-only routes for timesheets=view ot=true pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 7 > never reaches the owner-only routes for timesheets=edit ot=false pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 8 > never reaches the owner-only routes for timesheets=edit ot=false pdf=true
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 9 > never reaches the owner-only routes for timesheets=edit ot=true pdf=false
+ FAIL  tests/integration/sharing-matrix.test.ts > item set 10 > never reaches the owner-only routes for timesheets=edit ot=true pdf=true
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be less than 300
+ ❯ share tests/integration/sharing-matrix.test.ts:280:58
+    278|       ? await t.request('POST', '/api/shares', { cookie: owner, body: …
+    279|       : await t.request('PUT', `/api/shares/${shareId}`, { cookie: own…
+    280|   expect(response.status, JSON.stringify(response.body)).toBeLessThan(…
+       |                                                          ^
+    281|   shareId = response.body.share.id as string;
+    282| }
+ ❯ tests/integration/sharing-matrix.test.ts:330:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > grants by exact account email and lists the share for both parties, audited without personal content
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/sharing.test.ts:140:60
+    138|   it('grants by exact account email and lists the share for both parti…
+    139|     const response = await grant(items('view'), '  <email>…
+    140|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+    141|     const share = response.body.share;
+    142|     expect(share).toEqual({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > answers the same generic 422 for an unknown or inactive address and refuses self and empty shares, writing nothing
+SqliteError: no such table: timesheet_shares
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ personalState tests/integration/sharing.test.ts:118:18
+    116|     revisions: t.db.prepare('SELECT * FROM timesheet_revisions ORDER B…
+    117|     jobs: t.db.prepare('SELECT * FROM jobs ORDER BY rowid').all(),
+    118|     shares: t.db.prepare('SELECT * FROM timesheet_shares ORDER BY rowi…
+       |                  ^
+    119|     audit: count('SELECT count(*) FROM audit_events'),
+    120|   };
+ ❯ tests/integration/sharing.test.ts:197:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > rate-limits repeated grantee_not_found answers per account, also for an existing address
+AssertionError: 0: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/sharing.test.ts:231:46
+    229|     for (let index = 0; index < 10; index += 1) {
+    230|       const response = await grant(items('view'), `missing-${index}@ex…
+    231|       expect(response.status, String(index)).toBe(422);
+       |                                              ^
+    232|     }
+    233|     const limited = await grant(items('view'));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > refuses a second active share for the same grantee
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:246:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > changes items by revoking and replacing the row in one step, audited with before and after
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:254:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > lets the owner revoke, effective on the next request, audited once
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:295:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > lets the grantee leave, attributed to the grantee in the owner audit
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:317:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > refuses revocation by anyone but the two parties, and never re-shares
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:333:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > shows a view grantee the owner timesheet, never the grantee own data
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:369:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > lets an edit grantee write into the owner timesheet, attributed to the grantee; a view grantee gets 403 grant_scope
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:387:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > never offers Clock in/out, sign-off, signatures, review, settings, leave, evidence, history or policies to a full grantee
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:443:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > requires every object id to belong to the owner
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:483:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > suspends access while the owner is deactivated, without revoking, and restores it on reactivation
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:499:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > suspends access while the grantee is deactivated and restores it after reactivation and a new sign-in
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:509:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > applies a change of items on the next request
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:520:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses POST /days/2026-09-22/sessions with 404 and writes nothing when the share is revoked mid-request
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses PUT /days/2026-09-23 with 404 and writes nothing when the share is revoked mid-request
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses POST /days/batch with 404 and writes nothing when the share is revoked mid-request
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses PUT /sessions/:id with 404 and writes nothing when the share is revoked mid-request
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses DELETE /sessions/:id with 404 and writes nothing when the share is revoked mid-request
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:580:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses a write with 403 grant_scope when the share drops to view mid-request
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:590:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses a write with 404 when the owner is deactivated mid-request
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:610:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > final PDF downloads (pdf_download) > sends the owner PDF to a grantee with the PDF item and audits every download
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:660:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > final PDF downloads (pdf_download) > refuses the download without the PDF item, without a share and after revocation, and audits nothing
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:690:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > final PDF downloads (pdf_download) > finds only the owner revisions: another owner revision id is 404 for a PDF grantee
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:708:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > revision status list GET /api/revisions (owner-only, write-free) > lists the owner revisions as status metadata only, writes nothing and is empty for another user
+AssertionError: expected { error: { code: 'not_found', …(1) } } to deeply equal { revisions: [] }
+
+- Expected
++ Received
+
+  {
+-   "revisions": [],
++   "error": {
++     "code": "not_found",
++     "message": "Endpoint not found",
++   },
+  }
+
+ ❯ tests/integration/sharing.test.ts:719:80
+    717|   it('lists the owner revisions as status metadata only, writes nothin…
+    718|     const files = new FileStore(join(dirname(t.config.databasePath), '…
+    719|     expect((await t.request('GET', '/api/revisions', { cookie: owner }…
+       |                                                                                ^
+    720|     const settings = await t.request('POST', '/api/settings/submission…
+    721|       cookie: owner,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > administrator: list and revoke, never create or use > lists every share with names, items and instants, and revokes one with a reason
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:786:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > administrator: list and revoke, never create or use > refuses an employee, an anonymous caller and every create attempt
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:831:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/68]⎯
+
+ FAIL  tests/integration/sharing.test.ts > administrator: list and revoke, never create or use > lets an administrator use a share only like any grantee, once the owner grants one
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ granted tests/integration/sharing.test.ts:79:58
+     77| async function granted(granted: Items, email = grantee.email): Promise…
+     78|   const response = await grant(granted, email);
+     79|   expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                          ^
+     80|   return response.body.share.id as string;
+     81| }
+ ❯ tests/integration/sharing.test.ts:847:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/68]⎯
+
+
+ Test Files  5 failed (5)
+      Tests  68 failed | 55 passed (123)
+   Start at  01:43:18
+   Duration  12.92s (tests 86%, import 9%, transform 5%)
+
+EXIT 1

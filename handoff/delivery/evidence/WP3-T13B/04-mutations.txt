@@ -1,0 +1,81 @@
+WP3-T13B mutation checks (script: mutations.py.txt). Each mutation computed in memory before the file was opened for writing; restored byte-identical (SHA-256 compared).
+Command: python mutations.py <node.exe> <log>   (suites: sharing, sharing-matrix, history, isolation)
+
+M1 guard ignores the item (no 403 grant_scope at the door)
+  file: src/server/http/auth.ts
+  exit: 1 -> CAUGHT
+  Tests  11 failed | 72 passed (83)
+  restored byte-identical: True (sha256 47f71478b37ef2cf)
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 0 > answers every matrix route by item for timesheets=none ot=false pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 1 > answers every matrix route by item for timesheets=none ot=true pdf=false
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 2 > answers every matrix route by item for timesheets=none ot=true pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false
+M2 no re-check inside the write transaction
+  file: src/server/http/auth.ts
+  exit: 1 -> CAUGHT
+  Tests  7 failed | 76 passed (83)
+  restored byte-identical: True (sha256 47f71478b37ef2cf)
+    FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses POST /days/2026-09-22/sessions with 404 and writes nothing when the share is revoked mid-request
+    FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses PUT /days/2026-09-23 with 404 and writes nothing when the share is revoked mid-request
+    FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses POST /days/batch with 404 and writes nothing when the share is revoked mid-request
+    FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses PUT /sessions/:id with 404 and writes nothing when the share is revoked mid-request
+M3 subject taken from the session instead of the owner
+  file: src/server/http/auth.ts
+  exit: 1 -> CAUGHT
+  Tests  16 failed | 67 passed (83)
+  restored byte-identical: True (sha256 47f71478b37ef2cf)
+    FAIL  tests/integration/history.test.ts > GET /api/history > names the grantee for events performed under a share and nobody else (WP3-T13B)
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 0 > answers every matrix route by item for timesheets=none ot=false pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 2 > answers every matrix route by item for timesheets=none ot=true pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false
+M4 owner account status not checked live
+  file: src/server/services/users.ts
+  exit: 1 -> CAUGHT
+  Tests  2 failed | 81 passed (83)
+  restored byte-identical: True (sha256 7a160a84c042ae20)
+    FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > suspends access while the owner is deactivated, without revoking, and restores it on reactivation
+    FAIL  tests/integration/sharing.test.ts > the grant is re-checked inside the write transaction (revocation race) > refuses a write with 404 when the owner is deactivated mid-request
+M5 grantee PDF download not audited
+  file: src/server/routes/submission.ts
+  exit: 1 -> CAUGHT
+  Tests  1 failed | 82 passed (83)
+  restored byte-identical: True (sha256 5df08814823e1bb5)
+    FAIL  tests/integration/sharing.test.ts > final PDF downloads (pdf_download) > sends the owner PDF to a grantee with the PDF item and audits every download
+M6 Clock in added to the shared allowlist
+  file: src/server/routes/shares.ts
+  exit: 1 -> CAUGHT
+  Tests  13 failed | 70 passed (83)
+  restored byte-identical: True (sha256 fbe542d4b53c8088)
+    FAIL  tests/integration/sharing-matrix.test.ts > route inventory > registers exactly the matrix routes under /api/shared, each behind its guard
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 0 > never reaches the owner-only routes for timesheets=none ot=false pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 1 > never reaches the owner-only routes for timesheets=none ot=true pdf=false
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 2 > never reaches the owner-only routes for timesheets=none ot=true pdf=true
+M7 history names any other actor while a share ever existed (window dropped)
+  file: src/server/services/history.ts
+  exit: 1 -> CAUGHT
+  Tests  1 failed | 82 passed (83)
+  restored byte-identical: True (sha256 439fd3a7e44396cc)
+    FAIL  tests/integration/history.test.ts > GET /api/history > stops naming a former grantee for events after the share ended
+M8 anyone may revoke a share (third party treated as the grantee)
+  file: src/server/services/shares.ts
+  exit: 1 -> CAUGHT
+  Tests  1 failed | 82 passed (83)
+  restored byte-identical: True (sha256 98c384e78d01a4b4)
+    FAIL  tests/integration/sharing.test.ts > grant, list, change, revoke and leave (FR-17) > refuses revocation by anyone but the two parties, and never re-shares
+M9 revision list not scoped to the owner
+  file: src/server/routes/submission.ts
+  exit: 1 -> CAUGHT
+  Tests  1 failed | 82 passed (83)
+  restored byte-identical: True (sha256 5df08814823e1bb5)
+    FAIL  tests/integration/sharing.test.ts > revision status list GET /api/revisions (owner-only, write-free) > lists the owner revisions as status metadata only, writes nothing and is empty for another user
+M10 view items admit writes (edit check widened)
+  file: src/server/services/shares.ts
+  exit: 1 -> CAUGHT
+  Tests  8 failed | 75 passed (83)
+  restored byte-identical: True (sha256 98c384e78d01a4b4)
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 4 > answers every matrix route by item for timesheets=view ot=false pdf=true
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 5 > answers every matrix route by item for timesheets=view ot=true pdf=false
+    FAIL  tests/integration/sharing-matrix.test.ts > item set 6 > answers every matrix route by item for timesheets=view ot=true pdf=true
+
+10 of 10 mutations caught

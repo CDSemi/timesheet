@@ -541,6 +541,17 @@ describe('route inventory: no route posts a credit or debit', () => {
         'PUT /api/admin/automation/activation',
         'PUT /api/days/:workDate',
         'PUT /api/sessions/:id',
+        // Sharing (WP3-T13B): the caller's own grants and an admin revocation post nothing; the shared manual edits
+        // are the owner's edit routes behind a share (matrix in sharing-matrix.test.ts) and post nothing either.
+        'POST /api/shares',
+        'PUT /api/shares/:id',
+        'POST /api/shares/:id/revoke',
+        'POST /api/admin/shares/:id/revoke',
+        'DELETE /api/shared/:ownerId/sessions/:id',
+        'POST /api/shared/:ownerId/days/:workDate/sessions',
+        'POST /api/shared/:ownerId/days/batch',
+        'PUT /api/shared/:ownerId/days/:workDate',
+        'PUT /api/shared/:ownerId/sessions/:id',
       ].sort(),
     );
     for (const route of appRoutes()) {
@@ -548,7 +559,8 @@ describe('route inventory: no route posts a credit or debit', () => {
       expect(path, route).not.toMatch(/credit|debit|correction|adjust|posting/i);
     }
     const ledgerRoutes = appRoutes().filter((route) => route.includes('/ot/ledger'));
-    expect(ledgerRoutes).toEqual(['GET /api/ot/ledger']);
+    // The shared read-only ledger (WP3-T13B, ot_read item) is the same GET handler behind a share.
+    expect(ledgerRoutes).toEqual(['GET /api/ot/ledger', 'GET /api/shared/:ownerId/ot/ledger']);
   });
 
   it('never imports a ledger posting function into an HTTP router', () => {

@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T13-FREEZE",
+  "next_task_id": "WP3-T13B-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -67,6 +67,10 @@
       "observation": "WP3-T00-FREEZE attempt 1: validate_orchestration.py (validate_commits) refused a done commit task recorded without 'branch' and 'pushed' (WP2-ACCEPT). Every done commit task needs branch, commit_sha and pushed: true; the coordinator records them at hand-back."
     },
     {
+      "date": "2026-10-05",
+      "observation": "WP3-T13B-FREEZE attempt 1: the precommit check blocked an email address in a worker's red-run evidence log. Worker briefs should require running the precommit check over their own evidence (as WP3-T02/T05 did) and masking email tokens as <email> before hand-back."
+    },
+    {
       "date": "2026-10-04",
       "observation": "WP3-T01-FREEZE attempt 1: the precommit check blocks user-profile path literals (a Windows Users-folder pattern) in source and test files, even synthetic ones; only evidence logs may be masked. Worker briefs must ask for neutral synthetic roots or paths built at run time."
     },
@@ -100,7 +104,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "943027b3a328f174ef3de5c45ee4677906af3189",
+    "last_commit": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
     "unpushed": []
   },
   "owner_decisions": [
@@ -6480,9 +6484,115 @@
       "id": "WP3-T13-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T13"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8015ec67c30e99a5",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T13-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T13-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T13-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T13-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "943027b3a328f174ef3de5c45ee4677906af3189",
+      "branch": "main",
+      "commit_sha": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
+      "pushed": true,
+      "source_digest": "7b04f0b13b2fe7915121c78f2d82515df199e2628350aea404205fbe526f7301",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 57 paths (expected set), parent 943027b, remote SHA identical; digest 7b04f0b1 matched; 6 synthetic screenshots viewed; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T13B starts on 5b90d30."
+    },
+    {
+      "id": "WP3-T13B",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T13-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af519e04c005cee5c",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/db/migrations/0006_timesheet_shares.ts",
+        "src/server/db/migrations.ts",
+        "src/server/services/shares.ts",
+        "src/server/routes/shares.ts",
+        "src/server/app.ts",
+        "src/server/http/auth.ts",
+        "src/server/services/history.ts",
+        "src/server/services/users.ts",
+        "src/server/routes/admin.ts",
+        "src/server/routes/api.ts",
+        "src/server/routes/ot.ts",
+        "src/server/routes/submission.ts",
+        "tests/integration/sharing.test.ts",
+        "tests/integration/sharing-matrix.test.ts",
+        "tests/integration/history.test.ts",
+        "tests/integration/isolation.test.ts",
+        "tests/integration/migrations.test.ts",
+        "handoff/delivery/tasks/WP3-T13B.md",
+        "handoff/delivery/evidence/WP3-T13B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13B.md",
+      "report": "handoff/delivery/tasks/WP3-T13B.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13B/01-baseline-suite.txt",
+        "handoff/delivery/evidence/WP3-T13B/02-red.txt",
+        "handoff/delivery/evidence/WP3-T13B/03-green.txt",
+        "handoff/delivery/evidence/WP3-T13B/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-T13B/05-route-inventory-compare.txt",
+        "handoff/delivery/evidence/WP3-T13B/06-e2e.txt",
+        "handoff/delivery/evidence/WP3-T13B/07-verify.txt",
+        "handoff/delivery/evidence/WP3-T13B/08-digest.txt"
+      ],
+      "baseline_commit": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
+      "source_digest": "f3df3b86f5d0008f838f593aafd26631e93b3a476831744e3f9fad56809548ab",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: migration 0006 timesheet_shares with per-item columns, one active share per pair, created_by = owner, no deletes and revoke-once triggers. services/shares.ts and routes/shares.ts: /api/shares grant, change, revoke, leave, all audited; 422 grantee_not_found with a rate limit (429 after 10). Admin GET /api/admin/shares and revoke, no create. /api/shared/:ownerId exposes 17 routes from the T13A factories; requireShare resolves the share live and every write transaction re-checks it. Owner-only GET /api/revisions (status fields only). History shows the grantee name for events under a share. Matrix 11 item sets x 17 routes plus 31 never-shared paths green; race 5 writes and 2 variants refused, nothing written; red-first 68 failed; 10/10 mutations; self-only route inventory identical; e2e exit 0 (111 passed); verify exit 0, 59 files/1356 tests, 0 deprecation lines. Deviation: tests/integration/ot-api.test.ts route lists gained the new routes.",
+      "next_action": "None; WP3-T13B-FREEZE."
+    },
+    {
+      "id": "WP3-T13B-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T13B"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -6496,25 +6606,33 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ac758ef42584ed259",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP3-T13-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T13-FREEZE"
+      "attempt": 2,
+      "history": [
+        {
+          "attempt": 1,
+          "agent_id": "ac758ef42584ed259",
+          "outcome": "not committed: precommit-check exit 1, BLOCK email in handoff/delivery/evidence/WP3-T13B/02-red.txt:655 (an evidence log). HEAD 5b90d30 unchanged, set and digest f3df3b86 matched, 38 paths staged, diff --check 0; later checks not run. Attempt 2 authorizes masking email tokens in the WP3-T13B evidence only."
+        }
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T13-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T13-FREEZE.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T13B-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T13B-FREEZE",
+        "handoff/delivery/evidence/WP3-T13B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T13B-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T13B-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "943027b3a328f174ef3de5c45ee4677906af3189",
+      "baseline_commit": "5b90d30d7e4b5410770b01d04bd9ff8ee2663149",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "7b04f0b13b2fe7915121c78f2d82515df199e2628350aea404205fbe526f7301",
+      "source_digest": "f3df3b86f5d0008f838f593aafd26631e93b3a476831744e3f9fad56809548ab",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T13 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T13B set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

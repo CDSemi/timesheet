@@ -172,6 +172,31 @@ describe('two-user isolation (AC-01)', () => {
   });
 });
 
+describe('the shared path without a share item (AC-01, AC-16)', () => {
+  it('answers 404 to anyone naming another owner without a share, admin included, and writes nothing', async () => {
+    const before = sessionRow(employeeSessionId);
+    const probes: Array<[string, string, unknown?]> = [
+      ['GET', '/calendar'],
+      ['GET', '/timesheets/2026-10-02'],
+      ['GET', `/sessions/${employeeSessionId}`],
+      ['PUT', `/sessions/${employeeSessionId}`, { ...nineToSix('2026-09-21'), expected_version: 1, reason: 'swap attempt' }],
+      ['DELETE', `/sessions/${employeeSessionId}`, { expected_version: 1, reason: 'swap attempt' }],
+      ['GET', '/ot/summary'],
+      ['GET', '/revisions'],
+    ];
+    for (const [method, path, body] of probes) {
+      const asAdmin = await t.request(method, `/api/shared/${t.userIds.employee}${path}`, { cookie: admin, body });
+      expect(asAdmin.status, `admin ${method} ${path}`).toBe(404);
+      const asEmployee = await t.request(method, `/api/shared/${t.userIds.admin}${path}`, { cookie: employee, body });
+      expect(asEmployee.status, `employee ${method} ${path}`).toBe(404);
+      // Naming oneself is not a share either.
+      const self = await t.request(method, `/api/shared/${t.userIds.employee}${path}`, { cookie: employee, body });
+      expect(self.status, `self ${method} ${path}`).toBe(404);
+    }
+    expect(sessionRow(employeeSessionId)).toEqual(before);
+  });
+});
+
 describe('WP2 OT, leave, evidence and history isolation (AC-01)', () => {
   async function employeeLeave() {
     postCredit(
@@ -291,6 +316,9 @@ describe('admin router is account administration, not private-data access (AC-01
         // addresses per person and period, read-only, never a timesheet detail.
         'GET /api/admin/operations',
         'GET /api/admin/submissions',
+        // Sharing grants (WP3-T13B, FR-17): list and revoke only; an administrator never creates or uses a share here.
+        'GET /api/admin/shares',
+        'POST /api/admin/shares/:id/revoke',
       ].sort(),
     );
     for (const route of adminRoutes()) {
@@ -319,6 +347,8 @@ describe('admin router is account administration, not private-data access (AC-01
       '../services/calendars.ts',
       '../services/holidayImport.ts',
       '../services/operationsStatus.ts',
+      // WP3-T13B: the grant records only (owner, grantee, items, instants); never a timesheet row.
+      '../services/shares.ts',
       '../services/users.ts',
       '../types.ts',
     ]);
@@ -386,6 +416,19 @@ describe('admin router is account administration, not private-data access (AC-01
         'updated_at',
       ]);
     }
+  });
+
+  it('has no admin route that creates or uses a share (WP3-T13B)', async () => {
+    for (const [method, path] of [
+      ['POST', '/api/admin/shares'],
+      ['PUT', '/api/admin/shares/x'],
+      ['GET', `/api/admin/shares/${t.userIds.employee}/calendar`],
+      ['GET', `/api/admin/shared/${t.userIds.employee}/calendar`],
+    ] as const) {
+      const response = await t.request(method, path, { cookie: admin, ...(method === 'GET' ? {} : { body: {} }) });
+      expect(response.status, `${method} ${path}`).toBe(404);
+    }
+    expect(t.db.prepare('SELECT count(*) FROM timesheet_shares').pluck().get()).toBe(0);
   });
 
   it('still answers 404 to an admin swapping identifiers after administering the employee account', async () => {

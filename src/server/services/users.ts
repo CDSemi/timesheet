@@ -73,6 +73,21 @@ export function getUserAccount(db: Db, userId: string): UserAccount | undefined 
   return db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM users WHERE id = ?`).get(userId) as UserAccount | undefined;
 }
 
+/** The account with this id while it is active (status read live), or undefined. */
+export function getActiveAccount(db: Db, userId: string): UserAccount | undefined {
+  return db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM users WHERE id = ? AND status = 'active'`).get(userId) as UserAccount | undefined;
+}
+
+/**
+ * The active account with exactly this (normalized) email, or undefined for an unknown or
+ * deactivated one; callers answer both cases alike so an address reveals nothing more.
+ */
+export function findActiveAccountByEmail(db: Db, email: string): UserAccount | undefined {
+  return db
+    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM users WHERE email = ? AND status = 'active'`)
+    .get(normalizeEmail(email)) as UserAccount | undefined;
+}
+
 export function listUsers(db: Db): UserAccount[] {
   return db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM users ORDER BY created_at, email`).all() as UserAccount[];
 }

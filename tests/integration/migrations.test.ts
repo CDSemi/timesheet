@@ -31,11 +31,15 @@ const EXPECTED_TABLES = [
   'signoffs',
   'submission_settings',
   'timesheet_revisions',
+  'timesheet_shares',
   'timesheets',
   'users',
   'work_policies',
   'work_sessions',
 ];
+
+/** Tables created by migrations 0001-0005 (before 0006 adds the share records). */
+const V5_TABLES = EXPECTED_TABLES.filter((name) => name !== 'timesheet_shares');
 
 /** Tables created by migrations 0001-0003 (the schema of the accepted WP2 source 5fafeae). */
 const V3_TABLES = [
@@ -82,7 +86,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(5);
+    expect(LATEST).toBe(6);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -109,6 +113,7 @@ describe('fresh SQLite migrations', () => {
       'day_entry_source',
       'submission',
       'automatic_presentation',
+      'timesheet_shares',
     ]);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
@@ -156,12 +161,14 @@ describe('fresh SQLite migrations', () => {
 });
 
 describe('committed migrations', () => {
-  // Checksums recorded by databases created at WP1 (0001), the accepted WP2 source 5fafeae (0002, 0003) and WP3-T01 (0004).
+  // Checksums recorded by databases created at WP1 (0001), the accepted WP2 source 5fafeae (0002, 0003), WP3-T01 (0004)
+  // and WP3-T07B (0005).
   it.each([
     [1, 'initial', '1c0b248d74c4d83a11282dee28aaf056ae083fb12e0d5b5534cfebd7f2f0c9b5'],
     [2, 'ot_ledger', 'e9a6b285ba8fa97883e6481c700b2c0ac4d0bd9b9ee4f75acfd93b551d9da0c3'],
     [3, 'day_entry_source', '773cbb3dd33936b276353f12296cf679729188bd2bebd4b8c8f34e10c0bace06'],
     [4, 'submission', '73563328032f2d909d16f572130dca14f42804b661fd463daca474c45486457c'],
+    [5, 'automatic_presentation', 'e21e195ffc60d71b89a6f032bbf3dca62fb873f1919d934fe0b63b873ebfa14d'],
   ])('never edits migration %i (%s): its checksum stays pinned', (version, name, checksum) => {
     const migration = MIGRATIONS.find((item) => item.version === version);
     if (migration === undefined) throw new Error(`migration ${version} missing`);
@@ -191,7 +198,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
     );
   }
 
-  it('applies 0002-0005, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+  it('applies 0002-0006, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
     const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
     expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
     const seed = await seedSynthetic(db, new MutableClock(AT), {
@@ -226,7 +233,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5], version: 5 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6], version: 6 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -236,13 +243,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect.objectContaining({ version: 3, name: 'day_entry_source', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 4, name: 'submission', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 5, name: 'automatic_presentation', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 6, name: 'timesheet_shares', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    expect(db.pragma('user_version', { simple: true })).toBe(6);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -254,7 +262,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 5 });
+    expect(migrate(db)).toEqual({ applied: [], version: 6 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -271,7 +279,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5], version: 5 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6], version: 6 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -440,7 +448,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     );
   }
 
-  it('applies 0004 and 0005 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
+  it('applies 0004-0006 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
     // 0001-0003 are byte-identical to 5fafeae (checksums pinned above), so this builds the same schema.
     const v3 = MIGRATIONS.filter((migration) => migration.version <= 3);
     expect(migrate(db, v3)).toEqual({ applied: [1, 2, 3], version: 3 });
@@ -460,13 +468,13 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     const balances = seed.users.map((user) => getBalance(db, user.id));
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5], version: 5 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6], version: 6 });
 
     expect(snapshotV3(db)).toEqual(before);
     expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
-    expect(db.pragma('user_version', { simple: true })).toBe(5);
+    expect(db.pragma('user_version', { simple: true })).toBe(6);
     // Existing timesheets are not imported history; automation stays inactive until the owner records it.
     expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
     expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
@@ -482,7 +490,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     for (const name of EXPECTED_TABLES.filter((table) => !V3_TABLES.includes(table) && table !== 'operations_state')) {
       expect(db.prepare(`SELECT count(*) FROM ${name}`).pluck().get(), name).toBe(0);
     }
-    expect(migrate(db)).toEqual({ applied: [], version: 5 });
+    expect(migrate(db)).toEqual({ applied: [], version: 6 });
   });
 });
 
@@ -712,7 +720,7 @@ describe('migration 0004 submission schema', () => {
   });
 
   it('creates STRICT tables whose columns hold no secret, credential or image body', () => {
-    const added = EXPECTED_TABLES.filter((name) => !V3_TABLES.includes(name));
+    const added = V5_TABLES.filter((name) => !V3_TABLES.includes(name));
     expect(added).toHaveLength(10);
     for (const table of added) {
       const columns = db.prepare('SELECT name, type FROM pragma_table_info(?)').all(table) as Array<{ name: string; type: string }>;
@@ -1155,7 +1163,7 @@ describe('migration 0005 automatic presentation', () => {
       signature_attachment_id: 'sig-emp',
     });
 
-    const tables = EXPECTED_TABLES.filter((name) => name !== 'schema_migrations');
+    const tables = V5_TABLES.filter((name) => name !== 'schema_migrations');
     const rowsOf = (): Record<string, unknown[]> =>
       Object.fromEntries(
         tables.map((name) => [name, db.prepare(`SELECT ${name === 'submission_settings' ? V4_SETTINGS_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all()]),
@@ -1166,7 +1174,8 @@ describe('migration 0005 automatic presentation', () => {
     }
     const recorded = db.prepare('SELECT * FROM schema_migrations ORDER BY version').all();
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [5], version: 5 });
+    const v5 = MIGRATIONS.filter((migration) => migration.version <= 5);
+    expect(migrate(db, v5, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [5], version: 5 });
 
     expect(rowsOf()).toEqual(before);
     expect(db.prepare('SELECT * FROM schema_migrations ORDER BY version').all().slice(0, 4)).toEqual(recorded);
@@ -1193,6 +1202,293 @@ describe('migration 0005 automatic presentation', () => {
     expectSqliteError(() => insert('submission_settings', settingsRow('set-emp-4', ids.employee, 4, { auto_note_text: 'x'.repeat(121) })), NOTE_CHECK);
     expectSqliteError(() => db.prepare("UPDATE submission_settings SET auto_note_enabled = 1 WHERE id = 'set-emp-1'").run(), /immutable_submission_settings/);
     expectSqliteError(() => db.prepare("DELETE FROM submission_settings WHERE id = 'set-emp-1'").run(), /immutable_submission_settings/);
-    expect(migrate(db)).toEqual({ applied: [], version: 5 });
+    expect(migrate(db, v5)).toEqual({ applied: [], version: 5 });
+  });
+});
+
+describe('migration 0006 timesheet shares', () => {
+  const AT = '2026-10-05T18:00:00Z';
+  const LATER = '2026-10-06T09:30:00Z';
+  const SHARE_ERROR = /immutable_timesheet_share/;
+  const CHECK = /CHECK constraint failed/;
+
+  type Row = Record<string, string | number | null>;
+
+  function insert(target: Db, table: string, row: Row): void {
+    const columns = Object.keys(row);
+    target
+      .prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+      .run(...Object.values(row));
+  }
+
+  async function seed(target: Db): Promise<{ owner: string; grantee: string; admin: string; calendar: string }> {
+    const result = await seedSynthetic(target, new MutableClock(AT), {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+      sampleData: true,
+    });
+    const idOf = (email: string) => result.users.find((user) => user.email === email)?.id ?? '';
+    return {
+      owner: idOf('employee@example.invalid'),
+      grantee: idOf('employee2@example.invalid'),
+      admin: idOf('admin@example.invalid'),
+      calendar: result.calendarId ?? '',
+    };
+  }
+
+  function share(id: string, owner: string, grantee: string, overrides: Row = {}): Row {
+    return {
+      id,
+      owner_user_id: owner,
+      grantee_user_id: grantee,
+      timesheets_scope: 'view',
+      ot_read: 0,
+      pdf_download: 0,
+      created_by: owner,
+      created_at: AT,
+      ...overrides,
+    };
+  }
+
+  const revoke = (target: Db, id: string, by: string, at = LATER) =>
+    target.prepare('UPDATE timesheet_shares SET revoked_by = ?, revoked_at = ? WHERE id = ?').run(by, at, id);
+
+  it('creates one STRICT table with the item columns, the one-active index and the immutability triggers', () => {
+    migrate(db);
+    const columns = db.prepare('SELECT name, type, "notnull" FROM pragma_table_info(?)').all('timesheet_shares');
+    expect(columns).toEqual([
+      // A STRICT table's PRIMARY KEY is NOT NULL.
+      { name: 'id', type: 'TEXT', notnull: 1 },
+      { name: 'owner_user_id', type: 'TEXT', notnull: 1 },
+      { name: 'grantee_user_id', type: 'TEXT', notnull: 1 },
+      { name: 'timesheets_scope', type: 'TEXT', notnull: 1 },
+      { name: 'ot_read', type: 'INTEGER', notnull: 1 },
+      { name: 'pdf_download', type: 'INTEGER', notnull: 1 },
+      { name: 'created_by', type: 'TEXT', notnull: 1 },
+      { name: 'created_at', type: 'TEXT', notnull: 1 },
+      { name: 'revoked_by', type: 'TEXT', notnull: 0 },
+      { name: 'revoked_at', type: 'TEXT', notnull: 0 },
+      { name: 'revoke_reason', type: 'TEXT', notnull: 0 },
+    ]);
+    const objects = db
+      .prepare("SELECT type, name FROM sqlite_master WHERE tbl_name = 'timesheet_shares' AND name NOT LIKE 'sqlite_%' ORDER BY type, name")
+      .all();
+    expect(objects).toEqual([
+      { type: 'index', name: 'timesheet_shares_grantee' },
+      { type: 'index', name: 'timesheet_shares_one_active' },
+      { type: 'table', name: 'timesheet_shares' },
+      { type: 'trigger', name: 'timesheet_shares_fixed' },
+      { type: 'trigger', name: 'timesheet_shares_no_delete' },
+    ]);
+    // No column can hold a token, a password, a signature or timesheet content.
+    const names = (columns as Array<{ name: string }>).map((column) => column.name).join(' ');
+    expect(names).not.toMatch(/token|password|secret|signature|payload|note|minutes/i);
+  });
+
+  it('accepts every valid item set and refuses an empty, self, foreign-created or malformed share', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    let n = 0;
+    const attempt = (overrides: Row) => () => {
+      n += 1;
+      // Each accepted row is revoked at once, which frees the pair for the next attempt.
+      insert(db, 'timesheet_shares', share(`sh-${n}`, ids.owner, ids.grantee, overrides));
+      revoke(db, `sh-${n}`, ids.owner);
+    };
+    for (const timesheets of ['none', 'view', 'edit']) {
+      for (const otRead of [0, 1]) {
+        for (const pdf of [0, 1]) {
+          if (timesheets === 'none' && otRead === 0 && pdf === 0) continue;
+          expect(attempt({ timesheets_scope: timesheets, ot_read: otRead, pdf_download: pdf }), `${timesheets}/${otRead}/${pdf}`).not.toThrow();
+        }
+      }
+    }
+    expect(db.prepare('SELECT count(*) FROM timesheet_shares').pluck().get()).toBe(11);
+    expectSqliteError(attempt({ timesheets_scope: 'none', ot_read: 0, pdf_download: 0 }), CHECK);
+    expectSqliteError(attempt({ grantee_user_id: ids.owner }), CHECK);
+    expectSqliteError(attempt({ created_by: ids.admin }), CHECK);
+    expectSqliteError(attempt({ timesheets_scope: 'admin' }), CHECK);
+    expectSqliteError(attempt({ ot_read: 2 }), CHECK);
+    expectSqliteError(attempt({ pdf_download: -1 }), CHECK);
+    expectSqliteError(attempt({ created_at: '2026-10-05 18:00' }), CHECK);
+    expectSqliteError(attempt({ grantee_user_id: 'no-such-user' }), /FOREIGN KEY constraint failed/);
+    // Revocation fields come as a pair, never before the grant, and a reason needs a revocation.
+    expectSqliteError(attempt({ revoked_at: LATER }), CHECK);
+    expectSqliteError(attempt({ revoked_by: ids.owner }), CHECK);
+    expectSqliteError(attempt({ revoke_reason: 'Synthetic reason' }), CHECK);
+    expectSqliteError(attempt({ revoked_by: ids.owner, revoked_at: '2026-10-04T00:00:00Z' }), CHECK);
+    expectSqliteError(attempt({ revoked_by: ids.owner, revoked_at: LATER, revoke_reason: 'x'.repeat(501) }), CHECK);
+    expectSqliteError(attempt({ revoked_by: ids.owner, revoked_at: LATER, revoke_reason: '' }), CHECK);
+    expect(db.prepare('SELECT count(*) FROM timesheet_shares').pluck().get()).toBe(11);
+  });
+
+  it('keeps at most one active share per owner and grantee; revoked rows stay as history', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    insert(db, 'timesheet_shares', share('sh-1', ids.owner, ids.grantee));
+    expectSqliteError(
+      () => insert(db, 'timesheet_shares', share('sh-2', ids.owner, ids.grantee, { timesheets_scope: 'edit' })),
+      /UNIQUE constraint failed/,
+    );
+    // The opposite direction is a different share.
+    insert(db, 'timesheet_shares', share('sh-3', ids.grantee, ids.owner, { created_by: ids.grantee }));
+    // A change of items is a revocation plus a new row, in one transaction.
+    db.transaction(() => {
+      revoke(db, 'sh-1', ids.owner);
+      insert(db, 'timesheet_shares', share('sh-4', ids.owner, ids.grantee, { timesheets_scope: 'edit', created_at: LATER }));
+    })();
+    db.prepare('UPDATE timesheet_shares SET revoked_by = ?, revoked_at = ?, revoke_reason = ? WHERE id = ?').run(
+      ids.admin,
+      LATER,
+      'Synthetic reason',
+      'sh-4',
+    );
+    insert(db, 'timesheet_shares', share('sh-5', ids.owner, ids.grantee, { created_at: LATER }));
+    expect(
+      db
+        .prepare('SELECT id FROM timesheet_shares WHERE owner_user_id = ? AND grantee_user_id = ? AND revoked_at IS NULL')
+        .pluck()
+        .all(ids.owner, ids.grantee),
+    ).toEqual(['sh-5']);
+    expect(db.prepare('SELECT count(*) FROM timesheet_shares').pluck().get()).toBe(4);
+  });
+
+  it('refuses DELETE, any change of identity or items, and a second revocation', async () => {
+    migrate(db);
+    const ids = await seed(db);
+    insert(db, 'timesheet_shares', share('sh-1', ids.owner, ids.grantee, { ot_read: 1 }));
+    for (const assignment of [
+      "timesheets_scope = 'edit'",
+      'ot_read = 0',
+      'pdf_download = 1',
+      `owner_user_id = '${ids.admin}'`,
+      `grantee_user_id = '${ids.admin}'`,
+      `created_by = '${ids.grantee}'`,
+      "created_at = '2026-10-01T00:00:00Z'",
+      "id = 'sh-x'",
+    ]) {
+      expectSqliteError(() => db.prepare(`UPDATE timesheet_shares SET ${assignment} WHERE id = 'sh-1'`).run(), SHARE_ERROR);
+    }
+    expectSqliteError(() => db.prepare("DELETE FROM timesheet_shares WHERE id = 'sh-1'").run(), SHARE_ERROR);
+    revoke(db, 'sh-1', ids.grantee);
+    for (const assignment of [
+      `revoked_by = '${ids.owner}'`,
+      "revoked_at = '2026-10-07T00:00:00Z'",
+      "revoke_reason = 'Later'",
+      'revoked_at = NULL, revoked_by = NULL',
+    ]) {
+      expectSqliteError(() => db.prepare(`UPDATE timesheet_shares SET ${assignment} WHERE id = 'sh-1'`).run(), SHARE_ERROR);
+    }
+    expectSqliteError(() => db.prepare('DELETE FROM timesheet_shares').run(), SHARE_ERROR);
+    expect(db.prepare('SELECT timesheets_scope, ot_read, revoked_by, revoked_at FROM timesheet_shares').all()).toEqual([
+      { timesheets_scope: 'view', ot_read: 1, revoked_by: ids.grantee, revoked_at: LATER },
+    ]);
+  });
+
+  it('upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live', async () => {
+    const v5 = MIGRATIONS.filter((migration) => migration.version <= 5);
+    expect(migrate(db, v5)).toEqual({ applied: [1, 2, 3, 4, 5], version: 5 });
+    const clock = new MutableClock(AT);
+    const ids = await seed(db);
+    postCredit(
+      { db, clock },
+      { userId: ids.owner, sourceKey: 'v5-credit', minutes: 45, workDate: '2026-09-21', actorUserId: ids.owner, origin: 'manual' },
+    );
+    db.prepare(
+      `INSERT INTO pay_periods VALUES ('p-v5', ?, 0, '2026-10-02', '2026-10-02', '2026-09-14', '2026-09-27',
+         '2026-09-29', '17:00', '2026-09-30T00:00:00Z', 0, ?)`,
+    ).run(ids.calendar, AT);
+    db.prepare(
+      `INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at) VALUES ('ts-v5', ?, 'p-v5', 2, ?, ?)`,
+    ).run(ids.owner, AT, AT);
+    insert(db, 'timesheet_revisions', {
+      id: 'rev-v5',
+      user_id: ids.owner,
+      timesheet_id: 'ts-v5',
+      revision_no: 1,
+      revision_kind: 'original',
+      origin: 'deadline',
+      review_state: 'pending',
+      supersedes_revision_id: null,
+      correction_reason: null,
+      timesheet_version: 2,
+      payload_json: '{"days":[]}',
+      payload_sha256: 'a'.repeat(64),
+      reviewed_sha256: null,
+      send_requested: 1,
+      actor_user_id: null,
+      created_at: AT,
+    });
+    insert(db, 'submission_settings', {
+      id: 'set-v5',
+      user_id: ids.owner,
+      seq: 1,
+      recipients_to: '["payroll@example.invalid"]',
+      recipients_cc: '[]',
+      subject_template: 'Timesheet {PayrollDate}',
+      body_template: 'Attached.',
+      template_version: 1,
+      auto_submit: 0,
+      auto_submit_effective_from: AT,
+      reminder_offsets_minutes: '[]',
+      created_by: ids.owner,
+      created_at: AT,
+      auto_note_enabled: 1,
+      auto_note_text: 'Synthetic note',
+    });
+    const tables = V5_TABLES.filter((name) => name !== 'schema_migrations');
+    const rowsOf = (): Record<string, unknown[]> =>
+      Object.fromEntries(tables.map((name) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));
+    const objectsOf = () =>
+      db.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").all();
+    const before = rowsOf();
+    for (const name of ['users', 'work_sessions', 'ot_ledger', 'ot_leave_requests', 'audit_events', 'timesheet_revisions', 'submission_settings']) {
+      expect(before[name]?.length, name).toBeGreaterThan(0);
+    }
+    const objectsBefore = objectsOf();
+    const recorded = db.prepare('SELECT * FROM schema_migrations ORDER BY version').all();
+    const balance = getBalance(db, ids.owner);
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-06T18:00:00Z'))).toEqual({ applied: [6], version: 6 });
+
+    expect(rowsOf()).toEqual(before);
+    expect(getBalance(db, ids.owner)).toEqual(balance);
+    expect(db.prepare('SELECT * FROM schema_migrations ORDER BY version').all().slice(0, 5)).toEqual(recorded);
+    expect(db.prepare('SELECT version, name, applied_at FROM schema_migrations WHERE version = 6').get()).toEqual({
+      version: 6,
+      name: 'timesheet_shares',
+      applied_at: '2026-10-06T18:00:00Z',
+    });
+    // Every earlier table, index and trigger is unchanged; only the share objects are new.
+    const objectsAfter = objectsOf() as Array<{ name: string }>;
+    expect(objectsAfter.filter((object) => !object.name.startsWith('timesheet_shares'))).toEqual(objectsBefore);
+    expect(
+      objectsAfter
+        .filter((object) => object.name.startsWith('timesheet_shares'))
+        .map((object) => object.name)
+        .sort(),
+    ).toEqual([
+      'timesheet_shares',
+      'timesheet_shares_fixed',
+      'timesheet_shares_grantee',
+      'timesheet_shares_no_delete',
+      'timesheet_shares_one_active',
+    ]);
+    expect(db.prepare('SELECT count(*) FROM timesheet_shares').pluck().get()).toBe(0);
+    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    // Earlier triggers and unique keys stay live.
+    expectSqliteError(() => db.prepare("UPDATE timesheet_revisions SET correction_reason = 'x'").run(), /immutable_revision/);
+    expectSqliteError(() => db.prepare('DELETE FROM audit_events').run(), /immutable_audit_event/);
+    expectSqliteError(() => db.prepare('UPDATE submission_settings SET auto_note_enabled = 0').run(), /immutable_submission_settings/);
+    expectSqliteError(
+      () => insert(db, 'submission_settings', { ...(db.prepare("SELECT * FROM submission_settings WHERE id = 'set-v5'").get() as Row), id: 'set-dup' }),
+      /UNIQUE constraint failed/,
+    );
+    // The new table is usable at once and keeps its own rules.
+    insert(db, 'timesheet_shares', share('sh-v6', ids.owner, ids.grantee, { pdf_download: 1 }));
+    expectSqliteError(() => insert(db, 'timesheet_shares', share('sh-v6b', ids.owner, ids.grantee)), /UNIQUE constraint failed/);
+    expectSqliteError(() => db.prepare('DELETE FROM timesheet_shares').run(), SHARE_ERROR);
+    expect(migrate(db)).toEqual({ applied: [], version: 6 });
   });
 });

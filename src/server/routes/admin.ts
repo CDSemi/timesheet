@@ -23,6 +23,7 @@ import {
   operationsStatusJson,
   submissionStatusJson,
 } from '../services/operationsStatus.ts';
+import { adminRevokeShare, listAllShares } from '../services/shares.ts';
 import {
   createUser,
   deactivateUser,
@@ -42,6 +43,9 @@ const automationActivationBody = z.strictObject({
   active_from: z.string().max(40).nullable(),
   reason: z.string().max(1000),
 });
+
+/** An administrator's revocation of a sharing grant: an optional reason only. */
+const shareRevokeBody = z.strictObject({ reason: z.string().max(500).optional() });
 
 function parseSubmissionLimit(value: string | undefined): number {
   if (value === undefined) return DEFAULT_SUBMISSION_LIMIT;
@@ -82,6 +86,11 @@ function accountJson(account: UserAccount) {
  * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
  * holiday CSV preview/commit and payroll exceptions return calendar-only fields (dates, names,
  * versions and the admin's own input) and no employee-derived count, never a user's rows.
+ *
+ * Sharing grants (FR-17, WP3-T13B): the administrator lists every grant (owner and grantee names,
+ * items, instants) and may revoke one, audited with a reason. There is deliberately no route that
+ * creates a grant or uses one: only an owner shares, and an administrator reaches another person's
+ * timesheet only through that person's grant, like anyone else.
  */
 export function adminRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -100,6 +109,19 @@ export function adminRoutes(deps: AppDeps) {
   );
 
   app.get('/users', (c) => c.json({ users: listUsers(deps.db).map(accountJson) }));
+
+  app.get('/shares', (c) => c.json({ shares: listAllShares(deps.db) }));
+
+  app.post('/shares/:id/revoke', async (c) => {
+    const actor = c.get('user');
+    const body = await readJson(c, shareRevokeBody);
+    const share = adminRevokeShare(deps.db, deps.clock, {
+      actorUserId: actor.id,
+      shareId: c.req.param('id'),
+      reason: normalizeReason(body.reason),
+    });
+    return c.json({ share });
+  });
 
   app.post('/users', async (c) => {
     const actor = c.get('user');

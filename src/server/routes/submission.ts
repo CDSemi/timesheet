@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { z } from 'zod';
+import type { Db } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
 import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
 import { ApiError, notFound } from '../http/errors.ts';
@@ -25,13 +26,75 @@ const deliveryDecisionBody = z.strictObject({ decision: z.enum(['mark_delivered'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PAYROLL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The revision whose final PDF is about to be sent. */
+export interface PdfDownload {
+  id: string;
+  payrollDate: string;
+  revisionNo: number;
+}
+
 /**
  * Options of the submission router: the personal-router guard plus the private file store the PDF
  * download reads from. Without a store the download route is not registered (a router built only
- * to probe the other routes needs none); the application always passes it.
+ * to probe the other routes needs none); the application always passes it. `beforePdfSend` runs
+ * after every check passed and before the bytes leave; it may refuse by throwing. The owner's own
+ * route has none (an owner download writes nothing); the shared mount audits each grantee download
+ * with it (WP3-T13B).
  */
 export interface SubmissionRouterOptions extends PersonalRouterOptions {
   files?: FileStore;
+  beforePdfSend?: (c: Context<AppEnv>, revision: PdfDownload) => void;
+}
+
+interface RevisionStatusRow {
+  id: string;
+  payroll_date: string;
+  revision_no: number;
+  revision_kind: string;
+  origin: string;
+  review_state: string;
+  supersedes_revision_id: string | null;
+  created_at: string;
+  pdf_state: string | null;
+  delivery_state: string | null;
+}
+
+const MAX_REVISIONS = 1000;
+
+/**
+ * Every revision of one owner as status metadata only: number, kind, origin and review state as
+ * recorded, the supersedes link, the PDF state and the state of the latest delivery attempt. No
+ * payload, hash, envelope, recipient, signer or signature leaves here, and nothing is written.
+ */
+function listRevisionStatus(db: Db, ownerUserId: string) {
+  const rows = db
+    .prepare<[string, number], RevisionStatusRow>(
+      `SELECT r.id, p.payroll_date, r.revision_no, r.revision_kind, r.origin, r.review_state, r.supersedes_revision_id,
+              r.created_at, f.state AS pdf_state,
+              (SELECT d.state FROM delivery_attempts d
+                WHERE d.revision_id = r.id AND d.user_id = r.user_id
+                ORDER BY d.started_at DESC, d.rowid DESC LIMIT 1) AS delivery_state
+         FROM timesheet_revisions r
+         JOIN timesheets t ON t.id = r.timesheet_id AND t.user_id = r.user_id
+         JOIN pay_periods p ON p.id = t.pay_period_id
+         LEFT JOIN revision_files f ON f.revision_id = r.id AND f.user_id = r.user_id AND f.kind = 'pdf'
+        WHERE r.user_id = ?
+        ORDER BY p.payroll_date DESC, r.revision_no DESC
+        LIMIT ?`,
+    )
+    .all(ownerUserId, MAX_REVISIONS);
+  return rows.map((row) => ({
+    id: row.id,
+    payroll_date: row.payroll_date,
+    revision_no: row.revision_no,
+    revision_kind: row.revision_kind,
+    origin: row.origin,
+    review_state: row.review_state,
+    supersedes_revision_id: row.supersedes_revision_id,
+    finalized_at: row.created_at,
+    pdf_state: row.pdf_state,
+    delivery_state: row.delivery_state,
+  }));
 }
 
 interface PdfRow {
@@ -64,7 +127,9 @@ function pdfFilename(row: Pick<PdfRow, 'payroll_date' | 'revision_no'>): string 
  * The PDF download is owner-only: the revision is looked up for the subject, so another user's id
  * (an administrator's included) is "not found"; a PDF that is not ready is 409; the bytes come from
  * the private store only, are re-checked against the recorded hash, and are sent `no-store` as an
- * attachment with a sanitized filename. Nothing is written.
+ * attachment with a sanitized filename. Nothing is written on the owner's route.
+ * The revision list GET is the owner's status metadata of every revision (the history lists them
+ * all); it writes nothing.
  */
 export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions = {}) {
   const app = new Hono<AppEnv>();
@@ -122,6 +187,9 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
   app.get('/timesheets/:payrollDate/finalization', auth, (c) =>
     c.json(finalizationStatusJson(getFinalizationStatus(deps.db, c.get('subject'), c.req.param('payrollDate')))),
   );
+
+  // Status metadata of every revision of the owner, newest period first (WP3-T13 carry item).
+  app.get('/revisions', auth, (c) => c.json({ revisions: listRevisionStatus(deps.db, c.get('subject').id) }));
 
   // F-2: the owner's pending lines that are still current (for the review and OT screens).
   app.get('/revisions/pending-lines', auth, (c) => c.json({ lines: listCurrentPendingLines(deps.db, c.get('subject').id) }));
@@ -181,6 +249,7 @@ export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions
       if (createHash('sha256').update(bytes).digest('hex') !== row.sha256) {
         throw new ApiError(500, 'internal_error', 'Internal server error');
       }
+      options.beforePdfSend?.(c, { id, payrollDate: row.payroll_date, revisionNo: row.revision_no });
       return c.body(new Uint8Array(bytes), 200, {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${pdfFilename(row)}"`,

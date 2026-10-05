@@ -102,3 +102,9 @@ handoff/delivery/evidence/WP3-T13-FREEZE/. Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1: pre-HEAD 943027b; commit 5b90d30d7e4b5410770b01d04bd9ff8ee2663149; pushed to
+origin/main, remote SHA equal. Digest 7b04f0b1...f7301 (match). Staged 57. Screenshots
+viewed 6 (synthetic only). Checks: node 24.21.0, precommit, diff --check, JSON,
+validate_orchestration, check_recovery, preflight all exit 0. No masking, no EOF fix,
+no blockers. Evidence: handoff/delivery/evidence/WP3-T13-FREEZE/.
