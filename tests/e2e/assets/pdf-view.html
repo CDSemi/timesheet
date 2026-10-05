@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>PDF page render (synthetic test page)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Test-only harness (WP3-T14): pdf-visual.spec.ts serves this file, the pdfjs-dist build and one
+      generated PDF from a synthetic origin through page.route, so Edge renders a page of the PDF to a
+      canvas that the spec then screenshots. Nothing here is part of the product or served by the app.
+      Query: ?page=<number>&scale=<number>. The spec waits for window.__pdfRender.
+    -->
+    <canvas id="page" aria-label="Rendered PDF page"></canvas>
+    <script type="module">
+      import * as pdfjs from './pdf.mjs';
+
+      pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+      const params = new URLSearchParams(window.location.search);
+      const pageNumber = Number(params.get('page') ?? '1');
+      const scale = Number(params.get('scale') ?? '1.5');
+      try {
+        const document = await pdfjs.getDocument({ url: './doc.pdf' }).promise;
+        const page = await document.getPage(pageNumber);
+        const viewport = page.getViewport({ scale });
+        const canvas = window.document.getElementById('page');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        await page.render({ canvas, viewport }).promise;
+        window.__pdfRender = { ok: true, pages: document.numPages, width: canvas.width, height: canvas.height };
+      } catch (error) {
+        window.__pdfRender = { ok: false, error: String(error) };
+      }
+    </script>
+  </body>
+</html>

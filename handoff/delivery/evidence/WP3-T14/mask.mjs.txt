@@ -1,0 +1,8 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const [src, dst] = process.argv.slice(2);
+let s = readFileSync(src, 'utf8');
+s = s.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r\n/g, '\n');
+s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>');
+s = s.replace(/[A-Za-z]:[\/][^\s"')]*/g, '<path>');
+s = s.split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').replace(/\n+$/, '') + '\n';
+writeFileSync(dst, s);

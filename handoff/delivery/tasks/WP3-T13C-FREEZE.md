@@ -124,3 +124,15 @@ Attempt 1 (committer, claude-sonnet-5-5): STOPPED before staging; no commit, no 
   working-tree set (the reported shared-mode deviations list omits it). Every other path
   matches the expected set. Awaiting the coordinator: either add the path to the brief or
   revert it.
+
+Attempt 2 (committer, claude-sonnet-5-5): committed and pushed.
+
+- Node v24.21.0 (full path), exit 0. Pre-HEAD = origin/main = c3c35de41ee5c1afff0e602601bdb27bb0a19bc1.
+- Digest 9b8d6b26dd05436f3aca8546520087e4af095950efc6741cddb54fa2a187240a (matches), so
+  TimesheetScreen.tsx was added to the set. Staged 72 paths (explicit, one command).
+- Exits: precommit 0 (0 findings, no masking needed); diff --cached --check 0; JSON parse
+  0; validate_orchestration 0; check_recovery 0; validate_package --preflight 0
+  (workflow Python under C:\Users\<user>\.cache\...).
+- Screenshots viewed: 6 (desktop and mobile), synthetic data only.
+- Commit 8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2; pushed to main; remote SHA equal.
+- Blockers: none. The brief and this result are left uncommitted (allowed).

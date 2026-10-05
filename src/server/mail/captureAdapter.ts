@@ -9,9 +9,10 @@ import type { OutboundAdapter, SendContext, SendOutcome } from './outbound.ts';
  *
  * Writes the exact message bytes (`message.eml`), the attached PDF (`attachment.pdf`, the
  * stored bytes) and `metadata.json` (Message-ID, envelope, SHA-256 of both files; no
- * credential and no body text) to `<dataDir>/mail-capture/<attemptId>/`. The three files are
- * written and flushed in a temporary folder that is then renamed, so a capture folder is
- * either complete or absent. Nothing leaves the machine; the folder is private data (outside
+ * credential and no body text) to `<dataDir>/mail-capture/<attemptId>/`. A message without an
+ * attachment (a reminder or notice) has no `attachment.pdf` and no PDF fields in its metadata.
+ * The files are written and flushed in a temporary folder that is then renamed, so a capture
+ * folder is either complete or absent. Nothing leaves the machine; the folder is private data (outside
  * Dropbox and the static root) and is never served over HTTP.
  */
 
@@ -63,21 +64,21 @@ export function createCaptureAdapter(dataDir: string): OutboundAdapter {
       // An attempt is sent at most once; an existing folder means it was captured before.
       if (existsSync(target)) return Promise.resolve({ kind: 'uncertain', code: 'capture_exists', providerResponse: null });
       const emlSha256 = sha256(message.raw);
+      const hasPdf = message.pdf.length > 0;
       const metadata = {
         mode: 'capture',
         message_id: message.messageId,
         envelope: message.envelope,
         eml_sha256: emlSha256,
         eml_bytes: message.raw.length,
-        pdf_sha256: message.pdfSha256,
-        pdf_bytes: message.pdf.length,
+        ...(hasPdf ? { pdf_sha256: message.pdfSha256, pdf_bytes: message.pdf.length } : {}),
       };
       const files = ['message.eml', 'attachment.pdf', 'metadata.json'] as const;
       const temporary = join(dataDir, CAPTURE_FOLDER, `.tmp-${randomBytes(12).toString('hex')}`);
       try {
         mkdirSync(temporary, { recursive: true });
         writeFlushed(join(temporary, files[0]), message.raw);
-        writeFlushed(join(temporary, files[1]), message.pdf);
+        if (hasPdf) writeFlushed(join(temporary, files[1]), message.pdf);
         writeFlushed(join(temporary, files[2]), Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`, 'utf8'));
         renameSync(temporary, target);
       } catch {

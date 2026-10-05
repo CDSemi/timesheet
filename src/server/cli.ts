@@ -77,7 +77,9 @@ async function main(command: string | undefined, args: readonly string[]): Promi
       case 'seed': {
         if (config.production) throw new Error('Refusing to seed synthetic data when NODE_ENV=production');
         migrate(db);
+        const delivery = loadDeliveryConfig(process.env, config);
         const result = await seedSynthetic(db, systemClock, {
+          files: new FileStore(delivery.dataDir),
           passwords: {
             admin: process.env.SEED_ADMIN_PASSWORD,
             employee: process.env.SEED_EMPLOYEE_PASSWORD,
@@ -94,6 +96,12 @@ async function main(command: string | undefined, args: readonly string[]): Promi
           console.log(
             `  sample data for employee2@example.invalid: ${result.sample.sessions} sessions, ${result.sample.leaveRequests} leave request, setup credit ${result.sample.creditMinutes} minutes`,
           );
+          if (result.sample.submissionSettings) {
+            console.log(
+              '  submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for employee2@example.invalid',
+            );
+            console.log('  capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured');
+          }
         }
         return 0;
       }

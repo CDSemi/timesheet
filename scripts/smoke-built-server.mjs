@@ -4,11 +4,12 @@
 // Usage: npm run build && node scripts/smoke-built-server.mjs
 // Port: SMOKE_PORT when set; otherwise a free loopback port chosen by the OS per run.
 import { spawn, spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 
 /** Asks the OS for a free loopback port (bound, read, released). */
 function freeLoopbackPort() {
@@ -47,6 +48,10 @@ const env = {
   HOST: '127.0.0.1',
   DATABASE_PATH: join(work, 'timesheet.db'),
   APP_ORIGINS: origin,
+  // Capture mode with a synthetic sender; the server's own runner is off, the CLI runs the jobs.
+  MAIL_FROM: 'smoke-sender@example.invalid',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
   SEED_ADMIN_PASSWORD: passwords.admin,
   SEED_EMPLOYEE_PASSWORD: passwords.employee,
   SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
@@ -286,6 +291,145 @@ try {
 
   const noOrigin = await call('PUT', `/api/days/${monday}`, { cookie, withOrigin: false, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '' } });
   check('state change without Origin is rejected (403)', noOrigin.status === 403, String(noOrigin.status));
+
+// ---- WP3: review safety, sign-off conflict, private PDF, capture, shared route (WP3-T14) ----
+  const monitor = new Database(join(work, 'timesheet.db'), { readonly: true });
+  const tableNames = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  /** Row counts of every table plus the commit counter: any write by another connection changes it. */
+  const dbState = () =>
+    JSON.stringify({
+      version: monitor.pragma('data_version', { simple: true }),
+      rows: tableNames.map((name) => [name, monitor.prepare(`SELECT count(*) FROM "${name}"`).pluck().get()]),
+    });
+
+  const me2 = await call('GET', '/api/auth/me', { cookie: cookie2 });
+  const ownerId2 = me2.json?.user?.id;
+  const periods2 = await call('GET', '/api/periods/current', { cookie: cookie2 });
+  const payroll2 = periods2.json?.current?.payroll_date;
+  check('employee2 identifies and has a current period', typeof ownerId2 === 'string' && typeof payroll2 === 'string', `${me2.status}/${periods2.status}`);
+
+  // The seed saved synthetic submission settings and a generated signature for employee2.
+  const settings2 = await call('GET', '/api/settings/submission', { cookie: cookie2 });
+  const signature2 = await call('GET', '/api/signatures/current', { cookie: cookie2 });
+  check(
+    'seed: employee2 has saved submission settings (recipients on example.invalid) and a synthetic signature',
+    settings2.status === 200 && JSON.stringify(settings2.json).includes('payroll@example.invalid') && signature2.status === 200 && typeof signature2.json?.signature?.id === 'string',
+    `${settings2.status}/${signature2.status}`,
+  );
+
+  // GET safety: reading the review (and every other read of the submission area) writes nothing.
+  const reviewPath2 = `/api/timesheets/${payroll2}/review`;
+  const stateBefore = dbState();
+  const reads = [
+    reviewPath2,
+    `/api/timesheets/${payroll2}/finalization`,
+    '/api/revisions',
+    '/api/deliveries',
+    '/api/history',
+    '/api/settings/submission',
+    '/api/settings/submission/versions',
+    '/api/signatures/current',
+    '/api/shares',
+  ];
+  const readStatuses = [];
+  for (const path of reads) readStatuses.push((await call('GET', path, { cookie: cookie2 })).status);
+  check(
+    'review GET and the other submission reads change nothing in the database (data_version and every table count)',
+    readStatuses.every((status) => status === 200) && dbState() === stateBefore,
+    readStatuses.join(','),
+  );
+
+  // Sign off on the displayed review; then a request built from the old review is a conflict (409).
+  const review2 = await call('GET', reviewPath2, { cookie: cookie2 });
+  const signoffBody = {
+    expected_version: review2.json?.expected_version,
+    reviewed_hash: review2.json?.payload_hash,
+    signer_name: 'Example Employee Two',
+    incomplete_evidence_acknowledged: true,
+  };
+  const signoff = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: signoffBody });
+  const revisionId = signoff.json?.revision?.id;
+  check('sign-off of the reviewed period creates revision 1', signoff.status === 201 && signoff.json?.revision?.revision_no === 1 && typeof revisionId === 'string', String(signoff.status));
+  const stateAfterSignoff = dbState();
+  const conflict = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: { ...signoffBody, signer_name: 'Another Name' } });
+  check(
+    'a second, different sign-off of the same period is refused with 409 and writes nothing',
+    conflict.status === 409 && conflict.json?.error?.code === 'already_finalized' && dbState() === stateAfterSignoff,
+    `${conflict.status} ${conflict.json?.error?.code}`,
+  );
+  const staleReview = await call('POST', `/api/timesheets/${payroll2}/signoff`, { cookie: cookie2, body: { ...signoffBody, reviewed_hash: '0'.repeat(64) } });
+  check('a sign-off built from a stale review hash is also a 409', staleReview.status === 409, String(staleReview.status));
+
+  // The runner is off in this smoke: run the due jobs through the CLI (PDF, then delivery in capture mode).
+  const runAt = (offsetSeconds) =>
+    run(['dist/server/cli.js', 'run-jobs', '--once', '--now', new Date(Date.now() + offsetSeconds * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')]);
+  const passes = [runAt(1), runAt(150), runAt(300)];
+  check('cli run-jobs --once --now runs the PDF and send jobs', passes.every((pass) => pass.status === 0), passes.map((pass) => pass.output).join(' '));
+
+  const pdf2 = await fetch(`${base}/api/revisions/${revisionId}/pdf`, { headers: { cookie: cookie2 } });
+  const pdfBytes = Buffer.from(await pdf2.arrayBuffer());
+  check(
+    'the owner downloads the revision PDF (application/pdf, no-store, attachment)',
+    pdf2.status === 200 &&
+      pdf2.headers.get('content-type') === 'application/pdf' &&
+      (pdf2.headers.get('cache-control') ?? '').includes('no-store') &&
+      pdfBytes.subarray(0, 5).toString('latin1') === '%PDF-',
+    `${pdf2.status} ${pdfBytes.length} bytes`,
+  );
+  const foreignPdf = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie });
+  const adminPdf = await call('GET', `/api/revisions/${revisionId}/pdf`, { cookie: adminCookie });
+  const anonymousPdf = await call('GET', `/api/revisions/${revisionId}/pdf`);
+  check(
+    'the revision PDF is private: another employee and the admin get 404, anonymous gets 401',
+    foreignPdf.status === 404 && adminPdf.status === 404 && anonymousPdf.status === 401,
+    `${foreignPdf.status}/${adminPdf.status}/${anonymousPdf.status}`,
+  );
+
+  // Capture check: one accepted attempt whose captured message and PDF match the stored revision PDF.
+  const deliveries = await call('GET', `/api/deliveries?revision_id=${revisionId}`, { cookie: cookie2 });
+  const attempt = deliveries.json?.deliveries?.[0];
+  const captureDir = join(work, 'private-data', 'mail-capture', String(attempt?.id));
+  const captured = attempt?.state === 'accepted' && existsSync(captureDir) ? readdirSync(captureDir).sort() : [];
+  const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const metadata = captured.includes('metadata.json') ? JSON.parse(readFileSync(join(captureDir, 'metadata.json'), 'utf8')) : {};
+  const capturedPdf = captured.includes('attachment.pdf') ? readFileSync(join(captureDir, 'attachment.pdf')) : Buffer.alloc(0);
+  const eml = captured.includes('message.eml') ? readFileSync(join(captureDir, 'message.eml'), 'latin1') : '';
+  check(
+    'capture: one accepted attempt; message.eml, attachment.pdf and metadata.json exist; the PDF equals the download; sender and recipients are example.invalid',
+    (deliveries.json?.deliveries ?? []).length === 1 &&
+      attempt?.state === 'accepted' &&
+      captured.join(',') === 'attachment.pdf,message.eml,metadata.json' &&
+      sha256(capturedPdf) === sha256(pdfBytes) &&
+      metadata.pdf_sha256 === sha256(pdfBytes) &&
+      metadata.mode === 'capture' &&
+      metadata.envelope?.from === 'smoke-sender@example.invalid' &&
+      (metadata.envelope?.to ?? []).every((address) => address.endsWith('@example.invalid')) &&
+      eml.includes('payroll@example.invalid'),
+    `${attempt?.state} ${captured.join('+')}`,
+  );
+  check(
+    'capture: no password in the captured metadata',
+    !JSON.stringify(metadata).includes(passwords.employee2) && !JSON.stringify(metadata).toLowerCase().includes('password'),
+  );
+
+  // The shared route of an owner who granted nothing: a non-grantee (and the admin) get 404, never data.
+  const sharedPaths = [
+    `/api/shared/${ownerId2}/periods/current`,
+    `/api/shared/${ownerId2}/timesheets/${payroll2}`,
+    `/api/shared/${ownerId2}/revisions`,
+    `/api/shared/${ownerId2}/revisions/${revisionId}/pdf`,
+  ];
+  const sharedStatuses = [];
+  for (const path of sharedPaths) {
+    sharedStatuses.push(`${(await call('GET', path, { cookie })).status}/${(await call('GET', path, { cookie: adminCookie })).status}/${(await call('GET', path)).status}`);
+  }
+  check(
+    'shared routes of an owner without a share: a non-grantee and the admin get 404, anonymous gets 401',
+    sharedStatuses.every((status) => status === '404/404/401'),
+    sharedStatuses.join(' '),
+  );
+  monitor.close();
+
 
   const logout = await call('POST', '/api/auth/logout', { cookie });
   const after = await call('GET', '/api/auth/me', { cookie });

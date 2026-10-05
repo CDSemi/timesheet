@@ -344,6 +344,30 @@ describe('capture (default outbound mode)', () => {
     expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
   });
 
+  it('a message without an attachment (a reminder or notice) writes no attachment.pdf', async () => {
+    const attemptId = '3b0f6f0e-0a52-4c3a-9d0b-6d2f0a6b7c11';
+    const raw = Buffer.from(['From: timesheet@example.invalid', 'To: payroll@example.invalid', 'Subject: Synthetic notice', '', 'Body', ''].join('\r\n'), 'utf8');
+    const outcome = await createOutboundAdapter({ mode: 'capture' }, { dataDir }).send(
+      { messageId: '<notice@timesheet.invalid>', envelope: { from: SENDER, to: TO }, raw, pdf: new Uint8Array(0), pdfSha256: sha(new Uint8Array(0)) },
+      { attemptId },
+    );
+    expect(outcome).toMatchObject({ kind: 'accepted', providerResponse: 'captured' });
+    const folder = captureFolder(dataDir, attemptId);
+    expect(readdirSync(folder).sort()).toEqual(['message.eml', 'metadata.json']);
+    expect(JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8'))).toEqual({
+      mode: 'capture',
+      message_id: '<notice@timesheet.invalid>',
+      envelope: { from: SENDER, to: TO },
+      eml_sha256: sha(raw),
+      eml_bytes: raw.length,
+    });
+    // A second send of the same attempt is still refused as already captured.
+    expect(await createOutboundAdapter({ mode: 'capture' }, { dataDir }).send(
+      { messageId: '<notice@timesheet.invalid>', envelope: { from: SENDER, to: TO }, raw, pdf: new Uint8Array(0), pdfSha256: sha(new Uint8Array(0)) },
+      { attemptId },
+    )).toMatchObject({ kind: 'uncertain', code: 'capture_exists' });
+  });
+
   it('enqueues a duplicate send job once and sends once', async () => {
     const { revisionId, sendJobId } = await finalized();
     const duplicate = enqueueJob(t.db, t.clock, {

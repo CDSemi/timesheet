@@ -1,12 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import type { SessionUser, UserRole } from './auth/sessions.ts';
 import type { Clock } from './clock.ts';
 import type { Db } from './db/database.ts';
+import type { FileStore } from './files/fileStore.ts';
 import { createCalendar, createCalendarVersion } from './services/calendars.ts';
 import { postCredit } from './services/ledger.ts';
 import { reserveOtLeave } from './services/otLeave.ts';
 import { createPolicyVersion } from './services/policies.ts';
+import { saveSignature } from './services/signatures.ts';
+import { saveSubmissionSettings } from './services/submissionSettings.ts';
 import { createSession } from './services/timesheetCommands.ts';
 import { createUser, findUserByEmail } from './services/users.ts';
 
@@ -15,8 +19,12 @@ import { createUser, findUserByEmail } from './services/users.ts';
  * three isolated example.invalid accounts (one admin, two employees). Optional sample data
  * (CLI seed only) gives the second employee a few sessions, one recorded OT leave request
  * and one setup credit posted through the internal ledger service with an explicit
- * synthetic setup key and reason. No opening balance is inferred. Never used for
- * production bootstrap.
+ * synthetic setup key and reason. No opening balance is inferred. When a file store is
+ * given, the sample data also saves synthetic submission settings (recipients on
+ * example.invalid, automatic submission off) and a generated synthetic signature image for
+ * that employee. The sender address is configuration, not data: set MAIL_FROM to an
+ * example.invalid address and keep OUTBOUND_MODE at its default (capture) so the first
+ * attempts are captured, never sent. Never used for production bootstrap.
  */
 
 const POLICY_EXAMPLE = new URL('../../reference/examples/policy.example.json', import.meta.url);
@@ -64,6 +72,8 @@ export interface SeedOptions {
    * leave request and a setup credit. Off by default so the integration tests keep two accounts.
    */
   sampleData?: boolean;
+  /** The private file store; with sample data, the sample employee also gets a synthetic signature image. */
+  files?: FileStore;
 }
 
 export interface SeedResult {
@@ -71,12 +81,50 @@ export interface SeedResult {
   calendarId: string | null;
   users: Array<{ id: string; email: string; role: UserRole; generatedPassword: string | null }>;
   /** Present only when sample data was written. */
-  sample?: { sessions: number; leaveRequests: number; creditMinutes: number };
+  sample?: { sessions: number; leaveRequests: number; creditMinutes: number; submissionSettings: boolean; signature: boolean };
 }
 
 /** Setup credit and leave sizes of the sample data, in minutes. */
 const SAMPLE_CREDIT_MINUTES = 600;
 const SAMPLE_LEAVE_MINUTES = 240;
+
+function pngChunk(type: string, data: Uint8Array): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+
+/**
+ * A generated synthetic signature: a 160x48 PNG with one dark wave on white. No image file is
+ * committed; `phase` makes each image a different file.
+ */
+export function syntheticSignaturePng(phase = 9): Buffer {
+  const width = 160;
+  const height = 48;
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows: Buffer[] = [];
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 3, 0xff);
+    row[0] = 0;
+    for (let x = 0; x < width; x += 1) {
+      if (Math.abs(y - (24 + Math.round(14 * Math.sin(x / phase)))) <= 1) row.fill(0x2a, 1 + x * 3, 4 + x * 3);
+    }
+    rows.push(row);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(Buffer.concat(rows))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 function civilDateIn(zone: string, instant: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
@@ -100,7 +148,7 @@ const SAMPLE_SHAPES: ReadonlyArray<{ start: string; end: string }> = [
  * weekday sessions (relative to the clock), one setup credit posted with an explicit
  * synthetic key and reason, and one OT leave request for a weekday about two weeks ahead.
  */
-function seedSampleData(db: Db, clock: Clock, zone: string, employee: SessionUser): NonNullable<SeedResult['sample']> {
+function seedSampleData(db: Db, clock: Clock, zone: string, employee: SessionUser, files: FileStore | undefined): NonNullable<SeedResult['sample']> {
   const now = clock.now();
   const today = civilDateIn(zone, now);
   const recent: string[] = [];
@@ -154,7 +202,23 @@ function seedSampleData(db: Db, clock: Clock, zone: string, employee: SessionUse
       note: 'Synthetic seed leave request',
     },
   );
-  return { sessions: recent.length, leaveRequests: 1, creditMinutes: SAMPLE_CREDIT_MINUTES };
+  // Submission settings and a signature image, through the production services (needs the file store).
+  if (files !== undefined) {
+    saveSubmissionSettings(db, clock, employee.id, {
+      expectedSeq: 0,
+      to: ['payroll@example.invalid'],
+      cc: ['manager@example.invalid'],
+      autoSubmit: false,
+    });
+    saveSignature(db, clock, files, employee.id, syntheticSignaturePng(), 'image/png');
+  }
+  return {
+    sessions: recent.length,
+    leaveRequests: 1,
+    creditMinutes: SAMPLE_CREDIT_MINUTES,
+    submissionSettings: files !== undefined,
+    signature: files !== undefined,
+  };
 }
 
 export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions = {}): Promise<SeedResult> {
@@ -248,7 +312,7 @@ export async function seedSynthetic(db: Db, clock: Clock, options: SeedOptions =
   }
   const sampleOwner = sessionUsers.get('employee2');
   if (options.sampleData === true && sampleOwner !== undefined) {
-    return { created: true, calendarId, users, sample: seedSampleData(db, clock, example.calendar.reporting_zone, sampleOwner) };
+    return { created: true, calendarId, users, sample: seedSampleData(db, clock, example.calendar.reporting_zone, sampleOwner, options.files) };
   }
   return { created: true, calendarId, users };
 }

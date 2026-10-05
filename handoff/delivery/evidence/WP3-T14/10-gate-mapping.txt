@@ -1,0 +1,28 @@
+WP3-T14 gate item -> spec/test or render (testable WP3 gate items)
+
+Gate item (WP3-PLAN E)                          Spec / test / render
+----------------------------------------------  ---------------------------------------------------------------
+3  e2e desktop + mobile, renders collected       npm run test:e2e: 127 passed, 5 skipped (06-e2e.txt); pdf-*-synthetic.png
+6  auto-submit on/off, auto-image on/off matrix  tests/e2e/automation.spec.ts (deadline submits automatically: 2x2 note x
+                                                 image, empty period, switch off, notices; not-activated test);
+                                                 renders pdf-automatic-note-{off,on}-image-{off,on}*-synthetic.png
+6  signed_at null on automatic revisions         automation.spec.ts: finalization signoff null, origin deadline, review pending
+7  private downloads: foreign 404, anonymous 401 smoke (revision PDF: other employee/admin 404, anonymous 401, no-store);
+                                                 history-settings.spec.ts (foreign revision PDF 404); automation.spec.ts (admin 404)
+8  GET safety: zero DB changes                   smoke: data_version + every table count unchanged over 9 submission reads
+8  deep links require login                      review.spec.ts (deep link survives sign-in)
+9  capture inspection                            smoke (capture: files, PDF equals download, sender/recipients example.invalid, no
+                                                 password); submission.spec.ts (From/To/Cc/Subject, PDF equals stored and downloaded);
+                                                 tests/integration/delivery.test.ts (no attachment.pdf for a message without attachment)
+10 visual PDF evidence                           pdf-manual-ot-sundays-vietnamese-synthetic.png (14 dates, OT on both Sundays 5:00 and
+                                                 7:30 in the 15:30 total, Vietnamese name, bounded signature, real sign date);
+                                                 pdf-automatic-*-synthetic.png (no automatic indicator with the note off, note text
+                                                 on, submission date, image off/on, long and Vietnamese holiday labels, empty period)
+sign-off happy path, stale conflict, 409        review.spec.ts (existing); smoke (409 already_finalized, stale hash 409);
+                                                 submission.spec.ts (sign-off to captured delivery)
+explicit resend, uncertain decision             submission.spec.ts (resend, second identical capture); history-settings.spec.ts
+sharing grant/view/edit/revoke                  sharing.spec.ts (existing, T13C); smoke (non-grantee 404 on /api/shared)
+admin sees no timesheet details                 automation.spec.ts (admin list, 404 PDF, allowed keys only); admin-status.spec.ts;
+                                                 sharing.spec.ts
+Not covered here (other gate items)              4 races, 5 fault injection, 11 migration upgrade, 12 LG/DF: unit/integration suites of
+                                                 earlier tasks and the package-final gate

@@ -154,10 +154,10 @@ const attemptsOf = async (person: Person, revisionId: string): Promise<ApiAttemp
   (await person.api.call<{ deliveries: ApiAttempt[] }>('GET', `/api/deliveries?revision_id=${revisionId}`)).deliveries;
 
 /**
- * The runner (every 15 s) renders the PDF and then makes the delivery attempt. This harness has no
- * sender address unless the environment sets MAIL_FROM, so an attempt ends `failed_permanent` with a
- * visible fault code (no sender) or, with a sender, `accepted` in capture mode: both are final states
- * and both are shown, so the tests wait for `count` final attempts and word whichever one happened.
+ * The runner (every 15 s) renders the PDF and then makes the delivery attempt. The harness configures a
+ * synthetic capture sender (MAIL_FROM on example.invalid, OUTBOUND_MODE capture), so a first attempt ends
+ * `accepted` into the capture folder. A final state is still waited for, and the tests word whichever final
+ * state happened, so a regression in either direction shows as a changed assertion, not a hang.
  */
 async function waitForFinal(person: Person, revisionId: string, count: number): Promise<void> {
   await expect
@@ -248,6 +248,7 @@ test('history shows the signed revision with its PDF and delivery; download, exp
   const firstState = (await attemptsOf(person, revisionId)).at(-1)?.state ?? '';
   const outcome = OUTCOME[firstState];
   if (outcome === undefined) throw new Error(`unexpected first delivery state ${firstState}`);
+  expect(firstState, 'a configured capture sender: the first attempt is accepted').toBe('accepted');
 
   // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
   await signInPageAs(person.account, '#/timesheet');

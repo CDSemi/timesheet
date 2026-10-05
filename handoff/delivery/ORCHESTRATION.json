@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T13C-FREEZE",
+  "next_task_id": "WP3-T14-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -104,7 +104,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
+    "last_commit": "8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2",
     "unpushed": []
   },
   "owner_decisions": [
@@ -6703,7 +6703,7 @@
       "id": "WP3-T13C-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T13C"
       ],
@@ -6735,16 +6735,118 @@
       ],
       "prompt": "handoff/delivery/tasks/WP3-T13C-FREEZE.md",
       "report": "handoff/delivery/tasks/WP3-T13C-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T13C-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "c3c35de41ee5c1afff0e602601bdb27bb0a19bc1",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2",
+      "pushed": true,
       "source_digest": "9b8d6b26dd05436f3aca8546520087e4af095950efc6741cddb54fa2a187240a",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): digest 9b8d6b26 matched the worker's, so src/client/TimesheetScreen.tsx (shared-mode component omitted from the worker's list) was included; 72 paths, parent c3c35de, remote SHA identical; 6 synthetic screenshots viewed; precommit (0 findings, no masking), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T14 starts on 8ad2e4f."
+    },
+    {
+      "id": "WP3-T14",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T13C-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a18b70a4cc32092a3",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/seed.ts",
+        "src/server/cli.ts",
+        "src/server/mail/captureAdapter.ts",
+        "tests/integration/delivery.test.ts",
+        "scripts/smoke-built-server.mjs",
+        "playwright.config.ts",
+        "tests/e2e/fixtures.ts",
+        "tests/e2e/submission.spec.ts",
+        "tests/e2e/automation.spec.ts",
+        "tests/e2e/pdf-visual.spec.ts",
+        "tests/e2e/assets/pdf-view.html",
+        "handoff/delivery/tasks/WP3-T14.md",
+        "handoff/delivery/evidence/WP3-T14"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T14.md",
+      "report": "handoff/delivery/tasks/WP3-T14.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T14/01-capture-red.txt",
+        "handoff/delivery/evidence/WP3-T14/02-capture-green.txt",
+        "handoff/delivery/evidence/WP3-T14/06-e2e.txt",
+        "handoff/delivery/evidence/WP3-T14/07-verify.txt",
+        "handoff/delivery/evidence/WP3-T14/08-digest.txt",
+        "handoff/delivery/evidence/WP3-T14/10-gate-mapping.txt",
+        "handoff/delivery/evidence/WP3-T14/pdf-manual-ot-sundays-vietnamese-synthetic.png",
+        "handoff/delivery/evidence/WP3-T14/pdf-automatic-note-off-image-off-synthetic.png"
+      ],
+      "baseline_commit": "8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2",
+      "source_digest": "677b914268406543b542a5bbb2491e46266ae1bf5e2d950239a259778329b20c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: the seed gives employee2 synthetic settings and a generated signature; the e2e fixture sets MAIL_FROM on example.invalid (first attempts accepted) and adds a privateServer fixture (runner off, CLI run-jobs). Capture fix: no attachment.pdf for attachment-less messages (red then green). Smoke passed: GET safety by DB snapshot, sign-off 409, private PDF 404, capture check, shared-route 404. e2e 127 passed, 5 skipped; new specs submission, automation (2x2 note and image, empty period, off switch, admin) and pdf-visual. Five PDF renders viewed (OT on both Sundays, 15:30 total; real sign date; Vietnamese and long labels; no automatic indicator with the note off; note and image on/off). Gate mapping in 10-gate-mapping.txt (races, fault injection, migration upgrade and LG/DF covered by unit/integration suites). verify exit 0, 1384 tests, 0 deprecation lines; precommit over evidence 0 findings. Deviation: tests/e2e/history-settings.spec.ts harness tightening. DEVELOPMENT.md MAIL_FROM note passed to T15.",
+      "next_action": "None; WP3-T14-FREEZE."
+    },
+    {
+      "id": "WP3-T14-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T14"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "ad1889b436b6c3f9f",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent ad1889b436b6c3f9f, self-reported claude-sonnet-5-5): no commit; preflight exit 1 (broken link in tasks/WP3-GATE.md to ../WP3_HANDOFF.md, created later by WP3-T15); other checks 0; digest matched; 42 paths left staged; 8 images viewed, synthetic. Coordinator replaced the link with a plain code path; same committer resumed for attempt 2."
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T14-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T14-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T14-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T14-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "8ad2e4f42ab6f5ec25f66cf3069c2178de536bd2",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "677b914268406543b542a5bbb2491e46266ae1bf5e2d950239a259778329b20c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T13C set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T14 set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

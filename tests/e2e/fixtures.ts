@@ -1,11 +1,13 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { type Page, test as base, expect } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { syntheticSignaturePng } from '../../src/server/seed.ts';
 
 /*
  * Browser-test harness. One worker gets one BUILT server (dist/) on a free loopback port and a
@@ -26,7 +28,14 @@ export interface BuiltServer {
   credentials: Record<Role, { email: string; password: string }>;
   /** The temporary SQLite file; only the test-only credit seeding opens it besides the server. */
   databasePath: string;
+  /** The private data directory (files, signatures, PDFs, mail capture), beside the database and outside the repository. */
+  dataDir: string;
+  /** The environment of the server process, for the CLI run against the same database (never logged). */
+  env: NodeJS.ProcessEnv;
 }
+
+/** The synthetic capture sender of every harness server (example.invalid; nothing is ever sent). */
+export const CAPTURE_SENDER = 'timesheet-capture@example.invalid';
 
 export const SCREENSHOT_DIR = process.env.E2E_SCREENSHOT_DIR ?? join(tmpdir(), 'timesheet-e2e-screenshots');
 
@@ -65,7 +74,12 @@ async function waitUntilHealthy(origin: string, child: ChildProcess): Promise<vo
   throw new Error('Built server did not become healthy');
 }
 
-async function startBuiltServer(): Promise<{ server: BuiltServer; stop: () => Promise<void> }> {
+interface StartOptions {
+  /** False switches the server's own job runner off (JOB_RUNNER=off): the CLI `run-jobs` then drives every job. */
+  runner?: boolean;
+}
+
+async function startBuiltServer(options: StartOptions = {}): Promise<{ server: BuiltServer; stop: () => Promise<void> }> {
   const work = mkdtempSync(join(tmpdir(), 'timesheet-e2e-'));
   const fromRepo = relative(REPO_ROOT, work);
   // On Windows a different drive makes relative() return an absolute path.
@@ -83,6 +97,11 @@ async function startBuiltServer(): Promise<{ server: BuiltServer; stop: () => Pr
     PORT: String(port),
     DATABASE_PATH: join(work, 'timesheet.db'),
     APP_ORIGINS: origin,
+    // Capture mode with a synthetic sender, so a first delivery attempt is `accepted` into the capture folder.
+    OUTBOUND_MODE: 'capture',
+    MAIL_FROM: CAPTURE_SENDER,
+    DATA_DIR: join(work, 'private-data'),
+    ...(options.runner === false ? { JOB_RUNNER: 'off' } : {}),
     SEED_ADMIN_PASSWORD: credentials.admin.password,
     SEED_EMPLOYEE_PASSWORD: credentials.employee.password,
   };
@@ -104,7 +123,68 @@ async function startBuiltServer(): Promise<{ server: BuiltServer; stop: () => Pr
     await stop();
     throw error;
   }
-  return { server: { origin, credentials, databasePath: env.DATABASE_PATH ?? '' }, stop };
+  return { server: { origin, credentials, databasePath: env.DATABASE_PATH ?? '', dataDir: join(work, 'private-data'), env }, stop };
+}
+
+/* ---- Deterministic job runs and capture inspection ------------------------------- */
+
+export interface RunSummary {
+  claimed: number;
+  succeeded: number;
+  retried: number;
+  intervention: number;
+  lost: number;
+}
+
+/** A UTC instant in the form the CLI takes (whole seconds, trailing Z). */
+export function utcInstant(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Runs every due job once at the fixed instant `now` through the production CLI
+ * (`run-jobs --once --now`) against the server's database and capture folder. Nothing runs in the
+ * background: the CLI migrates, runs the due jobs and exits. Capture mode only.
+ */
+export function runJobsAt(server: BuiltServer, now: Date): RunSummary {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', 'run-jobs', '--once', '--now', utcInstant(now)], {
+    cwd: REPO_ROOT,
+    env: server.env,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) throw new Error(`run-jobs failed with ${result.status}: ${result.stderr}`);
+  return JSON.parse(result.stdout) as RunSummary;
+}
+
+/**
+ * Drains the runner at `start`, then at later instants: the PDF job and the send job of a revision are
+ * enqueued in the same second (a send claimed before its PDF is retried a minute later), and the
+ * reminder scan runs once per five-minute bucket, so the notices that follow a submission need passes
+ * in a later bucket.
+ */
+export function drainJobsFrom(server: BuiltServer, start: Date): RunSummary[] {
+  return [0, 120, 240, 600, 720, 840].map((offsetSeconds) => runJobsAt(server, new Date(start.getTime() + offsetSeconds * 1000)));
+}
+
+export interface CapturedMessage {
+  files: string[];
+  /** The decoded message text (headers and quoted-printable or plain body; attachments left encoded). */
+  eml: string;
+  metadata: Record<string, unknown>;
+  /** The captured attachment, or null when the message has none. */
+  pdf: Buffer | null;
+}
+
+/** Reads the capture folder of a delivery attempt (private data directory, never served over HTTP). */
+export function readCapture(server: BuiltServer, attemptId: string): CapturedMessage {
+  const folder = join(server.dataDir, 'mail-capture', attemptId);
+  const files = readdirSync(folder).sort();
+  return {
+    files,
+    eml: readFileSync(join(folder, 'message.eml'), 'utf8'),
+    metadata: JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8')) as Record<string, unknown>,
+    pdf: files.includes('attachment.pdf') ? readFileSync(join(folder, 'attachment.pdf')) : null,
+  };
 }
 
 /* ---- Test-only credit seeding ------------------------------------------------ */
@@ -277,6 +357,25 @@ export class SeedClient {
     if (this.cookie !== '') headers.cookie = this.cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     return fetch(`${this.origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  }
+
+  /**
+   * Uploads a generated signature image as this account (the route takes a raw image body). With
+   * `authorizeAutoImage` the upload also records the explicit automatic-image consent (settings must exist).
+   */
+  async uploadSignature(png: Buffer, authorizeAutoImage = false): Promise<string> {
+    const headers: Record<string, string> = { origin: this.origin, 'content-type': 'image/png' };
+    if (this.cookie !== '') headers.cookie = this.cookie;
+    const query = authorizeAutoImage ? '?authorize_auto_image=true' : '';
+    const response = await fetch(`${this.origin}/api/signatures${query}`, { method: 'POST', headers, body: new Uint8Array(png) });
+    expect(response.status, 'signature upload').toBe(201);
+    return ((await response.json()) as { signature: { id: string } }).signature.id;
+  }
+
+  /** A binary GET (a PDF download) as this account: status, the headers and the bytes. */
+  async download(path: string): Promise<{ status: number; headers: Headers; body: Buffer }> {
+    const response = await this.raw('GET', path);
+    return { status: response.status, headers: response.headers, body: Buffer.from(await response.arrayBuffer()) };
   }
 
   async call<T>(method: string, path: string, body?: unknown, expectedStatus = 200): Promise<T> {
@@ -472,6 +571,57 @@ export async function createAccountByAdminApi(
   return { id: created.user.id, email, displayName, password };
 }
 
+/* ---- A synthetic person with settings and a signature ----------------------------- */
+
+export interface Person {
+  account: CreatedAccount;
+  api: SeedClient;
+  todayLocal: string;
+  /** The payroll date of the period the app displays first (the current, not yet due period). */
+  payrollDate: string;
+}
+
+export interface PersonOptions {
+  displayName?: string;
+  to?: string[];
+  cc?: string[];
+  /** The auto-submit switch (default off, so a manual flow is never swept by the deadline scan). */
+  autoSubmit?: boolean;
+  autoNote?: { enabled: boolean; text?: string };
+  /** A generated signature image; `authorized` also records the consent for automatic submissions. */
+  signature?: 'saved' | 'authorized' | 'none';
+  /** The signature image phase (each value is a different file). */
+  signaturePhase?: number;
+}
+
+/**
+ * A fresh account (admin API) with a starting policy, saved submission settings on example.invalid and
+ * optionally a generated signature. Everything is over HTTP; the synthetic PNG is generated at run time.
+ */
+export async function newPerson(adminSeed: SeedClient, server: BuiltServer, options: PersonOptions = {}): Promise<Person> {
+  const account = await createAccountByAdminApi(adminSeed, { displayName: options.displayName ?? 'Synthetic Person' });
+  const api = await new SeedClient(server.origin).signIn(account.email, account.password);
+  const { todayLocal, currentPayrollDate } = await api.today();
+  await api.call('POST', '/api/policies', starterPolicyBody(addDays(todayLocal, -400)), 201);
+  await api.call(
+    'POST',
+    '/api/settings/submission',
+    {
+      expected_seq: 0,
+      to: options.to ?? ['payroll-synthetic@example.invalid'],
+      cc: options.cc ?? [],
+      auto_submit: options.autoSubmit ?? false,
+      ...(options.autoNote === undefined
+        ? {}
+        : { auto_note_enabled: options.autoNote.enabled, ...(options.autoNote.text === undefined ? {} : { auto_note_text: options.autoNote.text }) }),
+    },
+    201,
+  );
+  const signature = options.signature ?? 'saved';
+  if (signature !== 'none') await api.uploadSignature(syntheticSignaturePng(options.signaturePhase ?? 9), signature === 'authorized');
+  return { account, api, todayLocal, payrollDate: currentPayrollDate };
+}
+
 /** The HTTP status of a same-origin request made by the page itself, with the page's own session cookie. */
 export async function statusInPage(page: Page, method: string, path: string, body?: unknown): Promise<number> {
   const init = {
@@ -493,6 +643,13 @@ interface TestFixtures {
   employeeSeed: SeedClient;
   /** Seeds data as the synthetic admin, over HTTP. */
   adminSeed: SeedClient;
+  /**
+   * A fresh built server of this test alone (own database, own data directory), for flows that change
+   * system-wide state: the automation activation and a run-jobs clock that jumps past a deadline.
+   * The shared worker server must never see those. Its own job runner is off, so the CLI `run-jobs`
+   * is the only runner (deterministic, no lease race). Stopped and removed after the test.
+   */
+  privateServer: BuiltServer;
   /** Signs the page in through the real login form. */
   signInThroughUi: () => Promise<void>;
   /** Signs the page in through the real login form as any account; an optional hash (`#/settings`) is the first screen. */
@@ -515,6 +672,17 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   baseURL: async ({ builtServer }, use) => {
     await use(builtServer.origin);
   },
+  privateServer: [
+    async ({}, use) => {
+      const { server, stop } = await startBuiltServer({ runner: false });
+      try {
+        await use(server);
+      } finally {
+        await stop();
+      }
+    },
+    { timeout: 60_000 },
+  ],
   employeeSeed: async ({ builtServer }, use) => {
     const { email, password } = builtServer.credentials.employee;
     await use(await new SeedClient(builtServer.origin).signIn(email, password));
