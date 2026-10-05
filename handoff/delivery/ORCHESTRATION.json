@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T10-FREEZE",
+  "next_task_id": "WP3-T11-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -98,7 +98,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
+    "last_commit": "0321be6e82c770eaca5fc1293b9ac230b22263ff",
     "unpushed": []
   },
   "owner_decisions": [
@@ -5531,9 +5531,101 @@
       "id": "WP3-T10-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T10"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2ca8c4ab9220733e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T10-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T10-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T10-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
+      "branch": "main",
+      "commit_sha": "0321be6e82c770eaca5fc1293b9ac230b22263ff",
+      "pushed": true,
+      "source_digest": "5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 26 paths (expected set), parent 0a26afa, remote SHA identical; digest 5f16dab1 matched; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T11 starts on 0321be6 (WP3-DOC/T07B wait for G-Q1/G-Q2)."
+    },
+    {
+      "id": "WP3-T11",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T10-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a104eb559996622bd",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/domain/reminders.ts",
+        "src/server/services/notifications.ts",
+        "src/server/jobs/reminderJob.ts",
+        "src/server/jobs/runner.ts",
+        "tests/domain/reminders.test.ts",
+        "tests/integration/reminders.test.ts",
+        "handoff/delivery/tasks/WP3-T11.md",
+        "handoff/delivery/evidence/WP3-T11"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T11.md",
+      "report": "handoff/delivery/tasks/WP3-T11.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T11/01-red.txt",
+        "handoff/delivery/evidence/WP3-T11/02-green.txt",
+        "handoff/delivery/evidence/WP3-T11/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T11/04-verify.txt",
+        "handoff/delivery/evidence/WP3-T11/05-digest.txt"
+      ],
+      "baseline_commit": "0321be6e82c770eaca5fc1293b9ac230b22263ff",
+      "source_digest": "e7f00cd076cf70fea542362815efa9bbf92dd7cb70f8797a66464c751cc6f471",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: reminder kinds before_due (24 h and 2 h or the user's saved offsets), overdue and the outcome notice, each to the employee's own address only; the outcome text says 'submitted automatically' and 'Review is pending'. Occurrence and job in one transaction (dedupe; a rerun queues nothing); missed notices collapse into one current notice; send time re-checks finalization. Offsets are elapsed time; autumn, spring and gap deadlines tested against the independent zone oracle. Links #/review/{date} only. Red run then 57 green (22 domain, 35 integration); 16/16 mutations caught; verify exit 0, 1095 tests, 0 deprecation lines; digest re-run last. No deviations (runner.ts registration only). Coordinator dispositions of the worker's notes: the 5-minute scan bucket is accepted (routine); the zero-byte attachment.pdf in a reminder's capture folder is a carry item (capture adapter should omit an absent attachment; T14 or a fix round); a possible repeated reminder after a crash on real SMTP is an accepted, documented limitation (reminders are at-least-once).",
+      "next_action": "None; WP3-T11-FREEZE."
+    },
+    {
+      "id": "WP3-T11-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T11"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -5551,21 +5643,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T10-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T10-FREEZE"
+        "handoff/delivery/tasks/WP3-T11-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T11-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T11-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T11-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
+      "baseline_commit": "0321be6e82c770eaca5fc1293b9ac230b22263ff",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9",
+      "source_digest": "e7f00cd076cf70fea542362815efa9bbf92dd7cb70f8797a66464c751cc6f471",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T10 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T11 set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

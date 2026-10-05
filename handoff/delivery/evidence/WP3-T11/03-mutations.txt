@@ -1,0 +1,239 @@
+# WP3-T11 mutation checks (16 mutations; script mutations.py.txt). Each mutation was computed in memory before any file was opened for writing.
+M1 the decided occurrences are ignored (no dedupe by user, period and occurrence)
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 196ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 202ms
+    � records one decision per occurrence and a rerun sends nothing new 150ms
+    � sends the 24 h notice with the real time left when only that reminder was missed 214ms
+    � uses login-required deep links with the payroll date only, never a token or personal data 219ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  5 failed | 52 passed (57)
+    FAIL  tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn)
+    AssertionError: expected [ [ 'before_due', 'enqueued', �(1) ] ] to deeply equal [ �(2) ]
+    FAIL  tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring)
+    AssertionError: expected [ [ 'before_due', 'enqueued', �(1) ] ] to deeply equal [ �(2) ]
+    FAIL  tests/integration/reminders.test.ts > dedupe by user, period and occurrence > records one decision per occurrence and a rerun sends nothing new
+  restored byte-identical: True
+
+M2 missed notices are not collapsed into the current one
+  file: src/domain/reminders.ts (original sha256 3402986c7423bfb3b3e742bf96e21483c371a8a01db87558b09efa9356819106)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � collapses everything missed during downtime into the one current notice 4ms
+    � sends nothing before the activation instant or for a deadline before it 1ms
+    � sends only the 2 h notice and records the 24 h one as collapsed when the runner was down for both 178ms
+    � sends nothing while the clock is before the activation instant, then one current notice at it 194ms
+    Test Files  2 failed (2)
+    Tests  4 failed | 53 passed (57)
+    FAIL  tests/domain/reminders.test.ts > planning the pre-deadline notices > collapses everything missed during downtime into the one current notice
+    AssertionError: expected { send: 120, collapsed: [] } to deeply equal { send: 120, collapsed: [ 1440 ] }
+    FAIL  tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing before the activation instant or for a deadline before it
+    AssertionError: expected { send: 120, collapsed: [] } to deeply equal { send: 120, collapsed: [ 1440 ] }
+    FAIL  tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends only the 2 h notice and records the 24 h one as collapsed when the runner was down for both
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: 1, collapsed: 1 }
+  restored byte-identical: True
+
+M3 reminders keep coming after the period is finalized (scan side)
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends no 2 h reminder to an employee who signed off after the 24 h reminder 221ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > stop after finalization > sends no 2 h reminder to an employee who signed off after the 24 h reminder
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: +0, collapsed: +0 }
+  restored byte-identical: True
+
+M4 a queued reminder is sent although the period was finalized meanwhile (send side)
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends nothing for a reminder that was queued before the period was finalized 206ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > stop after finalization > sends nothing for a reminder that was queued before the period was finalized
+    AssertionError: expected [ { �(9) } ] to deeply equal []
+  restored byte-identical: True
+
+M5 the activation instant is no longer a lower bound for the current time (domain rule and scan guard)
+  file: src/domain/reminders.ts (original sha256 3402986c7423bfb3b3e742bf96e21483c371a8a01db87558b09efa9356819106)
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends nothing before the activation instant or for a deadline before it 4ms
+    � sends nothing while the clock is before the activation instant, then one current notice at it 165ms
+    � sends nothing for a period whose deadline is before the activation instant 160ms
+    Test Files  2 failed (2)
+    Tests  3 failed | 54 passed (57)
+    FAIL  tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing before the activation instant or for a deadline before it
+    AssertionError: expected { send: 120, collapsed: [ 1440 ] } to deeply equal { send: null, collapsed: [] }
+    FAIL  tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing while the clock is before the activation instant, then one current notice at it
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: +0, collapsed: +0 }
+    FAIL  tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing for a period whose deadline is before the activation instant
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: +0 }
+  restored byte-identical: True
+
+M6 imported periods are reminded
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends no reminder for an imported (unverified) period and no outcome notice 157ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends no reminder for an imported (unverified) period and no outcome notice
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: +0 }
+  restored byte-identical: True
+
+M7 the reminder instant is shifted by one hour (not elapsed time before the production deadline)
+  file: src/domain/reminders.ts (original sha256 3402986c7423bfb3b3e742bf96e21483c371a8a01db87558b09efa9356819106)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � is exactly 24 h and 2 h before the deadline of an ordinary period 15ms
+    � computes 24 h and 2 h before a deadline right after the change: clocks go back (autumn) 4ms
+    � computes 24 h and 2 h before a deadline right after the change: clocks go forward (spring) 1ms
+    � follows the production zone function for a deadline inside the spring gap 1ms
+    � sends the 24 h reminder at exactly its instant and the 2 h reminder at exactly its instant 1ms
+    � collapses everything missed during downtime into the one current notice 1ms
+    � sends the reminder through the registered runner jobs end to end 169ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 154ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 144ms
+    � records one decision per occurrence and a rerun sends nothing new 140ms
+    � dedupes per user: two employees each get their own single reminder 156ms
+    � rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains 151ms
+  restored byte-identical: True
+
+M8 the SMTP envelope also names the payroll recipient
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � warns about an overdue period only when auto-submit is off, once, to the employee only 218ms
+    � sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 217ms
+    � runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 371ms
+    � addresses every captured message to the employee�s own address only 257ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  4 failed | 53 passed (57)
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > warns about an overdue period only when auto-submit is off, once, to the employee only
+    AssertionError: expected [ �(2) ] to deeply equal [ Array(1) ]
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link
+    AssertionError: expected [ �(2) ] to deeply equal [ Array(1) ]
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee
+    AssertionError: expected [ �(2) ] to deeply equal [ Array(1) ]
+  restored byte-identical: True
+
+M9 the review link carries a token in its URL
+  file: src/domain/reminders.ts (original sha256 3402986c7423bfb3b3e742bf96e21483c371a8a01db87558b09efa9356819106)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � is a login-required deep link with the payroll date only 3ms
+    � sends the reminder through the registered runner jobs end to end 170ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 186ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 184ms
+    � records one decision per occurrence and a rerun sends nothing new 196ms
+    � dedupes per user: two employees each get their own single reminder 159ms
+    � sends no 2 h reminder to an employee who signed off after the 24 h reminder 159ms
+    � keeps reminding an employee whose other period is unfinalized (per-period scope) 209ms
+    � warns about an overdue period only when auto-submit is off, once, to the employee only 188ms
+    � sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 176ms
+    � runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 379ms
+    � sends the outcome notice once per automatic revision and none for a manual sign-off 221ms
+  restored byte-identical: True
+
+M10 the overdue warning keeps coming after the employee signed off the overdue period
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � stops the overdue warning once the employee signs off the overdue period 195ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > stops the overdue warning once the employee signs off the overdue period
+    AssertionError: expected [ [ 'overdue', 'enqueued' ] ] to deeply equal [ [ 'overdue', 'suppressed' ] ]
+  restored byte-identical: True
+
+M11 the outcome notice no longer says that review is pending
+  file: src/domain/reminders.ts (original sha256 3402986c7423bfb3b3e742bf96e21483c371a8a01db87558b09efa9356819106)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � renders the outcome notice: submitted automatically, review pending, login required 3ms
+    � sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 192ms
+    � runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 444ms
+    Test Files  2 failed (2)
+    Tests  3 failed | 54 passed (57)
+    FAIL  tests/domain/reminders.test.ts > rendered notices > renders the outcome notice: submitted automatically, review pending, login required
+    AssertionError: expected 'Your timesheet for 2026-09-14 to 2026�' to match /review is pending/i
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link
+    AssertionError: expected 'Your timesheet for 2026-09-14 to 2026�' to match /review is pending/i
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee
+    AssertionError: expected 'Your timesheet for 2026-09-14 to 2026�' to match /review is pending/i
+  restored byte-identical: True
+
+M12 the runner no longer queues the bucket's reminder scan job
+  file: src/server/jobs/runner.ts (original sha256 62fb69ffd9398b2596692ed0cc9b30d3efa6d39e8fb989f02cd881892d1d8996)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � queues at most one scan job per five-minute bucket once activated 171ms
+    � sends the reminder through the registered runner jobs end to end 149ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 178ms
+    � fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 172ms
+    � dedupes per user: two employees each get their own single reminder 144ms
+    � sends no 2 h reminder to an employee who signed off after the 24 h reminder 153ms
+    � keeps reminding an employee whose other period is unfinalized (per-period scope) 172ms
+    � warns about an overdue period only when auto-submit is off, once, to the employee only 175ms
+    � stops the overdue warning once the employee signs off the overdue period 167ms
+    � sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 163ms
+    � runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 330ms
+    � sends the outcome notice once per automatic revision and none for a manual sign-off 181ms
+  restored byte-identical: True
+
+M13 the outcome notice is also sent after the employee reviewed the automatic revision
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends no outcome notice once the employee already reviewed the automatic revision (late review) 282ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends no outcome notice once the employee already reviewed the automatic revision (late review)
+    AssertionError: expected [ { �(9) } ] to deeply equal []
+  restored byte-identical: True
+
+M14 the per-user reminder offsets are ignored
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � uses the offsets saved in the submission settings 228ms
+    � sends no pre-deadline notice when the offsets list is empty 218ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  2 failed | 55 passed (57)
+    FAIL  tests/integration/reminders.test.ts > per-user reminder offsets > uses the offsets saved in the submission settings
+    AssertionError: expected [ { �(9) }, { �(9) } ] to deeply equal []
+    FAIL  tests/integration/reminders.test.ts > per-user reminder offsets > sends no pre-deadline notice when the offsets list is empty
+    AssertionError: expected [ { �(9) } ] to deeply equal []
+  restored byte-identical: True
+
+M15 the message header also addresses the payroll recipient
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 185ms
+    � addresses every captured message to the employee�s own address only 250ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  2 failed | 55 passed (57)
+    FAIL  tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link
+    AssertionError: expected 'Auto-Submitted: auto-generated\r\nFro�' not to contain 'payroll@example.invalid'
+    FAIL  tests/integration/reminders.test.ts > links and recipients (AC-09) > addresses every captured message to the employee�s own address only
+    AssertionError: expected 'Auto-Submitted: auto-generated\r\nFro�' not to contain 'payroll@example.invalid'
+  restored byte-identical: True
+
+M16 a failed occurrence insert is swallowed, leaving a queued job without its decision
+  file: src/server/services/notifications.ts (original sha256 f664cd1f41370a430c56c3870b1d459e23c4af692349fa8a32af6192134231c9)
+  command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+  exit: 1 -> CAUGHT
+    � rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains 147ms
+    Test Files  1 failed | 1 passed (2)
+    Tests  1 failed | 56 passed (57)
+    FAIL  tests/integration/reminders.test.ts > dedupe by user, period and occurrence > rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains
+    AssertionError: expected { activated: true, enqueued: 1, �(4) } to match object { enqueued: +0, failed: 1 }
+  restored byte-identical: True
+
+mutations caught: 16/16

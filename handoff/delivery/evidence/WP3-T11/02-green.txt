@@ -1,0 +1,68 @@
+# WP3-T11 green run of the two new suites (verbose reporter). command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts --reporter=verbose
+
+ RUN  v5.0.2 <project>
+
+ ✓ tests/domain/reminders.test.ts > offsets and keys > keeps positive whole minutes once each, longest first 1ms
+ ✓ tests/domain/reminders.test.ts > offsets and keys > builds distinct, stable occurrence keys 0ms
+ ✓ tests/domain/reminders.test.ts > the reminder instant is elapsed time before the production deadline > is exactly 24 h and 2 h before the deadline of an ordinary period 11ms
+ ✓ tests/domain/reminders.test.ts > the reminder instant is elapsed time before the production deadline > computes 24 h and 2 h before a deadline right after the change: clocks go back (autumn) 2ms
+ ✓ tests/domain/reminders.test.ts > the reminder instant is elapsed time before the production deadline > computes 24 h and 2 h before a deadline right after the change: clocks go forward (spring) 1ms
+ ✓ tests/domain/reminders.test.ts > the reminder instant is elapsed time before the production deadline > follows the production zone function for a deadline inside the spring gap 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing before the first reminder is reached 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > sends the 24 h reminder at exactly its instant and the 2 h reminder at exactly its instant 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > never repeats a decided notice (dedupe) 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > collapses everything missed during downtime into the one current notice 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > does not send an older notice after a closer one was already decided 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing at or after the deadline 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing before the activation instant or for a deadline before it 0ms
+ ✓ tests/domain/reminders.test.ts > planning the pre-deadline notices > sends nothing without offsets 0ms
+ ✓ tests/domain/reminders.test.ts > the review link > is a login-required deep link with the payroll date only 0ms
+ ✓ tests/domain/reminders.test.ts > the review link > refuses a base that carries a token, credentials, a query or a fragment, and a malformed date 1ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > describes the deadline in the saved reporting zone with its offset 0ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > renders the before-deadline reminder with the time left and the link 0ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > renders the overdue warning without claiming a submission 0ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > renders the outcome notice: submitted automatically, review pending, login required 0ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > never puts anything but the one link in a URL and carries no token or address 0ms
+ ✓ tests/domain/reminders.test.ts > rendered notices > refuses a link that is not the review deep link 0ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > registers the scan and send handlers and queues no scan while the activation instant is null 171ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > queues at most one scan job per five-minute bucket once activated 169ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > sends the reminder through the registered runner jobs end to end 175ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 214ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 215ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > records one decision per occurrence and a rerun sends nothing new 211ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > dedupes per user: two employees each get their own single reminder 196ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains 160ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > sends no 2 h reminder to an employee who signed off after the 24 h reminder 231ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > sends nothing for a reminder that was queued before the period was finalized 183ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > keeps reminding an employee whose other period is unfinalized (per-period scope) 189ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > warns about an overdue period only when auto-submit is off, once, to the employee only 224ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > stops the overdue warning once the employee signs off the overdue period 179ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 193ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 365ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice once per automatic revision and none for a manual sign-off 209ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends no outcome notice once the employee already reviewed the automatic revision (late review) 184ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends only the 2 h notice and records the 24 h one as collapsed when the runner was down for both 185ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends the 24 h notice with the real time left when only that reminder was missed 190ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends no pre-deadline notice for a deadline that already passed during the downtime 158ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing while the clock is before the activation instant, then one current notice at it 168ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing for a period whose deadline is before the activation instant 154ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends no reminder for an imported (unverified) period and no outcome notice 169ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing to a deactivated account 147ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > uses the offsets saved in the submission settings 239ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > sends no pre-deadline notice when the offsets list is empty 188ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > uses login-required deep links with the payroll date only, never a token or personal data 246ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > addresses every captured message to the employee’s own address only 242ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > keeps the job payload to routing identifiers only 158ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > retries a temporary failure and does not send twice after acceptance 182ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > needs intervention for a permanent failure and never resends an uncertain outcome 199ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > blocks with a visible fault, never a send, when the sender is missing 169ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > treats an already captured message as sent when the same job runs again after a crash 192ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job whose occurrence does not exist and sends nothing 194ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job that borrows another employee’s decision (owner scoping) 205ms
+
+ Test Files  2 passed (2)
+      Tests  57 passed (57)
+   Start at  20:50:40
+   Duration  8.36s (tests 81%, import 12%, transform 7%)
+
+exit: 0

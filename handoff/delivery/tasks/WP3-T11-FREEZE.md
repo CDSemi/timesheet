@@ -1,46 +1,45 @@
-# WP3-T10-FREEZE dispatch brief
+# WP3-T11-FREEZE dispatch brief
 
-- Mission/task: timesheet-software-readiness / WP3-T10-FREEZE; package WP3; kind commit;
-  attempt 1; depends on WP3-T10.
+- Mission/task: timesheet-software-readiness / WP3-T11-FREEZE; package WP3; kind commit;
+  attempt 1; depends on WP3-T11.
 - Profile/routing: timesheet-committer, requested sonnet/medium, no override. Routing:
-  size S, risk M (automation and finalization code, race tests, evidence scripts),
-  novelty no. Records in English.
+  size S, risk M (notification code with synthetic addresses, evidence scripts), novelty
+  no. Records in English.
 - Authority: AGENTS.md rule 12, the docs/08 section "Commits and pushes" and the board
   `owner_decisions`.
 - Branch: main (`git.release_declared` is false). Expected HEAD = origin/main =
-  0a26afa3fc7fbbebe173f919ec4b7426e5d5438b. If either differs, stop and report.
+  0321be6e82c770eaca5fc1293b9ac230b22263ff. If either differs, stop and report.
 - Push after the commit.
 - Scratch space: make the first shell call a trivial `node --version` (Node 24 by full
   path); if it fails with ENOSPC or "temp filesystem … is full", stop at once and report.
-  Use `D:\timesheet-tmp\WP3-T10-FREEZE` (owner-authorized, outside Dropbox) for TEMP/TMP;
+  Use `D:\timesheet-tmp\WP3-T11-FREEZE` (owner-authorized, outside Dropbox) for TEMP/TMP;
   delete only files you created; never remove folders recursively.
 
 ## Expected working-tree set
 
 Source and tests: changed or new paths outside handoff/ may only be among these:
-- new: src/server/services/automation.ts, src/server/jobs/deadlineJob.ts,
-  tests/integration/deadline.test.ts and tests/integration/deadline-race.test.ts;
-- modified: src/server/services/finalization.ts, src/server/jobs/runner.ts,
-  src/server/routes/admin.ts, and the reported deviations tests/support/concurrency.ts,
-  tests/integration/isolation.test.ts and tests/integration/ot-api.test.ts.
+- new: src/domain/reminders.ts, src/server/services/notifications.ts,
+  src/server/jobs/reminderJob.ts, tests/domain/reminders.test.ts and
+  tests/integration/reminders.test.ts;
+- modified: src/server/jobs/runner.ts.
 
 Recompute the digest with Node 24 (`scripts/source-digest.mjs` or `npm run digest`)
 immediately before `git add` and record it. The worker reported
-5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9; a different value stops
+e7f00cd076cf70fea542362815efa9bbf92dd7cb70f8797a66464c751cc6f471; a different value stops
 the commit.
 
 New handoff files:
-- handoff/delivery/tasks/: WP3-T10.md, WP3-T10-FREEZE.md and WP3-T11.md.
-- Every file under handoff/delivery/evidence/WP3-T10/ (including `*.py.txt` scripts).
+- handoff/delivery/tasks/: WP3-T11-FREEZE.md and WP3-T12.md.
+- Every file under handoff/delivery/evidence/WP3-T11/ (including `*.py.txt` scripts).
 
 Modified or new handoff files:
 - handoff/delivery/ORCHESTRATION.json.
 - handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md and .vi.md.
-- handoff/delivery/tasks/WP3-T09-FREEZE.md.
-- Every file under handoff/delivery/evidence/WP3-T09-FREEZE/.
+- handoff/delivery/tasks/: WP3-T10-FREEZE.md and WP3-T11.md.
+- Every file under handoff/delivery/evidence/WP3-T10-FREEZE/.
 
 Allowed but not staged:
-- your own files in handoff/delivery/evidence/WP3-T10-FREEZE/;
+- your own files in handoff/delivery/evidence/WP3-T11-FREEZE/;
 - the results you append to this brief after the commit.
 
 Any other changed or untracked path stops the commit; report it. That includes a file
@@ -69,7 +68,8 @@ nothing else. If the precommit check masks a user-profile path in an evidence lo
 is allowed; a block in a source or test file stops the commit.
 
 Privacy hygiene: the precommit script is the privacy and secret scan.
-- Do not print diffs, test bodies, probe sources, names or CSV content through the shell.
+- Do not print diffs, test bodies, probe sources, names, addresses or CSV content through
+  the shell.
 - For any extra check, use the Grep tool and report masked values only.
 
 If any other check fails, do not commit. Report the file, line and rule.
@@ -83,21 +83,19 @@ single final newline. Stop any background process you started before you finish.
 
 ## Commit message (refine with the commit-message skill; keep the facts)
 
-Subject: Add deadline automation with the activation boundary
+Subject: Add deadline reminders, overdue warnings and the automatic-submission notice
 
-- feat(automation): deadline job finalizes eligible periods automatically (activation
-  instant set and passed, the user's switch on, unfinalized, not imported; re-checked in
-  the transaction): origin deadline, review pending, no sign-off, choose-mode debits
-  pending; empty periods submit with default labels, zero OT and no deficit (owner F-1)
-- feat(automation): switch off records an overdue audit event and exports nothing;
-  chronological bounded-batch recovery after downtime
-- feat(admin): audited activation route (admin only, refuses past instants)
-- test: 33 new tests incl. a 20-round manual/deadline race and scan/scan races; 12
+- feat(notifications): 24 h and 2 h reminders (or saved offsets), an overdue warning
+  when auto-submit is off and an outcome notice after automatic submission, each to the
+  employee's own address with a login-required link only
+- feat(jobs): reminder job with occurrence-and-job dedupe in one transaction, collapse
+  of missed notices after downtime, and a finalization re-check at send time
+- test: 57 new tests including DST-change deadlines against the zone oracle; 16
   mutations caught
-- docs(handoff): WP3-T09 freeze result, WP3-T10 brief, record and evidence, WP3-T11
-  brief, board and checkpoint (+ vi)
+- docs(handoff): WP3-T10 freeze result, WP3-T11 record and evidence, WP3-T12 brief,
+  board and checkpoint (+ vi)
 
-Task: WP3-T10-FREEZE
+Task: WP3-T11-FREEZE
 
 ## Push and report
 
@@ -108,13 +106,8 @@ Push per the profile. Append these results here:
 - check exits;
 - blockers.
 
-Evidence goes in handoff/delivery/evidence/WP3-T10-FREEZE/. Return at most 150 words.
+Evidence goes in handoff/delivery/evidence/WP3-T11-FREEZE/. Return at most 150 words.
 
 ## Results
 
 (Committer appends here.)
-- Pre-HEAD: 0a26afa3fc7fbbebe173f919ec4b7426e5d5438b; post-HEAD: 0321be6e82c770eaca5fc1293b9ac230b22263ff.
-- Commit SHA: 0321be6e82c770eaca5fc1293b9ac230b22263ff; pushed: yes; remote SHA: 0321be6e82c770eaca5fc1293b9ac230b22263ff (main).
-- Digest: 5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9 (matched); staged: 26.
-- Check exits: node v24.21.0; digest 0; add 0; precommit 0; diff --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0; validate_package --preflight 0.
-- Blockers: none. Evidence: handoff/delivery/evidence/WP3-T10-FREEZE/.

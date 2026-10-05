@@ -1,0 +1,40 @@
+# WP3-T11 red run 1 (before any implementation): both new suites fail to load because the modules do not exist.
+# command: node node_modules/vitest/vitest.mjs run tests/domain/reminders.test.ts tests/integration/reminders.test.ts
+# exit: 1
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/domain/reminders.test.ts (0 test)
+ ❯ tests/integration/reminders.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/domain/reminders.test.ts [ tests/domain/reminders.test.ts ]
+Error: Cannot find module '../../src/domain/reminders.ts' imported from <project>/tests/domain/reminders.test.ts
+ ❯ tests/domain/reminders.test.ts:4:1
+      2| import { formatUtcInstant, parseUtcInstant } from '../../src/domain/in…
+      3| import { type PayrollException, type PayrollScheduleRules, payPeriodAt…
+      4| import {
+       | ^
+      5|   beforeDueKey,
+      6|   describeDeadline,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/reminders.test.ts [ tests/integration/reminders.test.ts ]
+Error: Cannot find module '../../src/server/jobs/reminderJob.ts' imported from <project>/tests/integration/reminders.test.ts
+ ❯ tests/integration/reminders.test.ts:11:1
+      9| import { FileStore } from '../../src/server/files/fileStore.ts';
+     10| import { enqueueJob, getJob } from '../../src/server/jobs/jobStore.ts';
+     11| import { createReminderScanHandler, createSendReminderHandler, JOB_REM…
+       | ^
+     12| import { createJobHandlers, type JobHandlers, runJobsOnce } from '../.…
+     13| import { captureFolder } from '../../src/server/mail/captureAdapter.ts…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  no tests
+   Start at  20:37:57
+   Duration  309ms (worker 96%, environment 4%)

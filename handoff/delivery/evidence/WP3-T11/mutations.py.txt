@@ -1,0 +1,158 @@
+# WP3-T11 mutation checks. Run from the repository root: python handoff/delivery/evidence/WP3-T11/mutations.py.txt
+# Each mutation is computed in memory before any file is opened for writing; the original bytes are
+# restored afterwards and their SHA-256 is compared with the original. Output is masked and LF.
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.getcwd()
+NODE = os.path.join(os.environ["LOCALAPPDATA"], "timesheet-dev", "node-24.21.0", "node_modules", "node", "bin", "node.exe")
+VITEST = os.path.join("node_modules", "vitest", "vitest.mjs")
+NOTIF = "src/server/services/notifications.ts"
+DOMAIN = "src/domain/reminders.ts"
+RUNNER = "src/server/jobs/runner.ts"
+TESTS = ["tests/domain/reminders.test.ts", "tests/integration/reminders.test.ts"]
+
+# (title, [(file, [(original, mutated), ...]), ...])
+MUTATIONS = [
+    (
+        "M1 the decided occurrences are ignored (no dedupe by user, period and occurrence)",
+        [(NOTIF, [("            .map((row) => row.occurrence_key),", "            .map((row) => row.occurrence_key)\n            .filter(() => false),")])],
+    ),
+    (
+        "M2 missed notices are not collapsed into the current one",
+        [(DOMAIN, [("return { send: closest, collapsed: pending.filter((offset) => offset !== closest) };", "return { send: closest, collapsed: [] };")])],
+    ),
+    (
+        "M3 reminders keep coming after the period is finalized (scan side)",
+        [(NOTIF, [("    if (state.finalized || state.imported) return null;\n    const stored", "    if (state.imported) return null;\n    const stored")])],
+    ),
+    (
+        "M4 a queued reminder is sent although the period was finalized meanwhile (send side)",
+        [(NOTIF, [("  if (state.finalized && kind !== 'outcome_notice') return null;\n", "  // mutation: finalized periods still send\n")])],
+    ),
+    (
+        "M5 the activation instant is no longer a lower bound for the current time (domain rule and scan guard)",
+        [
+            (DOMAIN, [("if (activeFromUtc === null || nowUtc < activeFromUtc) return NOTHING;", "if (activeFromUtc === null) return NOTHING;")]),
+            (NOTIF, [("  if (now < activeFromEpoch) return summary;\n", "  // mutation: no activation bound\n")]),
+        ],
+    ),
+    (
+        "M6 imported periods are reminded",
+        [(NOTIF, [("    if (state.finalized || state.imported) return null;\n    const stored", "    if (state.finalized) return null;\n    const stored")])],
+    ),
+    (
+        "M7 the reminder instant is shifted by one hour (not elapsed time before the production deadline)",
+        [(DOMAIN, [("return dueAtUtc - offsetMinutes * SECONDS_PER_MINUTE;", "return dueAtUtc - offsetMinutes * SECONDS_PER_MINUTE + 3600;")])],
+    ),
+    (
+        "M8 the SMTP envelope also names the payroll recipient",
+        [(NOTIF, [("envelope: { from: sender, to: [source.notice.to] }", "envelope: { from: sender, to: [source.notice.to, 'payroll@example.invalid'] }")])],
+    ),
+    (
+        "M9 the review link carries a token in its URL",
+        [(DOMAIN, [("/#/review/${payrollDate}`;\n}", "/#/review/${payrollDate}?token=synthetic`;\n}")])],
+    ),
+    (
+        "M10 the overdue warning keeps coming after the employee signed off the overdue period",
+        [(NOTIF, [("    if (state.finalized || state.imported) {\n      insertOccurrence(db, clock, { ...base, disposition: 'suppressed'", "    if (state.imported) {\n      insertOccurrence(db, clock, { ...base, disposition: 'suppressed'")])],
+    ),
+    (
+        "M11 the outcome notice no longer says that review is pending",
+        [(DOMAIN, [("'Review is pending: it has not been signed by you yet.',", "'Review is complete.',")])],
+    ),
+    (
+        "M12 the runner no longer queues the bucket's reminder scan job",
+        [(RUNNER, [("  if (kinds.includes(JOB_REMINDER_SCAN)) enqueueReminderScan(db, clock);\n", "  // mutation: no reminder scan job\n")])],
+    ),
+    (
+        "M13 the outcome notice is also sent after the employee reviewed the automatic revision",
+        [
+            (
+                NOTIF,
+                [
+                    ("          AND NOT EXISTS (SELECT 1 FROM timesheet_revisions s WHERE s.timesheet_id = r.timesheet_id AND s.review_state = 'signed')\n", "          AND 1 = 1\n"),
+                    ("            AND NOT EXISTS (SELECT 1 FROM timesheet_revisions s WHERE s.timesheet_id = r.timesheet_id AND s.review_state = 'signed')`,", "            AND 1 = 1`,"),
+                ],
+            )
+        ],
+    ),
+    (
+        "M14 the per-user reminder offsets are ignored",
+        [(NOTIF, [("normalizeReminderOffsets(submissionSettingsOrDefault(db, user.id).reminderOffsetsMinutes);", "normalizeReminderOffsets([1440, 120]);")])],
+    ),
+    (
+        "M15 the message header also addresses the payroll recipient",
+        [(NOTIF, [("    to: [source.notice.to],\n", "    to: [source.notice.to, 'payroll@example.invalid'],\n")])],
+    ),
+    (
+        "M16 a failed occurrence insert is swallowed, leaving a queued job without its decision",
+        [(NOTIF, [("  insertOccurrence(db, clock, { ...row, disposition: 'enqueued', jobId: job.id });\n}", "  try {\n    insertOccurrence(db, clock, { ...row, disposition: 'enqueued', jobId: job.id });\n  } catch {\n    // mutation: swallowed\n  }\n}")])],
+    ),
+]
+
+
+def mask(text):
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    text = text.replace("\r\n", "\n")
+    for path, label in ((ROOT, "<project>"), (os.environ.get("TEMP", "<none>"), "<tmp>"), (os.path.expanduser("~"), "<home>")):
+        for variant in {path, path.replace("\\", "/")}:
+            if variant and variant != "<none>":
+                text = re.sub(re.escape(variant), label, text, flags=re.IGNORECASE)
+    return "\n".join(line.rstrip() for line in text.split("\n"))
+
+
+def summary_lines(output):
+    keep = []
+    for line in output.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith(("×", "Test Files", "Tests ", "FAIL", "AssertionError", "Error:")):
+            keep.append("    " + stripped)
+    return keep[:12]
+
+
+def read(rel):
+    with open(os.path.join(ROOT, rel), "rb") as handle:
+        return handle.read()
+
+
+report = []
+caught = 0
+for title, edits in MUTATIONS:
+    plan = []  # (path, rel, before bytes, after bytes), all computed before any file is opened for writing
+    for rel, replacements in edits:
+        before = read(rel)
+        text = before.decode("utf-8")
+        for original, mutated in replacements:
+            if text.count(original) != 1:
+                print(f"{title}: anchor found {text.count(original)} times in {rel}; aborting", file=sys.stderr)
+                sys.exit(2)
+            text = text.replace(original, mutated, 1)
+        plan.append((os.path.join(ROOT, rel), rel, before, text.encode("utf-8")))
+    try:
+        for path, _rel, _before, after in plan:
+            with open(path, "wb") as handle:
+                handle.write(after)
+        result = subprocess.run([NODE, VITEST, "run", *TESTS], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+        output = mask(result.stdout + result.stderr)
+    finally:
+        for path, _rel, before, _after in plan:
+            with open(path, "wb") as handle:
+                handle.write(before)
+    restored = all(hashlib.sha256(read(rel)).hexdigest() == hashlib.sha256(before).hexdigest() for _path, rel, before, _after in plan)
+    status = "CAUGHT" if result.returncode != 0 else "NOT CAUGHT"
+    caught += result.returncode != 0
+    report.append(title)
+    for _path, rel, before, _after in plan:
+        report.append(f"  file: {rel} (original sha256 {hashlib.sha256(before).hexdigest()})")
+    report.append(f"  command: node {VITEST.replace(os.sep, '/')} run {' '.join(TESTS)}")
+    report.append(f"  exit: {result.returncode} -> {status}")
+    report.extend(summary_lines(output))
+    report.append(f"  restored byte-identical: {restored}")
+    report.append("")
+
+report.append(f"mutations caught: {caught}/{len(MUTATIONS)}")
+print("\n".join(report))

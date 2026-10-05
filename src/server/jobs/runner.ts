@@ -16,6 +16,7 @@ import {
   renewLease,
 } from './jobStore.ts';
 import { createPdfJobHandler, JOB_RENDER_PDF } from './pdfJob.ts';
+import { createReminderScanHandler, createSendReminderHandler, enqueueReminderScan, JOB_REMINDER_SCAN, JOB_SEND_REMINDER } from './reminderJob.ts';
 import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
 
 /*
@@ -59,15 +60,16 @@ const DEFAULT_MAX_JOBS = 100;
 export const DEFAULT_INTERVAL_MS = 15_000;
 
 /**
- * The production handlers: the PDF job, the send job and the deadline scan; later job kinds
- * register here. The send job uses the configured outbound mode (capture by default, under the
- * files' private data directory) and the configured sender.
+ * The production handlers: the PDF job, the send job, the deadline scan and the reminder scan and
+ * send jobs; later job kinds register here. The send jobs use the configured outbound mode (capture
+ * by default, under the files' private data directory) and the configured sender; reminders link
+ * to the configured public base URL.
  */
 export function createJobHandlers(deps: {
   db: Db;
   clock: Clock;
   files: FileStore;
-  delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound'>;
+  delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound' | 'publicBaseUrl'>;
 }): JobHandlers {
   const { db, clock, files, delivery } = deps;
   const outbound = createOutboundAdapter(delivery.outbound, { dataDir: files.root });
@@ -75,6 +77,8 @@ export function createJobHandlers(deps: {
     [JOB_RENDER_PDF]: createPdfJobHandler({ db, clock, files }),
     [JOB_SEND_EMAIL]: createSendJobHandler({ db, clock, files, outbound, senderAddress: delivery.senderAddress }),
     [JOB_DEADLINE_SCAN]: createDeadlineJobHandler({ db, clock }),
+    [JOB_REMINDER_SCAN]: createReminderScanHandler({ db, clock }),
+    [JOB_SEND_REMINDER]: createSendReminderHandler({ db, clock, outbound, senderAddress: delivery.senderAddress, publicBaseUrl: delivery.publicBaseUrl }),
   };
 }
 
@@ -89,6 +93,8 @@ export async function runJobsOnce(options: RunnerOptions): Promise<RunSummary> {
   recordHeartbeat(db, clock, owner);
   // This minute's deadline scan (idempotent; nothing at all while the activation instant is null).
   if (kinds.includes(JOB_DEADLINE_SCAN)) enqueueDeadlineScan(db, clock);
+  // This bucket's reminder scan (idempotent; nothing at all while the activation instant is null).
+  if (kinds.includes(JOB_REMINDER_SCAN)) enqueueReminderScan(db, clock);
 
   while (summary.claimed < maxJobs) {
     const job = claimNextJob(db, clock, { owner, kinds, leaseSeconds });
