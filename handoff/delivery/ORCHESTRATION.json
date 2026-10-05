@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T09-FREEZE",
+  "next_task_id": "WP3-T10-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -98,7 +98,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
+    "last_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
     "unpushed": []
   },
   "owner_decisions": [
@@ -162,6 +162,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "G-Q1/G-Q2 still pending after the T09 freeze; F-1 and F-4 already decided by the owner",
+      "decision": "Run WP3-T10 (deadline automation) before WP3-DOC/T07B: the automation logic follows the recorded owner decisions F-1/F-4 and the system-tracking interpretation; the presentation details that G-Q1/G-Q2 govern stay in T07B. The canonical docs are updated by WP3-DOC before T13 and before the package gate, so the gate and audits check code against the updated canonical text. T11 and T12 may also run before WP3-DOC if the answers are still pending; T13 waits for WP3-DOC and T07B."
+    },
     {
       "date": "2026-10-04",
       "basis": "Pending owner questions G-Q1/G-Q2 block WP3-DOC and T07B; T09 builds the email from the frozen snapshot's rendered subject/body",
@@ -5432,9 +5437,103 @@
       "id": "WP3-T09-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T09"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a72f29be547a75484",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T09-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T09-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T09-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
+      "branch": "main",
+      "commit_sha": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
+      "pushed": true,
+      "source_digest": "5e7e6b40f2e33885136b5560741fb361a4d6b260d255427ea585b66f3fd87e8d",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 32 paths (expected set), parent 3d7a17c, remote SHA identical; digest 5e7e6b40 recomputed and matched; lockfile adds 6 packages, removes none; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T10 starts on 0a26afa (WP3-DOC/T07B wait for G-Q1/G-Q2)."
+    },
+    {
+      "id": "WP3-T10",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T09-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aed83c40920a5f87e",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/automation.ts",
+        "src/server/jobs/deadlineJob.ts",
+        "src/server/services/finalization.ts",
+        "src/server/jobs/runner.ts",
+        "src/server/routes/admin.ts",
+        "tests/integration/deadline.test.ts",
+        "tests/integration/deadline-race.test.ts",
+        "handoff/delivery/tasks/WP3-T10.md",
+        "handoff/delivery/evidence/WP3-T10"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T10.md",
+      "report": "handoff/delivery/tasks/WP3-T10.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T10/00-baseline.txt",
+        "handoff/delivery/evidence/WP3-T10/01-red.txt",
+        "handoff/delivery/evidence/WP3-T10/02-race.txt",
+        "handoff/delivery/evidence/WP3-T10/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T10/04-verify.txt",
+        "handoff/delivery/evidence/WP3-T10/05-digest.txt"
+      ],
+      "baseline_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
+      "source_digest": "5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: eligibility (active account; activation set and deadline on or after it; deadline passed; unfinalized and not imported; the switch governing that deadline on), re-checked inside the finalization transaction. Switch on: origin 'deadline' (the schema's automatic origin), review pending, no sign-off, choose-mode debits pending_choice, image only if authorized; an empty period submits with default labels, zero OT, no deficit. Switch off: one deadline.overdue audit record, nothing exported. Recovery oldest first in bounded batches. Race: 20 rounds sign-off vs scan plus 10 scan vs scan, always one revision, one ledger set, one send (sign-off won 3, deadline 17). Activation route admin-only, audited, refuses past instants. Red run failed on missing modules; 12/12 mutations caught; verify exit 0, 49 files/1038 tests (33 new), 0 deprecation lines. Deviations: tests/support/concurrency.ts and route-inventory lines in isolation.test.ts and ot-api.test.ts. Finding for T07B: the snapshot hardcodes 'Signed by employee' as {SignOffStatus} for every revision, so automatic emails state it (G-Q2 decides the wording).",
+      "next_action": "None; WP3-T10-FREEZE."
+    },
+    {
+      "id": "WP3-T10-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T10"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -5452,21 +5551,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T09-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T09-FREEZE"
+        "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T10-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T10-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
+      "baseline_commit": "0a26afa3fc7fbbebe173f919ec4b7426e5d5438b",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "5e7e6b40f2e33885136b5560741fb361a4d6b260d255427ea585b66f3fd87e8d",
+      "source_digest": "5f16dab12763e410b2daa114092f7b488b3355ec5185dfb08832bff157daf5b9",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T09 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T10 set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { requireAdmin } from '../http/auth.ts';
 import { notFound } from '../http/errors.ts';
 import {
@@ -10,6 +11,7 @@ import {
   holidayImportPreviewBody,
 } from '../http/schemas.ts';
 import { normalizeReason, readJson } from '../http/validation.ts';
+import { activationJson, getAutomationActivation, setAutomationActivation } from '../services/automation.ts';
 import { createPayrollException } from '../services/calendars.ts';
 import { calendarVersionJson, commitHolidayImport, previewHolidayImport } from '../services/holidayImport.ts';
 import {
@@ -22,6 +24,15 @@ import {
   updateUser,
 } from '../services/users.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
+
+/**
+ * The system activation instant (F-4, WP3-T10): a UTC instant, or null to clear it, with a
+ * required reason. Strict like every request contract, so no user id or other field is accepted.
+ */
+const automationActivationBody = z.strictObject({
+  active_from: z.string().max(40).nullable(),
+  reason: z.string().max(1000),
+});
 
 /** Account fields only: never the password hash and never another user's private data. */
 function accountJson(account: UserAccount) {
@@ -169,6 +180,21 @@ export function adminRoutes(deps: AppDeps) {
     // The answer is the exception alone: whether a stored period was refreshed would reveal whether
     // anyone on the calendar has a timesheet there (WP2-A2-02).
     return c.json({ payroll_exception: result.exception }, 201);
+  });
+
+  // Automation activation (F-4): the one system-wide instant before which nothing is submitted
+  // automatically. Only the instant, who recorded it and when are visible here, never a person's data.
+  app.get('/automation', (c) => c.json({ automation: activationJson(getAutomationActivation(deps.db)) }));
+
+  app.put('/automation/activation', async (c) => {
+    const actor = c.get('user');
+    const body = await readJson(c, automationActivationBody);
+    const activation = setAutomationActivation(deps.db, deps.clock, {
+      actorUserId: actor.id,
+      activeFrom: body.active_from,
+      reason: body.reason,
+    });
+    return c.json({ automation: activationJson(activation) });
   });
 
   return app;

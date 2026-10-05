@@ -1,0 +1,23 @@
+Add capture and SMTP adapters, the send job and uncertain-delivery decisions
+
+- feat(mail): build a deterministic message from the frozen snapshot and the
+  stored PDF (hash re-checked); capture adapter by default; SMTP adapter only
+  with OUTBOUND_MODE=smtp and the owner-only production flag, TLS required,
+  credentials never logged
+- feat(jobs): the send job commits `sending` before the network call and
+  classifies outcomes (temporary retried, permanent and uncertain go to
+  intervention, uncertain is never retried automatically); interrupted sends
+  are recovered
+- feat(api): owner-only delivery history and POST /api/deliveries/:id/decision
+  (mark delivered or resend through the same-revision resend)
+- build(deps): nodemailer 10.0.14; dev smtp-server 3.19.17 and
+  @types/smtp-server 3.5.13
+- test: 25 new tests with a loopback SMTP sink and child-process crash cases;
+  4 mutations caught; jobs-restart assertions updated for the registered send
+  job
+- docs(handoff): WP3-T08 freeze result, WP3-T09 brief, record and evidence,
+  board and checkpoint (+ vi)
+
+Task: WP3-T09-FREEZE
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

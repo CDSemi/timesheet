@@ -8,6 +8,7 @@ import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { ApiError } from '../../src/server/http/errors.ts';
 import type { SessionBody } from '../../src/server/http/schemas.ts';
 import { type SignOffInput, signOffTimesheet } from '../../src/server/services/finalization.ts';
+import { runDeadlineScan } from '../../src/server/services/automation.ts';
 import { getBalance } from '../../src/server/services/ledger.ts';
 import {
   type CancelOtLeaveInput,
@@ -63,6 +64,11 @@ export interface CreateSessionRaceInput {
   body: SessionBody;
 }
 
+/** One pass of the deadline scan (WP3-T10): finalizes every eligible overdue period it finds. */
+export interface DeadlineRaceInput {
+  batchSize?: number;
+}
+
 /** One racer's operation. `unsafeReserveControl` is the harness self-check, never production code. */
 export type RaceOp =
   | { kind: 'reserve'; input: ReserveOtLeaveInput }
@@ -71,6 +77,7 @@ export type RaceOp =
   | { kind: 'reverse'; input: ReverseOtLeaveUseInput }
   | { kind: 'signOff'; input: SignOffRaceInput }
   | { kind: 'createSession'; input: CreateSessionRaceInput }
+  | { kind: 'deadline'; input: DeadlineRaceInput }
   | { kind: 'unsafeReserveControl'; input: UnsafeReserveControlInput };
 
 export type RaceOutcome = (
@@ -91,6 +98,8 @@ interface RoundMessage {
   op: RaceOp;
   control: SharedArrayBuffer;
   racers: number;
+  /** Milliseconds this racer waits after the barrier release before its call (0 for none). */
+  delayMs: number;
 }
 
 type WorkerMessage = { type: 'ready' } | { type: 'done'; outcome: RaceOutcome } | { type: 'failed'; message: string };
@@ -162,6 +171,7 @@ function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
     parentPort?.postMessage({ type: 'ready' } satisfies WorkerMessage);
     const released = Atomics.wait(control, GO, 0, BARRIER_TIMEOUT_MS);
     if (released === 'timed-out') throw new Error('barrier_timeout');
+    if (message.delayMs > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)), 0, 0, message.delayMs);
     startedAtMs = wallMs();
     let status: string;
     switch (op.kind) {
@@ -184,6 +194,11 @@ function runOp(message: RoundMessage, control: Int32Array): RaceOutcome {
         createSession({ db, clock, user: user as SessionUser }, op.input.workDate, op.input.body);
         status = 'session_created';
         break;
+      case 'deadline': {
+        const summary = runDeadlineScan(db, clock, op.input.batchSize === undefined ? {} : { batchSize: op.input.batchSize });
+        status = `finalized:${summary.finalized}`;
+        break;
+      }
       case 'unsafeReserveControl':
         status = unsafeReserveControl(db, op.input, message.nowIso, control, message.racers);
         break;
@@ -262,16 +277,17 @@ export class RacePool {
 
   /**
    * Runs one round: every racer opens its own connection to `dbPath`, reports ready, and
-   * all are released together. Returns the outcomes in `ops` order.
+   * all are released together. Returns the outcomes in `ops` order. `startDelaysMs[i]` (optional)
+   * holds racer i back that many milliseconds after the release, to sweep the interleavings.
    */
-  async race(dbPath: string, nowIso: string, ops: readonly RaceOp[]): Promise<RaceOutcome[]> {
+  async race(dbPath: string, nowIso: string, ops: readonly RaceOp[], startDelaysMs: readonly number[] = []): Promise<RaceOutcome[]> {
     if (ops.length < 2 || ops.length > this.workers.length) throw new Error(`A round needs 2–${this.workers.length} operations`);
     const control = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2);
     const flags = new Int32Array(control);
     const racers = this.workers.slice(0, ops.length);
     const ready = racers.map((worker) => expectMessage(worker, 'ready'));
     racers.forEach((worker, index) => {
-      const message: RoundMessage = { type: 'round', dbPath, nowIso, op: ops[index] as RaceOp, control, racers: ops.length };
+      const message: RoundMessage = { type: 'round', dbPath, nowIso, op: ops[index] as RaceOp, control, racers: ops.length, delayMs: startDelaysMs[index] ?? 0 };
       worker.postMessage(message);
     });
     await Promise.all(ready);

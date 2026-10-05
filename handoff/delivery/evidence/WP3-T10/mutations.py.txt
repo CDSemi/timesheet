@@ -1,0 +1,154 @@
+# WP3-T10 mutation checks. Run from the repository root: python handoff/delivery/evidence/WP3-T10/mutations.py.txt
+# Each mutation is computed in memory before the file is opened for writing; the original bytes are
+# restored afterwards and their SHA-256 is compared with the original. Output is masked and LF.
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.getcwd()
+NODE = os.path.join(os.environ["LOCALAPPDATA"], "timesheet-dev", "node-24.21.0", "node_modules", "node", "bin", "node.exe")
+VITEST = os.path.join("node_modules", "vitest", "vitest.mjs")
+AUTOMATION = "src/server/services/automation.ts"
+FINALIZATION = "src/server/services/finalization.ts"
+DEADLINE = ["tests/integration/deadline.test.ts"]
+
+# (title, file, [(original, mutated), ...], vitest arguments)
+MUTATIONS = [
+    (
+        "M1 the activation instant is no longer a lower bound for the deadline",
+        AUTOMATION,
+        [
+            ("  if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };\n", "  // mutation: no activation bound\n"),
+            ("      if (period.dueAtUtc >= activeFrom && period.dueAtUtc <= now) candidates.push", "      if (period.dueAtUtc <= now) candidates.push"),
+        ],
+        DEADLINE,
+    ),
+    (
+        "M2 the user's auto-submit effective instant is ignored when choosing the governing switch",
+        AUTOMATION,
+        [("WHERE user_id = ? AND auto_submit_effective_from <= ? ORDER BY seq DESC LIMIT 1", "WHERE user_id = ? AND ? IS NOT NULL ORDER BY seq DESC LIMIT 1")],
+        DEADLINE,
+    ),
+    (
+        "M3 imported_unverified periods are no longer excluded",
+        AUTOMATION,
+        [("  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };\n", "  // mutation: imported periods are eligible\n")],
+        DEADLINE,
+    ),
+    (
+        "M4 missed deadlines are processed newest first instead of chronologically",
+        AUTOMATION,
+        [("a.period.dueAtUtc - b.period.dueAtUtc ||", "b.period.dueAtUtc - a.period.dueAtUtc ||")],
+        DEADLINE,
+    ),
+    (
+        "M5 the overdue record is no longer deduplicated",
+        AUTOMATION,
+        [("  if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };\n", "  // mutation: overdue records repeat\n")],
+        DEADLINE,
+    ),
+    (
+        "M6 a choose-mode deficit is recorded as waived instead of pending_choice on the automatic path",
+        FINALIZATION,
+        [("{ ...base, result: { outcome: 'pending_choice', ledgerEntryId: null } }", "{ ...base, result: { outcome: 'waived', ledgerEntryId: null } }")],
+        DEADLINE,
+    ),
+    (
+        "M7 the in-transaction authorization result is ignored",
+        FINALIZATION,
+        [("    if (refusal !== null) return { status: 'skipped', reason: refusal };", "    void refusal;")],
+        DEADLINE,
+    ),
+    (
+        "M8 the activation change is audited under a different operation",
+        AUTOMATION,
+        [("      operation: ACTIVATION_AUDIT_OPERATION,", "      operation: 'automation.noop',")],
+        DEADLINE,
+    ),
+    (
+        "M9 a period without a timesheet row is skipped instead of submitted with the default labels (F-1)",
+        FINALIZATION,
+        [("    const payload = review.payload;\n    const revisionNo = 1;\n    if (payload.submission.revision_no !== revisionNo) throw new Error('The automatic", "    if (existing === undefined) return { status: 'skipped', reason: 'no_timesheet' };\n    const payload = review.payload;\n    const revisionNo = 1;\n    if (payload.submission.revision_no !== revisionNo) throw new Error('The automatic")],
+        DEADLINE,
+    ),
+    (
+        "M10 the runner no longer queues the minute's deadline scan job",
+        "src/server/jobs/runner.ts",
+        [("  if (kinds.includes(JOB_DEADLINE_SCAN)) enqueueDeadlineScan(db, clock);\n", "  // mutation: no scan job\n")],
+        DEADLINE,
+    ),
+    (
+        "M11 deactivated accounts are no longer skipped (listing filter and in-transaction check both removed)",
+        AUTOMATION,
+        [
+            ("  if (status !== 'active') return { kind: 'skip', reason: 'inactive_user' };\n", "  // mutation: inactive accounts are eligible\n"),
+            ("FROM users WHERE status = 'active' ORDER BY id", "FROM users ORDER BY id"),
+        ],
+        DEADLINE,
+    ),
+    (
+        "M12 an activation instant in the past is accepted",
+        AUTOMATION,
+        [("    if (requested !== null && requested < nowEpoch(clock)) {", "    if (requested !== null && requested < 0) {")],
+        DEADLINE,
+    ),
+]
+
+
+def mask(text):
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    text = text.replace("\r\n", "\n")
+    for path, label in ((ROOT, "<project>"), (os.environ.get("TEMP", "<none>"), "<tmp>"), (os.path.expanduser("~"), "<home>")):
+        for variant in {path, path.replace("\\", "/")}:
+            if variant and variant != "<none>":
+                text = re.sub(re.escape(variant), label, text, flags=re.IGNORECASE)
+    return "\n".join(line.rstrip() for line in text.split("\n"))
+
+
+def summary_lines(output):
+    keep = []
+    for line in output.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith(("×", "Test Files", "Tests ", "FAIL", "AssertionError", "Error:")):
+            keep.append("    " + stripped)
+    return keep[:14]
+
+
+report = []
+caught = 0
+for title, rel, replacements, args in MUTATIONS:
+    path = os.path.join(ROOT, rel)
+    with open(path, "rb") as handle:
+        before = handle.read()
+    text = before.decode("utf-8")
+    for original, mutated in replacements:
+        if text.count(original) != 1:
+            print(f"{title}: anchor found {text.count(original)} times; aborting", file=sys.stderr)
+            sys.exit(2)
+        text = text.replace(original, mutated, 1)
+    after = text.encode("utf-8")
+    digest = hashlib.sha256(before).hexdigest()
+    try:
+        with open(path, "wb") as handle:
+            handle.write(after)
+        result = subprocess.run([NODE, VITEST, "run", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+        output = mask(result.stdout + result.stderr)
+    finally:
+        with open(path, "wb") as handle:
+            handle.write(before)
+    with open(path, "rb") as handle:
+        restored = hashlib.sha256(handle.read()).hexdigest()
+    status = "CAUGHT" if result.returncode != 0 else "NOT CAUGHT"
+    caught += result.returncode != 0
+    report.append(f"{title}")
+    report.append(f"  file: {rel}")
+    report.append(f"  command: node {VITEST.replace(os.sep, '/')} run {' '.join(args)}")
+    report.append(f"  exit: {result.returncode} -> {status}")
+    report.extend(summary_lines(output))
+    report.append(f"  restored byte-identical: {restored == digest} (sha256 {digest})")
+    report.append("")
+
+report.append(f"mutations caught: {caught}/{len(MUTATIONS)}")
+print("\n".join(report))

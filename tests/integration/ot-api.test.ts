@@ -537,6 +537,8 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/timesheets/:payrollDate/revisions',
         // The owner's decision on an uncertain delivery attempt (WP3-T09): resends or closes it, posts nothing.
         'POST /api/deliveries/:id/decision',
+        // The system activation instant (WP3-T10): admin only, audited, no timesheet content, posts nothing.
+        'PUT /api/admin/automation/activation',
         'PUT /api/days/:workDate',
         'PUT /api/sessions/:id',
       ].sort(),

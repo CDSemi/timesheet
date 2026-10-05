@@ -128,4 +128,7 @@ Evidence goes in handoff/delivery/evidence/WP3-T09-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 3d7a17c; post-HEAD and commit 0a26afa3fc7fbbebe173f919ec4b7426e5d5438b; pushed yes; remote SHA 0a26afa3fc7fbbebe173f919ec4b7426e5d5438b.
+- Digest 5e7e6b40f2e33885136b5560741fb361a4d6b260d255427ea585b66f3fd87e8d; staged 32; lockfile +6 packages, none removed.
+- Checks (Node v24.21.0): precommit, diff --check, JSON parse, validate_orchestration, check_recovery, validate_package --preflight all exit 0. No masking or EOF fix.
+- Blockers: none. Note: this results edit is uncommitted.

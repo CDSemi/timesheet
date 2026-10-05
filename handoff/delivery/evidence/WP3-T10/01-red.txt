@@ -1,0 +1,41 @@
+# Red run 1: baseline 0a26afa source + the new tests (and the harness deadline op), no implementation yet
+$ node node_modules/vitest/vitest.mjs run tests/integration/deadline.test.ts tests/integration/deadline-race.test.ts
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/deadline.test.ts (0 test)
+ ❯ tests/integration/deadline-race.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline-race.test.ts [ tests/integration/deadline-race.test.ts ]
+Error: Cannot find module '../../src/server/services/automation.ts' imported from <project>/tests/integration/deadline-race.test.ts
+ ❯ tests/integration/deadline-race.test.ts:8:1
+      6| import { FileStore } from '../../src/server/files/fileStore.ts';
+      7| import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/…
+      8| import { setAutomationActivation } from '../../src/server/services/aut…
+       | ^
+      9| import type { SignOffInput } from '../../src/server/services/finalizat…
+     10| import { getBalance, listLedgerEntries, postCredit } from '../../src/s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/deadline.test.ts [ tests/integration/deadline.test.ts ]
+Error: Cannot find module '../../src/server/jobs/deadlineJob.ts' imported from <project>/tests/integration/deadline.test.ts
+ ❯ tests/integration/deadline.test.ts:11:1
+      9| import { loadDeliveryConfig } from '../../src/server/config.ts';
+     10| import { FileStore } from '../../src/server/files/fileStore.ts';
+     11| import { JOB_DEADLINE_SCAN } from '../../src/server/jobs/deadlineJob.t…
+       | ^
+     12| import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/…
+     13| import { captureFolder } from '../../src/server/mail/captureAdapter.ts…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  no tests
+   Start at  20:06:25
+   Duration  715ms (worker 96%, environment 4%)
+
+exit 1

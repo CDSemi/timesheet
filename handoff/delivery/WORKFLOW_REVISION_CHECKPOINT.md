@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 3d7a17c3a0eecb10726eaf1378fbab537ec67ef5 (WP3-T08-FREEZE).
+  - HEAD = origin/main = 0a26afa3fc7fbbebe173f919ec4b7426e5d5438b (WP3-T09-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 706c1619… (T08, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest 5e7e6b40… (T09, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T08-FREEZE results and
-    evidence, the WP3-T09 brief. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T09-FREEZE results and
+    evidence, the WP3-T10 brief. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -171,9 +171,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   Four reported deviations (index.ts/cli.ts one line each, an ot-api route line, the
   jobs-restart assertions for the now-registered send job). Audit notes: a send claimed
   before its PDF consumes a job attempt; a TLS verification failure is temporary.
-- Running: WP3-T09-FREEZE (committer).
+- WP3-T09-FREEZE is committed and pushed as 0a26afa (32 paths, lockfile +6, all checks
+  0).
+- Coordinator decision: WP3-T10 runs now (F-1/F-4 decided; G-Q1/G-Q2 only affect T07B's
+  presentation). T11/T12 may also precede WP3-DOC; T13 waits for WP3-DOC and T07B.
+- WP3-T10 is done (author-reported): eligibility re-checked in the transaction;
+  automatic finalization (empty periods with default labels, zero OT, no deficit);
+  overdue record when switched off; bounded chronological recovery; races always one
+  revision/ledger set/send; audited admin activation route refusing past instants; 12/12
+  mutations; verify 1038 tests; digest 5f16dab1…. Finding for T07B: the snapshot
+  hardcodes "Signed by employee" for every revision (G-Q2).
+- Running: WP3-T10-FREEZE (committer).
 - Next action:
-  1. Record the T09 freeze; then WP3-DOC and T07B (after G-Q1/G-Q2), then T10.
+  1. Record the T10 freeze; then WP3-DOC and T07B if G-Q1/G-Q2 are answered, otherwise
+     T11 (brief ready).
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -191,5 +202,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T09-FREEZE only.
+- Live processes: WP3-T10-FREEZE only.
 - Usage/reset: not observable.

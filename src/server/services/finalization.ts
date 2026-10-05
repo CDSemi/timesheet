@@ -541,6 +541,199 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
   });
 }
 
+/* ----------------------------------------------------- automatic finalization --- */
+
+/*
+ * The deadline path (docs/05 "Deadline and recovery", R-05 choose mode, R-06 automatic origin,
+ * the owner's F-1 and F-4 decisions). It is called by the deadline job only, for an owner the
+ * job loaded from the users table; there is no session and no employee action, so the revision
+ * is `automatic` in the owner's words and `deadline` in the schema's: origin `deadline`, review
+ * `pending`, no actor, no `reviewed_sha256`, and no `signoffs` row (so there is no `signed_at`).
+ *
+ * One IMMEDIATE transaction, in this order:
+ * 1. the caller's `authorize` check runs first, inside the transaction, so a switch, activation
+ *    or import change committed by anyone else is seen (a reason means "skip, write nothing");
+ * 2. the review payload is built from the current data by the same engine-only builder the
+ *    manual path uses; a period with no saved entries has no timesheet row yet, so the row is
+ *    created and the payload is the FR-03 default labels with zero OT and no deficit;
+ * 3. a period that is already finalized (the manual sign-off won the race) is skipped;
+ * 4. the immutable revision is written and ledger.ts posts the computable credits and the
+ *    authorized debits with the `automatic` origin and no actor, under the same revision-
+ *    independent day keys as the manual path; choose-mode debits stay `pending_choice` lines
+ *    (the employee decides in a later revision) and a debit the balance cannot cover stays
+ *    pending; incomplete and empty days post nothing;
+ * 5. `finalized_revision_no` is set, the PDF and send jobs are enqueued and the audit event
+ *    (ids, hashes and counts only) is written.
+ *
+ * The signature image is not an input here: the snapshot records the user's own auto-image
+ * authorization and the PDF job includes the image only when that authorization is on.
+ * The manual path above is unchanged. A failure anywhere rolls everything back.
+ */
+
+export interface AutomaticFinalizationContext {
+  db: Db;
+  clock: Clock;
+  /** The owner, read from the users table by the deadline job (no session exists). */
+  owner: SessionUser;
+}
+
+export interface AutomaticFinalizationInput {
+  payrollDate: string;
+  /** Runs inside the transaction: a reason when the period must not be finalized now, else null. */
+  authorize: () => string | null;
+}
+
+export type AutomaticFinalizationResult =
+  | ({ status: 'created'; finalizedRevisionNo: number } & FinalizationView)
+  | { status: 'skipped'; reason: string };
+
+/** R-05 on the automatic path: choose mode never decides for the employee; the ledger stays authoritative. */
+function postAutomaticDeficits(posting: PostingContext): RevisionLedgerLine[] {
+  const { ledger, scope, user, revisionId, payload } = posting;
+  const lines: RevisionLedgerLine[] = [];
+  for (const proposal of payload.deficit_proposals) {
+    const day = payload.days.find((item) => item.work_date === proposal.work_date);
+    const policy = scope.policies.find((item) => item.id === proposal.policy_version_id);
+    if (day === undefined || policy === undefined) throw new Error('A reviewed deficit has no day or policy');
+    const outcome = decideDeficit({
+      requiredMinutes: policy.requiredMinutes,
+      regularMinutes: day.calculation?.regular_minutes ?? null,
+      nonworkingMinutes: day.calculation?.nonworking_minutes ?? null,
+      leaveMinutes: day.leave_minutes,
+      normalWorkDate: day.day_class === 'normal',
+      attendanceExpected: day.attendance_expected,
+      recordsComplete: day.completeness === 'complete',
+      mode: policy.deficitMode,
+      manualChoice: null,
+      finalizationOrigin: 'automatic',
+      availableMinutes: getBalance(ledger.db, user.id).availableMinutes,
+    });
+    if (outcome.deficitMinutes !== proposal.deficit_minutes) throw new Error('The automatic deficit differs from the reviewed payload');
+    const base = { userId: user.id, revisionId, workDate: proposal.work_date, lineKind: 'deficit_debit' as const, proposedMinutes: -proposal.deficit_minutes };
+    switch (outcome.decision) {
+      case 'ignored':
+        // Policy mode `ignore`: no debit is proposed, so there is no line.
+        break;
+      case 'pending':
+        lines.push(recordRevisionLine(ledger.db, ledger.clock, { ...base, result: { outcome: 'pending_choice', ledgerEntryId: null } }));
+        break;
+      case 'authorized':
+      case 'insufficient_balance': {
+        const result = postDeficitDebit(ledger, {
+          userId: user.id,
+          sourceKey: deficitDebitSourceKey(proposal.work_date),
+          sourceRef: revisionId,
+          actorUserId: null,
+          origin: 'automatic',
+          workDate: proposal.work_date,
+          debitMinutes: proposal.deficit_minutes,
+        });
+        lines.push(recordRevisionLine(ledger.db, ledger.clock, { ...base, result: deficitDebitOutcome(result) }));
+        break;
+      }
+      default:
+        throw new Error(`Unexpected deficit decision at automatic finalization: ${outcome.decision}`);
+    }
+  }
+  return lines;
+}
+
+/** R-06: posts each computable credit once through the ledger; incomplete and empty days have none. */
+function postAutomaticCredits(posting: PostingContext): RevisionLedgerLine[] {
+  const { ledger, user, revisionId, payload } = posting;
+  return payload.ot_proposals.map((proposal) => {
+    const result = postCredit(ledger, {
+      userId: user.id,
+      sourceKey: creditSourceKey(proposal.work_date),
+      sourceRef: revisionId,
+      actorUserId: null,
+      origin: 'automatic',
+      workDate: proposal.work_date,
+      minutes: proposal.credited_minutes,
+    });
+    return recordRevisionLine(ledger.db, ledger.clock, {
+      userId: user.id,
+      revisionId,
+      workDate: proposal.work_date,
+      lineKind: 'credit',
+      proposedMinutes: proposal.credited_minutes,
+      result: creditOutcome(result),
+    });
+  });
+}
+
+/**
+ * Finalizes the owner's period `payrollDate` automatically (see the section comment). Returns
+ * `created`, or `skipped` with a reason when `authorize` refuses or the period is already finalized.
+ */
+export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: AutomaticFinalizationInput): AutomaticFinalizationResult {
+  const { db, clock, owner } = ctx;
+  return writeTransaction(db, (): AutomaticFinalizationResult => {
+    const refusal = input.authorize();
+    if (refusal !== null) return { status: 'skipped', reason: refusal };
+
+    const review = buildReviewPayload(db, clock, owner, input.payrollDate);
+    const scope = loadScope(db, owner);
+    const period = resolvePeriod(scope, review.payload.period.payroll_date);
+    const existing = findTimesheet(db, scope, period);
+    if (existing !== undefined && existing.finalized_revision_no !== null) return { status: 'skipped', reason: 'already_finalized' };
+    const payload = review.payload;
+    const revisionNo = 1;
+    if (payload.submission.revision_no !== revisionNo) throw new Error('The automatic revision number is not the first one');
+
+    const now = nowUtc(clock);
+    const timesheet = existing ?? createTimesheetRow(db, clock, scope, period, now);
+    const revisionId = randomUUID();
+    db.prepare(
+      `INSERT INTO timesheet_revisions (id, user_id, timesheet_id, revision_no, revision_kind, origin, review_state,
+         supersedes_revision_id, correction_reason, timesheet_version, payload_json, payload_sha256, reviewed_sha256,
+         send_requested, actor_user_id, created_at)
+       VALUES (?, ?, ?, ?, 'original', 'deadline', 'pending', NULL, NULL, ?, ?, ?, NULL, 1, NULL, ?)`,
+    ).run(revisionId, owner.id, timesheet.id, revisionNo, timesheet.version, canonicalize(payload), review.payloadHash, now);
+
+    const posting: PostingContext = { ledger: { db, clock }, scope, user: owner, revisionId, payload };
+    const lines = [...postAutomaticDeficits(posting), ...postAutomaticCredits(posting)];
+
+    const finalized = db
+      .prepare(
+        `UPDATE timesheets SET finalized_revision_no = ?, version = version + 1, updated_at = ?
+          WHERE id = ? AND user_id = ? AND finalized_revision_no IS NULL AND version = ?`,
+      )
+      .run(revisionNo, now, timesheet.id, owner.id, timesheet.version);
+    if (finalized.changes !== 1) throw conflict('stale_version', 'The timesheet changed during automatic finalization');
+
+    enqueueJobs(db, owner.id, revisionId, now);
+
+    const loaded = loadFinalization(db, owner.id, { ...timesheet, finalized_revision_no: revisionNo });
+    if (loaded === null) throw new Error('The new revision was not stored');
+    recordAudit(db, clock, {
+      actorUserId: null,
+      ownerUserId: owner.id,
+      operation: 'timesheet.auto_finalize',
+      entityType: 'timesheet_revision',
+      entityId: revisionId,
+      before: { timesheet_id: timesheet.id, finalized_revision_no: null, version: timesheet.version },
+      after: {
+        timesheet_id: timesheet.id,
+        revision_id: revisionId,
+        revision_no: revisionNo,
+        revision_kind: 'original',
+        origin: 'deadline',
+        review_state: 'pending',
+        payroll_date: period.payrollDate,
+        payload_sha256: review.payloadHash,
+        signed_at: null,
+        auto_image_authorized: payload.auto_image.authorized,
+        ledger_lines: { ...outcomeCounts(lines), pending_choice: lines.filter((line) => line.outcome === 'pending_choice').length },
+        job_ids: loaded.view.jobs.map((job) => job.id),
+        finalized_revision_no: revisionNo,
+        version: timesheet.version + 1,
+      },
+    });
+    return { status: 'created', finalizedRevisionNo: revisionNo, ...loaded.view };
+  });
+}
+
 /* ------------------------------------------------- corrections, late review --- */
 
 /*

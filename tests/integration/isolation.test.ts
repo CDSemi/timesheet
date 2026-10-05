@@ -284,6 +284,9 @@ describe('admin router is account administration, not private-data access (AC-01
         'POST /api/admin/users',
         'POST /api/admin/users/:id/deactivate',
         'POST /api/admin/users/:id/reactivate',
+        // The system activation instant (WP3-T10): the instant, who recorded it and when; no employee data.
+        'GET /api/admin/automation',
+        'PUT /api/admin/automation/activation',
       ].sort(),
     );
     for (const route of adminRoutes()) {

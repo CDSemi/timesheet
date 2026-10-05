@@ -3,6 +3,7 @@ import type { Db } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
 import { createOutboundAdapter } from '../mail/outbound.ts';
 import type { DeliveryConfig } from '../types.ts';
+import { createDeadlineJobHandler, enqueueDeadlineScan, JOB_DEADLINE_SCAN } from './deadlineJob.ts';
 import {
   claimNextJob,
   completeJob,
@@ -58,9 +59,9 @@ const DEFAULT_MAX_JOBS = 100;
 export const DEFAULT_INTERVAL_MS = 15_000;
 
 /**
- * The production handlers: the PDF job and the send job; later job kinds register here. The
- * send job uses the configured outbound mode (capture by default, under the files' private data
- * directory) and the configured sender.
+ * The production handlers: the PDF job, the send job and the deadline scan; later job kinds
+ * register here. The send job uses the configured outbound mode (capture by default, under the
+ * files' private data directory) and the configured sender.
  */
 export function createJobHandlers(deps: {
   db: Db;
@@ -73,6 +74,7 @@ export function createJobHandlers(deps: {
   return {
     [JOB_RENDER_PDF]: createPdfJobHandler({ db, clock, files }),
     [JOB_SEND_EMAIL]: createSendJobHandler({ db, clock, files, outbound, senderAddress: delivery.senderAddress }),
+    [JOB_DEADLINE_SCAN]: createDeadlineJobHandler({ db, clock }),
   };
 }
 
@@ -85,6 +87,8 @@ export async function runJobsOnce(options: RunnerOptions): Promise<RunSummary> {
   const kinds = Object.keys(handlers);
   const summary: RunSummary = { claimed: 0, succeeded: 0, retried: 0, intervention: 0, lost: 0 };
   recordHeartbeat(db, clock, owner);
+  // This minute's deadline scan (idempotent; nothing at all while the activation instant is null).
+  if (kinds.includes(JOB_DEADLINE_SCAN)) enqueueDeadlineScan(db, clock);
 
   while (summary.claimed < maxJobs) {
     const job = claimNextJob(db, clock, { owner, kinds, leaseSeconds });
