@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type HistoryEvent, type HistoryPage } from './api.ts';
+import { DeliveryHistory } from './components/DeliveryHistory.tsx';
 import { describeError } from './components/errors.ts';
 import { displayZone, instantText } from './components/format.ts';
 import { changedFields, operationText } from './components/otModel.ts';
@@ -77,30 +78,34 @@ export function HistoryScreen() {
   return (
     <div className="stack">
       <h1>History</h1>
-      <p className="hint">Your own changes, newest first, with the values before and after and the reason given.</p>
-      {message !== null && (
-        <p className="error" role="alert">
-          {message}
-        </p>
-      )}
-      {events === null ? (
-        message === null && <p className="muted">Loading…</p>
-      ) : events.length === 0 ? (
-        <p className="muted">Nothing has been recorded yet. Changes to days, sessions and OT leave appear here.</p>
-      ) : (
-        <ul className="plain history-list" aria-label="Audit events">
-          {events.map((event) => (
-            <EventItem key={event.id} event={event} />
-          ))}
-        </ul>
-      )}
-      {cursor !== null && (
-        <div className="button-row">
-          <button type="button" className="secondary" disabled={busy} onClick={() => void loadPage(cursor)}>
-            Load older events
-          </button>
-        </div>
-      )}
+      <DeliveryHistory />
+      <section className="stack" aria-labelledby="changes-title">
+        <h2 id="changes-title">Recorded changes</h2>
+        <p className="hint">Your own changes, newest first, with the values before and after and the reason given.</p>
+        {message !== null && (
+          <p className="error" role="alert">
+            {message}
+          </p>
+        )}
+        {events === null ? (
+          message === null && <p className="muted">Loading…</p>
+        ) : events.length === 0 ? (
+          <p className="muted">Nothing has been recorded yet. Changes to days, sessions and OT leave appear here.</p>
+        ) : (
+          <ul className="plain history-list" aria-label="Audit events">
+            {events.map((event) => (
+              <EventItem key={event.id} event={event} />
+            ))}
+          </ul>
+        )}
+        {cursor !== null && (
+          <div className="button-row">
+            <button type="button" className="secondary" disabled={busy} onClick={() => void loadPage(cursor)}>
+              Load older events
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

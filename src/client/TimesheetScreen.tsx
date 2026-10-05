@@ -23,6 +23,7 @@ import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodHeader } from './components/PeriodHeader.tsx';
+import { SubmissionStatusLine, useGridStatus } from './components/SubmissionStatus.tsx';
 import { TimesheetGrid } from './components/TimesheetGrid.tsx';
 import { DayEditor } from './DayEditor.tsx';
 
@@ -57,6 +58,8 @@ export function TimesheetScreen({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [editDate, setEditDate] = useState<string | null>(null);
   const [clockOutSession, setClockOutSession] = useState<Session | null>(null);
+  // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
+  const periodStatus = useGridStatus(view?.period.payroll_date ?? null, view?.timesheet.version);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -241,16 +244,20 @@ export function TimesheetScreen({ user }: { user: User }) {
               selected={selected}
               onToggle={toggle}
               onEdit={setEditDate}
+              status={periodStatus}
             />
           ) : (
-            <DayList
-              days={view.days}
-              zone={displayZone}
-              todayLocal={todayLocal}
-              selected={selected}
-              onToggle={toggle}
-              onEdit={setEditDate}
-            />
+            <>
+              <SubmissionStatusLine status={periodStatus} />
+              <DayList
+                days={view.days}
+                zone={displayZone}
+                todayLocal={todayLocal}
+                selected={selected}
+                onToggle={toggle}
+                onEdit={setEditDate}
+              />
+            </>
           )}
           <p className="muted">
             *Provisional OT credit: {formatDuration(view.totals.provisional_credited_minutes)}; days pending OT evidence:{' '}

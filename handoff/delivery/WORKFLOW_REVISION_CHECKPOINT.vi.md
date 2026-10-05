@@ -6,16 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d (GOV-WP3P-FREEZE; commit
-    đóng băng mã nguồn gần nhất là c1e4bb2, WP3-T13A; đóng băng tài liệu cb9800e).
+  - HEAD = origin/main = 943027b3a328f174ef3de5c45ee4677906af3189 (WP3-T07B-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là 4d4c4863… (sau WP3-DOC, committer đã đối chiếu; WP3 chưa có gate).
-  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả GOV-WP3P-FREEZE, record
-    gate và audit GOV-WP3P, GOV_WP3P_REVIEW (+ vi) cùng bằng chứng; các file này vào commit
-    đóng băng T07B.
+    hiện tại của WP3 là 5e37ab98… (T07B, committer đã đối chiếu; WP3 chưa có gate).
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
+    T07B-FREEZE.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -252,10 +250,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   transaction; trả 422 khi chưa lưu cài đặt — chuyển cho T13), snapshot phiên bản 2,
   trạng thái "Submitted"/câu ghi chú, bỏ dấu hiệu tự động, PDF ký tay in đúng tên người
   ký đã lưu; 19/19 bản đối chứng; verify 1232 test; digest 5e37ab98….
-- Đang chạy: WP3-T07B-FREEZE (committer), gồm luôn các record GOV-WP3P.
+- WP3-T07B-FREEZE đã commit và push, SHA 943027b (56 đường dẫn, gồm các record GOV-WP3P;
+  mọi kiểm tra 0).
+- WP3-T13 đã xong (tác giả tự báo): tải PDF chỉ cho chủ, màn lịch sử và gửi, settings có
+  dòng ghi chú và quyền dùng ảnh chữ ký, upload chữ ký có ô đồng ý chọn sẵn (xử lý trường
+  hợp 422), trạng thái trên lưới; 16/16 bản đối chứng; e2e 111 đạt; verify 1292 test;
+  digest 7b04f0b1…. Việc chuyển tiếp: route liệt kê bản nộp (đã thêm vào brief T13B);
+  người gửi capture trong harness e2e và e2e tự nộp (T14); `GET /api/signatures/current`
+  trả 404 khi chưa có chữ ký (sửa sau).
+- Đang chạy: WP3-T13-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T07B; rồi T13 (brief đã sẵn, đã thêm xử lý trường hợp
-     422), T13B (opus), T13C, T14, T15, WP3-GATE và các audit.
+  1. Ghi kết quả commit đóng băng T13; rồi T13B (quyền chia sẻ, opus; brief đã sẵn), T13C,
+     T14, T15, WP3-GATE và các audit.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -274,5 +280,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T07B-FREEZE.
+- Process còn sống: chỉ WP3-T13-FREEZE.
 - Usage/reset: không quan sát được.

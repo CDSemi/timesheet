@@ -1,0 +1,20 @@
+# WP3-T13 mutation checks (mutate.py.txt): each mutation is computed in memory before the file is opened for writing, and the file is restored byte-identical (SHA-256 compared).
+# Note: first runs of S2 (state check removed), S4 (Cache-Control removed) and S4' (nosniff dropped) survived by design: the key check, the global no-store middleware and the global secure-headers middleware of the app cover the same properties. They were replaced by mutations of the status code and the content type.
+
+S1 PDF lookup no longer scoped to the owner: CAUGHT; restored byte-identical: True; Tests  1 failed | 9 passed (10)
+S2 a PDF that is not ready answers 404 instead of 409: CAUGHT; restored byte-identical: True; Tests  2 failed | 8 passed (10)
+S3 stored bytes are not checked against the recorded hash: CAUGHT; restored byte-identical: True; Tests  1 failed | 9 passed (10)
+S4 the download is labelled as HTML: CAUGHT; restored byte-identical: True; Tests  1 failed | 9 passed (10)
+S5 the PDF is shown inline instead of an attachment: CAUGHT; restored byte-identical: True; Tests  1 failed | 9 passed (10)
+D1 a succeeded render job is not read as a ready PDF: CAUGHT; restored byte-identical: True; Tests  7 failed | 17 passed (24)
+D2 an automatic submission no longer reads review pending: CAUGHT; restored byte-identical: True; Tests  1 failed | 23 passed (24)
+D3 resend stays enabled while a decision is due: CAUGHT; restored byte-identical: True; Tests  1 failed | 23 passed (24)
+D4 marking delivered no longer says nothing is sent: CAUGHT; restored byte-identical: True; Tests  1 failed | 23 passed (24)
+D5 an unrecognised provider text reaches the page: CAUGHT; restored byte-identical: True; Tests  1 failed | 23 passed (24)
+D6 an accepted attempt shows a fault code: CAUGHT; restored byte-identical: True; Tests  1 failed | 23 passed (24)
+M1 the consent is not pre-selected: CAUGHT; restored byte-identical: True; Tests  1 failed | 25 passed (26)
+M2 a ticked consent without saved settings is dropped silently: CAUGHT; restored byte-identical: True; Tests  1 failed | 25 passed (26)
+M3 the 422 submission_settings_required is no longer recognised: CAUGHT; restored byte-identical: True; Tests  1 failed | 25 passed (26)
+M4 overdue drafts are requested even when the switch did not change: CAUGHT; restored byte-identical: True; Tests  1 failed | 25 passed (26)
+M5 a note text of the wrong length is accepted: CAUGHT; restored byte-identical: True; Tests  5 failed | 21 passed (26)
+caught 16 of 16

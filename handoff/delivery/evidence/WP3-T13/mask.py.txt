@@ -1,0 +1,21 @@
+# WP3-T13: masks an output log. Usage: python mask.py.txt <in> <out> [header line]
+# Removes ANSI escapes, converts to LF, masks the repository, temporary and profile paths,
+# strips trailing whitespace and ends the file with one newline.
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+header = sys.argv[3] if len(sys.argv) > 3 else None
+text = open(src, encoding='utf-8', errors='replace').read().replace('\r\n', '\n').replace('\r', '\n')
+text = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', text)
+for pattern, mask in [
+    (r'[A-Za-z]:[\/]+Dropbox[\/]+Work\.CDSemi[\/]+timesheet', '<project>'),
+    (r'/d/Dropbox/Work\.CDSemi/timesheet', '<project>'),
+    (r'[A-Za-z]:[\/]+timesheet-tmp[\/]+WP3-T13', '<tmp>'),
+    (r'/d/timesheet-tmp/WP3-T13', '<tmp>'),
+    (r'[A-Za-z]:[\/]+Users[\/]+[^\/\s]+', '<profile>'),
+]:
+    text = re.sub(pattern, mask, text)
+lines = [line.rstrip() for line in text.split('\n')]
+body = '\n'.join(lines).strip('\n') + '\n'
+if header:
+    body = header + '\n\n' + body
+open(dst, 'w', encoding='utf-8', newline='\n').write(body)

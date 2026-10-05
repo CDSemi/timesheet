@@ -91,7 +91,7 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.route('/api/history', historyRoutes(deps));
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
-  app.route('/api', submissionRoutes(deps));
+  app.route('/api', submissionRoutes(deps, { files }));
   app.route('/api', apiRoutes(deps));
   app.all('/api/*', () => {
     throw notFound('Endpoint');

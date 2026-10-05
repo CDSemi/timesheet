@@ -567,6 +567,8 @@ export interface RevisionSummary {
   correction_reason: string | null;
   send_requested: boolean;
   created_at: string;
+  /** The revision this one replaced (a correction or a late review); null for the first revision. */
+  supersedes_revision_id?: string | null;
 }
 
 export interface FinalizationJob {
@@ -598,4 +600,117 @@ export interface DeliveryAttempt {
   decision: 'mark_delivered' | 'resend' | 'abandon' | null;
   decision_required: boolean;
   job: { state: string; last_error: string | null };
+}
+
+/**
+ * One delivery attempt with the owner's frozen envelope (GET /api/deliveries). The server redacts
+ * provider data and never sends the message body, the PDF or a credential.
+ */
+export interface DeliveryRecord extends DeliveryAttempt {
+  job_id: string;
+  revision_no: number | null;
+  payroll_date: string | null;
+  channel: string;
+  to: string[];
+  cc: string[];
+  subject: string | null;
+  provider_response: string | null;
+  accepted_at: string | null;
+  decided_at: string | null;
+  started_at: string;
+  updated_at: string;
+}
+
+/** POST /api/deliveries/:id/decision and POST /api/revisions/:id/resend: what the server answers. */
+export type DeliveryDecisionChoice = 'mark_delivered' | 'resend';
+
+/*
+ * Submission settings and the signature image (WP3). The server owns every rule (recipient
+ * limits, template variables, the note text); these types only describe what it sends.
+ */
+
+export interface SubmissionSettings {
+  /** Null for the defaults a user sees before the first save (seq 0, is_default). */
+  id: string | null;
+  seq: number;
+  is_default: boolean;
+  recipients: RecipientAddresses;
+  subject_template: string;
+  body_template: string;
+  template_version: number;
+  variables: string[];
+  auto_submit: boolean;
+  auto_submit_effective_from: string | null;
+  /** The audited authorization to print this signature image on automatic submissions. */
+  auto_image: { authorized: boolean; signature_attachment_id: string | null; authorized_at: string | null };
+  auto_note: { enabled: boolean; text: string };
+  show_ot_on_pdf: boolean;
+  reminder_offsets_minutes: number[];
+  created_at: string | null;
+}
+
+/** Body of POST /api/settings/submission; omitted optional fields keep the saved value. */
+export interface SubmissionSettingsRequest {
+  expected_seq: number;
+  to: string[];
+  cc: string[];
+  subject_template: string;
+  body_template: string;
+  auto_submit: boolean;
+  apply_to_overdue_drafts?: boolean;
+  auto_note_enabled: boolean;
+  auto_note_text?: string;
+  show_ot_on_pdf: boolean;
+}
+
+/** POST /api/settings/submission/preview: the caller's subject and body with sample values. */
+export interface SubmissionPreview {
+  sample: true;
+  sign_off: 'manual' | 'automatic';
+  values: Record<string, string>;
+  subject: string;
+  text_body: string;
+  html_body: string;
+  recipients: RecipientAddresses;
+  template_version: number;
+}
+
+export interface SignatureMetadata {
+  id: string;
+  mime_type: 'image/png' | 'image/jpeg';
+  size_bytes: number;
+  width_px: number;
+  height_px: number;
+  sha256: string;
+  created_at: string;
+}
+
+/** The answer of POST /api/signatures; `settings` is present only when the upload authorized the image. */
+export interface SignatureUploadResult {
+  signature: SignatureMetadata;
+  settings?: SubmissionSettings;
+}
+
+/** The error a failed response stands for, with the server's own code and message. */
+export async function requestFailure(response: Response): Promise<ApiRequestError> {
+  const data: unknown = await response.json().catch(() => null);
+  const error = (data as ErrorBody | null)?.error;
+  return new ApiRequestError(response.status, error?.code ?? 'error', error?.message ?? response.statusText, error?.details);
+}
+
+/**
+ * Uploads the signature image as the raw body (the one route that is not JSON). The consent flag is
+ * always sent explicitly, so the server records the audited authorization only when it is `true`,
+ * in the same transaction as the upload.
+ */
+export async function uploadSignature(file: Blob, authorizeAutoImage: boolean): Promise<SignatureUploadResult> {
+  const query = `authorize_auto_image=${authorizeAutoImage ? 'true' : 'false'}`;
+  const response = await fetch(`/api/signatures?${query}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': file.type },
+    body: file,
+  });
+  if (!response.ok) throw await requestFailure(response);
+  return (await response.json()) as SignatureUploadResult;
 }

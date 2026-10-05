@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import type { FileStore } from '../files/fileStore.ts';
 import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
-import { ApiError } from '../http/errors.ts';
+import { ApiError, notFound } from '../http/errors.ts';
 import { correctionRevisionBody, lateReviewBody, resendBody, signoffBody } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
 import {
@@ -21,6 +23,30 @@ import type { AppDeps, AppEnv } from '../types.ts';
 /** The owner's explicit decision on an uncertain delivery attempt (docs/05). */
 const deliveryDecisionBody = z.strictObject({ decision: z.enum(['mark_delivered', 'resend']) });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const PAYROLL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Options of the submission router: the personal-router guard plus the private file store the PDF
+ * download reads from. Without a store the download route is not registered (a router built only
+ * to probe the other routes needs none); the application always passes it.
+ */
+export interface SubmissionRouterOptions extends PersonalRouterOptions {
+  files?: FileStore;
+}
+
+interface PdfRow {
+  revision_no: number;
+  payroll_date: string;
+  state: string | null;
+  storage_key: string | null;
+  sha256: string | null;
+}
+
+/** The sanitized download name: only the payroll date and the revision number, never an id or a key. */
+function pdfFilename(row: Pick<PdfRow, 'payroll_date' | 'revision_no'>): string {
+  const date = PAYROLL_DATE.test(row.payroll_date) ? row.payroll_date : 'period';
+  return `timesheet-${date}-r${Math.trunc(row.revision_no)}.pdf`;
+}
 
 /**
  * Review and submission routes, built by a factory so the same handlers can be mounted behind a
@@ -35,8 +61,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
  * late review posts zero delta, a resend never moves the ledger). The delivery history GET
  * writes nothing; the decision POST records the owner's one decision on an uncertain attempt
  * (mark delivered, or resend as a new attempt on the same revision) and posts nothing.
+ * The PDF download is owner-only: the revision is looked up for the subject, so another user's id
+ * (an administrator's included) is "not found"; a PDF that is not ready is 409; the bytes come from
+ * the private store only, are re-checked against the recorded hash, and are sent `no-store` as an
+ * attachment with a sanitized filename. Nothing is written.
  */
-export function submissionRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
+export function submissionRoutes(deps: AppDeps, options: SubmissionRouterOptions = {}) {
   const app = new Hono<AppEnv>();
   const auth = options.access ?? requireUser(deps);
 
@@ -121,6 +151,44 @@ export function submissionRoutes(deps: AppDeps, options: PersonalRouterOptions =
     const result = decideDelivery({ db: deps.db, clock: deps.clock, user: c.get('subject') }, c.req.param('id'), body.decision);
     return c.json(decisionJson(result), result.resend === null ? 200 : 201);
   });
+
+  const files = options.files;
+  if (files !== undefined) {
+    app.get('/revisions/:id/pdf', auth, (c) => {
+      const id = c.req.param('id');
+      if (!UUID.test(id)) throw notFound('Revision');
+      const row = deps.db
+        .prepare<[string, string], PdfRow>(
+          `SELECT r.revision_no, p.payroll_date, f.state, a.storage_key, a.sha256
+             FROM timesheet_revisions r
+             JOIN timesheets t ON t.id = r.timesheet_id AND t.user_id = r.user_id
+             JOIN pay_periods p ON p.id = t.pay_period_id
+             LEFT JOIN revision_files f ON f.revision_id = r.id AND f.user_id = r.user_id AND f.kind = 'pdf'
+             LEFT JOIN attachments a ON a.id = f.attachment_id AND a.user_id = f.user_id AND a.kind = 'pdf'
+            WHERE r.id = ? AND r.user_id = ?`,
+        )
+        .get(id, c.get('subject').id);
+      if (row === undefined) throw notFound('Revision');
+      if (row.state !== 'ready' || row.storage_key === null || row.sha256 === null) {
+        throw new ApiError(409, 'pdf_not_ready', 'The final PDF of this revision is not ready yet');
+      }
+      let bytes: Buffer;
+      try {
+        bytes = files.read(row.storage_key);
+      } catch {
+        throw new ApiError(500, 'internal_error', 'Internal server error');
+      }
+      if (createHash('sha256').update(bytes).digest('hex') !== row.sha256) {
+        throw new ApiError(500, 'internal_error', 'Internal server error');
+      }
+      return c.body(new Uint8Array(bytes), 200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${pdfFilename(row)}"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+    });
+  }
 
   return app;
 }

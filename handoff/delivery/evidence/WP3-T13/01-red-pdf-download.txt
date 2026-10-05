@@ -1,0 +1,137 @@
+# WP3-T13 red run: tests/integration/pdf-download.test.ts against the baseline server (no PDF route yet).
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/pdf-download.test.ts (10 tests | 6 failed) 2620ms
+   ❯ owner download of a ready PDF (4)
+     × sends the stored bytes with no-store, an attachment disposition and a sanitized filename 339ms
+     × writes nothing: no row and no audit event 263ms
+   ❯ ownership and authentication (3)
+     × answers 401 to anonymous and forged-session callers, also for a real revision id 260ms
+   ❯ a PDF that is not ready (2)
+     × answers 409 pdf_not_ready while the PDF job has not run 222ms
+     × answers 409 pdf_not_ready after a failed render and 200 once a later run succeeds 228ms
+   ❯ integrity of the stored file (1)
+     × never sends bytes that no longer match the recorded hash 263ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > owner download of a ready PDF > sends the stored bytes with no-store, an attachment disposition and a sanitized filename
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:122:29
+    120|     const stored = storedPdf(revisionId);
+    121|     const response = await send(`/api/revisions/${revisionId}/pdf`, em…
+    122|     expect(response.status).toBe(200);
+       |                             ^
+    123|     expect(response.headers.get('content-type')).toBe('application/pdf…
+    124|     expect(response.headers.get('cache-control')).toBe('no-store');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > owner download of a ready PDF > writes nothing: no row and no audit event
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:145:79
+    143|     const revisionId = await finalized();
+    144|     const before = { audit: count('SELECT count(*) FROM audit_events')…
+    145|     expect((await send(`/api/revisions/${revisionId}/pdf`, employee)).…
+       |                                                                               ^
+    146|     expect({ audit: count('SELECT count(*) FROM audit_events'), attach…
+    147|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > ownership and authentication > answers 401 to anonymous and forged-session callers, also for a real revision id
+AssertionError: expected 404 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:173:69
+    171|   it('answers 401 to anonymous and forged-session callers, also for a …
+    172|     const revisionId = await finalized();
+    173|     expect((await send(`/api/revisions/${revisionId}/pdf`)).status).to…
+       |                                                                     ^
+    174|     expect((await send(`/api/revisions/${revisionId}/pdf`, 'ts_session…
+    175|     expect((await send(`/api/revisions/${MISSING}/pdf`)).status).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > a PDF that is not ready > answers 409 pdf_not_ready while the PDF job has not run
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:193:29
+    191|     const revisionId = await finalized({ pdf: false });
+    192|     const response = await send(`/api/revisions/${revisionId}/pdf`, em…
+    193|     expect(response.status).toBe(409);
+       |                             ^
+    194|     expect(response.json.error.code).toBe('pdf_not_ready');
+    195|     expect(response.headers.get('cache-control')).toBe('no-store');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > a PDF that is not ready > answers 409 pdf_not_ready after a failed render and 200 once a later run succeeds
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:205:79
+    203|     const state = t.db.prepare("SELECT state FROM revision_files WHERE…
+    204|     expect(state).toBe('failed');
+    205|     expect((await send(`/api/revisions/${revisionId}/pdf`, employee)).…
+       |                                                                               ^
+    206|
+    207|     t.clock.advanceSeconds(86_400);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > integrity of the stored file > never sends bytes that no longer match the recorded hash
+AssertionError: expected 404 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 404
+
+ ❯ tests/integration/pdf-download.test.ts:220:29
+    218|     writeFileSync(join(dataDir, 'files', stored.key), Buffer.concat([s…
+    219|     const response = await send(`/api/revisions/${revisionId}/pdf`, em…
+    220|     expect(response.status).toBe(500);
+       |                             ^
+    221|     expect(response.bytes.includes(Buffer.from('tampered'))).toBe(fals…
+    222|     expect(readFileSync(join(dataDir, 'files', stored.key)).includes(B…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 4 passed (10)
+   Start at  00:45:09
+   Duration  3.84s (tests 70%, import 21%, transform 10%)

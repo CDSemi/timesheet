@@ -1,0 +1,71 @@
+# WP3-T13 mutation checks. Usage: python mutate.py.txt <vitest.mjs path>
+# Each mutation is computed in memory before the target file is opened for writing; the file is
+# restored byte-identical (SHA-256 compared) after every run, also when the run fails.
+import hashlib, subprocess, sys
+
+VITEST = sys.argv[1]
+NL = chr(10)
+
+SERVER = 'src/server/routes/submission.ts'
+DELIVERY = 'src/client/components/deliveryModel.ts'
+SETTINGS = 'src/client/components/settingsModel.ts'
+
+# (name, target, test file, old text, new text)
+MUTATIONS = [
+    ('S1 PDF lookup no longer scoped to the owner', SERVER, 'tests/integration/pdf-download.test.ts',
+     "WHERE r.id = ? AND r.user_id = ?`,", "WHERE r.id = ? AND (r.user_id = ? OR 1 = 1)`,"),
+    ('S2 a PDF that is not ready answers 404 instead of 409', SERVER, 'tests/integration/pdf-download.test.ts',
+     "throw new ApiError(409, 'pdf_not_ready',", "throw new ApiError(404, 'pdf_not_ready',"),
+    ('S3 stored bytes are not checked against the recorded hash', SERVER, 'tests/integration/pdf-download.test.ts',
+     "if (createHash('sha256').update(bytes).digest('hex') !== row.sha256) {", "if (createHash('sha256').update(bytes).digest('hex') === 'never') {"),
+    ('S4 the download is labelled as HTML', SERVER, 'tests/integration/pdf-download.test.ts',
+     "'Content-Type': 'application/pdf',", "'Content-Type': 'text/html',"),
+    ('S5 the PDF is shown inline instead of an attachment', SERVER, 'tests/integration/pdf-download.test.ts',
+     "'Content-Disposition': `attachment; filename=", "'Content-Disposition': `inline; filename="),
+    ('D1 a succeeded render job is not read as a ready PDF', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "if (render?.state === 'succeeded') return 'ready';", "if (render?.state === 'never') return 'ready';"),
+    ('D2 an automatic submission no longer reads review pending', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "{ text: 'Review pending', tone: 'warn' }", "{ text: 'Signed', tone: 'ok' }"),
+    ('D3 resend stays enabled while a decision is due', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "if (row.attempts.some((item) => item.decision_required)) return wait('Decide on the uncertain delivery first.');", "if (false) return wait('Decide on the uncertain delivery first.');"),
+    ('D4 marking delivered no longer says nothing is sent', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "and nothing is sent.'", "and the PDF goes out again.'"),
+    ('D5 an unrecognised provider text reaches the page', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "  return 'unclassified';", "  return text.trim();"),
+    ('D6 an accepted attempt shows a fault code', DELIVERY, 'tests/client/deliveryModel.test.ts',
+     "if (attempt.state !== 'failed_temporary' && attempt.state !== 'failed_permanent' && attempt.state !== 'uncertain') return null;", ""),
+    ('M1 the consent is not pre-selected', SETTINGS, 'tests/client/settingsModel.test.ts',
+     "export const UPLOAD_CONSENT_DEFAULT = true;", "export const UPLOAD_CONSENT_DEFAULT = false;"),
+    ('M2 a ticked consent without saved settings is dropped silently', SETTINGS, 'tests/client/settingsModel.test.ts',
+     "return input.settingsSaved ? 'upload_and_authorize' : 'save_settings_first';", "return 'upload_and_authorize';"),
+    ('M3 the 422 submission_settings_required is no longer recognised', SETTINGS, 'tests/client/settingsModel.test.ts',
+     "if (caught.status === 422 && caught.code === 'submission_settings_required') {", "if (caught.status === 422 && caught.code === 'never') {"),
+    ('M4 overdue drafts are requested even when the switch did not change', SETTINGS, 'tests/client/settingsModel.test.ts',
+     "...(autoSubmitChanged(draft, settings) && draft.applyToOverdue ? { apply_to_overdue_drafts: true } : {}),", "...(draft.applyToOverdue ? { apply_to_overdue_drafts: true } : {}),"),
+    ('M5 a note text of the wrong length is accepted', SETTINGS, 'tests/client/settingsModel.test.ts',
+     "  const checked = checkAutoNoteText(text);" + NL + "  return checked.ok ? null : checked.message;", "  return null;"),
+]
+
+caught = 0
+for name, target, test, old, new in MUTATIONS:
+    original = open(target, 'rb').read()
+    base_hash = hashlib.sha256(original).hexdigest()
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, f'{name}: pattern found {text.count(old)} times'
+    mutated = text.replace(old, new, 1).encode('utf-8')
+    assert mutated != original
+    try:
+        open(target, 'wb').write(mutated)
+        run = subprocess.run(['node.exe', VITEST, 'run', test], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        open(target, 'wb').write(original)
+    restored = hashlib.sha256(open(target, 'rb').read()).hexdigest() == base_hash
+    failed = [l.strip() for l in run.stdout.splitlines() if l.strip().startswith('FAIL')]
+    summary = [l.strip() for l in run.stdout.splitlines() if l.strip().startswith('Tests')]
+    ok = run.returncode != 0
+    caught += ok
+    print(f'{name}: {"CAUGHT" if ok else "SURVIVED"}; restored byte-identical: {restored}; {summary[0] if summary else ""}')
+    for line in failed[:2]:
+        print('    ' + line)
+print(f'caught {caught} of {len(MUTATIONS)}')
+sys.exit(0 if caught == len(MUTATIONS) else 1)

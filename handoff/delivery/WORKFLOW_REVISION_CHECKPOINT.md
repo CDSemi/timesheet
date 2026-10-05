@@ -6,15 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = da6d0cdd2d20b6ffabb18f4cfaf7d8ad72951c0d (GOV-WP3P-FREEZE; last
-    code freeze c1e4bb2, WP3-T13A; docs freeze cb9800e).
+  - HEAD = origin/main = 943027b3a328f174ef3de5c45ee4677906af3189 (WP3-T07B-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 4d4c4863… (after WP3-DOC, committer-checked;
-    no WP3 gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the GOV-WP3P-FREEZE results,
-    the GOV-WP3P gate and audit records, GOV_WP3P_REVIEW (+ vi) and their evidence; they
-    go into the T07B freeze.
+    (WP2-GATE4). Current WP3 working digest 5e37ab98… (T07B, committer-checked; no WP3
+    gate yet).
+  - Uncommitted (handoff only): the board, this checkpoint and the T07B-FREEZE results
+    and evidence.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -233,10 +231,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   settings — carried to T13), snapshot v2, "Submitted"/note status, no automatic
   indicator, stored signer name on manual PDFs; 19/19 mutations; verify 1232 tests;
   digest 5e37ab98….
-- Running: WP3-T07B-FREEZE (committer), with the GOV-WP3P records.
+- WP3-T07B-FREEZE is committed and pushed as 943027b (56 paths incl. the GOV-WP3P
+  records; all checks 0).
+- WP3-T13 is done (author-reported): owner-only PDF download, history and delivery UI,
+  settings with note line and image authorization, signature upload with pre-selected
+  consent (422 handled), grid status; 16/16 mutations; e2e 111 passed; verify 1292 tests;
+  digest 7b04f0b1…. Carry items: a revision-list route (added to the T13B brief); a
+  capture sender in the e2e harness and the deadline-automation e2e (T14); the 404 of
+  `GET /api/signatures/current` without a signature (later fix).
+- Running: WP3-T13-FREEZE (committer).
 - Next action:
-  1. Record the T07B freeze; then T13 (brief ready, updated for the 422 case), T13B
-     (opus), T13C, T14, T15, WP3-GATE and the audits.
+  1. Record the T13 freeze; then T13B (sharing grants, opus; brief ready), T13C, T14,
+     T15, WP3-GATE and the audits.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -254,5 +260,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T07B-FREEZE only.
+- Live processes: WP3-T13-FREEZE only.
 - Usage/reset: not observable.

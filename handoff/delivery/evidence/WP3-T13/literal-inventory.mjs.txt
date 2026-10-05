@@ -1,0 +1,78 @@
+// WP2-FIXB3 literal inventory: node literal-inventory.mjs <styles.css> [<wp1 styles.css>]
+// Lists every declaration (outside custom-property definitions) that holds a raw literal:
+// numbers with or without units, hex colours and colour functions. Excluded only: 0, unitless 1,
+// 100%, keywords and the custom-property definitions themselves. Media-query conditions are not
+// declarations. With the second argument each literal is tagged WP1 (the same literal text is in
+// a WP1 declaration) or new.
+import { readFileSync } from 'node:fs';
+
+function declarations(path) {
+  const text = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+  const out = [];
+  const stack = [];
+  let start = 0;
+  let line = 1;
+  let atLine = 1;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === '\n') line += 1;
+    if (ch === '{') {
+      stack.push(text.slice(start, i).trim());
+      start = i + 1;
+    } else if (ch === '}') {
+      emit(text.slice(start, i));
+      stack.pop();
+      start = i + 1;
+    } else if (ch === ';') {
+      emit(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  function emit(chunk) {
+    const raw = chunk.trim();
+    if (raw === '' || !raw.includes(':')) return;
+    const idx = raw.indexOf(':');
+    const prop = raw.slice(0, idx).trim();
+    const value = raw.slice(idx + 1).trim().replace(/\s+/g, ' ');
+    const selector = (stack.filter((s) => !s.startsWith('@media')).pop() ?? '').replace(/\s+/g, ' ');
+    const lineNo = text.slice(0, text.indexOf(raw, 0)).split('\n').length;
+    out.push({ selector, prop, value });
+    void lineNo;
+    void atLine;
+  }
+  return out;
+}
+
+function literalsOf(value) {
+  const cleaned = value.replace(/var\(--[\w-]+\)/g, ' ').replace(/--[\w-]+/g, ' ');
+  const found = [];
+  for (const m of cleaned.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) found.push(m[0]);
+  for (const m of cleaned.matchAll(/\b(?:rgb|rgba|hsl|hsla|oklch)\(/g)) found.push(m[0]);
+  for (const m of cleaned.matchAll(/(?<![\w#.-])-?(?:\d+\.\d+|\d+|\.\d+)(?:[a-zA-Z]+|%)?/g)) {
+    const lit = m[0];
+    if (lit === '0' || lit === '1' || lit === '100%') continue;
+    found.push(lit);
+  }
+  return found;
+}
+
+const [file, wp1File] = process.argv.slice(2);
+const wp1 = wp1File ? new Set(declarations(wp1File).flatMap((d) => (d.prop.startsWith('--') ? [] : literalsOf(d.value)))) : null;
+let decls = 0;
+let literals = 0;
+let newLiterals = 0;
+for (const d of declarations(file)) {
+  if (d.prop.startsWith('--')) continue;
+  const lits = literalsOf(d.value);
+  if (lits.length === 0) continue;
+  decls += 1;
+  literals += lits.length;
+  const tagged = lits.map((l) => {
+    if (wp1 === null) return l;
+    const isNew = !wp1.has(l);
+    if (isNew) newLiterals += 1;
+    return `${l}(${isNew ? 'new' : 'WP1'})`;
+  });
+  console.log(`${d.selector} | ${d.prop}: ${d.value} | ${tagged.join(' ')}`);
+}
+console.log(`declarations with literals: ${decls}; literal occurrences: ${literals}${wp1 ? `; occurrences absent from WP1: ${newLiterals}` : ''}`);

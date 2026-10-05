@@ -1,9 +1,14 @@
 import type { DayView } from '../api.ts';
 import { CompletenessBadge, PendingOtBadge } from './DayStatus.tsx';
 import { weekGroups } from './dayModel.ts';
+import type { GridStatus } from './deliveryModel.ts';
 import { minutesText, sessionText } from './format.ts';
+import { SubmissionStatusLine } from './SubmissionStatus.tsx';
 
-/** Desktop two-week grid: one table, one body per Monday to Sunday week. */
+/**
+ * Desktop two-week grid: one table, one body per Monday to Sunday week. Its caption is the
+ * period's review and delivery status from the server's fields (null while they load).
+ */
 export function TimesheetGrid({
   days,
   zone,
@@ -11,6 +16,7 @@ export function TimesheetGrid({
   selected,
   onToggle,
   onEdit,
+  status,
 }: {
   days: readonly DayView[];
   zone: string;
@@ -18,10 +24,16 @@ export function TimesheetGrid({
   selected: ReadonlySet<string>;
   onToggle: (workDate: string) => void;
   onEdit: (workDate: string) => void;
+  status: GridStatus | null;
 }) {
   return (
     <div className="table-wrap">
       <table className="grid">
+        {status !== null && (
+          <caption className="grid-caption">
+            <SubmissionStatusLine status={status} />
+          </caption>
+        )}
         <thead>
           <tr>
             <th>
