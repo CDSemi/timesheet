@@ -1,0 +1,23 @@
+// WP3-RECHECK-BC2 evidence masker (adapted from evidence/WP3-RECHECK-BC/mask.mjs.txt): node mask.mjs <in> <out>
+// Strips ANSI codes, masks e-mail addresses, user names in profile paths and the local folders,
+// converts CRLF to LF and removes trailing whitespace. Separators match both "/" and "\".
+import { readFileSync, writeFileSync } from 'node:fs';
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/\r\n?/g, '\n');
+const SEP = String.raw`[\\/]+`;
+const rules = [
+  [/[\w.%+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,}/gi, '<email>'],
+  [new RegExp(String.raw`[A-Za-z]:${SEP}\.claude-tmp${SEP}timesheet${SEP}WP3-RECHECK-BC2`, 'gi'), '<scratch>'],
+  [new RegExp(String.raw`/[a-z]/\.claude-tmp/timesheet/WP3-RECHECK-BC2`, 'gi'), '<scratch>'],
+  [new RegExp(String.raw`[A-Za-z]:${SEP}Dropbox${SEP}Work\.CDSemi${SEP}timesheet`, 'gi'), '<project>'],
+  [new RegExp(String.raw`/[a-z]/Dropbox/Work\.CDSemi/timesheet`, 'gi'), '<project>'],
+  [new RegExp(String.raw`([A-Za-z]:${SEP}|/[a-z]/)Users${SEP}[^\\/\s"'\x60,;)]+`, 'gi'), '$1Users/<user>'],
+  [/\/home\/[^/\s"'`,;)]+/g, '/home/<user>'],
+  [new RegExp(String.raw`B:${SEP}Temp${SEP}claude${SEP}[^\s"'\x60,;)]*`, 'gi'), '<claude-temp>'],
+];
+for (const [re, to] of rules) text = text.replace(re, to);
+text = text.split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n');
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(output, text);

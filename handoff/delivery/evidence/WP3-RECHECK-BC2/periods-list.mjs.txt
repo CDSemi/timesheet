@@ -1,0 +1,7 @@
+// Prints the seed calendar's pay periods (payroll date, period, due instant) for probe planning.
+import { setup } from './lib.mjs';
+const ctx = await setup('periods');
+const r = await ctx.request('GET', '/api/periods?from=2026-09-14&to=2027-01-31', { cookie: ctx.cookies.owner });
+for (const p of r.body.periods ?? []) console.log(JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => /payroll|start|end|due/.test(k)))));
+if (!r.body.periods) console.log(JSON.stringify(r.body).slice(0, 600));
+ctx.db.close();

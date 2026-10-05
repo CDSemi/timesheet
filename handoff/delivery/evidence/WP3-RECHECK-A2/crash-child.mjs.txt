@@ -1,0 +1,71 @@
+// WP3-RECHECK-A2 crash child. Runs one production operation in its own OS process with its own SQLite
+// connection. At the chosen point it writes a marker file and then blocks its only thread
+// (Atomics.wait) so the parent can terminate it through the child-process handle while the IMMEDIATE
+// transaction is still open (a real crash: no JavaScript unwinding, no rollback call, no commit).
+//   argv: <signoff|deadline|late_review|correction> <dbPath> <mode> <markerPath> [hash version signer]
+//   mode: `at:<SQL prefix>` blocks when the first statement starting with that prefix is run;
+//         `after` blocks right after the operation returned (committed, no response delivered);
+//         `none` runs normally and prints the result.
+import { writeFileSync } from 'node:fs';
+
+const [operation, dbPath, mode, marker, hash, versionText, signerText] = process.argv.slice(2);
+const { m, sessionUser, fixedClock } = await import('./common.mjs');
+
+const block = (where) => {
+  writeFileSync(marker, where);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120000);
+  process.exitCode = 99; // reached only if the parent never terminated this process
+};
+const raw = m.db.openDatabase(dbPath);
+const prefix = mode.startsWith('at:') ? mode.slice(3) : null;
+const db =
+  prefix === null
+    ? raw
+    : new Proxy(raw, {
+        get(target, property) {
+          if (property === 'prepare') {
+            return (sql) => {
+              const statement = target.prepare(sql);
+              if (!sql.trimStart().startsWith(prefix)) return statement;
+              return new Proxy(statement, {
+                get(st, key) {
+                  if (key === 'run') return (...args) => (block(`inside the transaction at "${prefix}"`), st.run(...args));
+                  const value = Reflect.get(st, key, st);
+                  return typeof value === 'function' ? value.bind(st) : value;
+                },
+              });
+            };
+          }
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+
+const ownerId = raw.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get();
+const user = sessionUser(raw, ownerId);
+const signerName = signerText ?? 'Synthetic Signer';
+let result;
+try {
+  if (operation === 'signoff') {
+    const out = m.fin.signOffTimesheet({ db, clock: fixedClock('2026-09-30T00:30:05Z'), user }, '2026-10-02', {
+      expectedVersion: Number(versionText), reviewedHash: hash, signerName, deficitChoices: [], incompleteEvidenceAcknowledged: true,
+    });
+    result = { status: out.status, revision_no: out.finalizedRevisionNo };
+  } else if (operation === 'late_review' || operation === 'correction') {
+    const out = m.fin.reviseTimesheet({ db, clock: fixedClock('2026-10-01T18:00:00Z'), user }, '2026-10-02', {
+      kind: operation,
+      reason: operation === 'correction' ? 'Synthetic correction: one more hour on 2026-09-15' : null,
+      sendEmail: false,
+      expectedVersion: Number(versionText), reviewedHash: hash, signerName, deficitChoices: [], incompleteEvidenceAcknowledged: true,
+    });
+    result = { status: out.status, revision_no: out.finalizedRevisionNo, lines: out.lines?.map((line) => `${line.lineKind}:${line.outcome}:${line.proposedMinutes}`) };
+  } else {
+    const out = m.auto.runDeadlineScan(db, fixedClock('2026-09-30T00:30:00Z'));
+    result = { finalized: out.finalized, failed: out.failed, skipped: out.skipped };
+  }
+} catch (error) {
+  result = { error: error.code ?? String(error.message).slice(0, 100), status: error.status ?? null };
+}
+if (mode === 'after') block('after the operation returned');
+console.log(JSON.stringify({ operation, ...result }));
+raw.close();

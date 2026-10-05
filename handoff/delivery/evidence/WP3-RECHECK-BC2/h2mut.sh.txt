@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Probe H2 against the freeze clone `mut` with mutation M4 and then M5 applied (each restored afterwards).
+source <scratch>/env.sh
+S=<scratch>
+OUT=$S/21-h2-mut.raw
+: > $OUT
+cd $S/mut
+echo "### M4 applied in <scratch>/mut (scan ignores a NULL activation instant); PROBE_REPO=<scratch>/mut node probes/h2-guards.mjs" >> $OUT
+perl -0pi -e 's/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return \{ kind: .skip., reason: .not_active. \};/  const activeFrom = getAutomationActivation(db).activeFrom ?? \x271970-01-01T00:00:00Z\x27;/; s/  const \{ activeFrom \} = getAutomationActivation\(db\);\n  if \(activeFrom === null\) return summary;\n  summary\.activated = true;/  const stored = getAutomationActivation(db).activeFrom;\n  summary.activated = stored !== null;\n  const activeFrom = stored ?? \x271970-01-01T00:00:00Z\x27;/' src/server/services/automation.ts
+git diff --stat >> $OUT
+(cd $S/probes && PROBE_REPO=$S/mut "$NODE24" h2-guards.mjs) >> $OUT 2>&1; echo "exit=$?" >> $OUT
+git checkout -- src/server/services/automation.ts; git status --short >> $OUT; echo "restored" >> $OUT
+echo "### M5 applied in <scratch>/mut (imported skip moved after the switch-on decision); PROBE_REPO=<scratch>/mut node probes/h2-guards.mjs" >> $OUT
+perl -0pi -e 's/  if \(timesheet !== undefined && timesheet\.imported_unverified === 1\) return \{ kind: .skip., reason: .imported. \};\n//; s/  if \(governing\.autoSubmit\) return \{ kind: .finalize. \};\n/  if (governing.autoSubmit) return { kind: \x27finalize\x27 };\n  if (timesheet !== undefined \&\& timesheet.imported_unverified === 1) return { kind: \x27skip\x27, reason: \x27imported\x27 };\n/' src/server/services/automation.ts
+git diff --stat >> $OUT
+(cd $S/probes && PROBE_REPO=$S/mut "$NODE24" h2-guards.mjs) >> $OUT 2>&1; echo "exit=$?" >> $OUT
+git checkout -- src/server/services/automation.ts; git status --short >> $OUT; echo "restored" >> $OUT
+echo h2mut-done >> $OUT

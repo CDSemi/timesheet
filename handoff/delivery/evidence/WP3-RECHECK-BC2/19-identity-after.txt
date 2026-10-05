@@ -1,0 +1,18 @@
+Identity after (WP3-RECHECK-BC2, end of the run)
+$ date -u
+2026-10-05T21:04:45Z
+$ git -C <project> rev-parse HEAD
+2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714
+$ git -C <project> ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92 *-
+$ git -C <project> ls-tree ... | grep -v '^handoff/' | wc -l
+721
+$ git -C <project> status --short -- . ':!handoff'   (no change outside handoff/)
+(end of status)
+$ git -C <scratch>/fix2 rev-parse HEAD; status --short
+2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714
+(end of status)
+$ (cd <scratch>/fix2; npm run digest)
+0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92  (721 files, handoff/ excluded)
+$ git -C <scratch>/mut status --short; git -C <scratch>/pre2 status --short   (mutations restored)
+(end of status)

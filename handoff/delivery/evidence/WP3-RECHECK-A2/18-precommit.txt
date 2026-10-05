@@ -1,0 +1,18 @@
+Precommit privacy check over the WP3-RECHECK-A2 outputs on temporary indexes (the real index is untouched).
+Command (project folder): GIT_INDEX_FILE=<scratch>/tmp/precommit-N.idx; git read-tree HEAD;
+git add handoff/delivery/WP3_RECHECK_A2.md handoff/delivery/WP3_RECHECK_A2.vi.md handoff/delivery/tasks/WP3-RECHECK-A.md handoff/delivery/evidence/WP3-RECHECK-A2;
+<node24> scripts/precommit-check.mjs; git diff --cached --check
+
+Run 1 (before this file existed):
+staged: 46
+PASS: 46 staged file(s), 0 blocking finding(s), 0 warning(s)
+precommit exit 0
+diff --cached --check exit 0
+
+Run 2 (with this file as written for run 1; only these run-2 lines were added afterwards):
+staged: 47
+PASS: 47 staged file(s), 0 blocking finding(s), 0 warning(s)
+precommit exit 0
+diff --cached --check exit 0
+Rule self-test (scripts/precommit-check.mjs --self-test): PASS self-test: 35 path and 74 line samples, 12 rules
+Real index after both runs: git diff --cached --name-only -> 0 entries.

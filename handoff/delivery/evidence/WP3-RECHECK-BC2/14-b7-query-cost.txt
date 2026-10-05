@@ -1,0 +1,41 @@
+### <node24>/node.exe probes/b7-query-cost.mjs   (PROBE_REPO default = <scratch>/fix2, 2d72d35)
+# B7 query plans and the cost of the hint read (source: fix2)
+INFO governingSwitch
+    SEARCH submission_settings USING INDEX submission_settings_effective (user_id=? AND auto_submit_effective_from<?)
+    USE TEMP B-TREE FOR ORDER BY
+INFO hasSavedSettings
+    SEARCH submission_settings USING COVERING INDEX sqlite_autoindex_submission_settings_2 (user_id=?)
+INFO hint rows (round 2: rowid > ?, no time bound without a finalization)
+    SEARCH a USING INDEX audit_events_owner (owner_user_id=?)
+    USE TEMP B-TREE FOR ORDER BY
+
+## Cost: 50000 synthetic day-entry audit rows of the owner before the current period, no owner finalization
+PASS owner shares with the grantee (201)
+PASS the grantee edits one day of the current period (200)
+INFO owner Review GET with the hint: median 35.5 ms, max 40.4 ms over 7 requests; hint [{"display_name":"Synthetic Grantee","days":1,"work_dates":["2026-09-30"]}]
+PASS the hint is still exact with the large history
+INFO rows the round-2 hint read visits for this owner (no finalization): 50001
+
+SUMMARY B7 [fix2]: 3 PASS, 0 FAIL
+exit=0
+
+### PROBE_REPO=<scratch>/pre2 <node24>/node.exe probes/b7-query-cost.mjs   (pre-round-2 freeze 2f2520e)
+# B7 query plans and the cost of the hint read (source: pre2)
+INFO governingSwitch
+    SEARCH submission_settings USING INDEX submission_settings_effective (user_id=? AND auto_submit_effective_from<?)
+    USE TEMP B-TREE FOR ORDER BY
+INFO hasSavedSettings
+    SEARCH submission_settings USING COVERING INDEX sqlite_autoindex_submission_settings_2 (user_id=?)
+INFO hint rows (round 2: rowid > ?, no time bound without a finalization)
+    SEARCH a USING INDEX audit_events_owner (owner_user_id=?)
+    USE TEMP B-TREE FOR ORDER BY
+
+## Cost: 50000 synthetic day-entry audit rows of the owner before the current period, no owner finalization
+PASS owner shares with the grantee (201)
+PASS the grantee edits one day of the current period (200)
+INFO owner Review GET with the hint: median 1.6 ms, max 7.4 ms over 7 requests; hint [{"display_name":"Synthetic Grantee","days":1,"work_dates":["2026-09-30"]}]
+PASS the hint is still exact with the large history
+INFO rows the round-2 hint read visits for this owner (no finalization): 50001
+
+SUMMARY B7 [pre2]: 3 PASS, 0 FAIL
+exit=0

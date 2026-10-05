@@ -6,16 +6,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 2f2520e1ab80ff55938b70cd469f0bfe888e04a2 (WP3-FIX-FREEZE, commit
-    đóng băng của vòng sửa WP3). Commit đóng băng WP3 đầu tiên là a1cd566.
+  - HEAD = origin/main = 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714 (WP3-FIX2-FREEZE,
+    commit đóng băng của vòng sửa 2). Các commit đóng băng WP3 trước đó là a1cd566 và
+    2f2520e.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate: eeb417d3… (WP3-REGATE PASS trên 2f2520e). Digest gate
     WP3 đầu tiên là 96870f7e… (WP3-GATE trên a1cd566); digest gate WP2 là e61fa914…
     (WP2-GATE4).
-  - Chưa commit: thay đổi của WP3-FIX2 ở mã nguồn, test, docs/05 và docs/10 (digest
-    0d513fca…), cùng các bản ghi handoff từ sau 2f2520e. WP3-FIX2-FREEZE đang commit
-    những thay đổi này.
+  - Chưa commit, WP3-FIX3-FREEZE đang commit:
+    - tests/integration/deadline.test.ts (vòng 3, digest c31c300c…);
+    - các bản ghi handoff từ sau 2d72d35, kể cả brief WP3-FIX2-FREEZE.
+
+    Digest chính thức của gate là 0d513fca… (WP3-REGATE2 PASS).
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -391,7 +394,53 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
      - WP3-FIX2 đã xong ở lần 2. Worker đã che dữ liệu trong 6 tệp log và xóa đúng 6
        tệp `.raw` đã nêu tên, mỗi lệnh một đường dẫn cụ thể. Precommit trên bằng chứng
        không có finding nào. Verify đạt 1416 test; digest vẫn là 0d513fca….
-     - Đang chạy: WP3-FIX2-FREEZE (committer).
+     - WP3-FIX2-FREEZE đã commit và push thành 2d72d35 (158 đường dẫn; mọi kiểm tra trả
+       về 0; 6 ảnh giả lập; không có tệp `.raw`). Riêng brief của bước freeze chưa được
+       stage; nó sẽ vào commit handoff kế tiếp.
+     - WP3-REGATE2: PASS trên 2d72d35, đạt 19 mục (verifier tự báo):
+       - 1416 test; smoke 40; e2e 127 đạt;
+       - đua dữ liệu 20/20 mỗi loại; giả lập sự cố đạt; migration lên v6;
+       - đã nêu tên các test của vòng 2 và H-Q1;
+       - phạm vi thay đổi chỉ gồm các đường dẫn của FIX2 và docs 05/10;
+       - tài liệu khớp EN/VI, D-09 giữ nguyên;
+       - các validator trả về 0 trong thư mục dự án;
+       - digest chính thức của gate: 0d513fca….
+     - WP3-RECHECK-A lần 2: PASS trên 2d72d35, không có finding (auditor opus mới; digest
+       0d513fca… được ghi ở đầu và cuối).
+       - Phần thay đổi gồm 18 đường dẫn; lõi mảng A và tầng cơ sở dữ liệu không đổi.
+       - Chạy lại: đua dữ liệu hai lần, thêm phép thử đua giữa lần lưu cài đặt đầu tiên
+         và hạn nộp; sự cố; HTTP 84; dòng gợi ý 12; PDF 34; migration 30.
+       - So sánh H-Q1: dữ liệu của tài khoản đã setup giống hệt từng byte.
+       - R3 đã đóng. Rủi ro Info mới: R8 (tài khoản chưa setup vẫn nhận nhắc trước hạn)
+         và R9 (sự kiện trong seed hiện là tự động).
+     - WP3-RECHECK-BC2: FIX REQUIRED (auditor opus mới).
+       - RBC-01, RBC-02, test nhánh `sending` và H-Q1 (a) đều đúng; tài liệu khớp EN/VI;
+         mảng B và C không có hồi quy.
+       - WP3-RBC2-01 (Low, chỉ ở test): hai test hạn nộp nay dùng tài khoản chưa setup,
+         nên cơ chế chặn quét theo F-4 và cơ chế loại trừ kỳ đã nhập không còn test nào
+         kiểm tra. Cụ thể, các đột biến M4, M5, M5b vẫn qua toàn bộ test. Hành vi thật
+         của ứng dụng vẫn đúng.
+     - Vòng sửa 3 (quyết định điều phối 2026-10-05):
+       1. WP3-FIX3, chỉ sửa test: khôi phục test cho hai cơ chế chặn đó, chứng minh bằng
+          đột biến trong clone tạm, và thêm test cho các nhánh bỏ qua khác chưa được
+          kiểm tra.
+       2. WP3-FIX3-FREEZE.
+       3. WP3-REGATE3.
+       4. Một auditor mới làm cả WP3-RECHECK-BC3 và WP3-RECHECK-A lần 3 (gắn lại mảng A
+          với digest mới).
+       5. WP3-ACCREC và WP3-ACCEPT.
+     - WP3-FIX3 đã xong (tác giả tự báo), chỉ sửa test.
+       - Các test cơ chế chặn lại dùng tài khoản đã setup; công tắc tắt được lưu trước
+         hạn.
+       - Thêm 3 test quét các nhánh bỏ qua.
+       - Các đột biến M4, M5, M5b và ba nhánh bỏ qua đều làm test fail; bản sạch đạt.
+       - verify: 1420 test; digest c31c300c….
+     - Đang chạy: WP3-FIX3-FREEZE (committer). Commit này stage cả chính brief của nó
+       lẫn brief WP3-FIX2-FREEZE. Brief WP3-REGATE3 và WP3-RECHECK-BC3 (kiêm
+       WP3-RECHECK-A lần 3) đã sẵn.
+     - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
+       HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
+       sau khi WP3-ACCREC xong.
   4. Một commit đóng băng, chạy lại toàn bộ gate.
   5. Hai đợt kiểm tra lại song song bằng auditor mới: A có gắn digest, và B+C.
 
@@ -428,7 +477,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-FIX2-FREEZE.
+- Process còn sống: chỉ WP3-FIX3-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

@@ -1,0 +1,87 @@
+// WP3-RECHECK-BC2 probe B3: WP3-RBC-01. Every audit event without an actor is a system event in the server
+// response (`actor_is_system`) and reads "automatic" in the client wording, whatever its operation (the automatic
+// submission, the OT credit and deficit debit it posts, deadline records). Another person's act stays "by someone
+// else"; a grantee act through a share keeps its name (WP3-C-02). The labels are computed with the production client
+// models from the real GET /api/history response, exactly as HistoryScreen does. Adapted from the published
+// WP3-RECHECK-BC probe B3. Real SQLite file, production runner, capture outbound. Run against PROBE_REPO.
+import { LA, la, REPO, reporter, runJobsOnce, setup } from './lib.mjs';
+
+const mod = (p) => import(new URL(p, REPO).href);
+const { operationText } = await mod('src/client/components/otModel.ts');
+const sharing = await mod('src/client/components/sharingModel.ts');
+const r = reporter('B3 History: actor-less events are system events (WP3-RBC-01)');
+const ctx = await setup('b3', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const handlers = ctx.handlers();
+const label = (e) => sharing.shareOperationText(e.operation) ?? operationText(e.operation);
+const badge = (e) => sharing.historyActorBadge(e);
+// HistoryScreen.tsx: data-history-actor = via_share ? 'grantee' : actor_is_system ? 'system' : 'other' (only when a badge exists)
+const screenKind = (e) => (badge(e) === null ? null : e.via_share ? 'grantee' : e.actor_is_system ? 'system' : 'other');
+
+const autoCookie = await ctx.addUser('auto', 'probe-auto', 'Probe Auto');
+const offCookie = await ctx.addUser('off', 'probe-off', 'Probe Off');
+await ctx.addUser('grantee', 'probe-grantee', 'Synthetic Grantee');
+for (const [cookie, auto, who] of [[autoCookie, true, 'auto'], [offCookie, false, 'off']]) {
+  const s = await ctx.request('POST', '/api/settings/submission', { cookie, body: { expected_seq: 0, to: [ctx.emails[who]], auto_submit: auto } });
+  r.check(s.status === 201, `${who}: settings saved, auto_submit ${auto} (${s.status})`);
+}
+const pol = await ctx.request('POST', '/api/policies', {
+  cookie: autoCookie,
+  body: { effective_from: '2026-09-28', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'auto_deduct' },
+});
+r.check(pol.status === 201, `auto: auto_deduct policy (${pol.status})`);
+const share = await ctx.request('POST', '/api/shares', { cookie: autoCookie, body: { grantee_email: ctx.emails.grantee, items: { timesheets: 'edit', ot_read: false, pdf_download: false } } });
+r.check(share.status === 201, `auto shares edit access with the grantee (${share.status})`);
+clock.set('2026-10-01T00:00:00Z');
+const act = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic recheck activation' } });
+r.check(act.status === 200, `activation (${act.status})`);
+clock.set('2026-10-12T20:00:00Z');
+// Saturday 2026-10-03 09:00-13:00 LA (OT credit 240) and a short weekday 2026-10-05 09:00-15:00 (deficit 120 under auto_deduct).
+for (const [day, from, to] of [['2026-10-03', '09:00', '13:00'], ['2026-10-05', '09:00', '15:00']]) {
+  const s = await ctx.request('POST', `/api/days/${day}/sessions`, { cookie: autoCookie, body: { start: la(`${day}T${from}`), end: la(`${day}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true } });
+  r.check(s.status === 201, `auto: session ${day} ${from}-${to} (${s.status} ${s.body?.error?.code ?? ''})`);
+}
+const granteeEdit = await ctx.request('PUT', `/api/shared/${ctx.ids.auto}/days/2026-10-06`, { cookie: ctx.cookies.grantee, body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: 'entered by the grantee' } });
+r.check(granteeEdit.status === 200, `the grantee edits a day of auto through the share (${granteeEdit.status})`);
+const rename = await ctx.request('PATCH', `/api/admin/users/${ctx.ids.auto}`, { cookie: ctx.cookies.admin, body: { display_name: 'Probe Auto Renamed' } });
+r.check(rename.status === 200, `the administrator renames auto (an act by another person) (${rename.status})`);
+for (const iso of ['2026-10-14T00:00:30Z', '2026-10-14T00:02:30Z', '2026-10-14T00:04:30Z']) {
+  clock.set(iso);
+  await runJobsOnce({ db, clock, handlers, owner: 'probe-b3' });
+}
+const nullActor = db
+  .prepare('SELECT operation, count(*) AS n FROM audit_events WHERE owner_user_id = ? AND actor_user_id IS NULL GROUP BY operation ORDER BY operation')
+  .all(ctx.ids.auto);
+r.info(`auto: actor-less audit events: ${JSON.stringify(nullActor)}`);
+r.check(nullActor.some((x) => x.operation === 'ot_ledger.credit'), 'the automatic submission posted an actor-less OT credit');
+
+for (const who of ['auto', 'off']) {
+  const h = await ctx.request('GET', '/api/history?limit=500', { cookie: ctx.cookies[who] });
+  const events = h.body.audit_events;
+  const dbActor = (id) => db.prepare('SELECT actor_user_id FROM audit_events WHERE id = ?').pluck().get(id);
+  const rows = events.map((e) => ({ op: e.operation, label: label(e), badge: badge(e), kind: screenKind(e), system: e.actor_is_system }));
+  r.info(`${who}: history rows ${JSON.stringify(rows.map((x) => `${x.op} => "${x.label}"${x.badge ? ` [${x.badge}|${x.kind}]` : ''}`))}`);
+  r.check(events.every((e) => typeof e.actor_is_system === 'boolean'), `${who}: every event carries the server flag actor_is_system`);
+  const mismatched = events.filter((e) => e.actor_is_system !== (dbActor(e.id) === null));
+  r.check(mismatched.length === 0, `${who}: actor_is_system is exactly "the stored actor is NULL" for all ${events.length} events (mismatches ${mismatched.length})`);
+  const system = events.filter((e) => dbActor(e.id) === null);
+  const wrong = system.filter((e) => badge(e) !== 'automatic' || screenKind(e) !== 'system');
+  r.check(system.length > 0 && wrong.length === 0, `${who}: every actor-less event reads "automatic" with data-history-actor="system" (${system.length} events; wrong: ${JSON.stringify(wrong.map((e) => `${e.operation} [${badge(e)}]`))})`);
+  r.check(!events.some((e) => e.actor_is_system && badge(e) === 'by someone else'), `${who}: no system event reads "by someone else"`);
+  r.check(rows.every((x) => x.label !== x.op), `${who}: no raw operation code is shown`);
+  if (who === 'auto') {
+    const credit = events.find((e) => e.operation === 'ot_ledger.credit');
+    r.check(credit !== undefined && credit.actor_is_system === true && badge(credit) === 'automatic', `auto: "${label(credit ?? { operation: 'ot_ledger.credit' })}" [${credit ? badge(credit) : 'missing'}] (the WP3-RBC-01 scenario)`);
+    const debit = events.find((e) => /deficit|debit/.test(e.operation) && dbActor(e.id) === null);
+    r.info(`auto: actor-less deficit event: ${debit ? `${debit.operation} => "${label(debit)}" [${badge(debit)}]` : 'none'}`);
+    const update = events.find((e) => e.operation === 'user.update');
+    r.check(update !== undefined && update.actor_is_system === false && badge(update) === 'by someone else' && screenKind(update) === 'other', `auto: the administrator's rename stays another person's act: [${update ? badge(update) : 'missing'}]`);
+    const viaShare = events.find((e) => e.via_share);
+    r.check(viaShare !== undefined && viaShare.actor_is_system === false && badge(viaShare) === 'Changed by Synthetic Grantee (shared access)', `auto: the grantee edit keeps its attribution: [${viaShare ? badge(viaShare) : 'missing'}]`);
+    r.check(!JSON.stringify(h.body).includes(ctx.ids.admin) && !JSON.stringify(h.body).includes(ctx.ids.grantee), 'auto: no identifier of another person leaves the server');
+    const own = events.filter((e) => e.actor_is_self);
+    r.check(own.length > 0 && own.every((e) => e.actor_is_system === false && badge(e) === null), `auto: the owner's own ${own.length} events show no badge and are not system events`);
+  }
+}
+db.close();
+r.done('B3');

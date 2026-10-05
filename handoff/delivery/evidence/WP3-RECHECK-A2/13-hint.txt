@@ -1,0 +1,18 @@
+INFO  build repo; expect the pre-period change in the hint: true
+INFO  world H: dropped 2 audit trigger(s) in the copy, rewrote the actor of 5 grantee audit event(s)
+INFO  shown: hint=[{"display_name":"Example Employee Two","days":2,"work_dates":["2026-09-16","2026-09-17"]}] next-period hint=[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}] hash=b07ec0e8050842ee signed=created pdf_sha256=b4df460c255da363 pdf_bytes=27393 ledger=finalization:day:2026-09-15:credit=60,finalization:day:2026-09-16:deficit_debit=-240,recheck-opening=300 passes={"claimed":2,"succeeded":1,"retried":1,"intervention":0,"lost":0} | {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+INFO  hidden: hint=[] next-period hint=[] hash=b07ec0e8050842ee signed=created pdf_sha256=b4df460c255da363 pdf_bytes=27393 ledger=finalization:day:2026-09-15:credit=60,finalization:day:2026-09-16:deficit_debit=-240,recheck-opening=300 passes={"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  world S shows the hint (E2; ["2026-09-16","2026-09-17"]; 2026-09-18 taken over by the owner; 2026-09-30 is another period); world H shows none  [[{"display_name":"Example Employee Two","days":2,"work_dates":["2026-09-16","2026-09-17"]}]]
+PASS  the next period (payroll 2026-10-16) lists the pre-period change of 2026-09-30 in S only when the round-2 rule applies  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]]
+PASS  reading the review writes nothing (audit count unchanged by buildReviewPayload)
+PASS  the reviewed hash and expected version are identical with the hint shown and hidden
+PASS  both sign-offs are created; stored payload_sha256 and reviewed_sha256 are identical and equal the reviewed hash
+PASS  the stored payload JSON is byte-identical and holds no grantee name or grantee field
+PASS  the stored payload carries the planned leave of 2026-09-17 (the business data the hint points at)
+PASS  the rendered PDFs are byte-identical (same SHA-256) and their text holds no grantee name  [b4df460c255da363 / b4df460c255da363]
+PASS  the ledger postings are identical  [finalization:day:2026-09-15:credit=60,finalization:day:2026-09-16:deficit_debit=-240,recheck-opening=300]
+PASS  the captured e-mail: same subject, recipients and PDF hash; the message holds no grantee name
+PASS  after the owner sign-off the hint window restarts: no change of the period is listed  [[]]
+PASS  a grantee change after the owner sign-off is listed alone (2026-09-19); the pre-period one is not  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-19"]}]]
+HINT PROBE PASSED
+exit 0

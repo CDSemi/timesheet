@@ -1,0 +1,93 @@
+// WP3-RECHECK-BC probe B6: regression of the note-line x signature-image matrix (F-Q1 (a), F-Q2) on
+// automatic submissions after the fix round. Matrix logic adapted from the published WP3-AUDIT-B probe 2
+// (section 7), run independently: real SQLite file, production job handlers, capture outbound, pdfjs.
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { mail, REPO_DIR, reporter, runJobsOnce, setup, syntheticSignaturePng } from './lib.mjs';
+
+const pdfjs = await import(pathToFileURL(join(REPO_DIR, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+const r = reporter('B6 note line x signature image matrix');
+const ctx = await setup('b6', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const people = {
+  m00: { note: false, text: undefined, image: false },
+  m10: { note: true, text: undefined, image: false },
+  m01: { note: false, text: undefined, image: true },
+  m11: { note: true, text: 'Filed on schedule', image: true },
+};
+const BODY = 'Hello,\nTimesheet of {EmployeeName} for {PeriodStart} to {PeriodEnd}.\nStatus: {SignOffStatus}.\nRevision {Revision}.';
+let n = 3;
+for (const [key, p] of Object.entries(people)) {
+  const cookie = await ctx.addUser(key, `probe-${key}`, `Probe ${key.toUpperCase()} Nguyễn`);
+  const body = { expected_seq: 0, to: [mail(`payroll-${key}`)], auto_submit: true, subject_template: 'Timesheet {PayrollDate} {EmployeeName} [{SignOffStatus}]', body_template: BODY };
+  if (p.note) body.auto_note_enabled = true;
+  if (p.text !== undefined) body.auto_note_text = p.text;
+  const s = await ctx.request('POST', '/api/settings/submission', { cookie, body });
+  const up = await ctx.request('POST', `/api/signatures?authorize_auto_image=${p.image}`, { cookie, body: syntheticSignaturePng(n++), type: 'image/png' });
+  r.check(s.status === 201 && up.status === 201, `${key}: settings and signature (authorize_auto_image=${p.image}) saved (${s.status}/${up.status})`);
+}
+r.check(db.prepare("SELECT count(*) FROM audit_events WHERE operation LIKE '%auto_image%'").pluck().get() === 2, 'exactly two audited auto-image authorizations (m01, m11)');
+clock.set('2026-10-01T00:00:00Z');
+const act = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic recheck activation' } });
+r.check(act.status === 200, `activation (${act.status})`);
+const handlers = ctx.handlers();
+for (const iso of ['2026-10-14T00:00:30Z', '2026-10-14T00:02:30Z', '2026-10-14T00:04:30Z', '2026-10-14T00:06:30Z']) {
+  clock.set(iso);
+  await runJobsOnce({ db, clock, handlers, owner: 'probe-b6' });
+}
+const INDICATOR = /automat|pending|unsigned|not signed|review|deadline|system/i;
+async function readPdf(bytes) {
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 });
+  const doc = await task.promise;
+  let text = '';
+  let images = 0;
+  for (let i = 1; i <= doc.numPages; i += 1) {
+    const page = await doc.getPage(i);
+    text += `${(await page.getTextContent()).items.map((x) => x.str).join('\n')}\n`;
+    images += (await page.getOperatorList()).fnArray.filter((f) => f === pdfjs.OPS.paintImageXObject || f === pdfjs.OPS.paintInlineImageXObject).length;
+  }
+  await task.destroy();
+  return { text, images };
+}
+const qp = (text) => {
+  const joined = text.replace(/=\r?\n/g, '');
+  const bytes = [];
+  for (let i = 0; i < joined.length; i += 1) {
+    if (joined[i] === '=' && /^[0-9A-F]{2}$/.test(joined.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(joined.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else bytes.push(...Buffer.from(joined[i], 'utf8'));
+  }
+  return Buffer.from(bytes).toString('utf8');
+};
+const header = (eml, name) => {
+  const head = eml.split(/\r?\n\r?\n/)[0].replace(/\r?\n[ \t]+/g, ' ');
+  const raw = new RegExp(`^${name}: (.*)$`, 'm').exec(head)?.[1] ?? '';
+  return raw.replace(/\?= =\?UTF-8\?/gi, '?==?UTF-8?').replace(/=\?UTF-8\?([QB])\?([^?]*)\?=/gi, (_, enc, data) => (enc.toUpperCase() === 'B' ? Buffer.from(data, 'base64').toString('utf8') : qp(data.replace(/_/g, ' '))));
+};
+for (const [key, p] of Object.entries(people)) {
+  const rev = db.prepare("SELECT id, review_state, actor_user_id, reviewed_sha256 FROM timesheet_revisions WHERE user_id = ? AND origin = 'deadline'").get(ctx.ids[key]);
+  r.check(rev !== undefined && rev.review_state === 'pending' && rev.actor_user_id === null && rev.reviewed_sha256 === null, `${key}: automatic revision, review pending, no actor, no reviewed hash`);
+  const attempt = rev && db.prepare("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'accepted' ORDER BY attempt_no LIMIT 1").get(rev.id);
+  const folder = attempt ? join(ctx.dataDir, 'mail-capture', attempt.id) : null;
+  if (folder === null || !existsSync(join(folder, 'attachment.pdf'))) {
+    r.check(false, `${key}: submission captured`);
+    continue;
+  }
+  const pdf = await readPdf(readFileSync(join(folder, 'attachment.pdf')));
+  const eml = readFileSync(join(folder, 'message.eml'), 'utf8');
+  const subject = header(eml, 'Subject');
+  const textBody = qp((eml.split('Content-Type: text/plain')[1] ?? '').split('\r\n--')[0]);
+  const noteText = p.text ?? 'Automatic submission';
+  const expected = p.note ? noteText : 'Submitted';
+  r.check(pdf.images === (p.image ? 1 : 0), `${key}: PDF signature image count ${pdf.images} (expected ${p.image ? 1 : 0})`);
+  r.check(p.note ? pdf.text.includes(noteText) : !pdf.text.includes('Automatic submission'), `${key}: note line ${p.note ? `"${noteText}" present` : 'absent'} on the PDF`);
+  const pdfInd = pdf.text.split('\n').filter((l) => INDICATOR.test(l) && !(p.note && l.includes(noteText)));
+  const mailInd = `${subject}\n${textBody}`.split(/\r?\n/).filter((l) => INDICATOR.test(l) && !(p.note && l.includes(noteText)));
+  r.check(pdfInd.length === 0 && mailInd.length === 0, `${key}: no automatic indicator beyond the user's note (PDF ${JSON.stringify(pdfInd)}, mail ${JSON.stringify(mailInd)})`);
+  r.check(subject.includes(`[${expected}]`) && textBody.includes(`Status: ${expected}.`), `${key}: {SignOffStatus} = "${expected}" in subject and body`);
+  r.check(pdf.text.includes(`Probe ${key.toUpperCase()} Nguyễn`), `${key}: Vietnamese name printed`);
+}
+db.close();
+r.done('B6');

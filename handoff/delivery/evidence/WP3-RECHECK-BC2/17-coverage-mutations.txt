@@ -1,0 +1,291 @@
+### Coverage mutations for WP3-RBC2-01. Each mutation applied with perl in a scratch clone, the suite run with <node24>/node.exe node_modules/vitest/vitest.mjs run tests/integration tests/client tests/domain, then git checkout -- <file> (status shown empty after each).
+
+### M4: the deadline scan ignores a null activation instant (treated as 1970-01-01T00:00:00Z) while summary.activated still reports false; assessPeriod's not_active guard removed
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..65f1fad 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -187,8 +187,7 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   const { user, period } = candidate;
+   const account = db.prepare<[string], { status: string; created_at: string }>('SELECT status, created_at FROM users WHERE id = ?').get(user.id);
+   if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+   if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+@@ -340,9 +339,9 @@ export function runDeadlineScan(db: Db, clock: Clock, options: ScanOptions = {})
+   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+   if (!Number.isSafeInteger(batchSize) || batchSize < 1) throw new Error('The batch size is a positive whole number');
+   const summary: ScanSummary = { activated: false, examined: 0, finalized: 0, overdueRecorded: 0, skipped: 0, failed: 0, remaining: false };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+   const candidates = listCandidates(db, clock, parseUtcInstant(activeFrom));
+   summary.examined = candidates.length;
+   let acted = 0;
+
+ RUN  v5.0.2 <scratch>/mut
+
+
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+   Start at  13:49:07
+   Duration  57.18s (tests 93%, import 4%, transform 2%)
+
+M4 exit=0
+restored
+
+### M4 on the pre-round-2 freeze 2f2520e (<scratch>/pre2, its own tests restored with git checkout -- tests): the same mutation
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index 908e4a1..ff62f4f 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -179,8 +179,7 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   const { user, period } = candidate;
+   const account = db.prepare<[string], { status: string; created_at: string }>('SELECT status, created_at FROM users WHERE id = ?').get(user.id);
+   if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+   if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+@@ -332,9 +331,9 @@ export function runDeadlineScan(db: Db, clock: Clock, options: ScanOptions = {})
+   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+   if (!Number.isSafeInteger(batchSize) || batchSize < 1) throw new Error('The batch size is a positive whole number');
+   const summary: ScanSummary = { activated: false, examined: 0, finalized: 0, overdueRecorded: 0, skipped: 0, failed: 0, remaining: false };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+   const candidates = listCandidates(db, clock, parseUtcInstant(activeFrom));
+   summary.examined = candidates.length;
+   let acted = 0;
+
+ RUN  v5.0.2 <scratch>/pre2
+
+ ❯ tests/integration/deadline.test.ts (35 tests | 1 failed) 27959ms
+   ❯ activation boundary (F-4) (5)
+     × finalizes nothing while the activation instant is null 691ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null
+AssertionError: expected { activated: false, examined: 2, …(5) } to match object { activated: false, …(2) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "activated": false,
+-   "finalized": 0,
++   "finalized": 2,
+    "overdueRecorded": 0,
+  }
+
+ ❯ tests/integration/deadline.test.ts:272:20
+    270|     };
+    271|     expect(getAutomationActivation(t.db)).toEqual({ activeFrom: null, …
+    272|     expect(scan()).toMatchObject({ activated: false, finalized: 0, ove…
+       |                    ^
+    273|     expect(count('SELECT count(*) FROM timesheet_revisions')).toBe(bef…
+    274|     expect(count('SELECT count(*) FROM timesheets')).toBe(before.times…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1406 passed (1407)
+   Start at  13:50:38
+   Duration  47.13s (tests 91%, import 6%, transform 3%)
+
+M4-pre2 exit=1
+restored
+
+### M5 in <scratch>/mut: the imported_unverified skip moved after the switch-on decision (an imported period of an account with auto-submit on would be finalized automatically)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..6830069 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -201,10 +201,10 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+     )
+     .get(user.id, user.calendarId, period.index);
+   if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
+   if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
+   if (governing.autoSubmit) return { kind: 'finalize' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
+   return { kind: 'overdue' };
+ }
+
+ RUN  v5.0.2 <scratch>/mut
+
+
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+   Start at  13:52:15
+   Duration  43.13s (tests 92%, import 5%, transform 2%)
+
+M5-mut exit=0
+restored
+### M5 in <scratch>/pre2: the imported_unverified skip moved after the switch-on decision (an imported period of an account with auto-submit on would be finalized automatically)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index 908e4a1..6a4248a 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -193,10 +193,10 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+     )
+     .get(user.id, user.calendarId, period.index);
+   if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
+   if (governing === null) return { kind: 'skip', reason: 'before_effective' };
+   if (governing.autoSubmit) return { kind: 'finalize' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
+   return { kind: 'overdue' };
+ }
+
+ RUN  v5.0.2 <scratch>/pre2
+
+ ❯ tests/integration/deadline.test.ts (35 tests | 1 failed) 25140ms
+   ❯ imported and already finalized periods (2)
+     × never auto-submits an imported_unverified timesheet and records no overdue state for it 652ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet and records no overdue state for it
+AssertionError: expected [ { …(16) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "actor_user_id": null,
++     "correction_reason": null,
++     "created_at": "2026-09-30T00:05:00Z",
++     "id": "e53635c2-63d0-4829-b848-f4d798c3256a",
++     "origin": "deadline",
++     "payload_json": "{\"auto_image\":{\"attachment_id\":null,\"authorized\":false},\"auto_note\":{\"enabled\":false,\"text\":\"Automatic submission\"},\"calendar\":{\"id\":\"e330dca8-e2b4-46a6-9ed6-fa281334692c\",\"version_ids\":[\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\"]},\"days\":[{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-14\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-15\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-16\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-17\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-18\"},{\"attendance_expected\":false,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Off\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"nonworking\",\"day_class_reason\":\"unscheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-19\"},{\"attendance_expected\":false,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Off\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"nonworking\",\"day_class_reason\":\"unscheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-20\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-21\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-22\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-23\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-24\"},{\"attendance_expected\":true,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Worked\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"normal\",\"day_class_reason\":\"scheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-25\"},{\"attendance_expected\":false,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Off\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"nonworking\",\"day_class_reason\":\"unscheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-26\"},{\"attendance_expected\":false,\"calculation\":{\"credited_minutes\":null,\"eligible_minutes\":null,\"nonworking_minutes\":null,\"normal_excess_minutes\":null,\"regular_minutes\":null},\"calculation_error\":null,\"calendar_version_id\":\"3fc66d54-f51b-4d94-a4dc-f406acb970b8\",\"category\":\"Off\",\"category_source\":\"default\",\"completeness\":\"no_records\",\"day_class\":\"nonworking\",\"day_class_reason\":\"unscheduled_weekday\",\"holiday_name\":null,\"leave_kind\":null,\"leave_minutes\":0,\"notes\":\"\",\"ot_leave\":{\"consumed_minutes\":0,\"kind_minutes\":0,\"mismatch\":false,\"reversed_minutes\":0},\"policy_version_id\":\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\",\"sessions\":[],\"wfh\":false,\"work_date\":\"2026-09-27\"}],\"deficit_proposals\":[],\"employee\":{\"name\":\"Synthetic Employee\"},\"ot_leave_reservations\":[],\"ot_proposals\":[],\"period\":{\"due_at_utc\":\"2026-09-30T00:00:00Z\",\"due_local_date\":\"2026-09-29\",\"due_local_time\":\"17:00\",\"is_exception\":false,\"nominal_payroll_date\":\"2026-10-02\",\"payroll_date\":\"2026-10-02\",\"period_end\":\"2026-09-27\",\"period_start\":\"2026-09-14\"},\"policy\":{\"version_ids\":[\"0349d419-e0f4-4bd2-89f7-4b6b1508775d\"]},\"recipients\":{\"body_html\":\"Hello,<br>\\n<br>\\nAttached is the timesheet of Synthetic Employee for 2026-09-14 to 2026-09-27 (payroll date 2026-10-02).<br>\\nStatus: Submitted.<br>\\nSubmission TS-20261002-d976559956, revision 1.\",\"body_text\":\"Hello,\\n\\nAttached is the timesheet of Synthetic Employee for 2026-09-14 to 2026-09-27 (payroll date 2026-10-02).\\nStatus: Submitted.\\nSubmission TS-20261002-d976559956, revision 1.\",\"cc\":[],\"subject\":\"Timesheet 2026-09-14 to 2026-09-27 - Synthetic Employee - Submitted\",\"template_version\":1,\"to\":[]},\"reporting_zone\":\"America/Los_Angeles\",\"schema\":\"timesheet-review\",\"schema_version\":2,\"show_ot_on_pdf\":true,\"signature\":null,\"submission\":{\"id\":\"TS-20261002-d976559956\",\"revision_no\":1,\"sign_off_status\":\"Submitted\"},\"timesheet\":{\"finalized_revision_no\":null},\"totals\":{\"credited_minutes\":0,\"pending_days\":0},\"unresolved_inputs\":[{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-14\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-15\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-16\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-17\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-18\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-21\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-22\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-23\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-24\"},{\"detail\":null,\"reason\":\"no_records\",\"work_date\":\"2026-09-25\"}]}",
++     "payload_sha256": "aba845a0f871776699bb510fc04caa2d5b6d967e530c2e3e1e1ca78c56703aa3",
++     "review_state": "pending",
++     "reviewed_sha256": null,
++     "revision_kind": "original",
++     "revision_no": 1,
++     "send_requested": 1,
++     "supersedes_revision_id": null,
++     "timesheet_id": "2cef4b0c-1b51-413c-aab4-32c81b55d1dc",
++     "timesheet_version": 1,
++     "user_id": "a98b57fe-02fc-4711-9597-5f1935f2ed3a",
++   },
++ ]
+
+ ❯ tests/integration/deadline.test.ts:682:29
+    680|     t.clock.set('2026-09-30T00:05:00Z');
+    681|     scan();
+    682|     expect(revisions(user)).toEqual([]);
+       |                             ^
+    683|     expect(jobKinds(user)).toEqual([]);
+    684|     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1406 passed (1407)
+   Start at  13:52:59
+   Duration  41.40s (tests 92%, import 5%, transform 2%)
+
+M5-pre2 exit=1
+restored
+
+### Guard sweep (bash <scratch>/mutsweep.sh; per run only the FAIL lines and counts are kept)
+### guard removed: line containing [reason: 'inactive_user'] in <scratch>/mut src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+exit=0
+restored
+### guard removed: line containing [reason: 'inactive_user'] in <scratch>/pre2 src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1407 passed (1407)
+exit=0
+restored
+### guard removed: line containing [reason: 'before_activation'] in <scratch>/mut src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+exit=0
+restored
+### guard removed: line containing [reason: 'before_activation'] in <scratch>/pre2 src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1407 passed (1407)
+exit=0
+restored
+### guard removed: line containing [reason: 'not_due'] in <scratch>/mut src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+exit=0
+restored
+### guard removed: line containing [reason: 'not_due'] in <scratch>/pre2 src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1407 passed (1407)
+exit=0
+restored
+### guard removed: line containing [reason: 'finalized'] in <scratch>/mut src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one
+ Test Files  1 failed | 61 passed (62)
+      Tests  2 failed | 1414 passed (1416)
+exit=1
+restored
+### guard removed: line containing [reason: 'finalized'] in <scratch>/pre2 src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ FAIL  tests/integration/deadline-race.test.ts > manual sign-off racing the deadline job (AC-07, WP3-T10) > two deadline scans at once: one revision, one ledger set and one send (10 rounds)
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one
+ Test Files  2 failed | 60 passed (62)
+      Tests  3 failed | 1404 passed (1407)
+exit=1
+restored
+### guard removed: line containing [reason: 'imported'] in <scratch>/mut src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ Test Files  62 passed (62)
+      Tests  1416 passed (1416)
+exit=0
+restored
+### guard removed: line containing [reason: 'imported'] in <scratch>/pre2 src/server/services/automation.ts
+ src/server/services/automation.ts | 1 -
+ 1 file changed, 1 deletion(-)
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet and records no overdue state for it
+ Test Files  1 failed | 61 passed (62)
+      Tests  1 failed | 1406 passed (1407)
+exit=1
+restored
+sweep-done

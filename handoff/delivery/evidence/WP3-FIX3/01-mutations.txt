@@ -1,0 +1,170 @@
+### M4 activation guard ignored (null treated as 1970)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..65f1fad 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -187,8 +187,7 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   const { user, period } = candidate;
+   const account = db.prepare<[string], { status: string; created_at: string }>('SELECT status, created_at FROM users WHERE id = ?').get(user.id);
+   if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
++  const activeFrom = getAutomationActivation(db).activeFrom ?? '1970-01-01T00:00:00Z';
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+   if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+@@ -340,9 +339,9 @@ export function runDeadlineScan(db: Db, clock: Clock, options: ScanOptions = {})
+   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+   if (!Number.isSafeInteger(batchSize) || batchSize < 1) throw new Error('The batch size is a positive whole number');
+   const summary: ScanSummary = { activated: false, examined: 0, finalized: 0, overdueRecorded: 0, skipped: 0, failed: 0, remaining: false };
+-  const { activeFrom } = getAutomationActivation(db);
+-  if (activeFrom === null) return summary;
+-  summary.activated = true;
++  const stored = getAutomationActivation(db).activeFrom;
++  summary.activated = stored !== null;
++  const activeFrom = stored ?? '1970-01-01T00:00:00Z';
+   const candidates = listCandidates(db, clock, parseUtcInstant(activeFrom));
+   summary.examined = candidates.length;
+   let acted = 0;
+     × finalizes nothing while the activation instant is null, even for an account whose auto-submit is on 286ms
+ FAIL  tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null, even for an account whose auto-submit is on
+AssertionError: expected { activated: false, examined: 2, …(5) } to match object { activated: false, …(2) }
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+M4 activation guard ignored (null treated as 1970) exit=1
+restored; src status: 0 changed
+### M5 imported skip moved after the switch-on decision
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..6830069 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -201,10 +201,10 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+     )
+     .get(user.id, user.calendarId, period.index);
+   if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
+   if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
+   if (governing.autoSubmit) return { kind: 'finalize' };
++  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
+   return { kind: 'overdue' };
+ }
+     × never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state 166ms
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+AssertionError: expected { activated: true, examined: 1, …(5) } to match object { Object (activated, finalized, ...) }
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+M5 imported skip moved after the switch-on decision exit=1
+restored; src status: 0 changed
+### M5b imported skip deleted
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..908d51b 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -201,7 +201,6 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+     )
+     .get(user.id, user.calendarId, period.index);
+   if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+-  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
+   if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
+   if (governing.autoSubmit) return { kind: 'finalize' };
+     × never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state 162ms
+     × does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline 158ms
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state
+AssertionError: expected { activated: true, examined: 1, …(5) } to match object { Object (activated, finalized, ...) }
+ FAIL  tests/integration/deadline.test.ts > imported and already finalized periods > does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline
+AssertionError: expected { activated: true, examined: 1, …(5) } to match object { finalized: +0, overdueRecorded: +0 }
+ Test Files  1 failed (1)
+      Tests  2 failed | 42 passed (44)
+M5b imported skip deleted exit=1
+restored; src status: 0 changed
+### G1 inactive_user skip deleted
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..4cab12e 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -186,7 +186,6 @@ function storedPeriodId(db: Db, calendarId: string, period: PayPeriod): string |
+ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   const { user, period } = candidate;
+   const account = db.prepare<[string], { status: string; created_at: string }>('SELECT status, created_at FROM users WHERE id = ?').get(user.id);
+-  if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+   const { activeFrom } = getAutomationActivation(db);
+   if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+     × skips the later periods of an account deactivated while the scan runs (inactive_user) 185ms
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips the later periods of an account deactivated while the scan runs (inactive_user)
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: 1 }
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+G1 inactive_user skip deleted exit=1
+restored; src status: 0 changed
+### G2 before_activation skip deleted
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..fa81a6e 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -189,7 +189,6 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   if (account?.status !== 'active') return { kind: 'skip', reason: 'inactive_user' };
+   const { activeFrom } = getAutomationActivation(db);
+   if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
+-  if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+   if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+   if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
+     × skips a period that falls before an activation instant moved forward while the scan runs (before_activation) 177ms
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period that falls before an activation instant moved forward while the scan runs (before_activation)
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: 1 }
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+G2 before_activation skip deleted exit=1
+restored; src status: 0 changed
+### G3 not_due skip deleted
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..9cb7bdd 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -192,7 +192,6 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+   if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
+-  if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
+   const timesheet = db
+     .prepare<[string, string, number], TimesheetState>(
+       `SELECT t.finalized_revision_no, t.imported_unverified
+     × skips a period whose deadline is still ahead of the clock when it is acted on (not_due) 188ms
+ FAIL  tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period whose deadline is still ahead of the clock when it is acted on (not_due)
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: 1 }
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 passed (44)
+G3 not_due skip deleted exit=1
+restored; src status: 0 changed
+### G4 finalized skip deleted (control)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..230ade6 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -200,7 +200,6 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+         WHERE t.user_id = ? AND p.calendar_id = ? AND p.period_index = ?`,
+     )
+     .get(user.id, user.calendarId, period.index);
+-  if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
+   if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
+   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
+   if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
+     × processes missed deadlines chronologically in bounded batches 176ms
+     × orders several owners by deadline first and never starves an older period behind a newer one 233ms
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches
+AssertionError: expected { activated: true, examined: 4, …(5) } to match object { finalized: 2, remaining: false }
+ FAIL  tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one
+AssertionError: expected { activated: true, examined: 4, …(5) } to match object { finalized: 1, remaining: false }
+ Test Files  1 failed (1)
+      Tests  2 failed | 42 passed (44)
+G4 finalized skip deleted (control) exit=1
+restored; src status: 0 changed
+### clean again
+ Test Files  1 passed (1)
+      Tests  44 passed (44)
+clean again exit=0
+restored; src status: 0 changed

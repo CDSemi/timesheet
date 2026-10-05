@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410",
+  "current_source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-FIX2-FREEZE",
+  "next_task_id": "WP3-FIX3-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -116,7 +116,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "2f2520e1ab80ff55938b70cd469f0bfe888e04a2",
+    "last_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
     "unpushed": []
   },
   "owner_decisions": [
@@ -204,6 +204,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "WP3-RECHECK-BC2 FIX REQUIRED (WP3-RBC2-01, Low, test coverage only; production behaviour correct); FIX_FINDINGS (package-final snapshots keep a separate verifier gate); validator rule that every WP3 PASS audit must match current_source_digest (a test change changes the digest)",
+      "decision": "Fix round 3, in sequence:\n1. WP3-FIX3 (worker, sonnet): test-only. Restore coverage of the F-4 scan guard and the imported-period exclusion in deadline.test.ts, prove it with the auditor's M4/M5/M5b mutations in a scratch clone, and add direct tests for the inactive_user, before_activation and not_due skips where test-only.\n2. WP3-FIX3-FREEZE (its own brief staged).\n3. WP3-REGATE3 (items 1-19 plus the round-3 checks).\n4. One fresh opus auditor rechecks WP3-RBC2-01 (WP3-RECHECK-BC3) and rebinds area A to the new digest (WP3-RECHECK-A attempt 3); the round-3 delta is test-only.\n5. WP3-ACCREC and WP3-ACCEPT."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP3-AUDIT-B FIX REQUIRED (B-01..03), WP3-AUDIT-C FIX REQUIRED (C-01..03), WP3-AUDIT-A NOT VERIFIED (procedural, no finding); FIX_FINDINGS; docs/08 one source writer; WP3-REQ:455-460 and 584-588",
@@ -7489,30 +7494,39 @@
       "package": "WP3",
       "kind": "audit",
       "status": "done",
-      "reviewed_commit": "2f2520e1ab80ff55938b70cd469f0bfe888e04a2",
+      "reviewed_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
       "depends_on": [
-        "WP3-REGATE"
+        "WP3-REGATE2"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
       "requested_effort": "xhigh",
       "model_override_reason": null,
       "routing": {
-        "size": "L",
+        "size": "M",
         "risk": "H",
         "novelty": false
       },
       "actual_model": "claude-opus-5-5",
       "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": "a6f4a505bd38d735e",
+      "agent_id": "a6dd03dfdd2f440e9",
+      "previous_agent_ids": [
+        "a6f4a505bd38d735e"
+      ],
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a6f4a505bd38d735e, self-reported claude-opus-5-5) on 2f2520e: PASS, no finding, reviewed digest eeb417d3 (WP3_RECHECK_A.md, evidence/WP3-RECHECK-A/). Own runs: verify 1407 tests; area files 393 passed; ledger 64 passed; race 20 x 4 processes twice; crash K1-K7 twice; HTTP 70; hint 7; PDF 34; migrations 26; SMTP secret 4. Risks R1-R7 stay risks. Superseded for binding only: fix round 2 changed the source (digest 0d513fca), and the validator requires every WP3 PASS to match the current digest, so attempt 2 is a fresh digest-bound area-A delta recheck on 2d72d35."
+      ],
       "owned_paths": [
         "handoff/delivery/WP3_RECHECK_A.md",
         "handoff/delivery/WP3_RECHECK_A.vi.md",
+        "handoff/delivery/WP3_RECHECK_A2.md",
+        "handoff/delivery/WP3_RECHECK_A2.vi.md",
         "handoff/delivery/tasks/WP3-RECHECK-A.md",
-        "handoff/delivery/evidence/WP3-RECHECK-A"
+        "handoff/delivery/evidence/WP3-RECHECK-A",
+        "handoff/delivery/evidence/WP3-RECHECK-A2"
       ],
       "prompt": "handoff/delivery/tasks/WP3-RECHECK-A.md",
       "report": "handoff/delivery/tasks/WP3-RECHECK-A.md",
@@ -7536,18 +7550,44 @@
         "handoff/delivery/evidence/WP3-RECHECK-A/17-secret.txt",
         "handoff/delivery/evidence/WP3-RECHECK-A/18-precommit.txt"
       ],
-      "baseline_commit": "2f2520e1ab80ff55938b70cd469f0bfe888e04a2",
-      "source_digest": "eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410",
-      "reviewed_digest": "eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410",
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "reviewed_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
       "author_agent_ids": [],
       "decision": "PASS",
       "findings": [
+        "Attempt 2 (fresh auditor, WP3_RECHECK_A2.md): no finding. HEAD 2d72d35 and digest 0d513fca recorded first and last, unchanged, equal to the regate digest.",
+        "Delta 2f2520e..2d72d35: 18 paths outside handoff/ (automation.ts, history.ts, sharedActs.ts, four client files, docs 05 and 10 EN/VI, seven tests); the area-A core and src/server/db unchanged.",
+        "Own runs: verify 0 (1416 tests, smoke 40); 27 area-A and round-2 files 584 passed; race 20 x 4 processes twice (manual 11 / deadline 9 / failed 0); new race of the first settings save against a deadline pass, 40 rounds, never a partial state; crash 14 PASS; HTTP 84 PASS; hint 12 PASS; PDF 34 PASS with Edge renders, PDF text identical to 2f2520e.",
+        "H-Q1 (a) differential 2f2520e vs 2d72d35: configured accounts byte-identical (revisions, payloads, hashes, sign-offs, ledger, lines, jobs, attempts, reminders); the mid-period scenario identical from the first save; never-configured accounts get no revision, ledger line, job, attempt or overdue record, and manual sign-off still works.",
+        "RBC-01 actor_is_system matches the null actor for every History event of four users and on upgraded databases, with no identity; RBC-02 hint lists the pre-period change, owner-only, hash/payload/PDF/ledger/e-mail identical with the hint shown or hidden. Migrations: none added; WP2-source v3 and 2f2520e v6 upgrade cleanly (30 PASS).",
+        "Risks: R3 closed by H-Q1 (a); R7 tracked as HANDOFF carry item 15; new Info R8 (never-configured accounts still get before-due reminders to their own address) and R9 (seed events without an actor show as automatic in History). Process deviations recorded: one interactive cmd.exe opened by accident (exited at once) and one '> /dev/null' redirect in the scratch clone; no 'nul' file in the project."
+      ],
+      "findings_attempt_1": [
         "No finding in area A. HEAD 2f2520e and digest eeb417d3 recorded as the first and last commands, unchanged, equal to the regate digest (script and ls-tree agree).",
         "Own runs: npm ci 0; verify 0 (62 files / 1407 tests, smoke 40, 0 deprecation lines); 20 area-A and fix-regression files 393 passed; ot-leave and ledger 64 passed (LG-01..LG-10); race 20 rounds x 4 OS processes twice (manual 10 / deadline 10 / failed 0; one revision, ledger set and send per round; no invented signed_at); crash K1-K7 14 PASS twice; HTTP probe 70 PASS; hint probe 7 PASS (shown vs hidden: same reviewed hash, payload, PDF bytes, ledger, e-mail); PDF probe 34 PASS; B-01 differential a1cd566 vs 2f2520e identical except pre-creation periods; migrations 26 PASS (WP2-source v3 and a1cd566 v6 upgrade, fresh 1-6); SMTP secret probe 4 PASS; precommit 38 files 0 findings.",
         "Fix-round effects on area A: C-01 hint owner-only (grantee and admin 404, no admin field), outside hash/payload/PDF; C-02 attribution exposes no other user's data; B-01 changes only pre-creation periods; no fix-round migration.",
         "Risks R1-R5 stay risks (R1 reproduced: a 69-character label is truncated, no rule requires completeness; R3 narrowed by B-01); new Info R6 (hint and payload read in separate transactions) and R7 (operation-code attribution, area C)."
       ],
-      "next_action": "None; WP3 fix round 2, then a digest-bound area-A delta recheck (attempt 2) on its freeze, because the validator requires every WP3 PASS to match the current digest."
+      "evidence_attempt_2": [
+        "handoff/delivery/WP3_RECHECK_A2.md",
+        "handoff/delivery/WP3_RECHECK_A2.vi.md",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/00-commands.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/02-verify.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/03-area-tests.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/10-race.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/10b-race-rerun.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/10c-hq1-race.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/11-crash.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/12-http.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/13-hint.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/14-pdf.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/15d-hq1-compare.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/16b-migrations.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/17-delta.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-A2/18-precommit.txt"
+      ],
+      "next_action": "None; WP3 acceptance after WP3-RECHECK-BC2."
     },
     {
       "id": "WP3-RECHECK-BC",
@@ -7689,10 +7729,229 @@
       "id": "WP3-FIX2-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-FIX2",
         "WP3-TMPMOVE"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af78db5acb44add73",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
+        "handoff/delivery/evidence/WP3-FIX2-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-FIX2-FREEZE/result.txt",
+        "handoff/delivery/evidence/WP3-FIX2-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "2f2520e1ab80ff55938b70cd469f0bfe888e04a2",
+      "branch": "main",
+      "commit_sha": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "pushed": true,
+      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1), the WP3 fix-round-2 freeze: digest 0d513fca matched the WP3-FIX2 worker's; 158 paths, parent 2f2520e, remote SHA identical; 6 images viewed (3 RECHECK-BC, 2 RECHECK-A, 1 REGATE), synthetic; scans: 0 .raw staged, 0 email and 0 Windows user name in docs/05 and docs/10; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0; no masking. Deviation from the brief's intent: the committer left this brief (tasks/WP3-FIX2-FREEZE.md) unstaged because the brief also said not to stage the appended results; it is committed with the next handoff commit. The committed board therefore names a prompt file that is not in 2d72d35; validators must run on the live working tree until then.",
+      "next_action": "None; WP3-REGATE2 on 2d72d35."
+    },
+    {
+      "id": "WP3-REGATE2",
+      "package": "WP3",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "depends_on": [
+        "WP3-FIX2-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "abb46237e2b7c9c61",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-REGATE2.md",
+        "handoff/delivery/evidence/WP3-REGATE2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-REGATE2.md",
+      "report": "handoff/delivery/tasks/WP3-REGATE2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-REGATE2/00-commands.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/head-before.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/01-npmci.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/02-verify.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/03-e2e.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/04-vitest-verbose.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/05-migrations.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/06-digest-export-blobs.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/06b-digest-lstree.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/07-orch.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/08-recovery.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/09-preflight.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/10-diff-fix.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/10-diff-wp2.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/11-races.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/13-precommit.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/digest-end.txt",
+        "handoff/delivery/evidence/WP3-REGATE2/head-after.txt"
+      ],
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Verifier-reported, items 1-19, no flake or rerun. Clean export of 2d72d35 under D:\\.claude-tmp\\timesheet; digest of record 0d513fca (export blobs; equals ls-tree and the committer's; identical at the end); HEAD unchanged. verify exit 0, 0 deprecation lines, 62 files / 1416 tests, smoke 40 PASS 0 FAIL; e2e 127 passed, 5 skipped, 0 failed; races 20/20 each (ot-leave, finalization, deadline, sharing revocation); fault injection passes (kill before/after sending, uncertain, restart sends nothing, one explicit resend, duplicate jobs once, lease refused); migrations fresh 1-6 and v3 to 6, integrity ok, FK empty, user_version 6, rerun applies nothing. Item 17: B-01..03 and C-01..03 still pass; RBC-01 (history.test.ts, sharingModel.test.ts), RBC-02 (two review-grantee-changes tests), sending branch (delivery.test.ts), H-Q1 (a) five setup-bound tests in deadline.test.ts. Item 18: 7 FIX2 source files, 7 test files, docs/05 and docs/10 EN/VI, handoff records only. Item 19: docs/05 states both bounds; docs/10 has the 2026-10-05 H-Q1 (a) entry; D-09 unchanged; EN/VI match. Validators in the project folder: orchestration 0, check_recovery 0, preflight 0. Known record gap: the committed board names tasks/WP3-FIX2-FREEZE.md, absent from 2d72d35 (not a source failure). Evidence precommit PASS.",
+      "next_action": "None; WP3-RECHECK-A attempt 2 and WP3-RECHECK-BC2 on 2d72d35."
+    },
+    {
+      "id": "WP3-RECHECK-BC2",
+      "package": "WP3",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "depends_on": [
+        "WP3-REGATE2"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3acc7ac65de1693a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP3_RECHECK_BC2.md",
+        "handoff/delivery/WP3_RECHECK_BC2.vi.md",
+        "handoff/delivery/tasks/WP3-RECHECK-BC2.md",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-RECHECK-BC2.md",
+      "report": "handoff/delivery/tasks/WP3-RECHECK-BC2.md",
+      "evidence": [
+        "handoff/delivery/WP3_RECHECK_BC2.md",
+        "handoff/delivery/WP3_RECHECK_BC2.vi.md",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/00-commands.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/02-verify.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/03-red-prefix.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/04-mutations.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/05-e2e.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/06-h1-setup-bound.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/07-b3-history-system.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/08-c1-authz-hint.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/09-c2-race.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/10-b2-send-recovery.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/11-b4-get-safety.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/12-b5-css-tokens.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/13-b6-note-image-matrix.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/14-b7-query-cost.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/15-u2-ui.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/16-race-rounds.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/17-coverage-mutations.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/18-h2-guards.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/19-identity-after.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/20-preflight.txt",
+        "handoff/delivery/evidence/WP3-RECHECK-BC2/21-privacy.txt"
+      ],
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "reviewed_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "Identity: HEAD 2d72d35 and digest 0d513fca (721 files) before and after, in the project, the clone and npm run digest.",
+        "WP3-RBC-01 fixed (actor_is_system true exactly when the stored actor is NULL for all 17 events; the OT credit reads automatic in the API and in Edge desktop/mobile; 2f2520e fails 10 checks). WP3-RBC-02 fixed (pre-period grantee changes listed; the owner's sign-off ends the window, a revoked share does not; 2f2520e fails 2). The sending-branch test is meaningful (each of three branch mutations fails only that test).",
+        "H-Q1 (a) behaves as decided (H1 probe 50/50; 2f2520e 25 FAIL): never-configured accounts get nothing across eight deadlines; a mid-period save does not reach earlier periods; the explicit overdue choice stays clamped by account creation; switching off unchanged; no screen or status contradicts it; no seed change; the e2e change is stricter.",
+        "Docs: docs/05 and docs/10 EN/VI in parity, D-09 unchanged; preflight 0 (67 pairs, 1358 links). Regressions: none in areas B and C (verify 1416 tests; e2e 127 passed 5 skipped; probes B2, B4, B5, B6, C1, C2, U2; 5 race rounds).",
+        "WP3-RBC2-01 (Low, test coverage): tests/integration/deadline.test.ts:271 and :786 still use never-configured accounts, so the F-4 scan guard (automation.ts:191, :343-344) and the imported-period exclusion (automation.ts:204) have no test; mutations M4, M5 and M5b pass all 1416 tests at the freeze and fail at 2f2520e; the off half of :786 saves the switch after its deadline and tests nothing. Production behaviour is correct (probe H2 10/10 and catches both mutants). Required: auto-submit on in both tests, save the off switch before the deadline, and show the three mutations fail again. Guard sweep (17-coverage-mutations.txt): removing the inactive_user, before_activation or not_due skip passes in both commits (pre-existing test gap).",
+        "Risks: the hint read has no time bound (35.5 ms at 50,000 rows); never-configured accounts get no overdue warning; the deadline scan re-checks their periods on every pass."
+      ],
+      "next_action": "None; WP3-FIX3 (test-only) addresses WP3-RBC2-01."
+    },
+    {
+      "id": "WP3-FIX3",
+      "package": "WP3",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP3-RECHECK-BC2",
+      "depends_on": [
+        "WP3-REGATE2"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab4bd2cde876c7ecb",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/integration",
+        "handoff/delivery/WP3_HANDOFF.md",
+        "handoff/delivery/WP3_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP3-FIX3.md",
+        "handoff/delivery/evidence/WP3-FIX3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-FIX3.md",
+      "report": "handoff/delivery/tasks/WP3-FIX3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-FIX3/00-commands.txt",
+        "handoff/delivery/evidence/WP3-FIX3/01-mutations.txt",
+        "handoff/delivery/evidence/WP3-FIX3/02-clean-run.txt",
+        "handoff/delivery/evidence/WP3-FIX3/03-verify.txt"
+      ],
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported, test-only: tests/integration/deadline.test.ts: the F-4 activation test uses configuredUser; the imported-period test split into an auto-on half (configuredUser) and an 'off' half that saves the switch off before the deadline and asserts no revision, job or overdue record; a new guard-sweep describe with 3 tests (inactive_user and before_activation via a temporary test trigger, not_due via a rewinding clock). Mutations in a scratch clone of 2d72d35 with only deadline.test.ts replaced: clean 44 pass; M4 1 fail; M5 1 fail; M5b 2 fail; each of the three deleted skips 1 fail; finalized control 2 fail; clean again 44 pass. All guards testable without a source change. verify exit 0, 62 files / 1420 tests (+4), smoke passed; evidence precommit exit 0; digest c31c300c (721 files). No e2e run (integration tests only). Deviations: none.",
+      "next_action": "None; WP3-FIX3-FREEZE."
+    },
+    {
+      "id": "WP3-FIX3-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-FIX3"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -7710,21 +7969,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
-        "handoff/delivery/evidence/WP3-FIX2-FREEZE"
+        "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+        "handoff/delivery/evidence/WP3-FIX3-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-FIX2-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-FIX3-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "2f2520e1ab80ff55938b70cd469f0bfe888e04a2",
+      "baseline_commit": "2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92",
+      "source_digest": "c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3 fix-round-2 set with the recheck reports and pending handoff records."
+      "next_action": "Commit and push the round-3 test fix with the pending recheck reports and handoff records, including this brief."
     },
     {
       "id": "WP3-TMPMOVE",

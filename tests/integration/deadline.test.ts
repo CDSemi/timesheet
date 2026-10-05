@@ -268,8 +268,10 @@ describe('a payroll exception that moves the deadline', () => {
 });
 
 describe('activation boundary (F-4)', () => {
-  it('finalizes nothing while the activation instant is null', () => {
-    const user = newUser();
+  it('finalizes nothing while the activation instant is null, even for an account whose auto-submit is on', () => {
+    // WP3-FIX3 (WP3-RBC2-01): the account saved auto-submit on (H-Q1 (a)), so only the F-4 activation guard holds it back.
+    const user = configuredUser();
+    expect(count('SELECT count(*) FROM submission_settings WHERE user_id = ?', user.id)).toBeGreaterThan(0);
     work(user, '2026-09-15', '09:00', '18:00');
     t.clock.set('2026-10-20T12:00:00Z');
     const before = {
@@ -783,23 +785,38 @@ describe('switch off: overdue state and notice record, nothing finalized', () =>
 });
 
 describe('imported and already finalized periods', () => {
-  it('never auto-submits an imported_unverified timesheet and records no overdue state for it', () => {
-    const user = newUser();
-    activate('2026-09-21T00:00:00Z');
-    const p1 = period(P1.payroll);
-    const payPeriodId = ensurePayPeriodRow(t.db, t.clock, t.calendarId, p1);
+  /** An imported_unverified timesheet row for the first period of the user (WP3-FIX3: kept as a helper for both halves). */
+  function importPeriodOne(user: SessionUser): void {
+    const payPeriodId = ensurePayPeriodRow(t.db, t.clock, t.calendarId, period(P1.payroll));
     t.db
       .prepare('INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at, imported_unverified) VALUES (?, ?, ?, 1, ?, ?, 1)')
       .run(randomUUID(), user.id, payPeriodId, EARLY, EARLY);
+  }
+
+  it('never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state', () => {
+    // WP3-FIX3 (WP3-RBC2-01): with auto-submit on only the imported-period exclusion holds the period back.
+    const user = configuredUser();
+    activate('2026-09-21T00:00:00Z');
+    importPeriodOne(user);
     t.clock.set('2026-09-30T00:05:00Z');
-    scan();
+    expect(scan()).toMatchObject({ activated: true, finalized: 0, overdueRecorded: 0 });
     expect(revisions(user)).toEqual([]);
     expect(jobKinds(user)).toEqual([]);
     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
-    // With the switch off the imported period is still not marked overdue.
-    t.clock.set('2026-09-30T01:00:00Z');
-    saveSettings(user, { autoSubmit: false });
-    scan();
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ? AND finalized_revision_no IS NOT NULL', user.id)).toBe(0);
+  });
+
+  it('does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline', () => {
+    const user = newUser();
+    const on = saveSettings(user); // on, effective at the account creation
+    activate('2026-09-21T00:00:00Z');
+    t.clock.set('2026-09-21T12:00:00Z');
+    saveSettings(user, { autoSubmit: false, expectedSeq: on.seq }); // off well before the deadline
+    importPeriodOne(user);
+    t.clock.set('2026-09-30T00:05:00Z');
+    expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 0 });
+    expect(revisions(user)).toEqual([]);
+    expect(jobKinds(user)).toEqual([]);
     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
   });
 
@@ -829,6 +846,42 @@ describe('imported and already finalized periods', () => {
     expect(await drain()).toBe(0);
     expect(count("SELECT count(*) FROM delivery_attempts WHERE user_id = ? AND state = 'accepted'", user.id)).toBe(1);
     expect(revisions(user)).toHaveLength(1);
+  });
+});
+
+describe('the scan re-assesses every period just before acting (guard sweep, WP3-FIX3)', () => {
+  // listCandidates already filters these cases, so each guard in assessPeriod is only reachable when the state changes
+  // after the candidate list was built; a trigger or a clock that moves after the first finalization does exactly that.
+  it('skips the later periods of an account deactivated while the scan runs (inactive_user)', () => {
+    const user = configuredUser();
+    activate('2026-09-21T00:00:00Z');
+    t.db.exec(`CREATE TEMP TRIGGER deactivate_after_first AFTER INSERT ON timesheet_revisions BEGIN UPDATE users SET status = 'deactivated' WHERE id = NEW.user_id; END`);
+    t.clock.set('2026-10-15T00:00:00Z');
+    expect(scan()).toMatchObject({ finalized: 1 });
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P1.payroll]);
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', user.id)).toBe(1);
+  });
+
+  it('skips a period that falls before an activation instant moved forward while the scan runs (before_activation)', () => {
+    const user = configuredUser();
+    activate('2026-09-21T00:00:00Z');
+    t.db.exec(`CREATE TEMP TRIGGER move_activation AFTER INSERT ON timesheet_revisions BEGIN UPDATE operations_state SET automation_active_from = '2026-10-14T00:00:01Z' WHERE id = 1; END`);
+    t.clock.set('2026-10-15T00:00:00Z');
+    expect(scan()).toMatchObject({ finalized: 1 });
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P1.payroll]);
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', user.id)).toBe(1);
+  });
+
+  it('skips a period whose deadline is still ahead of the clock when it is acted on (not_due)', () => {
+    const user = configuredUser();
+    activate('2026-09-21T00:00:00Z');
+    t.clock.set('2026-10-15T00:00:00Z');
+    // The candidate list is built at 2026-10-15; once the first revision exists the clock reads a time before P2 is due.
+    const wound = new Date('2026-10-01T00:00:00Z');
+    const clock = { now: () => (count('SELECT count(*) FROM timesheet_revisions') > 0 ? wound : t.clock.now()) };
+    expect(runDeadlineScan(t.db, clock)).toMatchObject({ finalized: 1 });
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P1.payroll]);
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', user.id)).toBe(1);
   });
 });
 

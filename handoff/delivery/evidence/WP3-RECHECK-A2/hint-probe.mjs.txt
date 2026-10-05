@@ -1,0 +1,141 @@
+// WP3-RECHECK-A2 hint probe (C-01 and the round-2 change WP3-RBC-02). The review hint stays outside the
+// snapshot, its hash, the stored revision, the PDF and the e-mail, also for a grantee change made BEFORE
+// the period started. Two worlds with byte-identical business data:
+//   S (shown)  E2, holding an edit share of E1 since 2026-09-05, records planned leave on E1's day
+//              2026-09-17 on 2026-09-10 (before the 2026-09-14 period start), a change of 2026-09-18 that
+//              E1 later takes over, a change of 2026-09-30 (next period), and a session on 2026-09-16 inside
+//              the period; all through the production commands with actor E2 / subject E1 (what /api/shared does);
+//   H (hidden) a file copy of S in which only the audit actor of E2's events is rewritten to E1
+//              (probe-only: the append-only audit trigger is dropped in the COPY), so the hint is empty.
+// Both are reviewed, signed with the same fixed clock and finished by the same production run-jobs passes;
+// the hashes, stored payloads, PDFs and the captured e-mail must be identical. Run with AUDIT_REPO set to
+// the 2f2520e clone to see the round-1 hint (no pre-period change) on the same data.
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { fixedClock, m, MAIL_FROM, PAYROLL, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+import { readPdf } from './pdftext.mjs';
+
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/hint`;
+const EXPECT_PRE_PERIOD = process.env.EXPECT_PRE_PERIOD !== '0';
+const T0 = '2026-09-05T12:00:00Z';
+const PRE = '2026-09-10T12:00:00Z';
+const NOW = '2026-09-30T00:30:00Z';
+const SIGN = '2026-09-30T00:30:05Z';
+let failures = 0;
+const check = (label, condition, detail = '') => {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
+  if (!condition) failures += 1;
+};
+console.log(`INFO  build ${REPO.split(/[\\/]/).pop()}; expect the pre-period change in the hint: ${EXPECT_PRE_PERIOD}`);
+
+const S = join(BASE, 'shown');
+const H = join(BASE, 'hidden');
+if (existsSync(join(S, 't.db')) || existsSync(join(H, 't.db'))) throw new Error('Refusing to reuse a run folder');
+mkdirSync(S, { recursive: true });
+mkdirSync(H, { recursive: true });
+
+let e1Id;
+let e2Id;
+{
+  const db = m.db.openDatabase(join(S, 't.db'));
+  m.mig.migrate(db);
+  const c0 = fixedClock(T0);
+  const seed = await m.seed.seedSynthetic(db, c0, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+  e1Id = seed.users.find((u) => u.role === 'employee').id;
+  const adminId = seed.users.find((u) => u.role === 'admin').id;
+  e2Id = await users.createUser(db, c0, { email: '<email>', displayName: 'Example Employee Two', role: 'employee', password: randomBytes(18).toString('base64url'), calendarId: seed.calendarId }, adminId);
+  const e1 = sessionUser(db, e1Id);
+  const e2 = sessionUser(db, e2Id);
+  policy(db, T0, e1Id, seed.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: c0 }, { userId: e1Id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c0, new m.files.FileStore(join(S, 'private-data')), e1Id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, c0, e1Id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: false });
+  m.shares.grantShare(db, c0, { ownerUserId: e1Id, granteeEmail: '<email>', items: { timesheets: 'edit', otRead: false, pdfDownload: false } });
+  const pre = fixedClock(PRE);
+  // Before the period starts (2026-09-14 in the reporting zone): planned leave on 09-17, a change of 09-18, a day of the next period.
+  m.cmds.upsertDayEntry({ db, clock: pre, user: e1, actor: e2 }, '2026-09-17', { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: 'Synthetic planned leave' });
+  m.cmds.upsertDayEntry({ db, clock: pre, user: e1, actor: e2 }, '2026-09-18', { category: 'Worked', leave_minutes: 0, wfh: true, notes: 'Synthetic change later taken over by the owner' });
+  m.cmds.upsertDayEntry({ db, clock: pre, user: e1, actor: e2 }, '2026-09-30', { category: 'Vacation', leave_minutes: 480, leave_kind: 'vacation', wfh: false, notes: 'Synthetic next-period leave' });
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-20T12:00:00Z'), user: e1 }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-21T12:00:00Z'), user: e1, actor: e2 }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-22T12:00:00Z'), user: e1 }, '2026-09-18', session('2026-09-18', '08:00', '16:00'));
+  db.close();
+}
+cpSync(join(S, 't.db'), join(H, 't.db'));
+cpSync(join(S, 'private-data'), join(H, 'private-data'), { recursive: true });
+{
+  const raw = new Database(join(H, 't.db'));
+  const triggers = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'audit_events'").pluck().all();
+  for (const name of triggers) raw.exec(`DROP TRIGGER "${name}"`);
+  const changed = raw.prepare('UPDATE audit_events SET actor_user_id = owner_user_id WHERE actor_user_id = ? AND owner_user_id = ?').run(e2Id, e1Id).changes;
+  raw.close();
+  console.log(`INFO  world H: dropped ${triggers.length} audit trigger(s) in the copy, rewrote the actor of ${changed} grantee audit event(s)`);
+}
+
+const results = {};
+for (const [name, dir] of [['shown', S], ['hidden', H]]) {
+  const db = m.db.openDatabase(join(dir, 't.db'));
+  const e1 = sessionUser(db, e1Id);
+  const hint = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-02');
+  const hintNext = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-16');
+  const auditBefore = db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+  const review = m.review.buildReviewPayload(db, fixedClock(NOW), e1, '2026-10-02');
+  const auditAfterRead = db.prepare('SELECT count(*) FROM audit_events').pluck().get();
+  const signed = m.fin.signOffTimesheet({ db, clock: fixedClock(SIGN), user: e1 }, '2026-10-02', {
+    expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Synthetic Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true,
+  });
+  const hintAfterSign = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-02');
+  db.close();
+  const env = { DATABASE_PATH: join(dir, 't.db'), DATA_DIR: join(dir, 'private-data'), MAIL_FROM };
+  const passes = [];
+  for (const instant of ['2026-09-30T00:40:00Z', '2026-09-30T00:50:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], env)).out.split('\n').pop());
+  const check2 = m.db.openDatabase(join(dir, 't.db'));
+  const rev = check2.prepare('SELECT id, payload_json, payload_sha256, reviewed_sha256 FROM timesheet_revisions WHERE user_id = ?').get(e1Id);
+  const pdfKey = check2.prepare("SELECT a.storage_key FROM attachments a JOIN revision_files f ON f.attachment_id = a.id WHERE f.revision_id = ? AND f.kind = 'pdf'").pluck().get(rev.id);
+  const ledger = check2.prepare("SELECT source_key || '=' || delta_minutes FROM ot_ledger WHERE user_id = ? ORDER BY source_key").pluck().all(e1Id);
+  check2.close();
+  const pdf = new m.files.FileStore(join(dir, 'private-data')).read(pdfKey);
+  const captureDir = join(dir, 'private-data', 'mail-capture');
+  const folder = readdirSync(captureDir).find((n) => !n.startsWith('.tmp'));
+  const eml = readFileSync(join(captureDir, folder, 'message.eml'), 'utf8');
+  const meta = JSON.parse(readFileSync(join(captureDir, folder, 'metadata.json'), 'utf8'));
+  results[name] = { hint, hintNext, hintAfterSign, review, signed, rev, pdf, pdfSha: createHash('sha256').update(pdf).digest('hex'), pdfText: (await readPdf(pdf)).text, ledger, eml, meta, passes, readWrites: auditAfterRead - auditBefore };
+  console.log(`INFO  ${name}: hint=${JSON.stringify(hint)} next-period hint=${JSON.stringify(hintNext)} hash=${review.payloadHash.slice(0, 16)} signed=${signed.status} pdf_sha256=${results[name].pdfSha.slice(0, 16)} pdf_bytes=${pdf.length} ledger=${ledger.join(',')} passes=${passes.join(' | ')}`);
+}
+const s = results.shown;
+const h = results.hidden;
+const expected = EXPECT_PRE_PERIOD ? '["2026-09-16","2026-09-17"]' : '["2026-09-16"]';
+check(`world S shows the hint (E2; ${expected}; 2026-09-18 taken over by the owner; 2026-09-30 is another period); world H shows none`,
+  s.hint.length === 1 && s.hint[0].display_name === 'Example Employee Two' && JSON.stringify(s.hint[0].work_dates) === expected && s.hint[0].days === JSON.parse(expected).length && h.hint.length === 0,
+  JSON.stringify(s.hint));
+check('the next period (payroll 2026-10-16) lists the pre-period change of 2026-09-30 in S only when the round-2 rule applies', EXPECT_PRE_PERIOD
+  ? s.hintNext.length === 1 && JSON.stringify(s.hintNext[0].work_dates) === '["2026-09-30"]' && h.hintNext.length === 0
+  : s.hintNext.length === 0 && h.hintNext.length === 0, JSON.stringify(s.hintNext));
+check('reading the review writes nothing (audit count unchanged by buildReviewPayload)', s.readWrites === 0 && h.readWrites === 0);
+check('the reviewed hash and expected version are identical with the hint shown and hidden', s.review.payloadHash === h.review.payloadHash && s.review.expectedVersion === h.review.expectedVersion);
+check('both sign-offs are created; stored payload_sha256 and reviewed_sha256 are identical and equal the reviewed hash',
+  s.signed.status === 'created' && h.signed.status === 'created' && s.rev.payload_sha256 === h.rev.payload_sha256 && s.rev.reviewed_sha256 === h.rev.reviewed_sha256 && s.rev.reviewed_sha256 === s.review.payloadHash);
+check('the stored payload JSON is byte-identical and holds no grantee name or grantee field', s.rev.payload_json === h.rev.payload_json && !s.rev.payload_json.includes('Example Employee Two') && !s.rev.payload_json.includes('grantee'));
+check('the stored payload carries the planned leave of 2026-09-17 (the business data the hint points at)', /2026-09-17/.test(s.rev.payload_json) && /Vacation/.test(s.rev.payload_json));
+check('the rendered PDFs are byte-identical (same SHA-256) and their text holds no grantee name', s.pdfSha === h.pdfSha && s.pdfText === h.pdfText && !s.pdfText.includes('Example Employee Two'), `${s.pdfSha.slice(0, 16)} / ${h.pdfSha.slice(0, 16)}`);
+check('the ledger postings are identical', JSON.stringify(s.ledger) === JSON.stringify(h.ledger), s.ledger.join(','));
+check('the captured e-mail: same subject, recipients and PDF hash; the message holds no grantee name',
+  s.meta.subject === h.meta.subject && JSON.stringify(s.meta.envelope) === JSON.stringify(h.meta.envelope) && s.meta.pdf_sha256 === h.meta.pdf_sha256 && !s.eml.includes('Example Employee Two') && !h.eml.includes('Example Employee Two'));
+check('after the owner sign-off the hint window restarts: no change of the period is listed', s.hintAfterSign.length === 0 && h.hintAfterSign.length === 0, JSON.stringify(s.hintAfterSign));
+// After the owner's finalization only later grantee changes count (the round-2 rule keeps this).
+{
+  const db = m.db.openDatabase(join(S, 't.db'));
+  const e1 = sessionUser(db, e1Id);
+  const e2 = sessionUser(db, e2Id);
+  m.cmds.upsertDayEntry({ db, clock: fixedClock('2026-10-01T12:00:00Z'), user: e1, actor: e2 }, '2026-09-19', { category: 'Worked', leave_minutes: 0, wfh: true, notes: 'Synthetic change after the sign-off', reason: 'Synthetic change after the sign-off' });
+  const later = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-02');
+  db.close();
+  check('a grantee change after the owner sign-off is listed alone (2026-09-19); the pre-period one is not', later.length === 1 && JSON.stringify(later[0].work_dates) === '["2026-09-19"]', JSON.stringify(later));
+}
+console.log(failures === 0 ? 'HINT PROBE PASSED' : `HINT PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

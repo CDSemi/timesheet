@@ -1,0 +1,59 @@
+// WP3-RECHECK-BC2 probe B7: query plans and cost of the round-2 queries. (1) EXPLAIN QUERY PLAN of the H-Q1 reads
+// (governing switch, saved-settings existence) and of the hint read without a time bound (WP3-RBC-02). (2) Cost of
+// the unbounded hint read: a synthetic owner with N old day-entry audit rows (one per day over many years, written
+// directly into a probe database) and no owner finalization of the current period; the owner Review is timed.
+// Run against PROBE_REPO. Usage: node b7-query-cost.mjs [rows]
+import { randomUUID } from 'node:crypto';
+import { REPO, reporter, setup } from './lib.mjs';
+
+const N = Number(process.argv[2] ?? 50000);
+const { sharedActCondition } = await import(new URL('src/server/services/sharedActs.ts', REPO).href);
+const r = reporter('B7 query plans and the cost of the hint read');
+const ctx = await setup('b7', '2026-09-29T20:00:00Z');
+const { db } = ctx;
+const plan = (label, sql, ...args) => r.info(`${label}\n    ${db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map((row) => row.detail).join('\n    ')}`);
+plan('governingSwitch', 'SELECT auto_submit FROM submission_settings WHERE user_id = ? AND auto_submit_effective_from <= ? ORDER BY seq DESC LIMIT 1', 'x', '2026-10-14T00:00:00Z');
+plan('hasSavedSettings', 'SELECT 1 AS one FROM submission_settings WHERE user_id = ? LIMIT 1', 'x');
+plan(
+  'hint rows (round 2: rowid > ?, no time bound without a finalization)',
+  `SELECT json_extract(COALESCE(a.after_json, a.before_json), '$.work_date') AS work_date, CASE WHEN ${sharedActCondition('a')} THEN a.actor_user_id END AS s
+     FROM audit_events a WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND a.rowid > ? ORDER BY a.rowid`,
+  'x',
+  0,
+);
+
+r.section(`Cost: ${N} synthetic day-entry audit rows of the owner before the current period, no owner finalization`);
+const grantee = await ctx.addUser('grantee', 'probe-grantee', 'Synthetic Grantee');
+const share = await ctx.request('POST', '/api/shares', { cookie: ctx.cookies.owner, body: { grantee_email: ctx.emails.grantee, items: { timesheets: 'edit', ot_read: false, pdf_download: false } } });
+r.check(share.status === 201, `owner shares with the grantee (${share.status})`);
+const insert = db.prepare(
+  `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json)
+   VALUES (?, ?, ?, ?, 'day_entry.update', 'day_entry', ?, NULL, NULL, ?)`,
+);
+const start = Date.UTC(2010, 0, 1);
+db.transaction(() => {
+  for (let i = 0; i < N; i += 1) {
+    const day = new Date(start + (i % 6000) * 86400000).toISOString().slice(0, 10);
+    insert.run(randomUUID(), new Date(start + i * 3600000).toISOString().replace('.000Z', 'Z'), ctx.ids.owner, ctx.ids.owner, randomUUID(), JSON.stringify({ work_date: day, category: 'Worked' }));
+  }
+})();
+const edit = await ctx.request('PUT', `/api/shared/${ctx.ids.owner}/days/2026-09-30`, { cookie: grantee, body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: 'grantee' } });
+r.check(edit.status === 200, `the grantee edits one day of the current period (${edit.status})`);
+const times = [];
+let hint = null;
+for (let i = 0; i < 7; i += 1) {
+  const t0 = process.hrtime.bigint();
+  const review = await ctx.request('GET', '/api/timesheets/2026-10-16/review', { cookie: ctx.cookies.owner });
+  times.push(Number(process.hrtime.bigint() - t0) / 1e6);
+  hint = review.body.grantee_changes;
+}
+times.sort((a, b) => a - b);
+r.info(`owner Review GET with the hint: median ${times[3].toFixed(1)} ms, max ${times[6].toFixed(1)} ms over 7 requests; hint ${JSON.stringify(hint)}`);
+r.check(JSON.stringify(hint) === JSON.stringify([{ display_name: 'Synthetic Grantee', days: 1, work_dates: ['2026-09-30'] }]), 'the hint is still exact with the large history');
+const scanned = db
+  .prepare("SELECT count(*) FROM audit_events a WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND a.rowid > 0")
+  .pluck()
+  .get(ctx.ids.owner);
+r.info(`rows the round-2 hint read visits for this owner (no finalization): ${scanned}`);
+db.close();
+r.done('B7');

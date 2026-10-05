@@ -1,0 +1,79 @@
+// WP3-RECHECK-BC2 probe H2: the two deadline-scan guards whose unit tests became vacuous with the H-Q1 test updates
+// (WP3-RBC2-01), exercised with accounts that saved auto-submit on, so that only the guard can stop the scan:
+// (a) F-4: nothing is automated while the activation instant is null, including a scan job that was queued while
+//     automation was active and runs after the administrator cleared the activation;
+// (b) docs/05 "imported history is excluded": an imported_unverified period of an auto-on account is never
+//     finalized automatically and gets no overdue record.
+// Real SQLite file, production runner handlers, capture outbound. Run against PROBE_REPO.
+import { randomUUID } from 'node:crypto';
+import { LA, la, REPO, reporter, runJobsOnce, setup } from './lib.mjs';
+
+const mod = (p) => import(new URL(p, REPO).href);
+const { runDeadlineScan } = await mod('src/server/services/automation.ts');
+const { enqueueDeadlineScan } = await mod('src/server/jobs/deadlineJob.ts');
+const { getCalendar, listPayrollExceptions } = await mod('src/server/services/calendars.ts');
+const { payPeriodForPayrollDate } = await mod('src/domain/periods.ts');
+const { ensurePayPeriodRow } = await mod('src/server/services/periods.ts');
+const r = reporter('H2 activation and imported-period guards with configured accounts');
+const ctx = await setup('h2', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const handlers = ctx.handlers();
+const autoRevs = (id) =>
+  db
+    .prepare(
+      `SELECT p.payroll_date FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+        WHERE r.user_id = ? AND r.origin = 'deadline' ORDER BY p.payroll_date`,
+    )
+    .pluck()
+    .all(id);
+const overdue = (id) => db.prepare("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.overdue'").pluck().get(id);
+const pass = async (iso) => {
+  clock.set(iso);
+  return runJobsOnce({ db, clock, handlers, owner: 'probe-h2' });
+};
+for (const [who, local, name] of [['conf', 'probe-conf', 'Probe Configured'], ['imp', 'probe-imp', 'Probe Imported']]) {
+  const cookie = await ctx.addUser(who, local, name);
+  const s = await ctx.request('POST', '/api/settings/submission', { cookie, body: { expected_seq: 0, to: [ctx.emails[who]], auto_submit: true } });
+  r.check(s.status === 201, `${who}: saves auto-submit on (${s.status})`);
+}
+const s1 = await ctx.request('POST', '/api/days/2026-09-28/sessions', {
+  cookie: ctx.cookies.conf,
+  body: { start: la('2026-09-28T09:00'), end: la('2026-09-28T17:00'), input_zone: LA, breaks: [], breaks_confirmed: true },
+});
+r.check(s1.status === 201, `conf: a working day (${s1.status})`);
+
+r.section('(a) F-4 with a configured account: no activation, then a queued scan job after the activation was cleared');
+for (const iso of ['2026-09-30T00:00:30Z', '2026-10-14T00:00:30Z']) await pass(iso);
+const direct = runDeadlineScan(db, clock);
+r.check(autoRevs(ctx.ids.conf).length === 0 && overdue(ctx.ids.conf) === 0 && direct.activated === false && direct.finalized === 0, `no activation: two deadlines pass and a direct scan reports ${JSON.stringify(direct)}; nothing automated for the auto-on account`);
+r.check(db.prepare("SELECT count(*) FROM jobs WHERE kind = 'deadline_scan'").pluck().get() === 0, 'no scan job is queued while the activation instant is null');
+clock.set('2026-10-27T23:59:00Z');
+const on = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-27T23:59:00Z', reason: 'synthetic activation' } });
+clock.set('2026-10-28T00:00:30Z');
+const queued = enqueueDeadlineScan(db, clock);
+const off = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: null, reason: 'synthetic clear before the queued scan runs' } });
+r.check(on.status === 200 && queued?.created === true && off.status === 200, `activation recorded (${on.status}), one scan job queued for the 2026-10-28 deadline, activation cleared (${off.status})`);
+const ran = await runJobsOnce({ db, clock, handlers, owner: 'probe-h2' });
+r.info(`runner pass after the clear: ${JSON.stringify(ran)}; scan job state ${db.prepare('SELECT state FROM jobs WHERE id = ?').pluck().get(queued?.job.id)}`);
+r.check(autoRevs(ctx.ids.conf).length === 0 && overdue(ctx.ids.conf) === 0, `the queued scan finalizes nothing once the activation was cleared (revisions ${JSON.stringify(autoRevs(ctx.ids.conf))})`);
+
+r.section('(b) An imported_unverified period of an auto-on account');
+clock.set('2026-10-28T00:05:00Z');
+const again = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-28T00:05:00Z', reason: 'synthetic re-activation' } });
+r.check(again.status === 200, `re-activated at 2026-10-28T00:05:00Z (${again.status})`);
+const calendarId = db.prepare('SELECT calendar_id FROM users WHERE id = ?').pluck().get(ctx.ids.imp);
+const { schedule } = getCalendar(db, calendarId);
+const p1113 = payPeriodForPayrollDate(schedule, '2026-11-13', listPayrollExceptions(db, calendarId));
+const payPeriodId = ensurePayPeriodRow(db, clock, calendarId, p1113);
+db.prepare('INSERT INTO timesheets (id, user_id, pay_period_id, version, created_at, updated_at, imported_unverified) VALUES (?, ?, ?, 1, ?, ?, 1)').run(
+  randomUUID(),
+  ctx.ids.imp,
+  payPeriodId,
+  clock.iso(),
+  clock.iso(),
+);
+for (const iso of ['2026-11-11T01:00:30Z', '2026-11-11T01:02:30Z']) await pass(iso);
+r.check(JSON.stringify(autoRevs(ctx.ids.conf)) === JSON.stringify(['2026-11-13']), `control: the configured account is automated at the 2026-11-11 deadline (${JSON.stringify(autoRevs(ctx.ids.conf))})`);
+r.check(autoRevs(ctx.ids.imp).length === 0 && overdue(ctx.ids.imp) === 0, `the imported period of the auto-on account is not finalized and gets no overdue record (revisions ${JSON.stringify(autoRevs(ctx.ids.imp))}, overdue ${overdue(ctx.ids.imp)})`);
+db.close();
+r.done('H2');

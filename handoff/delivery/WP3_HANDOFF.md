@@ -221,3 +221,12 @@ Tests, seed fixtures and e2e scenarios changed because of H-Q1:
 Commands and results (`evidence/WP3-FIX2/00-commands.txt`): preflight exit 0; after the last source edit `npm run test:e2e` exit 0 (127 passed, 5 skipped); `npm run verify` exit 0 (62 files / 1416 tests, SMOKE PASSED with 40 `PASS` lines, no deprecation line); `npm run digest` exit 0: `0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92` (721 files, `handoff/` excluded).
 
 Remaining: nothing new. Next action: freeze, gate, then a fresh B/C recheck at the new digest.
+
+## Fix round 3 — WP3-FIX3 (finding WP3-RBC2-01, test-only)
+
+Evidence: `evidence/WP3-FIX3/`. Only `tests/integration/deadline.test.ts` changed; no file under `src/`, `docs/`, `scripts/` or configuration.
+
+- WP3-RBC2-01 fixed. The F-4 activation test and the imported-period test now use accounts that saved auto-submit on (`configuredUser`), so each again exercises the guard it was written for. The imported test gained an "off" half whose switch is saved off before the deadline; it asserts no revision, no job and no overdue record.
+- Guard sweep (a gap that already existed at `2f2520e`): three direct tests in a new `describe` re-assess a period after the state changed during the scan (a temporary trigger deactivates the account or moves the activation instant after the first revision; a clock that goes back covers `not_due`). Removing the `inactive_user`, `before_activation` or `not_due` skip now fails a test.
+- Mutation proof in a scratch clone of `2d72d35` (the suite file copied in; the repository source was never mutated): clean 44/44 pass; M4, M5, M5b, and the removal of each of the three guards fail exactly the intended tests; removing `finalized` (control) still fails.
+- Checks: `npm run verify` and `npm run digest` as the last commands (results in the brief). No e2e run: only an integration test file changed.

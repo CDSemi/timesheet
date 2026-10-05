@@ -1,0 +1,657 @@
+### Mutation checks in <scratch>/mut (2d72d35); each mutation applied with sed/perl, the test file run with <node24>/node.exe node_modules/vitest/vitest.mjs run <file>, then git checkout -- <file> (restored; git status shown empty after each)
+### M1: remove the handler's own 'sending' branch (sendJob.ts:227-231)
+ src/server/jobs/sendJob.ts | 5 -----
+ 1 file changed, 5 deletions(-)
+diff --git a/src/server/jobs/sendJob.ts b/src/server/jobs/sendJob.ts
+index 5e1ff53..ba538b7 100644
+--- a/src/server/jobs/sendJob.ts
++++ b/src/server/jobs/sendJob.ts
+@@ -224,11 +224,6 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
+     if (revision === undefined) throw new JobError('revision_not_found', { permanent: true });
+     const snapshot = loadSnapshot(revision);
+
+-    const latest = latestAttempt(db, job, userId);
+-    if (latest?.state === 'sending') {
+-      // This runner holds the lease now, so the runner that committed `sending` is gone.
+-      markUncertain(db, clock, latest.id, UNCERTAIN_LEASE_EXPIRED);
+-      throw new JobError('delivery_uncertain', { permanent: true });
+     }
+     if (latest?.state === 'uncertain') throw new JobError('delivery_uncertain', { permanent: true });
+     if (latest?.state === 'failed_permanent') throw new JobError('delivery_failed_permanent', { permanent: true });
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/delivery.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts [ tests/integration/delivery.test.ts ]
+Error: Transform failed with 3 errors:
+
+[PARSE_ERROR] `await` is only allowed within async functions and at the top levels of modules
+     ╭─[ src/server/jobs/sendJob.ts:251:17 ]
+     │
+ 251 │       message = await buildMessage({
+     │                 ──┬──
+     │                   ╰────
+     │
+     │ Help: Either remove this `await` or add the `async` keyword to the enclosing function
+─────╯
+
+[PARSE_ERROR] `await` is only allowed within async functions and at the top levels of modules
+     ╭─[ src/server/jobs/sendJob.ts:269:17 ]
+     │
+ 269 │       outcome = await outbound.send(message, { attemptId: attempt.id });
+     │                 ──┬──
+     │                   ╰────
+     │
+     │ Help: Either remove this `await` or add the `async` keyword to the enclosing function
+─────╯
+
+[PARSE_ERROR] Unexpected token
+     ╭─[ src/server/jobs/sendJob.ts:277:1 ]
+     │
+ 277 │ }
+     │ ┬
+     │ ╰──
+─────╯
+
+  Plugin: vite:oxc
+  File: <scratch>/mut/src/server/jobs/sendJob.ts
+ ❯ transformWithOxc node_modules/vite/dist/node/chunks/node.js:7551:19
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:7623:26
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8515:51
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:19998:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  13:28:17
+   Duration  2.83s (worker 97%, environment 3%)
+
+M1 exit=1
+restored
+### M2: keep the branch but drop markUncertain (sendJob.ts:229)
+diff --git a/src/server/jobs/sendJob.ts b/src/server/jobs/sendJob.ts
+index 5e1ff53..4a32f37 100644
+--- a/src/server/jobs/sendJob.ts
++++ b/src/server/jobs/sendJob.ts
+@@ -226,7 +226,6 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
+
+     const latest = latestAttempt(db, job, userId);
+     if (latest?.state === 'sending') {
+-      // This runner holds the lease now, so the runner that committed `sending` is gone.
+       markUncertain(db, clock, latest.id, UNCERTAIN_LEASE_EXPIRED);
+       throw new JobError('delivery_uncertain', { permanent: true });
+     }
+
+ RUN  v5.0.2 <scratch>/mut
+
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  13:28:21
+   Duration  12.80s (tests 77%, import 15%, transform 7%)
+
+M2 exit=0
+restored
+### NOTE: the two runs above used wrong line numbers (M1 removed 'const latest' and failed to compile; M2 removed only the comment). Corrected runs follow.
+### M1b: remove the handler's own 'sending' branch (sendJob.ts:228-232)
+diff --git a/src/server/jobs/sendJob.ts b/src/server/jobs/sendJob.ts
+index 5e1ff53..81e98e2 100644
+--- a/src/server/jobs/sendJob.ts
++++ b/src/server/jobs/sendJob.ts
+@@ -225,11 +225,6 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
+     const snapshot = loadSnapshot(revision);
+
+     const latest = latestAttempt(db, job, userId);
+-    if (latest?.state === 'sending') {
+-      // This runner holds the lease now, so the runner that committed `sending` is gone.
+-      markUncertain(db, clock, latest.id, UNCERTAIN_LEASE_EXPIRED);
+-      throw new JobError('delivery_uncertain', { permanent: true });
+-    }
+     if (latest?.state === 'uncertain') throw new JobError('delivery_uncertain', { permanent: true });
+     if (latest?.state === 'failed_permanent') throw new JobError('delivery_failed_permanent', { permanent: true });
+     if (latest?.state === 'accepted') return;
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/delivery.test.ts (25 tests | 1 failed) 10568ms
+   ❯ the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) (1)
+     × marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending` 354ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) > marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending`
+AssertionError: expected JobError: delivery_attempt_open { …(2) } to match object { name: 'JobError', …(2) }
+
+- Expected
++ Received
+
+- {
+-   "code": "delivery_uncertain",
++ JobError {
++   "code": "delivery_attempt_open",
+    "name": "JobError",
+-   "permanent": true,
++   "permanent": false,
+  }
+
+ ❯ tests/integration/delivery.test.ts:734:20
+    732|       (error: unknown) => error,
+    733|     );
+    734|     expect(caught).toMatchObject({ name: 'JobError', code: 'delivery_u…
+       |                    ^
+    735|     expect(attempts(revisionId).map((row) => [row.state, row.provider_…
+    736|     expect(failJob(t.db, t.clock, claimed.id, 'runner-reclaim', caught…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 passed (25)
+   Start at  13:28:50
+   Duration  12.38s (tests 86%, import 9%, transform 5%)
+
+M1b exit=1
+restored
+### M2b: keep the branch but drop markUncertain (sendJob.ts:230)
+diff --git a/src/server/jobs/sendJob.ts b/src/server/jobs/sendJob.ts
+index 5e1ff53..7be4b9d 100644
+--- a/src/server/jobs/sendJob.ts
++++ b/src/server/jobs/sendJob.ts
+@@ -227,7 +227,6 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
+     const latest = latestAttempt(db, job, userId);
+     if (latest?.state === 'sending') {
+       // This runner holds the lease now, so the runner that committed `sending` is gone.
+-      markUncertain(db, clock, latest.id, UNCERTAIN_LEASE_EXPIRED);
+       throw new JobError('delivery_uncertain', { permanent: true });
+     }
+     if (latest?.state === 'uncertain') throw new JobError('delivery_uncertain', { permanent: true });
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/delivery.test.ts (25 tests | 1 failed) 10709ms
+   ❯ the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) (1)
+     × marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending` 443ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) > marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending`
+AssertionError: expected [ [ 'sending', null, null ] ] to deeply equal [ [ 'uncertain', …(2) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+-     "uncertain",
+-     "lease_expired_while_sending",
++     "sending",
++     null,
+      null,
+    ],
+  ]
+
+ ❯ tests/integration/delivery.test.ts:735:97
+    733|     );
+    734|     expect(caught).toMatchObject({ name: 'JobError', code: 'delivery_u…
+    735|     expect(attempts(revisionId).map((row) => [row.state, row.provider_…
+       |                                                                                                 ^
+    736|     expect(failJob(t.db, t.clock, claimed.id, 'runner-reclaim', caught…
+    737|     expect(job(sendJobId)).toMatchObject({ state: 'intervention', last…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 passed (25)
+   Start at  13:29:03
+   Duration  12.50s (tests 86%, import 9%, transform 5%)
+
+M2b exit=1
+restored
+### M2c: keep the branch but make the error retryable (permanent: false)
+diff --git a/src/server/jobs/sendJob.ts b/src/server/jobs/sendJob.ts
+index 5e1ff53..51c6f84 100644
+--- a/src/server/jobs/sendJob.ts
++++ b/src/server/jobs/sendJob.ts
+@@ -228,7 +228,7 @@ export function createSendJobHandler(deps: SendJobDeps): JobHandler {
+     if (latest?.state === 'sending') {
+       // This runner holds the lease now, so the runner that committed `sending` is gone.
+       markUncertain(db, clock, latest.id, UNCERTAIN_LEASE_EXPIRED);
+-      throw new JobError('delivery_uncertain', { permanent: true });
++      throw new JobError('delivery_uncertain', { permanent: false });
+     }
+     if (latest?.state === 'uncertain') throw new JobError('delivery_uncertain', { permanent: true });
+     if (latest?.state === 'failed_permanent') throw new JobError('delivery_failed_permanent', { permanent: true });
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/delivery.test.ts (25 tests | 1 failed) 10599ms
+   ❯ the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) (1)
+     × marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending` 372ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) > marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending`
+AssertionError: expected JobError: delivery_uncertain { …(2) } to match object { name: 'JobError', …(2) }
+
+- Expected
++ Received
+
+- {
++ JobError {
+    "code": "delivery_uncertain",
+    "name": "JobError",
+-   "permanent": true,
++   "permanent": false,
+  }
+
+ ❯ tests/integration/delivery.test.ts:734:20
+    732|       (error: unknown) => error,
+    733|     );
+    734|     expect(caught).toMatchObject({ name: 'JobError', code: 'delivery_u…
+       |                    ^
+    735|     expect(attempts(revisionId).map((row) => [row.state, row.provider_…
+    736|     expect(failJob(t.db, t.clock, claimed.id, 'runner-reclaim', caught…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 passed (25)
+   Start at  13:29:16
+   Duration  12.36s (tests 86%, import 9%, transform 5%)
+
+M2c exit=1
+restored
+### M3a: a never-saved account is governed by a default 'on' switch (the pre-H-Q1 rule)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..9648a13 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -162,7 +162,7 @@ function governingSwitch(db: Db, userId: string, dueAt: string): { autoSubmit: b
+       'SELECT auto_submit FROM submission_settings WHERE user_id = ? AND auto_submit_effective_from <= ? ORDER BY seq DESC LIMIT 1',
+     )
+     .get(userId, dueAt);
+-  return row === undefined ? null : { autoSubmit: row.auto_submit === 1 };
++  return row === undefined ? (hasSavedSettings(db, userId) ? null : { autoSubmit: true }) : { autoSubmit: row.auto_submit === 1 };
+ }
+
+ function hasSavedSettings(db: Db, userId: string): boolean {
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/deadline.test.ts (40 tests | 5 failed) 9083ms
+   ❯ setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) (5)
+     × never automates an account that never saved its submission settings, at and after every deadline 215ms
+     × automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period 208ms
+     × keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation 212ms
+     × without the overdue choice a first save never reaches periods that fell due before it 212ms
+     × still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved 212ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > never automates an account that never saved its submission settings, at and after every deadline
+AssertionError: 2026-10-02 at 2026-09-30T00:00:00Z: expected { activated: true, examined: 1, …(5) } to match object { Object (activated, finalized, ...) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "activated": true,
+    "failed": 0,
+-   "finalized": 0,
++   "finalized": 1,
+    "overdueRecorded": 0,
+  }
+
+ ❯ tests/integration/deadline.test.ts:433:75
+    431|       for (const instant of [due - 1, due, due + 1, due + 3600]) {
+    432|         t.clock.set(formatUtcInstant(instant));
+    433|         expect(scan(), `${item.payroll} at ${formatUtcInstant(instant)…
+       |                                                                           ^
+    434|         expectNothingAutomated(user, `${item.payroll} at ${formatUtcIn…
+    435|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/integration/deadline.test.ts:450:30
+    448|     activate('2026-09-21T00:00:00Z');
+    449|     t.clock.set(formatUtcInstant(period(P1.payroll).dueAtUtc + 3600));
+    450|     expect(scan().finalized).toBe(0); // P1 passed while the account w…
+       |                              ^
+    451|     t.clock.set('2026-10-05T12:00:00Z'); // inside P2 (due 2026-10-14T…
+    452|     saveSettings(user); // auto-submit on, effective now
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation
+AssertionError: expected 5 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 5
+
+ ❯ tests/integration/deadline.test.ts:476:30
+    474|     const later = newUser('ignore', 0, '2026-10-05T12:00:00Z');
+    475|     t.clock.set('2026-10-29T12:00:00Z');
+    476|     expect(scan().finalized).toBe(0); // neither has saved settings: n…
+       |                              ^
+    477|     saveSettings(early, { applyToOverdue: true });
+    478|     saveSettings(later, { applyToOverdue: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > without the overdue choice a first save never reaches periods that fell due before it
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/integration/deadline.test.ts:488:30
+    486|     activate('2026-09-21T00:00:00Z');
+    487|     t.clock.set('2026-10-29T12:00:00Z');
+    488|     expect(scan().finalized).toBe(0);
+       |                              ^
+    489|     saveSettings(user); // P1, P2 and P3 are all overdue; no overdue c…
+    490|     expect(scan().finalized).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: +0, overdueRecorded: 1 }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "finalized": 0,
++   "finalized": 1,
+    "overdueRecorded": 1,
+  }
+
+ ❯ tests/integration/deadline.test.ts:503:20
+    501|     saveSettings(off, { autoSubmit: false });
+    502|     t.clock.set('2026-10-05T12:00:00Z');
+    503|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+       |                    ^
+    504|     t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc));
+    505|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 35 passed (40)
+   Start at  13:29:40
+   Duration  10.99s (tests 84%, import 10%, transform 6%)
+
+M3a exit=1
+restored
+### M3b: a never-saved account is governed by a default 'off' switch (overdue records)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..a92d8b7 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -162,7 +162,7 @@ function governingSwitch(db: Db, userId: string, dueAt: string): { autoSubmit: b
+       'SELECT auto_submit FROM submission_settings WHERE user_id = ? AND auto_submit_effective_from <= ? ORDER BY seq DESC LIMIT 1',
+     )
+     .get(userId, dueAt);
+-  return row === undefined ? null : { autoSubmit: row.auto_submit === 1 };
++  return row === undefined ? (hasSavedSettings(db, userId) ? null : { autoSubmit: false }) : { autoSubmit: row.auto_submit === 1 };
+ }
+
+ function hasSavedSettings(db: Db, userId: string): boolean {
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/deadline.test.ts (40 tests | 4 failed) 9016ms
+   ❯ setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) (5)
+     × never automates an account that never saved its submission settings, at and after every deadline 204ms
+     × automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period 213ms
+     × without the overdue choice a first save never reaches periods that fell due before it 184ms
+     × still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved 190ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > never automates an account that never saved its submission settings, at and after every deadline
+AssertionError: 2026-10-02 at 2026-09-30T00:00:00Z: expected { activated: true, examined: 1, …(5) } to match object { Object (activated, finalized, ...) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "activated": true,
+    "failed": 0,
+    "finalized": 0,
+-   "overdueRecorded": 0,
++   "overdueRecorded": 1,
+  }
+
+ ❯ tests/integration/deadline.test.ts:433:75
+    431|       for (const instant of [due - 1, due, due + 1, due + 3600]) {
+    432|         t.clock.set(formatUtcInstant(instant));
+    433|         expect(scan(), `${item.payroll} at ${formatUtcInstant(instant)…
+       |                                                                           ^
+    434|         expectNothingAutomated(user, `${item.payroll} at ${formatUtcIn…
+    435|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period
+AssertionError: expected [ { payrollDate: '2026-10-02', …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "dueAt": "2026-09-30T00:00:00Z",
++     "payrollDate": "2026-10-02",
++     "reason": "auto_submit_off",
++     "recordedAt": "2026-09-30T01:00:00Z",
++   },
++ ]
+
+ ❯ tests/integration/deadline.test.ts:461:47
+    459|     expect(scan().finalized).toBe(1);
+    460|     expect(revisions(user).map((row) => snapshotOf(row).period.payroll…
+    461|     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+       |                                               ^
+    462|     // P1 stays the user's own draft (the work entered above): no revi…
+    463|     expect(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > without the overdue choice a first save never reaches periods that fell due before it
+AssertionError: after the plain save: expected [ { …(4) }, { …(4) }, { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "dueAt": "2026-09-30T00:00:00Z",
++     "payrollDate": "2026-10-02",
++     "reason": "auto_submit_off",
++     "recordedAt": "2026-10-29T12:00:00Z",
++   },
++   {
++     "dueAt": "2026-10-14T00:00:00Z",
++     "payrollDate": "2026-10-16",
++     "reason": "auto_submit_off",
++     "recordedAt": "2026-10-29T12:00:00Z",
++   },
++   {
++     "dueAt": "2026-10-28T00:00:00Z",
++     "payrollDate": "2026-10-30",
++     "reason": "auto_submit_off",
++     "recordedAt": "2026-10-29T12:00:00Z",
++   },
++ ]
+
+ ❯ expectNothingAutomated tests/integration/deadline.test.ts:420:53
+    418|     expect(jobKinds(user), when).toEqual([]);
+    419|     expect(ledger(user), when).toEqual([]);
+    420|     expect(listOverdueRecords(t.db, user.id), when).toEqual([]);
+       |                                                     ^
+    421|     expect(count('SELECT count(*) FROM delivery_attempts WHERE user_id…
+    422|     expect(count("SELECT count(*) FROM audit_events WHERE owner_user_i…
+ ❯ tests/integration/deadline.test.ts:491:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: +0, overdueRecorded: 1 }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "finalized": 0,
+-   "overdueRecorded": 1,
++   "overdueRecorded": 2,
+  }
+
+ ❯ tests/integration/deadline.test.ts:503:20
+    501|     saveSettings(off, { autoSubmit: false });
+    502|     t.clock.set('2026-10-05T12:00:00Z');
+    503|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+       |                    ^
+    504|     t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc));
+    505|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 36 passed (40)
+   Start at  13:29:52
+   Duration  10.76s (tests 85%, import 10%, transform 5%)
+
+M3b exit=1
+restored
+### M3c: drop the account-creation clamp (before_account)
+diff --git a/src/server/services/automation.ts b/src/server/services/automation.ts
+index d1e836a..fd75e56 100644
+--- a/src/server/services/automation.ts
++++ b/src/server/services/automation.ts
+@@ -191,7 +191,7 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
+   if (activeFrom === null) return { kind: 'skip', reason: 'not_active' };
+   if (period.dueAtUtc < parseUtcInstant(activeFrom)) return { kind: 'skip', reason: 'before_activation' };
+   // A deadline that passed before the account existed is never automated (WP3-B-01).
+-  if (period.dueAtUtc < parseUtcInstant(account.created_at)) return { kind: 'skip', reason: 'before_account' };
++  // mutated: no creation clamp
+   if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
+   const timesheet = db
+     .prepare<[string, string, number], TimesheetState>(
+@@ -254,7 +254,7 @@ function listCandidates(db: Db, clock: Clock, activeFrom: EpochSeconds): Candida
+       calendars.set(row.calendar_id, calendar);
+     }
+     const owner = ownerOf(row);
+-    const start = Math.max(activeFrom, parseUtcInstant(row.created_at));
++    const start = activeFrom;
+     for (const index of calendar.indices) {
+       const period = payPeriodAt(calendar.schedule, index, calendar.exceptions);
+       if (period.dueAtUtc >= start && period.dueAtUtc <= now) candidates.push({ user: owner, period });
+
+ RUN  v5.0.2 <scratch>/mut
+
+ ❯ tests/integration/deadline.test.ts (40 tests | 3 failed) 8937ms
+   ❯ account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) (4)
+     × never submits a period whose deadline passed before the account existed, even with the explicit overdue choice 239ms
+     × never puts the auto-submit effective instant of saved settings before the account existed 207ms
+   ❯ setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) (5)
+     × keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation 234ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never submits a period whose deadline passed before the account existed, even with the explicit overdue choice
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/integration/deadline.test.ts:348:31
+    346|     t.clock.set('2026-11-12T00:00:30Z');
+    347|     const summary = scan();
+    348|     expect(summary.finalized).toBe(0);
+       |                               ^
+    349|     expect(revisions(late)).toEqual([]);
+    350|     expect(count('SELECT count(*) FROM timesheets WHERE user_id = ?', …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never puts the auto-submit effective instant of saved settings before the account existed
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/integration/deadline.test.ts:396:30
+    394|     saveSettings(user, { autoSubmit: true, applyToOverdue: true, expec…
+    395|     t.clock.set('2026-10-29T00:00:00Z');
+    396|     expect(scan().finalized).toBe(1);
+       |                              ^
+    397|     expect(revisions(user).map((row) => snapshotOf(row).period.payroll…
+    398|     expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation
+AssertionError: expected 6 to be 5 // Object.is equality
+
+- Expected
++ Received
+
+- 5
++ 6
+
+ ❯ tests/integration/deadline.test.ts:479:30
+    477|     saveSettings(early, { applyToOverdue: true });
+    478|     saveSettings(later, { applyToOverdue: true });
+    479|     expect(scan().finalized).toBe(5);
+       |                              ^
+    480|     expect(revisions(early).map((row) => snapshotOf(row).period.payrol…
+    481|     expect(revisions(later).map((row) => snapshotOf(row).period.payrol…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 37 passed (40)
+   Start at  13:30:03
+   Duration  10.69s (tests 84%, import 10%, transform 6%)
+
+M3c exit=1
+restored

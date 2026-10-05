@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Guard-removal sweep over assessPeriod (automation.ts), each in <scratch>/mut (2d72d35) and <scratch>/pre2 (2f2520e):
+# delete one guard line, run the unit/integration suite, record the counts, restore with git checkout.
+source <scratch>/env.sh
+S=<scratch>
+OUT=$S/04e-guard-sweep.raw
+: > $OUT
+for guard in "reason: 'inactive_user'" "reason: 'before_activation'" "reason: 'not_due'" "reason: 'finalized'" "reason: 'imported'"; do
+  for c in mut pre2; do
+    cd $S/$c
+    echo "### guard removed: line containing [$guard] in <scratch>/$c src/server/services/automation.ts" >> $OUT
+    G="$guard" perl -ni -e 'print unless index($_, $ENV{G}) >= 0 && /^\s+if \(/' src/server/services/automation.ts
+    git diff --stat src/server/services/automation.ts >> $OUT
+    "$NODE24" node_modules/vitest/vitest.mjs run tests/integration tests/client tests/domain > $S/tmp/sweep-run.raw 2>&1; code=$?
+    sed 's/\x1b\[[0-9;]*m//g' $S/tmp/sweep-run.raw | grep -E "^ FAIL |Test Files|Tests  " >> $OUT
+    echo "exit=$code" >> $OUT
+    git checkout -- src/server/services/automation.ts; git status --short >> $OUT; echo "restored" >> $OUT
+  done
+done
+echo sweep-done >> $OUT

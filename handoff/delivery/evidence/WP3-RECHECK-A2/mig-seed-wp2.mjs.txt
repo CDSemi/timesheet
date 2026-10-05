@@ -1,0 +1,54 @@
+// WP3-RECHECK-A2: builds a schema-v3 database with the ACCEPTED WP2 source (5fafeae, built in its own
+// clone) and synthetic rows in the WP2 tables: the CLI-style seed with sample data, a calendar version
+// with a closure, a payroll exception, day entries (notes, leave, WFH), sessions with a break, a
+// Sunday session, an OT leave request reserved and partly used, an extra account later deactivated.
+// argv: <wp2 clone> <dbPath>
+import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [wp2, dbPath] = process.argv.slice(2);
+const load = (rel) => import(pathToFileURL(join(wp2, 'dist', rel)).href);
+const { openDatabase } = await load('server/db/database.js');
+const { migrate } = await load('server/db/migrations.js');
+const { seedSynthetic } = await load('server/seed.js');
+const cmds = await load('server/services/timesheetCommands.js');
+const calendars = await load('server/services/calendars.js');
+const users = await load('server/services/users.js');
+const otLeave = await load('server/services/otLeave.js');
+const sessions = await load('server/auth/sessions.js');
+
+const NOW = '2026-09-22T18:00:00Z';
+const clock = { now: () => new Date(NOW) };
+const db = openDatabase(dbPath);
+const applied = migrate(db, undefined, new Date(NOW));
+const pw = () => randomBytes(18).toString('base64url');
+const seed = await seedSynthetic(db, clock, { passwords: { admin: pw(), employee: pw(), employee2: pw() }, sampleData: true });
+const row = (email) => db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE email = ?').get(email);
+const asUser = (r) => ({ id: r.id, email: r.email, displayName: r.display_name, role: r.role, calendarId: r.calendar_id, sessionId: 'wp2-seed' });
+const admin = asUser(row('<email>'));
+const employee = asUser(row('<email>'));
+const employee2 = asUser(row('<email>'));
+const zone = 'America/Los_Angeles';
+const at = (date, time) => ({ local: `${date}T${time}`, zone });
+
+const last = calendars.listCalendarVersions(db, seed.calendarId).at(-1);
+calendars.createCalendarVersion(db, clock, { calendarId: seed.calendarId, effectiveFrom: '2026-09-28', weekdays: [...last.weekdays], dates: [...last.dates, { date: '2026-12-24', kind: 'closure', name: 'Synthetic WP2 closure' }], note: 'WP2 recheck seed' }, admin.id);
+calendars.createPayrollException(db, clock, { calendarId: seed.calendarId, nominalPayrollDate: '2026-11-13', payrollDate: '2026-11-12', dueLocalDate: null, dueLocalTime: null, reason: 'Synthetic WP2 holiday shift' }, admin.id);
+const ctx = { db, clock, user: employee };
+cmds.upsertDayEntry(ctx, '2026-09-15', { category: 'Worked', leave_minutes: 120, leave_kind: 'vacation', wfh: true, notes: 'Synthetic WP2 recheck note A' });
+cmds.upsertDayEntry(ctx, '2026-09-17', { category: 'Sick', leave_minutes: 480, leave_kind: 'sick', wfh: false, notes: 'Synthetic WP2 recheck note B' });
+cmds.createSession(ctx, '2026-09-15', { start: at('2026-09-15', '08:00'), end: at('2026-09-15', '13:30'), input_zone: zone, breaks: [{ start: at('2026-09-15', '11:00'), end: at('2026-09-15', '11:20'), counts_as_work: false }], breaks_confirmed: true });
+cmds.createSession(ctx, '2026-09-20', { start: at('2026-09-20', '09:00'), end: at('2026-09-20', '12:00'), input_zone: zone, breaks: [], breaks_confirmed: true });
+cmds.createSession(ctx, '2026-09-21', { start: at('2026-09-21', '07:00'), end: at('2026-09-21', '17:30'), input_zone: zone, breaks: [], breaks_confirmed: true });
+const reserved = otLeave.reserveOtLeave({ db, clock }, {
+  userId: employee2.id, actorUserId: employee2.id, requestKey: 'wp2-recheck-leave', leaveDate: '2026-09-21', requestedMinutes: 120,
+  permission: { approverName: 'Synthetic Approver', approvalDate: '2026-09-18', evidenceRef: 'Synthetic WP2 recheck reference' },
+});
+otLeave.recordOtLeaveUse({ db, clock }, { userId: employee2.id, actorUserId: employee2.id, requestId: reserved.request.id, useKey: 'wp2-recheck-use', minutes: 90 });
+const extra = await users.createUser(db, clock, { email: '<email>', displayName: 'Synthetic WP2 Extra', role: 'employee', password: pw(), calendarId: seed.calendarId }, admin.id);
+users.deactivateUser(db, clock, { actorUserId: admin.id, userId: extra, reason: 'Synthetic deactivation' });
+sessions.createAuthSession(db, clock, employee.id, 3600); // a login session row (the token itself is discarded)
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+console.log(JSON.stringify({ applied: applied.applied, user_version: db.pragma('user_version', { simple: true }), rows: Object.fromEntries(tables.map((t) => [t, db.prepare(`SELECT count(*) FROM "${t}"`).pluck().get()])) }));
+db.close();

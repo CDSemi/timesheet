@@ -1,0 +1,175 @@
+// WP3-RECHECK-BC probe B2: send recovery (WP3-B-02) and job regressions on a real SQLite file.
+// 1. retry delays 1/5/15/60 min; 2. a real runner process killed (SIGKILL) after `sending` was
+// committed on the fifth (last) attempt: uncertain + owner decision, never resent, one explicit
+// resend sends once; 3. the residual edge (lease expiring between the pass-start recovery and the
+// claim sweep), for the last attempt and for an earlier attempt (the handler's own `sending` branch);
+// 4. a live runner's in-flight send is not touched by another runner's pass-start recovery.
+// Usage: node b2-send-recovery.mjs                      (main)
+//        node b2-send-recovery.mjs child <mode>          (child runner; env P_DB, P_DATA, P_NOW, P_MARK)
+import { spawn } from 'node:child_process';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { FileStore, finalizeWithPdf, mail, openDatabase, REPO, reporter, runJobsOnce, setup } from './lib.mjs';
+
+const mod = (p) => import(new URL(p, REPO).href);
+const { createSendJobHandler } = await mod('src/server/jobs/sendJob.ts');
+const { createOutboundAdapter } = await mod('src/server/mail/outbound.ts');
+const { claimNextJob } = await mod('src/server/jobs/jobStore.ts');
+const { recoverInterruptedSends } = await mod('src/server/services/deliveries.ts');
+
+const [role, mode] = process.argv.slice(2);
+if (role === 'child') {
+  const db = openDatabase(process.env.P_DB);
+  const clock = { now: () => new Date(process.env.P_NOW) };
+  const files = new FileStore(process.env.P_DATA);
+  const outbound = createOutboundAdapter({ mode: 'capture' }, { dataDir: process.env.P_DATA });
+  const hooks =
+    mode === 'kill'
+      ? { beforeSend: () => process.kill(process.pid, 'SIGKILL') }
+      : {
+          beforeSend: () => {
+            writeFileSync(process.env.P_MARK, 'sending');
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000);
+          },
+        };
+  const summary = await runJobsOnce({ db, clock, owner: `child-${mode}`, handlers: { send_email: createSendJobHandler({ db, clock, files, outbound, senderAddress: mail('sender'), hooks }) } });
+  console.log(JSON.stringify(summary));
+  db.close();
+  process.exit(0);
+}
+
+const r = reporter('B2 send recovery and jobs');
+const ctx = await setup('b2', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const capture = createOutboundAdapter({ mode: 'capture' }, { dataDir: ctx.dataDir });
+const sendHandler = (outbound, hooks) => ({ send_email: createSendJobHandler({ db, clock, files: ctx.files, outbound, senderAddress: mail('sender'), ...(hooks ? { hooks } : {}) }) });
+const flaky = { mode: 'capture', send: async () => ({ kind: 'failed_temporary', code: 'smtp_unavailable', providerResponse: '421' }) };
+const captures = () => (existsSync(join(ctx.dataDir, 'mail-capture')) ? readdirSync(join(ctx.dataDir, 'mail-capture')).length : 0);
+const job = (id) => db.prepare('SELECT state, attempts, next_run_at, lease_owner, lease_expires_at, last_error FROM jobs WHERE id = ?').get(id);
+const attempts = (jobId) => db.prepare('SELECT id, attempt_no, state, provider_response, decision FROM delivery_attempts WHERE revision_id = (SELECT revision_id FROM jobs WHERE id = ?) ORDER BY started_at, attempt_no').all(jobId);
+const sendJobOf = (revisionId) => db.prepare("SELECT id FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY created_at DESC LIMIT 1").pluck().get(revisionId);
+const childRun = (mode, extraEnv = {}) =>
+  new Promise((resolve) => {
+    const child = spawn(process.execPath, [process.argv[1], 'child', mode], { env: { ...process.env, P_DB: ctx.dbPath, P_DATA: ctx.dataDir, P_NOW: clock.iso(), ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (out += d));
+    child.on('exit', (code, signal) => resolve({ code, signal, out }));
+  });
+const delivery = async (who, jobId, attemptNo) => {
+  const list = await ctx.request('GET', '/api/deliveries', { cookie: ctx.cookies[who] });
+  return list.body.deliveries.find((d) => d.job.state !== undefined && d.attempt_no === attemptNo && attempts(jobId).some((a) => a.id === d.id));
+};
+async function toLastAttempt(jobId) {
+  const delays = [];
+  for (let i = 0; i < 4; i += 1) {
+    const before = clock.t;
+    await runJobsOnce({ db, clock, owner: 'probe-flaky', handlers: sendHandler(flaky) });
+    const j = job(jobId);
+    delays.push((new Date(j.next_run_at).getTime() - before) / 1000);
+    clock.set(j.next_run_at);
+  }
+  return delays;
+}
+
+r.section('1. Retries 1/5/15/60 minutes, then the fifth attempt');
+const revA = await finalizeWithPdf(ctx, 'owner', 'Example Employee');
+const jobA = sendJobOf(revA);
+const delays = await toLastAttempt(jobA);
+r.check(JSON.stringify(delays) === JSON.stringify([60, 300, 900, 3600]), `retry delays after four temporary failures: ${JSON.stringify(delays)} s`);
+r.check(job(jobA).state === 'queued' && job(jobA).attempts === 4, `job queued after 4 attempts (${JSON.stringify(job(jobA))})`);
+
+r.section('2. A runner process killed after `sending` was committed on the fifth (last) attempt');
+const killed = await childRun('kill');
+r.check(killed.signal === 'SIGKILL' || killed.code !== 0, `child runner killed by SIGKILL inside the send (exit ${killed.code}, signal ${killed.signal})`);
+r.check(JSON.stringify(attempts(jobA).map((a) => a.state)) === JSON.stringify(['failed_temporary', 'failed_temporary', 'failed_temporary', 'failed_temporary', 'sending']), `attempts after the kill: ${JSON.stringify(attempts(jobA).map((a) => a.state))}`);
+r.check(job(jobA).state === 'leased' && job(jobA).attempts === 5, `job leased by the dead runner, 5 attempts (${job(jobA).state}/${job(jobA).attempts})`);
+clock.advance(60);
+const early = await runJobsOnce({ db, clock, owner: 'probe-early', handlers: sendHandler(capture) });
+r.check(early.claimed === 0 && attempts(jobA).at(-1).state === 'sending', `a pass while the dead runner's lease is still valid changes nothing (${JSON.stringify(early)})`);
+clock.advance(61);
+const afterExpiry = await runJobsOnce({ db, clock, owner: 'probe-after', handlers: sendHandler(capture) });
+r.info(`pass after the lease expired: ${JSON.stringify(afterExpiry)}; job ${JSON.stringify({ state: job(jobA).state, last_error: job(jobA).last_error })}`);
+const last = attempts(jobA).at(-1);
+r.check(last.state === 'uncertain' && last.provider_response === 'lease_expired_while_sending' && last.decision === null, `fifth attempt is uncertain (lease_expired_while_sending), no decision yet (${last.state}/${last.provider_response})`);
+const shown = await delivery('owner', jobA, 5);
+r.check(shown?.state === 'uncertain' && shown?.decision_required === true, `the owner sees the fifth attempt uncertain with the decision prompt (decision_required ${shown?.decision_required})`);
+const resendRefused = await ctx.request('POST', `/api/revisions/${revA}/resend`, { cookie: ctx.cookies.owner, body: {} });
+r.check(resendRefused.status === 409 && resendRefused.body.error.code === 'delivery_uncertain', `a plain resend is refused with the decision prompt, not "in progress" (${resendRefused.status} ${resendRefused.body?.error?.code})`);
+clock.advance(6 * 3600);
+await runJobsOnce({ db, clock, owner: 'probe-later', handlers: sendHandler(capture) });
+r.check(captures() === 0, `never resent automatically: ${captures()} captures after 6 h of passes`);
+const decide = await ctx.request('POST', `/api/deliveries/${last.id}/decision`, { cookie: ctx.cookies.owner, body: { decision: 'resend' } });
+r.check(decide.status === 201, `explicit owner decision resend accepted (${decide.status})`);
+await runJobsOnce({ db, clock, owner: 'probe-resend', handlers: sendHandler(capture) });
+await runJobsOnce({ db, clock, owner: 'probe-resend2', handlers: sendHandler(capture) });
+r.check(captures() === 1, `the decision sends exactly once (${captures()} capture)`);
+const second = await ctx.request('POST', `/api/deliveries/${last.id}/decision`, { cookie: ctx.cookies.owner, body: { decision: 'resend' } });
+r.check(second.status === 409, `a second decision on the same attempt is refused (${second.status} ${second.body?.error?.code})`);
+r.check(db.prepare("SELECT count(*) FROM audit_events WHERE operation = 'delivery.decision' AND owner_user_id = ?").pluck().get(ctx.ids.owner) === 1, 'the decision is audited once');
+r.check(db.prepare('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?').pluck().get(ctx.ids.owner) === 1, 'still one revision (no duplicate)');
+
+r.section('3a. Residual edge, last attempt: the lease expires after the pass-start recovery and before the claim sweep');
+const bCookie = await ctx.addUser('b', 'probe-b', 'Probe B');
+void bCookie;
+const revB = await finalizeWithPdf(ctx, 'b', 'Probe B');
+const jobB = sendJobOf(revB);
+await toLastAttempt(jobB);
+await childRun('kill');
+const leaseB = job(jobB).lease_expires_at;
+r.check(job(jobB).state === 'leased' && attempts(jobB).at(-1).state === 'sending', `B: fifth attempt sending, job leased until ${leaseB}`);
+// The pass starts one second before the expiry (recovery: nothing to do), the sweep runs one second after it.
+const tExpiry = new Date(leaseB).getTime();
+const recovered = recoverInterruptedSends(db, { now: () => new Date(tExpiry - 1000) });
+const claimed = claimNextJob(db, { now: () => new Date(tExpiry + 1000) }, { owner: 'probe-sweep', kinds: ['send_email'] });
+r.check(recovered === 0 && claimed === null, `start-of-pass recovery found nothing (${recovered}); the sweep claimed nothing (${claimed === null ? 'null' : claimed.id})`);
+r.info(`after the sweep: job ${JSON.stringify({ state: job(jobB).state, last_error: job(jobB).last_error })}, attempt ${attempts(jobB).at(-1).state}`);
+const midShown = await delivery('b', jobB, 5);
+const midResend = await ctx.request('POST', `/api/revisions/${revB}/resend`, { cookie: ctx.cookies.b, body: {} });
+r.info(`until the next pass the owner sees ${midShown?.state} (decision_required ${midShown?.decision_required}); a plain resend answers ${midResend.status} ${midResend.body?.error?.code}`);
+clock.set(new Date(tExpiry + 15_000).toISOString().replace('.000Z', 'Z'));
+await runJobsOnce({ db, clock, owner: 'probe-next', handlers: sendHandler(capture) });
+const nextShown = await delivery('b', jobB, 5);
+r.check(nextShown?.state === 'uncertain' && nextShown?.decision_required === true, `the next ordinary pass (15 s later) makes it uncertain with the decision prompt (${nextShown?.state}, job last_error ${job(jobB).last_error})`);
+const capturesBefore = captures();
+const decideB = await ctx.request('POST', `/api/deliveries/${nextShown?.id}/decision`, { cookie: ctx.cookies.b, body: { decision: 'resend' } });
+await runJobsOnce({ db, clock, owner: 'probe-next2', handlers: sendHandler(capture) });
+r.check(decideB.status === 201 && captures() === capturesBefore + 1, `B: one explicit decision sends exactly once (${decideB.status}, +${captures() - capturesBefore})`);
+
+r.section('3b. Residual edge, earlier attempt: the claim sweep re-claims the job and the handler marks it uncertain');
+const cCookie = await ctx.addUser('c', 'probe-c', 'Probe C');
+void cCookie;
+const revC = await finalizeWithPdf(ctx, 'c', 'Probe C');
+const jobC = sendJobOf(revC);
+await childRun('kill');
+const leaseC = new Date(job(jobC).lease_expires_at).getTime();
+r.check(job(jobC).attempts === 1 && attempts(jobC).at(-1).state === 'sending', 'C: first attempt sending, job leased by the dead runner');
+recoverInterruptedSends(db, { now: () => new Date(leaseC - 1000) });
+const late = { now: () => new Date(leaseC + 1000) };
+const reclaimed = claimNextJob(db, late, { owner: 'probe-reclaim', kinds: ['send_email'] });
+let thrown = null;
+try {
+  await createSendJobHandler({ db, clock: late, files: ctx.files, outbound: capture, senderAddress: mail('sender') })({ job: reclaimed, renewLease: () => true });
+} catch (error) {
+  thrown = error;
+}
+r.check(reclaimed !== null && thrown?.code === 'delivery_uncertain' && thrown?.permanent === true && attempts(jobC).at(-1).state === 'uncertain', `the handler's own branch marks the re-claimed attempt uncertain and stops permanently (${thrown?.code}, ${attempts(jobC).at(-1).state})`);
+r.check(captures() === capturesBefore + 1, 'nothing was sent for C');
+
+r.section('4. A live runner keeps its in-flight send: another runner pass does not mark it uncertain');
+const dCookie = await ctx.addUser('d', 'probe-d', 'Probe D');
+void dCookie;
+const revD = await finalizeWithPdf(ctx, 'd', 'Probe D');
+const jobD = sendJobOf(revD);
+const mark = join(ctx.dir, 'sending-mark.txt');
+const slow = childRun('slow', { P_MARK: mark });
+const waitStart = Date.now();
+while (!existsSync(mark) && Date.now() - waitStart < 20_000) await new Promise((resolve) => setTimeout(resolve, 50));
+r.check(existsSync(mark) && attempts(jobD).at(-1).state === 'sending', 'D: the child runner committed `sending` and is inside the adapter call');
+const other = await runJobsOnce({ db, clock, owner: 'probe-other', handlers: sendHandler(capture) });
+r.check(other.claimed === 0 && attempts(jobD).at(-1).state === 'sending', `another runner's pass leaves the live send alone (${JSON.stringify(other)}, attempt ${attempts(jobD).at(-1).state})`);
+const slowDone = await slow;
+r.info(`slow child: exit ${slowDone.code} ${slowDone.out.trim()}`);
+r.check(attempts(jobD).at(-1).state === 'accepted' && job(jobD).state === 'succeeded', `D: the live send completes as accepted (${attempts(jobD).at(-1).state}, job ${job(jobD).state})`);
+db.close();
+r.done('B2');

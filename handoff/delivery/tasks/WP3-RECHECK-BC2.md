@@ -86,3 +86,17 @@ Return at most 300 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result - attempt 1 (timesheet-auditor; self-reported model claude-opus-5-5; 2026-10-05)
+
+Decision: **FIX REQUIRED** (one Low finding, WP3-RBC2-01). Report: [WP3_RECHECK_BC2](../WP3_RECHECK_BC2.md) and its `.vi.md`. Evidence: `evidence/WP3-RECHECK-BC2/` (masked, LF), starting at [00-commands.txt](../evidence/WP3-RECHECK-BC2/00-commands.txt).
+
+- Identity: HEAD `2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714` and digest `0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92` (721 files) before and after, in the project folder and the scratch clone; equal to the regate digest.
+- Scope 1: WP3-RBC-01 fixed (probe B3 25/25 at the freeze, 10 FAIL at `2f2520e`; Edge desktop and mobile). WP3-RBC-02 fixed (probe C1 91/91, 2 FAIL at `2f2520e`; Edge). The `sending`-branch test is meaningful: three mutations of the branch each fail only that test.
+- Scope 2: H-Q1 (a) behaves as decided (probe H1 50/50 at the freeze, 25 FAIL at `2f2520e`): never-configured accounts get nothing across eight deadlines; a mid-period save reaches no earlier period; the overdue choice still works and stays clamped by creation; switching off is unchanged; no screen or status claims otherwise. Test changes: one defect, WP3-RBC2-01.
+- Scope 3: docs/05 and docs/10 state both bounds and H-Q1 in EN and VI in parity; D-09 unchanged.
+- Scopes 4-5: no regression in area B or C (B2, B4, B5, B6, C1 sections 1-10, C2, U2, e2e 127 passed / 5 skipped, 5 race rounds).
+- Scope 6: no deprecated API, no CSS change; the hint read is now unbounded in time (35.5 ms at 50 000 rows; risk R1).
+- WP3-RBC2-01 (Low): `tests/integration/deadline.test.ts:271` and `:786` still use a never-configured account, so the F-4 activation guard of the deadline scan and the imported-period exclusion lost their only tests (the off half of `:786` saves the off switch after the deadline it checks, so it proves nothing in either commit). Mutations removing either guard (M4, M5, M5b) pass all 1416 tests at the freeze and fail at `2f2520e`; probe H2 catches them. Required change: save auto-submit on in both tests (for example `configuredUser()`), save the off switch before the deadline in the off half, and confirm M4, M5 and M5b fail again.
+- Preflight (project folder, workflow Python): exit 0, 67 pairs, 1358 links. Guard sweep: no other weakened guard.
+- Leftovers: no server, browser or runner process; scratch files only under `D:\.claude-tmp\timesheet\WP3-RECHECK-BC2`.

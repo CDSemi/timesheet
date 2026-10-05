@@ -1,0 +1,38 @@
+// WP3-RECHECK-A2 H-Q1 race child: one racer in its own OS process with its own SQLite connection.
+// argv: save <dbPath> <startAtMs> <delayMs> <overdue|plain>
+//       scan <dbPath> <dataDir> <startAtMs> <delayMs> <nowIso>   (the production run-jobs CLI, in this process)
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [role, ...rest] = process.argv.slice(2);
+const { m, REPO, fixedClock, PAYROLL, MAIL_FROM } = await import('./common.mjs');
+const waitUntil = async (ms) => {
+  while (Date.now() < ms) await new Promise((resolve) => setTimeout(resolve, 1));
+};
+
+if (role === 'save') {
+  const [dbPath, startAt, delay, mode] = rest;
+  const db = m.db.openDatabase(dbPath);
+  const ownerId = db.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get();
+  await waitUntil(Number(startAt) + Number(delay));
+  try {
+    const saved = m.settings.saveSubmissionSettings(db, fixedClock('2026-09-30T00:30:02Z'), ownerId, {
+      expectedSeq: 0, to: [PAYROLL], autoSubmit: true, ...(mode === 'overdue' ? { applyToOverdueDrafts: true } : {}),
+    });
+    console.log(JSON.stringify({ role, seq: saved.seq ?? saved.settings?.seq ?? 'saved' }));
+  } catch (error) {
+    console.log(JSON.stringify({ role, error: error.code ?? String(error.message).slice(0, 80) }));
+  } finally {
+    db.close();
+  }
+} else {
+  const [dbPath, dataDir, startAt, delay, now] = rest;
+  process.env.DATABASE_PATH = dbPath;
+  process.env.DATA_DIR = dataDir;
+  process.env.MAIL_FROM = MAIL_FROM;
+  delete process.env.OUTBOUND_MODE;
+  delete process.env.PRODUCTION_SENDING_ENABLED;
+  process.argv = [process.argv[0], join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now];
+  await waitUntil(Number(startAt) + Number(delay));
+  await import(pathToFileURL(join(REPO, 'dist/server/cli.js')).href);
+}

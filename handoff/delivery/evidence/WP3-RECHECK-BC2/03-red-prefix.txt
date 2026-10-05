@@ -1,0 +1,256 @@
+### Pre-round-2 red run: the freeze's 6 changed round-2 test files copied into <scratch>/pre2 (2f2520e source, scratch only):
+### cp <scratch>/fix2/{tests/client/settingsModel.test.ts,tests/client/sharingModel.test.ts,tests/integration/deadline.test.ts,tests/integration/delivery.test.ts,tests/integration/history.test.ts,tests/integration/review-grantee-changes.test.ts} <scratch>/pre2/...
+### <node24>/node.exe node_modules/vitest/vitest.mjs run <those 6 files>   (cwd <scratch>/pre2)
+
+ RUN  v5.0.2 <scratch>/pre2
+
+ ❯ tests/client/settingsModel.test.ts (26 tests | 1 failed) 21ms
+   ❯ the effective auto-submit rule in words (2)
+     × says what the unsaved defaults do, and that a change covering overdue drafts reaches every unsubmitted period 4ms
+ ❯ tests/client/sharingModel.test.ts (25 tests | 1 failed) 12ms
+   ❯ history: shared edits and share events (5)
+     × labels every event the server flags as a system event as automatic, never as someone else (WP3-B-03, WP3-RBC-01) 4ms
+ ❯ tests/integration/history.test.ts (14 tests | 1 failed) 9127ms
+   ❯ GET /api/history (14)
+     × WP3-RBC-01: every event without an actor is a system event, whatever its operation (the automatic OT credit and debit) 699ms
+ ❯ tests/integration/review-grantee-changes.test.ts (13 tests | 2 failed) 10759ms
+   ❯ the owner Review lists the days a grantee changed last (WP3-C-01) (10)
+     × lists a grantee change made before the period started when the owner has not finalized it (WP3-RBC-02) 867ms
+     × counts a change made before the period started only until the owner finalizes the period (WP3-RBC-02) 1001ms
+ ❯ tests/integration/deadline.test.ts (40 tests | 5 failed) 14477ms
+   ❯ setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) (5)
+     × never automates an account that never saved its submission settings, at and after every deadline 229ms
+     × automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period 297ms
+     × keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation 313ms
+     × without the overdue choice a first save never reaches periods that fell due before it 379ms
+     × still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved 428ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/settingsModel.test.ts > the effective auto-submit rule in words > says what the unsaved defaults do, and that a change covering overdue drafts reaches every unsubmitted period
+AssertionError: expected 'Not saved yet. Automatic submission i…' not to match /on by default/i
+
+- Expected:
+/on by default/i
+
++ Received:
+"Not saved yet. Automatic submission is on by default and applies to periods that fall due after you save your settings."
+
+ ❯ tests/client/settingsModel.test.ts:200:25
+    198|     expect(unsaved).toContain('Not saved yet');
+    199|     // H-Q1 (a): nothing is automated for an account that never saved …
+    200|     expect(unsaved).not.toMatch(/on by default/i);
+       |                         ^
+    201|     expect(unsaved).toContain('Nothing is submitted for you until you …
+    202|     expect(autoSubmitRule(settings({ auto_submit_effective_from: '1970…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/client/sharingModel.test.ts > history: shared edits and share events > labels every event the server flags as a system event as automatic, never as someone else (WP3-B-03, WP3-RBC-01)
+AssertionError: ot_ledger.credit: expected 'by someone else' to be 'automatic' // Object.is equality
+
+Expected: "automatic"
+Received: "by someone else"
+
+ ❯ tests/client/sharingModel.test.ts:207:111
+    205|     // The server decides: an event with no actor is a system event wh…
+    206|     for (const operation of ['timesheet.auto_finalize', 'deadline.over…
+    207|       expect(historyActorBadge(event({ operation, actor_is_self: false…
+       |                                                                                                               ^
+    208|     }
+    209|     // The name of an operation never decides: another person's event …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > never automates an account that never saved its submission settings, at and after every deadline
+AssertionError: 2026-10-02 at 2026-09-30T00:00:00Z: expected { activated: true, examined: 1, …(5) } to match object { Object (activated, finalized, ...) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "activated": true,
+    "failed": 0,
+-   "finalized": 0,
++   "finalized": 1,
+    "overdueRecorded": 0,
+  }
+
+ ❯ tests/integration/deadline.test.ts:433:75
+    431|       for (const instant of [due - 1, due, due + 1, due + 3600]) {
+    432|         t.clock.set(formatUtcInstant(instant));
+    433|         expect(scan(), `${item.payroll} at ${formatUtcInstant(instant)…
+       |                                                                           ^
+    434|         expectNothingAutomated(user, `${item.payroll} at ${formatUtcIn…
+    435|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/integration/deadline.test.ts:450:30
+    448|     activate('2026-09-21T00:00:00Z');
+    449|     t.clock.set(formatUtcInstant(period(P1.payroll).dueAtUtc + 3600));
+    450|     expect(scan().finalized).toBe(0); // P1 passed while the account w…
+       |                              ^
+    451|     t.clock.set('2026-10-05T12:00:00Z'); // inside P2 (due 2026-10-14T…
+    452|     saveSettings(user); // auto-submit on, effective now
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation
+AssertionError: expected 5 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 5
+
+ ❯ tests/integration/deadline.test.ts:476:30
+    474|     const later = newUser('ignore', 0, '2026-10-05T12:00:00Z');
+    475|     t.clock.set('2026-10-29T12:00:00Z');
+    476|     expect(scan().finalized).toBe(0); // neither has saved settings: n…
+       |                              ^
+    477|     saveSettings(early, { applyToOverdue: true });
+    478|     saveSettings(later, { applyToOverdue: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > without the overdue choice a first save never reaches periods that fell due before it
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/integration/deadline.test.ts:488:30
+    486|     activate('2026-09-21T00:00:00Z');
+    487|     t.clock.set('2026-10-29T12:00:00Z');
+    488|     expect(scan().finalized).toBe(0);
+       |                              ^
+    489|     saveSettings(user); // P1, P2 and P3 are all overdue; no overdue c…
+    490|     expect(scan().finalized).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved
+AssertionError: expected { activated: true, examined: 2, …(5) } to match object { finalized: +0, overdueRecorded: 1 }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "finalized": 0,
++   "finalized": 1,
+    "overdueRecorded": 1,
+  }
+
+ ❯ tests/integration/deadline.test.ts:503:20
+    501|     saveSettings(off, { autoSubmit: false });
+    502|     t.clock.set('2026-10-05T12:00:00Z');
+    503|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+       |                    ^
+    504|     t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc));
+    505|     expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-RBC-01: every event without an actor is a system event, whatever its operation (the automatic OT credit and debit)
+AssertionError: expected { …(12) } to match object { actor_is_self: false, …(4) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "actor_display_name": null,
+    "actor_is_self": false,
+-   "actor_is_system": true,
+    "actor_user_id": null,
+    "via_share": false,
+  }
+
+ ❯ tests/integration/history.test.ts:387:20
+    385|     expect(credit, 'the automatic credit is in the owner history').toB…
+    386|     // The actor-less posting is flagged as a system event by the serv…
+    387|     expect(credit).toMatchObject({ actor_is_self: false, actor_user_id…
+       |                    ^
+    388|     const auto = events.find((event) => event.operation === 'timesheet…
+    389|     expect(auto).toMatchObject({ actor_is_system: true, actor_is_self:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > lists a grantee change made before the period started when the owner has not finalized it (WP3-RBC-02)
+AssertionError: expected [ { …(3) } ] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "days": 2,
++     "days": 1,
+      "display_name": "Synthetic Grantee",
+      "work_dates": [
+-       "2026-09-22",
+        "2026-09-23",
+      ],
+    },
+  ]
+
+ ❯ tests/integration/review-grantee-changes.test.ts:222:46
+    220|     t.clock.set('2026-09-29T20:00:00Z');
+    221|     owner = await t.login('employee');
+    222|     expect((await review()).grantee_changes).toEqual([{ display_name: …
+       |                                              ^
+    223|   });
+    224|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts a change made before the period started only until the owner finalizes the period (WP3-RBC-02)
+AssertionError: expected [] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "days": 1,
+-     "display_name": "Synthetic Grantee",
+-     "work_dates": [
+-       "2026-09-22",
+-     ],
+-   },
+- ]
++ []
+
+ ❯ tests/integration/review-grantee-changes.test.ts:235:36
+    233|     await readyToSign();
+    234|     const before = await review();
+    235|     expect(before.grantee_changes).toEqual([{ display_name: GRANTEE_NA…
+       |                                    ^
+    236|     t.clock.advanceSeconds(60);
+    237|     expect((await signOff(before)).status).toBe(201);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  5 failed | 1 passed (6)
+      Tests  10 failed | 133 passed (143)
+   Start at  13:27:26
+   Duration  18.79s (tests 78%, import 13%, transform 9%)
+
+exit=1

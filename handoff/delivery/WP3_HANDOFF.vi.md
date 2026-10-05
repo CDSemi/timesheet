@@ -221,3 +221,12 @@ Test, fixture seed và kịch bản e2e đã đổi vì H-Q1:
 Lệnh và kết quả (`evidence/WP3-FIX2/00-commands.txt`): preflight exit 0; sau lần sửa mã nguồn cuối `npm run test:e2e` exit 0 (127 đạt, 5 bỏ qua); `npm run verify` exit 0 (62 file / 1416 test, SMOKE PASSED với 40 dòng `PASS`, không có dòng deprecation); `npm run digest` exit 0: `0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92` (721 file, loại `handoff/`).
 
 Còn lại: không có gì mới. Hành động tiếp theo: freeze, gate, rồi recheck B/C bằng reviewer mới tại digest mới.
+
+## Vòng sửa 3 — WP3-FIX3 (phát hiện WP3-RBC2-01, chỉ sửa test)
+
+Bằng chứng: `evidence/WP3-FIX3/`. Chỉ `tests/integration/deadline.test.ts` thay đổi; không đổi file nào trong `src/`, `docs/`, `scripts/` hay cấu hình.
+
+- Đã sửa WP3-RBC2-01. Test ngưỡng kích hoạt F-4 và test kỳ nhập khẩu nay dùng tài khoản đã lưu auto-submit bật (`configuredUser`), nên mỗi test lại kiểm tra đúng chốt chặn nó được viết cho. Test kỳ nhập khẩu có thêm nửa "tắt": công tắc được lưu tắt trước hạn; khẳng định không có revision, không có job, không có bản ghi quá hạn.
+- Quét chốt chặn (khoảng trống đã có từ `2f2520e`): ba test trực tiếp trong một `describe` mới đánh giá lại kỳ sau khi trạng thái đổi giữa lúc quét (trigger tạm thời vô hiệu hóa tài khoản hoặc dời mốc kích hoạt sau revision đầu tiên; đồng hồ lùi lại cho `not_due`). Xóa nhánh bỏ qua `inactive_user`, `before_activation` hoặc `not_due` nay làm một test thất bại.
+- Chứng minh đột biến trong bản clone tạm của `2d72d35` (file test được chép vào; mã nguồn kho không bị đột biến): bản sạch 44/44 đạt; M4, M5, M5b và việc xóa từng chốt trong ba chốt đều làm đúng các test dự kiến thất bại; xóa `finalized` (đối chứng) vẫn thất bại.
+- Kiểm tra: `npm run verify` và `npm run digest` là lệnh cuối (kết quả trong brief). Không chạy e2e: chỉ một file test tích hợp thay đổi.

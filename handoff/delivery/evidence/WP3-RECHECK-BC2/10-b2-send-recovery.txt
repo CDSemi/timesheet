@@ -1,0 +1,44 @@
+### <node24>/node.exe probes/b2-send-recovery.mjs   (fix2)
+# B2 send recovery and jobs (source: fix2)
+
+## 1. Retries 1/5/15/60 minutes, then the fifth attempt
+PASS retry delays after four temporary failures: [60,300,900,3600] s
+PASS job queued after 4 attempts ({"state":"queued","attempts":4,"next_run_at":"2026-09-29T21:21:00Z","lease_owner":null,"lease_expires_at":null,"last_error":"smtp_unavailable"})
+
+## 2. A runner process killed after `sending` was committed on the fifth (last) attempt
+PASS child runner killed by SIGKILL inside the send (exit 1, signal null)
+PASS attempts after the kill: ["failed_temporary","failed_temporary","failed_temporary","failed_temporary","sending"]
+PASS job leased by the dead runner, 5 attempts (leased/5)
+PASS a pass while the dead runner's lease is still valid changes nothing ({"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0})
+INFO pass after the lease expired: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}; job {"state":"intervention","last_error":"delivery_uncertain"}
+PASS fifth attempt is uncertain (lease_expired_while_sending), no decision yet (uncertain/lease_expired_while_sending)
+PASS the owner sees the fifth attempt uncertain with the decision prompt (decision_required true)
+PASS a plain resend is refused with the decision prompt, not "in progress" (409 delivery_uncertain)
+PASS never resent automatically: 0 captures after 6 h of passes
+PASS explicit owner decision resend accepted (201)
+PASS the decision sends exactly once (1 capture)
+PASS a second decision on the same attempt is refused (409 delivery_decision_recorded)
+PASS the decision is audited once
+PASS still one revision (no duplicate)
+
+## 3a. Residual edge, last attempt: the lease expires after the pass-start recovery and before the claim sweep
+PASS B: fifth attempt sending, job leased until 2026-09-30T04:46:01Z
+PASS start-of-pass recovery found nothing (0); the sweep claimed nothing (null)
+INFO after the sweep: job {"state":"intervention","last_error":"lease_expired"}, attempt sending
+INFO until the next pass the owner sees sending (decision_required false); a plain resend answers 409 delivery_in_progress
+PASS the next ordinary pass (15 s later) makes it uncertain with the decision prompt (uncertain, job last_error lease_expired)
+PASS B: one explicit decision sends exactly once (201, +1)
+
+## 3b. Residual edge, earlier attempt: the claim sweep re-claims the job and the handler marks it uncertain
+PASS C: first attempt sending, job leased by the dead runner
+PASS the handler's own branch marks the re-claimed attempt uncertain and stops permanently (delivery_uncertain, uncertain)
+PASS nothing was sent for C
+
+## 4. A live runner keeps its in-flight send: another runner pass does not mark it uncertain
+PASS D: the child runner committed `sending` and is inside the adapter call
+PASS another runner's pass leaves the live send alone ({"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}, attempt sending)
+INFO slow child: exit 0 {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+PASS D: the live send completes as accepted (accepted, job succeeded)
+
+SUMMARY B2 [fix2]: 25 PASS, 0 FAIL
+exit=0

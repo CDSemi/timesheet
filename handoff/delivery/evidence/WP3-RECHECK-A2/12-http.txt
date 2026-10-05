@@ -1,0 +1,94 @@
+PASS  cli seed  [  capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured]
+PASS  built server listening (JOB_RUNNER off, capture mode, loopback)
+PASS  three logins
+PASS  E1 settings, signature, note and two sessions (weekday and Sunday)  [201/201/200/201/201]
+PASS  E1 grants E2 (edit, OT read, PDF) and the admin (view)  [201/201]
+PASS  E2 edits E1 day 2026-09-30 (session) and 2026-10-01 (day entry) through /api/shared  [201/200]
+PASS  RBC-02 setup: E2 records planned leave on E1 day 2026-10-13 through /api/shared before that period starts  [200 {"work_date":"2026-10-13","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"00f69158-0ae6-4a1e-91be-ae41dd641f3f"},"default_category":"Worked","cat]
+PASS  C-01 owner review carries the hint beside the payload: E2 by display name, days 2026-09-30 and 2026-10-01  [[{"display_name":"Example Employee Two","days":2,"work_dates":["2026-09-30","2026-10-01"]}]]
+PASS  C-01 the hint is not inside the payload (no grantee name, no grantee_changes, no E2 id)
+PASS  C-01 payload_hash = SHA-256 of the canonical JSON of the payload alone  [48ff500acdcb vs 48ff500acdcb]
+INFO  an identical owner PUT of 2026-10-01 (same content, current version): status 200, E1 events 15->16, hint [{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]
+PASS  C-01 an owner change of 2026-10-01 takes the day over: the hint now lists only 2026-09-30  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]]
+PASS  C-01 shared review route 404 for the grantee and the admin (not on the allowlist)  [404/404]
+PASS  C-01 the shared timesheet view carries no hint  [200]
+PASS  C-01 E2 and the admin get their own review with an empty hint and nothing of E1
+PASS  RBC-02 E1 review of payroll 2026-10-30 lists E2 for 2026-10-13 (changed before the period started)  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-10-13"]}]]
+PASS  RBC-02 the 2026-10-30 hint is outside the payload: no grantee name or id, payload_hash = SHA-256 of the canonical payload alone
+PASS  RBC-02 grantee shared review 404; shared timesheet without hint; admin and E2 own reviews empty and without E1 data  [404/200/200/200]
+PASS  RBC-02 the 2026-10-30 hash shown with the hint equals the production builder hash without it
+PASS  C-01 the hash with the hint shown (GET review) equals the hash built without it (production builder)  [c23e6af60b78/c23e6af60b78]
+PASS  E1 signs off the hash shown with the hint (201)  [201]
+PASS  C-01 after the owner sign-off the hint window restarts (empty)  [[]]
+PASS  saving settings with an empty To list is refused (422), so every account that H-Q1 automates has a recipient  [422 recipients_required]
+PASS  H-Q1 setup: admin settings saved (auto-submit on, one recipient; an empty To list is refused at save, see INFO); E3 created, signed in, one session, settings never saved (is_default)  [201/201/201/true]
+PASS  E2 note line and auto-submit on, image authorized; admin records the activation  [201/201/200]
+PASS  seven production run-jobs passes exit 0 (the first three with the sender, so E1 manual send is captured)  [{"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":6,"succeeded":4,"retried":1,"intervention":1,"lost":0} | {"claimed":5,"succeeded":2,"retried":0,"intervention":3,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}]
+PASS  H-Q1 (a) E3 (never saved settings) after its 2026-10-14 deadline: no revision, no revision line, no finalization ledger entry, no job, no delivery attempt, no system or deadline event, no overdue reminder, nothing finalized  [{"revisions":0,"lines":0,"finalizationLedger":0,"jobs":[],"attempts":0,"systemAudits":[],"reminders":[],"finalizedTimesheets":0}]
+PASS  GET /api/revisions lists only the caller's revisions  [e1=1 e2=1 admin=1]
+PASS  owner PDF download: 200 application/pdf, no-store, attachment, nosniff  [200 no-store attachment; filename="timesheet-2026-10-16-r1.pdf"]
+PASS  C-01 the signed PDF carries no hint: no grantee name, no "changed by", no "share"  [24 lines]
+PASS  the signed PDF prints the signer name and the Sunday 2026-10-04 row
+INFO  E1 PDF lines: 24; first: Submission TS-20261016-470595b182 / C&D Semiconductor Services, Inc. / Revision 1
+PASS  E2 downloads its own automatic PDF  [200]
+PASS  E2 downloads E1 PDF through the PDF item (200, no-store)  [200]
+PASS  the admin (also a grantee) revokes its own share of E1 through the admin route  [200]
+PASS  C-02 E1 history attributes exactly the five grantee acts through /api/shared (day entry created by the session POST, session, day PUT, pre-period leave PUT, PDF download) to the grantee name  [day_entry.create,day_entry.create,day_entry.create,share.pdf_download,work_session.create]
+PASS  C-02 every attributed event names E2 only, with actor_user_id null
+PASS  C-02 the admin-route revocation by an admin holding a share stays unattributed  [{"via_share":false,"name":null}]
+PASS  C-02 E1 history carries no other user's id or email (E2, admin), and E2's name only in attribution
+PASS  C-02 E2's and the admin's own histories hold nothing of E1 (id, revision, notes, address, signer, share ids)
+INFO  RBC-01 E1: 23 events; system: user.create; by another person: share.revoke,share.pdf_download(share),day_entry.create(share),day_entry.create(share),work_session.create(share),day_entry.create(share); keys: actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share
+INFO  RBC-01 E2: 18 events; system: timesheet.auto_finalize,ot_ledger.credit,ot_ledger.credit,user.create; by another person: -; keys: actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share
+INFO  RBC-01 admin: 5 events; system: timesheet.auto_finalize,user.create; by another person: -; keys: actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share
+INFO  RBC-01 E3: 4 events; system: -; by another person: user.create; keys: actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share
+PASS  RBC-01 every history event: actor_is_system equals "no actor" in the database, the event is the caller's own, and a system event carries no id, name, share or self flag
+PASS  RBC-01 E2 automatic submission: timesheet.auto_finalize and its OT postings are system events; nothing of E2 by a person is labelled system  [timesheet.auto_finalize,ot_ledger.credit,ot_ledger.credit,user.create]
+PASS  RBC-01 E1: the admin revocation and the grantee leave are not system events; the only E1 system event is the CLI-seed account creation (no actor)  [user.create | share.revoke,share.pdf_download(share),day_entry.create(share),day_entry.create(share),work_session.create(share),day_entry.create(share)]
+PASS  RBC-01 / H-Q1: E3 (never configured) history has no system event (nothing automatic happened) and no other user's data
+PASS  RBC-01 the history answer adds only the boolean actor_is_system (key set of every event)  [actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share | actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share | actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share | actor_display_name,actor_is_self,actor_is_system,actor_user_id,after,before,entity_id,entity_type,id,occurred_at,operation,reason,via_share]
+PASS  history is not shared: /api/shared/<E1>/history 404  [404]
+PASS  E2 leaves the share: the shared PDF is 404 at once and the leave stays unattributed in E1 history  [200/404]
+PASS  ID swap / anonymous: E2 -> E1 PDF -> 404  [404]
+PASS  ID swap / anonymous: admin -> E1 PDF -> 404  [404]
+PASS  ID swap / anonymous: anonymous -> E1 PDF -> 401  [401]
+PASS  ID swap / anonymous: E1 -> E2 PDF -> 404  [404]
+PASS  ID swap / anonymous: E1 upper-case id -> 404  [404]
+PASS  ID swap / anonymous: E1 traversal id -> 404  [404]
+PASS  ID swap / anonymous: admin shared path after its share was revoked -> 404  [404]
+PASS  ID swap / anonymous: E2 -> E1 signature -> 404  [404]
+PASS  ID swap / anonymous: admin -> E1 signature -> 404  [404]
+PASS  ID swap / anonymous: E1 -> E2 signature -> 404  [404]
+PASS  ID swap / anonymous: anonymous -> E1 signature -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> signatures/current -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> revisions -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> E1 review -> 401  [401]
+PASS  ID swap / anonymous: admin -> E1 resend -> 404  [404]
+PASS  ID swap / anonymous: E2 -> E1 resend -> 404  [404]
+PASS  owner signature download 200 image/png, no-store, attachment  [200]
+PASS  signatures/current answers the caller only (E1 own id; admin null), no-store
+PASS  deliveries are owner-scoped: admin list empty, admin decision 404  [0/404]
+PASS  no static path: GET /<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /files/<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/files/<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /api/files/<pdf-key>  [404 application/json]
+PASS  no static path: GET /<sig-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /files/<sig-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/mail-capture/<attempt>/attachment.pdf  [200 text/html; charset=utf-8]
+PASS  no static path: GET /mail-capture/<attempt>/message.eml  [200 text/html; charset=utf-8]
+PASS  no static path: GET /t.db  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/../t.db  [200 text/html; charset=utf-8]
+PASS  no static path: GET /t.db-wal  [200 text/html; charset=utf-8]
+PASS  no-store on the owner API answers (incl. the review with its hint)  [no-store,no-store,no-store,no-store,no-store,no-store,no-store]
+PASS  every admin answer field is in the allowlist (docs/03, operationsStatus.ts)
+INFO  admin key paths: .automation .automation.active_from .automation.recorded_at .automation.recorded_by .operations .operations.activation .operations.activation.active_from .operations.activation.recorded_at .operations.activation.recorded_by .operations.deliveries .operations.deliveries.accepted .operations.deliveries.failed_permanent .operations.deliveries.failed_temporary .operations.deliveries.preparing .operations.deliveries.sending .operations.deliveries.uncertain .operations.jobs .operations.jobs.cancelled .operations.jobs.intervention .operations.jobs.leased .operations.jobs.queued .operations.jobs.succeeded .operations.runner .operations.runner.heartbeat_at .operations.runner.state .operations.sender .operations.sender.configured .operations.sender.outbound_mode .shares .shares[].created_at .shares[].grantee .shares[].grantee.display_name .shares[].grantee.id .shares[].id .shares[].items .shares[].items.ot_read .shares[].items.pdf_download .shares[].items.timesheets .shares[].owner .shares[].owner.display_name .shares[].owner.id .shares[].revoked_at .shares[].revoked_by_role .submissions .submissions[].delivery .submissions[].delivery.accepted_at .submissions[].delivery.attempts .submissions[].delivery.decision_required .submissions[].delivery.fault_code .submissions[].delivery.job_fault_code .submissions[].delivery.job_state .submissions[].delivery.state .submissions[].display_name .submissions[].pdf .submissions[].pdf.fault_code .submissions[].pdf.state .submissions[].period .submissions[].period.due_at .submissions[].period.payroll_date .submissions[].period.period_end .submissions[].period.period_start .submissions[].recipients .submissions[].recipients.effective .submissions[].recipients.effective.cc .submissions[].recipients.effective.to .submissions[].recipients.frozen .submissions[].recipients.frozen.cc .submissions[].recipients.frozen.to .submissions[].revision .submissions[].revision.finalized_at .submissions[].revision.no .submissions[].revision.origin .submissions[].revision.review_state .submissions[].revision.send_requested .submissions[].user_id .users .users[].calendar_id .users[].created_at .users[].display_name .users[].email .users[].id .users[].role .users[].status .users[].updated_at
+PASS  admin answers hold no timesheet detail, note, signer, template/subject/body, hash, key, review hint or history attribution
+PASS  admin sees E1 recipient addresses, effective and frozen (F-Q3 (b))  [{"effective":{"to":["<email>"],"cc":["<email>"]},"frozen":{"to":["<email>"],"cc":["<email>"]}}]
+INFO  admin submission rows: Example Admin|2026-10-16|r1|deadline|pending|pdf=ready|delivery=failed_permanent/intervention/sender_missing ; Example Employee|2026-10-16|r1|employee|signed|pdf=ready|delivery=accepted/succeeded/null ; Example Employee Two|2026-10-16|r1|deadline|pending|pdf=ready|delivery=failed_permanent/intervention/sender_missing
+PASS  AC-14: the admin account (settings saved, auto-submit on) empty-period automatic submission sent without a configured sender shows the sender_missing fault, never accepted  [{"state":"failed_permanent","attempts":1,"accepted_at":null,"fault_code":"sender_missing","decision_required":false,"job_state":"intervention","job_fault_code":"sender_missing"}]
+PASS  H-Q1 (a): the administrator submission status has no row for E3 (never configured)  [Example Admin,Example Employee,Example Employee Two]
+PASS  E1 capture: recipients = frozen snapshot, PDF hash = download, subject frozen, capture mode
+PASS  C-01 stored revision: payload and reviewed hashes equal the hash shown with the hint; the stored payload and the e-mail hold no hint or grantee name
+PASS  no password, hash, session token or token hash in 198 responses, logs, captures, audit payloads, job errors, provider responses or payloads
+INFO  server exit code=null signal=SIGTERM; server log lines: 1
+HTTP PROBE PASSED

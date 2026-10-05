@@ -1,0 +1,69 @@
+### <node24>/node.exe probes/h2-guards.mjs   (fix2)
+# H2 activation and imported-period guards with configured accounts (source: fix2)
+PASS conf: saves auto-submit on (201)
+PASS imp: saves auto-submit on (201)
+PASS conf: a working day (201)
+
+## (a) F-4 with a configured account: no activation, then a queued scan job after the activation was cleared
+PASS no activation: two deadlines pass and a direct scan reports {"activated":false,"examined":0,"finalized":0,"overdueRecorded":0,"skipped":0,"failed":0,"remaining":false}; nothing automated for the auto-on account
+PASS no scan job is queued while the activation instant is null
+PASS activation recorded (200), one scan job queued for the 2026-10-28 deadline, activation cleared (200)
+INFO runner pass after the clear: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}; scan job state succeeded
+PASS the queued scan finalizes nothing once the activation was cleared (revisions [])
+
+## (b) An imported_unverified period of an auto-on account
+PASS re-activated at 2026-10-28T00:05:00Z (200)
+PASS control: the configured account is automated at the 2026-11-11 deadline (["2026-11-13"])
+PASS the imported period of the auto-on account is not finalized and gets no overdue record (revisions [], overdue 0)
+
+SUMMARY H2 [fix2]: 10 PASS, 0 FAIL
+exit=0
+
+### bash <scratch>/h2mut.sh   (probe H2 against <scratch>/mut with M4, then M5)
+### M4 applied in <scratch>/mut (scan ignores a NULL activation instant); PROBE_REPO=<scratch>/mut node probes/h2-guards.mjs
+ src/server/services/automation.ts | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+# H2 activation and imported-period guards with configured accounts (source: mut)
+PASS conf: saves auto-submit on (201)
+PASS imp: saves auto-submit on (201)
+PASS conf: a working day (201)
+
+## (a) F-4 with a configured account: no activation, then a queued scan job after the activation was cleared
+FAIL no activation: two deadlines pass and a direct scan reports {"activated":false,"examined":8,"finalized":4,"overdueRecorded":0,"skipped":4,"failed":0,"remaining":false}; nothing automated for the auto-on account
+PASS no scan job is queued while the activation instant is null
+PASS activation recorded (200), one scan job queued for the 2026-10-28 deadline, activation cleared (200)
+INFO runner pass after the clear: {"claimed":13,"succeeded":12,"retried":1,"intervention":0,"lost":0}; scan job state succeeded
+FAIL the queued scan finalizes nothing once the activation was cleared (revisions ["2026-10-02","2026-10-16","2026-10-30"])
+
+## (b) An imported_unverified period of an auto-on account
+PASS re-activated at 2026-10-28T00:05:00Z (200)
+FAIL control: the configured account is automated at the 2026-11-11 deadline (["2026-10-02","2026-10-16","2026-10-30","2026-11-13"])
+FAIL the imported period of the auto-on account is not finalized and gets no overdue record (revisions ["2026-10-02","2026-10-16","2026-10-30"], overdue 0)
+
+SUMMARY H2 [mut]: 6 PASS, 4 FAIL
+exit=1
+restored
+### M5 applied in <scratch>/mut (imported skip moved after the switch-on decision); PROBE_REPO=<scratch>/mut node probes/h2-guards.mjs
+ src/server/services/automation.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+# H2 activation and imported-period guards with configured accounts (source: mut)
+PASS conf: saves auto-submit on (201)
+PASS imp: saves auto-submit on (201)
+PASS conf: a working day (201)
+
+## (a) F-4 with a configured account: no activation, then a queued scan job after the activation was cleared
+PASS no activation: two deadlines pass and a direct scan reports {"activated":false,"examined":0,"finalized":0,"overdueRecorded":0,"skipped":0,"failed":0,"remaining":false}; nothing automated for the auto-on account
+PASS no scan job is queued while the activation instant is null
+PASS activation recorded (200), one scan job queued for the 2026-10-28 deadline, activation cleared (200)
+INFO runner pass after the clear: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}; scan job state succeeded
+PASS the queued scan finalizes nothing once the activation was cleared (revisions [])
+
+## (b) An imported_unverified period of an auto-on account
+PASS re-activated at 2026-10-28T00:05:00Z (200)
+PASS control: the configured account is automated at the 2026-11-11 deadline (["2026-11-13"])
+FAIL the imported period of the auto-on account is not finalized and gets no overdue record (revisions ["2026-11-13"], overdue 0)
+
+SUMMARY H2 [mut]: 9 PASS, 1 FAIL
+exit=1
+restored
+h2mut-done

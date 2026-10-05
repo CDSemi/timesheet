@@ -1,0 +1,249 @@
+// WP3-RECHECK-A2 H-Q1 (a) differential probe. The SAME scenario script runs against the build named by
+// AUDIT_REPO (the previous freeze 2f2520e, then the reviewed 2d72d35) through the production services and
+// the production `cli.js run-jobs --once --now` passes with fixed instants, and writes a normalized dump of
+// every timesheet row, revision, sign-off, ledger entry, revision line, audit operation, job, delivery
+// attempt and reminder decision of the scenario's accounts (UUIDs, submission ids and hashes replaced by
+// placeholders in order of appearance). The caller diffs the two dumps.
+//   X  configured existing account: manual sign-off, automatic finalization of the next period, late
+//      review, correction (H-Q1 must change nothing);
+//   Y  configured account created inside a period (2026-09-20), settings saved at creation: its creation
+//      period is automated, then late-reviewed (must change nothing);
+//   Z  as Y, but the account never saves submission settings (H-Q1: nothing at all on 2d72d35);
+//   N  never-configured existing accounts (the seed employee with OT sessions in three periods and a
+//      signature; the seed admin), passes before, at and after three deadlines, then the employee signs
+//      the 2026-10-02 period by hand (manual path unchanged);
+//   M  first save in the middle of a period after a deadline passed with a runner pass in between
+//      (2d72d35: the earlier period is never automated; later periods are);
+//   O  the explicit apply-to-overdue choice at the first save, for an account that existed at the
+//      deadline (automated) and for one created after it (clamped by creation);
+//   F  auto-submit saved OFF (overdue record, overdue reminder; must change nothing).
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { fixedClock, freshDb, m, MAIL_FROM, PAYROLL, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const BUILD = REPO.split(/[\\/]/).pop();
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/hq1-${BUILD}`;
+const scenario = process.argv[2];
+const dir = join(BASE, scenario);
+mkdirSync(dir, { recursive: true });
+const dbPath = join(dir, 't.db');
+const dataDir = join(dir, 'private-data');
+const passes = [];
+const runJobs = async (instant) => {
+  const r = await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM });
+  passes.push(`${instant.slice(5, 16)}:${r.code}:${r.out.split('\n').pop()}`);
+  if (r.code !== 0) console.log(`ERR   run-jobs ${instant} exit ${r.code}: ${r.err.slice(0, 300)}`);
+};
+const pw = () => randomBytes(18).toString('base64url');
+
+function normalizer() {
+  const map = new Map();
+  const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const submission = /TS-\d{8}-[0-9a-f]{10}/g;
+  const hex64 = /\b[0-9a-f]{64}\b/g;
+  const swap = (prefix) => (match) => {
+    if (!map.has(match)) map.set(match, `<${prefix}${map.size + 1}>`);
+    return map.get(match);
+  };
+  return (text) => text.replace(uuid, swap('id')).replace(submission, swap('ts')).replace(hex64, swap('h'));
+}
+
+function dump(userIds) {
+  const db = m.db.openDatabase(dbPath);
+  const out = {};
+  for (const [label, userId] of Object.entries(userIds)) {
+    const q = (sql) => db.prepare(sql).all({ user: userId });
+    out[label] = {
+      timesheets: q('SELECT p.payroll_date, t.finalized_revision_no, t.version, t.imported_unverified FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id WHERE t.user_id = :user ORDER BY p.payroll_date'),
+      revisions: q(`SELECT p.payroll_date, r.revision_no, r.revision_kind, r.origin, r.review_state, r.correction_reason, r.timesheet_version, r.send_requested,
+                           r.actor_user_id IS NOT NULL AS has_actor, r.reviewed_sha256 IS NOT NULL AS has_reviewed, r.payload_sha256, r.payload_json, r.created_at
+                      FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+                     WHERE r.user_id = :user ORDER BY r.created_at, r.revision_no`),
+      signoffs: q('SELECT signer_name, signed_at, reviewed_sha256 FROM signoffs WHERE user_id = :user ORDER BY signed_at'),
+      ledger: q('SELECT entry_type, source_key, delta_minutes, origin, work_date, actor_user_id IS NOT NULL AS has_actor, reason, posted_at FROM ot_ledger WHERE user_id = :user ORDER BY rowid'),
+      lines: q('SELECT revision_id, work_date, line_kind, proposed_minutes, outcome, ledger_entry_id IS NOT NULL AS has_entry FROM revision_ledger_lines WHERE user_id = :user ORDER BY rowid'),
+      audits: q(`SELECT operation, entity_type, occurred_at, CASE WHEN actor_user_id IS NULL THEN 'none' WHEN actor_user_id = owner_user_id THEN 'self' ELSE 'other' END AS actor
+                   FROM audit_events WHERE owner_user_id = :user ORDER BY rowid`),
+      jobs: q('SELECT kind, business_key, state, last_error FROM jobs WHERE user_id = :user ORDER BY rowid'),
+      attempts: q('SELECT state, provider_response FROM delivery_attempts WHERE user_id = :user ORDER BY rowid'),
+      reminders: q('SELECT r.kind, r.occurrence_key, r.disposition, p.payroll_date FROM reminder_occurrences r JOIN pay_periods p ON p.id = r.pay_period_id WHERE r.user_id = :user ORDER BY r.rowid'),
+    };
+  }
+  db.close();
+  return out;
+}
+
+function summary(d) {
+  return Object.entries(d)
+    .map(([label, u]) => {
+      const revs = u.revisions.map((r) => `${r.payroll_date}#${r.revision_no}:${r.origin}:${r.review_state}`).join(',') || '-';
+      const fin = u.ledger.filter((e) => e.source_key.startsWith('finalization:') || e.source_key.startsWith('rev:')).length;
+      const jobs = u.jobs.map((j) => `${j.kind}:${j.state}`).join(',') || '-';
+      const ops = u.audits.filter((a) => a.operation.startsWith('timesheet.') || a.operation.startsWith('deadline.')).map((a) => a.operation).join(',') || '-';
+      const rem = u.reminders.map((r) => `${r.kind}/${r.disposition}@${r.payroll_date}`).join(',') || '-';
+      return `${label}: revisions=${revs} signoffs=${u.signoffs.length} finalization_ledger=${fin} lines=${u.lines.length} timesheet_rows=${u.timesheets.length} jobs=${jobs} attempts=${u.attempts.map((a) => a.state).join(',') || '-'} system_ops=${ops} reminders=${rem}`;
+    })
+    .join('\n  ');
+}
+
+const sign = (db, clock, user, payroll, signer = 'Synthetic Signer') => {
+  const r = m.review.buildReviewPayload(db, clock, user, payroll);
+  return m.fin.signOffTimesheet({ db, clock, user }, payroll, { expectedVersion: r.expectedVersion, reviewedHash: r.payloadHash, signerName: signer, deficitChoices: [], incompleteEvidenceAcknowledged: true }).status;
+};
+const revise = (db, clock, user, payroll, kind, reason, sendEmail, signer = 'Synthetic Signer') => {
+  const r = m.review.buildReviewPayload(db, clock, user, payroll);
+  return m.fin.reviseTimesheet({ db, clock, user }, payroll, { kind, reason, sendEmail, expectedVersion: r.expectedVersion, reviewedHash: r.payloadHash, signerName: signer, deficitChoices: [], incompleteEvidenceAcknowledged: true }).status;
+};
+const activate = (db, adminId, activeFrom, at = '2026-08-31T12:00:00Z') =>
+  m.auto.setAutomationActivation(db, fixedClock(at), { actorUserId: adminId, activeFrom, reason: 'Synthetic recheck activation' });
+
+let ids;
+const notes = [];
+if (scenario === 'X') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const c0 = fixedClock('2026-09-01T12:00:00Z');
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: c0 }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c0, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, c0, owner.id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: true });
+  activate(db, s.admin.id, '2026-09-21T00:00:00Z', '2026-09-01T12:00:00Z');
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  const c1 = fixedClock('2026-09-28T20:00:00Z');
+  m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  notes.push(`signoff=${sign(db, fixedClock('2026-09-29T20:00:00Z'), owner, '2026-10-02')}`);
+  const c2 = fixedClock('2026-10-06T20:00:00Z');
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-10-04', session('2026-10-04', '09:00', '12:00'));
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-10-05', session('2026-10-05', '09:00', '13:00'));
+  db.close();
+  for (const instant of ['2026-09-29T20:10:00Z', '2026-09-30T00:30:00Z', '2026-10-14T00:30:00Z', '2026-10-14T00:40:00Z']) await runJobs(instant);
+  const db2 = m.db.openDatabase(dbPath);
+  notes.push(`late=${revise(db2, fixedClock('2026-10-14T18:00:00Z'), owner, '2026-10-16', 'late_review', null, false)}`);
+  m.cmds.createSession({ db: db2, clock: fixedClock('2026-10-14T18:30:00Z'), user: owner }, '2026-09-15', { ...session('2026-09-15', '18:00', '19:00'), reason: 'Synthetic late hour' });
+  notes.push(`correction=${revise(db2, fixedClock('2026-10-14T19:00:00Z'), owner, '2026-10-02', 'correction', 'Synthetic correction', true)}`);
+  db2.close();
+  for (const instant of ['2026-10-14T19:10:00Z', '2026-10-14T19:20:00Z']) await runJobs(instant);
+  ids = { owner: owner.id };
+} else if (scenario === 'Y' || scenario === 'Z') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  activate(db, s.admin.id, '2026-09-01T00:00:00Z');
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id IN (?, ?)").run(s.admin.id, s.employee.id);
+  const c1 = fixedClock('2026-09-20T12:00:00Z');
+  const lateId = await users.createUser(db, c1, { email: '<email>', displayName: 'Synthetic Late Account', role: 'employee', password: pw(), calendarId: s.calendarId }, s.admin.id);
+  const owner = sessionUser(db, lateId);
+  policy(db, '2026-09-20T12:00:00Z', owner.id, s.calendarId, 'auto_deduct', '2026-09-14');
+  m.ledger.postCredit({ db, clock: c1 }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-14', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c1, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  if (scenario === 'Y') m.settings.saveSubmissionSettings(db, c1, owner.id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: true });
+  const c2 = fixedClock('2026-09-26T20:00:00Z');
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-09-21', session('2026-09-21', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-09-22', session('2026-09-22', '09:00', '13:00'));
+  db.close();
+  for (const instant of ['2026-09-20T12:30:00Z', '2026-09-29T23:00:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z', '2026-09-30T01:40:00Z', '2026-10-14T00:30:00Z', '2026-10-14T00:40:00Z']) await runJobs(instant);
+  notes.push(`after the deadline passes, before any manual step: ${summary(dump({ owner: owner.id }))}`);
+  const db2 = m.db.openDatabase(dbPath);
+  const hasRevision = db2.prepare('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?').pluck().get(owner.id) > 0;
+  if (hasRevision) notes.push(`late=${revise(db2, fixedClock('2026-10-01T18:00:00Z'), owner, '2026-10-02', 'late_review', null, false, 'Synthetic Late Signer')}`);
+  else notes.push(`manual signoff of the creation period=${sign(db2, fixedClock('2026-10-01T18:00:00Z'), owner, '2026-10-02', 'Synthetic Late Signer')}`);
+  db2.close();
+  await runJobs('2026-10-01T18:10:00Z');
+  ids = { owner: owner.id };
+} else if (scenario === 'N') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const c0 = fixedClock('2026-09-01T12:00:00Z');
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'auto_deduct', '2026-08-31');
+  m.ledger.postCredit({ db, clock: c0 }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c0, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  activate(db, s.admin.id, '2026-09-01T00:00:00Z');
+  db.close();
+  // Sessions are recorded the day after they happened, interleaved with the runner passes in time order.
+  const record = (rows) => {
+    const dbs = m.db.openDatabase(dbPath);
+    for (const [date, from, to, at] of rows) m.cmds.createSession({ db: dbs, clock: fixedClock(at), user: owner }, date, session(date, from, to));
+    dbs.close();
+  };
+  record([['2026-09-08', '08:00', '18:00', '2026-09-09T12:00:00Z']]);
+  for (const instant of ['2026-09-16T00:30:00Z', '2026-09-16T22:30:00Z', '2026-09-17T00:30:00Z', '2026-09-17T01:30:00Z']) await runJobs(instant);
+  record([['2026-09-15', '09:00', '18:00', '2026-09-17T12:00:00Z'], ['2026-09-16', '09:00', '13:00', '2026-09-17T12:00:00Z']]);
+  for (const instant of ['2026-09-29T23:00:00Z', '2026-09-30T00:30:00Z', '2026-09-30T01:30:00Z']) await runJobs(instant);
+  record([['2026-09-29', '08:00', '17:30', '2026-10-05T12:00:00Z'], ['2026-10-04', '09:00', '12:00', '2026-10-05T12:00:00Z']]);
+  for (const instant of ['2026-10-13T23:00:00Z', '2026-10-14T00:30:00Z', '2026-10-14T01:30:00Z', '2026-10-20T12:00:00Z']) await runJobs(instant);
+  const mid = dump({ employee: owner.id, admin: s.admin.id });
+  notes.push(`after the passes: ${summary(mid).replace(/\n {2}/g, ' || ')}`);
+  const db2 = m.db.openDatabase(dbPath);
+  let manual;
+  try {
+    manual = sign(db2, fixedClock('2026-10-20T12:30:00Z'), owner, '2026-10-02');
+  } catch (error) {
+    manual = `${error.status}/${error.code}`;
+  }
+  notes.push(`manual signoff of 2026-10-02 after its deadline=${manual}`);
+  db2.close();
+  for (const instant of ['2026-10-20T12:40:00Z', '2026-10-20T12:50:00Z']) await runJobs(instant);
+  ids = { employee: owner.id, admin: s.admin.id };
+} else if (scenario === 'M') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'ignore', '2026-08-31');
+  activate(db, s.admin.id, '2026-09-01T00:00:00Z');
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-09T12:00:00Z'), user: owner }, '2026-09-08', session('2026-09-08', '08:00', '18:00'));
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-16T12:00:00Z'), user: owner }, '2026-09-15', session('2026-09-15', '08:00', '18:00'));
+  db.close();
+  await runJobs('2026-09-17T00:30:00Z'); // the 2026-09-18 deadline passes while the account has no saved settings
+  const db1 = m.db.openDatabase(dbPath);
+  m.settings.saveSubmissionSettings(db1, fixedClock('2026-09-20T12:00:00Z'), owner.id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: true });
+  db1.close();
+  for (const instant of ['2026-09-20T12:30:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z', '2026-10-14T00:30:00Z', '2026-10-14T00:40:00Z']) await runJobs(instant);
+  ids = { owner: owner.id };
+} else if (scenario === 'O') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'ignore', '2026-08-31');
+  activate(db, s.admin.id, '2026-09-01T00:00:00Z');
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  const later = await users.createUser(db, fixedClock('2026-09-18T12:00:00Z'), { email: '<email>', displayName: 'Synthetic Later Account', role: 'employee', password: pw(), calendarId: s.calendarId }, s.admin.id);
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-09T12:00:00Z'), user: owner }, '2026-09-08', session('2026-09-08', '08:00', '18:00'));
+  // No runner pass between the 2026-09-18 deadline (2026-09-17T00:00Z) and the save: both builds see the same state.
+  const save = fixedClock('2026-09-20T12:00:00Z');
+  m.settings.saveSubmissionSettings(db, save, owner.id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: true, applyToOverdueDrafts: true });
+  m.settings.saveSubmissionSettings(db, save, later, { expectedSeq: 0, to: [PAYROLL], autoSubmit: true, applyToOverdueDrafts: true });
+  db.close();
+  for (const instant of ['2026-09-20T12:30:00Z', '2026-09-20T12:40:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z']) await runJobs(instant);
+  ids = { owner: owner.id, later };
+} else if (scenario === 'F') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'ignore', '2026-08-31');
+  m.settings.saveSubmissionSettings(db, fixedClock('2026-09-01T12:00:00Z'), owner.id, { expectedSeq: 0, to: [PAYROLL], autoSubmit: false });
+  activate(db, s.admin.id, '2026-09-01T00:00:00Z');
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-16T12:00:00Z'), user: owner }, '2026-09-15', session('2026-09-15', '08:00', '18:00'));
+  db.close();
+  for (const instant of ['2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z', '2026-09-30T01:40:00Z']) await runJobs(instant);
+  ids = { owner: owner.id };
+} else {
+  throw new Error(`unknown scenario ${scenario}`);
+}
+
+const result = dump(ids);
+const norm = normalizer();
+writeFileSync(join(dir, 'dump.json'), `${norm(JSON.stringify(result, null, 1))}\n`);
+const db = m.db.openDatabase(dbPath);
+const integrity = db.prepare('PRAGMA integrity_check').pluck().get();
+const fk = db.prepare('PRAGMA foreign_key_check').all().length;
+db.close();
+console.log(`scenario ${scenario} on ${BUILD}: ${notes.join('; ')}`);
+console.log(`  ${summary(result)}`);
+console.log(`  integrity=${integrity} fk=${fk} passes=${passes.join(' | ')}`);

@@ -1,0 +1,20 @@
+WP3-FIX3 attempt 1 - commands and results (timesheet-worker; test-only fix of WP3-RBC2-01)
+Node: portable v24.21.0 called by full path (node --version first -> v24.21.0). Scratch: outside Dropbox, TEMP/TMP there.
+Baseline: 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714. Changed: tests/integration/deadline.test.ts (+ WP3_HANDOFF pair, this brief, this folder).
+
+1. Scratch clone of 2d72d35, npm ci -> exit 0 (found 0 vulnerabilities).
+2. For each case: copy the updated tests/integration/deadline.test.ts into the clone, apply the mutation to
+   src/server/services/automation.ts with perl, run vitest on tests/integration/deadline.test.ts, git checkout the source.
+   M4, M5 and M5b are the auditor's mutations (WP3-RECHECK-BC2 evidence 17); G1-G3 delete one skip line; G4 is the finalized control.
+   Results (01-mutations.txt):
+     clean            exit 0, 44 passed
+     M4               exit 1, 1 failed (activation test, auto-on account)
+     M5               exit 1, 1 failed (imported test, auto-on account)
+     M5b              exit 1, 2 failed (both imported tests)
+     G1 inactive_user exit 1, 1 failed (guard sweep test)
+     G2 before_activation exit 1, 1 failed (guard sweep test)
+     G3 not_due       exit 1, 1 failed (guard sweep test)
+     G4 finalized     exit 1, 2 failed (control, as at the audit)
+     clean again      exit 0, 44 passed; source status empty after every run
+3. npm run verify (node --trace-deprecation --pending-deprecation, in the project folder) -> exit 0; 62 files, 1420 tests (was 1416: +1 imported "off" test, +3 guard-sweep tests); SMOKE PASSED; no deprecation line (03-verify.txt).
+4. No e2e run: only an integration test file changed.

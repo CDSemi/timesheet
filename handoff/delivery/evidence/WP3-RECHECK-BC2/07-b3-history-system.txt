@@ -1,0 +1,69 @@
+### <node24>/node.exe probes/b3-history-system.mjs   (PROBE_REPO default = <scratch>/fix2, 2d72d35)
+# B3 History: actor-less events are system events (WP3-RBC-01) (source: fix2)
+PASS auto: settings saved, auto_submit true (201)
+PASS off: settings saved, auto_submit false (201)
+PASS auto: auto_deduct policy (201)
+PASS auto shares edit access with the grantee (201)
+PASS activation (200)
+PASS auto: session 2026-10-03 09:00-13:00 (201 )
+PASS auto: session 2026-10-05 09:00-15:00 (201 )
+PASS the grantee edits a day of auto through the share (200)
+PASS the administrator renames auto (an act by another person) (200)
+INFO auto: actor-less audit events: [{"operation":"ot_ledger.credit","n":1},{"operation":"timesheet.auto_finalize","n":1}]
+PASS the automatic submission posted an actor-less OT credit
+INFO auto: history rows ["timesheet.auto_finalize => \"Submitted automatically\" [automatic|system]","ot_ledger.credit => \"OT credit posted\" [automatic|system]","user.update => \"Account changed\" [by someone else|other]","day_entry.create => \"Day entry created\" [Changed by Synthetic Grantee (shared access)|grantee]","work_session.create => \"Work session added\"","day_entry.create => \"Day entry created\"","work_session.create => \"Work session added\"","day_entry.create => \"Day entry created\"","share.grant => \"Share granted\"","work_policy.create => \"Work policy saved\"","submission_settings.update => \"Submission settings saved\"","auth.login => \"Signed in\"","user.create => \"Account created\" [by someone else|other]"]
+PASS auto: every event carries the server flag actor_is_system
+PASS auto: actor_is_system is exactly "the stored actor is NULL" for all 13 events (mismatches 0)
+PASS auto: every actor-less event reads "automatic" with data-history-actor="system" (2 events; wrong: [])
+PASS auto: no system event reads "by someone else"
+PASS auto: no raw operation code is shown
+PASS auto: "OT credit posted" [automatic] (the WP3-RBC-01 scenario)
+INFO auto: actor-less deficit event: none
+PASS auto: the administrator's rename stays another person's act: [by someone else]
+PASS auto: the grantee edit keeps its attribution: [Changed by Synthetic Grantee (shared access)]
+PASS auto: no identifier of another person leaves the server
+PASS auto: the owner's own 8 events show no badge and are not system events
+INFO off: history rows ["deadline.overdue => \"Deadline passed with automatic submission off\" [automatic|system]","submission_settings.update => \"Submission settings saved\"","auth.login => \"Signed in\"","user.create => \"Account created\" [by someone else|other]"]
+PASS off: every event carries the server flag actor_is_system
+PASS off: actor_is_system is exactly "the stored actor is NULL" for all 4 events (mismatches 0)
+PASS off: every actor-less event reads "automatic" with data-history-actor="system" (1 events; wrong: [])
+PASS off: no system event reads "by someone else"
+PASS off: no raw operation code is shown
+
+SUMMARY B3 [fix2]: 25 PASS, 0 FAIL
+exit=0
+
+### PROBE_REPO=<scratch>/pre2 <node24>/node.exe probes/b3-history-system.mjs   (pre-round-2 freeze 2f2520e)
+# B3 History: actor-less events are system events (WP3-RBC-01) (source: pre2)
+PASS auto: settings saved, auto_submit true (201)
+PASS off: settings saved, auto_submit false (201)
+PASS auto: auto_deduct policy (201)
+PASS auto shares edit access with the grantee (201)
+PASS activation (200)
+PASS auto: session 2026-10-03 09:00-13:00 (201 )
+PASS auto: session 2026-10-05 09:00-15:00 (201 )
+PASS the grantee edits a day of auto through the share (200)
+PASS the administrator renames auto (an act by another person) (200)
+INFO auto: actor-less audit events: [{"operation":"ot_ledger.credit","n":1},{"operation":"timesheet.auto_finalize","n":1}]
+PASS the automatic submission posted an actor-less OT credit
+INFO auto: history rows ["timesheet.auto_finalize => \"Submitted automatically\" [automatic|other]","ot_ledger.credit => \"OT credit posted\" [by someone else|other]","user.update => \"Account changed\" [by someone else|other]","day_entry.create => \"Day entry created\" [Changed by Synthetic Grantee (shared access)|grantee]","work_session.create => \"Work session added\"","day_entry.create => \"Day entry created\"","work_session.create => \"Work session added\"","day_entry.create => \"Day entry created\"","share.grant => \"Share granted\"","work_policy.create => \"Work policy saved\"","submission_settings.update => \"Submission settings saved\"","auth.login => \"Signed in\"","user.create => \"Account created\" [by someone else|other]"]
+FAIL auto: every event carries the server flag actor_is_system
+FAIL auto: actor_is_system is exactly "the stored actor is NULL" for all 13 events (mismatches 13)
+FAIL auto: every actor-less event reads "automatic" with data-history-actor="system" (2 events; wrong: ["timesheet.auto_finalize [automatic]","ot_ledger.credit [by someone else]"])
+PASS auto: no system event reads "by someone else"
+PASS auto: no raw operation code is shown
+FAIL auto: "OT credit posted" [by someone else] (the WP3-RBC-01 scenario)
+INFO auto: actor-less deficit event: none
+FAIL auto: the administrator's rename stays another person's act: [by someone else]
+FAIL auto: the grantee edit keeps its attribution: [Changed by Synthetic Grantee (shared access)]
+PASS auto: no identifier of another person leaves the server
+FAIL auto: the owner's own 8 events show no badge and are not system events
+INFO off: history rows ["deadline.overdue => \"Deadline passed with automatic submission off\" [automatic|other]","submission_settings.update => \"Submission settings saved\"","auth.login => \"Signed in\"","user.create => \"Account created\" [by someone else|other]"]
+FAIL off: every event carries the server flag actor_is_system
+FAIL off: actor_is_system is exactly "the stored actor is NULL" for all 4 events (mismatches 4)
+FAIL off: every actor-less event reads "automatic" with data-history-actor="system" (1 events; wrong: ["deadline.overdue [automatic]"])
+PASS off: no system event reads "by someone else"
+PASS off: no raw operation code is shown
+
+SUMMARY B3 [pre2]: 15 PASS, 10 FAIL
+exit=1

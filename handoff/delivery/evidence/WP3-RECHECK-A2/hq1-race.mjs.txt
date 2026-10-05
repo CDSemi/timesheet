@@ -1,0 +1,74 @@
+// WP3-RECHECK-A2 H-Q1 race probe: an account that never saved settings makes its FIRST save at the moment a
+// production deadline pass runs, in two OS processes with their own SQLite connections, 20 rounds per mode.
+//   mode `overdue`: the first save turns auto-submit on WITH the explicit apply-to-overdue choice, so the period
+//                   that fell due before the save is eligible once the save is committed;
+//   mode `plain`:   the first save turns auto-submit on without the choice (the period must never be automated).
+// After two drain passes, every round must show either nothing (plain) or exactly one automatic revision, one
+// ledger set, one PDF and one send (overdue), whatever the interleaving; never a partial state.
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { count, fixedClock, freshDb, m, MAIL_FROM, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const ROUNDS = Number(process.env.ROUNDS ?? 20);
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/hq1-race`;
+const HERE = import.meta.dirname;
+const DELAYS = [0, 2, 5, 9, 14, 20, 30, 45, 70, 100];
+const totals = {};
+for (const mode of ['overdue', 'plain']) {
+  totals[mode] = { scanFirst: 0, saveFirst: 0, failed: 0 };
+  for (let round = 1; round <= ROUNDS; round += 1) {
+    const dir = join(BASE, `${mode}-r${String(round).padStart(2, '0')}`);
+    mkdirSync(dir, { recursive: true });
+    const dbPath = join(dir, 't.db');
+    const dataDir = join(dir, 'private-data');
+    const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+    const { db } = s;
+    const owner = sessionUser(db, s.employee.id);
+    policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'auto_deduct');
+    m.ledger.postCredit({ db, clock: fixedClock('2026-09-01T12:00:00Z') }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+    m.sigs.saveSignature(db, fixedClock('2026-09-01T12:00:00Z'), new m.files.FileStore(dataDir), owner.id, m.seed.syntheticSignaturePng(31), 'image/png');
+    m.auto.setAutomationActivation(db, fixedClock('2026-09-01T12:00:00Z'), { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic recheck activation' });
+    db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+    const c1 = fixedClock('2026-09-28T20:00:00Z');
+    m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+    m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+    db.close();
+    const startAt = Date.now() + 1500;
+    const d = DELAYS[(round - 1) % DELAYS.length];
+    const child = join(HERE, 'hq1-race-child.mjs');
+    const [save, scan] = await Promise.all([
+      run([child, 'save', dbPath, String(startAt), String(round % 2 === 0 ? d : 0), mode]),
+      run([child, 'scan', dbPath, dataDir, String(startAt), String(round % 2 === 0 ? 0 : d), '2026-09-30T00:30:00Z']),
+    ]);
+    const env = { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM };
+    const drains = [];
+    for (const now of ['2026-09-30T00:40:00Z', '2026-09-30T00:50:00Z']) drains.push(await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now], env));
+    const check = m.db.openDatabase(dbPath);
+    const revisions = check.prepare("SELECT origin, created_at FROM timesheet_revisions WHERE user_id = ?").all(owner.id);
+    const settingsRow = check.prepare('SELECT created_at, auto_submit_effective_from FROM submission_settings WHERE user_id = ?').get(owner.id);
+    const finLedger = count(check, "SELECT count(*) FROM ot_ledger WHERE user_id = ? AND source_key LIKE 'finalization:%'", owner.id);
+    const lines = count(check, 'SELECT count(*) FROM revision_ledger_lines WHERE user_id = ?', owner.id);
+    const jobs = check.prepare("SELECT kind || ':' || state FROM jobs WHERE user_id = ? AND kind IN ('render_pdf', 'send_email') ORDER BY kind").pluck().all(owner.id);
+    const attempts = check.prepare('SELECT state FROM delivery_attempts WHERE user_id = ?').pluck().all(owner.id);
+    const overdue = count(check, "SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation LIKE 'deadline.%'", owner.id);
+    const integrity = check.prepare('PRAGMA integrity_check').pluck().get();
+    check.close();
+    const scanOut = scan.out.split('\n').pop();
+    const scanFirst = revisions.length === 1 ? revisions[0].created_at !== '2026-09-30T00:30:00Z' : true;
+    const problems = [];
+    if (save.code !== 0 || scan.code !== 0 || drains.some((r) => r.code !== 0)) problems.push(`exit ${save.code}/${scan.code}/${drains.map((r) => r.code).join('/')} ${save.err.slice(0, 160)} ${scan.err.slice(0, 160)}`);
+    if (settingsRow === undefined) problems.push('settings not saved');
+    if (mode === 'plain') {
+      if (revisions.length !== 0 || finLedger !== 0 || lines !== 0 || jobs.length !== 0 || attempts.length !== 0 || overdue !== 0) problems.push('plain mode automated or recorded something');
+    } else if (revisions.length !== 1 || revisions[0].origin !== 'deadline' || finLedger !== 2 || lines !== 2 || JSON.stringify(jobs) !== '["render_pdf:succeeded","send_email:succeeded"]' || JSON.stringify(attempts) !== '["accepted"]' || overdue !== 0) {
+      problems.push('overdue mode: not exactly one automatic finalization and send');
+    }
+    if (integrity !== 'ok') problems.push(`integrity ${integrity}`);
+    if (problems.length) totals[mode].failed += 1;
+    else if (mode === 'overdue' && scanFirst) totals[mode].scanFirst += 1;
+    else totals[mode].saveFirst += 1;
+    console.log(`${mode} round ${String(round).padStart(2, '0')} delay=${d}ms save=${save.out.split('\n').pop()} scan=${scanOut} revisions=${revisions.map((r) => `${r.origin}@${r.created_at}`).join(',') || '-'} ledger=${finLedger} lines=${lines} jobs=${jobs.join(',') || '-'} attempts=${attempts.join(',') || '-'} deadline_events=${overdue} integrity=${integrity} ${problems.length ? `FAIL ${problems.join('; ')}` : 'OK'}`);
+  }
+}
+console.log(`TOTAL ${JSON.stringify(totals)}`);
+process.exitCode = Object.values(totals).every((t) => t.failed === 0) ? 0 : 1;

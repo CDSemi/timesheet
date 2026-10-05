@@ -1,0 +1,48 @@
+// WP3-RECHECK-A2: compares one scenario of hq1-diff.mjs between the two builds on the rows of the periods with
+// payroll date >= argv[3] only (each database normalized on its own), and prints the per-period differences of
+// the earlier periods. argv: <scenario> <minPayroll>
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { SCRATCH } from './common.mjs';
+
+const Database = createRequire(join(SCRATCH, 'repo', 'package.json'))('better-sqlite3');
+const [scenario, minPayroll] = process.argv.slice(2);
+
+function normalizer() {
+  const map = new Map();
+  const swap = (prefix) => (match) => {
+    if (!map.has(match)) map.set(match, `<${prefix}${map.size + 1}>`);
+    return map.get(match);
+  };
+  return (text) => text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, swap('id')).replace(/TS-\d{8}-[0-9a-f]{10}/g, swap('ts')).replace(/\b[0-9a-f]{64}\b/g, swap('h'));
+}
+
+function load(build) {
+  const db = new Database(join(SCRATCH, 'work', `hq1-r3-${build}`, scenario, 't.db'), { readonly: true });
+  const q = (sql, ...args) => db.prepare(sql).all(...args);
+  const periodRev = 'JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id JOIN users u ON u.id = r.user_id';
+  const all = {
+    revisions: q(`SELECT p.payroll_date, r.user_id, r.revision_no, r.revision_kind, r.origin, r.review_state, r.payload_sha256, r.payload_json, r.created_at, r.send_requested FROM timesheet_revisions r ${periodRev} ORDER BY p.payroll_date, u.email, r.revision_no`),
+    lines: q(`SELECT p.payroll_date, l.work_date, l.line_kind, l.proposed_minutes, l.outcome FROM revision_ledger_lines l JOIN timesheet_revisions r ON r.id = l.revision_id ${periodRev} ORDER BY p.payroll_date, u.email, l.work_date, l.line_kind`),
+    ledger: q("SELECT source_key, delta_minutes, origin, work_date, posted_at FROM ot_ledger WHERE source_key LIKE 'finalization:%' OR source_key LIKE 'rev:%' ORDER BY work_date, source_key, (SELECT email FROM users WHERE id = ot_ledger.user_id)"),
+    jobs: q(`SELECT p.payroll_date, j.kind, j.state FROM jobs j JOIN timesheet_revisions r ON r.id = j.revision_id ${periodRev} ORDER BY p.payroll_date, u.email, j.kind`),
+    attempts: q(`SELECT p.payroll_date, a.state FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id ${periodRev} ORDER BY p.payroll_date, u.email`),
+    audits: q(`SELECT a.operation, a.occurred_at, p.payroll_date FROM audit_events a JOIN timesheet_revisions r ON r.id = a.entity_id ${periodRev} WHERE a.operation LIKE 'timesheet.%' ORDER BY p.payroll_date, u.email, a.occurred_at`),
+  };
+  db.close();
+  const periodStart = (date) => {
+    const [y, mo, d] = date.split('-').map(Number);
+    return new Date(Date.UTC(y, mo - 1, d - 18)).toISOString().slice(0, 10);
+  };
+  const keep = (row) => (row.payroll_date !== undefined ? row.payroll_date >= minPayroll : row.work_date >= periodStart(minPayroll));
+  const later = Object.fromEntries(Object.entries(all).map(([k, rows]) => [k, rows.filter(keep)]));
+  const earlier = Object.fromEntries(Object.entries(all).map(([k, rows]) => [k, rows.filter((row) => !keep(row)).length]));
+  return { later: normalizer()(JSON.stringify(later, null, 1)), earlier, revisionsEarlier: all.revisions.filter((row) => !keep(row)).map((r) => `${r.payroll_date}:${r.origin}`) };
+}
+
+const old = load('old-2f2520e');
+const now = load('repo');
+console.log(`scenario ${scenario}, periods with payroll >= ${minPayroll}: ${old.later === now.later ? 'IDENTICAL' : 'DIFFERENT'} (${old.later.length} / ${now.later.length} chars)`);
+console.log(`  earlier periods: 2f2520e rows ${JSON.stringify(old.earlier)} revisions [${old.revisionsEarlier.join(',')}]`);
+console.log(`  earlier periods: 2d72d35 rows ${JSON.stringify(now.earlier)} revisions [${now.revisionsEarlier.join(',')}]`);
+process.exitCode = old.later === now.later ? 0 : 1;

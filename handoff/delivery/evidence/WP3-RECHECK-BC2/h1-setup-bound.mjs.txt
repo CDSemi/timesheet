@@ -1,0 +1,230 @@
+// WP3-RECHECK-BC2 probe H1: owner decision H-Q1 (a) (automatic submission only for accounts that saved their
+// submission settings with auto-submit on), with the account-creation bound (WP3-B-01), F-1 and the switch-off
+// behaviour. Real SQLite file, the production runner (deadline scan, PDF, send and reminder jobs), capture outbound,
+// settings saved through the HTTP API. Auditor-written; synthetic data only. Run against PROBE_REPO.
+// Usage: node h1-setup-bound.mjs                 (main)
+//        node h1-setup-bound.mjs scan <db> <now> (child: one deadline scan in the process TZ, prints JSON)
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { LA, la, openDatabase, REPO, reporter, runJobsOnce, saveSignature, setup, syntheticSignaturePng } from './lib.mjs';
+
+const [role, childDb, childNow] = process.argv.slice(2);
+if (role === 'scan') {
+  const { runDeadlineScan } = await import(new URL('src/server/services/automation.ts', REPO).href);
+  const db = openDatabase(childDb);
+  const summary = runDeadlineScan(db, { now: () => new Date(childNow) }, { batchSize: 1000 });
+  const rows = db
+    .prepare(
+      `SELECT u.display_name AS who, p.payroll_date FROM timesheet_revisions r JOIN users u ON u.id = r.user_id
+         JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id ORDER BY u.display_name, p.payroll_date`,
+    )
+    .all();
+  const overdue = db.prepare("SELECT u.display_name AS who, json_extract(a.after_json, '$.payroll_date') AS payroll FROM audit_events a JOIN users u ON u.id = a.owner_user_id WHERE a.operation = 'deadline.overdue' ORDER BY 1, 2").all();
+  console.log(JSON.stringify({ tz: process.env.TZ, offset: new Date(childNow).getTimezoneOffset(), summary, rows, overdue }));
+  db.close();
+  process.exit(0);
+}
+
+const settingsModel = await import(new URL('src/client/components/settingsModel.ts', REPO).href);
+const r = reporter('H1 setup bound (H-Q1 (a)), creation bound and switch-off');
+const ctx = await setup('h1', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const handlers = ctx.handlers();
+const passAt = async (iso) => {
+  const out = [];
+  for (const offset of [0, 120, 240]) {
+    clock.set(new Date(new Date(iso).getTime() + offset * 1000).toISOString().replace('.000Z', 'Z'));
+    out.push(await runJobsOnce({ db, clock, handlers, owner: 'probe-h1' }));
+  }
+  return out;
+};
+const revs = (id) =>
+  db
+    .prepare(
+      `SELECT p.payroll_date FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+        WHERE r.user_id = ? ORDER BY p.payroll_date, r.revision_no`,
+    )
+    .pluck()
+    .all(id);
+const autoRevs = (id) =>
+  db
+    .prepare(
+      `SELECT p.payroll_date FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+        WHERE r.user_id = ? AND r.origin = 'deadline' ORDER BY p.payroll_date`,
+    )
+    .pluck()
+    .all(id);
+const overdue = (id) => db.prepare("SELECT json_extract(after_json, '$.payroll_date') FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.overdue' ORDER BY rowid").pluck().all(id);
+const footprint = (id) => ({
+  revisions: db.prepare('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?').pluck().get(id),
+  finalized: db.prepare('SELECT count(*) FROM timesheets WHERE user_id = ? AND finalized_revision_no IS NOT NULL').pluck().get(id),
+  submissionJobs: db.prepare("SELECT count(*) FROM jobs WHERE user_id = ? AND kind IN ('render_pdf', 'send_email')").pluck().get(id),
+  attempts: db.prepare('SELECT count(*) FROM delivery_attempts WHERE user_id = ?').pluck().get(id),
+  ledger: db.prepare('SELECT count(*) FROM ot_ledger WHERE user_id = ?').pluck().get(id),
+  deadlineAudit: db.prepare("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND (operation LIKE 'deadline.%' OR operation = 'timesheet.auto_finalize')").pluck().get(id),
+  overdueNotices: db.prepare("SELECT count(*) FROM reminder_occurrences WHERE user_id = ? AND kind IN ('overdue', 'outcome_notice')").pluck().get(id),
+});
+const nothing = (id) => {
+  const f = footprint(id);
+  return { ok: Object.values(f).every((v) => v === 0), f };
+};
+const save = async (who, body) => {
+  const seq = db.prepare('SELECT seq FROM submission_settings WHERE user_id = ? ORDER BY seq DESC LIMIT 1').pluck().get(ctx.ids[who]) ?? 0;
+  return ctx.request('POST', '/api/settings/submission', { cookie: ctx.cookies[who], body: { expected_seq: seq, to: [ctx.emails[who]], ...body } });
+};
+const session = (who, day, from, to) =>
+  ctx.request('POST', `/api/days/${day}/sessions`, { cookie: ctx.cookies[who], body: { start: la(`${day}T${from}`), end: la(`${day}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true } });
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const NEVER = ['never', 'admin', 'owner'];
+
+r.section('0. Accounts (created 2026-09-29T20:00Z unless stated) and activation');
+for (const [who, local, name] of [
+  ['never', 'probe-never', 'Probe Never'],
+  ['onEarly', 'probe-on-early', 'Probe On Early'],
+  ['mid', 'probe-mid', 'Probe Mid'],
+  ['choice', 'probe-choice', 'Probe Choice'],
+  ['plain', 'probe-plain', 'Probe Plain'],
+  ['offUser', 'probe-off', 'Probe Off'],
+  ['offEarly', 'probe-off-early', 'Probe Off Early'],
+]) {
+  await ctx.addUser(who, local, name);
+}
+const pol = await ctx.request('POST', '/api/policies', {
+  cookie: ctx.cookies.never,
+  body: { effective_from: '2026-09-28', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'auto_deduct' },
+});
+r.check(pol.status === 201, `never: auto_deduct policy, so an automatic submission would post OT credits and deficit debits (${pol.status})`);
+const defaultView = await ctx.request('GET', '/api/settings/submission', { cookie: ctx.cookies.never });
+r.info(`never: GET /api/settings/submission before any save: is_default ${defaultView.body.settings.is_default}, auto_submit ${defaultView.body.settings.auto_submit}, auto_submit_effective_from ${defaultView.body.settings.auto_submit_effective_from}`);
+const ruleText = settingsModel.autoSubmitRule(defaultView.body.settings, (x) => x);
+r.info(`never: Settings rule text for the unsaved defaults: "${ruleText}"`);
+r.check(defaultView.body.settings.is_default === true && !/on by default/i.test(ruleText) && /Nothing is submitted for you until you save/.test(ruleText), 'the unsaved-settings wording makes no claim that automation applies before setup');
+clock.set('2026-09-30T12:00:00Z');
+r.check((await save('onEarly', { auto_submit: true })).status === 201, 'onEarly: saves auto-submit on (2026-09-30T12:00Z, before activation)');
+r.check((await save('offUser', { auto_submit: true })).status === 201, 'offUser: saves auto-submit on (2026-09-30T12:00Z)');
+r.check((await save('offEarly', { auto_submit: false })).status === 201, 'offEarly: saves auto-submit off (2026-09-30T12:00Z, before activation)');
+clock.set('2026-10-01T00:00:00Z');
+const act = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic recheck activation' } });
+r.check(act.status === 200, `activation 2026-10-01T00:00:00Z (${act.status})`);
+const actPast = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-09-30T00:00:00Z', reason: 'synthetic past activation' } });
+r.check(actPast.status === 422 && actPast.body?.error?.code === 'activation_in_past', `an activation instant in the past is refused (${actPast.status} ${actPast.body?.error?.code})`);
+clock.set('2026-10-06T18:00:00Z');
+for (const [day, from, to] of [['2026-10-03', '09:00', '12:00'], ['2026-10-05', '09:00', '15:00']]) {
+  const s = await session('never', day, from, to);
+  r.check(s.status === 201, `never: session ${day} ${from}-${to} (Saturday OT / short weekday) (${s.status} ${s.body?.error?.code ?? ''})`);
+}
+for (const who of ['mid', 'choice', 'plain', 'owner']) {
+  const s = await session(who, '2026-10-05', '09:00', '18:00');
+  r.check(s.status === 201, `${who}: a draft working day 2026-10-05 (${s.status})`);
+}
+
+r.section('1. Deadline 2026-10-14T00:00Z (payroll 2026-10-16)');
+await passAt('2026-10-13T23:55:30Z');
+r.check(autoRevs(ctx.ids.onEarly).length === 0 && overdue(ctx.ids.offEarly).length === 0, 'runner passes up to 30 s before the deadline automate nothing');
+r.info(`runner passes: ${JSON.stringify(await passAt('2026-10-14T00:00:30Z'))}`);
+for (const who of NEVER) {
+  const n = nothing(ctx.ids[who]);
+  r.check(n.ok, `${who} (never saved settings): nothing automated, no overdue record, no PDF/send job, no delivery attempt, no ledger row (${JSON.stringify(n.f)})`);
+}
+r.check(eq(overdue(ctx.ids.offEarly), ['2026-10-16']) && autoRevs(ctx.ids.offEarly).length === 0, `offEarly (saved auto-submit off before the deadline): one overdue record for 2026-10-16 and no revision (${JSON.stringify(overdue(ctx.ids.offEarly))})`);
+r.check(eq(autoRevs(ctx.ids.onEarly), ['2026-10-16']) && eq(autoRevs(ctx.ids.offUser), ['2026-10-16']), `onEarly and offUser (auto on before the deadline): 2026-10-16 submitted automatically (${JSON.stringify([autoRevs(ctx.ids.onEarly), autoRevs(ctx.ids.offUser)])})`);
+for (const who of ['mid', 'choice', 'plain']) r.check(nothing(ctx.ids[who]).ok, `${who} (not set up yet): nothing automated`);
+clock.set('2026-10-15T00:00:00Z');
+await ctx.addUser('lateChoice', 'probe-late-choice', 'Probe Late Choice');
+r.info(`lateChoice created at ${db.prepare('SELECT created_at FROM users WHERE id = ?').pluck().get(ctx.ids.lateChoice)} (after the 2026-10-14 deadline)`);
+
+r.section('2. Mid-period save (2026-10-20, inside 2026-10-12..10-25) and switching off (offUser)');
+clock.set('2026-10-20T12:00:00Z');
+r.check((await save('mid', { auto_submit: true })).status === 201, 'mid: first save, auto-submit on, no overdue choice');
+r.check((await save('offUser', { auto_submit: false })).status === 201, 'offUser: turns auto-submit off');
+await passAt('2026-10-20T12:00:30Z');
+r.check(nothing(ctx.ids.mid).ok, 'mid: the save itself reaches no period that was already due (2026-10-16 stays a draft)');
+await passAt('2026-10-28T00:00:30Z');
+r.check(eq(autoRevs(ctx.ids.mid), ['2026-10-30']), `mid: the current period (due 2026-10-28) is submitted at its deadline (${JSON.stringify(autoRevs(ctx.ids.mid))})`);
+r.check(eq(autoRevs(ctx.ids.offUser), ['2026-10-16']) && eq(overdue(ctx.ids.offUser), ['2026-10-30']), `offUser: after switching off, 2026-10-30 gets one overdue record and no revision (${JSON.stringify([autoRevs(ctx.ids.offUser), overdue(ctx.ids.offUser)])})`);
+for (const who of [...NEVER, 'choice', 'plain', 'lateChoice']) r.check(nothing(ctx.ids[who]).ok, `${who}: still nothing automated after the 2026-10-28 deadline`);
+
+r.section('3. The explicit apply-to-overdue choice (clamped by account creation) and a plain first save');
+clock.set('2026-10-29T12:00:00Z');
+const choiceSave = await save('choice', { auto_submit: true, apply_to_overdue_drafts: true });
+const lateSave = await save('lateChoice', { auto_submit: true, apply_to_overdue_drafts: true });
+const plainSave = await save('plain', { auto_submit: true });
+r.check(choiceSave.status === 201 && lateSave.status === 201 && plainSave.status === 201, `saves: choice + overdue choice (${choiceSave.status}, effective ${choiceSave.body.settings?.auto_submit_effective_from}), lateChoice + overdue choice (${lateSave.status}), plain (${plainSave.status}, effective ${plainSave.body.settings?.auto_submit_effective_from})`);
+await passAt('2026-10-29T12:00:30Z');
+r.check(eq(autoRevs(ctx.ids.choice), ['2026-10-16', '2026-10-30']), `choice: the explicit choice submits the overdue periods due after activation (not 2026-10-02, due before activation): ${JSON.stringify(autoRevs(ctx.ids.choice))}`);
+r.check(eq(autoRevs(ctx.ids.lateChoice), ['2026-10-30']), `lateChoice (created 2026-10-15): the choice never reaches 2026-10-16 (due before the account existed): ${JSON.stringify(autoRevs(ctx.ids.lateChoice))}`);
+r.check(nothing(ctx.ids.plain).ok, 'plain: a first save without the choice reaches no overdue period');
+const signOff = async (who, payroll, name) => {
+  if (db.prepare("SELECT count(*) FROM attachments WHERE user_id = ? AND kind = 'signature'").pluck().get(ctx.ids[who]) === 0) saveSignature(db, clock, ctx.files, ctx.ids[who], syntheticSignaturePng(7), 'image/png');
+  const review = await ctx.request('GET', `/api/timesheets/${payroll}/review`, { cookie: ctx.cookies[who] });
+  return ctx.request('POST', `/api/timesheets/${payroll}/signoff`, {
+    cookie: ctx.cookies[who],
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: name, incomplete_evidence_acknowledged: true },
+  });
+};
+clock.set('2026-10-29T13:00:00Z');
+const offSigned = await signOff('offUser', '2026-10-30', 'Probe Off');
+const offNotice = db.prepare("SELECT count(*) FROM reminder_occurrences WHERE user_id = ? AND kind = 'overdue'").pluck().get(ctx.ids.offUser);
+r.check(offNotice === 1, `offUser: the overdue warning for 2026-10-30 is decided once by the reminder scan (${offNotice})`);
+r.check(offSigned.status === 201 && offSigned.body.revision?.origin !== 'deadline', `offUser: the overdue period can still be signed off manually (${offSigned.status} ${offSigned.body?.error?.code ?? ''} ${offSigned.body?.error?.message ?? ''})`);
+const neverSigned = await signOff('never', '2026-10-16', 'Probe Never');
+r.check(neverSigned.status === 201, `never: the manual path is unchanged for a never-configured account (sign-off of 2026-10-16: ${neverSigned.status} ${neverSigned.body?.error?.code ?? ''} ${neverSigned.body?.error?.message ?? ''})`);
+r.info(`never after its own sign-off: ${JSON.stringify(footprint(ctx.ids.never))} (manual revision, its PDF/send jobs and ledger rows are the employee's own act)`);
+const withoutAttempts = (f) => ({ ...f, attempts: undefined });
+const neverManual = withoutAttempts(footprint(ctx.ids.never));
+
+r.section('4. Device-zone independence before the 2026-11-11 deadline (database copies scanned under four TZ values)');
+db.pragma('wal_checkpoint(TRUNCATE)');
+const runs = [];
+for (const tz of ['America/Los_Angeles', 'Pacific/Kiritimati', 'Asia/Ho_Chi_Minh', 'UTC']) {
+  const copy = join(ctx.dir, `zone-${tz.replace(/\//g, '_')}.db`);
+  copyFileSync(ctx.dbPath, copy);
+  const child = spawnSync(process.execPath, [process.argv[1], 'scan', copy, '2026-11-11T01:00:30Z'], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });
+  runs.push(JSON.parse(child.stdout.trim()));
+}
+const key = (run) => JSON.stringify([run.rows, run.overdue]);
+r.check(runs.every((run) => key(run) === key(runs[0])) && new Set(runs.map((x) => x.offset)).size === 4, `identical revisions and overdue records under ${runs.map((x) => `${x.tz}(${x.offset})`).join(', ')}`);
+r.check(runs.every((run) => !run.rows.some((row) => ['Example Admin', 'Example Employee'].includes(row.who)) && !run.overdue.some((row) => ['Example Admin', 'Example Employee', 'Probe Never'].includes(row.who))), 'no device zone automates or records an overdue period for a never-configured account');
+
+r.section('5. Several more deadlines (2026-11-11 .. 2027-01-20)');
+for (const due of ['2026-11-11T01:00:30Z', '2026-11-25T01:00:30Z', '2026-12-09T01:00:30Z', '2026-12-23T01:00:30Z', '2027-01-06T01:00:30Z', '2027-01-20T01:00:30Z']) await passAt(due);
+r.check(eq(autoRevs(ctx.ids.plain), ['2026-11-13', '2026-11-27', '2026-12-11', '2026-12-25', '2027-01-08', '2027-01-22']), `plain: automated from the first deadline after its save (${JSON.stringify(autoRevs(ctx.ids.plain))})`);
+const plainF1 = db
+  .prepare(
+    `SELECT r.payload_json, r.origin, r.review_state, r.reviewed_sha256, r.actor_user_id FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id
+       JOIN pay_periods p ON p.id = t.pay_period_id WHERE r.user_id = ? AND p.payroll_date = '2026-11-13'`,
+  )
+  .get(ctx.ids.plain);
+const f1 = JSON.parse(plainF1?.payload_json ?? '{"days":[]}');
+r.check(
+  plainF1?.origin === 'deadline' && plainF1.review_state === 'pending' && plainF1.reviewed_sha256 === null && plainF1.actor_user_id === null && f1.days.length === 14 && f1.ot_proposals?.length === 0 && f1.deficit_proposals?.length === 0 && db.prepare('SELECT count(*) FROM ot_ledger WHERE user_id = ?').pluck().get(ctx.ids.plain) === 0,
+  `F-1 for a configured account: the empty period 2026-11-13 is submitted with 14 default-labelled days (${[...new Set(f1.days.map((d) => d.category))].join('/')}), no OT, no deficit, no ledger row, review pending, no reviewed hash, no actor`,
+);
+for (const who of ['admin', 'owner']) {
+  const n = nothing(ctx.ids[who]);
+  r.check(n.ok, `${who} (seeded, never saved settings): nothing automated across 8 deadlines (${JSON.stringify(n.f)})`);
+}
+r.check(eq(withoutAttempts(footprint(ctx.ids.never)), neverManual) && db.prepare("SELECT count(*) FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id WHERE a.user_id = ? AND r.origin = 'deadline'").pluck().get(ctx.ids.never) === 0 && eq(autoRevs(ctx.ids.never), []) && eq(overdue(ctx.ids.never), []), `never: only its own manual sign-off; no automatic revision, overdue record or extra job across 8 deadlines (${JSON.stringify(footprint(ctx.ids.never))})`);
+const neverHistory = (await ctx.request('GET', '/api/history?limit=500', { cookie: ctx.cookies.never })).body.audit_events;
+r.check(!neverHistory.some((e) => /^deadline\.|auto_finalize/.test(e.operation)), 'never: its History holds no automatic submission or deadline record');
+const reminderKinds = db.prepare('SELECT kind, count(*) AS n FROM reminder_occurrences WHERE user_id = ? GROUP BY kind').all(ctx.ids.never);
+r.info(`never: reminder decisions (before-deadline notices are not part of H-Q1): ${JSON.stringify(reminderKinds)}`);
+
+r.section('6. Administrator operations status');
+const ops = await ctx.request('GET', '/api/admin/operations', { cookie: ctx.cookies.admin });
+const subs = await ctx.request('GET', '/api/admin/submissions', { cookie: ctx.cookies.admin });
+r.info(`operations: activation ${ops.body.operations.activation.active_from}; jobs ${JSON.stringify(ops.body.operations.jobs)}; deliveries ${JSON.stringify(ops.body.operations.deliveries)}`);
+const rowsBy = (id) => subs.body.submissions.filter((row) => row.user_id === id);
+const autoFaults = db
+  .prepare("SELECT count(*) FROM jobs j JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id WHERE r.origin = 'deadline' AND j.state = 'intervention'")
+  .pluck()
+  .get();
+const manualFaults = db.prepare("SELECT u.display_name AS who, j.kind, j.last_error FROM jobs j JOIN users u ON u.id = j.user_id WHERE j.state = 'intervention'").all();
+r.info(`jobs needing intervention (all origins): ${JSON.stringify(manualFaults)}`);
+r.check(ops.status === 200 && autoFaults === 0, `no automatic submission stops with a fault (${autoFaults}; before H-Q1 the never-configured accounts' automatic sends failed recipient_missing)`);
+r.check(rowsBy(ctx.ids.admin).length === 0 && rowsBy(ctx.ids.owner).length === 0 && rowsBy(ctx.ids.never).every((row) => row.revision.origin === 'employee'), `the submission list holds no automatic row for a never-configured account (admin ${rowsBy(ctx.ids.admin).length}, employee ${rowsBy(ctx.ids.owner).length}, never ${JSON.stringify(rowsBy(ctx.ids.never).map((row) => row.revision.origin))})`);
+const captured = existsSync(join(ctx.dataDir, 'mail-capture')) ? readdirSync(join(ctx.dataDir, 'mail-capture')).length : 0;
+r.info(`capture folders (submissions and notices of all probe accounts): ${captured}`);
+db.close();
+r.done('H1');

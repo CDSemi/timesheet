@@ -6,15 +6,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 2f2520e1ab80ff55938b70cd469f0bfe888e04a2 (WP3-FIX-FREEZE, the
-    WP3 fix-round freeze). The first WP3 freeze was a1cd566.
+  - HEAD = origin/main = 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714 (WP3-FIX2-FREEZE, the
+    fix-round-2 freeze). Earlier WP3 freezes were a1cd566 and 2f2520e.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410
     (WP3-REGATE PASS on 2f2520e). The first WP3 gate digest was 96870f7e… (WP3-GATE on
     a1cd566); the WP2 gate digest was e61fa914… (WP2-GATE4).
-  - Uncommitted: the WP3-FIX2 source, tests and docs/05 and docs/10 changes (digest
-    0d513fca…), plus the handoff records since 2f2520e. WP3-FIX2-FREEZE is committing
-    them.
+  - Uncommitted, being committed by WP3-FIX3-FREEZE:
+    - tests/integration/deadline.test.ts (round 3, digest c31c300c…);
+    - the handoff records since 2d72d35, including the WP3-FIX2-FREEZE brief.
+
+    The gate digest of record is 0d513fca… (WP3-REGATE2 PASS).
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -370,7 +372,52 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
      - WP3-FIX2 is done at attempt 2. It masked the six logs, deleted the six named
        `.raw` files one literal path at a time, and the evidence precommit found 0
        findings. Verify passed with 1416 tests; the digest is still 0d513fca….
-     - Running: WP3-FIX2-FREEZE (committer).
+     - WP3-FIX2-FREEZE is committed and pushed as 2d72d35 (158 paths; all checks 0; 6
+       synthetic images; no `.raw` file). The freeze brief itself was left unstaged; it
+       goes into the next handoff commit.
+     - WP3-REGATE2: PASS on 2d72d35, items 1–19 (verifier-reported).
+       - Tests: 1416; smoke 40; e2e 127 passed.
+       - Robustness: races 20/20 each; fault injection; migrations to v6.
+       - Round-2 and H-Q1 tests named.
+       - Fix scope limited to the FIX2 paths and docs 05/10.
+       - Docs: parity ok; D-09 unchanged.
+       - Validators: 0 in the project folder.
+       - Gate digest of record: 0d513fca….
+     - WP3-RECHECK-A attempt 2: PASS on 2d72d35 with no finding (fresh opus auditor;
+       digest 0d513fca… bound first and last).
+       - Delta of 18 paths; the area-A core and the database layer are unchanged.
+       - Reruns: race twice and a new first-save race; crash; HTTP 84; hint 12; PDF 34;
+         migrations 30.
+       - The H-Q1 differential leaves configured accounts byte-identical.
+       - R3 is closed. New Info risks: R8 (before-due reminders reach never-configured
+         accounts) and R9 (seed events show as automatic).
+     - WP3-RECHECK-BC2: FIX REQUIRED (fresh opus auditor).
+       - RBC-01, RBC-02, the sending-branch test and H-Q1 (a) are correct; docs are in
+         parity; no regression in areas B or C.
+       - WP3-RBC2-01 (Low, test-only): two deadline tests now use never-configured
+         accounts. As a result, the F-4 scan guard and the imported-period exclusion are
+         untested: mutations M4, M5 and M5b pass the whole suite. Production behaviour
+         is correct.
+     - Fix round 3 (coordinator decision 2026-10-05):
+       1. WP3-FIX3, a test-only change: restore those guards' coverage, prove it by
+          mutation in a scratch clone, and cover the other untested skips.
+       2. WP3-FIX3-FREEZE.
+       3. WP3-REGATE3.
+       4. One fresh auditor for WP3-RECHECK-BC3 and WP3-RECHECK-A attempt 3 (rebinding
+          area A).
+       5. WP3-ACCREC and WP3-ACCEPT.
+     - WP3-FIX3 is done (author-reported), test-only.
+       - The guard tests use configured accounts again; the off switch is saved before
+         the deadline.
+       - A guard sweep adds 3 tests.
+       - Mutations M4, M5, M5b and the three skips each fail; the clean run passes.
+       - verify: 1420 tests; digest c31c300c….
+     - Running: WP3-FIX3-FREEZE (committer). This brief stages itself and the
+       WP3-FIX2-FREEZE brief. The briefs for WP3-REGATE3 and WP3-RECHECK-BC3 (which
+       also covers WP3-RECHECK-A attempt 3) are ready.
+     - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
+       and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
+       follow once WP3-ACCREC is done.
   4. One freeze, a full regate.
   5. Two fresh rechecks in parallel: A with digest binding, and B+C.
 
@@ -407,7 +454,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-FIX2-FREEZE only.
+- Live processes: WP3-FIX3-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

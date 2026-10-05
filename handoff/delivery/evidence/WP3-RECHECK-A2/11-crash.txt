@@ -1,0 +1,37 @@
+K before: revisions=[] signoffs=[] ledger_rows=1 entries=[] lines=[] jobs=[] attempts=[] audits=[] finalized_no=null posted=300 captures=0 integrity=ok fk=0 writable=true
+K1 child marker="inside the transaction at \"INSERT INTO ot_ledger\"" code=null signal=SIGKILL out=""
+K1 after kill: revisions=[] signoffs=[] ledger_rows=1 entries=[] lines=[] jobs=[] attempts=[] audits=[] finalized_no=null posted=300 captures=0 integrity=ok fk=0 writable=true
+PASS  K1 a sign-off terminated inside the transaction at "INSERT INTO ot_ledger" persists nothing; integrity ok, no FK violation, the file is writable
+K2 child marker="inside the transaction at \"INSERT INTO jobs\"" code=null signal=SIGKILL out=""
+K2 after kill: revisions=[] signoffs=[] ledger_rows=1 entries=[] lines=[] jobs=[] attempts=[] audits=[] finalized_no=null posted=300 captures=0 integrity=ok fk=0 writable=true
+PASS  K2 a sign-off terminated inside the transaction at "INSERT INTO jobs" persists nothing; integrity ok, no FK violation, the file is writable
+K3 child marker="inside the transaction at \"INSERT INTO audit_events\"" code=null signal=SIGKILL out=""
+K3 after kill: revisions=[] signoffs=[] ledger_rows=1 entries=[] lines=[] jobs=[] attempts=[] audits=[] finalized_no=null posted=300 captures=0 integrity=ok fk=0 writable=true
+PASS  K3 a sign-off terminated inside the transaction at "INSERT INTO audit_events" persists nothing; integrity ok, no FK violation, the file is writable
+K4 child marker="after the operation returned" code=null signal=SIGKILL
+K4 after commit then kill: revisions=["1:original:employee:signed"] signoffs=["2026-09-30T00:30:05Z"] ledger_rows=3 entries=["finalization:day:2026-09-16:deficit_debit=-240","finalization:day:2026-09-15:credit=60"] lines=["deficit_debit:posted","credit:posted"] jobs=["render_pdf:queued","send_email:queued"] attempts=[] audits=["timesheet.signoff"] finalized_no=1 posted=120 captures=0 integrity=ok fk=0 writable=true
+PASS  K4 a committed sign-off survives the kill: one revision, one sign-off at the real instant, +60/-240 once, two lines, PDF and send jobs, one audit
+K4 identical retry out={"operation":"signoff","status":"replayed","revision_no":1} | different retry out={"operation":"signoff","error":"already_finalized","status":409}
+PASS  K4 identical retry replays and a different retry is 409 already_finalized; neither writes
+K4 run-jobs passes: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+K4 drained: revisions=["1:original:employee:signed"] signoffs=["2026-09-30T00:30:05Z"] ledger_rows=3 entries=["finalization:day:2026-09-16:deficit_debit=-240","finalization:day:2026-09-15:credit=60"] lines=["deficit_debit:posted","credit:posted"] jobs=["render_pdf:succeeded","send_email:succeeded"] attempts=["accepted"] audits=["timesheet.signoff"] finalized_no=1 posted=120 captures=1 integrity=ok fk=0 writable=true
+PASS  K4 after three runner passes: one submission captured, one accepted attempt, ledger unchanged
+K5 child marker="inside the transaction at \"INSERT INTO revision_ledger_lines\"" code=null signal=SIGKILL
+K5 after kill: revisions=[] signoffs=[] ledger_rows=1 entries=[] lines=[] jobs=[] attempts=[] audits=[] finalized_no=null posted=300 captures=0 integrity=ok fk=0 writable=true
+PASS  K5 an automatic finalization terminated inside its transaction persists nothing; file writable
+K5 run-jobs passes: {"claimed":5,"succeeded":4,"retried":1,"intervention":0,"lost":0} | {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+K5 after recovery passes: revisions=["1:original:deadline:pending"] signoffs=[] ledger_rows=3 entries=["finalization:day:2026-09-16:deficit_debit=-240","finalization:day:2026-09-15:credit=60"] lines=["deficit_debit:posted","credit:posted"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded"] attempts=["accepted"] audits=["timesheet.auto_finalize"] finalized_no=1 posted=120 captures=1 integrity=ok fk=0 writable=true
+PASS  K5 the next passes finalize once: origin deadline, review pending, no sign-off, reviewed hash and actor null, audit signed_at null, +60/-240 once, one capture  [{"reviewed_sha256":null,"actor_user_id":null,"signed_at_in_audit":null}]
+PASS  K6 a late review terminated inside its transaction persists nothing
+K6 after late review (commit then kill): revisions=["1:original:deadline:pending","2:late_review:employee:signed"] signoffs=["2026-10-01T18:00:00Z"] ledger_rows=3 entries=["finalization:day:2026-09-16:deficit_debit=-240","finalization:day:2026-09-15:credit=60"] lines=["deficit_debit:posted","credit:posted","correction:unchanged","correction:unchanged"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded","render_pdf:queued"] attempts=["accepted"] audits=["timesheet.auto_finalize","timesheet.late_review"] finalized_no=2 posted=120 captures=1 integrity=ok fk=0 writable=true
+PASS  K6 the late review is durable: revision 2 late_review signed, one sign-off, zero new ledger rows and posted unchanged (LG-09), its lines all unchanged
+PASS  K6 the identical late-review retry replays: no third revision, no ledger row  [{"operation":"late_review","status":"replayed","revision_no":2,"lines":["correction:unchanged:0","correction:unchanged:0"]}]
+K6 run-jobs pass: {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0}
+PASS  K6 send_email false: only the PDF job is enqueued, still one submission captured, ledger unchanged
+PASS  K7 a correction terminated at its ledger posting persists nothing
+K7 correction out={"operation":"correction","status":"created","revision_no":3,"lines":["correction:posted:60","correction:unchanged:0"]} | retry out={"operation":"correction","status":"replayed","revision_no":3,"lines":["correction:posted:60","correction:unchanged:0"]}
+K7 after correction: revisions=["1:original:deadline:pending","2:late_review:employee:signed","3:correction:employee:signed"] signoffs=["2026-10-01T18:00:00Z","2026-10-01T18:00:00Z"] ledger_rows=4 entries=["finalization:day:2026-09-16:deficit_debit=-240","finalization:day:2026-09-15:credit=60","rev:e24a0e38-9adf-49ba-ba99-6dfb352fc377:day:2026-09-15:correction=60"] lines=["deficit_debit:posted","credit:posted","correction:unchanged","correction:unchanged","correction:unchanged","correction:posted"] jobs=["render_pdf:succeeded","send_email:succeeded","send_reminder:succeeded","render_pdf:succeeded","render_pdf:queued"] attempts=["accepted"] audits=["timesheet.auto_finalize","timesheet.late_review","timesheet.correction"] finalized_no=3 posted=180 captures=1 integrity=ok fk=0 writable=true
+PASS  K7 the correction appends exactly one +60 entry under a revision-specific key and posted grows by 60; an identical retry replays and writes nothing  [["rev:e24a0e38-9adf-49ba-ba99-6dfb352fc377:day:2026-09-15:correction=60"]]
+CRASH PROBE PASSED
+exit 0
+20:33:02Z

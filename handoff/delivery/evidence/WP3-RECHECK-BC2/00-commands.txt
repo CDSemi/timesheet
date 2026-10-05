@@ -1,0 +1,75 @@
+WP3-RECHECK-BC2 attempt 1 - commands, exits and results (timesheet-auditor; self-reported model claude-opus-5-5)
+Date: 2026-10-05 (UTC). Host: Windows 11, Git Bash. Node: portable v24.21.0 called by full path (<node24>/node.exe) for
+every node/npm step; npm 11.18.0 through <npm-cli> (npm-cli.js) on Node 24. Scratch: <scratch> = <scratch>
+(outside Dropbox); TEMP/TMP = <scratch>\tmp. git run with a per-process safe.directory override. PRODUCTION_SENDING_ENABLED unset;
+outbound capture only; no real mail. Servers used OS-assigned loopback ports (no fixed port; WP3-RECHECK-A2 untouched).
+Raw output was written only under <scratch>; the files here are masked copies (probes/mask.mjs: <email>, <user>, <scratch>,
+<project>, <claude-temp>; LF; no trailing whitespace).
+
+Identity before (first commands after `node --version`)
+  1  <node24>/node.exe --version                                   -> v24.21.0
+  2  git -C <project> rev-parse HEAD                                -> 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714
+  3  git -C <project> ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+                                                                   -> 0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92 (= regate digest)
+     date -u                                                       -> 2026-10-05T20:24:11Z
+Scratch clones
+  4  git clone --no-local <project> <scratch>/fix2; git -C fix2 checkout 2d72d355e5c8876f2591ae7fdc6a8c8f0f1ca714   exit 0
+     ls-tree digest in the clone                                    -> 0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92 (721 files)
+  5  git clone --no-local <project> <scratch>/pre2; git -C pre2 checkout 2f2520e1ab80ff55938b70cd469f0bfe888e04a2   exit 0
+  6  git diff --stat 2f2520e 2d72d35 -- . ':!handoff'               -> 18 files: 7 src, 7 tests, docs/05 and docs/10 (EN+VI)
+Checks
+  7  npm ci (fix2; pre2)                                            exit 0; exit 0 (01-npm-ci.txt)
+  8  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (fix2)
+                                                                   exit 0; 62 files / 1416 tests; SMOKE PASSED, 40 PASS lines;
+                                                                   0 lines matching "deprecat" (02-verify.txt)
+  9  copy the freeze's 6 changed round-2 test files into pre2 (scratch only), then
+     <node24>/node.exe node_modules/vitest/vitest.mjs run <those 6 files>   (2f2520e source)
+                                                                   exit 1; 10 failed / 133 passed (143): settingsModel wording,
+                                                                   sharingModel RBC-01, history RBC-01, 2 x RBC-02, 5 x H-Q1 setup
+                                                                   bound; the sending-branch test passes there (03-red-prefix.txt)
+ 10  git clone --no-local <project> <scratch>/mut; checkout 2d72d35; npm ci   exit 0 (mutation clone)
+ 11  mutations in mut, each restored with git checkout (04-mutations.txt):
+       M1 / M2 (wrong line numbers: M1 removed `const latest` and did not compile, M2 removed only a comment) - discarded,
+       corrected as M1b / M2b below
+       M1b remove the handler's `sending` branch                    exit 1; 1 failed (the new branch test)
+       M2b drop markUncertain in the branch                         exit 1; 1 failed (the new branch test)
+       M2c make the branch error retryable                          exit 1; 1 failed (the new branch test)
+       M3a never-saved account governed by a default "on" switch    exit 1; 5 failed (the H-Q1 setup-bound tests)
+       M3b never-saved account governed by a default "off" switch   exit 1; 4 failed
+       M3c drop the account-creation clamp                          exit 1; 3 failed
+ 12  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run test:e2e (fix2, Edge)
+                                                                   exit 0; 127 passed, 5 skipped (5.4 min); 0 deprecation lines (05-e2e.txt)
+ 13  node probes/h1-setup-bound.mjs (fix2; PROBE_REPO=pre2)         exit 0, 50 PASS; exit 1, 25 PASS / 25 FAIL (06-h1-setup-bound.txt)
+     (earlier runs of this probe during its development failed on probe errors only: employee2 is not seeded without sample
+      data, the overdue-warning check ran before the reminder bucket, and the manual sign-offs needed a signature; fixed in the
+      probe, then rerun as above)
+ 14  node probes/b3-history-system.mjs (fix2; pre2)                 exit 0, 25 PASS; exit 1, 15 PASS / 10 FAIL (07-b3-history-system.txt)
+ 15  node probes/c1-authz-hint.mjs (fix2; pre2)                     exit 0, 91 PASS; exit 1, 89 PASS / 2 FAIL (08-c1-authz-hint.txt)
+ 16  node probes/c2-race.mjs (fix2)                                 exit 0, 23 PASS; 20/20 rounds (09-c2-race.txt)
+ 17  node probes/b2-send-recovery.mjs (fix2)                        exit 0, 25 PASS (10-b2-send-recovery.txt)
+ 18  node probes/b4-get-safety.mjs <scratch>/fix2 <scratch>/runs/b4-fix2   exit 0; 204 requests, 1 writing (11-b4-get-safety.txt)
+ 19  node probes/b5-css-tokens.mjs <scratch>/fix2                   exit 0; 0 literals outside :root, 0 inline styles (12-b5-css-tokens.txt)
+ 20  node probes/b6-note-image-matrix.mjs (fix2)                    exit 0, 30 PASS (13-b6-note-image-matrix.txt)
+ 21  node probes/b7-query-cost.mjs 50000 (fix2; pre2)               exit 0; exit 0; Review median 35.5 ms vs 1.6 ms (14-b7-query-cost.txt)
+ 22  node probes/u2-ui.mjs <scratch>/fix2 <scratch>/runs/u2-fix2 <scratch>/shots   (built dist/ of fix2; Edge)
+                                                                   exit 0, 28 PASS; 8 screenshots viewed (15-u2-ui.txt, recheck-bc2-*-synthetic.png)
+ 23  5 rounds: vitest run deadline-race, delivery-crash, jobs-restart, delivery, deadline, history, review-grantee-changes,
+     sharing, reminders, operations-status (fix2)                   exit 0 x 5; 10 files / 184 tests each (16-race-rounds.txt)
+ 24  coverage mutations for WP3-RBC2-01 (17-coverage-mutations.txt):
+       M4 (scan ignores a NULL activation) in mut                   exit 0; 62 files / 1416 tests passed (survives)
+       M4 in pre2 (its own tests)                                   exit 1; 1 failed: "finalizes nothing while the activation instant is null"
+       M5 (imported skip after the switch-on decision) in mut       exit 0; 1416 passed (survives)
+       M5 in pre2                                                   exit 1; 1 failed: "never auto-submits an imported_unverified timesheet ..."
+       guard sweep (bash <scratch>/mutsweep.sh: one assessPeriod guard line deleted at a time, both clones, full
+       unit/integration suite, then git checkout):
+         inactive_user, before_activation, not_due: exit 0 in both clones (each sits behind the candidate list)
+         finalized: exit 1 in both (2 tests at the freeze; 3 at 2f2520e)
+         imported (M5b, the skip deleted): exit 0 in mut (1416 passed, survives); exit 1 in pre2 (1 failed: the imported test)
+ 25  node probes/h2-guards.mjs (fix2)                                exit 0, 10 PASS
+     bash <scratch>/h2mut.sh: PROBE_REPO=mut with M4, then with M5   exit 1, 6 PASS / 4 FAIL; exit 1, 9 PASS / 1 FAIL (each restored)
+                                                                   (18-h2-guards.txt; the first fix2 run failed one setup step,
+                                                                   a session ending in the future, fixed in the probe and rerun)
+ 26  <python> handoff/delivery/validate_package.py --preflight (project folder, live board; workflow Python): see 20-preflight.txt
+     (a first run stopped on "Broken link ... tasks/WP3-RECHECK-BC2.md -> ../evidence/WP3-RECHECK-BC2/00-commands.txt"
+      because this file did not exist yet; rerun after writing it)
+Identity after and privacy: see 19-identity-after.txt and 21-privacy.txt.
