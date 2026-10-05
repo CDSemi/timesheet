@@ -279,10 +279,14 @@ describe('run-jobs CLI', () => {
     const dataDir = join(workDir(), 'override-data');
     const { revisionId, pdfJobId } = await signedRevision(dataDir);
     const before = ledgerState();
-    const env = { NODE_ENV: undefined, DATABASE_PATH: t.config.databasePath, DATA_DIR: dataDir };
+    const env = { NODE_ENV: undefined, DATABASE_PATH: t.config.databasePath, DATA_DIR: dataDir, OUTBOUND_MODE: undefined, MAIL_FROM: undefined };
     const result = await start([CLI, 'run-jobs', '--once', '--now', '2026-09-29T20:05:00Z'], env).done;
     expect(result.code, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ claimed: 1, succeeded: 1, retried: 0, intervention: 0, lost: 0 });
+    // WP3-T09: the send job is registered too. Claimed before the PDF it waits (pdf_not_ready);
+    // claimed after it, the unset MAIL_FROM blocks it with the visible fault sender_missing.
+    const summary = JSON.parse(result.stdout) as Record<string, number>;
+    expect(summary).toMatchObject({ claimed: 2, succeeded: 1, lost: 0 });
+    expect((summary.retried ?? 0) + (summary.intervention ?? 0)).toBe(1);
     expect(t.db.prepare('SELECT state, attempts, updated_at FROM jobs WHERE id = ?').get(pdfJobId)).toEqual({ state: 'succeeded', attempts: 1, updated_at: '2026-09-29T20:05:00Z' });
     const key = t.db
       .prepare("SELECT a.storage_key FROM revision_files f JOIN attachments a ON a.id = f.attachment_id WHERE f.revision_id = ? AND f.state = 'ready'")
@@ -290,8 +294,11 @@ describe('run-jobs CLI', () => {
       .get(revisionId) as string;
     expect(existsSync(join(dataDir, 'files', key))).toBe(true);
     expect(existsSync(join(workDir(), 'private-data', 'files', key))).toBe(false);
-    expect(ledgerState()).toEqual(before);
-    expect(t.db.prepare("SELECT state FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(revisionId)).toBe('queued');
+    expect(ledgerState()).toMatchObject({ ledger: before.ledger, lines: before.lines, revisions: before.revisions });
+    const send = t.db.prepare("SELECT state, last_error FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId);
+    expect([{ state: 'queued', last_error: 'pdf_not_ready' }, { state: 'intervention', last_error: 'sender_missing' }]).toContainEqual(send);
+    expect(count("SELECT count(*) FROM delivery_attempts WHERE state = 'accepted'")).toBe(0);
+    expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
     expect(result.stdout + result.stderr).not.toMatch(/Example Employee|example\.invalid/);
   });
 });
@@ -319,7 +326,7 @@ describe('server entry', () => {
   it('passes DATA_DIR to the file store and starts the in-process runner', async () => {
     const dataDir = join(workDir(), 'server-data');
     const { revisionId, signature } = await signedRevision(dataDir);
-    const server = await startServer({ DATA_DIR: dataDir, JOB_RUNNER: undefined });
+    const server = await startServer({ DATA_DIR: dataDir, JOB_RUNNER: undefined, OUTBOUND_MODE: undefined, MAIL_FROM: undefined });
     try {
       // The signature route reads from DATA_DIR (the default beside the database is empty).
       const image = await fetch(`${server.base}/api/signatures/${signature.id}`, { headers: { cookie: server.cookie } });
@@ -330,7 +337,9 @@ describe('server entry', () => {
       expect(t.db.prepare('SELECT runner_heartbeat_at IS NOT NULL FROM operations_state').pluck().get()).toBe(1);
       const key = t.db.prepare("SELECT storage_key FROM attachments WHERE kind = 'pdf'").pluck().get() as string;
       expect(existsSync(join(dataDir, 'files', key))).toBe(true);
-      expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toEqual({ state: 'queued', attempts: 0 });
+      // WP3-T09: the send job is registered too; without MAIL_FROM it is never sent (it waits or shows sender_missing).
+      expect(t.db.prepare("SELECT state FROM jobs WHERE revision_id = ? AND kind = 'send_email'").pluck().get(revisionId)).not.toBe('succeeded');
+      expect(count("SELECT count(*) FROM delivery_attempts WHERE state = 'accepted'")).toBe(0);
     } finally {
       server.child.kill();
       await server.done;

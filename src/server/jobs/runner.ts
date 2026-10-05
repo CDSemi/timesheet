@@ -1,6 +1,8 @@
 import type { Clock } from '../clock.ts';
 import type { Db } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
+import { createOutboundAdapter } from '../mail/outbound.ts';
+import type { DeliveryConfig } from '../types.ts';
 import {
   claimNextJob,
   completeJob,
@@ -13,6 +15,7 @@ import {
   renewLease,
 } from './jobStore.ts';
 import { createPdfJobHandler, JOB_RENDER_PDF } from './pdfJob.ts';
+import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
 
 /*
  * Job runner (docs/03, docs/05 "Durable delivery"). `runJobsOnce` writes the heartbeat, then
@@ -54,9 +57,23 @@ export interface RunSummary {
 const DEFAULT_MAX_JOBS = 100;
 export const DEFAULT_INTERVAL_MS = 15_000;
 
-/** The production handlers: the PDF job now; later job kinds register here. */
-export function createJobHandlers(deps: { db: Db; clock: Clock; files: FileStore }): JobHandlers {
-  return { [JOB_RENDER_PDF]: createPdfJobHandler(deps) };
+/**
+ * The production handlers: the PDF job and the send job; later job kinds register here. The
+ * send job uses the configured outbound mode (capture by default, under the files' private data
+ * directory) and the configured sender.
+ */
+export function createJobHandlers(deps: {
+  db: Db;
+  clock: Clock;
+  files: FileStore;
+  delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound'>;
+}): JobHandlers {
+  const { db, clock, files, delivery } = deps;
+  const outbound = createOutboundAdapter(delivery.outbound, { dataDir: files.root });
+  return {
+    [JOB_RENDER_PDF]: createPdfJobHandler({ db, clock, files }),
+    [JOB_SEND_EMAIL]: createSendJobHandler({ db, clock, files, outbound, senderAddress: delivery.senderAddress }),
+  };
 }
 
 /** One pass: heartbeat, then claim and run due jobs until none is due. */

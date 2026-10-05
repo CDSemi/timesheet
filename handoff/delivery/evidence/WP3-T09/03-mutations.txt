@@ -1,0 +1,54 @@
+# WP3-T09 mutation checks
+$ python handoff/delivery/evidence/WP3-T09/mutations.py.txt
+M1 SMTP loss after DATA classified as a pre-transfer (temporary) failure
+  file: src/server/mail/smtpAdapter.ts
+  command: node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts -t uncertain
+  exit: 1 -> CAUGHT
+    × uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt 438ms
+    × mark delivered closes the uncertain attempt without sending 342ms
+    × classifies a timeout or loss after the transfer began as uncertain and before it as temporary 157ms
+    Test Files  1 failed (1)
+    Tests  3 failed | 2 passed | 17 skipped (22)
+    FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt
+    AssertionError: expected { claimed: 1, succeeded: +0, …(3) } to match object { claimed: 1, intervention: 1 }
+    FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > mark delivered closes the uncertain attempt without sending
+    AssertionError: expected 409 to be 200 // Object.is equality
+    FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > classifies a timeout or loss after the transfer began as uncertain and before it as temporary
+    AssertionError: expected { kind: 'failed_temporary', …(2) } to match object { kind: 'uncertain', …(1) }
+  restored byte-identical: True (sha256 ffbae0e75c640a85f5cd5a6a08fb7af29c364c5fbf24c517405fc687410c3427)
+
+M2 PDF hash re-check removed from the send job
+  file: src/server/jobs/sendJob.ts
+  command: node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts -t PDF hash mismatch
+  exit: 1 -> CAUGHT
+    × a PDF hash mismatch blocks the send 431ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 21 skipped (22)
+    FAIL  tests/integration/delivery.test.ts > integrity and visible faults > a PDF hash mismatch blocks the send
+    AssertionError: expected { claimed: 1, succeeded: 1, …(3) } to match object { claimed: 1, intervention: 1 }
+  restored byte-identical: True (sha256 45180021859133332c5b5fc22f7ea4064d89b6a4e49fda24a60adbcfeff3cca8)
+
+M3 owner scope dropped from the delivery attempt lookup (decision route)
+  file: src/server/services/deliveries.ts
+  command: node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts -t ID swap
+  exit: 1 -> CAUGHT
+    × another user cannot see or decide an attempt (404 on ID swap) 482ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 21 skipped (22)
+    FAIL  tests/integration/delivery.test.ts > owner scoping > another user cannot see or decide an attempt (404 on ID swap)
+    AssertionError: expected 409 to be 404 // Object.is equality
+  restored byte-identical: True (sha256 8af88a37f914bbfdd06e4bf11010b572f9765e9d948530e38400d9b7fda31ddf)
+
+M4 a reclaimed job ignores its interrupted `sending` attempt
+  file: src/server/jobs/sendJob.ts
+  command: node node_modules/vitest/vitest.mjs run tests/integration/delivery-crash.test.ts -t SMTP
+  exit: 1 -> CAUGHT
+    × SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing 728ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 2 skipped (3)
+    FAIL  tests/integration/delivery-crash.test.ts > a runner process killed during the send > SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing
+    AssertionError: expected { claimed: 1, succeeded: +0, …(3) } to deeply equal { claimed: 1, succeeded: +0, …(3) }
+  restored byte-identical: True (sha256 45180021859133332c5b5fc22f7ea4064d89b6a4e49fda24a60adbcfeff3cca8)
+
+mutations caught: 4/4
+exit 0

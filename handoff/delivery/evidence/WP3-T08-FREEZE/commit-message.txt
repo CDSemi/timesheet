@@ -1,0 +1,24 @@
+Add the durable job store, runner and PDF job
+
+- feat(jobs): claim jobs atomically with leases inside BEGIN IMMEDIATE;
+  only the lease holder may renew, complete or fail; expired leases are
+  reclaimed; retries wait 1/5/15/60 minutes, then need intervention;
+  heartbeat in operations_state; only error codes are stored
+- feat(jobs): add an in-process runner and a run-jobs --once --now CLI
+  refused in production; the PDF job renders only from the stored
+  snapshot, verifies the signature hash, writes a temp file then renames,
+  records revision_files, and posts and sends nothing
+- fix(server): index.ts passes the delivery config data directory to
+  createApp
+- test: add 21 tests incl. child-process crash recovery; 13 mutations
+  are caught
+- docs(handoff): WP3-T06 freeze result, WP3-REQ2 addendum, WP3-T08
+  record and evidence, board and checkpoint (+ vi)
+
+Task: WP3-T08-FREEZE
+Gate: precommit-check PASS (25 files); orchestration, recovery and
+  package preflight validators PASS
+Audit: none for this commit task; WP3-T08 audit follows
+Digest: 706c1619ef5461428f28bcf80722c2189d85ee0a927d1c7c664eca349cd82467
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

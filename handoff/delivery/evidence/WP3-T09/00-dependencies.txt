@@ -1,0 +1,76 @@
+# WP3-T09 dependency and baseline evidence (2026-10-04)
+$ git rev-parse HEAD
+3d7a17c3a0eecb10726eaf1378fbab537ec67ef5
+$ node --version
+v24.21.0
+$ npm --version
+11.18.0
+
+## Registry metadata (a 'deprecated' field would be printed if present)
+$ npm view nodemailer@10.0.14 name version deprecated --json
+{
+  "name": "nodemailer",
+  "version": "10.0.14"
+}
+exit 0
+$ npm view smtp-server@3.19.17 name version deprecated --json
+{
+  "name": "smtp-server",
+  "version": "3.19.17"
+}
+exit 0
+$ npm view @types/smtp-server@3.5.13 name version deprecated --json
+{
+  "name": "@types/smtp-server",
+  "version": "3.5.13"
+}
+exit 0
+$ npm view @types/nodemailer@8.0.2 name version deprecated --json
+{
+  "name": "@types/nodemailer",
+  "version": "8.0.2"
+}
+exit 0
+$ npm view punycode.js@2.3.1 name version deprecated --json
+{
+  "name": "punycode.js",
+  "version": "2.3.1"
+}
+exit 0
+$ npm view ipv6-normalize@1.0.1 name version deprecated --json
+{
+  "name": "ipv6-normalize",
+  "version": "1.0.1"
+}
+exit 0
+
+## Install (run in place, outside npm ci)
+$ npm install --save-exact nodemailer@10.0.14   -> exit 0, found 0 vulnerabilities
+$ npm install --save-exact --save-dev smtp-server@3.19.17 @types/smtp-server@3.5.13   -> exit 0, found 0 vulnerabilities
+
+## package.json diff
++    "nodemailer": "10.0.14",
++    "@types/smtp-server": "3.5.13",
++    "smtp-server": "3.19.17",
+
+## package-lock.json: added package entries (no entry removed or changed)
+"node_modules/@types/nodemailer"
+"node_modules/@types/smtp-server"
+"node_modules/ipv6-normalize"
+"node_modules/nodemailer"
+"node_modules/punycode.js"
+"node_modules/smtp-server"
+removed lines: 0
+
+$ npm ls nodemailer smtp-server @types/smtp-server @types/nodemailer
+timesheet@0.1.0 <project>
++-- @types/smtp-server@3.5.13
+| `-- @types/nodemailer@8.0.2
++-- nodemailer@10.0.14
+`-- smtp-server@3.19.17
+  `-- nodemailer@10.0.14 deduped
+
+exit 0
+
+## Clean install of the lockfile (scratch export of the baseline tree plus the new lockfile, outside Dropbox)
+$ npm ci   (in <tmp>/red) -> exit 0, found 0 vulnerabilities

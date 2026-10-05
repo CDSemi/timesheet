@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { requireUser } from '../http/auth.ts';
+import { ApiError } from '../http/errors.ts';
 import { correctionRevisionBody, lateReviewBody, resendBody, signoffBody } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
 import {
@@ -12,8 +14,13 @@ import {
   signOffJson,
   signOffTimesheet,
 } from '../services/finalization.ts';
+import { decideDelivery, decisionJson, deliveryJson, listDeliveries } from '../services/deliveries.ts';
 import { buildReviewPayload, reviewPayloadJson } from '../services/reviewPayload.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
+
+/** The owner's explicit decision on an uncertain delivery attempt (docs/05). */
+const deliveryDecisionBody = z.strictObject({ decision: z.enum(['mark_delivered', 'resend']) });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * Review and submission routes. Every handler derives the owner from the session; no route
@@ -23,7 +30,9 @@ import type { AppDeps, AppEnv } from '../types.ts';
  * reviewed payload, records the real sign-off, posts through the ledger service and enqueues
  * the PDF and send jobs (services/finalization.ts). The revision, late-review and resend
  * POSTs follow the same rules for later revisions (corrections post only differences, a
- * late review posts zero delta, a resend never moves the ledger).
+ * late review posts zero delta, a resend never moves the ledger). The delivery history GET
+ * writes nothing; the decision POST records the owner's one decision on an uncertain attempt
+ * (mark delivered, or resend as a new attempt on the same revision) and posts nothing.
  */
 export function submissionRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -94,6 +103,21 @@ export function submissionRoutes(deps: AppDeps) {
       ...(body.template_version === undefined ? {} : { templateVersion: body.template_version }),
     });
     return c.json(resendJson(result), 201);
+  });
+
+  // The owner's delivery attempts (newest first), optionally of one revision; redacted, no body.
+  app.get('/deliveries', auth, (c) => {
+    const revisionId = c.req.query('revision_id');
+    if (revisionId !== undefined && !UUID.test(revisionId)) throw new ApiError(422, 'validation_error', 'revision_id must be an id');
+    const records = listDeliveries(deps.db, c.get('user').id, revisionId === undefined ? {} : { revisionId });
+    return c.json({ deliveries: records.map(deliveryJson) });
+  });
+
+  // The explicit decision on an uncertain attempt: mark delivered, or resend once as a new attempt.
+  app.post('/deliveries/:id/decision', auth, async (c) => {
+    const body = await readJson(c, deliveryDecisionBody);
+    const result = decideDelivery({ db: deps.db, clock: deps.clock, user: c.get('user') }, c.req.param('id'), body.decision);
+    return c.json(decisionJson(result), result.resend === null ? 200 : 201);
   });
 
   return app;

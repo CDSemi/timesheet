@@ -40,7 +40,7 @@ const app = createApp(
 const runner: JobRunner | null =
   process.env.JOB_RUNNER === 'off'
     ? null
-    : startJobRunner({ db, clock: systemClock, handlers: createJobHandlers({ db, clock: systemClock, files: new FileStore(delivery.dataDir) }) });
+    : startJobRunner({ db, clock: systemClock, handlers: createJobHandlers({ db, clock: systemClock, files: new FileStore(delivery.dataDir), delivery }) });
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`Timesheet listening on http://${info.address}:${info.port} (schema v${migration.version})`);

@@ -1,0 +1,71 @@
+# Green: the new and adjusted test files (NODE_OPTIONS=--trace-deprecation --pending-deprecation)
+$ node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts tests/integration/delivery-crash.test.ts tests/integration/jobs-restart.test.ts tests/integration/ot-api.test.ts --reporter=verbose
+
+ RUN  v5.0.2 <project>
+
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > starts at zero 273ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > writes the exact message and PDF from the frozen snapshot and records the acceptance 435ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > keeps posted, provisional (E-6), reserved and available apart 287ms
+ ✓ tests/integration/jobs-restart.test.ts > separate runner processes > claim every job exactly once 645ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > waits for the PDF without creating an attempt 235ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > raises the negative flag for a truthful correction below zero (LG-08) 305ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > enqueues a duplicate send job once and sends once 293ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing 984ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > requires a session 238ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > lists only the caller’s entries in posting order, with the balance 271ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > acknowledged acceptance: provider id and time, the frozen envelope and content 439ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > ignores a client-supplied owner parameter 238ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the permission and reserves 1:1 minutes (201), then lists it 241ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > implicit TLS (SMTP_SECURITY=tls) and an untrusted certificate 464ms
+ ✓ tests/integration/jobs-restart.test.ts > a runner process killed during the PDF job > resumes after a kill before write without duplicate files or ledger rows 1367ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > capture: killed before `sending` was committed; the restart reuses the prepared attempt and sends once 940ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > is idempotent per request key (200 duplicate) and refuses a changed payload (409) 236ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > rejects insufficient balance with 409 and creates nothing (E-5) 242ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > pre-transfer failure (connection lost before DATA, or refused): temporary, retried, then accepted with a new attempt 570ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > needs the recorded permission and rejects owner or unknown fields 226ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the session user as both actor and owner 250ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > capture: killed after `sending` was committed; the decision route recovers the expired lease 878ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > posts a partial linked debit and keeps the remainder reserved 223ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit temporary rejection (reject_rcpt_temporary): failed_temporary and retried through the job store 501ms
+ ✓ tests/integration/jobs-restart.test.ts > a runner process killed during the PDF job > resumes after a kill before rename without duplicate files or ledger rows 1244ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > refuses stale versions, over-use and use before the leave date 256ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel releases the unused reservation and retries are unchanged 232ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit temporary rejection (reject_data_temporary): failed_temporary and retried through the job store 526ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel with a stale version is refused while minutes are still reserved 231ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit permanent rejection (reject_rcpt_permanent): failed_permanent, intervention, never retried 399ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > reverse gives used minutes back with a reason and a linked positive delta 237ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > returns 404 for another user’s request on consume, cancel and reverse, also for admins 262ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit permanent rejection (reject_data_permanent): failed_permanent, intervention, never retried 387ms
+ ✓ tests/integration/jobs-restart.test.ts > a runner process killed during the PDF job > resumes after a kill after rename without duplicate files or ledger rows 1217ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > shows an admin only the admin’s own summary, ledger and requests 243ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies 233ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt 486ms
+ ✓ tests/integration/jobs-restart.test.ts > run-jobs CLI > is refused in production and touches nothing 465ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies 231ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies 242ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > mark delivered closes the uncertain attempt without sending 392ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > classifies a timeout or loss after the transfer began as uncertain and before it as temporary 186ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies 258ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > exposes exactly the reviewed OT, history and evidence routes 293ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a PDF hash mismatch blocks the send 406ms
+ ✓ tests/integration/jobs-restart.test.ts > run-jobs CLI > rejects a missing --once or an invalid --now 998ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting 270ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a missing sender is a visible fault, never "sent" 266ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > never imports a ledger posting function into an HTTP router 223ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a missing recipient is a visible fault, never "sent" 275ms
+ ✓ tests/integration/jobs-restart.test.ts > run-jobs CLI > runs the due PDF job once at the given instant into DATA_DIR 604ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > the builder refuses a missing or malformed sender and recipient 226ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a process lost after `sending` was committed leaves the attempt uncertain and sends nothing later 253ms
+ ✓ tests/integration/jobs-restart.test.ts > server entry > passes DATA_DIR to the file store and starts the in-process runner 697ms
+ ✓ tests/integration/delivery.test.ts > owner scoping > another user cannot see or decide an attempt (404 on ID swap) 411ms
+ ✓ tests/integration/delivery.test.ts > owner scoping > only an uncertain attempt takes a decision 255ms
+ ✓ tests/integration/delivery.test.ts > secrets and the owner-only sending flag > SMTP mode is refused without the owner-only flag; the test process never sets it 169ms
+ ✓ tests/integration/delivery.test.ts > secrets and the owner-only sending flag > credentials never reach rows, logs, captured metadata or responses 487ms
+ ✓ tests/integration/jobs-restart.test.ts > server entry > does not start the runner when JOB_RUNNER=off 2093ms
+
+ Test Files  4 passed (4)
+      Tests  59 passed (59)
+   Start at  19:47:04
+   Duration  10.06s (tests 91%, import 6%, transform 3%)
+
+exit 0

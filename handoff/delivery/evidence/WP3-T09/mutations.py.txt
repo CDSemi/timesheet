@@ -1,0 +1,98 @@
+# WP3-T09 mutation checks. Run from the repository root: python handoff/delivery/evidence/WP3-T09/mutations.py.txt
+# Each mutation is computed in memory before the file is opened for writing; the original bytes are
+# restored afterwards and their SHA-256 is compared with the original. Output is masked and LF.
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.getcwd()
+NODE = os.path.join(os.environ["LOCALAPPDATA"], "timesheet-dev", "node-24.21.0", "node_modules", "node", "bin", "node.exe")
+VITEST = os.path.join("node_modules", "vitest", "vitest.mjs")
+
+MUTATIONS = [
+    (
+        "M1 SMTP loss after DATA classified as a pre-transfer (temporary) failure",
+        "src/server/mail/smtpAdapter.ts",
+        "  if (stage === 'transfer' && (LOST.has(code) || code === '')) {",
+        "  if (stage === 'never' && (LOST.has(code) || code === '')) {",
+        ["tests/integration/delivery.test.ts", "-t", "uncertain"],
+    ),
+    (
+        "M2 PDF hash re-check removed from the send job",
+        "src/server/jobs/sendJob.ts",
+        "    if (sha256(bytes) !== pdf.sha256) throw failBeforeSend(db, clock, attempt.id, 'pdf_hash_mismatch', true);\n",
+        "    // mutation: no hash re-check\n",
+        ["tests/integration/delivery.test.ts", "-t", "PDF hash mismatch"],
+    ),
+    (
+        "M3 owner scope dropped from the delivery attempt lookup (decision route)",
+        "src/server/services/deliveries.ts",
+        "`${ATTEMPT_SELECT} WHERE a.id = ? AND a.user_id = ?`",
+        "`${ATTEMPT_SELECT} WHERE a.id = ? AND ? IS NOT NULL`",
+        ["tests/integration/delivery.test.ts", "-t", "ID swap"],
+    ),
+    (
+        "M4 a reclaimed job ignores its interrupted `sending` attempt",
+        "src/server/jobs/sendJob.ts",
+        "    if (latest?.state === 'sending') {",
+        "    if (latest?.state === 'sending-mutated') {",
+        ["tests/integration/delivery-crash.test.ts", "-t", "SMTP"],
+    ),
+]
+
+
+def mask(text):
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    text = text.replace("\r\n", "\n")
+    for path, label in ((ROOT, "<project>"), (os.environ.get("TEMP", "<none>"), "<tmp>"), (os.path.expanduser("~"), "<home>")):
+        for variant in {path, path.replace("\\", "/")}:
+            if variant and variant != "<none>":
+                text = re.sub(re.escape(variant), label, text, flags=re.IGNORECASE)
+    return "\n".join(line.rstrip() for line in text.split("\n"))
+
+
+def summary_lines(output):
+    keep = []
+    for line in output.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith(("×", "✓", "Test Files", "Tests ", "FAIL", "AssertionError", "Error:")):
+            keep.append("    " + stripped)
+    return keep
+
+
+report = []
+caught = 0
+for title, rel, original, mutated, args in MUTATIONS:
+    path = os.path.join(ROOT, rel)
+    with open(path, "rb") as handle:
+        before = handle.read()
+    text = before.decode("utf-8")
+    if text.count(original) != 1:
+        print(f"{title}: anchor found {text.count(original)} times; aborting", file=sys.stderr)
+        sys.exit(2)
+    after = text.replace(original, mutated, 1).encode("utf-8")
+    digest = hashlib.sha256(before).hexdigest()
+    try:
+        with open(path, "wb") as handle:
+            handle.write(after)
+        result = subprocess.run([NODE, VITEST, "run", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+        output = mask(result.stdout + result.stderr)
+    finally:
+        with open(path, "wb") as handle:
+            handle.write(before)
+    with open(path, "rb") as handle:
+        restored = hashlib.sha256(handle.read()).hexdigest()
+    status = "CAUGHT" if result.returncode != 0 else "NOT CAUGHT"
+    caught += result.returncode != 0
+    report.append(f"{title}")
+    report.append(f"  file: {rel}")
+    report.append(f"  command: node {VITEST.replace(os.sep, '/')} run {' '.join(args)}")
+    report.append(f"  exit: {result.returncode} -> {status}")
+    report.extend(summary_lines(output))
+    report.append(f"  restored byte-identical: {restored == digest} (sha256 {digest})")
+    report.append("")
+
+report.append(f"mutations caught: {caught}/{len(MUTATIONS)}")
+print("\n".join(report))

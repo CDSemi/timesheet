@@ -111,4 +111,10 @@ Evidence goes in handoff/delivery/evidence/WP3-T08-FREEZE/. Return at most 150 w
 
 ## Results
 
-(Committer appends here.)
+- Self-reported model: claude-sonnet-5-5
+- Pre-HEAD: 2f8011ac1a8e2eadc031e6654714454efe1126f1; post-HEAD: 3d7a17c3a0eecb10726eaf1378fbab537ec67ef5
+- Commit: 3d7a17c3a0eecb10726eaf1378fbab537ec67ef5; pushed: yes; remote SHA: 3d7a17c3a0eecb10726eaf1378fbab537ec67ef5
+- Digest: 706c1619ef5461428f28bcf80722c2189d85ee0a927d1c7c664eca349cd82467; staged: 25
+- Check exits: node 0, digest 0, add 0, precommit 0, diff-check 0, JSON 0, orchestration 0, recovery 0, preflight 0
+- Blockers: none; no masking, no unstaging
+- Evidence: handoff/delivery/evidence/WP3-T08-FREEZE/

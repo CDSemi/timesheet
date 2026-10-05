@@ -1,0 +1,233 @@
+# Red run 1: baseline 3d7a17c source + the new tests, smtpSink and lockfile (scratch export <tmp>/red)
+$ node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts tests/integration/delivery-crash.test.ts
+exit 1
+
+ RUN  v5.0.2 <tmp>/red
+
+ ❯ tests/integration/delivery-crash.test.ts (0 test)
+ ❯ tests/integration/delivery.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery-crash.test.ts [ tests/integration/delivery-crash.test.ts ]
+Error: Cannot find module '../../src/server/jobs/sendJob.ts' imported from <tmp>/red/tests/integration/delivery-crash.test.ts
+ ❯ tests/integration/delivery-crash.test.ts:10:1
+      8| import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+      9| import { runJobsOnce } from '../../src/server/jobs/runner.ts';
+     10| import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts…
+       | ^
+     11| import { captureFolder } from '../../src/server/mail/captureAdapter.ts…
+     12| import { createOutboundAdapter } from '../../src/server/mail/outbound.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/delivery.test.ts [ tests/integration/delivery.test.ts ]
+Error: Cannot find module '../../src/server/jobs/sendJob.ts' imported from <tmp>/red/tests/integration/delivery.test.ts
+ ❯ tests/integration/delivery.test.ts:11:1
+      9| import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+     10| import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/…
+     11| import { createSendJobHandler, type SendJobHooks } from '../../src/ser…
+       | ^
+     12| import { captureFolder } from '../../src/server/mail/captureAdapter.ts…
+     13| import { buildMessage, MessageError } from '../../src/server/mail/mess…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  no tests
+   Start at  19:42:47
+   Duration  3.18s (worker 100%)
+
+
+# Red run 2: as run 1 plus the new mail modules, sendJob.ts and deliveries.ts, but the baseline runner.ts (no send registration), submission.ts (no delivery routes), index.ts and cli.ts
+$ node node_modules/vitest/vitest.mjs run tests/integration/delivery.test.ts tests/integration/delivery-crash.test.ts
+exit 1
+
+ RUN  v5.0.2 <tmp>/red
+
+ ❯ tests/integration/delivery-crash.test.ts (2 tests | 2 failed) 1287ms
+   ❯ a runner process killed during the send (2)
+     × SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing 754ms
+     × capture: killed after `sending` was committed; the decision route recovers the expired lease 532ms
+ ❯ tests/integration/delivery.test.ts (21 tests | 6 failed) 6513ms
+   ❯ capture (default outbound mode) (3)
+     × writes the exact message and PDF from the frozen snapshot and records the acceptance 340ms
+   ❯ SMTP adapter against the loopback sink (docs/05 failure table) (9)
+     × uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt 346ms
+     × mark delivered closes the uncertain attempt without sending 445ms
+   ❯ integrity and visible faults (5)
+     × a missing sender is a visible fault, never "sent" 220ms
+   ❯ owner scoping (2)
+     × another user cannot see or decide an attempt (404 on ID swap) 375ms
+     × only an uncertain attempt takes a decision 228ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery-crash.test.ts > a runner process killed during the send > SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/delivery-crash.test.ts:235:58
+    233|     const [uncertain] = attemptRows(revisionId);
+    234|     const decided = await t.request('POST', `/api/deliveries/${uncerta…
+    235|     expect(decided.status, JSON.stringify(decided.body)).toBe(201);
+       |                                                          ^
+    236|     expect(await run('runner-resend')).toMatchObject({ claimed: 1, suc…
+    237|     const rows = attemptRows(revisionId);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/integration/delivery-crash.test.ts > a runner process killed during the send > capture: killed after `sending` was committed; the decision route recovers the expired lease
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/delivery-crash.test.ts:263:26
+    261|     t.clock.set('2026-09-29T20:05:30Z');
+    262|     const early = await t.request('POST', `/api/deliveries/${sending?.…
+    263|     expect(early.status).toBe(409);
+       |                          ^
+    264|     expect(early.body.error).toMatchObject({ code: 'delivery_not_uncer…
+    265|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > capture (default outbound mode) > writes the exact message and PDF from the frozen snapshot and records the acceptance
+AssertionError: expected { claimed: +0, succeeded: +0, …(3) } to match object { claimed: 1, succeeded: 1 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "claimed": 1,
+-   "succeeded": 1,
++   "claimed": 0,
++   "succeeded": 0,
+  }
+
+ ❯ tests/integration/delivery.test.ts:281:21
+    279|     t.clock.set('2026-09-29T20:10:00Z');
+    280|     const summary = await runJobsOnce({ db: t.db, clock: t.clock, owne…
+    281|     expect(summary).toMatchObject({ claimed: 1, succeeded: 1 });
+       |                     ^
+    282|
+    283|     const [attempt, ...others] = attempts(revisionId);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/delivery.test.ts:475:28
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > mark delivered closes the uncertain attempt without sending
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/delivery.test.ts:512:28
+    510|     const [uncertain] = attempts(revisionId);
+    511|     const decided = await t.request('POST', `/api/deliveries/${uncerta…
+    512|     expect(decided.status).toBe(200);
+       |                            ^
+    513|     expect(decided.body).toMatchObject({ attempt: { state: 'uncertain'…
+    514|     expect(t.db.prepare('SELECT decision, decision_actor_user_id FROM …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > integrity and visible faults > a missing sender is a visible fault, never "sent"
+AssertionError: expected undefined to deeply equal [ ObjectContaining{…} ]
+
+- Expected:
+[
+  ObjectContaining {
+    "accepted_at": null,
+    "job": {
+      "last_error": "sender_missing",
+      "state": "intervention",
+    },
+    "provider_response": "sender_missing",
+    "state": "failed_permanent",
+  },
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/delivery.test.ts:559:37
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > owner scoping > another user cannot see or decide an attempt (404 on ID swap)
+AssertionError: expected { error: { code: 'not_found', …(1) } } to deeply equal { deliveries: [] }
+
+- Expected
++ Received
+
+  {
+-   "deliveries": [],
++   "error": {
++     "code": "not_found",
++     "message": "Endpoint not found",
++   },
+  }
+
+ ❯ tests/integration/delivery.test.ts:630:23
+    628|     expect(swapped.body).toEqual(unknown.body);
+    629|     const list = await t.request('GET', '/api/deliveries', { cookie: a…
+    630|     expect(list.body).toEqual({ deliveries: [] });
+       |                       ^
+    631|     const filtered = await t.request('GET', `/api/deliveries?revision_…
+    632|     expect(filtered.body).toEqual({ deliveries: [] });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/integration/delivery.test.ts > owner scoping > only an uncertain attempt takes a decision
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ tests/integration/delivery.test.ts:648:29
+    646|     const [accepted] = attempts(revisionId);
+    647|     const response = await t.request('POST', `/api/deliveries/${accept…
+    648|     expect(response.status).toBe(409);
+       |                             ^
+    649|     expect(response.body.error).toMatchObject({ code: 'delivery_not_un…
+    650|     expect(count("SELECT count(*) FROM jobs WHERE revision_id = ? AND …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 15 passed (23)
+   Start at  19:43:00
+   Duration  9.29s (tests 59%, import 32%, transform 9%)

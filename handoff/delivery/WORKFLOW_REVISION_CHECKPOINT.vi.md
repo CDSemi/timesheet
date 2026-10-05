@@ -6,15 +6,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   chọn; profile inherit); effort không quan sát được. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 2f8011ac1a8e2eadc031e6654714454efe1126f1 (WP3-T06-FREEZE).
+  - HEAD = origin/main = 3d7a17c3a0eecb10726eaf1378fbab537ec67ef5 (WP3-T08-FREEZE).
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate gần nhất
     e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df (WP2-GATE4). Digest
-    hiện tại của WP3 là b47d30da… (T06, committer đã đối chiếu; WP3 chưa có gate).
+    hiện tại của WP3 là 706c1619… (T08, committer đã đối chiếu; WP3 chưa có gate).
   - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
-    T06-FREEZE, brief WP3-REQ2 và phần sửa brief T08. Các file này vào commit đóng băng
-    kế tiếp.
+    T08-FREEZE, brief WP3-T09. Các file này vào commit đóng băng kế tiếp.
   - Không có commit chưa push.
 - Đã xong:
   - Quản trị: bản sửa quy trình v2 đã nghiệm thu (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -175,10 +174,20 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
   có kiểm hash chữ ký, test phục hồi khi tiến trình bị kill, nối DATA_DIR; 13/13 bản đối
   chứng bị phát hiện; verify 980 test; digest 706c1619…. T09 phải sở hữu
   `src/server/jobs/runner.ts` để đăng ký job gửi mail.
-- Đang chạy: WP3-T08-FREEZE (committer).
+- WP3-T08-FREEZE đã commit và push, SHA 3d7a17c (25 đường dẫn, mọi kiểm tra 0).
+- Quyết định của coordinator: WP3-T09 chạy ngay (email được dựng từ snapshot đã chốt nên
+  G-Q1/G-Q2 không ảnh hưởng); WP3-DOC và T07B chạy sau khi chủ dự án trả lời và trước T10.
+- WP3-T09 đã xong (tác giả tự báo): email dựng ổn định từ snapshot đã chốt và PDF đã lưu;
+  mặc định ghi ra file (capture); SMTP chỉ chạy khi có cờ của chủ dự án (test với máy
+  nhận mail giả trên máy); phân loại kết quả gửi, kết quả chưa rõ không bao giờ tự gửi
+  lại; phục hồi khi tiến trình bị kill; route quyết định; không lộ thông tin đăng nhập ở
+  đâu cả; 4/4 bản đối chứng; verify 1005 test; digest 5e7e6b40…. Bốn chỗ sửa ngoài phạm vi
+  đã báo (index.ts/cli.ts mỗi file một dòng, một dòng route trong ot-api, chỉnh assertion
+  của jobs-restart vì job gửi giờ đã được đăng ký). Ghi chú cho audit: job gửi được nhận
+  trước khi có PDF sẽ tốn một lượt thử; lỗi xác minh chứng chỉ TLS bị xếp là tạm thời.
+- Đang chạy: WP3-T09-FREEZE (committer).
 - Bước tiếp:
-  1. Ghi kết quả commit đóng băng T08; rồi WP3-DOC (sau G-Q1/G-Q2), T07B và từ T09 trở
-     đi.
+  1. Ghi kết quả commit đóng băng T09; sau đó WP3-DOC và T07B (sau G-Q1/G-Q2), rồi T10.
   2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
      (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
      quyết.
@@ -197,5 +206,5 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP3-T08-FREEZE.
+- Process còn sống: chỉ WP3-T09-FREEZE.
 - Usage/reset: không quan sát được.

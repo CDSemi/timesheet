@@ -53,7 +53,7 @@ async function runJobs(args: readonly string[]): Promise<number> {
   try {
     migrate(db);
     const clock = { now: () => new Date(instant.getTime()) };
-    const handlers = createJobHandlers({ db, clock, files: new FileStore(delivery.dataDir) });
+    const handlers = createJobHandlers({ db, clock, files: new FileStore(delivery.dataDir), delivery });
     const summary = await runJobsOnce({ db, clock, handlers });
     // Counts only: no identifiers, names, recipients or paths.
     console.log(JSON.stringify(summary));

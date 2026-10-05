@@ -28,7 +28,7 @@
   "current_source_digest": "e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP3-T08-FREEZE",
+  "next_task_id": "WP3-T09-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -98,7 +98,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "2f8011ac1a8e2eadc031e6654714454efe1126f1",
+    "last_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
     "unpushed": []
   },
   "owner_decisions": [
@@ -162,6 +162,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-04",
+      "basis": "Pending owner questions G-Q1/G-Q2 block WP3-DOC and T07B; T09 builds the email from the frozen snapshot's rendered subject/body",
+      "decision": "Run WP3-T09 (mail adapters, send job, uncertain outcome) after the T08 freeze instead of after T07B, so the single-writer chain does not idle. WP3-DOC and T07B run as soon as the owner answers G-Q1/G-Q2, and before T10 (automatic submission uses the note line and image option). T09 adds src/server/jobs/runner.ts to its owned paths (send handler registration)."
+    },
     {
       "date": "2026-10-04",
       "basis": "Owner answers F-Q1..F-Q6 (owner_decisions 2026-10-04); AGENTS rule 8; WP3-REQ sections A-F",
@@ -5327,9 +5332,109 @@
       "id": "WP3-T08-FREEZE",
       "package": "WP3",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP3-T08"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af411728b458f9362",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP3-T08-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T08-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T08-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T08-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T08-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP3-T08-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "2f8011ac1a8e2eadc031e6654714454efe1126f1",
+      "branch": "main",
+      "commit_sha": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
+      "pushed": true,
+      "source_digest": "706c1619ef5461428f28bcf80722c2189d85ee0a927d1c7c664eca349cd82467",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 25 paths (exact expected set), parent 2f8011a, remote SHA identical; digest 706c1619 matched; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0.",
+      "next_action": "None; WP3-T09 starts on 3d7a17c (WP3-DOC/T07B wait for G-Q1/G-Q2)."
+    },
+    {
+      "id": "WP3-T09",
+      "package": "WP3",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP3-T08-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae747a75a2b3439ed",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "package.json",
+        "package-lock.json",
+        "src/server/mail/outbound.ts",
+        "src/server/mail/message.ts",
+        "src/server/mail/captureAdapter.ts",
+        "src/server/mail/smtpAdapter.ts",
+        "src/server/jobs/sendJob.ts",
+        "src/server/jobs/runner.ts",
+        "src/server/services/deliveries.ts",
+        "src/server/routes/submission.ts",
+        "tests/integration/delivery.test.ts",
+        "tests/integration/delivery-crash.test.ts",
+        "tests/support/smtpSink.ts",
+        "handoff/delivery/tasks/WP3-T09.md",
+        "handoff/delivery/evidence/WP3-T09"
+      ],
+      "prompt": "handoff/delivery/tasks/WP3-T09.md",
+      "report": "handoff/delivery/tasks/WP3-T09.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP3-T09/00-dependencies.txt",
+        "handoff/delivery/evidence/WP3-T09/01-red.txt",
+        "handoff/delivery/evidence/WP3-T09/02-green.txt",
+        "handoff/delivery/evidence/WP3-T09/03-mutations.txt",
+        "handoff/delivery/evidence/WP3-T09/04-verify.txt",
+        "handoff/delivery/evidence/WP3-T09/05-digest.txt"
+      ],
+      "baseline_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
+      "source_digest": "5e7e6b40f2e33885136b5560741fb361a4d6b260d255427ea585b66f3fd87e8d",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: nodemailer 10.0.14, dev smtp-server 3.19.17 and @types/smtp-server 3.5.13 (plus @types/nodemailer, punycode.js, ipv6-normalize), none deprecated, lockfile only adds. Deterministic message from the frozen snapshot and stored PDF (hash re-checked) with a stored Message-ID; capture default (.eml, PDF, metadata under the private data dir); SMTP only with OUTBOUND_MODE=smtp and the owner-only flag, TLS required. Outcomes: 4xx and drops before DATA temporary (retried), 5xx and auth/TLS permanent, drop/timeout after DATA uncertain (never retried), 250 accepted with provider id and time. Crash: a child killed after the sink got the message leaves sending, then uncertain after lease expiry; restart sends nothing. Decision route POST /api/deliveries/:id/decision (mark_delivered or resend via the T06 resend; a second decision 409; other user 404). Secrets absent from rows, DB bytes, logs, captures and responses. Red: both files fail on baseline, 8 fail without routes/registration; 4/4 mutations caught; verify exit 0, 47 files/1005 tests, 0 deprecation lines; digest re-run as the last command. Deviations (reported, justified): one line each in index.ts and cli.ts (pass the delivery config to the job handlers); an ot-api.test.ts route line; jobs-restart.test.ts assertions changed because the send job is now claimed (they now assert it is never sent). A brief git add -N was undone at once. Notes for audits: a send job claimed before its PDF consumes a job-store attempt (pdf_not_ready); a TLS verification failure is classified temporary. Scratch tree D:\\timesheet-tmp\\WP3-T09\\red left in place.",
+      "next_action": "None; WP3-T09-FREEZE."
+    },
+    {
+      "id": "WP3-T09-FREEZE",
+      "package": "WP3",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP3-T09"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -5347,21 +5452,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP3-T08-FREEZE.md",
-        "handoff/delivery/evidence/WP3-T08-FREEZE"
+        "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+        "handoff/delivery/evidence/WP3-T09-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP3-T08-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP3-T08-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP3-T09-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "2f8011ac1a8e2eadc031e6654714454efe1126f1",
+      "baseline_commit": "3d7a17c3a0eecb10726eaf1378fbab537ec67ef5",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "706c1619ef5461428f28bcf80722c2189d85ee0a927d1c7c664eca349cd82467",
+      "source_digest": "5e7e6b40f2e33885136b5560741fb361a4d6b260d255427ea585b66f3fd87e8d",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP3-T08 set with the pending handoff records."
+      "next_action": "Commit and push the WP3-T09 set with the pending handoff records."
     },
     {
       "id": "WP3-REQ2",
