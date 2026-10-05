@@ -14,11 +14,11 @@ Triển khai **chỉ WP3**. Theo [AGENTS](../../AGENTS.md). Kiểm repo thật v
 
 Chỉ đọc thêm source/docs khi có dependency cụ thể. Dùng fixture giờ/OT liên quan và fixture sổ; bàn giao trước; không mặc định nạp mọi bản dịch hay binary workbook.
 
-Phạm vi: Làm snapshot/hash bất biến, review/sign-off rõ, chốt sổ/outbox nguyên tử, báo cáo pdf-lib và ảnh ký riêng, template/người nhận, job/nhắc bền vững, tự động đến hạn, adapter capture/provider và lịch sử gửi. Bao phủ OT thiếu, chọn khoản thiếu, mốc kích hoạt, review muộn/sửa/gửi lại và SMTP chưa rõ. Deep link có login bắt buộc; magic link giới hạn tùy chọn, nếu làm phải đủ bảo vệ.
+Phạm vi: Làm snapshot/hash bất biến, review/sign-off rõ, chốt sổ/outbox nguyên tử, báo cáo pdf-lib và ảnh ký riêng, template/người nhận, job/nhắc bền vững, tự động đến hạn, adapter capture/provider và lịch sử gửi. Bao phủ OT thiếu, chọn khoản thiếu, mốc kích hoạt, review muộn/sửa/gửi lại và SMTP chưa rõ. Deep link có login bắt buộc; magic link giới hạn tùy chọn, nếu làm phải đủ bảo vệ. Thêm chia sẻ timesheet do chủ cấp, bật/tắt từng mục, và ranh giới tình trạng cho admin.
 
 Checkpoint gợi ý: (1) Snapshot/review/PDF/transaction sổ; (2) job/nhắc/adapter/phục hồi lỗi; (3) tích hợp/xem PDF còn lại nếu cần.
 
-Gate bắt buộc: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật. Mọi gửi ở dry-run/capture.
+Gate bắt buộc: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật; AC-16, dòng ghi chú và tùy chọn ảnh khi tự nộp, bản tự nộp gửi đi không dấu hiệu tự động, tự nộp kỳ chưa có dữ liệu và tình trạng admin không có chi tiết timesheet. Mọi gửi ở dry-run/capture.
 
 Thực hiện triển khai, không chỉ đề xuất. Gửi cục bộ ở dry-run/capture. Không đổi thanh toán, mua usage, mở host hay gửi tin thật. Tự quyết việc thường trong hợp đồng; báo mâu thuẫn yêu cầu thật.
 

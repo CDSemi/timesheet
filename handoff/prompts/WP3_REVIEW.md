@@ -14,7 +14,7 @@ Read:
 
 Focus: Inspect transaction boundaries and reviewed-hash binding. Inject crash after possible acceptance; verify no blind resend or duplicate ledger. Check no invented signed_at, image settings, Sunday totals, Unicode, GET safety and unchanged late-review zero delta.
 
-Required gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays. All sending stays dry-run/capture.
+Required gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays; AC-16, the automatic note line and image options, outgoing automatic submissions without an automatic indicator, empty-period automatic submission and admin status without timesheet details. All sending stays dry-run/capture.
 
 Inspect repository state/handoff, trace critical behavior through actual production code and persistence, and run meaningful available checks using synthetic data/local capture. Record commands, exit status, observed outcome and blocked/unrun cases. Missing source/base or execution access means NOT VERIFIED, not a pass.
 

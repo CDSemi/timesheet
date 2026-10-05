@@ -6,14 +6,14 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 632092d730f84bc10b3bee1f7ae61f96edec35eb (WP3-REC1, records only;
-    last source freeze c1e4bb2, WP3-T13A).
+  - HEAD = origin/main = cb9800e4cfef57786c2e69bb4fd78d245ab5c817 (WP3-DOC-FREEZE; last
+    code freeze c1e4bb2, WP3-T13A).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest 0edefc94… (T13A, committer-checked; no WP3
-    gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint and the WP3-REC1 results; they
-    go into the next commit.
+    (WP2-GATE4). Current WP3 working digest 4d4c4863… (after WP3-DOC, committer-checked;
+    no WP3 gate yet).
+  - Uncommitted: the four WP3 prompt files (GOV-WP3P-FREEZE commits them), the board,
+    this checkpoint, the DOC-FREEZE results and the GOV-WP3P briefs.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -219,11 +219,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - Governance split (coordinator decision): `handoff/prompts/` is a governance path, so
   WP3-DOC-FREEZE commits only the docs and the policy example; the four WP3 prompt files
   go through GOV-WP3P-FREEZE, GOV-WP3P-GATE and a fresh GOV-WP3P-AUDIT before T07B.
-- Running: WP3-DOC-FREEZE (committer), prompt files left unstaged.
+- WP3-DOC-FREEZE is committed and pushed as cb9800e (32 paths; the four prompt files
+  stayed unstaged; all checks 0).
+- Running: GOV-WP3P-FREEZE (committer): the four WP3 prompt files.
 - Next action:
-  1. Record the DOC freeze; then GOV-WP3P-FREEZE, GOV-WP3P-GATE, GOV-WP3P-AUDIT (fresh
-     opus); then T07B, T13 (brief ready), T13B (opus), T13C, T14, T15, WP3-GATE and the
-     audits.
+  1. Record the GOV freeze; GOV-WP3P-GATE (verifier); GOV-WP3P-AUDIT (fresh opus); then
+     T07B, T13 (brief ready), T13B (opus), T13C, T14, T15, WP3-GATE and the audits.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -241,5 +242,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-DOC-FREEZE only.
+- Live processes: GOV-WP3P-FREEZE only.
 - Usage/reset: not observable.

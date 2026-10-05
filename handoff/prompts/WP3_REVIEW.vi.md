@@ -14,7 +14,7 @@ Review độc lập **WP3** theo [AGENTS](../../AGENTS.md). Trao đổi tiếng 
 
 Trọng tâm: Kiểm ranh giới transaction và gắn hash đã xem. Chèn crash sau có thể chấp nhận; không gửi lại mù/ghi sổ trùng. Kiểm không bịa signed_at, ảnh, tổng Chủ nhật, Unicode, GET an toàn và review muộn không đổi có delta 0.
 
-Gate bắt buộc: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật. Mọi gửi ở dry-run/capture.
+Gate bắt buộc: AC-06–AC-10 và AC-14; race đến hạn/tay, ảnh tự động bật/tắt, gửi gián đoạn/chưa rõ, job trùng, tải riêng và bằng chứng PDF gồm hai Chủ nhật; AC-16, dòng ghi chú và tùy chọn ảnh khi tự nộp, bản tự nộp gửi đi không dấu hiệu tự động, tự nộp kỳ chưa có dữ liệu và tình trạng admin không có chi tiết timesheet. Mọi gửi ở dry-run/capture.
 
 Kiểm trạng thái repo/bàn giao, truy hành vi quan trọng qua code production/lưu trữ thật, chạy kiểm có ý nghĩa bằng dữ liệu giả/capture cục bộ. Ghi lệnh, exit status, kết quả và phần chặn/chưa chạy. Thiếu source/base hoặc môi trường chạy là NOT VERIFIED, không phải đạt.
 

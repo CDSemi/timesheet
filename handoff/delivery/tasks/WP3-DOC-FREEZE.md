@@ -100,4 +100,12 @@ Evidence in handoff/delivery/evidence/WP3-DOC-FREEZE/. Return at most 150 words.
 
 ## Results
 
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5
+
+- Pre-HEAD 632092d730f84bc10b3bee1f7ae61f96edec35eb; post-HEAD and commit SHA
+  cb9800e4cfef57786c2e69bb4fd78d245ab5c817; pushed yes; remote SHA the same; branch main.
+- Node v24.21.0; digest 4d4c4863cd6b61d63236927d5c77c6ea132edcf8d8d940789ecb61904918078f.
+- Staged 32 files; no prompt file staged (the four stay modified and unstaged).
+- Checks all exit 0: precommit, diff --check, JSON parse, validate_orchestration,
+  check_recovery, validate_package --preflight. No masking or EOF fixes needed.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP3-DOC-FREEZE/.

@@ -14,11 +14,11 @@ Read:
 
 Read only additional source/docs needed for a concrete dependency. Use the relevant time/OT fixtures and ledger fixtures; prior handoff; do not load every translation or binary workbook by default.
 
-Scope: Implement immutable snapshots/hashes, explicit review/sign-off, atomic ledger/outbox finalization, pdf-lib report and private signature files, templates/recipients, durable jobs/reminders, deadline automation, capture/provider adapters and delivery history. Cover incomplete OT, deficit choices, activation boundary, late review/corrections/resend and uncertain SMTP outcomes. Authenticated deep links are required; restricted magic links are optional and must meet full safeguards if added.
+Scope: Implement immutable snapshots/hashes, explicit review/sign-off, atomic ledger/outbox finalization, pdf-lib report and private signature files, templates/recipients, durable jobs/reminders, deadline automation, capture/provider adapters and delivery history. Cover incomplete OT, deficit choices, activation boundary, late review/corrections/resend and uncertain SMTP outcomes. Authenticated deep links are required; restricted magic links are optional and must meet full safeguards if added. Add owner-granted timesheet sharing with per-item toggles and the admin status boundary.
 
 Suggested checkpoints: (1) Snapshot/review/PDF/ledger transaction; (2) jobs/reminders/adapters/failure recovery; (3) remaining integration/visual checks only if needed.
 
-Required gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays. All sending stays dry-run/capture.
+Required gate: AC-06–AC-10 and AC-14; deadline/manual race, auto-image on/off, interrupted/uncertain send, duplicate jobs, private downloads and visual PDF evidence including both Sundays; AC-16, the automatic note line and image options, outgoing automatic submissions without an automatic indicator, empty-period automatic submission and admin status without timesheet details. All sending stays dry-run/capture.
 
 Do the implementation, not just a proposal. Keep local sending in dry-run/capture. Do not change billing, buy usage, expose a host or send real messages. Resolve routine choices within the contracts; flag actual contradictory requirements.
 
