@@ -116,4 +116,11 @@ Evidence goes in handoff/delivery/evidence/WP3-T13A-FREEZE/. Return at most 150 
 
 ## Results
 
-(Committer appends here.)
+- Self-reported model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD 19723b6e77b75c972cf416229d05b3b5203c8480; post-HEAD and commit SHA
+  c1e4bb2c161561cfa3827028837a087303352718; pushed to main; remote SHA equal.
+- Digest 0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299 (matches).
+  Staged count 34. No masking, no EOF fix, no unstaged extras.
+- Check exits (all 0): digest, git add, precommit (0 findings), diff --check, JSON
+  parse, validate_orchestration, check_recovery, validate_package --preflight.
+- Blockers: none.

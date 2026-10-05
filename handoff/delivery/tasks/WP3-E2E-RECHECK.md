@@ -38,3 +38,10 @@ each run's exit and counts, and any real failure.
 ## Results
 
 (Verifier appends here.)
+
+Run 1 (attempt 1): HEAD c1e4bb2c161561cfa3827028837a087303352718, digest
+0edefc94a01eef88b0c7df32d7c71f328703ee08f58876a2c9297d6b8ed03299 before and after
+(unchanged). Node v24.21.0; TEMP/TMP D:\timesheet-tmp\WP3-E2E-RECHECK.
+`npm run test:e2e` (build + playwright, both projects): exit 0, 97 passed, 3 skipped
+(the three mobile-only tests under the desktop project), 0 failed, 1.7m. No ERR_*
+errors in the log (evidence/WP3-E2E-RECHECK/run1.log). Second run not needed.
