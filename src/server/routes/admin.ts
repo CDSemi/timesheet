@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { requireAdmin } from '../http/auth.ts';
-import { notFound } from '../http/errors.ts';
+import { ApiError, notFound } from '../http/errors.ts';
 import {
   adminPayrollExceptionBody,
   adminUserCreateBody,
@@ -14,6 +14,15 @@ import { normalizeReason, readJson } from '../http/validation.ts';
 import { activationJson, getAutomationActivation, setAutomationActivation } from '../services/automation.ts';
 import { createPayrollException } from '../services/calendars.ts';
 import { calendarVersionJson, commitHolidayImport, previewHolidayImport } from '../services/holidayImport.ts';
+import {
+  DEFAULT_SUBMISSION_LIMIT,
+  deliverySetupFromEnv,
+  getOperationsStatus,
+  listSubmissionStatus,
+  MAX_SUBMISSION_LIMIT,
+  operationsStatusJson,
+  submissionStatusJson,
+} from '../services/operationsStatus.ts';
 import {
   createUser,
   deactivateUser,
@@ -33,6 +42,15 @@ const automationActivationBody = z.strictObject({
   active_from: z.string().max(40).nullable(),
   reason: z.string().max(1000),
 });
+
+function parseSubmissionLimit(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_SUBMISSION_LIMIT;
+  const limit = /^\d{1,4}$/.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SUBMISSION_LIMIT) {
+    throw new ApiError(422, 'invalid_limit', `limit must be a whole number from 1 to ${MAX_SUBMISSION_LIMIT}`);
+  }
+  return limit;
+}
 
 /** Account fields only: never the password hash and never another user's private data. */
 function accountJson(account: UserAccount) {
@@ -56,6 +74,11 @@ function accountJson(account: UserAccount) {
  * password (E-11) is hashed on creation and is never returned, logged or audited. There is
  * no password reset route: FR-01 and E-11 do not require one.
  *
+ * Operations status (F-3, F-Q3 (b), WP3-T13D): two read-only routes backed by one service with a
+ * column allowlist. The administrator sees the pipeline (sender, runner heartbeat, activation, job
+ * and delivery totals; per person and period the revision, PDF and delivery states, redacted fault
+ * codes and recipient addresses) and never a person's timesheet details, templates or message content.
+ *
  * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
  * holiday CSV preview/commit and payroll exceptions return calendar-only fields (dates, names,
  * versions and the admin's own input) and no employee-derived count, never a user's rows.
@@ -64,6 +87,17 @@ export function adminRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
   // Applies to every /api/admin/* path, including unknown ones: 401 anonymous, 403 employee.
   app.use('*', requireAdmin(deps));
+
+  // Operations status: reads only; nothing here can change a record.
+  app.get('/operations', (c) =>
+    c.json({
+      operations: operationsStatusJson(getOperationsStatus(deps.db, deps.clock, deliverySetupFromEnv(process.env, deps.config))),
+    }),
+  );
+
+  app.get('/submissions', (c) =>
+    c.json({ submissions: submissionStatusJson(listSubmissionStatus(deps.db, { limit: parseSubmissionLimit(c.req.query('limit')) })) }),
+  );
 
   app.get('/users', (c) => c.json({ users: listUsers(deps.db).map(accountJson) }));
 

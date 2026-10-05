@@ -1,49 +1,46 @@
-# WP3-T12-FREEZE dispatch brief
+# WP3-T13D-FREEZE dispatch brief
 
-- Mission/task: timesheet-software-readiness / WP3-T12-FREEZE; package WP3; kind commit;
-  attempt 1; depends on WP3-T12.
+- Mission/task: timesheet-software-readiness / WP3-T13D-FREEZE; package WP3; kind commit;
+  attempt 1; depends on WP3-T13D.
 - Profile/routing: timesheet-committer, requested sonnet/medium, no override. Routing:
-  size S, risk M (UI code, synthetic screenshots, evidence scripts), novelty no. Records
-  in English.
+  size S, risk M (admin privacy boundary code, synthetic screenshots, evidence scripts),
+  novelty no. Records in English.
 - Authority: AGENTS.md rule 12, the docs/08 section "Commits and pushes" and the board
   `owner_decisions`.
 - Branch: main (`git.release_declared` is false). Expected HEAD = origin/main =
-  c3d32b9f72ebaa1bb0e96e35c7f4f61ad9ab40ce. If either differs, stop and report.
+  8e2c2bf288030a48ee4a58fe9a9d86b3df01e818. If either differs, stop and report.
 - Push after the commit.
 - Scratch space: make the first shell call a trivial `node --version` (Node 24 by full
   path); if it fails with ENOSPC or "temp filesystem … is full", stop at once and report.
-  Use `D:\timesheet-tmp\WP3-T12-FREEZE` (owner-authorized, outside Dropbox) for TEMP/TMP;
-  delete only files you created; never remove folders recursively.
+  Use `D:\timesheet-tmp\WP3-T13D-FREEZE` (owner-authorized, outside Dropbox) for
+  TEMP/TMP; delete only files you created; never remove folders recursively.
 
 ## Expected working-tree set
 
 Source and tests: changed or new paths outside handoff/ may only be among these:
-- new: src/client/ReviewScreen.tsx, src/client/components/ReviewDays.tsx,
-  ReviewFindings.tsx, ReviewEnvelope.tsx, ReviewSignoff.tsx, ReviewStatus.tsx,
-  src/client/components/reviewModel.ts, tests/client/reviewModel.test.ts and
-  tests/e2e/review.spec.ts;
-- modified: src/client/App.tsx, src/client/api.ts, src/client/styles.css,
-  src/client/components/AppShell.tsx, src/client/components/PeriodHeader.tsx, and the
-  reported deviation tests/e2e/timesheet.spec.ts.
+- new: src/server/services/operationsStatus.ts, src/client/components/OperationsStatus.tsx,
+  tests/integration/operations-status.test.ts and tests/e2e/admin-status.spec.ts;
+- modified: src/server/routes/admin.ts, src/client/AdminScreen.tsx, src/client/api.ts,
+  src/client/styles.css and tests/integration/isolation.test.ts.
 
 Recompute the digest with Node 24 (`scripts/source-digest.mjs` or `npm run digest`)
 immediately before `git add` and record it. The worker reported
-160bb78cc502facd8b4c9d2b27415a8225cf841124ae8a9bd52d9064ad2f510e; a different value stops
+321cc6a04ec23a92e6aa7e30c153d12db870002bf053cf3fc2b5655d3d0ae862; a different value stops
 the commit.
 
 New handoff files:
-- handoff/delivery/tasks/: WP3-T12-FREEZE.md, WP3-DOC.md and WP3-T07B.md.
-- Every file under handoff/delivery/evidence/WP3-T12/, including the 12
-  `review-*-synthetic.png` screenshots and the `*.mjs.txt`/`*.py.txt` scripts.
+- handoff/delivery/tasks/: WP3-T13D.md, WP3-T13D-FREEZE.md and WP3-T13A.md.
+- Every file under handoff/delivery/evidence/WP3-T13D/, including the six
+  `admin-status-*-synthetic.png` screenshots and the `*.mjs.txt`/`*.py.txt` scripts.
 
 Modified or new handoff files:
 - handoff/delivery/ORCHESTRATION.json.
 - handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md and .vi.md.
-- handoff/delivery/tasks/: WP3-T11-FREEZE.md and WP3-T12.md.
-- Every file under handoff/delivery/evidence/WP3-T11-FREEZE/.
+- handoff/delivery/tasks/WP3-T12-FREEZE.md.
+- Every file under handoff/delivery/evidence/WP3-T12-FREEZE/.
 
 Allowed but not staged:
-- your own files in handoff/delivery/evidence/WP3-T12-FREEZE/;
+- your own files in handoff/delivery/evidence/WP3-T13D-FREEZE/;
 - the results you append to this brief after the commit.
 
 Any other changed or untracked path stops the commit; report it. That includes a file
@@ -67,8 +64,9 @@ Run one command per step with Node 24 (by full path) and record each exit code:
   `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
   Write `<user>` in the evidence.
 
-View at least six of the new screenshots with the Read tool (desktop and mobile) and
-record how many; they must show synthetic data only.
+View at least four of the new screenshots with the Read tool (desktop and mobile) and
+record how many; they must show synthetic data only (synthetic recipient addresses on
+`example.invalid`).
 
 If `git diff --cached --check` flags only a blank line at EOF in a task record outside
 evidence/, you may remove exactly that line and re-stage it. Record the file name. Change
@@ -91,21 +89,20 @@ single final newline. Stop any background process you started before you finish.
 
 ## Commit message (refine with the commit-message skill; keep the facts)
 
-Subject: Add the review and sign-off screen with stale-review handling and status badges
+Subject: Add the admin operations and submission status within the privacy boundary
 
-- feat(ui): #/review/{payrollDate} shows the server's review content (14 days, OT
-  proposals, deficit choices, missing evidence, reservations, recipients and email
-  preview, signature) and posts sign-off with the expected version and reviewed hash;
-  late review and correction entry points
-- feat(ui): a 409 reloads a fresh review, a 422 names the field; the deep link survives
-  login without a token; review and delivery badges in the period header
-- style(ui): four new custom properties, no raw literals
-- test: 40 unit tests (8 mutations caught) and review e2e on desktop and mobile (93
-  passed, 3 skipped); a pre-existing e2e shared-state flake fixed
-- docs(handoff): WP3-T11 freeze result, WP3-T12 record, evidence and screenshots,
-  WP3-DOC and WP3-T07B briefs, board and checkpoint (+ vi)
+- feat(admin): read-only GET /api/admin/operations and /api/admin/submissions backed by
+  an explicit field allowlist: pipeline status and per-person, per-period submission and
+  delivery state with recipient addresses (owner F-3, F-Q3 (b)); no timesheet details,
+  templates, message content, Message-ID or audit payloads
+- feat(ui): operations status panel and submission table on the admin screen, token-only
+  CSS
+- test: response key-path leak test, isolation route and import inventory, admin e2e on
+  desktop and mobile; 8 mutations caught
+- docs(handoff): WP3-T12 freeze result, WP3-T13D record, evidence and screenshots,
+  WP3-T13A brief, board and checkpoint (+ vi)
 
-Task: WP3-T12-FREEZE
+Task: WP3-T13D-FREEZE
 
 ## Push and report
 
@@ -116,10 +113,8 @@ Push per the profile. Append these results here:
 - check exits;
 - blockers.
 
-Evidence goes in handoff/delivery/evidence/WP3-T12-FREEZE/. Return at most 150 words.
+Evidence goes in handoff/delivery/evidence/WP3-T13D-FREEZE/. Return at most 150 words.
 
 ## Results
 
-- Pre-HEAD c3d32b9f72ebaa1bb0e96e35c7f4f61ad9ab40ce; commit 8e2c2bf288030a48ee4a58fe9a9d86b3df01e818; pushed to main, remote SHA equals the commit.
-- Digest 160bb78cc502facd8b4c9d2b27415a8225cf841124ae8a9bd52d9064ad2f510e; 49 staged; 6 screenshots viewed (synthetic only).
-- All checks exit 0 (see evidence/WP3-T12-FREEZE/checks.txt); no masking or EOF fixes needed; no blockers.
+(Committer appends here.)

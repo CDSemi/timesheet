@@ -1,0 +1,41 @@
+# WP3-T13D mutation checks for the operations status service and the admin router.
+# Usage: python mutate.py.txt <vitest.mjs path>
+# Each mutation is computed in memory before its file is opened for writing; the file is restored
+# byte-identical (SHA-256 compared) after every run.
+import hashlib, subprocess, sys
+
+VITEST = sys.argv[1]
+SERVICE = 'src/server/services/operationsStatus.ts'
+ROUTER = 'src/server/routes/admin.ts'
+TESTS = ['tests/integration/operations-status.test.ts', 'tests/integration/isolation.test.ts']
+
+MUTATIONS = [
+    ('M1 fault code returns the raw provider text', SERVICE, "if (FAULT_CODE.test(token)) return token;", "if (FAULT_CODE.test(token)) return text;"),
+    ('M2 effective recipients not scoped to the person', SERVICE, "FROM submission_settings WHERE user_id = ? ORDER BY seq DESC LIMIT 1", "FROM submission_settings WHERE ? IS NOT NULL ORDER BY seq DESC LIMIT 1"),
+    ('M3 an accepted delivery shows a fault code', SERVICE, "const faulty = attempt !== undefined && (attempt.state === 'failed_temporary' || attempt.state === 'failed_permanent' || attempt.state === 'uncertain');", "const faulty = attempt !== undefined;"),
+    ('M4 heartbeat stale one second early', SERVICE, "> HEARTBEAT_STALE_SECONDS ? 'stale'", ">= HEARTBEAT_STALE_SECONDS ? 'stale'"),
+    ('M5 frozen envelope recipients dropped', SERVICE, "const frozen = attempt === undefined ? null : recipientsOf(attempt.envelope_json);", "const frozen = attempt === undefined ? null : recipientsOf(null);"),
+    ('M6 an extra field in the submission response', SERVICE, "      send_requested: row.revision.sendRequested,\n    },\n    pdf:", "      send_requested: row.revision.sendRequested,\n      note: 'x',\n    },\n    pdf:"),
+    ('M7 admin guard removed', ROUTER, "app.use('*', requireAdmin(deps));", "app.use('*', async (_c, next) => { await next(); });"),
+    ('M8 sender flag inverted', SERVICE, "senderConfigured: delivery.senderAddress !== null", "senderConfigured: delivery.senderAddress === null"),
+]
+
+hashes = {path: hashlib.sha256(open(path, 'rb').read()).hexdigest() for path in (SERVICE, ROUTER)}
+caught = 0
+for name, target, old, new in MUTATIONS:
+    original = open(target, 'rb').read()
+    text = original.decode('utf-8')
+    assert text.count(old) == 1, f'{name}: pattern found {text.count(old)} times'
+    mutated = text.replace(old, new, 1).encode('utf-8')
+    assert mutated != original
+    try:
+        open(target, 'wb').write(mutated)
+        run = subprocess.run(['node', VITEST, 'run', *TESTS], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    finally:
+        open(target, 'wb').write(original)
+    restored = hashlib.sha256(open(target, 'rb').read()).hexdigest() == hashes[target]
+    summary = [line.strip() for line in (run.stdout + run.stderr).splitlines() if line.strip().startswith('Tests ')]
+    is_caught = run.returncode != 0
+    caught += is_caught
+    print(f"{name}: {'CAUGHT' if is_caught else 'NOT CAUGHT'}; restored byte-identical: {restored}; {summary[-1] if summary else 'no summary'}")
+print(f'caught {caught} of {len(MUTATIONS)}')

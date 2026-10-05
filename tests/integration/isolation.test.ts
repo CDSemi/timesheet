@@ -287,6 +287,10 @@ describe('admin router is account administration, not private-data access (AC-01
         // The system activation instant (WP3-T10): the instant, who recorded it and when; no employee data.
         'GET /api/admin/automation',
         'PUT /api/admin/automation/activation',
+        // The operations status (WP3-T13D, F-3, F-Q3 (b)): states, redacted fault codes and recipient
+        // addresses per person and period, read-only, never a timesheet detail.
+        'GET /api/admin/operations',
+        'GET /api/admin/submissions',
       ].sort(),
     );
     for (const route of adminRoutes()) {
@@ -301,6 +305,30 @@ describe('admin router is account administration, not private-data access (AC-01
       expect(module, module).not.toMatch(/timesheet|dayEntries|ledger|otLeave|otEvidence|history|periods|policies|attendance/i);
     }
     expect(source).not.toMatch(/work_sessions|day_entries|ot_ledger|ot_leave_requests|audit_events|timesheet_/i);
+    // WP3-T13D: the one service that may read submission and delivery records for the admin. It reaches
+    // them through an explicit column allowlist and writes nothing (tests/integration/operations-status.test.ts).
+    expect(imports).toContain('../services/operationsStatus.ts');
+    const reviewed = new Set([
+      'hono',
+      'zod',
+      '../http/auth.ts',
+      '../http/errors.ts',
+      '../http/schemas.ts',
+      '../http/validation.ts',
+      '../services/automation.ts',
+      '../services/calendars.ts',
+      '../services/holidayImport.ts',
+      '../services/operationsStatus.ts',
+      '../services/users.ts',
+      '../types.ts',
+    ]);
+    for (const module of imports) expect(reviewed.has(module ?? ''), `unreviewed admin import ${module}`).toBe(true);
+  });
+
+  it('keeps the operations service read-only and column-allowlisted', () => {
+    const source = readFileSync(join(import.meta.dirname, '../../src/server/services/operationsStatus.ts'), 'utf8');
+    expect(source).not.toMatch(/\b(INSERT|UPDATE|DELETE|REPLACE|DROP|ALTER|CREATE)\b/);
+    expect(source).not.toMatch(/work_sessions|session_breaks|day_entries|ot_ledger|ot_leave_requests|audit_events|revision_ledger_lines|signoffs|attachments|SELECT \*|r\.\*|\.payload_json|subject_template|body_template/i);
   });
 
   it('answers 404 to an admin probing for another user’s private data under /api/admin', async () => {

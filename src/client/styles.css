@@ -1220,3 +1220,88 @@ textarea.mono {
     font-size: var(--font-size-xs);
   }
 }
+
+/* ---- Administrator operations status (WP3-T13D) ------------------------------------------ */
+
+.ops-status h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
+.ops-status .toolbar {
+  margin-bottom: 0;
+}
+
+/* Counts are short: several fit on one row, also on a phone. */
+.ops-status .ops-counts {
+  grid-template-columns: repeat(auto-fit, minmax(var(--counter-min), var(--track)));
+}
+
+.ops-table td {
+  white-space: normal;
+}
+
+.ops-table td > span:not(.badge) {
+  display: block;
+}
+
+.ops-table .badge {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.ops-person {
+  font-weight: var(--font-weight-strong);
+  color: var(--text);
+}
+
+.ops-recipients {
+  min-width: var(--facts-min);
+  overflow-wrap: anywhere;
+}
+
+/* Below 768px each person and period is a labelled block instead of a table row. */
+@media (max-width: 767px) {
+  .ops-table,
+  .ops-table tbody,
+  .ops-table th,
+  .ops-table td {
+    display: block;
+  }
+
+  .ops-table thead {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+  }
+
+  .ops-table tr {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-2), var(--track));
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: var(--hairline) solid var(--line-soft);
+  }
+
+  .ops-table th,
+  .ops-table td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .ops-table .ops-person,
+  .ops-table td[data-label='Recipients'] {
+    grid-column: span var(--cols-2);
+  }
+
+  .ops-table td::before {
+    display: block;
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+  }
+}

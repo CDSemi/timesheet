@@ -1,0 +1,233 @@
+# WP3-T13D red run: operations-status.test.ts and the isolation changes written before the admin routes existed (the service file existed, no route did); the write-method and redaction unit tests pass without routes.
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/operations-status.test.ts (14 tests | 11 failed) 5027ms
+   ❯ access (F-3: administrators only) (3)
+     × answers 401 anonymous and 403 to an employee, for both status routes 308ms
+     × validates the limit 247ms
+   ❯ system status (4)
+     × reports an empty system: never a heartbeat, no activation, zero totals 254ms
+     × reads the sender flag and mode from the configuration without echoing the address 253ms
+     × classifies the runner heartbeat as running, then stale after the documented age 315ms
+     × shows the activation instant with who recorded it and when 267ms
+   ❯ submission and delivery status (4)
+     × lists each person and period with states, a redacted fault and their own recipients (F-Q3 (b)) 569ms
+     × shows an accepted delivery with no fault and the settings changed after the freeze 483ms
+     × shows an uncertain delivery as a decision needed, with the redacted code only 424ms
+     × shows a failed PDF with its code 349ms
+   ❯ the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) (2)
+     × returns exactly the allowlisted fields and none of the private content 571ms
+ ❯ tests/integration/isolation.test.ts (17 tests | 2 failed) 5153ms
+   ❯ admin router is account administration, not private-data access (AC-01, FR-01) (6)
+     × exposes exactly the reviewed account and company-calendar routes 338ms
+     × has an admin router source that reaches only account services and tables 320ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > exposes exactly the reviewed account and company-calendar routes
+AssertionError: expected [ 'GET /api/admin/automation', …(9) ] to deeply equal [ 'GET /api/admin/automation', …(11) ]
+
+- Expected
++ Received
+
+@@ -1,9 +1,7 @@
+  [
+    "GET /api/admin/automation",
+-   "GET /api/admin/operations",
+-   "GET /api/admin/submissions",
+    "GET /api/admin/users",
+    "PATCH /api/admin/users/:id",
+    "POST /api/admin/calendar/import/commit",
+    "POST /api/admin/calendar/import/preview",
+    "POST /api/admin/payroll-exceptions",
+
+ ❯ tests/integration/isolation.test.ts:276:27
+    274|
+    275|   it('exposes exactly the reviewed account and company-calendar routes…
+    276|     expect(adminRoutes()).toEqual(
+       |                           ^
+    277|       [
+    278|         'GET /api/admin/users',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/integration/isolation.test.ts > admin router is account administration, not private-data access (AC-01, FR-01) > has an admin router source that reaches only account services and tables
+AssertionError: expected [ 'hono', 'zod', …(9) ] to include '../services/operationsStatus.ts'
+ ❯ tests/integration/isolation.test.ts:310:21
+    308|     // WP3-T13D: the one service that may read submission and delivery…
+    309|     // them through an explicit column allowlist and writes nothing (t…
+    310|     expect(imports).toContain('../services/operationsStatus.ts');
+       |                     ^
+    311|     const reviewed = new Set([
+    312|       'hono',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > access (F-3: administrators only) > answers 401 anonymous and 403 to an employee, for both status routes
+AssertionError: admin /api/admin/operations: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/operations-status.test.ts:222:47
+    220|       expect(JSON.stringify(asEmployee.body)).not.toContain('payroll');
+    221|       const asAdmin = await statusOf(path, admin);
+    222|       expect(asAdmin.status, `admin ${path}`).toBe(200);
+       |                                               ^
+    223|     }
+    224|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > access (F-3: administrators only) > validates the limit
+AssertionError: 0: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/operations-status.test.ts:240:38
+    238|     for (const limit of ['0', '-1', '501', 'x', '1.5']) {
+    239|       const response = await statusOf(`/api/admin/submissions?limit=${…
+    240|       expect(response.status, limit).toBe(422);
+       |                                      ^
+    241|       expect(response.body.error.code).toBe('validation_error');
+    242|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reports an empty system: never a heartbeat, no activation, zero totals
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/operations-status.test.ts:250:29
+    248|   it('reports an empty system: never a heartbeat, no activation, zero …
+    249|     const response = await statusOf('/api/admin/operations', admin);
+    250|     expect(response.status).toBe(200);
+       |                             ^
+    251|     expect(response.body.operations).toEqual({
+    252|       sender: { configured: false, outbound_mode: 'capture' },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reads the sender flag and mode from the configuration without echoing the address
+TypeError: Cannot read properties of undefined (reading 'sender')
+ ❯ tests/integration/operations-status.test.ts:263:37
+    261|     vi.stubEnv('MAIL_FROM', SENDER);
+    262|     const response = await statusOf('/api/admin/operations', admin);
+    263|     expect(response.body.operations.sender).toEqual({ configured: true…
+       |                                     ^
+    264|     expect(JSON.stringify(response.body)).not.toContain(SENDER);
+    265|     // A real-sending request without the owner-only flag is reported,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > classifies the runner heartbeat as running, then stale after the documented age
+TypeError: Cannot read properties of undefined (reading 'runner')
+ ❯ tests/integration/operations-status.test.ts:274:36
+    272|     recordHeartbeat(t.db, t.clock, 'runner-one');
+    273|     const running = await statusOf('/api/admin/operations', admin);
+    274|     expect(running.body.operations.runner).toEqual({ heartbeat_at: '20…
+       |                                    ^
+    275|     t.clock.advanceSeconds(HEARTBEAT_STALE_SECONDS);
+    276|     expect((await statusOf('/api/admin/operations', admin)).body.opera…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > shows the activation instant with who recorded it and when
+TypeError: Cannot read properties of undefined (reading 'activation')
+ ❯ tests/integration/operations-status.test.ts:286:37
+    284|     setAutomationActivation(t.db, t.clock, { actorUserId: t.userIds.ad…
+    285|     const response = await statusOf('/api/admin/operations', admin);
+    286|     expect(response.body.operations.activation).toEqual({
+       |                                     ^
+    287|       active_from: '2026-10-05T00:00:00Z',
+    288|       recorded_at: '2026-09-29T20:00:00Z',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > submission and delivery status > lists each person and period with states, a redacted fault and their own recipients (F-Q3 (b))
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/operations-status.test.ts:301:29
+    299|     await runPipeline(null);
+    300|     const response = await statusOf('/api/admin/submissions', admin);
+    301|     expect(response.status).toBe(200);
+       |                             ^
+    302|     const rows = response.body.submissions as Array<Record<string, any…
+    303|     expect(rows).toHaveLength(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > submission and delivery status > shows an accepted delivery with no fault and the settings changed after the freeze
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ tests/integration/operations-status.test.ts:334:72
+    332|     });
+    333|     expect(changed.status, JSON.stringify(changed.body)).toBeLessThan(…
+    334|     const row = (await statusOf('/api/admin/submissions', admin)).body…
+       |                                                                        ^
+    335|     expect(row.delivery).toMatchObject({ state: 'accepted', attempts: …
+    336|     expect(row.delivery.accepted_at).toMatch(/^2026-09-29T20:00:\d\dZ$…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > submission and delivery status > shows an uncertain delivery as a decision needed, with the redacted code only
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ tests/integration/operations-status.test.ts:353:31
+    351|       .run('lease_expired_while_sending to=leaked-bob@example.invalid'…
+    352|     const response = await statusOf('/api/admin/submissions', admin);
+    353|     const row = response.body.submissions[0];
+       |                               ^
+    354|     expect(row.delivery).toMatchObject({ state: 'uncertain', fault_cod…
+    355|     expect(JSON.stringify(response.body)).not.toContain('leaked-bob');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > submission and delivery status > shows a failed PDF with its code
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ tests/integration/operations-status.test.ts:363:72
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) > returns exactly the allowlisted fields and none of the private content
+AssertionError: {"error":{"code":"period_finalized","message":"A finalized timesheet references this pay period, so its payroll or due date cannot change","details":{"period_start":"2026-09-14","period_end":"2026-09-27"}}}: expected 409 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 409
+
+ ❯ tests/integration/operations-status.test.ts:378:62
+    376|       body: { calendar_id: t.calendarId, nominal_payroll_date: PAYROLL…
+    377|     });
+    378|     expect(exception.status, JSON.stringify(exception.body)).toBe(201);
+       |                                                              ^
+    379|     expect(count("SELECT count(*) FROM audit_events WHERE after_json L…
+    380|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  13 failed | 18 passed (31)
+   Start at  21:32:12
+   Duration  6.18s (tests 84%, import 10%, transform 6%)

@@ -6,13 +6,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
   (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = c3d32b9f72ebaa1bb0e96e35c7f4f61ad9ab40ce (WP3-T11-FREEZE).
+  - HEAD = origin/main = 8e2c2bf288030a48ee4a58fe9a9d86b3df01e818 (WP3-T12-FREEZE).
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df
-    (WP2-GATE4). Current WP3 working digest e7f00cd0… (T11, committer-checked; no WP3
+    (WP2-GATE4). Current WP3 working digest 160bb78c… (T12, committer-checked; no WP3
     gate yet).
-  - Uncommitted (handoff only): the board, this checkpoint, the T11-FREEZE results and
-    evidence. They go into the next freeze.
+  - Uncommitted (handoff only): the board, this checkpoint, the T12-FREEZE results and
+    evidence, the WP3-T13D brief. They go into the next freeze.
   - No unpushed commits.
 - Completed scope:
   - Governance: revision v2 accepted (WF-AUDIT3 PASS, `1a25275..6578df8`;
@@ -191,11 +191,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 - WP3-T12 is done (author-reported): review screen, stale handling, deep link, header
   badges; literal scan 0; 8/8 mutations; e2e 93 passed/3 skipped; verify 1135 tests;
   digest 160bb78c…. Carry item for T13: status in the grid (its parent was not owned).
-- Running: WP3-T12-FREEZE (committer).
+- WP3-T12-FREEZE is committed and pushed as 8e2c2bf (49 paths, 6 screenshots viewed, all
+  checks 0).
+- WP3-T13D is done (author-reported): allowlisted admin operations/submission status
+  with recipient addresses (F-3, F-Q3 (b)), admin UI, key-path leak test, isolation
+  inventory; e2e 97 passed; 8/8 mutations; verify 1150 tests; digest 321cc6a0…. Carry
+  item (assigned to T13A): pass the delivery config through AppDeps instead of reading
+  process.env.
+- Running: WP3-T13D-FREEZE (committer).
 - Next action:
-  1. Record the T12 freeze; then WP3-DOC and T07B if G-Q1/G-Q2 are answered; otherwise
-     T13D (admin status per the F-3 boundary) and T13A (actor/subject seam), which do not
-     depend on G-Q1/G-Q2; T13 (settings UI) waits for T07B.
+  1. Record the T13D freeze; then WP3-DOC and T07B if G-Q1/G-Q2 are answered, otherwise
+     T13A (brief ready); T13 waits for T07B.
   2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
      (starts with independent acceptance); a concrete pilot packet. The real pilot stays
      owner-controlled.
@@ -213,5 +219,5 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-04 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP3-T12-FREEZE only.
+- Live processes: WP3-T13D-FREEZE only.
 - Usage/reset: not observable.

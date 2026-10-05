@@ -433,6 +433,44 @@ export interface PayrollExceptionRequest {
   reason: string;
 }
 
+/**
+ * The administrator operations status (F-3, F-Q3 (b)): pipeline states, redacted fault codes and
+ * recipient addresses. By contract it carries no timesheet detail, template or message content.
+ */
+export interface OperationsStatus {
+  sender: { configured: boolean | null; outbound_mode: 'capture' | 'smtp' | 'unknown' };
+  runner: { heartbeat_at: string | null; state: 'never' | 'running' | 'stale' };
+  activation: { active_from: string | null; recorded_at: string | null; recorded_by: string | null };
+  jobs: Record<'queued' | 'leased' | 'succeeded' | 'intervention' | 'cancelled', number>;
+  deliveries: Record<'preparing' | 'sending' | 'accepted' | 'failed_temporary' | 'failed_permanent' | 'uncertain', number>;
+}
+
+export type DeliveryAttemptState = keyof OperationsStatus['deliveries'];
+export type SendJobState = keyof OperationsStatus['jobs'];
+
+export interface RecipientAddresses {
+  to: string[];
+  cc: string[];
+}
+
+export interface SubmissionStatus {
+  user_id: string;
+  display_name: string;
+  period: { payroll_date: string; period_start: string; period_end: string; due_at: string };
+  revision: { no: number; origin: 'employee' | 'deadline'; review_state: 'pending' | 'signed'; finalized_at: string; send_requested: boolean };
+  pdf: { state: 'pending' | 'ready' | 'failed' | 'none'; fault_code: string | null };
+  delivery: {
+    state: DeliveryAttemptState | 'none';
+    attempts: number;
+    accepted_at: string | null;
+    fault_code: string | null;
+    decision_required: boolean;
+    job_state: SendJobState | 'none';
+    job_fault_code: string | null;
+  };
+  recipients: { effective: RecipientAddresses; frozen: RecipientAddresses | null };
+}
+
 /** The balance block of every OT response; the server computes it, the client never does. */
 export interface OtBalance {
   posted_minutes: number;
