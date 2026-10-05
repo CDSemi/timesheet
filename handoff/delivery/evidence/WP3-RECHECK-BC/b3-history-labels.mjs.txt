@@ -1,0 +1,59 @@
+// WP3-RECHECK-BC probe B3: the owner's History wording after an automatic submission (WP3-B-03).
+// Every actor-less (system) event must read as automatic, never "by someone else", and no raw
+// operation code may be shown. The labels are computed with the production client models
+// (otModel.operationText, sharingModel.shareOperationText/historyActorBadge) from the real
+// GET /api/history response, exactly as HistoryScreen does.
+import { LA, la, REPO, reporter, runJobsOnce, setup } from './lib.mjs';
+
+const mod = (p) => import(new URL(p, REPO).href);
+const { operationText } = await mod('src/client/components/otModel.ts');
+const sharing = await mod('src/client/components/sharingModel.ts');
+const r = reporter('B3 History labels of system events');
+const ctx = await setup('b3', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const handlers = ctx.handlers();
+const label = (e) => sharing.shareOperationText(e.operation) ?? operationText(e.operation);
+const badge = (e) => sharing.historyActorBadge(e);
+
+// Two employees: "auto" (switch on, an OT session on a Saturday so the automatic submission posts a credit)
+// and "off" (switch off, so the deadline writes an overdue record).
+const autoCookie = await ctx.addUser('auto', 'probe-auto', 'Probe Auto');
+const offCookie = await ctx.addUser('off', 'probe-off', 'Probe Off');
+for (const [cookie, auto, who] of [[autoCookie, true, 'auto'], [offCookie, false, 'off']]) {
+  const s = await ctx.request('POST', '/api/settings/submission', { cookie, body: { expected_seq: 0, to: [ctx.emails[who]], auto_submit: auto } });
+  r.check(s.status === 201, `${who}: settings saved, auto_submit ${auto} (${s.status})`);
+}
+const pol = await ctx.request('POST', '/api/policies', {
+  cookie: autoCookie,
+  body: { effective_from: '2026-09-28', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: 'auto_deduct' },
+});
+r.check(pol.status === 201, `auto: auto_deduct policy (${pol.status} ${pol.body?.error?.code ?? ''})`);
+clock.set('2026-10-01T00:00:00Z');
+await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic recheck activation' } });
+clock.set('2026-10-12T20:00:00Z');
+// Saturday 2026-10-03 09:00-12:00 LA (OT credit) and a short weekday 2026-10-05 09:00-15:00 (deficit 120 under auto_deduct).
+for (const [day, from, to] of [['2026-10-03', '09:00', '12:00'], ['2026-10-05', '09:00', '15:00']]) {
+  const s = await ctx.request('POST', `/api/days/${day}/sessions`, { cookie: autoCookie, body: { start: la(`${day}T${from}`), end: la(`${day}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true } });
+  r.check(s.status === 201, `auto: session ${day} ${from}-${to} (${s.status} ${s.body?.error?.code ?? ''})`);
+}
+for (const iso of ['2026-10-14T00:00:30Z', '2026-10-14T00:02:30Z', '2026-10-14T00:04:30Z']) {
+  clock.set(iso);
+  await runJobsOnce({ db, clock, handlers, owner: 'probe-b3' });
+}
+const nullActor = db
+  .prepare("SELECT operation, count(*) AS n FROM audit_events WHERE owner_user_id = ? AND actor_user_id IS NULL GROUP BY operation ORDER BY operation")
+  .all(ctx.ids.auto);
+r.info(`auto: actor-less audit events written by the automatic submission: ${JSON.stringify(nullActor)}`);
+
+for (const who of ['auto', 'off']) {
+  const h = await ctx.request('GET', '/api/history?limit=200', { cookie: ctx.cookies[who] });
+  const events = h.body.audit_events;
+  const rows = events.map((e) => ({ op: e.operation, self: e.actor_is_self, label: label(e), badge: badge(e) }));
+  r.info(`${who}: history rows ${JSON.stringify(rows.map((x) => `${x.op} => "${x.label}"${x.badge ? ` [${x.badge}]` : ''}`))}`);
+  r.check(rows.every((x) => x.label !== x.op && !/^[a-z_]+\.[a-z_]+$/.test(x.label)), `${who}: no raw operation code is shown`);
+  const system = events.filter((e) => !e.actor_is_self && !e.via_share && db.prepare('SELECT actor_user_id FROM audit_events WHERE id = ?').pluck().get(e.id) === null);
+  const wrong = system.filter((e) => badge(e) !== 'automatic');
+  r.check(system.length > 0 && wrong.length === 0, `${who}: every actor-less (system) event is badged automatic (${system.length} system events; mislabelled: ${JSON.stringify(wrong.map((e) => `${e.operation} [${badge(e)}]`))})`);
+}
+db.close();
+r.done('B3');

@@ -1,0 +1,36 @@
+INFO  wp2: cli migrate exit=0 out="{\"database\":\"D:\\\\timesheet-tmp\\\\WP3-RECHECK-A\\\\work\\\\mig\\\\wp2-upgraded.db\",\"applied\":[4,5,6],\"version\":6}" err=""
+PASS  wp2: production cli.js migrate exits 0 and applies exactly [4,5,6]  [[4,5,6]]
+PASS  wp2: the checksums of the already applied migrations are unchanged
+PASS  wp2: every pre-existing row kept column for column (66 rows in 14 tables)
+INFO  wp2: new tables [attachments, delivery_attempts, jobs, operations_state, reminder_occurrences, revision_files, revision_ledger_lines, signoffs, submission_settings, timesheet_revisions, timesheet_shares]; added columns [timesheets+imported_unverified]
+PASS  wp2: every pre-existing trigger is kept (22 before, 54 after)
+PASS  wp2: integrity_check ok, foreign_key_check empty, user_version 6  [ok fk=0 uv=6]
+INFO  wp2: append-only probe audit_events.UPDATE=refused audit_events.DELETE=refused ot_ledger.UPDATE=refused ot_ledger.DELETE=refused calendar_versions.UPDATE=refused calendar_versions.DELETE=refused work_policies.UPDATE=refused work_policies.DELETE=refused timesheet_revisions.UPDATE=no-row timesheet_revisions.DELETE=no-row signoffs.UPDATE=no-row signoffs.DELETE=no-row revision_ledger_lines.UPDATE=no-row revision_ledger_lines.DELETE=no-row submission_settings.UPDATE=no-row submission_settings.DELETE=no-row attachments.UPDATE=no-row attachments.DELETE=no-row timesheet_shares.UPDATE=no-row timesheet_shares.DELETE=no-row
+PASS  wp2: UPDATE/DELETE on append-only tables refused by triggers (8 refused, 0 allowed, 12 without a row)
+PASS  wp2: a second migrate applies nothing  ["{\"database\":\"D:\\\\timesheet-tmp\\\\WP3-RECHECK-A\\\\work\\\\mig\\\\wp2-upgraded.db\",\"applied\":[],\"version\":6}"]
+PASS  wp2 upgraded: a WP2-era period (sessions, leave, a Sunday) is signed off by the reviewed build  [credit:posted:180,credit:posted:150 posted 0->330]
+PASS  wp2 upgraded: a share and a grantee act work; the owner hint names the grantee for 2026-09-29  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-29"]}]]
+PASS  wp2 upgraded: history attributes only the grantee acts; WP2-era events by others (user.*) stay unattributed; no other user id in the answer  [attributed=day_entry.create,work_session.create unattributed_by_others=user.create]
+INFO  wp2 upgraded: run-jobs {"claimed":6,"succeeded":5,"retried":1,"intervention":0,"lost":0} | {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0} | {"claimed":6,"succeeded":4,"retried":2,"intervention":0,"lost":0} | {"claimed":6,"succeeded":4,"retried":0,"intervention":2,"lost":0}; accounts created 2026-09-22T18:00:00Z; automatic revisions <email>:2026-10-02,<email>:2026-10-02
+PASS  wp2 upgraded: the PDF is rendered and the submission captured once (capture mode)  [ready ["accepted"]]
+PASS  wp2 upgraded: B-01 bound on WP2-era accounts: no automatic revision for a period due before the accounts existed (payroll < 2026-10-02); the 2026-10-02 period is automated for accounts without a sign-off  [2026-10-02,2026-10-02]
+PASS  wp2 upgraded: integrity ok and no FK violation after the WP3 activity
+INFO  a1cd566: cli migrate exit=0 out="{\"database\":\"D:\\\\timesheet-tmp\\\\WP3-RECHECK-A\\\\work\\\\mig\\\\a1cd566-upgraded.db\",\"applied\":[],\"version\":6}" err=""
+PASS  a1cd566: production cli.js migrate exits 0 and applies exactly []  [[]]
+PASS  a1cd566: the checksums of the already applied migrations are unchanged
+PASS  a1cd566: every pre-existing row kept column for column (139 rows in 25 tables)
+INFO  a1cd566: new tables []; added columns []
+PASS  a1cd566: every pre-existing trigger is kept (54 before, 54 after)
+PASS  a1cd566: integrity_check ok, foreign_key_check empty, user_version 6  [ok fk=0 uv=6]
+INFO  a1cd566: append-only probe audit_events.UPDATE=refused audit_events.DELETE=refused ot_ledger.UPDATE=refused ot_ledger.DELETE=refused calendar_versions.UPDATE=refused calendar_versions.DELETE=refused work_policies.UPDATE=refused work_policies.DELETE=refused timesheet_revisions.UPDATE=refused timesheet_revisions.DELETE=refused signoffs.UPDATE=refused signoffs.DELETE=refused revision_ledger_lines.UPDATE=refused revision_ledger_lines.DELETE=refused submission_settings.UPDATE=refused submission_settings.DELETE=refused attachments.UPDATE=refused attachments.DELETE=refused timesheet_shares.UPDATE=refused timesheet_shares.DELETE=refused
+PASS  a1cd566: UPDATE/DELETE on append-only tables refused by triggers (20 refused, 0 allowed, 0 without a row)
+PASS  a1cd566: a second migrate applies nothing  ["{\"database\":\"D:\\\\timesheet-tmp\\\\WP3-RECHECK-A\\\\work\\\\mig\\\\a1cd566-upgraded.db\",\"applied\":[],\"version\":6}"]
+PASS  a1cd566 upgraded: history over a1cd566 audit rows attributes exactly the grantee acts done through the grant (3 sessions/day entries per edit, PDF download)  [day_entry.create,day_entry.create,day_entry.create,share.pdf_download,work_session.create,work_session.create]
+PASS  a1cd566 upgraded: the admin-route revocation (an admin holding a share) and the grantee leave stay unattributed; no other user id in the answer
+PASS  a1cd566 upgraded: the review hint reads a1cd566 rows: 2026-10-16 names the grantee for 2026-09-30 (kept after the share ended); 2026-10-02 is empty after the owner correction  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}] []]
+INFO  a1cd566 upgraded: correction lines correction:unchanged:0,correction:posted:240; run-jobs {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  a1cd566 upgraded: a new correction on an a1cd566 revision is created (debit removed: 4h more on 2026-09-16), its PDF rendered and sent once  [created ready ["accepted"]]
+PASS  a1cd566 upgraded: integrity ok and no FK violation after the WP3 activity
+PASS  fresh database: cli.js migrate applies 1-6, integrity ok  [[1,2,3,4,5,6] {"database":"D:\\timesheet-tmp\\WP3-RECHECK-A\\work\\mig\\fresh.db","applied":[1,2,3,4,5,6],"version":6}]
+MIGRATION PROBE PASSED
+exit 0

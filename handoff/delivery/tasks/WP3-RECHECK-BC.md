@@ -98,3 +98,39 @@ Return at most 300 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1, 2026-10-05)
+
+- Self-reported model: claude-opus-5-5 (profile timesheet-auditor, agent `a4f9e4253ee83db68`; effort not observable).
+  Fresh context; authored nothing in WP3, including WP3-FIXB/FIXC (sonnet). Review:
+  [WP3_RECHECK_BC](../WP3_RECHECK_BC.md) and [WP3_RECHECK_BC.vi](../WP3_RECHECK_BC.vi.md). Evidence:
+  `handoff/delivery/evidence/WP3-RECHECK-BC/` (start at [00-commands.txt](../evidence/WP3-RECHECK-BC/00-commands.txt)).
+- HEAD before and after: 2f2520e1ab80ff55938b70cd469f0bfe888e04a2. Digest before and after:
+  eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410 (721 files), in the project and the scratch clone,
+  equal to the regate digest.
+- **Verdict: FIX REQUIRED** (two Low findings).
+- Checks:
+  - `npm ci` 0. `verify` with deprecation tracing 0: 62 files / 1407 tests, 40 smoke `PASS` lines, 0 deprecation lines.
+  - `test:e2e` 0: 127 passed, 5 skipped.
+  - Race and regression files, 5 rounds: 0 each.
+  - The freeze's regression tests on a1cd566: 23 fail.
+  - Own probes on both commits: B1 27/0 (a1cd566 8 FAIL), B2 25/0 (4 FAIL), B3 8/1 (4 FAIL), C1 84/1 (11 FAIL),
+    C2 race 23/0, B4 GET 204 requests with 1 audited write, B5 tokens 0 literals, B6 matrix 30/0, U1 Edge 25/2.
+- Dispositions: B-01, B-02, C-01, C-02 and C-03 are fixed. B-03 is partly fixed.
+- New findings:
+  - WP3-RBC-01 Low, `src/client/components/sharingModel.ts:177`. The actor-less automatic OT credit
+    (`finalization.ts:627`, `:650`) still reads "by someone else". Required change: mark system events from the event
+    itself (actor null → server flag), not from a list; add a test.
+  - WP3-RBC-02 Low, `src/server/services/sharedActs.ts:91-94`. With no owner finalization, the hint drops grantee
+    changes made before the period start (for example planned leave). Required change: no time lower bound (the work
+    dates bound the rows), or a decision that accepts the gap; add a test.
+- Judgements:
+  - "claimed 0": a correct reflection of the new order. The handler's `sending` branch lost its direct test (R3).
+  - Residual edge: acceptable (≤ one runner interval, never resent).
+  - Creation clamp: correct and necessary (on a1cd566 the overdue choice fabricated 5 pre-account submissions).
+  - `SHARED_ACT_OPERATIONS`: meets the outcome now. A marker is not required yet; it is needed before any non-shared
+    day/session write for another person (WP4).
+  - Grantee leave: consistent with WP3-REQ:455-457.
+  - Replaced test: no material coverage lost.
+- Regressions B/C: none.
+- No server, browser or runner process left. Privacy check: see `17-privacy.txt`.

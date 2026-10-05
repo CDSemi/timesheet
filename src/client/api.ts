@@ -559,6 +559,8 @@ export interface HistoryEvent {
   entity_id: string | null;
   reason: string | null;
   actor_is_self: boolean;
+  /** True for an event with no actor: the system's own (the automatic submission and the postings it makes). */
+  actor_is_system: boolean;
   /** True for an event the owner's grantee performed while holding an active share (FR-17). */
   via_share: boolean;
   /** The grantee's display name for such an event; null for every other event. */

@@ -1,0 +1,190 @@
+// WP3-RECHECK-BC probe U1: the built server (dist/) on a loopback port (JOB_RUNNER=off, capture outbound),
+// synthetic seed, installed Edge channel, desktop and mobile. Screens of the fix round: the owner's Review
+// hint (WP3-C-01), the shared view without it, and the owner's History after an automatic submission
+// (WP3-B-03 labels). Checks: hint visible and named, horizontal overflow, unnamed controls.
+// Every child uses process.execPath. Usage: node u1-ui.mjs <repoDir> <workDir> <shotDir> <port>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [repoDir, workDir, shotDir, portText] = process.argv.slice(2);
+const port = Number(portText);
+const ORIGIN = `http://127.0.0.1:${port}`;
+mkdirSync(shotDir, { recursive: true });
+mkdirSync(workDir, { recursive: true });
+const mail = (local) => `${local}${String.fromCharCode(64)}example.invalid`;
+let failures = 0;
+let passes = 0;
+const check = (ok, label) => {
+  if (ok) passes += 1;
+  else failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`);
+};
+const credentials = {
+  admin: { email: mail('admin'), password: randomBytes(18).toString('base64url') },
+  employee: { email: mail('employee'), password: randomBytes(18).toString('base64url') },
+  employee2: { email: mail('employee2'), password: randomBytes(18).toString('base64url') },
+};
+const env = {
+  ...process.env,
+  PORT: String(port),
+  DATABASE_PATH: join(workDir, 'u1.db'),
+  DATA_DIR: join(workDir, 'private-data'),
+  MAIL_FROM: mail('sender'),
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: credentials.admin.password,
+  SEED_EMPLOYEE_PASSWORD: credentials.employee.password,
+  SEED_EMPLOYEE2_PASSWORD: credentials.employee2.password,
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+delete env.OUTBOUND_MODE;
+const cli = (...args) => spawnSync(process.execPath, [join(repoDir, 'dist/server/cli.js'), ...args], { cwd: repoDir, env, encoding: 'utf8' });
+const seeded = cli('seed');
+check(seeded.status === 0, `seed exit ${seeded.status}`);
+
+const server = spawn(process.execPath, [join(repoDir, 'dist/server/index.js')], { cwd: repoDir, env, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverOut = '';
+server.stdout.on('data', (d) => (serverOut += d));
+server.stderr.on('data', (d) => (serverOut += d));
+const stopServer = async () => {
+  if (server.exitCode === null) {
+    const exited = new Promise((resolve) => server.once('exit', resolve));
+    server.kill();
+    await exited;
+  }
+};
+let browser;
+try {
+  for (let i = 0; i < 100; i += 1) {
+    try {
+      if ((await fetch(`${ORIGIN}/api/health`)).ok) break;
+    } catch {
+      // not yet listening
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const api = async (cookie, method, path, body) => {
+    const headers = { origin: ORIGIN };
+    if (cookie) headers.cookie = cookie;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const res = await fetch(`${ORIGIN}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null, cookie: res.headers.get('set-cookie')?.split(';')[0] };
+  };
+  const loginApi = async (who) => (await api(undefined, 'POST', '/api/auth/login', credentials[who])).cookie;
+  const adminCookie = await loginApi('admin');
+  const ownerCookie = await loginApi('employee');
+  const granteeCookie = await loginApi('employee2');
+  const me = await api(ownerCookie, 'GET', '/api/auth/me');
+  const ownerId = me.body.user.id;
+  const share = await api(ownerCookie, 'POST', '/api/shares', { grantee_email: credentials.employee2.email, items: { timesheets: 'edit', ot_read: true, pdf_download: true } });
+  check(share.status === 201, `owner shares (edit) with employee2 (${share.status})`);
+  for (const day of ['2026-09-29', '2026-09-30']) {
+    const e = await api(granteeCookie, 'PUT', `/api/shared/${ownerId}/days/${day}`, { category: 'Vacation', leave_minutes: 0, wfh: false, notes: 'entered by the grantee' });
+    check(e.status === 200, `grantee edits the owner's ${day} (${e.status})`);
+  }
+  // An OT session on Saturday 2026-10-03 (owner), so the automatic submission posts an actor-less OT credit.
+  const ot = await api(ownerCookie, 'POST', '/api/days/2026-10-03/sessions', { start: '2026-10-03T16:00:00Z', end: '2026-10-03T19:00:00Z', input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true });
+  check(ot.status === 201, `owner Saturday OT session (${ot.status})`);
+  const saved = await api(ownerCookie, 'POST', '/api/settings/submission', { expected_seq: 0, to: [mail('payroll')], auto_submit: true });
+  check(saved.status === 201, `owner settings, auto-submit on (${saved.status})`);
+
+  const pw = await import(pathToFileURL(join(repoDir, 'node_modules/playwright-core/index.mjs')).href);
+  browser = await pw.chromium.launch({ channel: 'msedge', headless: true });
+  const viewports = {
+    desktop: { viewport: { width: 1280, height: 800 } },
+    mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+  };
+  const login = async (page, who) => {
+    await page.getByLabel('Email').fill(credentials[who].email);
+    await page.getByLabel('Password').fill(credentials[who].password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+  };
+  const unnamed = async (page) => {
+    const yaml = await page.locator('body').ariaSnapshot();
+    return yaml.split('\n').filter((l) => /^\s*- (button|link|textbox|checkbox|radio|combobox|switch|spinbutton)\s*(\[[^\]]*\])?\s*:?\s*$/.test(l));
+  };
+  const shoot = async (page, name, kind, fullPage = false) => {
+    await page.waitForLoadState('networkidle');
+    const file = `recheck-bc-${name}-${kind}-synthetic.png`;
+    await page.screenshot({ path: join(shotDir, file), fullPage });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const missing = await unnamed(page);
+    check(overflow <= 0 && missing.length === 0, `${file}: horizontal overflow ${overflow}px, unnamed controls ${missing.length}`);
+  };
+
+  // 1. The owner's Review with the hint (before any finalization), desktop and mobile.
+  for (const [kind, options] of Object.entries(viewports)) {
+    const context = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/#/review/2026-10-16`);
+    await login(page, 'employee');
+    await page.getByRole('heading', { name: /Review and sign off/i }).waitFor();
+    const region = page.getByRole('region', { name: 'Changed by someone you share with' });
+    await region.waitFor();
+    await region.scrollIntoViewIfNeeded();
+    const box = await region.boundingBox();
+    const text = await region.innerText();
+    const vw = options.viewport.width;
+    check(box !== null && box.width > 0 && box.x >= 0 && box.x + box.width <= vw && /2 days last changed by Example Employee Two/.test(text), `${kind}: the hint region is named, visible inside the viewport (${box ? `${Math.round(box.x)}+${Math.round(box.width)} of ${vw}` : 'none'}) and reads "${text.split('\n')[1] ?? ''}"`);
+    const style = await region.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { radius: s.borderTopLeftRadius, borderStart: s.borderInlineStartWidth, shadow: s.boxShadow !== 'none' };
+    });
+    console.log(`INFO ${kind}: hint computed style ${JSON.stringify(style)}`);
+    await shoot(page, 'review-hint', kind);
+    await context.close();
+  }
+
+  // 2. The grantee's shared view of the owner: no hint, no review.
+  for (const [kind, options] of Object.entries(viewports)) {
+    const context = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/#/shared/${ownerId}`);
+    await login(page, 'employee2');
+    await page.waitForLoadState('networkidle');
+    await page.getByText(/Viewing/i).first().waitFor();
+    const body = await page.locator('body').innerText();
+    check(!/last changed by/i.test(body) && !/Changed by someone you share with/i.test(body), `${kind}: the shared view shows no hint`);
+    await shoot(page, 'shared-view-no-hint', kind);
+    await context.close();
+  }
+
+  // 3. Automatic submission (run-jobs CLI with a fixed instant), then the owner's History and late review.
+  const activeFrom = new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
+  const act = await api(adminCookie, 'PUT', '/api/admin/automation/activation', { active_from: activeFrom, reason: 'synthetic UI recheck' });
+  check(act.status === 200, `activation recorded (${act.status})`);
+  for (const now of ['2026-10-14T00:00:30Z', '2026-10-14T00:02:30Z']) {
+    const res = cli('run-jobs', '--once', '--now', now);
+    console.log(`INFO run-jobs --now ${now}: exit ${res.status} ${res.stdout.trim()}`);
+  }
+  for (const [kind, options] of Object.entries(viewports)) {
+    const context = await browser.newContext({ ...options, timezoneId: 'America/Los_Angeles' });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/#/history`);
+    await login(page, 'employee');
+    await page.waitForLoadState('networkidle');
+    await page.getByText('Submitted automatically').first().waitFor();
+    const items = await page.locator('[data-history-actor]').evaluateAll((els) => els.map((el) => ({ kind: el.getAttribute('data-history-actor'), badge: el.textContent, label: el.parentElement?.querySelector('strong')?.textContent ?? '' })));
+    console.log(`INFO ${kind}: history badges ${JSON.stringify(items)}`);
+    check(items.some((i) => i.label === 'Submitted automatically' && i.kind === 'system' && i.badge === 'automatic'), `${kind}: "Submitted automatically" is badged automatic`);
+    check(!items.some((i) => i.label === 'OT credit posted' && i.badge === 'by someone else'), `${kind}: the automatic OT credit is not badged "by someone else"`);
+    await shoot(page, 'history-automatic', kind);
+    await page.getByText('OT credit posted', { exact: true }).first().scrollIntoViewIfNeeded();
+    await shoot(page, 'history-ot-credit', kind);
+    await page.goto(`${ORIGIN}/#/review/2026-10-16`);
+    await page.getByRole('heading', { name: /Review and sign off/i }).waitFor();
+    const late = await page.locator('body').innerText();
+    check(/last changed by Example Employee Two/.test(late), `${kind}: the late review after the automatic submission still shows the hint`);
+    await shoot(page, 'late-review-hint', kind);
+    await context.close();
+  }
+} finally {
+  await browser?.close();
+  await stopServer();
+}
+console.log(`INFO server output lines: ${serverOut.split('\n').filter(Boolean).length}; deprecation lines: ${serverOut.split('\n').filter((l) => /deprecat/i.test(l)).length}`);
+console.log(`SUMMARY U1: ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

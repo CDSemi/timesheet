@@ -1,0 +1,49 @@
+## A. Deterministic interleaving: guard admits, a second connection commits, then the write transaction runs
+PASS production, revoke mid-request: PUT /days/2026-09-30 -> 404 not_found, nothing written
+PASS production, revoke mid-request: POST /days/2026-09-29/sessions -> 404 not_found, nothing written
+PASS production, revoke mid-request: POST /days/batch -> 404 not_found, nothing written
+PASS production, revoke mid-request: PUT /sessions/<id> -> 404 not_found, nothing written
+PASS production, revoke mid-request: DELETE /sessions/<id> -> 404 not_found, nothing written
+PASS production, drop to view mid-request: PUT /days/2026-09-30 -> 403 grant_scope, nothing written
+PASS production, drop to view mid-request: POST /days/2026-09-29/sessions -> 403 grant_scope, nothing written
+PASS production, drop to view mid-request: POST /days/batch -> 403 grant_scope, nothing written
+PASS production, drop to view mid-request: PUT /sessions/<id> -> 403 grant_scope, nothing written
+PASS production, drop to view mid-request: DELETE /sessions/<id> -> 403 grant_scope, nothing written
+PASS production, owner deactivated mid-request: PUT /days/2026-09-30 -> 404 not_found, nothing written
+PASS production, owner deactivated mid-request: POST /days/2026-09-29/sessions -> 404 not_found, nothing written
+PASS production, owner deactivated mid-request: POST /days/batch -> 404 not_found, nothing written
+PASS production, owner deactivated mid-request: PUT /sessions/<id> -> 404 not_found, nothing written
+PASS production, owner deactivated mid-request: DELETE /sessions/<id> -> 404 not_found, nothing written
+PASS production, grantee deactivated mid-request: PUT /days/2026-09-30 -> 404 not_found, nothing written
+PASS production, grantee deactivated mid-request: POST /days/2026-09-29/sessions -> 404 not_found, nothing written
+PASS production, grantee deactivated mid-request: POST /days/batch -> 404 not_found, nothing written
+PASS production, grantee deactivated mid-request: PUT /sessions/<id> -> 404 not_found, nothing written
+PASS production, grantee deactivated mid-request: DELETE /sessions/<id> -> 404 not_found, nothing written
+PASS production, revoke mid-download: GET pdf -> 404, no bytes, no audit
+PASS CONTROL (no in-transaction re-check): the interleaving is real -- the write lands after the revocation (200)
+
+## B. Real multi-process race on the file: editors vs a revoker, 20 rounds
+round 1: delay 47 ms, editor writes committed 132 (audit 132), refused 10, writes after revoke 0, other statuses [0,0]
+round 2: delay 39 ms, editor writes committed 18 (audit 18), refused 10, writes after revoke 0, other statuses [0,0]
+round 3: delay 14 ms, editor writes committed 10 (audit 10), refused 10, writes after revoke 0, other statuses [0,0]
+round 4: delay 7 ms, editor writes committed 170 (audit 170), refused 10, writes after revoke 0, other statuses [0,0]
+round 5: delay 19 ms, editor writes committed 9 (audit 9), refused 10, writes after revoke 0, other statuses [0,0]
+round 6: delay 63 ms, editor writes committed 34 (audit 34), refused 10, writes after revoke 0, other statuses [0,0]
+round 7: delay 34 ms, editor writes committed 31 (audit 31), refused 10, writes after revoke 0, other statuses [0,0]
+round 8: delay 30 ms, editor writes committed 20 (audit 20), refused 10, writes after revoke 0, other statuses [0,0]
+round 9: delay 34 ms, editor writes committed 140 (audit 140), refused 10, writes after revoke 0, other statuses [0,0]
+round 10: delay 6 ms, editor writes committed 7 (audit 7), refused 10, writes after revoke 0, other statuses [0,0]
+round 11: delay 40 ms, editor writes committed 16 (audit 16), refused 10, writes after revoke 0, other statuses [0,0]
+round 12: delay 41 ms, editor writes committed 22 (audit 22), refused 10, writes after revoke 0, other statuses [0,0]
+round 13: delay 23 ms, editor writes committed 28 (audit 28), refused 10, writes after revoke 0, other statuses [0,0]
+round 14: delay 30 ms, editor writes committed 17 (audit 17), refused 10, writes after revoke 0, other statuses [0,0]
+round 15: delay 42 ms, editor writes committed 16 (audit 16), refused 10, writes after revoke 0, other statuses [0,0]
+round 16: delay 25 ms, editor writes committed 34 (audit 34), refused 10, writes after revoke 0, other statuses [0,0]
+round 17: delay 29 ms, editor writes committed 16 (audit 16), refused 10, writes after revoke 0, other statuses [0,0]
+round 18: delay 31 ms, editor writes committed 17 (audit 17), refused 10, writes after revoke 0, other statuses [0,0]
+round 19: delay 14 ms, editor writes committed 12 (audit 12), refused 10, writes after revoke 0, other statuses [0,0]
+round 20: delay 54 ms, editor writes committed 21 (audit 21), refused 10, writes after revoke 0, other statuses [0,0]
+PASS 20/20 rounds: no grantee write committed after the revocation; every 2xx has its audit event; after the first refusal every request is refused (20/20)
+
+SUMMARY C2: 23 PASS, 0 FAIL
+exit 0

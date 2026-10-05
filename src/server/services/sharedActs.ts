@@ -1,8 +1,6 @@
 import { assertCivilDate } from '../../domain/dates.ts';
-import { formatUtcInstant } from '../../domain/instants.ts';
 import { isDomainError } from '../../domain/errors.ts';
 import { payPeriodForPayrollDate } from '../../domain/periods.ts';
-import { startOfLocalDay } from '../../domain/zones.ts';
 import type { SessionUser } from '../auth/sessions.ts';
 import type { Db } from '../db/database.ts';
 import { notFound } from '../http/errors.ts';
@@ -60,8 +58,9 @@ interface DayChangeRow {
  * The days of the owner's period that were last changed through a grant, grouped by grantee name, for
  * the owner's Review (never part of the review payload, its hash or the PDF). The window starts
  * after the owner's latest own finalization of the period (sign-off, correction or late review; the
- * automatic submission is not the owner's) and, when there is none, at the start of the period in the
- * reporting zone. A later change by the owner or by another grantee takes the day over. Read-only.
+ * automatic submission is not the owner's) and, when there is none, has no time bound: every change to a
+ * day of the period counts, including one made before the period started (WP3-RBC-02). A later change
+ * by the owner or by another grantee takes the day over. Read-only.
  */
 export function granteeChangesForReview(db: Db, owner: Pick<SessionUser, 'id' | 'calendarId'>, payrollDateInput: string): GranteeChange[] {
   return db
@@ -88,20 +87,20 @@ export function granteeChangesForReview(db: Db, owner: Pick<SessionUser, 'id' | 
                     AND a.operation IN (${FINALIZATION_OPERATIONS.map((operation) => `'${operation}'`).join(', ')})`,
               )
               .get(owner.id, timesheet.id)?.last ?? null);
-      const since =
-        finalization === null
-          ? { clause: 'a.occurred_at >= ?', value: formatUtcInstant(startOfLocalDay(scope.calendar.schedule.reportingZone, period.periodStart)) }
-          : { clause: 'a.rowid > ?', value: finalization };
+      // With no owner finalization there is no lower bound in time (WP3-RBC-02): the period's own work dates,
+      // filtered below, already bound the days, and a grantee change made before the period started (planned leave)
+      // is still a change the owner has not seen. After the owner's finalization only later events count.
+      const sinceRowid = finalization ?? 0;
       const rows = db
-        .prepare<[string, string | number], DayChangeRow>(
+        .prepare<[string, number], DayChangeRow>(
           `SELECT json_extract(COALESCE(a.after_json, a.before_json), '$.work_date') AS work_date,
                   CASE WHEN ${sharedActCondition('a')} THEN a.actor_user_id END AS shared_actor_id,
                   CASE WHEN ${sharedActCondition('a')} THEN (SELECT u.display_name FROM users u WHERE u.id = a.actor_user_id) END AS shared_actor_name
              FROM audit_events a
-            WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND ${since.clause}
+            WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND a.rowid > ?
             ORDER BY a.rowid`,
         )
-        .all(owner.id, since.value);
+        .all(owner.id, sinceRowid);
       // The last event of a day decides who changed it last.
       const lastChange = new Map<string, { id: string; name: string } | null>();
       for (const row of rows) {

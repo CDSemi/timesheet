@@ -207,6 +207,45 @@ describe('the owner Review lists the days a grantee changed last (WP3-C-01)', ()
     expect((await review()).grantee_changes).toEqual([{ display_name: GRANTEE_NAME, days: 1, work_dates: [DAY_B] }]);
   });
 
+  it('lists a grantee change made before the period started when the owner has not finalized it (WP3-RBC-02)', async () => {
+    // The period is 2026-09-14 ... 2026-09-27. The share and the grantee's planned leave come well before it started.
+    t.clock.set('2026-09-10T20:00:00Z');
+    owner = await t.login('employee');
+    await share('grantee@example.invalid');
+    t.clock.advanceSeconds(60);
+    await granteeDay(grantee, DAY_A, 'planned leave entered before the period');
+    // Another day is changed inside the period; the hint must list both days, whatever the time of the change.
+    t.clock.set('2026-09-24T20:00:00Z');
+    await granteeDay(grantee, DAY_B, 'changed inside the period');
+    t.clock.set('2026-09-29T20:00:00Z');
+    owner = await t.login('employee');
+    expect((await review()).grantee_changes).toEqual([{ display_name: GRANTEE_NAME, days: 2, work_dates: [DAY_A, DAY_B] }]);
+  });
+
+  it('counts a change made before the period started only until the owner finalizes the period (WP3-RBC-02)', async () => {
+    t.clock.set('2026-09-10T20:00:00Z');
+    owner = await t.login('employee');
+    await share('grantee@example.invalid');
+    t.clock.advanceSeconds(60);
+    await granteeDay(grantee, DAY_A, 'planned leave entered before the period');
+    t.clock.set('2026-09-29T20:00:00Z');
+    owner = await t.login('employee');
+    await readyToSign();
+    const before = await review();
+    expect(before.grantee_changes).toEqual([{ display_name: GRANTEE_NAME, days: 1, work_dates: [DAY_A] }]);
+    t.clock.advanceSeconds(60);
+    expect((await signOff(before)).status).toBe(201);
+    // With the owner's own finalization the window starts after it: the earlier change is no longer listed.
+    expect((await review()).grantee_changes).toEqual([]);
+    t.clock.advanceSeconds(60);
+    const correction = await t.request('PUT', shared(`/days/${DAY_B}`), {
+      cookie: grantee.cookie,
+      body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: 'after the sign-off', reason: 'Synthetic correction reason' },
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(200);
+    expect((await review()).grantee_changes).toEqual([{ display_name: GRANTEE_NAME, days: 1, work_dates: [DAY_B] }]);
+  });
+
   it('still lists a change after the share was revoked: the hint comes from the audit, not from the live share', async () => {
     const id = await share('grantee@example.invalid');
     t.clock.advanceSeconds(60);

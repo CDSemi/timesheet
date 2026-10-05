@@ -10,8 +10,9 @@ import { sharedActCondition } from './sharedActs.ts';
  * versions that apply to them. Revisions, PDFs and delivery attempts arrive with WP3.
  * Read-only and owner-scoped: only events whose owner is the session user are returned,
  * and another person's identifier never leaves the server. An event performed by someone
- * else is flagged, not attributed, with one exception (FR-17, WP3-T13B, WP3-C-02): an event performed
- * through /api/shared under a grant shows the grantee's display name (`via_share`,
+ * else is flagged, not attributed, and an event with no actor at all is flagged as a system event
+ * (WP3-RBC-01), with one exception (FR-17, WP3-T13B, WP3-C-02): an event performed through
+ * /api/shared under a grant shows the grantee's display name (`via_share`,
  * `actor_display_name`). Whether an event was performed through a grant comes from the event itself
  * (its actor and operation, see `sharedActCondition`), never from the time window in which a share
  * existed: an administrator who also holds a share, an act in the same second as a later grant and a
@@ -92,6 +93,8 @@ export function getHistory(db: Db, user: Pick<SessionUser, 'id' | 'calendarId'>,
       entity_id: row.entity_id,
       reason: row.reason,
       actor_is_self: row.actor_user_id === user.id,
+      // An event with no actor is the system's own (the automatic submission and every posting it makes), whatever its operation (WP3-RBC-01).
+      actor_is_system: row.actor_user_id === null,
       actor_user_id: row.actor_user_id === user.id ? row.actor_user_id : null,
       via_share: row.shared_actor_name !== null,
       actor_display_name: row.shared_actor_name,

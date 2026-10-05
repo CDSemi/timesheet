@@ -1,0 +1,156 @@
+// WP3-RECHECK-BC probe B1: the account-creation bound of deadline automation (WP3-B-01), the
+// activation bound and F-1 for accounts created before activation, the clamp of saved settings
+// (explicit "apply to overdue drafts"), the overdue record, and device-zone independence of the bound.
+// Real SQLite file, production job handlers, capture outbound. Run against PROBE_REPO.
+// Usage: node b1-automation.mjs            (main)
+//        node b1-automation.mjs scan <db> <now>   (child: one deadline scan, prints JSON)
+import { spawnSync } from 'node:child_process';
+import { copyFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { LA, la, openDatabase, REPO, reporter, setup } from './lib.mjs';
+
+const [role, childDb, childNow] = process.argv.slice(2);
+if (role === 'scan') {
+  const { runDeadlineScan } = await import(new URL('src/server/services/automation.ts', REPO).href);
+  const db = openDatabase(childDb);
+  const summary = runDeadlineScan(db, { now: () => new Date(childNow) }, { batchSize: 1000 });
+  const rows = db
+    .prepare(
+      `SELECT u.display_name AS who, p.payroll_date FROM timesheet_revisions r JOIN users u ON u.id = r.user_id
+         JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id ORDER BY u.display_name, p.payroll_date`,
+    )
+    .all();
+  console.log(JSON.stringify({ tz: process.env.TZ, offset: new Date(childNow).getTimezoneOffset(), summary, rows }));
+  db.close();
+  process.exit(0);
+}
+
+const r = reporter('B1 automation bounds');
+const ctx = await setup('b1', '2026-09-29T20:00:00Z');
+const { db, clock } = ctx;
+const handlers = ctx.handlers();
+const pass = async (iso) => {
+  clock.set(iso);
+  return runJobsOnce({ db, clock, handlers, owner: 'probe-b1' });
+};
+const { runJobsOnce } = await import(new URL('src/server/jobs/runner.ts', REPO).href);
+const revs = (id) =>
+  db
+    .prepare(
+      `SELECT p.payroll_date, r.origin, r.review_state, r.payload_json FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id
+         JOIN pay_periods p ON p.id = t.pay_period_id WHERE r.user_id = ? ORDER BY p.payroll_date`,
+    )
+    .all(id);
+const payrolls = (id) => revs(id).map((x) => x.payroll_date);
+const overdue = (id) => db.prepare("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.overdue'").pluck().get(id);
+const created = (id) => db.prepare('SELECT created_at FROM users WHERE id = ?').pluck().get(id);
+const policy = (cookie, mode) =>
+  ctx.request('POST', '/api/policies', {
+    cookie,
+    body: { effective_from: '2026-09-14', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '16:00', breaks: [], deficit_mode: mode },
+  });
+
+r.section('1. Accounts created before activation (F-1 and the activation bound)');
+clock.set('2026-09-30T12:00:00Z');
+const preCookie = await ctx.addUser('pre', 'probe-pre', 'Probe Pre');
+const prePol = await policy(preCookie, 'auto_deduct');
+r.check(prePol.status === 201, `auto_deduct policy for the pre-activation account (${prePol.status} ${prePol.body?.error?.code ?? ''})`);
+const preSavedCookie = await ctx.addUser('preSaved', 'probe-pre-saved', 'Probe Pre Saved');
+const preSaved = await ctx.request('POST', '/api/settings/submission', { cookie: preSavedCookie, body: { expected_seq: 0, to: [ctx.emails.preSaved], auto_submit: true } });
+r.check(preSaved.status === 201, `pre-activation account with saved settings, auto on (${preSaved.status})`);
+// Activation at 2026-10-01T00:00Z (recording it in the past is refused).
+clock.set('2026-10-01T00:00:00Z');
+const act = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-10-01T00:00:00Z', reason: 'synthetic recheck activation' } });
+r.check(act.status === 200, `activation recorded at 2026-10-01T00:00:00Z (${act.status})`);
+const actPast = await ctx.request('PUT', '/api/admin/automation/activation', { cookie: ctx.cookies.admin, body: { active_from: '2026-09-30T00:00:00Z', reason: 'x' } });
+r.check(actPast.status === 422 && actPast.body.error.code === 'activation_in_past', `an activation in the past is refused (${actPast.status} ${actPast.body?.error?.code})`);
+await pass('2026-10-13T23:59:30Z');
+r.check(revs(ctx.ids.pre).length === 0, 'nothing automated 30 s before the first deadline after activation');
+await pass('2026-10-14T00:00:30Z');
+const preRevs = revs(ctx.ids.pre);
+r.check(JSON.stringify(preRevs.map((x) => [x.payroll_date, x.origin, x.review_state])) === JSON.stringify([['2026-10-16', 'deadline', 'pending']]), `pre-activation account (never saved settings): one automatic pending revision for 2026-10-16 only; the 2026-10-02 deadline (2026-09-30) is before activation (${JSON.stringify(preRevs.map((x) => x.payroll_date))})`);
+const snap = JSON.parse(preRevs[0]?.payload_json ?? '{"days":[]}');
+const labels = [...new Set(snap.days.map((d) => d.category))].sort();
+r.check(snap.days.length === 14 && snap.ot_proposals?.length === 0 && snap.deficit_proposals?.length === 0, `F-1 empty period: 14 days, labels ${labels.join('/')}, 0 OT proposals, 0 deficit proposals`);
+r.check(db.prepare('SELECT count(*) FROM ot_ledger WHERE user_id = ?').pluck().get(ctx.ids.pre) === 0, 'F-1: no ledger row for the empty period (auto_deduct policy)');
+r.check(JSON.stringify(payrolls(ctx.ids.preSaved)) === JSON.stringify(['2026-10-16']), `pre-activation account with saved auto-on settings: 2026-10-16 only (${JSON.stringify(payrolls(ctx.ids.preSaved))})`);
+await pass('2026-10-14T00:05:30Z');
+r.check(revs(ctx.ids.pre).length === 1, 'a later pass creates no second revision (one revision per period)');
+
+r.section('2. WP3-B-01 original scenario: an account created after activation with past deadlines');
+await pass('2026-10-28T00:00:30Z');
+await pass('2026-11-11T01:00:30Z');
+clock.set('2026-11-12T00:00:00Z');
+await ctx.addUser('late', 'probe-late', 'Probe Late');
+r.info(`late account created_at ${created(ctx.ids.late)}`);
+await pass('2026-11-12T00:00:30Z');
+const lateNow = payrolls(ctx.ids.late);
+r.check(lateNow.length === 0, `one runner pass after creation: no automatic revision for the periods already overdue at creation (got ${JSON.stringify(lateNow)})`);
+r.check(db.prepare('SELECT count(*) FROM timesheets WHERE user_id = ?').pluck().get(ctx.ids.late) === 0 && overdue(ctx.ids.late) === 0, 'no timesheet row and no overdue record for the late account');
+r.check(db.prepare("SELECT count(*) FROM jobs WHERE user_id = ? AND kind IN ('render_pdf','send_email')").pluck().get(ctx.ids.late) === 0, 'no PDF or send job for the late account');
+await pass('2026-11-25T01:00:30Z');
+const lateRevs = revs(ctx.ids.late);
+r.check(JSON.stringify(lateRevs.map((x) => [x.payroll_date, x.origin])) === JSON.stringify([['2026-11-27', 'deadline']]), `the first deadline after creation (2026-11-25T01:00Z, payroll 2026-11-27) is automated (F-1): ${JSON.stringify(lateRevs.map((x) => x.payroll_date))}`);
+const lateSnap = JSON.parse(lateRevs[0]?.payload_json ?? '{"days":[]}');
+r.check(lateSnap.days.length === 14 && lateSnap.ot_proposals?.length === 0, `late account's first automatic revision: 14 default-labelled days, no OT (${[...new Set(lateSnap.days.map((d) => d.category))].join('/')})`);
+
+r.section('3. The period in which the account was created is automated at its deadline');
+// A second database timeline is not needed: create the account inside the next period (2026-11-23..12-06, payroll 12-11).
+clock.set('2026-11-30T00:00:00Z');
+await ctx.addUser('mid', 'probe-mid', 'Probe Mid');
+const due1211 = '2026-12-09T01:00:30Z';
+await pass('2026-11-30T00:00:30Z');
+r.check(revs(ctx.ids.mid).length === 0, `nothing for the mid-period account right after creation (${JSON.stringify(payrolls(ctx.ids.mid))})`);
+await pass(due1211);
+r.check(JSON.stringify(payrolls(ctx.ids.mid)) === JSON.stringify(['2026-12-11']), `the creation period is automated at its deadline (${JSON.stringify(payrolls(ctx.ids.mid))})`);
+
+r.section('4. Saved settings: the explicit "apply to overdue drafts" choice and the creation bound (clamp)');
+// The account is created 2026-12-12; it records drafts in two periods: 2026-11-23..12-06 (due 2026-12-09, BEFORE the
+// account) and 2026-12-07..12-20 (due 2026-12-23, after). The switch is saved off, the second deadline passes (overdue
+// record), then the switch is turned on with the explicit overdue choice.
+clock.set('2026-12-12T00:00:00Z');
+const clampCookie = await ctx.addUser('clamp', 'probe-clamp', 'Probe Clamp');
+const off = await ctx.request('POST', '/api/settings/submission', { cookie: clampCookie, body: { expected_seq: 0, to: [ctx.emails.clamp], auto_submit: false } });
+r.check(off.status === 201, `clamp account saves auto off (${off.status})`);
+const eff = db.prepare('SELECT auto_submit_effective_from FROM submission_settings WHERE user_id = ? ORDER BY seq').pluck().all(ctx.ids.clamp);
+r.check(eff.every((value) => value >= created(ctx.ids.clamp)), `an ordinary save never puts the effective instant before the account (${JSON.stringify(eff)} vs ${created(ctx.ids.clamp)})`);
+for (const day of ['2026-12-01', '2026-12-08']) {
+  const d = await ctx.request('PUT', `/api/days/${day}`, { cookie: clampCookie, body: { category: 'Worked', leave_minutes: 0, wfh: false, notes: 'probe draft', reason: 'probe backfill' } });
+  r.check(d.status === 200 || d.status === 201, `draft day ${day} saved (${d.status} ${d.body?.error?.code ?? ''})`);
+}
+await pass('2026-12-23T01:00:30Z');
+r.check(overdue(ctx.ids.clamp) === 1 && revs(ctx.ids.clamp).length === 0, `switch off: one overdue record for the payroll 2026-12-25 deadline (after creation), none for the payroll 2026-12-11 deadline (before creation): ${overdue(ctx.ids.clamp)}`);
+clock.set('2026-12-23T02:00:00Z');
+const on = await ctx.request('POST', '/api/settings/submission', { cookie: clampCookie, body: { expected_seq: off.body.settings?.seq ?? 1, to: [ctx.emails.clamp], auto_submit: true, apply_to_overdue_drafts: true } });
+r.check(on.status === 201, `auto on with the explicit overdue choice (${on.status} ${on.body?.error?.code ?? ''})`);
+await pass('2026-12-23T02:00:30Z');
+const clampRevs = payrolls(ctx.ids.clamp);
+r.info(`clamp account revisions after the explicit overdue choice: ${JSON.stringify(clampRevs)}`);
+r.check(clampRevs.includes('2026-12-25'), 'the explicit choice still submits the overdue draft whose deadline is after the account creation');
+r.check(!clampRevs.includes('2026-12-11'), 'the explicit choice does not reach the draft whose deadline passed before the account existed (creation bound)');
+
+r.section('5. Device-zone independence of the creation bound (copies of the database scanned under four TZ values)');
+// A fresh account created after the 2027-01-06 deadline must get nothing from a scan at 2027-01-08 in any device zone.
+clock.set('2027-01-08T00:00:00Z');
+await ctx.addUser('zone', 'probe-zone', 'Probe Zone');
+db.pragma('wal_checkpoint(TRUNCATE)');
+const runs = [];
+for (const tz of ['America/Los_Angeles', 'Pacific/Kiritimati', 'Asia/Ho_Chi_Minh', 'UTC']) {
+  const copy = join(ctx.dir, `zone-${tz.replace(/\//g, '_')}.db`);
+  copyFileSync(ctx.dbPath, copy);
+  const child = spawnSync(process.execPath, [process.argv[1], 'scan', copy, '2027-01-08T00:00:30Z'], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });
+  runs.push(JSON.parse(child.stdout.trim()));
+}
+const key = (run) => JSON.stringify(run.rows);
+r.check(runs.every((run) => key(run) === key(runs[0])) && new Set(runs.map((x) => x.offset)).size === 4, `identical revisions under ${runs.map((x) => `${x.tz}(${x.offset})`).join(', ')}`);
+r.check(runs.every((run) => !run.rows.some((row) => row.who === 'Probe Zone')), 'the zone account gets no automatic revision in any device zone');
+
+r.section('6. Observation: never-configured accounts created before activation (audit A risk R3, not in this fix)');
+const adminRevs = payrolls(ctx.ids.admin);
+r.info(`seed admin account (created before activation, never saved settings) automatic revisions: ${JSON.stringify(adminRevs)}`);
+const failing = db.prepare("SELECT u.display_name AS who, j.last_error FROM jobs j JOIN users u ON u.id = j.user_id WHERE j.kind = 'send_email' AND j.state = 'intervention'").all();
+r.info(`send jobs in intervention: ${JSON.stringify(failing.reduce((acc, x) => ({ ...acc, [`${x.who}:${x.last_error}`]: (acc[`${x.who}:${x.last_error}`] ?? 0) + 1 }), {}))}`);
+void la;
+void LA;
+db.close();
+r.done('B1');

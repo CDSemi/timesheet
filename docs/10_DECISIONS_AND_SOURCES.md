@@ -133,3 +133,9 @@ Source: the owner's direct replies recorded in the task board, 2026-10-04.
 - F-4: one system-wide activation instant (empty until the owner's pilot) combined with each user's auto-submit effective instant.
 - F-5: the PDF total is the credited OT total in h:mm over all 14 days, hidden when Show OT on PDF is off.
 - Unchanged meanwhile: the accepted WP2 removal of employee-derived holiday-preview counts (WP2-A-01); F-Q6 is re-asked.
+
+## Owner decisions — 2026-10-05 (WP3-FIX2, question H-Q1)
+
+Source: the owner's direct reply recorded in the task board, 2026-10-05.
+
+- H-Q1 (a): automatic submission applies only to accounts that saved their submission settings with auto-submit on. An account that never saved them is never auto-finalized and no delivery is attempted for it. By default, periods whose deadline passed before the settings were saved are not submitted automatically, the same kind of bound as the account-creation bound (docs/05 "Deadline and recovery"). The explicit apply-to-overdue choice a user makes when saving settings stays as implemented: it is the user's own act and is still clamped by the account creation. Turning auto-submit off keeps its behaviour. This reads D-09 "Auto-submit preference enabled after setup" as: no automation before setup.

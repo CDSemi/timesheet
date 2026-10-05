@@ -1,0 +1,31 @@
+// WP3-RECHECK-A evidence masking: ANSI codes removed, CRLF -> LF, trailing whitespace removed,
+// every email address -> <email>, the OS account name -> <user>, scratch/project/profile paths ->
+// <scratch> / <project> / <home>. argv: <input> <output>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/\r\n?/g, '\n');
+text = text.replace(/[\w.%+-]+@(?:[\w-]+\.)+[A-Za-z]{2,}/g, '<email>');
+const paths = [
+  [/[A-Za-z]:[\/]+timesheet-tmp[\/]+WP3-RECHECK-A/gi, '<scratch>'],
+  [/\/[a-z]\/timesheet-tmp\/WP3-RECHECK-A/gi, '<scratch>'],
+  [/[A-Za-z]:\\timesheet-tmp\\WP3-RECHECK-A/gi, '<scratch>'],
+  [/[A-Za-z]:[\/]+Dropbox[\/]+Work\.CDSemi[\/]+timesheet/gi, '<project>'],
+  [/\/[a-z]\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/[A-Za-z]:[\/]+Users[\/]+[^\/\s"'`]+/gi, '<home>'],
+  [/\/[a-z]\/Users\/[^/\s"'`]+/gi, '<home>'],
+  [/B:[\/]+Temp[\/]+claude[^\s"'`]*/gi, '<session-temp>'],
+];
+for (const [pattern, replacement] of paths) text = text.replace(pattern, replacement);
+const account = userInfo().username;
+if (account.length >= 3) text = text.split(account).join('<user>');
+text = text.split('<user>').join('<user>');
+text = text
+  .split('\n')
+  .map((line) => line.replace(/[ \t]+$/, ''))
+  .join('\n');
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(output, text, 'utf8');

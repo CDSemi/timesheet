@@ -1,0 +1,94 @@
+# B1 automation bounds (source: repo)
+
+## 1. Accounts created before activation (F-1 and the activation bound)
+PASS auto_deduct policy for the pre-activation account (201 )
+PASS pre-activation account with saved settings, auto on (201)
+PASS activation recorded at 2026-10-01T00:00:00Z (200)
+PASS an activation in the past is refused (422 activation_in_past)
+PASS nothing automated 30 s before the first deadline after activation
+PASS pre-activation account (never saved settings): one automatic pending revision for 2026-10-16 only; the 2026-10-02 deadline (2026-09-30) is before activation (["2026-10-16"])
+PASS F-1 empty period: 14 days, labels Off/Worked, 0 OT proposals, 0 deficit proposals
+PASS F-1: no ledger row for the empty period (auto_deduct policy)
+PASS pre-activation account with saved auto-on settings: 2026-10-16 only (["2026-10-16"])
+PASS a later pass creates no second revision (one revision per period)
+
+## 2. WP3-B-01 original scenario: an account created after activation with past deadlines
+INFO late account created_at 2026-11-12T00:00:00Z
+PASS one runner pass after creation: no automatic revision for the periods already overdue at creation (got [])
+PASS no timesheet row and no overdue record for the late account
+PASS no PDF or send job for the late account
+PASS the first deadline after creation (2026-11-25T01:00Z, payroll 2026-11-27) is automated (F-1): ["2026-11-27"]
+PASS late account's first automatic revision: 14 default-labelled days, no OT (Worked/Off)
+
+## 3. The period in which the account was created is automated at its deadline
+PASS nothing for the mid-period account right after creation ([])
+PASS the creation period is automated at its deadline (["2026-12-11"])
+
+## 4. Saved settings: the explicit "apply to overdue drafts" choice and the creation bound (clamp)
+PASS clamp account saves auto off (201)
+PASS an ordinary save never puts the effective instant before the account (["2026-12-12T00:00:00Z"] vs 2026-12-12T00:00:00Z)
+PASS draft day 2026-12-01 saved (200 )
+PASS draft day 2026-12-08 saved (200 )
+PASS switch off: one overdue record for the payroll 2026-12-25 deadline (after creation), none for the payroll 2026-12-11 deadline (before creation): 1
+PASS auto on with the explicit overdue choice (201 )
+INFO clamp account revisions after the explicit overdue choice: ["2026-12-25"]
+PASS the explicit choice still submits the overdue draft whose deadline is after the account creation
+PASS the explicit choice does not reach the draft whose deadline passed before the account existed (creation bound)
+
+## 5. Device-zone independence of the creation bound (copies of the database scanned under four TZ values)
+PASS identical revisions under America/Los_Angeles(480), Pacific/Kiritimati(-840), Asia/Ho_Chi_Minh(-420), UTC(0)
+PASS the zone account gets no automatic revision in any device zone
+
+## 6. Observation: never-configured accounts created before activation (audit A risk R3, not in this fix)
+INFO seed admin account (created before activation, never saved settings) automatic revisions: ["2026-10-16","2026-10-30","2026-11-13","2026-11-27","2026-12-11","2026-12-25"]
+INFO send jobs in intervention: {"Probe Pre:recipient_missing":6,"Example Admin:recipient_missing":6,"Example Employee:recipient_missing":6,"Probe Late:recipient_missing":3,"Probe Mid:recipient_missing":2}
+
+SUMMARY B1 [repo]: 27 PASS, 0 FAIL
+exit 0
+# B1 automation bounds (source: prefix)
+
+## 1. Accounts created before activation (F-1 and the activation bound)
+PASS auto_deduct policy for the pre-activation account (201 )
+PASS pre-activation account with saved settings, auto on (201)
+PASS activation recorded at 2026-10-01T00:00:00Z (200)
+PASS an activation in the past is refused (422 activation_in_past)
+PASS nothing automated 30 s before the first deadline after activation
+PASS pre-activation account (never saved settings): one automatic pending revision for 2026-10-16 only; the 2026-10-02 deadline (2026-09-30) is before activation (["2026-10-16"])
+PASS F-1 empty period: 14 days, labels Off/Worked, 0 OT proposals, 0 deficit proposals
+PASS F-1: no ledger row for the empty period (auto_deduct policy)
+PASS pre-activation account with saved auto-on settings: 2026-10-16 only (["2026-10-16"])
+PASS a later pass creates no second revision (one revision per period)
+
+## 2. WP3-B-01 original scenario: an account created after activation with past deadlines
+INFO late account created_at 2026-11-12T00:00:00Z
+FAIL one runner pass after creation: no automatic revision for the periods already overdue at creation (got ["2026-10-16","2026-10-30","2026-11-13"])
+FAIL no timesheet row and no overdue record for the late account
+FAIL no PDF or send job for the late account
+FAIL the first deadline after creation (2026-11-25T01:00Z, payroll 2026-11-27) is automated (F-1): ["2026-10-16","2026-10-30","2026-11-13","2026-11-27"]
+PASS late account's first automatic revision: 14 default-labelled days, no OT (Worked/Off)
+
+## 3. The period in which the account was created is automated at its deadline
+FAIL nothing for the mid-period account right after creation (["2026-10-16","2026-10-30","2026-11-13","2026-11-27"])
+FAIL the creation period is automated at its deadline (["2026-10-16","2026-10-30","2026-11-13","2026-11-27","2026-12-11"])
+
+## 4. Saved settings: the explicit "apply to overdue drafts" choice and the creation bound (clamp)
+PASS clamp account saves auto off (201)
+PASS an ordinary save never puts the effective instant before the account (["2026-12-12T00:00:00Z"] vs 2026-12-12T00:00:00Z)
+PASS draft day 2026-12-01 saved (200 )
+PASS draft day 2026-12-08 saved (200 )
+PASS switch off: one overdue record for the payroll 2026-12-25 deadline (after creation), none for the payroll 2026-12-11 deadline (before creation): 1
+PASS auto on with the explicit overdue choice (201 )
+INFO clamp account revisions after the explicit overdue choice: ["2026-10-16","2026-10-30","2026-11-13","2026-11-27","2026-12-11","2026-12-25"]
+PASS the explicit choice still submits the overdue draft whose deadline is after the account creation
+FAIL the explicit choice does not reach the draft whose deadline passed before the account existed (creation bound)
+
+## 5. Device-zone independence of the creation bound (copies of the database scanned under four TZ values)
+PASS identical revisions under America/Los_Angeles(480), Pacific/Kiritimati(-840), Asia/Ho_Chi_Minh(-420), UTC(0)
+FAIL the zone account gets no automatic revision in any device zone
+
+## 6. Observation: never-configured accounts created before activation (audit A risk R3, not in this fix)
+INFO seed admin account (created before activation, never saved settings) automatic revisions: ["2026-10-16","2026-10-30","2026-11-13","2026-11-27","2026-12-11","2026-12-25"]
+INFO send jobs in intervention: {"Example Employee:recipient_missing":6,"Probe Pre:recipient_missing":6,"Example Admin:recipient_missing":6,"Probe Late:recipient_missing":6,"Probe Mid:recipient_missing":6}
+
+SUMMARY B1 [prefix]: 19 PASS, 8 FAIL
+exit 1

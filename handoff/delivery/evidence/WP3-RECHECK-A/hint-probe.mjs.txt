@@ -1,0 +1,108 @@
+// WP3-RECHECK-A C-01 probe: the review hint is outside the snapshot, its hash, the stored revision, the
+// PDF and the e-mail. Two worlds with byte-identical business data:
+//   S (shown)  E2, holding an edit share of E1, records a session on one of E1's days through the
+//              production command with actor E2 / subject E1 (what /api/shared does);
+//   H (hidden) a file copy of S in which only the audit actor of E2's events is rewritten to E1
+//              (probe-only: the append-only audit trigger is dropped in the COPY), so the hint is empty.
+// Both are reviewed, signed with the same fixed clock and finished by the same production run-jobs
+// passes; the hashes, stored payloads, PDFs and the captured e-mail body must be identical.
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { fixedClock, m, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+import { readPdf } from './pdftext.mjs';
+
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/hint`;
+const EARLY = '2026-09-20T12:00:00Z';
+const NOW = '2026-09-30T00:30:00Z';
+const SIGN = '2026-09-30T00:30:05Z';
+let failures = 0;
+const check = (label, condition, detail = '') => {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
+  if (!condition) failures += 1;
+};
+
+const S = join(BASE, 'shown');
+const H = join(BASE, 'hidden');
+if (existsSync(join(S, 't.db')) || existsSync(join(H, 't.db'))) throw new Error('Refusing to reuse a run folder');
+mkdirSync(S, { recursive: true });
+mkdirSync(H, { recursive: true });
+
+// World S.
+let e1Id;
+let e2Id;
+{
+  const db = m.db.openDatabase(join(S, 't.db'));
+  m.mig.migrate(db);
+  const early = fixedClock(EARLY);
+  const seed = await m.seed.seedSynthetic(db, early, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+  e1Id = seed.users.find((u) => u.role === 'employee').id;
+  const adminId = seed.users.find((u) => u.role === 'admin').id;
+  e2Id = await users.createUser(db, early, { email: '<email>', displayName: 'Example Employee Two', role: 'employee', password: randomBytes(18).toString('base64url'), calendarId: seed.calendarId }, adminId);
+  const e1 = sessionUser(db, e1Id);
+  const e2 = sessionUser(db, e2Id);
+  policy(db, EARLY, e1Id, seed.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: early }, { userId: e1Id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, early, new m.files.FileStore(join(S, 'private-data')), e1Id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, early, e1Id, { expectedSeq: 0, to: ['<email>'], autoSubmit: false });
+  m.shares.grantShare(db, early, { ownerUserId: e1Id, granteeEmail: '<email>', items: { timesheets: 'edit', otRead: false, pdfDownload: false } });
+  m.cmds.createSession({ db, clock: early, user: e1 }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-21T12:00:00Z'), user: e1, actor: e2 }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  db.close();
+}
+// World H: a byte copy of S (database closed and checkpointed) with only the audit actor rewritten.
+cpSync(join(S, 't.db'), join(H, 't.db'));
+cpSync(join(S, 'private-data'), join(H, 'private-data'), { recursive: true });
+{
+  const raw = new Database(join(H, 't.db'));
+  const triggers = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'audit_events'").pluck().all();
+  for (const name of triggers) raw.exec(`DROP TRIGGER "${name}"`);
+  const changed = raw.prepare('UPDATE audit_events SET actor_user_id = owner_user_id WHERE actor_user_id = ? AND owner_user_id = ?').run(e2Id, e1Id).changes;
+  raw.close();
+  console.log(`INFO  world H: dropped ${triggers.length} audit trigger(s) in the copy, rewrote the actor of ${changed} grantee audit event(s)`);
+}
+
+const results = {};
+for (const [name, dir] of [['shown', S], ['hidden', H]]) {
+  const db = m.db.openDatabase(join(dir, 't.db'));
+  const e1 = sessionUser(db, e1Id);
+  const hint = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-02');
+  const review = m.review.buildReviewPayload(db, fixedClock(NOW), e1, '2026-10-02');
+  const signed = m.fin.signOffTimesheet({ db, clock: fixedClock(SIGN), user: e1 }, '2026-10-02', {
+    expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Synthetic Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true,
+  });
+  db.close();
+  const env = { DATABASE_PATH: join(dir, 't.db'), DATA_DIR: join(dir, 'private-data'), MAIL_FROM: '<email>' };
+  const passes = [];
+  for (const instant of ['2026-09-30T00:40:00Z', '2026-09-30T00:50:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], env)).out.split('\n').pop());
+  const check2 = m.db.openDatabase(join(dir, 't.db'));
+  const rev = check2.prepare('SELECT id, payload_json, payload_sha256, reviewed_sha256 FROM timesheet_revisions WHERE user_id = ?').get(e1Id);
+  const pdfKey = check2.prepare("SELECT a.storage_key FROM attachments a JOIN revision_files f ON f.attachment_id = a.id WHERE f.revision_id = ? AND f.kind = 'pdf'").pluck().get(rev.id);
+  const ledger = check2.prepare("SELECT source_key || '=' || delta_minutes FROM ot_ledger WHERE user_id = ? ORDER BY source_key").pluck().all(e1Id);
+  check2.close();
+  const pdf = new m.files.FileStore(join(dir, 'private-data')).read(pdfKey);
+  const captureDir = join(dir, 'private-data', 'mail-capture');
+  const folder = readdirSync(captureDir).find((n) => !n.startsWith('.tmp'));
+  const eml = readFileSync(join(captureDir, folder, 'message.eml'), 'utf8');
+  const meta = JSON.parse(readFileSync(join(captureDir, folder, 'metadata.json'), 'utf8'));
+  const textPart = eml.split(/\r?\n\r?\n/).slice(1).join('\n\n').split(/^--/m)[1] ?? '';
+  results[name] = { hint, review, signed, rev, pdf, pdfSha: createHash('sha256').update(pdf).digest('hex'), pdfText: (await readPdf(pdf)).text, ledger, eml, meta, textPart, passes };
+  console.log(`INFO  ${name}: hint=${JSON.stringify(hint)} hash=${review.payloadHash.slice(0, 16)} signed=${signed.status} pdf_sha256=${results[name].pdfSha.slice(0, 16)} pdf_bytes=${pdf.length} ledger=${ledger.join(',')} passes=${passes.join(' | ')}`);
+}
+const s = results.shown;
+const h = results.hidden;
+check('world S shows the hint (E2, one day 2026-09-16); world H shows none', s.hint.length === 1 && s.hint[0].display_name === 'Example Employee Two' && JSON.stringify(s.hint[0].work_dates) === '["2026-09-16"]' && h.hint.length === 0);
+check('the reviewed hash and expected version are identical with the hint shown and hidden', s.review.payloadHash === h.review.payloadHash && s.review.expectedVersion === h.review.expectedVersion);
+check('both sign-offs are created; stored payload_sha256 and reviewed_sha256 are identical and equal the reviewed hash',
+  s.signed.status === 'created' && h.signed.status === 'created' && s.rev.payload_sha256 === h.rev.payload_sha256 && s.rev.reviewed_sha256 === h.rev.reviewed_sha256 && s.rev.reviewed_sha256 === s.review.payloadHash);
+check('the stored payload JSON is byte-identical and holds no grantee name or grantee field', s.rev.payload_json === h.rev.payload_json && !s.rev.payload_json.includes('Example Employee Two') && !s.rev.payload_json.includes('grantee'));
+check('the rendered PDFs are byte-identical (same SHA-256) and their text holds no grantee name', s.pdfSha === h.pdfSha && s.pdfText === h.pdfText && !s.pdfText.includes('Example Employee Two'), `${s.pdfSha.slice(0, 16)} / ${h.pdfSha.slice(0, 16)}`);
+check('the ledger postings are identical', JSON.stringify(s.ledger) === JSON.stringify(h.ledger), s.ledger.join(','));
+check('the captured e-mail: same subject, recipients and PDF hash; the message holds no grantee name',
+  s.meta.subject === h.meta.subject && JSON.stringify(s.meta.envelope) === JSON.stringify(h.meta.envelope) && s.meta.pdf_sha256 === h.meta.pdf_sha256 && !s.eml.includes('Example Employee Two') && !h.eml.includes('Example Employee Two'));
+console.log(failures === 0 ? 'HINT PROBE PASSED' : `HINT PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

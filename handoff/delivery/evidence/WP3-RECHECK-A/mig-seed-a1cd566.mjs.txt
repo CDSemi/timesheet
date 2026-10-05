@@ -1,0 +1,67 @@
+// WP3-RECHECK-A: builds a schema-v6 database with the FIRST WP3 freeze a1cd566 (built in its own clone;
+// run with AUDIT_REPO=<that clone>) holding WP3 rows in every table: signatures (one with the
+// automatic-image authorization), settings versions with the note line (0005), shares (0006) with
+// grantee acts through a grant, an administrator holding a share and revoking it on the admin route,
+// a grantee leaving, a grantee PDF download, a manual sign-off, an automatic finalization, a late
+// review, a correction, PDFs, captured deliveries and reminders. argv: <dbPath>
+import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { fixedClock, freshDb, m, png, policy, REPO, run, session, sessionUser } from './common.mjs';
+
+const [dbPath] = process.argv.slice(2);
+const dataDir = join(dbPath, '..', 'a1cd566-private-data');
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const T0 = '2026-09-14T15:00:00Z';
+const s = await freshDb(dbPath, T0);
+const { db } = s;
+const c0 = fixedClock(T0);
+const files = new m.files.FileStore(dataDir);
+const e1 = sessionUser(db, s.employee.id);
+const e2Id = await users.createUser(db, c0, { email: '<email>', displayName: 'Example Employee Two', role: 'employee', password: randomBytes(18).toString('base64url'), calendarId: s.calendarId }, s.admin.id);
+const e2 = sessionUser(db, e2Id);
+const admin = sessionUser(db, s.admin.id);
+policy(db, T0, e1.id, s.calendarId, 'auto_deduct');
+policy(db, T0, e2.id, s.calendarId, 'ignore');
+m.ledger.postCredit({ db, clock: c0 }, { userId: e1.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+m.sigs.saveSignature(db, c0, files, e1.id, png(5), 'image/png');
+m.settings.saveSubmissionSettings(db, c0, e1.id, { expectedSeq: 0, to: ['<email>'], cc: ['<email>'], autoSubmit: false });
+m.settings.saveSubmissionSettings(db, c0, e2.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true, autoNoteEnabled: true, autoNoteText: 'Nộp tự động' });
+m.sigs.saveSignatureAndAuthorizeAutoImage(db, c0, files, e2.id, png(9), 'image/png');
+const shareE2 = m.shares.grantShare(db, c0, { ownerUserId: e1.id, granteeEmail: '<email>', items: { timesheets: 'edit', otRead: true, pdfDownload: true } });
+const shareA = m.shares.grantShare(db, c0, { ownerUserId: e1.id, granteeEmail: '<email>', items: { timesheets: 'view', otRead: false, pdfDownload: false } });
+m.auto.setAutomationActivation(db, c0, { actorUserId: admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic recheck activation' });
+
+const c1 = fixedClock('2026-09-26T20:00:00Z');
+m.cmds.createSession({ db, clock: c1, user: e1 }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+m.cmds.createSession({ db, clock: c1, user: e1 }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+m.cmds.createSession({ db, clock: c1, user: e1, actor: e2 }, '2026-09-17', session('2026-09-17', '08:00', '16:00'));
+m.cmds.upsertDayEntry({ db, clock: c1, user: e1, actor: e2 }, '2026-09-18', { category: 'Worked', leave_minutes: 0, wfh: true, notes: 'Synthetic grantee note' });
+m.cmds.createSession({ db, clock: c1, user: e2 }, '2026-09-20', session('2026-09-20', '09:00', '13:30'));
+const sign = fixedClock('2026-09-29T05:45:00Z');
+const r1 = m.review.buildReviewPayload(db, sign, e1, '2026-10-02');
+const signed = m.fin.signOffTimesheet({ db, clock: sign, user: e1 }, '2026-10-02', { expectedVersion: r1.expectedVersion, reviewedHash: r1.payloadHash, signerName: 'Synthetic Signer One', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+db.close();
+const env = { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM: '<email>' };
+const passes = [];
+for (const now of ['2026-09-29T06:00:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z', '2026-09-30T02:00:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now], env)).out.split('\n').pop());
+
+const db2 = m.db.openDatabase(dbPath);
+const c2 = fixedClock('2026-10-01T18:00:00Z');
+const r2 = m.review.buildReviewPayload(db2, c2, e2, '2026-10-02');
+const late = m.fin.reviseTimesheet({ db: db2, clock: c2, user: e2 }, '2026-10-02', { kind: 'late_review', reason: null, sendEmail: false, expectedVersion: r2.expectedVersion, reviewedHash: r2.payloadHash, signerName: 'Example Employee Two', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+m.cmds.createSession({ db: db2, clock: fixedClock('2026-10-01T18:10:00Z'), user: e1 }, '2026-09-15', { ...session('2026-09-15', '18:00', '19:00'), reason: 'Synthetic late hour' });
+const c3 = fixedClock('2026-10-01T18:30:00Z');
+const r3 = m.review.buildReviewPayload(db2, c3, e1, '2026-10-02');
+const corr = m.fin.reviseTimesheet({ db: db2, clock: c3, user: e1 }, '2026-10-02', { kind: 'correction', reason: 'Synthetic correction', sendEmail: true, expectedVersion: r3.expectedVersion, reviewedHash: r3.payloadHash, signerName: 'Synthetic Signer One', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+m.shares.recordSharedPdfDownload(db2, fixedClock('2026-10-01T19:00:00Z'), { ownerUserId: e1.id, granteeUserId: e2.id, revisionId: signed.revision.id, payrollDate: '2026-10-02', revisionNo: 1 });
+m.cmds.createSession({ db: db2, clock: fixedClock('2026-10-01T19:10:00Z'), user: e1, actor: e2 }, '2026-09-30', session('2026-09-30', '08:00', '17:00'));
+m.shares.adminRevokeShare(db2, fixedClock('2026-10-01T19:20:00Z'), { actorUserId: admin.id, shareId: shareA.id, reason: 'Synthetic admin revocation' });
+m.shares.revokeOwnShare(db2, fixedClock('2026-10-02T09:00:00Z'), { actorUserId: e2.id, shareId: shareE2.id, reason: null });
+db2.close();
+for (const now of ['2026-10-01T18:40:00Z', '2026-10-01T18:50:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now], env)).out.split('\n').pop());
+const db3 = m.db.openDatabase(dbPath);
+const tables = db3.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+const rows = Object.fromEntries(tables.map((t) => [t, db3.prepare(`SELECT count(*) FROM "${t}"`).pluck().get()]));
+console.log(JSON.stringify({ build: REPO.split(/[\\/]/).pop(), late: late.status, correction: corr.status, passes, user_version: db3.pragma('user_version', { simple: true }), rows, ids: { e1: e1.id, e2: e2.id, admin: admin.id } }));
+db3.close();

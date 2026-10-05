@@ -159,8 +159,9 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   const submittedAt = new Date(due.getTime() + 5 * 60_000);
   const summaries = drainJobsFrom(server, submittedAt);
   expect(summaries.reduce((sum, item) => sum + item.claimed, 0), 'jobs ran').toBeGreaterThan(8);
-  // The seeded admin and employee accounts have no recipients: their sends stop with a visible fault (nothing is sent).
-  expect(summaries.reduce((sum, item) => sum + item.intervention, 0), `interventions: ${JSON.stringify(summaries)}`).toBe(2);
+  // The seeded admin and employee accounts never saved submission settings: by the owner decision H-Q1 (a) they are never
+  // submitted automatically, so no send is queued for them and nothing stops with a fault (before H-Q1 their two sends needed intervention).
+  expect(summaries.reduce((sum, item) => sum + item.intervention, 0), `interventions: ${JSON.stringify(summaries)}`).toBe(0);
 
   const printedDate = usDateOf(submittedAt, periods.reporting_zone);
   const outcomes = {
@@ -221,6 +222,13 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   await expect(revision.locator('[data-revision-badge="review"]')).toHaveText('Review pending');
   await expect(revision.locator('[data-fact="signed"]')).toHaveText('Not signed yet');
   await expect(revision.locator('[data-revision-badge="delivery"]')).toHaveText('Email accepted by the mail server');
+  // WP3-RBC-01: an event with no actor reads "automatic" because the server flags it (`actor_is_system`), never "by someone else".
+  const submitted = page.locator('[data-operation="timesheet.auto_finalize"]').first();
+  await expect(submitted.locator('[data-history-actor]')).toHaveText('automatic');
+  await expect(submitted.locator('[data-history-actor]')).toHaveAttribute('data-history-actor', 'system');
+  // The only event by another person is the administrator's account creation.
+  await expect(page.locator('[data-history-actor="other"]')).toHaveCount(1);
+  await expect(page.locator('[data-operation="user.create"] [data-history-actor="other"]')).toHaveText('by someone else');
   await page.screenshot({ path: screenshotPath(`automation-history-${project}-synthetic.png`) });
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' }).click();
   await expect(page.locator('[data-grid-status="review"]')).toHaveText('Submitted automatically, review pending');
@@ -231,8 +239,9 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
   await page.screenshot({ path: screenshotPath(`automation-review-${project}-synthetic.png`), fullPage: true });
 
   // The administrator sees the pipeline, never a timesheet: no revision, no PDF, no names.
-  // (The admin account is an account too and was submitted for itself; only its own revision is listed.)
+  // (The admin account never saved submission settings, so by the owner decision H-Q1 (a) it is never submitted automatically; the list holds none of the employees' revisions.)
   const adminRevisions = await admin.call<{ revisions: Array<{ id: string }> }>('GET', '/api/revisions');
+  expect(adminRevisions.revisions, 'the administrator never saved settings, so nothing was submitted for the administrator account').toEqual([]);
   const plainRevisionId = (await finalizationOf(plain)).revision?.id ?? '';
   for (const person of [plain, full, noteOnly, imageOnly]) {
     expect(adminRevisions.revisions.map((item) => item.id), 'no employee revision in the administrator list').not.toContain((await finalizationOf(person)).revision?.id);

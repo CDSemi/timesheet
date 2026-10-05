@@ -1,0 +1,12 @@
+// WP3-RECHECK-BC probe B7: query plans of the fix round's new queries (bounded/indexed reads).
+// Usage: node b7-query-plans.mjs <db>   (a probe database produced by c1-authz-hint.mjs)
+import { openDatabase, REPO } from './lib.mjs';
+const { sharedActCondition } = await import(new URL('src/server/services/sharedActs.ts', REPO).href);
+const db = openDatabase(process.argv[2]);
+const plan = (label, sql, ...args) => console.log(`${label}\n  ${db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map((row) => row.detail).join('\n  ')}`);
+plan('hint, since a finalization (rowid > ?)', `SELECT json_extract(COALESCE(a.after_json, a.before_json), '$.work_date') AS work_date FROM audit_events a WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND a.rowid > ? ORDER BY a.rowid`, 'x', 0);
+plan('hint, since the period start (occurred_at >= ?)', `SELECT json_extract(COALESCE(a.after_json, a.before_json), '$.work_date') AS work_date FROM audit_events a WHERE a.owner_user_id = ? AND a.entity_type IN ('day_entry', 'work_session') AND a.occurred_at >= ? ORDER BY a.rowid`, 'x', '2026-01-01T00:00:00Z');
+plan('hint, latest owner finalization', `SELECT max(a.rowid) AS last FROM audit_events a JOIN timesheet_revisions r ON r.id = a.entity_id AND r.user_id = a.owner_user_id WHERE a.owner_user_id = ? AND r.timesheet_id = ? AND a.entity_type = 'timesheet_revision' AND a.operation IN ('timesheet.signoff', 'timesheet.correction', 'timesheet.late_review')`, 'x', 'y');
+plan('history page (unchanged shape, new CASE)', `SELECT seq FROM (SELECT row_number() OVER (ORDER BY a.rowid) AS seq, CASE WHEN ${sharedActCondition('a')} THEN 1 END AS s FROM audit_events a WHERE a.owner_user_id = ?) WHERE (? IS NULL OR seq < ?) ORDER BY seq DESC LIMIT ?`, 'x', null, null, 201);
+plan('recoverInterruptedSends (every runner pass)', `SELECT a.id FROM delivery_attempts a JOIN jobs j ON j.id = a.job_id AND j.user_id = a.user_id WHERE a.state = 'sending' AND (j.state <> 'leased' OR j.lease_expires_at <= ?)`, '2026-10-05T00:00:00Z');
+db.close();

@@ -31,17 +31,20 @@ import { ensurePayPeriodRow } from './periods.ts';
  * finalization transaction so a concurrent change by anyone else is seen:
  * - the owner is an active account and the activation instant is set;
  * - the deadline is on or after the activation instant and has passed;
- * - the deadline is not before the account existed (`users.created_at`, WP3-B-01): the account
- *   start is the effective start of automation for a user who never saved settings, and a bound
- *   for saved settings too (even an explicit "apply to overdue drafts" never reaches back before
- *   the account). A period whose deadline is on or after the account's creation, including the
- *   one in which it was created, is automated at its deadline (F-1);
+ * - the deadline is not before the account existed (`users.created_at`, WP3-B-01): a bound for
+ *   saved settings (even an explicit "apply to overdue drafts" never reaches back before the
+ *   account). A period whose deadline is on or after the account's creation, including the
+ *   one in which it was created, is automated at its deadline once the settings are saved (F-1);
  * - the timesheet (when one exists) is unfinalized and not `imported_unverified`;
  * - the auto-submit switch that governs the deadline is on. Each saved version of a user's
  *   settings applies to deadlines on or after its own effective instant, so the governing
  *   version is the newest one whose effective instant is not after the deadline; a deadline
  *   before every version has no governing switch and is never touched. A user who never saved
- *   settings has the default (on).
+ *   settings is never automated, and gets no overdue record either (owner decision H-Q1 (a),
+ *   2026-10-05: automatic submission applies only to accounts that saved their submission
+ *   settings with auto-submit on; periods due before that save are not submitted automatically
+ *   unless the user explicitly applies the switch to overdue drafts when saving, which is still
+ *   clamped by the account creation above).
  * A period governed by an off switch gets one overdue record (an audit event, no export, no
  * revision); the employee can still sign off manually. An eligible period with no saved entries
  * is still submitted with the default labels (F-1; the transaction creates the timesheet row).
@@ -134,7 +137,7 @@ export function activationJson(activation: AutomationActivation) {
 
 /* ----------------------------------------------------------- eligibility ---- */
 
-type SkipReason = 'not_active' | 'inactive_user' | 'before_activation' | 'before_account' | 'not_due' | 'finalized' | 'imported' | 'before_effective' | 'overdue_recorded';
+type SkipReason = 'not_active' | 'inactive_user' | 'before_activation' | 'before_account' | 'not_configured' | 'not_due' | 'finalized' | 'imported' | 'before_effective' | 'overdue_recorded';
 
 type Verdict = { kind: 'finalize' } | { kind: 'overdue' } | { kind: 'skip'; reason: SkipReason };
 
@@ -148,17 +151,22 @@ interface TimesheetState {
   imported_unverified: number;
 }
 
-/** The switch governing a deadline, or null when no saved version applies yet. */
+/**
+ * The switch governing a deadline, or null when no saved version applies to it: the user never saved
+ * submission settings, or every saved version took effect after the deadline (WP3-H-Q1: automation
+ * starts with the user's own saved settings, never with a default).
+ */
 function governingSwitch(db: Db, userId: string, dueAt: string): { autoSubmit: boolean } | null {
   const row = db
     .prepare<[string, string], { auto_submit: number }>(
       'SELECT auto_submit FROM submission_settings WHERE user_id = ? AND auto_submit_effective_from <= ? ORDER BY seq DESC LIMIT 1',
     )
     .get(userId, dueAt);
-  if (row !== undefined) return { autoSubmit: row.auto_submit === 1 };
-  const saved = db.prepare<[string], { one: number }>('SELECT 1 AS one FROM submission_settings WHERE user_id = ? LIMIT 1').get(userId);
-  // A user who never saved settings has the default, which is on.
-  return saved === undefined ? { autoSubmit: true } : null;
+  return row === undefined ? null : { autoSubmit: row.auto_submit === 1 };
+}
+
+function hasSavedSettings(db: Db, userId: string): boolean {
+  return db.prepare<[string], { one: number }>('SELECT 1 AS one FROM submission_settings WHERE user_id = ? LIMIT 1').get(userId) !== undefined;
 }
 
 function overdueRecorded(db: Db, userId: string, payPeriodId: string | undefined): boolean {
@@ -195,7 +203,7 @@ function assessPeriod(db: Db, clock: Clock, candidate: Candidate): Verdict {
   if (timesheet !== undefined && timesheet.finalized_revision_no !== null) return { kind: 'skip', reason: 'finalized' };
   if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };
   const governing = governingSwitch(db, user.id, formatUtcInstant(period.dueAtUtc));
-  if (governing === null) return { kind: 'skip', reason: 'before_effective' };
+  if (governing === null) return { kind: 'skip', reason: hasSavedSettings(db, user.id) ? 'before_effective' : 'not_configured' };
   if (governing.autoSubmit) return { kind: 'finalize' };
   if (overdueRecorded(db, user.id, storedPeriodId(db, user.calendarId, period))) return { kind: 'skip', reason: 'overdue_recorded' };
   return { kind: 'overdue' };

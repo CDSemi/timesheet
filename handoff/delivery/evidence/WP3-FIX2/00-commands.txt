@@ -1,0 +1,25 @@
+WP3-FIX2 commands and exit codes (masked; both attempts). Baseline: main at 2f2520e1ab80ff55938b70cd469f0bfe888e04a2.
+Runtime: Node 24.21.0 portable by full path; TEMP/TMP in the scratch folder (attempt 1 `<scratch>` = D:\timesheet-tmp\WP3-FIX2, attempt 2 = D:\.claude-tmp\timesheet\WP3-FIX2).
+
+Attempt 1
+ 1. node --version -> v24.21.0
+ 2. vitest run tests/integration/delivery.test.ts -t WP3-FIX2 (new sending-branch test) -> exit 0, 1 passed
+ 3. mutation: sendJob.ts `latest?.state === 'sending'` branch disabled, same test -> exit 1 (1 failed, 24 skipped), file restored byte for byte -> 02-mutation-sending-branch-red.txt
+ 4. RED run against the baseline source of the 7 changed source files (git show HEAD:<path>), tests deadline, history, review-grantee-changes, sharingModel, settingsModel -> exit 1, 10 failed / 108 passed; sources restored (cmp: same) -> 01-red-baseline-source.txt
+ 5. vitest run (all) after H-Q1 -> 14 failures, all in deadline.test.ts (accounts that never saved settings); tests updated (configuredUser)
+ 6. npm run typecheck -> exit 0; npm run lint -> exit 0
+ 7. validate_package.py --preflight (workflow Python) -> exit 0, PASS, 65 translation pairs (rerun after the HANDOFF edit: 1266 links) -> 03-preflight.txt
+ 8. npm run test:e2e (first run) -> exit 1: 125 passed, 2 failed (automation.spec: interventions expected 2, received 0, the H-Q1 effect); spec updated
+ 9. playwright automation.spec.ts alone -> 4 passed
+10. npm run test:e2e (after the last source edit) -> exit 0, 127 passed, 5 skipped -> 05-e2e.txt
+11. vitest run of the 6 changed test files -> exit 0, 6 files / 143 tests -> 04-targeted-green.txt
+12. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify -> exit 0, 62 files / 1416 tests, SMOKE PASSED, 40 PASS, 0 deprecation lines -> 06-verify.txt
+13. npm run digest -> exit 0, 0d513fcadb386706d21127a7c77c512a5c6e94f8f69917f7e2c6972b3127ea92 (721 files, handoff/ excluded)
+14. masking loop with a variable-expanded rm -> DENIED by the permission check, not run (attempt 1 stopped)
+
+Attempt 2 (owner decision H-Q2 (a); no source, test or document changed)
+15. node --version (full path) -> v24.21.0
+16. mask.py <raw> <txt>, one command per log (01..06) -> exit 0 each; Grep: 0 unmasked addresses, 0 Windows user names or profile paths, 0 CR or trailing whitespace in the .txt files
+17. rm <literal path>, one command per log (01..06 .raw) -> exit 0 each
+18. scripts/precommit-check.mjs on a temporary index over the evidence: see 08-precommit.txt
+19. npm run verify, then npm run digest (last commands): see 06b-verify-final.txt and 07-digest.txt

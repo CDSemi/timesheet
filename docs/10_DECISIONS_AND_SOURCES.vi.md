@@ -134,3 +134,9 @@ Nguồn: các câu trả lời trực tiếp của chủ ghi trong bảng task, 
 - F-4: một thời điểm kích hoạt toàn hệ thống (trống tới pilot của chủ) kết hợp thời điểm hiệu lực tự nộp của từng user.
 - F-5: tổng trên PDF là tổng OT được ghi dạng h:mm của cả 14 ngày, ẩn khi tắt Hiện OT trên PDF.
 - Tạm thời không đổi: việc WP2 đã bỏ số đếm suy từ dữ liệu nhân viên trong preview lịch lễ (WP2-A-01); F-Q6 được hỏi lại.
+
+## Quyết định của chủ — 2026-10-05 (WP3-FIX2, câu hỏi H-Q1)
+
+Nguồn: câu trả lời trực tiếp của chủ ghi trong bảng task, 2026-10-05.
+
+- H-Q1 (a): tự nộp chỉ áp dụng cho tài khoản đã lưu setting nộp bài với tự nộp bật. Tài khoản chưa từng lưu thì không bao giờ được tự chốt và không có lần gửi nào. Mặc định, kỳ có hạn đã qua trước khi lưu setting không được tự nộp, cùng loại giới hạn với giới hạn lúc tạo tài khoản (docs/05 "Đến hạn và phục hồi"). Lựa chọn áp dụng cho kỳ quá hạn mà user chọn rõ khi lưu setting giữ nguyên như đã cài: đó là việc của chính user và vẫn bị chặn bởi lúc tạo tài khoản. Tắt tự nộp giữ nguyên hành vi. Điều này hiểu D-09 "Bật tùy chọn tự nộp sau setup" là: không tự động trước khi setup.

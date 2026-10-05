@@ -25,6 +25,11 @@ Lưu due_at UTC từ quy tắc hạn theo múi giờ báo cáo. Runner không c�
 
 Ghi một automation_active_from cho toàn hệ thống khi chủ kích hoạt (trống cho tới lúc đó, nên không có gì tự chốt trước). Một kỳ chỉ đủ điều kiện khi due_at bằng/sau cả thời điểm đó và thời điểm hiệu lực tự nộp của user; loại lịch sử nhập. Sau downtime, xử lý hạn đủ điều kiện đã lỡ theo thứ tự với số lượng giới hạn. Đổi setting mặc định chỉ cho kỳ tương lai; áp dụng nháp đã quá hạn cần lựa chọn rõ. Thiếu sender/người nhận chặn gửi và báo lỗi, không ghi “đã gửi.”
 
+Giới hạn theo tài khoản đối với tự nộp (cả hai chỉ thu hẹp những gì được nộp; không đổi đường nộp tay):
+
+- Lúc tạo tài khoản (WP3-B-01; nguồn: quyết định của coordinator ngày 2026-10-05, phát hiện WP3-B-01, chủ có thể đảo ngược): tự nộp không bao giờ chốt kỳ có hạn đã qua trước khi tài khoản tồn tại (`users.created_at`). Giới hạn này cũng chặn cả lựa chọn áp dụng cho kỳ quá hạn nêu bên dưới. Kỳ mà tài khoản được tạo trong đó vẫn được nộp đúng hạn.
+- Setting đã lưu (quyết định của chủ H-Q1 (a), 2026-10-05, tài liệu 10): tự nộp chỉ áp dụng cho tài khoản đã lưu setting nộp bài với tự nộp bật. Tài khoản chưa từng lưu thì không bao giờ được tự chốt, không ghi trạng thái quá hạn và không có lần gửi nào. Mặc định, kỳ có hạn đã qua trước khi lưu setting không được tự nộp; lựa chọn áp dụng cho kỳ quá hạn mà user chọn rõ khi lưu (vẫn bị chặn bởi lúc tạo tài khoản) là cách duy nhất để gồm các kỳ đó. Tắt tự nộp giữ nguyên nháp như quy tắc tắt ở trên.
+
 ## Nhắc và link review
 
 Mặc định: trước hạn 24h, 2h; báo quá hạn nếu tắt tự nộp; báo kết quả sau tự nộp. Chống trùng theo user/kỳ/lần nhắc; ngừng nhắc thường khi đã chốt. Gộp các nhắc trước hạn bị lỡ thành một thông báo hiện tại hữu ích.

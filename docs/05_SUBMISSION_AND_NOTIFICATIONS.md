@@ -25,6 +25,11 @@ Automatic image inclusion is a separate explicit, audited authorization of one s
 
 Record one system-wide automation_active_from at the owner's activation (empty until then, so nothing is finalized automatically before it). A period is eligible only when its due_at is on/after both that instant and the user's auto-submit effective instant; imported history is excluded. Recover missed eligible deadlines chronologically in bounded batches after downtime. Changes default to future periods; applying them to already-overdue drafts requires an explicit choice. Missing sender/recipient blocks delivery and shows a fault, never “sent.”
 
+Account bounds on automatic submission (both only narrow what is submitted; neither changes the manual path):
+
+- Account creation (WP3-B-01; source: the coordinator decision of 2026-10-05, finding WP3-B-01, reversible by the owner): automatic submission never finalizes a period whose deadline passed before the account existed (`users.created_at`). The bound also clamps the explicit apply-to-overdue choice below. The period in which the account was created is still submitted at its deadline.
+- Saved settings (owner decision H-Q1 (a), 2026-10-05, document 10): automatic submission applies only to an account that has saved its submission settings with auto-submit on. An account that never saved them is never finalized automatically, records no overdue state and has no delivery attempted. By default a period whose deadline passed before the settings were saved is not submitted automatically; the user's explicit apply-to-overdue choice when saving (still clamped by the account creation) is the only way to include such periods. Turning auto-submit off keeps the draft as the switch-off rule above describes.
+
 ## Reminders and review links
 
 Default reminders: 24h and 2h before due, an overdue warning when auto-submit is off, and an outcome notice after automatic submission. Deduplicate by user/period/reminder occurrence; stop normal reminders after finalization. Collapse missed pre-deadline notices into one useful current notice.

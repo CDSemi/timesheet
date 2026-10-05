@@ -8,7 +8,6 @@ import {
   grantFailureText,
   hasAnyItem,
   historyActorBadge,
-  isSystemOperation,
   itemsProblem,
   itemsSummary,
   parseSharedHash,
@@ -183,6 +182,7 @@ describe('history: shared edits and share events', () => {
     entity_id: 'd1',
     reason: null,
     actor_is_self: true,
+    actor_is_system: false,
     via_share: false,
     actor_display_name: null,
     before: null,
@@ -201,15 +201,17 @@ describe('history: shared edits and share events', () => {
     expect(historyActorBadge(event({}))).toBeNull();
   });
 
-  it('labels the actor-less system events as automatic, never as someone else (WP3-B-03)', () => {
-    for (const operation of ['timesheet.auto_finalize', 'deadline.overdue', 'deadline.finalize_failed']) {
-      expect(isSystemOperation(operation), operation).toBe(true);
-      expect(historyActorBadge(event({ operation, actor_is_self: false })), operation).toBe('automatic');
+  it('labels every event the server flags as a system event as automatic, never as someone else (WP3-B-03, WP3-RBC-01)', () => {
+    // The server decides: an event with no actor is a system event whatever its operation, including the automatic OT credit and debit.
+    for (const operation of ['timesheet.auto_finalize', 'deadline.overdue', 'deadline.finalize_failed', 'ot_ledger.credit', 'ot_ledger.deficit_debit', 'some.future_operation']) {
+      expect(historyActorBadge(event({ operation, actor_is_self: false, actor_is_system: true })), operation).toBe('automatic');
     }
-    // A person's operation is never a system event, and the grantee attribution is unchanged.
-    expect(isSystemOperation('timesheet.signoff')).toBe(false);
-    expect(isSystemOperation('day_entry.update')).toBe(false);
-    expect(historyActorBadge(event({ operation: 'day_entry.update', actor_is_self: false }))).toBe('by someone else');
+    // The name of an operation never decides: another person's event stays "by someone else", even under a system-looking name.
+    for (const operation of ['timesheet.auto_finalize', 'ot_ledger.credit', 'timesheet.signoff', 'day_entry.update']) {
+      expect(historyActorBadge(event({ operation, actor_is_self: false, actor_is_system: false })), operation).toBe('by someone else');
+    }
+    // The owner's own event shows no badge, and the grantee attribution is unchanged.
+    expect(historyActorBadge(event({ operation: 'ot_ledger.credit' }))).toBeNull();
     expect(
       historyActorBadge(event({ operation: 'day_entry.update', actor_is_self: false, via_share: true, actor_display_name: 'Synthetic Grantee' })),
     ).toBe('Changed by Synthetic Grantee (shared access)');

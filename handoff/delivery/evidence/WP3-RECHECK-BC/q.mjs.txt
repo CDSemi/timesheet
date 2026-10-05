@@ -1,0 +1,6 @@
+// Ad-hoc read-only query helper for probe databases: node q.mjs <db> <sql>
+import { openDatabase } from './lib.mjs';
+const [dbPath, sql] = process.argv.slice(2);
+const db = openDatabase(dbPath);
+console.log(JSON.stringify(db.prepare(sql).all(), null, 0));
+db.close();

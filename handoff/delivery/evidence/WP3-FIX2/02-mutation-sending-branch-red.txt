@@ -1,0 +1,39 @@
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/delivery.test.ts (25 tests | 1 failed | 24 skipped) 900ms
+   ❯ the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) (1)
+     × marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending` 898ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/delivery.test.ts > the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) > marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending`
+AssertionError: expected JobError: delivery_attempt_open { …(2) } to match object { name: 'JobError', …(2) }
+
+- Expected
++ Received
+
+- {
+-   "code": "delivery_uncertain",
++ JobError {
++   "code": "delivery_attempt_open",
+    "name": "JobError",
+-   "permanent": true,
++   "permanent": false,
+  }
+
+ ❯ tests/integration/delivery.test.ts:734:20
+    732|       (error: unknown) => error,
+    733|     );
+    734|     expect(caught).toMatchObject({ name: 'JobError', code: 'delivery_u…
+       |                    ^
+    735|     expect(attempts(revisionId).map((row) => [row.state, row.provider_…
+    736|     expect(failJob(t.db, t.clock, claimed.id, 'runner-reclaim', caught…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 skipped (25)
+   Start at  10:44:13
+   Duration  3.98s (import 46%, transform 30%, tests 23%)

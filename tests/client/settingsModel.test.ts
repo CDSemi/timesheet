@@ -194,7 +194,11 @@ describe('the effective auto-submit rule in words', () => {
   });
 
   it('says what the unsaved defaults do, and that a change covering overdue drafts reaches every unsubmitted period', () => {
-    expect(autoSubmitRule(defaults(), at)).toContain('Not saved yet');
+    const unsaved = autoSubmitRule(defaults(), at);
+    expect(unsaved).toContain('Not saved yet');
+    // H-Q1 (a): nothing is automated for an account that never saved its settings, so the text must not claim a default that is on.
+    expect(unsaved).not.toMatch(/on by default/i);
+    expect(unsaved).toContain('Nothing is submitted for you until you save these settings with automatic submission on');
     expect(autoSubmitRule(settings({ auto_submit_effective_from: '1970-01-01T00:00:00Z' }), at)).toContain('overdue');
   });
 });

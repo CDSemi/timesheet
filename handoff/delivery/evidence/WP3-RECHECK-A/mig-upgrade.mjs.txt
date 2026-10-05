@@ -1,0 +1,233 @@
+// WP3-RECHECK-A migration upgrade probe (reviewed build 2f2520e). For a COPY of each source database
+//   wp2      schema v3 made by the accepted WP2 source 5fafeae (mig-seed-wp2.mjs),
+//   a1cd566  schema v6 made by the first WP3 freeze a1cd566 (mig-seed-a1cd566.mjs),
+// it runs the production `cli.js migrate`, then checks: applied versions, every pre-existing row kept
+// column for column, old checksums unchanged, triggers kept, append-only refusals, integrity and
+// foreign keys, a second migrate applies nothing, and that WP3 and the fix-round behaviour work on the
+// upgraded file (sign-off, PDF, capture, share, review hint, history attribution, B-01 bound).
+import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { fixedClock, m, png, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const Database = createRequire(join(REPO, 'package.json'))('better-sqlite3');
+const DIR = `${SCRATCH}/work/mig`;
+let failures = 0;
+const check = (label, condition, detail = '') => {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
+  if (!condition) failures += 1;
+};
+
+function snapshot(path) {
+  const db = new Database(path, { readonly: true });
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  const data = {};
+  for (const table of tables) {
+    const columns = db.prepare(`PRAGMA table_info("${table}")`).all().map((c) => c.name);
+    data[table] = { columns, rows: db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() };
+  }
+  const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").pluck().all();
+  const migrations = db.prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version').all();
+  db.close();
+  return { tables, data, triggers, migrations };
+}
+
+const APPEND_ONLY = [
+  ['audit_events', "UPDATE audit_events SET reason = 'x' WHERE rowid = (SELECT min(rowid) FROM audit_events)", 'DELETE FROM audit_events WHERE rowid = (SELECT min(rowid) FROM audit_events)'],
+  ['ot_ledger', 'UPDATE ot_ledger SET delta_minutes = delta_minutes + 1 WHERE rowid = (SELECT min(rowid) FROM ot_ledger)', 'DELETE FROM ot_ledger WHERE rowid = (SELECT min(rowid) FROM ot_ledger)'],
+  ['calendar_versions', "UPDATE calendar_versions SET note = 'x' WHERE rowid = (SELECT min(rowid) FROM calendar_versions)", 'DELETE FROM calendar_versions WHERE rowid = (SELECT min(rowid) FROM calendar_versions)'],
+  ['work_policies', "UPDATE work_policies SET note = 'x' WHERE rowid = (SELECT min(rowid) FROM work_policies)", 'DELETE FROM work_policies WHERE rowid = (SELECT min(rowid) FROM work_policies)'],
+  ['timesheet_revisions', "UPDATE timesheet_revisions SET payload_json = '{}' WHERE rowid = (SELECT min(rowid) FROM timesheet_revisions)", 'DELETE FROM timesheet_revisions WHERE rowid = (SELECT min(rowid) FROM timesheet_revisions)'],
+  ['signoffs', "UPDATE signoffs SET signer_name = 'x' WHERE rowid = (SELECT min(rowid) FROM signoffs)", 'DELETE FROM signoffs WHERE rowid = (SELECT min(rowid) FROM signoffs)'],
+  ['revision_ledger_lines', "UPDATE revision_ledger_lines SET outcome = 'unchanged' WHERE rowid = (SELECT min(rowid) FROM revision_ledger_lines)", 'DELETE FROM revision_ledger_lines WHERE rowid = (SELECT min(rowid) FROM revision_ledger_lines)'],
+  ['submission_settings', 'UPDATE submission_settings SET auto_submit = 1 - auto_submit WHERE rowid = (SELECT min(rowid) FROM submission_settings)', 'DELETE FROM submission_settings WHERE rowid = (SELECT min(rowid) FROM submission_settings)'],
+  ['attachments', "UPDATE attachments SET sha256 = 'x' WHERE rowid = (SELECT min(rowid) FROM attachments)", 'DELETE FROM attachments WHERE rowid = (SELECT min(rowid) FROM attachments)'],
+  ['timesheet_shares', "UPDATE timesheet_shares SET created_at = '2000-01-01T00:00:00Z' WHERE rowid = (SELECT min(rowid) FROM timesheet_shares)", 'DELETE FROM timesheet_shares WHERE rowid = (SELECT min(rowid) FROM timesheet_shares)'],
+];
+
+function appendOnly(path) {
+  const db = new Database(path);
+  const results = [];
+  for (const [table, update, remove] of APPEND_ONLY) {
+    const count = db.prepare(`SELECT count(*) FROM "${table}"`).pluck().get();
+    for (const [kind, sql] of [['UPDATE', update], ['DELETE', remove]]) {
+      if (count === 0) {
+        results.push({ table, kind, outcome: 'no-row' });
+        continue;
+      }
+      db.exec('SAVEPOINT probe');
+      let outcome;
+      try {
+        const changes = db.prepare(sql).run().changes;
+        outcome = changes === 0 ? 'no-change' : 'ALLOWED';
+      } catch (error) {
+        outcome = `refused (${String(error.message).slice(0, 60)})`;
+      }
+      db.exec('ROLLBACK TO probe; RELEASE probe');
+      results.push({ table, kind, outcome });
+    }
+  }
+  db.close();
+  return results;
+}
+
+async function upgrade(name, source, expectApplied) {
+  const target = join(DIR, `${name}-upgraded.db`);
+  if (existsSync(target)) throw new Error(`Refusing to reuse ${target}`);
+  cpSync(source, target);
+  const before = snapshot(target);
+  const env = { DATABASE_PATH: target, DATA_DIR: join(DIR, `${name}-upgraded-private-data`) };
+  const first = await run([join(REPO, 'dist/server/cli.js'), 'migrate'], env);
+  const after = snapshot(target);
+  console.log(`INFO  ${name}: cli migrate exit=${first.code} out=${JSON.stringify(first.out)} err=${JSON.stringify(first.err.slice(0, 200))}`);
+  const applied = after.migrations.filter((row) => !before.migrations.some((old) => old.version === row.version)).map((row) => row.version);
+  check(`${name}: production cli.js migrate exits 0 and applies exactly [${expectApplied}]`, first.code === 0 && JSON.stringify(applied) === JSON.stringify(expectApplied), JSON.stringify(applied));
+  check(`${name}: the checksums of the already applied migrations are unchanged`, before.migrations.every((old) => after.migrations.find((row) => row.version === old.version)?.checksum === old.checksum));
+  let kept = 0;
+  const problems = [];
+  const added = [];
+  for (const table of before.tables) {
+    if (table === 'schema_migrations') continue;
+    const old = before.data[table];
+    const now = after.data[table];
+    if (now === undefined) {
+      problems.push(`${table} dropped`);
+      continue;
+    }
+    const newColumns = now.columns.filter((c) => !old.columns.includes(c));
+    if (newColumns.length) added.push(`${table}+${newColumns.join('+')}`);
+    if (now.rows.length !== old.rows.length) problems.push(`${table} rows ${old.rows.length}->${now.rows.length}`);
+    old.rows.forEach((row, index) => {
+      for (const column of old.columns) if (now.rows[index]?.[column] !== row[column]) problems.push(`${table}[${index}].${column}`);
+    });
+    kept += old.rows.length;
+  }
+  const newTables = after.tables.filter((t) => !before.tables.includes(t));
+  check(`${name}: every pre-existing row kept column for column (${kept} rows in ${before.tables.length - 1} tables)`, problems.length === 0, problems.slice(0, 5).join(','));
+  console.log(`INFO  ${name}: new tables [${newTables.join(', ')}]; added columns [${added.join(', ')}]`);
+  check(`${name}: every pre-existing trigger is kept (${before.triggers.length} before, ${after.triggers.length} after)`, before.triggers.every((t) => after.triggers.includes(t)));
+  const db = new Database(target, { readonly: true });
+  const integrity = db.prepare('PRAGMA integrity_check').pluck().get();
+  const fk = db.prepare('PRAGMA foreign_key_check').all();
+  const userVersion = db.pragma('user_version', { simple: true });
+  db.close();
+  check(`${name}: integrity_check ok, foreign_key_check empty, user_version 6`, integrity === 'ok' && fk.length === 0 && userVersion === 6, `${integrity} fk=${fk.length} uv=${userVersion}`);
+  const refusals = appendOnly(target);
+  const allowed = refusals.filter((r) => r.outcome === 'ALLOWED');
+  const refused = refusals.filter((r) => r.outcome.startsWith('refused'));
+  console.log(`INFO  ${name}: append-only probe ${refusals.map((r) => `${r.table}.${r.kind}=${r.outcome.split(' ')[0]}`).join(' ')}`);
+  check(`${name}: UPDATE/DELETE on append-only tables refused by triggers (${refused.length} refused, ${allowed.length} allowed, ${refusals.length - refused.length - allowed.length} without a row)`, allowed.length === 0, allowed.map((r) => `${r.table}.${r.kind}`).join(','));
+  const second = await run([join(REPO, 'dist/server/cli.js'), 'migrate'], env);
+  const again = snapshot(target);
+  check(`${name}: a second migrate applies nothing`, second.code === 0 && again.migrations.length === after.migrations.length, JSON.stringify(second.out));
+  return target;
+}
+
+/* WP2 source ---------------------------------------------------------------------------------------- */
+{
+  const target = await upgrade('wp2', join(DIR, 'wp2-source.db'), [4, 5, 6]);
+  const dataDir = join(DIR, 'wp2-upgraded-private-data');
+  const db = m.db.openDatabase(target);
+  const id = (email) => db.prepare('SELECT id FROM users WHERE email = ?').pluck().get(email);
+  const e1 = sessionUser(db, id('<email>'));
+  const e2 = sessionUser(db, id('<email>'));
+  const adminId = id('<email>');
+  const created = db.prepare('SELECT created_at FROM users WHERE id = ?').pluck().get(e2.id);
+  const c0 = fixedClock('2026-08-31T12:00:00Z');
+  m.auto.setAutomationActivation(db, c0, { actorUserId: adminId, activeFrom: '2026-09-01T00:00:00Z', reason: 'Synthetic recheck activation' });
+  const c1 = fixedClock('2026-09-28T16:00:00Z');
+  m.sigs.saveSignature(db, c1, new m.files.FileStore(dataDir), e1.id, png(3), 'image/png');
+  m.settings.saveSubmissionSettings(db, c1, e1.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: false });
+  const ledgerBefore = m.ledger.getBalance(db, e1.id).postedMinutes;
+  const sign = fixedClock('2026-09-29T05:00:00Z');
+  const review = m.review.buildReviewPayload(db, sign, e1, '2026-10-02');
+  const signed = m.fin.signOffTimesheet({ db, clock: sign, user: e1 }, '2026-10-02', { expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Synthetic WP2 Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  const lines = db.prepare("SELECT line_kind || ':' || outcome || ':' || proposed_minutes FROM revision_ledger_lines WHERE revision_id = ?").pluck().all(signed.revision.id);
+  check('wp2 upgraded: a WP2-era period (sessions, leave, a Sunday) is signed off by the reviewed build', signed.status === 'created', `${lines.join(',')} posted ${ledgerBefore}->${m.ledger.getBalance(db, e1.id).postedMinutes}`);
+  const share = m.shares.grantShare(db, fixedClock('2026-09-30T16:00:00Z'), { ownerUserId: e1.id, granteeEmail: '<email>', items: { timesheets: 'edit', otRead: false, pdfDownload: false } });
+  m.cmds.createSession({ db, clock: fixedClock('2026-09-30T17:00:00Z'), user: e1, actor: e2 }, '2026-09-29', session('2026-09-29', '08:00', '16:30'));
+  const hint = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-16');
+  check('wp2 upgraded: a share and a grantee act work; the owner hint names the grantee for 2026-09-29', share.id !== undefined && hint.length === 1 && JSON.stringify(hint[0].work_dates) === '["2026-09-29"]', JSON.stringify(hint));
+  const history = m.history.getHistory(db, e1, {});
+  const attributed = history.audit_events.filter((e) => e.via_share).map((e) => e.operation).sort().join(',');
+  const others = history.audit_events.filter((e) => !e.actor_is_self && !e.via_share).map((e) => e.operation).sort().join(',');
+  const text = JSON.stringify(history);
+  check('wp2 upgraded: history attributes only the grantee acts; WP2-era events by others (user.*) stay unattributed; no other user id in the answer',
+    attributed === 'day_entry.create,work_session.create' && !text.includes(e2.id) && !text.includes(adminId), `attributed=${attributed} unattributed_by_others=${others}`);
+  db.close();
+  const passes = [];
+  for (const now of ['2026-09-29T05:10:00Z', '2026-09-29T05:20:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now], { DATABASE_PATH: target, DATA_DIR: dataDir, MAIL_FROM: '<email>' })).out.split('\n').pop());
+  const check2 = m.db.openDatabase(target);
+  const pdf = check2.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(signed.revision.id);
+  const attempt = check2.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().all(signed.revision.id);
+  const auto = check2.prepare(`SELECT u.email, p.payroll_date, r.origin FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+                                 JOIN users u ON u.id = r.user_id WHERE r.origin = 'deadline' ORDER BY p.payroll_date, u.email`).all();
+  const integrity = check2.prepare('PRAGMA integrity_check').pluck().get();
+  const fk = check2.prepare('PRAGMA foreign_key_check').all().length;
+  check2.close();
+  console.log(`INFO  wp2 upgraded: run-jobs ${passes.join(' | ')}; accounts created ${created}; automatic revisions ${auto.map((a) => `${a.email}:${a.payroll_date}`).join(',')}`);
+  check('wp2 upgraded: the PDF is rendered and the submission captured once (capture mode)', pdf === 'ready' && JSON.stringify(attempt) === '["accepted"]', `${pdf} ${JSON.stringify(attempt)}`);
+  check('wp2 upgraded: B-01 bound on WP2-era accounts: no automatic revision for a period due before the accounts existed (payroll < 2026-10-02); the 2026-10-02 period is automated for accounts without a sign-off',
+    auto.every((a) => a.payroll_date >= '2026-10-02') && auto.some((a) => a.payroll_date === '2026-10-02'), auto.map((a) => a.payroll_date).join(','));
+  check('wp2 upgraded: integrity ok and no FK violation after the WP3 activity', integrity === 'ok' && fk === 0);
+}
+
+/* a1cd566 ------------------------------------------------------------------------------------------- */
+{
+  const target = await upgrade('a1cd566', join(DIR, 'a1cd566-source.db'), []);
+  const dataDir = join(DIR, 'a1cd566-upgraded-private-data');
+  cpSync(join(DIR, 'a1cd566-private-data'), dataDir, { recursive: true });
+  const db = m.db.openDatabase(target);
+  const id = (email) => db.prepare('SELECT id FROM users WHERE email = ?').pluck().get(email);
+  const e1 = sessionUser(db, id('<email>'));
+  const e2Id = id('<email>');
+  const adminId = id('<email>');
+  const history = m.history.getHistory(db, e1, {});
+  const events = history.audit_events;
+  const attributed = events.filter((e) => e.via_share).map((e) => e.operation).sort().join(',');
+  const adminRevoke = events.find((e) => e.operation === 'share.revoke' && e.after?.revoked_by_role === 'admin');
+  const leave = events.find((e) => e.operation === 'share.revoke' && e.after?.revoked_by_role === 'grantee');
+  const text = JSON.stringify(history);
+  check('a1cd566 upgraded: history over a1cd566 audit rows attributes exactly the grantee acts done through the grant (3 sessions/day entries per edit, PDF download)',
+    attributed === 'day_entry.create,day_entry.create,day_entry.create,share.pdf_download,work_session.create,work_session.create' && events.filter((e) => e.via_share).every((e) => e.actor_display_name === 'Example Employee Two'), attributed);
+  check('a1cd566 upgraded: the admin-route revocation (an admin holding a share) and the grantee leave stay unattributed; no other user id in the answer',
+    adminRevoke?.via_share === false && adminRevoke?.actor_display_name === null && leave?.via_share === false && leave?.actor_display_name === null && !text.includes(e2Id) && !text.includes(adminId));
+  const hint16 = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-16');
+  const hint02 = m.sharedActs.granteeChangesForReview(db, e1, '2026-10-02');
+  check('a1cd566 upgraded: the review hint reads a1cd566 rows: 2026-10-16 names the grantee for 2026-09-30 (kept after the share ended); 2026-10-02 is empty after the owner correction',
+    hint16.length === 1 && JSON.stringify(hint16[0].work_dates) === '["2026-09-30"]' && hint02.length === 0, `${JSON.stringify(hint16)} ${JSON.stringify(hint02)}`);
+  const revBefore = db.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get();
+  m.cmds.createSession({ db, clock: fixedClock('2026-10-03T16:00:00Z'), user: e1 }, '2026-09-16', { ...session('2026-09-16', '13:00', '17:00'), reason: 'Synthetic second correction' });
+  const c = fixedClock('2026-10-03T16:30:00Z');
+  const review = m.review.buildReviewPayload(db, c, e1, '2026-10-02');
+  const corr = m.fin.reviseTimesheet({ db, clock: c, user: e1 }, '2026-10-02', { kind: 'correction', reason: 'Synthetic correction after upgrade', sendEmail: true, expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Synthetic Signer One', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  const newLines = db.prepare("SELECT line_kind || ':' || outcome || ':' || proposed_minutes FROM revision_ledger_lines WHERE revision_id = ?").pluck().all(corr.revision.id);
+  db.close();
+  const passes = [];
+  for (const now of ['2026-10-03T16:40:00Z', '2026-10-03T16:50:00Z']) passes.push((await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now], { DATABASE_PATH: target, DATA_DIR: dataDir, MAIL_FROM: '<email>' })).out.split('\n').pop());
+  const check2 = m.db.openDatabase(target);
+  const pdf = check2.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(corr.revision.id);
+  const attempt = check2.prepare('SELECT state FROM delivery_attempts WHERE revision_id = ?').pluck().all(corr.revision.id);
+  const revAfter = check2.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get();
+  const integrity = check2.prepare('PRAGMA integrity_check').pluck().get();
+  const fk = check2.prepare('PRAGMA foreign_key_check').all().length;
+  check2.close();
+  console.log(`INFO  a1cd566 upgraded: correction lines ${newLines.join(',')}; run-jobs ${passes.join(' | ')}`);
+  check('a1cd566 upgraded: a new correction on an a1cd566 revision is created (debit removed: 4h more on 2026-09-16), its PDF rendered and sent once', corr.status === 'created' && revAfter === revBefore + 1 && pdf === 'ready' && JSON.stringify(attempt) === '["accepted"]', `${corr.status} ${pdf} ${JSON.stringify(attempt)}`);
+  check('a1cd566 upgraded: integrity ok and no FK violation after the WP3 activity', integrity === 'ok' && fk === 0);
+}
+
+/* Fresh database ------------------------------------------------------------------------------------- */
+{
+  const target = join(DIR, 'fresh.db');
+  if (existsSync(target)) throw new Error('Refusing to reuse fresh.db');
+  const first = await run([join(REPO, 'dist/server/cli.js'), 'migrate'], { DATABASE_PATH: target, DATA_DIR: join(DIR, 'fresh-private-data') });
+  const db = new Database(target, { readonly: true });
+  const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').pluck().all();
+  const integrity = db.prepare('PRAGMA integrity_check').pluck().get();
+  db.close();
+  check('fresh database: cli.js migrate applies 1-6, integrity ok', first.code === 0 && JSON.stringify(versions) === '[1,2,3,4,5,6]' && integrity === 'ok', `${JSON.stringify(versions)} ${first.out}`);
+}
+
+console.log(failures === 0 ? 'MIGRATION PROBE PASSED' : `MIGRATION PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

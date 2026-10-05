@@ -1,0 +1,21 @@
+hint, since a finalization (rowid > ?)
+  SEARCH a USING INDEX audit_events_owner (owner_user_id=?)
+  USE TEMP B-TREE FOR ORDER BY
+hint, since the period start (occurred_at >= ?)
+  SEARCH a USING INDEX audit_events_owner (owner_user_id=? AND occurred_at>?)
+  USE TEMP B-TREE FOR ORDER BY
+hint, latest owner finalization
+  SEARCH a USING INDEX audit_events_entity (entity_type=?)
+  SEARCH r USING INDEX sqlite_autoindex_timesheet_revisions_3 (id=? AND user_id=?)
+history page (unchanged shape, new CASE)
+  CO-ROUTINE (subquery-1)
+  CO-ROUTINE (subquery-3)
+  SEARCH a USING INDEX audit_events_owner (owner_user_id=?)
+  USE TEMP B-TREE FOR ORDER BY
+  SCAN (subquery-3)
+  SCAN (subquery-1)
+  USE TEMP B-TREE FOR ORDER BY
+recoverInterruptedSends (every runner pass)
+  SEARCH a USING INDEX delivery_attempts_state (state=?)
+  SEARCH j USING INDEX sqlite_autoindex_jobs_3 (id=? AND user_id=?)
+exit 0

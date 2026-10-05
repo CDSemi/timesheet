@@ -1,0 +1,44 @@
+// WP3-RECHECK-A race child: one racer in its own OS process with its own SQLite connection.
+// argv: manual <dbPath> <startAtMs> <delayMs> <hash> <version>
+//       deadline <dbPath> <dataDir> <startAtMs> <delayMs> <nowIso>   (the production run-jobs CLI, in this process)
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [role, ...rest] = process.argv.slice(2);
+const { m, REPO, sessionUser, fixedClock } = await import('./common.mjs');
+const waitUntil = async (ms) => {
+  while (Date.now() < ms) await new Promise((resolve) => setTimeout(resolve, 1));
+};
+export const SIGN_INSTANT = '2026-09-30T00:30:05Z';
+
+if (role === 'manual') {
+  const [dbPath, startAt, delay, hash, version] = rest;
+  const db = m.db.openDatabase(dbPath);
+  const ownerId = db.prepare("SELECT id FROM users WHERE email = '<email>'").pluck().get();
+  const user = sessionUser(db, ownerId);
+  await waitUntil(Number(startAt) + Number(delay));
+  try {
+    const result = m.fin.signOffTimesheet({ db, clock: fixedClock(SIGN_INSTANT), user }, '2026-10-02', {
+      expectedVersion: Number(version),
+      reviewedHash: hash,
+      signerName: 'Synthetic Racer',
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    console.log(JSON.stringify({ role, outcome: result.status, revision_no: result.finalizedRevisionNo }));
+  } catch (error) {
+    console.log(JSON.stringify({ role, outcome: 'error', status: error.status ?? null, code: error.code ?? String(error.message).slice(0, 80) }));
+  } finally {
+    db.close();
+  }
+} else {
+  const [dbPath, dataDir, startAt, delay, now] = rest;
+  process.env.DATABASE_PATH = dbPath;
+  process.env.DATA_DIR = dataDir;
+  process.env.MAIL_FROM = '<email>';
+  delete process.env.OUTBOUND_MODE;
+  delete process.env.PRODUCTION_SENDING_ENABLED;
+  process.argv = [process.argv[0], join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', now];
+  await waitUntil(Number(startAt) + Number(delay));
+  await import(pathToFileURL(join(REPO, 'dist/server/cli.js')).href);
+}

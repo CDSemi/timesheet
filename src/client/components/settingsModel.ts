@@ -151,7 +151,7 @@ export function settingsRefusal(caught: unknown): string {
 /** The effective auto-submit rule in words. `formatInstant` shows a UTC instant in the viewer's zone. */
 export function autoSubmitRule(settings: SubmissionSettings, formatInstant: (instant: string) => string): string {
   if (settings.is_default || settings.auto_submit_effective_from === null) {
-    return 'Not saved yet. Automatic submission is on by default and applies to periods that fall due after you save your settings.';
+    return 'Not saved yet. Nothing is submitted for you until you save these settings with automatic submission on. It then applies to periods that fall due after you save.';
   }
   const since = settings.auto_submit_effective_from.startsWith('1970-01-01')
     ? 'This covers every period that is not yet submitted, overdue drafts included.'

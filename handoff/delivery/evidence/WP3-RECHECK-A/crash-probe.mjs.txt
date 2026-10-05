@@ -1,0 +1,232 @@
+// WP3-RECHECK-A crash-injection probe for finalization (synthetic data, capture mode only).
+// A child process runs one production operation on a real SQLite WAL file and blocks at a chosen
+// statement inside the IMMEDIATE transaction; this parent then terminates it through its handle.
+//   K1-K3  manual sign-off killed at the first ledger posting, at the job insert and at the audit
+//          insert (the last write before COMMIT): nothing persists; the file stays writable.
+//   K4     a committed sign-off killed before replying: durable; identical retry replays; a
+//          different retry is 409 already_finalized; runner passes send exactly once.
+//   K5     automatic finalization killed at its first revision line: nothing persists; the next
+//          production run-jobs passes finalize once (no sign-off, review pending, signed_at empty).
+//   K6     late review killed inside its transaction, then completed and killed after commit: zero
+//          ledger delta (LG-09), lines unchanged, identical retry replays, send_email false.
+//   K7     correction (+60 credit on one day) killed at its ledger posting, then completed: exactly
+//          one correction entry under a revision-specific key; identical retry replays.
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { count, fixedClock, freshDb, m, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/crash`;
+const EARLY = '2026-09-20T12:00:00Z';
+const NOW = '2026-09-30T00:30:00Z';
+const HERE = import.meta.dirname;
+let failures = 0;
+
+function expect(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  [${detail}]` : ''}`);
+  if (!condition) failures += 1;
+}
+
+/** Runs the crash child; with a blocking mode, waits for its marker and terminates it through the handle. */
+function crashChild(args, marker, blocking) {
+  return new Promise((resolve) => {
+    if (existsSync(marker)) rmSync(marker);
+    const child = spawn(process.execPath, [join(HERE, 'crash-child.mjs'), ...args], { cwd: REPO });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { err += d; });
+    let markerText = null;
+    const timer = blocking
+      ? setInterval(() => {
+          if (existsSync(marker)) {
+            markerText = readFileSync(marker, 'utf8');
+            clearInterval(timer);
+            child.kill('SIGKILL');
+          }
+        }, 20)
+      : null;
+    child.on('close', (code, signal) => {
+      if (timer) clearInterval(timer);
+      resolve({ code, signal, marker: markerText, out: out.trim(), err: err.trim().slice(0, 300) });
+    });
+  });
+}
+
+async function setup(name) {
+  const dir = join(BASE, name);
+  mkdirSync(dir, { recursive: true });
+  const dbPath = join(dir, 't.db');
+  const dataDir = join(dir, 'private-data');
+  const s = await freshDb(dbPath, EARLY);
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const early = fixedClock(EARLY);
+  policy(db, EARLY, owner.id, s.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: early }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  m.sigs.saveSignature(db, early, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, early, owner.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true });
+  m.auto.setAutomationActivation(db, early, { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic recheck activation' });
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  db.close();
+  return { dir, dbPath, dataDir, ownerId: owner.id, env: { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM: '<email>' } };
+}
+
+function state(c, at = NOW) {
+  const db = m.db.openDatabase(c.dbPath);
+  const id = c.ownerId;
+  const out = {
+    revisions: db.prepare('SELECT revision_no, revision_kind, origin, review_state FROM timesheet_revisions WHERE user_id = ? ORDER BY revision_no').all(id),
+    signoffs: db.prepare('SELECT signed_at FROM signoffs WHERE user_id = ? ORDER BY signed_at').pluck().all(id),
+    ledgerRows: count(db, 'SELECT count(*) FROM ot_ledger WHERE user_id = ?', id),
+    entries: db.prepare("SELECT source_key || '=' || delta_minutes FROM ot_ledger WHERE user_id = ? AND source_key <> 'recheck-opening' ORDER BY rowid").pluck().all(id),
+    lines: db.prepare("SELECT line_kind || ':' || outcome FROM revision_ledger_lines WHERE user_id = ? ORDER BY rowid").pluck().all(id),
+    jobs: db.prepare("SELECT kind || ':' || state FROM jobs WHERE user_id = ? ORDER BY rowid").pluck().all(id),
+    attempts: db.prepare('SELECT state FROM delivery_attempts WHERE user_id = ?').pluck().all(id),
+    audits: db.prepare("SELECT operation FROM audit_events WHERE owner_user_id = ? AND operation LIKE 'timesheet.%' ORDER BY rowid").pluck().all(id),
+    finalizedNo: db.prepare('SELECT finalized_revision_no FROM timesheets WHERE user_id = ?').pluck().get(id) ?? null,
+    posted: m.ledger.getBalance(db, id).postedMinutes,
+    integrity: db.prepare('PRAGMA integrity_check').pluck().get(),
+    fk: db.prepare('PRAGMA foreign_key_check').all().length,
+  };
+  // The file must be writable again after a kill (no stale lock): an IMMEDIATE no-op transaction.
+  out.writable = (() => {
+    try {
+      db.exec('BEGIN IMMEDIATE; ROLLBACK;');
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const review = m.review.buildReviewPayload(db, fixedClock(at), sessionUser(db, id), '2026-10-02');
+  out.hash = review.payloadHash;
+  out.version = review.expectedVersion;
+  db.close();
+  const captureDir = join(c.dataDir, 'mail-capture');
+  const metas = existsSync(captureDir)
+    ? readdirSync(captureDir).filter((n) => !n.startsWith('.tmp')).map((n) => JSON.parse(readFileSync(join(captureDir, n, 'metadata.json'), 'utf8')))
+    : [];
+  out.submissionCaptures = metas.filter((meta) => meta.pdf_sha256 !== undefined).length;
+  return out;
+}
+
+const show = (label, s) =>
+  `${label}: revisions=${JSON.stringify(s.revisions.map((r) => `${r.revision_no}:${r.revision_kind}:${r.origin}:${r.review_state}`))} signoffs=${JSON.stringify(s.signoffs)} ` +
+  `ledger_rows=${s.ledgerRows} entries=${JSON.stringify(s.entries)} lines=${JSON.stringify(s.lines)} jobs=${JSON.stringify(s.jobs)} attempts=${JSON.stringify(s.attempts)} ` +
+  `audits=${JSON.stringify(s.audits)} finalized_no=${s.finalizedNo} posted=${s.posted} captures=${s.submissionCaptures} integrity=${s.integrity} fk=${s.fk} writable=${s.writable}`;
+const untouched = (a, b) =>
+  a.revisions.length === b.revisions.length && a.signoffs.length === b.signoffs.length && a.ledgerRows === b.ledgerRows && a.lines.length === b.lines.length &&
+  a.jobs.length === b.jobs.length && a.audits.length === b.audits.length && a.finalizedNo === b.finalizedNo && a.hash === b.hash && a.version === b.version;
+const runJobs = (c, instant) => run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], c.env);
+
+/* K1-K4: manual sign-off ---------------------------------------------------------------------- */
+{
+  const c = await setup('k1-manual');
+  const marker = join(c.dir, 'marker.txt');
+  const before = state(c);
+  console.log(show('K before', before));
+  for (const [label, prefix] of [['K1', 'INSERT INTO ot_ledger'], ['K2', 'INSERT INTO jobs'], ['K3', 'INSERT INTO audit_events']]) {
+    const killed = await crashChild(['signoff', c.dbPath, `at:${prefix}`, marker, before.hash, String(before.version)], marker, true);
+    const after = state(c);
+    console.log(`${label} child marker=${JSON.stringify(killed.marker)} code=${killed.code} signal=${killed.signal} out=${JSON.stringify(killed.out)}`);
+    console.log(show(`${label} after kill`, after));
+    expect(`${label} a sign-off terminated ${killed.marker} persists nothing; integrity ok, no FK violation, the file is writable`,
+      killed.marker !== null && untouched(before, after) && after.integrity === 'ok' && after.fk === 0 && after.writable);
+  }
+  const committed = await crashChild(['signoff', c.dbPath, 'after', marker, before.hash, String(before.version)], marker, true);
+  const durable = state(c);
+  console.log(`K4 child marker=${JSON.stringify(committed.marker)} code=${committed.code} signal=${committed.signal}`);
+  console.log(show('K4 after commit then kill', durable));
+  expect('K4 a committed sign-off survives the kill: one revision, one sign-off at the real instant, +60/-240 once, two lines, PDF and send jobs, one audit',
+    durable.revisions.length === 1 && durable.signoffs.length === 1 && durable.signoffs[0] === '2026-09-30T00:30:05Z' && durable.ledgerRows === before.ledgerRows + 2 &&
+      JSON.stringify(durable.entries) === JSON.stringify(['finalization:day:2026-09-16:deficit_debit=-240', 'finalization:day:2026-09-15:credit=60']) &&
+      durable.lines.length === 2 && durable.jobs.length === 2 && JSON.stringify(durable.audits) === '["timesheet.signoff"]');
+  const replay = await crashChild(['signoff', c.dbPath, 'none', marker, before.hash, String(before.version)], marker, false);
+  const different = await crashChild(['signoff', c.dbPath, 'none', marker, before.hash, String(before.version), 'Another Synthetic Signer'], marker, false);
+  const afterRetries = state(c);
+  console.log(`K4 identical retry out=${replay.out} | different retry out=${different.out}`);
+  expect('K4 identical retry replays and a different retry is 409 already_finalized; neither writes',
+    replay.out.includes('"status":"replayed"') && different.out.includes('already_finalized') && different.out.includes('409') && untouched(durable, afterRetries));
+  const passes = [];
+  for (const instant of ['2026-09-30T00:40:00Z', '2026-09-30T00:50:00Z', '2026-09-30T01:50:00Z']) passes.push((await runJobs(c, instant)).out.split('\n').pop());
+  const drained = state(c);
+  console.log(`K4 run-jobs passes: ${passes.join(' | ')}`);
+  console.log(show('K4 drained', drained));
+  expect('K4 after three runner passes: one submission captured, one accepted attempt, ledger unchanged',
+    drained.submissionCaptures === 1 && JSON.stringify(drained.attempts) === '["accepted"]' && drained.ledgerRows === durable.ledgerRows && drained.integrity === 'ok');
+}
+
+/* K5-K7: automatic finalization, late review, correction ---------------------------------------- */
+{
+  const c = await setup('k5-automatic');
+  const marker = join(c.dir, 'marker.txt');
+  const before = state(c);
+  const killed = await crashChild(['deadline', c.dbPath, 'at:INSERT INTO revision_ledger_lines', marker], marker, true);
+  const afterKill = state(c);
+  console.log(`K5 child marker=${JSON.stringify(killed.marker)} code=${killed.code} signal=${killed.signal}`);
+  console.log(show('K5 after kill', afterKill));
+  expect('K5 an automatic finalization terminated inside its transaction persists nothing; file writable',
+    killed.marker !== null && untouched(before, afterKill) && afterKill.integrity === 'ok' && afterKill.writable);
+  const passes = [];
+  for (const instant of ['2026-09-30T00:31:00Z', '2026-09-30T00:41:00Z', '2026-09-30T01:41:00Z']) passes.push((await runJobs(c, instant)).out.split('\n').pop());
+  const auto = state(c);
+  console.log(`K5 run-jobs passes: ${passes.join(' | ')}`);
+  console.log(show('K5 after recovery passes', auto));
+  const autoRow = (() => {
+    const db = m.db.openDatabase(c.dbPath);
+    const row = db.prepare('SELECT reviewed_sha256, actor_user_id FROM timesheet_revisions WHERE user_id = ?').get(c.ownerId);
+    const auditAfter = JSON.parse(db.prepare("SELECT after_json FROM audit_events WHERE operation = 'timesheet.auto_finalize'").pluck().get());
+    db.close();
+    return { ...row, signed_at_in_audit: auditAfter.signed_at };
+  })();
+  expect('K5 the next passes finalize once: origin deadline, review pending, no sign-off, reviewed hash and actor null, audit signed_at null, +60/-240 once, one capture',
+    auto.revisions.length === 1 && auto.revisions[0].origin === 'deadline' && auto.revisions[0].review_state === 'pending' && auto.signoffs.length === 0 &&
+      autoRow.reviewed_sha256 === null && autoRow.actor_user_id === null && autoRow.signed_at_in_audit === null && auto.ledgerRows === before.ledgerRows + 2 &&
+      auto.submissionCaptures === 1 && JSON.stringify(auto.attempts) === '["accepted"]', JSON.stringify(autoRow));
+
+  // K6 late review: killed inside, then committed and killed after, then identical retry.
+  const lateKill = await crashChild(['late_review', c.dbPath, 'at:INSERT INTO revision_ledger_lines', marker, auto.hash, String(auto.version)], marker, true);
+  const afterLateKill = state(c);
+  expect('K6 a late review terminated inside its transaction persists nothing', lateKill.marker !== null && untouched(auto, afterLateKill) && afterLateKill.writable);
+  const late = await crashChild(['late_review', c.dbPath, 'after', marker, auto.hash, String(auto.version)], marker, true);
+  const reviewed = state(c);
+  console.log(show('K6 after late review (commit then kill)', reviewed));
+  expect('K6 the late review is durable: revision 2 late_review signed, one sign-off, zero new ledger rows and posted unchanged (LG-09), its lines all unchanged',
+    late.marker !== null && reviewed.revisions.length === 2 && reviewed.revisions[1].revision_kind === 'late_review' && reviewed.revisions[1].review_state === 'signed' &&
+      reviewed.signoffs.length === 1 && reviewed.ledgerRows === auto.ledgerRows && reviewed.posted === auto.posted && reviewed.lines.length > auto.lines.length &&
+      reviewed.lines.slice(auto.lines.length).every((line) => line.endsWith(':unchanged')));
+  const lateReplay = await crashChild(['late_review', c.dbPath, 'none', marker, auto.hash, String(auto.version)], marker, false);
+  const afterLateReplay = state(c);
+  expect('K6 the identical late-review retry replays: no third revision, no ledger row', lateReplay.out.includes('"status":"replayed"') && untouched(reviewed, afterLateReplay), lateReplay.out);
+  const pass4 = (await runJobs(c, '2026-10-01T18:05:00Z')).out.split('\n').pop();
+  const afterPass = state(c);
+  console.log(`K6 run-jobs pass: ${pass4}`);
+  expect('K6 send_email false: only the PDF job is enqueued, still one submission captured, ledger unchanged',
+    afterPass.submissionCaptures === 1 && afterPass.ledgerRows === auto.ledgerRows && afterPass.jobs.filter((job) => job.startsWith('send_email')).length === 1);
+
+  // K7 correction: one more hour on 2026-09-15 (credit 60 -> 120).
+  {
+    const db = m.db.openDatabase(c.dbPath);
+    m.cmds.createSession({ db, clock: fixedClock('2026-10-01T17:00:00Z'), user: sessionUser(db, c.ownerId) }, '2026-09-15', { ...session('2026-09-15', '18:00', '19:00'), reason: 'Synthetic late hour' });
+    db.close();
+  }
+  const edited = state(c, '2026-10-01T18:00:00Z');
+  const corrKill = await crashChild(['correction', c.dbPath, 'at:INSERT INTO ot_ledger', marker, edited.hash, String(edited.version)], marker, true);
+  const afterCorrKill = state(c, '2026-10-01T18:00:00Z');
+  expect('K7 a correction terminated at its ledger posting persists nothing', corrKill.marker !== null && untouched(edited, afterCorrKill) && afterCorrKill.writable);
+  const corr = await crashChild(['correction', c.dbPath, 'none', marker, edited.hash, String(edited.version)], marker, false);
+  const corrected = state(c, '2026-10-01T18:00:00Z');
+  const corrReplay = await crashChild(['correction', c.dbPath, 'none', marker, edited.hash, String(edited.version)], marker, false);
+  const afterCorrReplay = state(c, '2026-10-01T18:00:00Z');
+  console.log(`K7 correction out=${corr.out} | retry out=${corrReplay.out}`);
+  console.log(show('K7 after correction', corrected));
+  const newEntries = corrected.entries.slice(edited.entries.length);
+  expect('K7 the correction appends exactly one +60 entry under a revision-specific key and posted grows by 60; an identical retry replays and writes nothing',
+    corr.out.includes('"status":"created"') && newEntries.length === 1 && /^rev:[0-9a-f-]{36}:day:2026-09-15:correction=60$/.test(newEntries[0]) &&
+      corrected.posted === edited.posted + 60 && corrReplay.out.includes('"status":"replayed"') && untouched(corrected, afterCorrReplay), JSON.stringify(newEntries));
+}
+
+console.log(failures === 0 ? 'CRASH PROBE PASSED' : `CRASH PROBE FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

@@ -5,7 +5,7 @@ import { inspect } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDeliveryConfig } from '../../src/server/config.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
-import { enqueueJob } from '../../src/server/jobs/jobStore.ts';
+import { claimNextJob, enqueueJob, failJob } from '../../src/server/jobs/jobStore.ts';
 import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
 import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSendJobHandler, type SendJobHooks } from '../../src/server/jobs/sendJob.ts';
@@ -13,6 +13,7 @@ import { captureFolder } from '../../src/server/mail/captureAdapter.ts';
 import { buildMessage, MessageError } from '../../src/server/mail/message.ts';
 import { createOutboundAdapter, type OutboundAdapter } from '../../src/server/mail/outbound.ts';
 import { classifySmtpFailure } from '../../src/server/mail/smtpAdapter.ts';
+import { recoverInterruptedSends } from '../../src/server/services/deliveries.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { makePng } from '../support/pdfText.ts';
 import { type SinkBehaviour, type SmtpSink, startSmtpSink } from '../support/smtpSink.ts';
@@ -699,6 +700,46 @@ describe('integrity and visible faults', () => {
     expect(readdirSync(join(dataDir, 'mail-capture'))).toHaveLength(1);
     expect(await runSend(captureOutbound())).toMatchObject({ claimed: 0 });
     expect(readdirSync(join(dataDir, 'mail-capture'))).toHaveLength(1);
+  });
+});
+
+describe('the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5)', () => {
+  it('marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending`', async () => {
+    const { revisionId, sendJobId } = await finalized();
+    const crash: SendJobHooks = {
+      beforeSend: () => {
+        throw new Error('simulated loss after the sending state was committed');
+      },
+    };
+    expect(await runSend(captureOutbound(), { hooks: crash, owner: 'runner-dead' })).toMatchObject({ claimed: 1, retried: 1 });
+    expect(attempts(revisionId).map((row) => row.state)).toEqual(['sending']);
+    // The dead runner still holds a lease that is valid for one more minute: a pass-start recovery changes nothing.
+    t.db
+      .prepare("UPDATE jobs SET state = 'leased', lease_owner = 'runner-dead', lease_expires_at = ?, last_error = NULL WHERE id = ?")
+      .run(new Date(t.clock.now().getTime() + 60_000).toISOString().replace('.000Z', 'Z'), sendJobId);
+    expect(recoverInterruptedSends(t.db, t.clock)).toBe(0);
+    // The lease then expires after that recovery and before the claim: the claim reclaims the job with the
+    // attempt still `sending`, so the handler's own branch is the one that must stop it (no pass-start recovery here).
+    t.clock.advanceSeconds(61);
+    const claimed = claimNextJob(t.db, t.clock, { owner: 'runner-reclaim', kinds: ['send_email'] });
+    expect(claimed?.id).toBe(sendJobId);
+    if (claimed === null) throw new Error('The job was not reclaimed');
+    expect(attempts(revisionId).map((row) => row.state)).toEqual(['sending']);
+    const handler = createSendJobHandler({ db: t.db, clock: t.clock, files, outbound: captureOutbound(), senderAddress: SENDER });
+    // The handler's own recovery sees a valid lease (this runner's), so only the `sending` branch can stop it.
+    const caught = await handler({ job: claimed, renewLease: () => true }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(caught).toMatchObject({ name: 'JobError', code: 'delivery_uncertain', permanent: true });
+    expect(attempts(revisionId).map((row) => [row.state, row.provider_response, row.decision])).toEqual([['uncertain', 'lease_expired_while_sending', null]]);
+    expect(failJob(t.db, t.clock, claimed.id, 'runner-reclaim', caught)).toEqual({ state: 'intervention' });
+    expect(job(sendJobId)).toMatchObject({ state: 'intervention', last_error: 'delivery_uncertain' });
+    // Nothing was sent, and nothing sends later: the owner's decision is the only way on.
+    expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
+    t.clock.advanceSeconds(6 * 3600);
+    expect(await runSend(captureOutbound())).toMatchObject({ claimed: 0 });
+    expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
   });
 });
 

@@ -1,0 +1,21 @@
+// WP3-RECHECK-BC evidence masker: node mask.mjs <in> <out>
+// Strips ANSI codes, masks e-mail addresses, user names in profile paths and the local folders,
+// converts CRLF to LF and removes trailing whitespace.
+import { readFileSync, writeFileSync } from 'node:fs';
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
+text = text.replace(/\r\n?/g, '\n');
+const rules = [
+  [/[\w.%+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,}/gi, '<email>'],
+  [/[A-Za-z]:[\/]+timesheet-tmp[\/]+WP3-RECHECK-BC/gi, '<scratch>'],
+  [/\/[a-z]\/timesheet-tmp\/WP3-RECHECK-BC/gi, '<scratch>'],
+  [/[A-Za-z]:[\/]+Dropbox[\/]+Work\.CDSemi[\/]+timesheet/gi, '<project>'],
+  [/\/[a-z]\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/([A-Za-z]:[\/]+|\/[a-z]\/)Users[\/]+[^\/\s"'`,;)]+/gi, '$1Users/<user>'],
+  [/\/home\/[^\/\s"'`,;)]+/g, '/home/<user>'],
+];
+for (const [re, to] of rules) text = text.replace(re, to);
+text = text.split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n');
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(output, text);

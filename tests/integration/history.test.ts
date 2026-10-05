@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import { runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
 import { postCredit } from '../../src/server/services/ledger.ts';
+import { saveSubmissionSettings } from '../../src/server/services/submissionSettings.ts';
 import { createUser } from '../../src/server/services/users.ts';
 import { createTestContext, la, ORIGIN, type TestContext } from '../support/testApp.ts';
 
@@ -358,6 +360,44 @@ describe('GET /api/history', () => {
     }
     // Everything else by another person (the grant to the grantee is the owner's own act) stays unattributed.
     for (const event of events.filter((row) => !written.includes(row))) expect(event.via_share, event.operation).toBe(false);
+  });
+
+  it('WP3-RBC-01: every event without an actor is a system event, whatever its operation (the automatic OT credit and debit)', async () => {
+    // Auto-submit saved and activated, then a Monday with one OT hour; the deadline pass submits automatically (P2: due 2026-10-14T00:00Z).
+    saveSubmissionSettings(t.db, t.clock, t.userIds.employee, { expectedSeq: 0, to: ['payroll@example.invalid'], autoSubmit: true });
+    setAutomationActivation(t.db, t.clock, { actorUserId: t.userIds.admin, activeFrom: '2026-10-03T00:00:00Z', reason: 'Synthetic pilot activation' });
+    t.clock.set('2026-10-06T01:00:00Z');
+    employee = await t.login('employee');
+    admin = await t.login('admin');
+    const worked = await t.request('POST', '/api/days/2026-10-05/sessions', {
+      cookie: employee,
+      body: { start: la('2026-10-05T09:00'), end: la('2026-10-05T18:00'), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true },
+    });
+    expect(worked.status, JSON.stringify(worked.body)).toBe(201);
+    t.clock.set('2026-10-14T00:05:00Z');
+    runDeadlineScan(t.db, t.clock);
+    expect(t.db.prepare('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?').pluck().get(t.userIds.employee)).toBe(1);
+    employee = await t.login('employee');
+    admin = await t.login('admin');
+
+    const events = (await t.request('GET', '/api/history', { cookie: employee })).body.audit_events as Array<Record<string, any>>;
+    const credit = events.find((event) => event.operation === 'ot_ledger.credit');
+    expect(credit, 'the automatic credit is in the owner history').toBeDefined();
+    // The actor-less posting is flagged as a system event by the server, not recognised by its name on the client.
+    expect(credit).toMatchObject({ actor_is_self: false, actor_user_id: null, actor_is_system: true, via_share: false, actor_display_name: null });
+    const auto = events.find((event) => event.operation === 'timesheet.auto_finalize');
+    expect(auto).toMatchObject({ actor_is_system: true, actor_is_self: false });
+    // The flag is exactly "no actor": every event with an actor, the owner's own or another person's, is not a system event.
+    const noActor = t.db.prepare('SELECT id FROM audit_events WHERE owner_user_id = ? AND actor_user_id IS NULL').pluck().all(t.userIds.employee) as string[];
+    expect(noActor.length).toBeGreaterThan(1);
+    for (const event of events) expect(event.actor_is_system, event.operation).toBe(noActor.includes(event.id as string));
+    expect(events.some((event) => event.operation === 'auth.login' && event.actor_is_system === false && event.actor_is_self === true)).toBe(true);
+    // An administrator act on the account is another person's, never "system".
+    await t.request('PATCH', `/api/admin/users/${t.userIds.employee}`, { cookie: admin, body: { display_name: 'Renamed Employee' } });
+    const after = (await t.request('GET', '/api/history', { cookie: employee })).body.audit_events as Array<Record<string, any>>;
+    expect(after.find((event) => event.operation === 'user.update')).toMatchObject({ actor_is_system: false, actor_is_self: false, actor_user_id: null });
+    // No identifier of anyone else leaves the server.
+    expect(JSON.stringify(after)).not.toContain(t.userIds.admin);
   });
 
   it('is read-only, immutable and requires a session', async () => {

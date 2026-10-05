@@ -1,0 +1,114 @@
+// WP3-RECHECK-A multi-process deadline/manual race probe (synthetic data, capture mode only).
+// Each round: a fresh SQLite WAL file and FOUR racing OS processes, each with its own connection:
+//   M1, M2  two identical manual sign-offs through the production service (different delays);
+//   D1, D2  two production `cli.js run-jobs --once --now` passes, one minute bucket apart, so two
+//           deadline scans run concurrently with the sign-offs.
+// Then two production run-jobs passes drain the PDF and send jobs. Checks: one winner, one revision,
+// one ledger set (+60 credit, -240 debit, once), one send, no invented signed_at, an identical
+// manual retry replays when the manual path won, both manuals get 409 when the deadline won.
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { count, fixedClock, freshDb, m, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const ROUNDS = Number(process.env.ROUNDS ?? 20);
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/race`;
+const EARLY = '2026-09-20T12:00:00Z';
+const NOW = '2026-09-30T00:30:00Z';
+const NOW2 = '2026-09-30T00:31:10Z';
+const SIGN_INSTANT = '2026-09-30T00:30:05Z';
+const DELAYS = [0, 3, 7, 12, 25, 50, 90, 140, 200, 300];
+const HERE = import.meta.dirname;
+
+const totals = { manual: 0, deadline: 0, failed: 0 };
+for (let round = 1; round <= ROUNDS; round += 1) {
+  const dir = join(BASE, `r${String(round).padStart(2, '0')}`);
+  mkdirSync(dir, { recursive: true });
+  const dbPath = join(dir, 't.db');
+  const dataDir = join(dir, 'private-data');
+  const s = await freshDb(dbPath, EARLY);
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const early = fixedClock(EARLY);
+  policy(db, EARLY, owner.id, s.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: early }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: early, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  m.sigs.saveSignature(db, early, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, early, owner.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true });
+  m.auto.setAutomationActivation(db, early, { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic recheck activation' });
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  const review = m.review.buildReviewPayload(db, fixedClock(NOW), owner, '2026-10-02');
+  db.close();
+
+  const startAt = Date.now() + 2000;
+  const d1 = DELAYS[(round - 1) % DELAYS.length];
+  const d2 = d1 + 2;
+  const child = join(HERE, 'race-child.mjs');
+  const [m1, m2, r1, r2] = await Promise.all([
+    run([child, 'manual', dbPath, String(startAt), String(d1), review.payloadHash, String(review.expectedVersion)]),
+    run([child, 'manual', dbPath, String(startAt), String(d2), review.payloadHash, String(review.expectedVersion)]),
+    run([child, 'deadline', dbPath, dataDir, String(startAt), '0', NOW]),
+    run([child, 'deadline', dbPath, dataDir, String(startAt), String(d1 + 1), NOW2]),
+  ]);
+  const env = { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM: '<email>' };
+  const drain1 = await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', '2026-09-30T00:40:00Z'], env);
+  const drain2 = await run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', '2026-09-30T00:50:00Z'], env);
+
+  const check = m.db.openDatabase(dbPath);
+  const revs = check.prepare('SELECT id, origin, review_state, reviewed_sha256, payload_sha256, actor_user_id FROM timesheet_revisions WHERE user_id = ?').all(owner.id);
+  const rev = revs[0];
+  const signoffs = check.prepare('SELECT signed_at, reviewed_sha256 FROM signoffs WHERE user_id = ?').all(owner.id);
+  const fin = check.prepare("SELECT source_key, delta_minutes, origin, source_ref FROM ot_ledger WHERE user_id = ? AND source_key LIKE 'finalization:%' ORDER BY source_key").all(owner.id);
+  const lines = count(check, 'SELECT count(*) FROM revision_ledger_lines WHERE user_id = ?', owner.id);
+  const jobs = check.prepare("SELECT kind, state FROM jobs WHERE user_id = ? AND kind IN ('render_pdf','send_email') ORDER BY kind").all(owner.id);
+  const attempts = check.prepare('SELECT state FROM delivery_attempts WHERE user_id = ?').all(owner.id);
+  const audits = check.prepare("SELECT operation FROM audit_events WHERE owner_user_id = ? AND operation IN ('timesheet.signoff','timesheet.auto_finalize')").pluck().all(owner.id);
+  const scans = check.prepare("SELECT state FROM jobs WHERE kind = 'deadline_scan'").pluck().all();
+  const integrity = check.prepare('PRAGMA integrity_check').pluck().get();
+  const fk = check.prepare('PRAGMA foreign_key_check').all().length;
+  const balance = m.ledger.getBalance(check, owner.id);
+  check.close();
+  const captureDir = join(dataDir, 'mail-capture');
+  const folders = existsSync(captureDir) ? readdirSync(captureDir).filter((name) => !name.startsWith('.tmp')) : [];
+  const metas = folders.map((name) => JSON.parse(readFileSync(join(captureDir, name, 'metadata.json'), 'utf8')));
+  const captures = metas.filter((meta) => meta.pdf_sha256 !== undefined).length;
+
+  const parse = (r) => JSON.parse(r.out.split('\n').pop() || '{}');
+  const outcomes = [parse(m1), parse(m2)];
+  const winner = rev === undefined ? 'none' : rev.origin === 'employee' ? 'manual' : 'deadline';
+  const problems = [];
+  if (revs.length !== 1) problems.push(`revisions=${revs.length}`);
+  if (winner === 'manual') {
+    const kinds = outcomes.map((o) => o.outcome).sort().join(',');
+    if (kinds !== 'created,replayed') problems.push(`manual outcomes ${kinds}`);
+    if (signoffs.length !== 1 || signoffs[0].signed_at !== SIGN_INSTANT || signoffs[0].reviewed_sha256 !== review.payloadHash) problems.push(`signoffs=${JSON.stringify(signoffs)}`);
+    if (rev.review_state !== 'signed' || rev.reviewed_sha256 !== review.payloadHash || rev.actor_user_id !== owner.id) problems.push('manual revision fields');
+  } else if (winner === 'deadline') {
+    if (!outcomes.every((o) => o.outcome === 'error' && o.status === 409 && o.code === 'already_finalized')) problems.push(`manual losers ${JSON.stringify(outcomes)}`);
+    if (signoffs.length !== 0) problems.push('automatic revision has a signoff');
+    if (rev.review_state !== 'pending' || rev.reviewed_sha256 !== null || rev.actor_user_id !== null) problems.push('automatic revision fields');
+  }
+  const ledgerOk = fin.length === 2 && fin.some((e) => e.source_key === 'finalization:day:2026-09-15:credit' && e.delta_minutes === 60) &&
+    fin.some((e) => e.source_key === 'finalization:day:2026-09-16:deficit_debit' && e.delta_minutes === -240) && fin.every((e) => e.source_ref === rev?.id);
+  if (!ledgerOk) problems.push(`ledger=${JSON.stringify(fin)}`);
+  if (lines !== 2) problems.push(`lines=${lines}`);
+  if (jobs.length !== 2 || jobs.some((j) => j.state !== 'succeeded')) problems.push(`jobs=${JSON.stringify(jobs)}`);
+  if (attempts.length !== 1 || attempts[0].state !== 'accepted') problems.push(`attempts=${JSON.stringify(attempts)}`);
+  if (captures !== 1) problems.push(`captures=${captures}`);
+  if (audits.length !== 1) problems.push(`audits=${audits.join(',')}`);
+  if (integrity !== 'ok' || fk !== 0) problems.push(`integrity=${integrity} fk=${fk}`);
+  if (balance.postedMinutes !== 120) problems.push(`posted=${balance.postedMinutes}`);
+  const codes = [m1, m2, r1, r2, drain1, drain2].map((r) => r.code);
+  if (codes.some((c) => c !== 0)) problems.push(`exit codes ${codes.join('/')} ${[m1, m2, r1, r2].map((r) => r.err.slice(0, 160)).join(' | ')}`);
+  if (problems.length > 0) totals.failed += 1;
+  else totals[winner] += 1;
+  const text = (o) => `${o.outcome}${o.code ? `/${o.code}` : ''}`;
+  console.log(
+    `round ${String(round).padStart(2, '0')} delays=${d1}/${d2}ms winner=${winner} M1=${text(outcomes[0])} M2=${text(outcomes[1])} D1=${r1.out.split('\n').pop()} D2=${r2.out.split('\n').pop()} ` +
+      `revisions=${revs.length} signoffs=${signoffs.length} signed_at=${signoffs[0]?.signed_at ?? 'null'} ledger=${fin.map((e) => e.delta_minutes).join(',')} lines=${lines} ` +
+      `jobs=${jobs.map((j) => `${j.kind}:${j.state}`).join(',')} scans=${scans.join(',')} attempts=${attempts.map((a) => a.state).join(',')} captures=${captures} posted=${balance.postedMinutes} ` +
+      `integrity=${integrity} fk=${fk} ${problems.length ? `FAIL ${problems.join('; ')}` : 'OK'}`,
+  );
+}
+console.log(`TOTAL rounds=${ROUNDS} manual_won=${totals.manual} deadline_won=${totals.deadline} failed=${totals.failed}`);
+process.exitCode = totals.failed === 0 ? 0 : 1;

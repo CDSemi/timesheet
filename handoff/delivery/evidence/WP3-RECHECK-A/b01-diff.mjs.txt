@@ -1,0 +1,141 @@
+// WP3-RECHECK-A B-01 differential probe. The SAME scenario script runs against the build named by
+// AUDIT_REPO (the first WP3 freeze a1cd566, then the reviewed 2f2520e) and prints a normalized
+// record of every revision, sign-off, ledger entry, revision line, timesheet row and timesheet.*
+// audit operation (UUIDs, submission ids and payload hashes replaced by placeholders in order of
+// appearance). The caller compares the two outputs.
+//   X  an existing account (created 2026-09-01, before the 2026-09-21 activation): manual sign-off,
+//      automatic finalization of the next period, late review, correction with reason;
+//   Y  activation 2026-09-01, an account created 2026-09-20 (inside the 09-14..09-27 period): its
+//      creation period (payroll 2026-10-02) is automated at its deadline, then late-reviewed; periods that
+//      ended before the account existed are excluded from the compared dump and reported apart;
+//   Z  as Y, but the account never saves submission settings (the WP3-B-01 case).
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { fixedClock, freshDb, m, png, policy, REPO, run, SCRATCH, session, sessionUser } from './common.mjs';
+
+const users = await import(pathToFileURL(join(REPO, 'dist/server/services/users.js')).href);
+const BASE = process.env.RUN_DIR ?? `${SCRATCH}/work/b01`;
+const scenario = process.argv[2];
+mkdirSync(BASE, { recursive: true });
+
+function normalizer() {
+  const map = new Map();
+  const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const submission = /TS-\d{8}-[0-9a-f]{10}/g;
+  const hex64 = /\b[0-9a-f]{64}\b/g;
+  const swap = (prefix) => (match) => {
+    if (!map.has(match)) map.set(match, `<${prefix}${map.size + 1}>`);
+    return map.get(match);
+  };
+  return (text) => text.replace(uuid, swap('id')).replace(submission, swap('ts')).replace(hex64, swap('h'));
+}
+
+/** Everything of `userId` in the periods with payroll date >= `minPayroll` (ledger: work dates from that period start). */
+function dump(dbPath, userId, minPayroll = '0000-00-00') {
+  const db = m.db.openDatabase(dbPath);
+  const from = db.prepare('SELECT min(period_start) FROM pay_periods WHERE payroll_date >= ?').pluck().get(minPayroll) ?? '0000-00-00';
+  const q = (sql) => db.prepare(sql).all({ user: userId, min: minPayroll, from });
+  const revOf = 'JOIN timesheet_revisions r ON r.id = X JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id';
+  const out = {
+    timesheets: q('SELECT payroll_date, finalized_revision_no, version FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id WHERE t.user_id = :user AND payroll_date >= :min ORDER BY payroll_date'),
+    revisions: q(`SELECT p.payroll_date, r.revision_no, r.revision_kind, r.origin, r.review_state, r.correction_reason, r.timesheet_version, r.send_requested,
+                         r.actor_user_id IS NOT NULL AS has_actor, r.reviewed_sha256 IS NOT NULL AS has_reviewed, r.payload_sha256, r.payload_json, r.created_at
+                    FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id JOIN pay_periods p ON p.id = t.pay_period_id
+                   WHERE r.user_id = :user AND p.payroll_date >= :min ORDER BY r.created_at, r.revision_no`),
+    signoffs: q(`SELECT s.signer_name, s.signed_at, s.reviewed_sha256 FROM signoffs s ${revOf.replace('X', 's.revision_id')} WHERE s.user_id = :user AND p.payroll_date >= :min ORDER BY s.signed_at`),
+    ledger: q('SELECT entry_type, source_key, delta_minutes, origin, work_date, actor_user_id IS NOT NULL AS has_actor, reason, posted_at FROM ot_ledger WHERE user_id = :user AND (work_date IS NULL OR work_date >= :from) ORDER BY rowid'),
+    lines: q(`SELECT l.revision_id, l.work_date, l.line_kind, l.proposed_minutes, l.outcome, l.ledger_entry_id IS NOT NULL AS has_entry
+                FROM revision_ledger_lines l ${revOf.replace('X', 'l.revision_id')} WHERE l.user_id = :user AND p.payroll_date >= :min ORDER BY l.rowid`),
+    audits: q(`SELECT a.operation, a.occurred_at FROM audit_events a ${revOf.replace('X', 'a.entity_id')}
+                WHERE a.owner_user_id = :user AND a.entity_type = 'timesheet_revision' AND a.operation LIKE 'timesheet.%' AND p.payroll_date >= :min ORDER BY a.rowid`),
+    jobs: q(`SELECT j.kind, j.business_key, j.state FROM jobs j ${revOf.replace('X', 'j.revision_id')} WHERE j.user_id = :user AND p.payroll_date >= :min ORDER BY j.rowid`),
+  };
+  db.close();
+  return out;
+}
+
+function preCreation(dbPath, userId, payroll) {
+  const db = m.db.openDatabase(dbPath);
+  const row = db.prepare(`SELECT count(r.id) AS revisions, group_concat(p.payroll_date || ':' || r.origin) AS periods FROM timesheet_revisions r JOIN timesheets t ON t.id = r.timesheet_id
+                            JOIN pay_periods p ON p.id = t.pay_period_id WHERE r.user_id = ? AND p.payroll_date < ?`).get(userId, payroll);
+  const overdue = db.prepare("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.overdue'").pluck().get(userId);
+  db.close();
+  return { ...row, overdue_events: overdue };
+}
+
+const runJobs = (dbPath, dataDir, instant) => run([join(REPO, 'dist/server/cli.js'), 'run-jobs', '--once', '--now', instant], { DATABASE_PATH: dbPath, DATA_DIR: dataDir, MAIL_FROM: '<email>' });
+const dir = join(BASE, scenario);
+mkdirSync(dir, { recursive: true });
+const dbPath = join(dir, 't.db');
+const dataDir = join(dir, 'private-data');
+const passes = [];
+
+if (scenario === 'X') {
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const owner = sessionUser(db, s.employee.id);
+  const c0 = fixedClock('2026-09-01T12:00:00Z');
+  policy(db, '2026-09-01T12:00:00Z', owner.id, s.calendarId, 'auto_deduct');
+  m.ledger.postCredit({ db, clock: c0 }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c0, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  m.settings.saveSubmissionSettings(db, c0, owner.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true });
+  m.auto.setAutomationActivation(db, c0, { actorUserId: s.admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic recheck activation' });
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(s.admin.id);
+  const c1 = fixedClock('2026-09-28T20:00:00Z');
+  m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-15', session('2026-09-15', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: c1, user: owner }, '2026-09-16', session('2026-09-16', '09:00', '13:00'));
+  const sign = fixedClock('2026-09-29T20:00:00Z');
+  const r1 = m.review.buildReviewPayload(db, sign, owner, '2026-10-02');
+  m.fin.signOffTimesheet({ db, clock: sign, user: owner }, '2026-10-02', { expectedVersion: r1.expectedVersion, reviewedHash: r1.payloadHash, signerName: 'Synthetic Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  const c2 = fixedClock('2026-10-06T20:00:00Z');
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-10-04', session('2026-10-04', '09:00', '12:00'));
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-10-05', session('2026-10-05', '09:00', '13:00'));
+  db.close();
+  for (const instant of ['2026-09-29T20:10:00Z', '2026-09-30T00:30:00Z', '2026-10-14T00:30:00Z', '2026-10-14T00:40:00Z']) passes.push((await runJobs(dbPath, dataDir, instant)).out.split('\n').pop());
+  const db2 = m.db.openDatabase(dbPath);
+  const late = fixedClock('2026-10-14T18:00:00Z');
+  const r2 = m.review.buildReviewPayload(db2, late, owner, '2026-10-16');
+  const lateOut = m.fin.reviseTimesheet({ db: db2, clock: late, user: owner }, '2026-10-16', { kind: 'late_review', reason: null, sendEmail: false, expectedVersion: r2.expectedVersion, reviewedHash: r2.payloadHash, signerName: 'Synthetic Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  m.cmds.createSession({ db: db2, clock: fixedClock('2026-10-14T18:30:00Z'), user: owner }, '2026-09-15', { ...session('2026-09-15', '18:00', '19:00'), reason: 'Synthetic late hour' });
+  const corr = fixedClock('2026-10-14T19:00:00Z');
+  const r3 = m.review.buildReviewPayload(db2, corr, owner, '2026-10-02');
+  const corrOut = m.fin.reviseTimesheet({ db: db2, clock: corr, user: owner }, '2026-10-02', { kind: 'correction', reason: 'Synthetic correction', sendEmail: true, expectedVersion: r3.expectedVersion, reviewedHash: r3.payloadHash, signerName: 'Synthetic Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  db2.close();
+  passes.push(`late=${lateOut.status} correction=${corrOut.status}`);
+  for (const instant of ['2026-10-14T19:10:00Z', '2026-10-14T19:20:00Z']) passes.push((await runJobs(dbPath, dataDir, instant)).out.split('\n').pop());
+  const norm = normalizer();
+  writeFileSync(join(dir, 'dump.json'), norm(JSON.stringify(dump(dbPath, owner.id), null, 1)));
+} else {
+  // Y: activation 2026-09-01; a new account is created on 2026-09-20 (inside the 09-14..09-27 period).
+  // Every period due before 2026-09-20 (for example 08-31..09-13, due 2026-09-16) ended before the account existed.
+  const s = await freshDb(dbPath, '2026-09-01T12:00:00Z');
+  const { db } = s;
+  const c0 = fixedClock('2026-09-01T12:00:00Z');
+  m.auto.setAutomationActivation(db, fixedClock('2026-08-31T12:00:00Z'), { actorUserId: s.admin.id, activeFrom: '2026-09-01T00:00:00Z', reason: 'Synthetic recheck activation' });
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id IN (?, ?)").run(s.admin.id, s.employee.id);
+  const c1 = fixedClock('2026-09-20T12:00:00Z');
+  const lateId = await users.createUser(db, c1, { email: '<email>', displayName: 'Synthetic Late Account', role: 'employee', password: randomBytes(18).toString('base64url'), calendarId: s.calendarId }, s.admin.id);
+  const owner = sessionUser(db, lateId);
+  policy(db, '2026-09-20T12:00:00Z', owner.id, s.calendarId, 'auto_deduct', '2026-09-14');
+  m.ledger.postCredit({ db, clock: c1 }, { userId: owner.id, sourceKey: 'recheck-opening', minutes: 300, workDate: '2026-09-14', actorUserId: null, origin: 'system', reason: 'Synthetic opening balance' });
+  m.sigs.saveSignature(db, c1, new m.files.FileStore(dataDir), owner.id, png(), 'image/png');
+  if (scenario === 'Y') m.settings.saveSubmissionSettings(db, c1, owner.id, { expectedSeq: 0, to: ['<email>'], autoSubmit: true });
+  const c2 = fixedClock('2026-09-26T20:00:00Z');
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-09-21', session('2026-09-21', '09:00', '18:00'));
+  m.cmds.createSession({ db, clock: c2, user: owner }, '2026-09-22', session('2026-09-22', '09:00', '13:00'));
+  db.close();
+  for (const instant of ['2026-09-20T12:30:00Z', '2026-09-30T00:30:00Z', '2026-09-30T00:40:00Z', '2026-09-30T01:40:00Z']) passes.push((await runJobs(dbPath, dataDir, instant)).out.split('\n').pop());
+  const db2 = m.db.openDatabase(dbPath);
+  const late = fixedClock('2026-10-01T18:00:00Z');
+  const r2 = m.review.buildReviewPayload(db2, late, owner, '2026-10-02');
+  const lateOut = m.fin.reviseTimesheet({ db: db2, clock: late, user: owner }, '2026-10-02', { kind: 'late_review', reason: null, sendEmail: false, expectedVersion: r2.expectedVersion, reviewedHash: r2.payloadHash, signerName: 'Synthetic Late Signer', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  db2.close();
+  passes.push(`late=${lateOut.status}`);
+  passes.push((await runJobs(dbPath, dataDir, '2026-10-01T18:10:00Z')).out.split('\n').pop());
+  const norm = normalizer();
+  writeFileSync(join(dir, 'dump.json'), norm(JSON.stringify(dump(dbPath, owner.id, '2026-10-02'), null, 1)));
+  console.log(`scenario ${scenario} periods before the account (payroll < 2026-10-02) on ${REPO.split(/[\/]/).pop()}: ${JSON.stringify(preCreation(dbPath, owner.id, '2026-10-02'))}`);
+}
+console.log(`scenario ${scenario} on ${REPO.split(/[\/]/).pop()}: passes ${passes.join(' | ')}`);

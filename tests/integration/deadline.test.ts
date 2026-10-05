@@ -109,6 +109,17 @@ function newUser(mode: Mode = 'ignore', balance = 0, createdAt = EARLY): Session
   return { id, email: `user-${id}@example.invalid`, displayName: 'Synthetic Employee', role: 'employee', calendarId: t.calendarId, sessionId: 'test' };
 }
 
+/**
+ * A synthetic employee who saved the submission settings with auto-submit on at the current instant: since the
+ * owner decision H-Q1 (a) (2026-10-05) only such an account is ever automated. Its switch governs every deadline
+ * after that instant (the clock is the account's creation instant for the helper's default).
+ */
+function configuredUser(mode: Mode = 'ignore', balance = 0, createdAt = EARLY): SessionUser {
+  const user = newUser(mode, balance, createdAt);
+  saveSubmissionSettings(t.db, t.clock, user.id, { expectedSeq: 0, to: TO, autoSubmit: true });
+  return user;
+}
+
 function work(user: SessionUser, date: string, from: string, to: string): void {
   createSession({ db: t.db, clock: t.clock, user }, date, {
     start: la(`${date}T${from}`),
@@ -216,7 +227,7 @@ describe('deadlines are computed with the production zone functions (season inde
   });
 
   it('finalizes exactly at the deadline instant in daylight time and in standard time', () => {
-    const user = newUser();
+    const user = configuredUser();
     activate('2026-10-15T00:00:00Z'); // after the P2 deadline, so only P3 and P4 are eligible
     for (const item of [P3, P4]) {
       const due = period(item.payroll).dueAtUtc;
@@ -235,7 +246,7 @@ describe('deadlines are computed with the production zone functions (season inde
 
 describe('a payroll exception that moves the deadline', () => {
   it('uses the exception deadline, computed in the reporting zone, and the moved payroll date', () => {
-    const user = newUser();
+    const user = configuredUser();
     createPayrollException(
       t.db,
       t.clock,
@@ -278,7 +289,7 @@ describe('activation boundary (F-4)', () => {
   });
 
   it('does not touch a period due before the activation instant and finalizes the next one', () => {
-    const user = newUser();
+    const user = configuredUser();
     activate('2026-10-01T00:00:00Z');
     t.clock.set('2026-10-29T12:00:00Z');
     expect(scan().finalized).toBe(2);
@@ -290,7 +301,7 @@ describe('activation boundary (F-4)', () => {
   });
 
   it('treats a period due exactly at the activation instant as eligible', () => {
-    const user = newUser();
+    const user = configuredUser();
     activate(P1.dueAt);
     t.clock.set(P1.dueAt);
     scan();
@@ -326,11 +337,12 @@ describe('activation boundary (F-4)', () => {
 describe('account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4)', () => {
   const P5 = { payroll: '2026-11-27', dueAt: '2026-11-26T01:00:00Z' }; // 17:00 PST
 
-  it('never submits a period whose deadline passed before the account existed (no saved settings)', () => {
+  it('never submits a period whose deadline passed before the account existed, even with the explicit overdue choice', () => {
     activate('2026-10-01T00:00:00Z');
-    // The account is created after P1..P4 are all due; it never saves settings (default: on).
+    // The account is created after P1..P4 are all due; it saves auto-submit on and explicitly applies it to overdue drafts.
     t.clock.set('2026-11-12T00:00:00Z');
     const late = newUser('ignore', 0, '2026-11-12T00:00:00Z');
+    saveSettings(late, { applyToOverdue: true });
     t.clock.set('2026-11-12T00:00:30Z');
     const summary = scan();
     expect(summary.finalized).toBe(0);
@@ -349,7 +361,7 @@ describe('account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4
   it('still automates the first deadline after the account was created, with the default labels (F-1)', () => {
     activate('2026-10-01T00:00:00Z');
     t.clock.set('2026-11-12T00:00:00Z');
-    const late = newUser('ignore', 0, '2026-11-12T00:00:00Z');
+    const late = configuredUser('ignore', 0, '2026-11-12T00:00:00Z');
     t.clock.set(P5.dueAt);
     expect(scan().finalized).toBe(1);
     const rows = revisions(late);
@@ -358,8 +370,9 @@ describe('account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4
 
   it('automates the period in which the account was created when its deadline is still ahead', () => {
     activate('2026-10-01T00:00:00Z');
-    // P4 starts 2026-10-26 and is due 2026-11-11T01:00Z; the account appears in the middle of it.
-    const mid = newUser('ignore', 0, '2026-11-05T00:00:00Z');
+    // P4 starts 2026-10-26 and is due 2026-11-11T01:00Z; the account appears in the middle of it and saves its settings.
+    t.clock.set('2026-11-05T00:00:00Z');
+    const mid = configuredUser('ignore', 0, '2026-11-05T00:00:00Z');
     t.clock.set(P4.dueAt);
     expect(scan().finalized).toBe(1);
     expect(revisions(mid).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P4.payroll]);
@@ -391,6 +404,107 @@ describe('account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4
     expect(effective).toHaveLength(4);
     // The three ordinary saves take effect at their own instant, never before the account existed.
     for (const row of effective.slice(0, 3)) expect(row.auto_submit_effective_from >= accountCreated).toBe(true);
+  });
+});
+
+describe('setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09)', () => {
+  const PERIODS = [P1, P2, P3, P4];
+
+  /** Everything an automatic submission could leave behind for the user: nothing of it may exist. */
+  function expectNothingAutomated(user: SessionUser, when: string): void {
+    expect(revisions(user), when).toEqual([]);
+    // The user's own work may have created a draft; no automatic act ever finalizes one.
+    expect(count('SELECT count(*) FROM timesheets WHERE user_id = ? AND finalized_revision_no IS NOT NULL', user.id), when).toBe(0);
+    expect(jobKinds(user), when).toEqual([]);
+    expect(ledger(user), when).toEqual([]);
+    expect(listOverdueRecords(t.db, user.id), when).toEqual([]);
+    expect(count('SELECT count(*) FROM delivery_attempts WHERE user_id = ?', user.id), when).toBe(0);
+    expect(count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND (operation LIKE 'deadline.%' OR operation LIKE 'timesheet.%')", user.id), when).toBe(0);
+  }
+
+  it('never automates an account that never saved its submission settings, at and after every deadline', async () => {
+    const user = newUser(); // created before the activation; it has days of work, an OT hour, and never saves settings
+    work(user, '2026-09-15', '09:00', '18:00');
+    activate('2026-09-21T00:00:00Z');
+    for (const item of PERIODS) {
+      const due = period(item.payroll).dueAtUtc;
+      for (const instant of [due - 1, due, due + 1, due + 3600]) {
+        t.clock.set(formatUtcInstant(instant));
+        expect(scan(), `${item.payroll} at ${formatUtcInstant(instant)}`).toMatchObject({ activated: true, finalized: 0, overdueRecorded: 0, failed: 0 });
+        expectNothingAutomated(user, `${item.payroll} at ${formatUtcInstant(instant)}`);
+      }
+    }
+    // The production runner path (the scan job, the PDF and send jobs) does nothing for it either: no delivery is attempted.
+    t.clock.set('2026-11-20T12:00:00Z');
+    expect(await drain()).toBe(0);
+    expectNothingAutomated(user, 'after the runner passes');
+    expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
+    expect(capturedAttempts(user)).toEqual([]);
+  });
+
+  it('automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period', () => {
+    const user = newUser();
+    work(user, '2026-09-15', '09:00', '18:00');
+    activate('2026-09-21T00:00:00Z');
+    t.clock.set(formatUtcInstant(period(P1.payroll).dueAtUtc + 3600));
+    expect(scan().finalized).toBe(0); // P1 passed while the account was not set up
+    t.clock.set('2026-10-05T12:00:00Z'); // inside P2 (due 2026-10-14T00:00Z)
+    saveSettings(user); // auto-submit on, effective now
+    expect(scan().finalized).toBe(0); // the saved settings do not reach back to P1
+    t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc - 1));
+    expect(scan().finalized).toBe(0);
+    t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc));
+    expect(scan().finalized).toBe(1);
+    t.clock.set('2026-10-29T12:00:00Z');
+    expect(scan().finalized).toBe(1);
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P2.payroll, P3.payroll]);
+    expect(listOverdueRecords(t.db, user.id)).toEqual([]);
+    // P1 stays the user's own draft (the work entered above): no revision, no finalization.
+    expect(
+      count('SELECT count(*) FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id WHERE t.user_id = ? AND p.payroll_date = ? AND t.finalized_revision_no IS NOT NULL', user.id, P1.payroll),
+    ).toBe(0);
+  });
+
+  it('keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation', () => {
+    activate('2026-09-21T00:00:00Z');
+    // Created before every deadline: the choice reaches P1, P2 and P3.
+    const early = newUser();
+    // Created between the P1 and P2 deadlines: the choice never reaches P1.
+    t.clock.set('2026-10-05T12:00:00Z');
+    const later = newUser('ignore', 0, '2026-10-05T12:00:00Z');
+    t.clock.set('2026-10-29T12:00:00Z');
+    expect(scan().finalized).toBe(0); // neither has saved settings: nothing is automated
+    saveSettings(early, { applyToOverdue: true });
+    saveSettings(later, { applyToOverdue: true });
+    expect(scan().finalized).toBe(5);
+    expect(revisions(early).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P1.payroll, P2.payroll, P3.payroll]);
+    expect(revisions(later).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P2.payroll, P3.payroll]);
+  });
+
+  it('without the overdue choice a first save never reaches periods that fell due before it', () => {
+    const user = newUser();
+    activate('2026-09-21T00:00:00Z');
+    t.clock.set('2026-10-29T12:00:00Z');
+    expect(scan().finalized).toBe(0);
+    saveSettings(user); // P1, P2 and P3 are all overdue; no overdue choice
+    expect(scan().finalized).toBe(0);
+    expectNothingAutomated(user, 'after the plain save');
+    t.clock.set(P4.dueAt);
+    expect(scan().finalized).toBe(1);
+    expect(revisions(user).map((row) => snapshotOf(row).period.payroll_date)).toEqual([P4.payroll]);
+  });
+
+  it('still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved', () => {
+    const off = newUser();
+    const never = newUser();
+    activate('2026-09-21T00:00:00Z');
+    saveSettings(off, { autoSubmit: false });
+    t.clock.set('2026-10-05T12:00:00Z');
+    expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 }); // P1, governed by the off switch saved before it
+    t.clock.set(formatUtcInstant(period(P2.payroll).dueAtUtc));
+    expect(scan()).toMatchObject({ finalized: 0, overdueRecorded: 1 }); // P2
+    expect(listOverdueRecords(t.db, off.id).map((row) => row.payrollDate)).toEqual([P1.payroll, P2.payroll]);
+    expectNothingAutomated(never, 'the account that never saved');
   });
 });
 
@@ -446,7 +560,7 @@ describe('switch on: automatic finalization (R-05, R-06, F-1)', () => {
   });
 
   it('records a choose-mode deficit as pending_choice and posts no debit', () => {
-    const user = newUser('choose_at_signoff', 300);
+    const user = configuredUser('choose_at_signoff', 300);
     work(user, '2026-09-16', '09:00', '13:00');
     activate('2026-09-21T00:00:00Z');
     t.clock.set('2026-09-30T00:05:00Z');
@@ -462,7 +576,7 @@ describe('switch on: automatic finalization (R-05, R-06, F-1)', () => {
   });
 
   it('posts an auto-deduct debit through the ledger with the automatic origin', () => {
-    const user = newUser('auto_deduct', 300);
+    const user = configuredUser('auto_deduct', 300);
     work(user, '2026-09-16', '09:00', '13:00');
     activate('2026-09-21T00:00:00Z');
     t.clock.set('2026-09-30T00:05:00Z');
@@ -475,7 +589,7 @@ describe('switch on: automatic finalization (R-05, R-06, F-1)', () => {
   });
 
   it('keeps an auto-deduct debit pending when the balance cannot cover it', () => {
-    const user = newUser('auto_deduct', 100);
+    const user = configuredUser('auto_deduct', 100);
     work(user, '2026-09-16', '09:00', '13:00');
     activate('2026-09-21T00:00:00Z');
     t.clock.set('2026-09-30T00:05:00Z');
@@ -486,7 +600,7 @@ describe('switch on: automatic finalization (R-05, R-06, F-1)', () => {
   });
 
   it('posts nothing for an incomplete day and still submits the period', () => {
-    const user = newUser('auto_deduct', 300);
+    const user = configuredUser('auto_deduct', 300);
     // An open session (no end): the day stays unresolved, never invented hours.
     createSession({ db: t.db, clock: t.clock, user }, '2026-09-16', {
       start: la('2026-09-16T09:00'),
@@ -655,9 +769,9 @@ describe('switch off: overdue state and notice record, nothing finalized', () =>
   });
 
   it('never records or finalizes a deactivated user', () => {
-    const user = newUser();
+    const user = configuredUser();
     t.db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(user.id);
-    const other = newUser();
+    const other = configuredUser();
     activate('2026-09-21T00:00:00Z');
     t.clock.set('2026-09-30T00:05:00Z');
     expect(scan().finalized).toBe(1);
@@ -749,7 +863,7 @@ describe('a manual sign-off after the automatic submission', () => {
 
 describe('recovery after downtime', () => {
   it('processes missed deadlines chronologically in bounded batches', () => {
-    const user = newUser();
+    const user = configuredUser();
     activate('2026-09-21T00:00:00Z');
     // The runner was down for six weeks: four deadlines passed (two in daylight time, one just before and one after the change).
     t.clock.set('2026-11-12T12:00:00Z');
@@ -768,7 +882,7 @@ describe('recovery after downtime', () => {
   });
 
   it('orders several owners by deadline first and never starves an older period behind a newer one', () => {
-    const early = newUser();
+    const early = configuredUser();
     const late = newUser();
     activate('2026-09-21T00:00:00Z');
     // `late` joined the switch after P1: only its P2 deadline is eligible, `early` has P1 and P2.
@@ -832,7 +946,7 @@ describe('the runner registration', () => {
 
 describe('a failure rolls the automatic finalization back (transaction rollback)', () => {
   it('leaves no row behind, records the failure once and finalizes after the cause is gone', () => {
-    const user = newUser('auto_deduct', 300);
+    const user = configuredUser('auto_deduct', 300);
     activate('2026-09-21T00:00:00Z');
     t.db.exec("CREATE TRIGGER synthetic_job_failure BEFORE INSERT ON jobs BEGIN SELECT RAISE(ABORT, 'synthetic_failure'); END");
     t.clock.set('2026-09-30T00:05:00Z');

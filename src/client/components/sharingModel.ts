@@ -173,26 +173,22 @@ export function shareOperationText(operation: string): string | null {
   return SHARE_OPERATION_TEXT[operation] ?? null;
 }
 
-/** Operations the system records on its own, with no person acting (no actor on the audit event). */
-const SYSTEM_OPERATIONS: ReadonlySet<string> = new Set(['timesheet.auto_finalize', 'deadline.overdue', 'deadline.finalize_failed']);
-
-export function isSystemOperation(operation: string): boolean {
-  return SYSTEM_OPERATIONS.has(operation);
-}
-
 /**
- * The badge of a history entry made by someone other than the owner. A system event (the
- * automatic submission and its deadline records) is labelled automatic, never as another person.
+ * The badge of a history entry made by someone other than the owner. A system event, which the server
+ * flags (`actor_is_system`: the event has no actor, whatever its operation: the automatic submission,
+ * its deadline records and the OT postings it makes), is labelled automatic, never as another person.
  * An act performed through a share names the grantee (the server sends the display name, never an
  * id): "Changed by" for an edit and "Downloaded by" for a PDF download. Any other foreign event
  * stays unnamed.
  */
-export function historyActorBadge(event: Pick<HistoryEvent, 'operation' | 'actor_is_self' | 'via_share' | 'actor_display_name'>): string | null {
+export function historyActorBadge(
+  event: Pick<HistoryEvent, 'operation' | 'actor_is_self' | 'actor_is_system' | 'via_share' | 'actor_display_name'>,
+): string | null {
   if (event.via_share && event.actor_display_name !== null) {
     const verb = event.operation === 'share.pdf_download' ? 'Downloaded' : 'Changed';
     return `${verb} by ${event.actor_display_name} (shared access)`;
   }
-  if (!event.actor_is_self && isSystemOperation(event.operation)) return 'automatic';
+  if (event.actor_is_system) return 'automatic';
   return event.actor_is_self ? null : 'by someone else';
 }
 

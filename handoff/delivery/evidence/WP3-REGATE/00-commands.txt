@@ -1,0 +1,17 @@
+# WP3-REGATE attempt 1 - commands and exits (2026-10-05); Node v24.21.0 portable, full path; TEMP/TMP=<scratch>\tmp
+HEAD before/after: 2f2520e1ab80ff55938b70cd469f0bfe888e04a2 / same
+Digest (git ls-tree form, HEAD): eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410 before and after (12-digest-end.txt)
+1  git archive 2f2520e | tar -x -C <scratch>/export                              exit 0
+   npm ci                                                                         exit 0   (01-npmci.txt)
+2  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify         exit 0   (02-verify.txt)
+   0 deprecation lines; 62 files, 1407 tests passed; SMOKE PASSED, 40 PASS lines, 0 FAIL
+3  npm run test:e2e (Edge)                                                        exit 0   127 passed, 5 skipped, 0 failed (03-e2e.txt)
+4  vitest run <file> x20 fresh processes, each of 4 race sets                      20/20 each (11-races.txt)
+5  vitest run --reporter=verbose (all 1407 tests)                                  exit 0   (04-vitest-verbose.txt)
+11 node <scratch>/tmp/mig.mjs (fresh; v3 = 0001-0003 unchanged since 5fafeae; upgrade; rerun)   exit 0   (05-migrations.txt)
+12 digest on the export: git hash-object of the export files at the 721 non-handoff paths  eeb417d3...8410  (06-digest-export-blobs.txt)
+   git ls-tree form                                                               eeb417d3...8410  (06b-digest-lstree.txt)
+   npm run digest in the export                                                   exit 1 (the export has no .git; expected; not used)
+   workflow Python validate_orchestration.py exit 0; check_recovery.py exit 0; validate_package.py --preflight exit 0 (07, 08, 09)
+16/18 git diff --name-status 3ead61e 2f2520e (10-diff-wp2.txt); a1cd566 2f2520e (10-diff-fix.txt)
+Renders and screenshots (viewed): pdf-*-synthetic.png (5), sharing-review-hint-{desktop,mobile}-synthetic.png

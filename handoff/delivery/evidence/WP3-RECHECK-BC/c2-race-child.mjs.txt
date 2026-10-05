@@ -1,0 +1,62 @@
+// WP3-RECHECK-BC probe C2 child (ported from the published WP3-AUDIT-C probe P2 child): one process with its own connection to the same SQLite file.
+//   edit <cfg> <date> <day|batch>: the grantee edits the owner's day through /api/shared until refused 5 times.
+//   revoke <cfg> <shareId> <delayMs> <afterRowid>: once both editors have committed writes, waits <delayMs> and the
+//   owner revokes the share through POST /api/shares/:id/revoke.
+import { setTimeout as sleep } from 'node:timers/promises';
+import { Clock, createApp, LoginRateLimiter, openDatabase, config, request } from './lib.mjs';
+
+const [mode, cfgJson, arg1, arg2] = process.argv.slice(2);
+const cfg = JSON.parse(cfgJson);
+const db = openDatabase(cfg.dbPath);
+const clock = new Clock('2026-09-29T20:00:00Z');
+const app = createApp({ db, clock, config: config(cfg.dbPath), loginLimiter: new LoginRateLimiter(), staticDir: null }, { dataDir: cfg.dataDir });
+
+if (mode === 'edit') {
+  const date = arg1;
+  let ok = 0;
+  let refused = 0;
+  let other = 0;
+  let monotonic = true;
+  let seenRefusal = false;
+  for (let i = 0; i < 2000 && refused < 5; i++) {
+    const row = db.prepare('SELECT version, category FROM day_entries WHERE user_id = ? AND work_date = ?').get(cfg.owner, date);
+    const version = row?.version ?? null;
+    // Always a real change (an unchanged batch entry is a no-op without an audit event).
+    const category = row?.category === 'Off' ? 'Worked' : 'Off';
+    const r =
+      arg2 === 'batch'
+        ? await request(app, 'POST', `/api/shared/${cfg.owner}/days/batch`, {
+            cookie: cfg.granteeCookie,
+            body: { mode: 'commit', entries: [{ work_date: date, category, expected_version: version }] },
+          })
+        : await request(app, 'PUT', `/api/shared/${cfg.owner}/days/${date}`, {
+            cookie: cfg.granteeCookie,
+            body: { category, leave_minutes: 0, wfh: false, notes: `r${i}`, expected_version: version },
+          });
+    if (r.status === 200) {
+      ok++;
+      if (seenRefusal) monotonic = false;
+    } else if (r.status === 404) {
+      refused++;
+      seenRefusal = true;
+    } else other++;
+  }
+  console.log(JSON.stringify({ ok, refused, other, monotonic }));
+} else if (mode === 'revoke') {
+  const afterRowid = Number(process.argv[6]);
+  const started = Date.now();
+  // Wait until the editors are running (at least 4 grantee writes after the grant), at most 20 s.
+  while (Date.now() - started < 20000) {
+    const n = db
+      .prepare("SELECT count(*) FROM audit_events WHERE actor_user_id = ? AND owner_user_id = ? AND operation NOT LIKE 'share.%' AND rowid > ?")
+      .pluck()
+      .get(cfg.grantee, cfg.owner, afterRowid);
+    if (n >= 4) break;
+    await sleep(2);
+  }
+  await sleep(Number(arg2));
+  const r = await request(app, 'POST', `/api/shares/${arg1}/revoke`, { cookie: cfg.ownerCookie, body: {} });
+  console.log(JSON.stringify({ status: r.status }));
+  if (r.status !== 200) process.exitCode = 1;
+}
+db.close();

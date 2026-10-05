@@ -1,0 +1,77 @@
+PASS  cli seed  [  capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured]
+PASS  built server listening (JOB_RUNNER off, capture mode, loopback)
+PASS  three logins
+PASS  E1 settings, signature, note and two sessions (weekday and Sunday)  [201/201/200/201/201]
+PASS  E1 grants E2 (edit, OT read, PDF) and the admin (view)  [201/201]
+PASS  E2 edits E1 day 2026-09-30 (session) and 2026-10-01 (day entry) through /api/shared  [201/200]
+PASS  C-01 owner review carries the hint beside the payload: E2 by display name, days 2026-09-30 and 2026-10-01  [[{"display_name":"Example Employee Two","days":2,"work_dates":["2026-09-30","2026-10-01"]}]]
+PASS  C-01 the hint is not inside the payload (no grantee name, no grantee_changes, no E2 id)
+PASS  C-01 payload_hash = SHA-256 of the canonical JSON of the payload alone  [00c4c6744bae vs 00c4c6744bae]
+INFO  an identical owner PUT of 2026-10-01 (same content, current version): status 200, E1 events 14->15, hint [{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]
+PASS  C-01 an owner change of 2026-10-01 takes the day over: the hint now lists only 2026-09-30  [[{"display_name":"Example Employee Two","days":1,"work_dates":["2026-09-30"]}]]
+PASS  C-01 shared review route 404 for the grantee and the admin (not on the allowlist)  [404/404]
+PASS  C-01 the shared timesheet view carries no hint  [200]
+PASS  C-01 E2 and the admin get their own review with an empty hint and nothing of E1
+PASS  C-01 the hash with the hint shown (GET review) equals the hash built without it (production builder)  [858d966f0ff5/858d966f0ff5]
+PASS  E1 signs off the hash shown with the hint (201)  [201]
+PASS  C-01 after the owner sign-off the hint window restarts (empty)  [[]]
+PASS  E2 note line and auto-submit on, image authorized; admin records the activation  [201/201/200]
+PASS  five production run-jobs passes exit 0  [{"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0} | {"claimed":7,"succeeded":5,"retried":1,"intervention":1,"lost":0} | {"claimed":5,"succeeded":5,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0} | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}]
+PASS  GET /api/revisions lists only the caller's revisions  [e1=1 e2=1 admin=1]
+PASS  owner PDF download: 200 application/pdf, no-store, attachment, nosniff  [200 no-store attachment; filename="timesheet-2026-10-16-r1.pdf"]
+PASS  C-01 the signed PDF carries no hint: no grantee name, no "changed by", no "share"  [24 lines]
+PASS  the signed PDF prints the signer name and the Sunday 2026-10-04 row
+INFO  E1 PDF lines: 24; first: Submission TS-20261016-aba173a5e4 / C&D Semiconductor Services, Inc. / Revision 1
+PASS  E2 downloads its own automatic PDF  [200]
+PASS  E2 downloads E1 PDF through the PDF item (200, no-store)  [200]
+PASS  the admin (also a grantee) revokes its own share of E1 through the admin route  [200]
+PASS  C-02 E1 history attributes exactly the four grantee acts through /api/shared (day entry created by the session POST, session, day PUT, PDF download) to the grantee name  [day_entry.create,day_entry.create,share.pdf_download,work_session.create]
+PASS  C-02 every attributed event names E2 only, with actor_user_id null
+PASS  C-02 the admin-route revocation by an admin holding a share stays unattributed  [{"via_share":false,"name":null}]
+PASS  C-02 E1 history carries no other user's id or email (E2, admin), and E2's name only in attribution
+PASS  C-02 E2's and the admin's own histories hold nothing of E1 (id, revision, notes, address, signer, share ids)
+PASS  history is not shared: /api/shared/<E1>/history 404  [404]
+PASS  E2 leaves the share: the shared PDF is 404 at once and the leave stays unattributed in E1 history  [200/404]
+PASS  ID swap / anonymous: E2 -> E1 PDF -> 404  [404]
+PASS  ID swap / anonymous: admin -> E1 PDF -> 404  [404]
+PASS  ID swap / anonymous: anonymous -> E1 PDF -> 401  [401]
+PASS  ID swap / anonymous: E1 -> E2 PDF -> 404  [404]
+PASS  ID swap / anonymous: E1 upper-case id -> 404  [404]
+PASS  ID swap / anonymous: E1 traversal id -> 404  [404]
+PASS  ID swap / anonymous: admin shared path after its share was revoked -> 404  [404]
+PASS  ID swap / anonymous: E2 -> E1 signature -> 404  [404]
+PASS  ID swap / anonymous: admin -> E1 signature -> 404  [404]
+PASS  ID swap / anonymous: E1 -> E2 signature -> 404  [404]
+PASS  ID swap / anonymous: anonymous -> E1 signature -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> signatures/current -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> revisions -> 401  [401]
+PASS  ID swap / anonymous: anonymous -> E1 review -> 401  [401]
+PASS  ID swap / anonymous: admin -> E1 resend -> 404  [404]
+PASS  ID swap / anonymous: E2 -> E1 resend -> 404  [404]
+PASS  owner signature download 200 image/png, no-store, attachment  [200]
+PASS  signatures/current answers the caller only (E1 own id; admin null), no-store
+PASS  deliveries are owner-scoped: admin list empty, admin decision 404  [0/404]
+PASS  no static path: GET /<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /files/<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/files/<pdf-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /api/files/<pdf-key>  [404 application/json]
+PASS  no static path: GET /<sig-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /files/<sig-key>  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/mail-capture/<attempt>/attachment.pdf  [200 text/html; charset=utf-8]
+PASS  no static path: GET /mail-capture/<attempt>/message.eml  [200 text/html; charset=utf-8]
+PASS  no static path: GET /t.db  [200 text/html; charset=utf-8]
+PASS  no static path: GET /private-data/../t.db  [200 text/html; charset=utf-8]
+PASS  no static path: GET /t.db-wal  [200 text/html; charset=utf-8]
+PASS  no-store on the owner API answers (incl. the review with its hint)  [no-store,no-store,no-store,no-store,no-store,no-store,no-store]
+PASS  every admin answer field is in the allowlist (docs/03, operationsStatus.ts)
+INFO  admin key paths: .automation .automation.active_from .automation.recorded_at .automation.recorded_by .operations .operations.activation .operations.activation.active_from .operations.activation.recorded_at .operations.activation.recorded_by .operations.deliveries .operations.deliveries.accepted .operations.deliveries.failed_permanent .operations.deliveries.failed_temporary .operations.deliveries.preparing .operations.deliveries.sending .operations.deliveries.uncertain .operations.jobs .operations.jobs.cancelled .operations.jobs.intervention .operations.jobs.leased .operations.jobs.queued .operations.jobs.succeeded .operations.runner .operations.runner.heartbeat_at .operations.runner.state .operations.sender .operations.sender.configured .operations.sender.outbound_mode .shares .shares[].created_at .shares[].grantee .shares[].grantee.display_name .shares[].grantee.id .shares[].id .shares[].items .shares[].items.ot_read .shares[].items.pdf_download .shares[].items.timesheets .shares[].owner .shares[].owner.display_name .shares[].owner.id .shares[].revoked_at .shares[].revoked_by_role .submissions .submissions[].delivery .submissions[].delivery.accepted_at .submissions[].delivery.attempts .submissions[].delivery.decision_required .submissions[].delivery.fault_code .submissions[].delivery.job_fault_code .submissions[].delivery.job_state .submissions[].delivery.state .submissions[].display_name .submissions[].pdf .submissions[].pdf.fault_code .submissions[].pdf.state .submissions[].period .submissions[].period.due_at .submissions[].period.payroll_date .submissions[].period.period_end .submissions[].period.period_start .submissions[].recipients .submissions[].recipients.effective .submissions[].recipients.effective.cc .submissions[].recipients.effective.to .submissions[].recipients.frozen .submissions[].recipients.frozen.cc .submissions[].recipients.frozen.to .submissions[].revision .submissions[].revision.finalized_at .submissions[].revision.no .submissions[].revision.origin .submissions[].revision.review_state .submissions[].revision.send_requested .submissions[].user_id .users .users[].calendar_id .users[].created_at .users[].display_name .users[].email .users[].id .users[].role .users[].status .users[].updated_at
+PASS  admin answers hold no timesheet detail, note, signer, template/subject/body, hash, key, review hint or history attribution
+PASS  admin sees E1 recipient addresses, effective and frozen (F-Q3 (b))  [{"effective":{"to":["<email>"],"cc":["<email>"]},"frozen":{"to":["<email>"],"cc":["<email>"]}}]
+INFO  admin submission rows: Example Admin|2026-10-16|r1|deadline|pending|pdf=ready|delivery=failed_permanent/intervention/recipient_missing ; Example Employee|2026-10-16|r1|employee|signed|pdf=ready|delivery=accepted/succeeded/null ; Example Employee Two|2026-10-16|r1|deadline|pending|pdf=ready|delivery=accepted/succeeded/null
+PASS  the admin account empty-period automatic submission without recipients shows a fault, never accepted (AC-14)  [{"state":"failed_permanent","attempts":1,"accepted_at":null,"fault_code":"recipient_missing","decision_required":false,"job_state":"intervention","job_fault_code":"recipient_missing"}]
+PASS  E1 capture: recipients = frozen snapshot, PDF hash = download, subject frozen, capture mode
+PASS  C-01 stored revision: payload and reviewed hashes equal the hash shown with the hint; the stored payload and the e-mail hold no hint or grantee name
+PASS  no password, hash, session token or token hash in 173 responses, logs, captures, audit payloads, job errors, provider responses or payloads
+INFO  server exit code=null signal=SIGTERM; server log lines: 1
+HTTP PROBE PASSED
+exit 0

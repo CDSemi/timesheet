@@ -1,0 +1,62 @@
+WP3-RECHECK-BC attempt 1 - commands, exits and results (timesheet-auditor; self-reported model claude-opus-5-5)
+Date: 2026-10-05 (UTC). Host: Windows 11, Git Bash. Node: portable v24.21.0 called by full path for every node/npm
+step; npm 11.18.0 through npm-cli.js on Node 24. Scratch: <scratch> = D:\timesheet-tmp\WP3-RECHECK-BC (outside Dropbox);
+TEMP/TMP/TMPDIR = <scratch>\tmp. PRODUCTION_SENDING_ENABLED unset; outbound capture only; no real mail.
+
+Identity before (first commands after `node --version`)
+  1  <node24>/node.exe --version                                  -> v24.21.0
+  2  git -C <project> rev-parse HEAD                               -> 2f2520e1ab80ff55938b70cd469f0bfe888e04a2
+  3  git -C <project> ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+                                                                  -> eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410 (= regate digest)
+Scratch clones
+  4  git clone --no-local --no-checkout <project> <scratch>/repo; git checkout --detach 2f2520e1ab80ff55938b70cd469f0bfe888e04a2
+     git -C <scratch>/repo rev-parse HEAD                         -> 2f2520e1ab80ff55938b70cd469f0bfe888e04a2; status clean
+     ls-tree digest (scratch)                                     -> eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410 (721 files)
+  5  git clone --no-local --no-checkout <project> <scratch>/prefix; git checkout --detach a1cd566e59253d19f53cfd5b3a81fd27a7e9a056
+  6  git -C <scratch>/repo diff --stat a1cd566 2f2520e -- . ':!handoff'  -> 23 files (13 src, 10 tests), +893/-59
+Checks
+  7  npm ci (repo)                                                exit 0, 0 vulnerabilities (01-npm-ci.txt)
+  8  npm ci (prefix)                                              exit 0
+  9  NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify (repo)
+                                                                  exit 0; 62 files / 1407 tests passed; SMOKE PASSED, 40 PASS lines;
+                                                                  0 lines matching "deprecat" (02-verify.txt)
+ 10  git -C <scratch>/prefix checkout 2f2520e -- <the 9 changed/new unit+integration test files>   (scratch only)
+     node node_modules/vitest/vitest.mjs run --reporter=verbose <those 9 files>   (prefix = a1cd566 source + freeze tests)
+                                                                  exit 1; 23 failed | 140 passed (163); every named
+                                                                  B-01/B-02/B-03/C-01/C-02 regression test fails on a1cd566
+                                                                  (03-red-prefix.txt)
+ 11  node probes/b1-automation.mjs           (repo)              exit 0; 27 PASS, 0 FAIL (04-b1-automation.txt)
+     PROBE_REPO=<scratch>/prefix node probes/b1-automation.mjs   exit 1; 19 PASS, 8 FAIL = WP3-B-01 reproduced on a1cd566
+ 12  node probes/b2-send-recovery.mjs        (repo)              exit 0; 25 PASS, 0 FAIL (05-b2-send-recovery.txt)
+     PROBE_REPO=<scratch>/prefix node probes/b2-send-recovery.mjs exit 1; 21 PASS, 4 FAIL = WP3-B-02 reproduced on a1cd566
+ 13  node probes/b3-history-labels.mjs       (repo)              exit 1; 8 PASS, 1 FAIL = new finding WP3-RBC-01
+                                                                  (automatic OT credit, actor-less, badged "by someone else")
+     PROBE_REPO=<scratch>/prefix node probes/b3-history-labels.mjs exit 1; 5 PASS, 4 FAIL (raw codes, auto_finalize/overdue
+                                                                  "by someone else") (06-b3-history-labels.txt)
+ 14  E2E_SCREENSHOT_DIR=<scratch>\e2e-shots npm run test:e2e (repo; Edge channel, desktop 1280x800 + mobile 390x844)
+                                                                  exit 0; 127 passed, 5 skipped, 0 failed (5.2 min) (07-e2e.txt)
+ 15  node probes/c1-authz-hint.mjs           (repo)              exit 1; 84 PASS, 1 FAIL = new finding WP3-RBC-02 (grantee change made
+                                                                  before the period start missing from the hint) (08-c1-authz-hint.txt)
+     PROBE_REPO=<scratch>/prefix node probes/c1-authz-hint.mjs   exit 1; 74 PASS, 11 FAIL = WP3-C-01 and WP3-C-02 reproduced on a1cd566
+ 16  node probes/c2-race.mjs (+ c2-race-child.mjs)               exit 0; 23 PASS, 0 FAIL (09-c2-race.txt)
+ 17  node probes/b4-get-safety.mjs <scratch>/repo <scratch>/runs/b4-repo
+                                                                  exit 0; 204 GET requests, 1 writing = audited grantee PDF download
+                                                                  (10-b4-get-safety.txt)
+ 18  node probes/b5-css-tokens.mjs <scratch>/repo ; ... <scratch>/prefix
+                                                                  exit 0 / exit 0; 0 literals outside :root, 0 inline styles (11-b5-css-tokens.txt)
+ 19  node probes/b6-note-image-matrix.mjs    (repo)              exit 0; 30 PASS (12-b6-note-image-matrix.txt)
+ 20  node probes/b7-query-plans.mjs <c1 run db>                  exit 0 (13-b7-query-plans.txt)
+ 21  node probes/u1-ui.mjs <scratch>/repo <scratch>/runs/u1b-repo <scratch>/shots 47322
+                                                                  exit 1; 25 PASS, 2 FAIL = WP3-RBC-01 on desktop and mobile; 0 overflow,
+                                                                  0 unnamed controls; server 0 deprecation lines (14-u1-ui.txt). An earlier
+                                                                  run on port 47321 (runs/u1-repo) gave the same result without the two
+                                                                  OT-credit screenshots, which were added for the rerun.
+                                                                  10 screenshots copied as recheck-bc-*-synthetic.png and viewed.
+ 22  5 rounds: vitest run deadline-race, delivery-crash, jobs-restart, delivery, deadline, history, review-grantee-changes, sharing
+                                                                  exit 0 each; 8 files / 126 tests per round (15-race-rounds.txt)
+ 23  node probes/periods-list.mjs (planning aid: seed calendar periods and due instants); probes/q.mjs (one read-only query on a
+     probe database: revision ledger lines of the B3 run)
+Identity after: see 16-digest-after.txt (project and scratch HEAD 2f2520e, digest eeb417d3...48410, 721 files, clean).
+Processes: no node or msedge process with a <scratch> command line remained (Get-CimInstance Win32_Process filter); every probe
+server and browser was closed by its finally block.
+Scratch-only edits: the freeze's test files were checked out into <scratch>/prefix for step 10; no project source was changed.
