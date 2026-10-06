@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -23,6 +23,8 @@ if (config.databasePath.split(/[\\/]/).some((segment) => segment.toLowerCase() =
   console.warn('DATABASE_PATH is inside a Dropbox folder; keep the live SQLite database on local storage (doc 07).');
 }
 const delivery = loadDeliveryConfig(process.env, config);
+// The private directory exists before the first request, so /api/ready reports a usable volume (not a missing one).
+mkdirSync(delivery.dataDir, { recursive: true, mode: 0o700 });
 const db = openDatabase(config.databasePath);
 const migration = migrate(db);
 const app = createApp(

@@ -1,0 +1,29 @@
+GOV-SKILL-AUDIT evidence: freeze diff scope, blob identity and hygiene of the three skill files.
+
+$ git diff --name-only 3bdffbec685599b02c41c0a1f85931c8d90242f2^ 3bdffbec685599b02c41c0a1f85931c8d90242f2 | grep -v '^handoff/'
+.claude/skills/readme-md/SKILL.md
+.claude/skills/readme-md/references/markdown.md
+.claude/skills/readme-md/references/outlines.md
+pipe exit 0 0
+$ git ls-tree -r 3bdffbec685599b02c41c0a1f85931c8d90242f2 -- .claude/skills/readme-md
+100644 blob 3f457942db64399372ad10fd2b6177fd5824cee0	.claude/skills/readme-md/SKILL.md
+100644 blob 56f5eed2787e7f6e5b62af6302bd318b123fa3ce	.claude/skills/readme-md/references/markdown.md
+100644 blob 64de9ad834e66aac906c43fabf83fbbcb9cd4b9c	.claude/skills/readme-md/references/outlines.md
+exit 0
+$ git hash-object (working tree copies)
+3f457942db64399372ad10fd2b6177fd5824cee0
+56f5eed2787e7f6e5b62af6302bd318b123fa3ce
+64de9ad834e66aac906c43fabf83fbbcb9cd4b9c
+exit 0
+$ git diff --check 3bdffbec685599b02c41c0a1f85931c8d90242f2^ 3bdffbec685599b02c41c0a1f85931c8d90242f2
+exit 0
+$ parent digest (ls-tree 3bdffbec685599b02c41c0a1f85931c8d90242f2^, handoff excluded)
+c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72 *-
+$ wc -l of the three files at 3bdffbec685599b02c41c0a1f85931c8d90242f2
+SKILL.md 282
+references/markdown.md 150
+references/outlines.md 173
+$ last byte is LF
+SKILL.md   \n
+references/markdown.md   \n
+references/outlines.md   \n

@@ -58,3 +58,31 @@ Return at most 120 words, beginning with your self-reported model.
 ## Results
 
 (Verifier appends here.)
+
+Verifier: timesheet-verifier (claude-sonnet-5-5), attempt 1, 2026-10-05. Node v24.21.0 portable.
+Evidence (masked): handoff/delivery/evidence/GOV-SKILL-GATE/*.txt. Raw output under D:\.claude-tmp\timesheet\GOV-SKILL-GATE.
+
+HEAD before and after: 3bdffbec685599b02c41c0a1f85931c8d90242f2 (= freeze_commit).
+
+1. PASS. HEAD equals freeze; `git status --short` outside handoff/ is empty.
+2. PASS. `git diff --name-only <freeze>^ <freeze>` outside handoff/delivery/ lists only
+   .claude/skills/readme-md/SKILL.md, references/markdown.md, references/outlines.md.
+3. PASS. Frontmatter fields: `name: readme-md`, `description` (folded block). Name equals folder.
+   Body names references/markdown.md and references/outlines.md; both exist.
+4. PASS. `git diff --check` exit 0. Precommit over the three files (scratch repo with the files
+   staged, Node 24): "PASS: 3 staged file(s), 0 blocking finding(s), 0 warning(s)", exit 0.
+   Grep `\r|[ \t]+$` over the skill folder: 0 matches.
+5. PASS. Export via `git archive` of the freeze; `npm ci` exit 0; `NODE_OPTIONS=--trace-deprecation
+   --pending-deprecation npm run verify` exit 0; Test Files 62 passed; Tests 1420 passed (1420);
+   0 deprecation lines; smoke ran.
+6. PASS. validate_orchestration.py exit 0; check_recovery.py exit 0; validate_package.py --preflight
+   exit 0 (live board).
+7. PASS. Digest of record (export blob IDs hashed with git hash-object, equal to git ls-tree):
+   aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d, 724 files; matches the
+   committer's figure. Versus WP3 c31c300c… (parent tree): only three added files, no other change:
+   + .claude/skills/readme-md/SKILL.md 3f457942db64399372ad10fd2b6177fd5824cee0
+   + .claude/skills/readme-md/references/markdown.md 56f5eed2787e7f6e5b62af6302bd318b123fa3ce
+   + .claude/skills/readme-md/references/outlines.md 64de9ad834e66aac906c43fabf83fbbcb9cd4b9c
+   (Parent listing diff shows exactly these three lines; 721 files before.)
+
+Decision: PASS (7/7). No process left running; created only temp files.

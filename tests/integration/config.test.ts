@@ -45,6 +45,13 @@ function expectRefusedWithoutSecrets(env: NodeJS.ProcessEnv, pattern: RegExp): v
   }
 }
 
+/** A complete synthetic production environment (the minimum a container supplies). */
+const PRODUCTION_BASE: NodeJS.ProcessEnv = {
+  NODE_ENV: 'production',
+  DATABASE_PATH: resolve('/synthetic/data/timesheet.db'),
+  DATA_DIR: resolve('/synthetic/data/private-data'),
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -57,6 +64,62 @@ describe('application configuration (unchanged by WP3)', () => {
     expect(config.databasePath).toBe(join(LOCAL, 'timesheet-dev', 'timesheet.db'));
     expect(config.production).toBe(false);
   });
+});
+
+describe('production configuration (container-ready, docs/07)', () => {
+  const production: NodeJS.ProcessEnv = {
+    ...PRODUCTION_BASE,
+    APP_ORIGINS: 'https://timesheet.example.invalid',
+    PUBLIC_BASE_URL: 'https://timesheet.example.invalid',
+  };
+
+  it('starts with an explicit absolute DATABASE_PATH and DATA_DIR', () => {
+    expect(loadConfig(production).databasePath).toBe(production.DATABASE_PATH);
+    expect(loadDeliveryConfig(production).dataDir).toBe(production.DATA_DIR);
+  });
+
+  it.each([undefined, 'relative/timesheet.db', ':memory:', ''])('refuses production with DATABASE_PATH = %j', (value) => {
+    const env = { ...production, LOCALAPPDATA: LOCAL, DATABASE_PATH: value };
+    expect(errorOf(() => loadConfig(env)).message).toMatch(/DATABASE_PATH is required in production as an absolute path/);
+    expect(() => loadDeliveryConfig(env)).toThrow(/DATABASE_PATH is required in production/);
+  });
+
+  it.each([undefined, 'relative/private', '', './private'])('refuses production with DATA_DIR = %j', (value) => {
+    const env = { ...production, LOCALAPPDATA: LOCAL, DATA_DIR: value };
+    const message = errorOf(() => loadDeliveryConfig(env)).message;
+    expect(message).toMatch(/DATA_DIR is required in production as an absolute path/);
+    expect(message).not.toContain('relative/private');
+  });
+
+  it('keeps the loopback host by default and accepts a container bind address', () => {
+    expect(loadConfig({ LOCALAPPDATA: LOCAL }).host).toBe('127.0.0.1');
+    expect(loadConfig(production).host).toBe('127.0.0.1');
+    expect(loadConfig({ ...production, HOST: '0.0.0.0' }).host).toBe('0.0.0.0');
+  });
+});
+
+describe('trusted proxy addresses', () => {
+  it('trusts no proxy by default', () => {
+    expect(loadConfig({ LOCALAPPDATA: LOCAL }).trustedProxyAddresses).toEqual([]);
+    expect(loadConfig({ LOCALAPPDATA: LOCAL, TRUSTED_PROXY_ADDRESSES: '' }).trustedProxyAddresses).toEqual([]);
+  });
+
+  it('reads an exact, normalized address list', () => {
+    const config = loadConfig({
+      LOCALAPPDATA: LOCAL,
+      TRUSTED_PROXY_ADDRESSES: ' 172.18.0.1 , ::ffff:10.0.0.2,FD00:0:0:0:0:0:0:1 ',
+    });
+    expect(config.trustedProxyAddresses).toEqual(['172.18.0.1', '10.0.0.2', 'fd00::1']);
+  });
+
+  it.each(['172.18.0.0/16', 'proxy.example.invalid', '*', '172.18.0.1:8080', '999.1.1.1', 'fe80::1%eth0'])(
+    'refuses %j without echoing it',
+    (value) => {
+      const message = errorOf(() => loadConfig({ LOCALAPPDATA: LOCAL, TRUSTED_PROXY_ADDRESSES: value })).message;
+      expect(message).toMatch(/TRUSTED_PROXY_ADDRESSES must be a comma-separated list of exact IP addresses/);
+      expect(message).not.toContain(value);
+    },
+  );
 });
 
 describe('delivery configuration defaults', () => {
@@ -119,7 +182,7 @@ describe('public base URL for deep links', () => {
   });
 
   it('requires an explicit HTTPS base URL in production', () => {
-    const production = { NODE_ENV: 'production', APP_ORIGINS: 'https://timesheet.example.invalid', LOCALAPPDATA: LOCAL };
+    const production = { ...PRODUCTION_BASE, APP_ORIGINS: 'https://timesheet.example.invalid' };
     expect(() => loadDeliveryConfig(production)).toThrow(/PUBLIC_BASE_URL is required in production/);
     expect(() => loadDeliveryConfig({ ...production, PUBLIC_BASE_URL: 'http://timesheet.example.invalid' })).toThrow(
       /must use https in production/,

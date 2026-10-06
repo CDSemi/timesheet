@@ -1,8 +1,10 @@
+import { accessSync, constants, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
+import { MIGRATIONS } from './db/migrations.ts';
 import { FileStore } from './files/fileStore.ts';
 import { errorBody, handleError, notFound } from './http/errors.ts';
 import { noStore, requireAllowedOrigin, requireJsonContentType, unless } from './http/security.ts';
@@ -32,6 +34,27 @@ const GLOBAL_JSON_LIMIT_BYTES = 64 * 1024;
 function isInside(parent: string, child: string): boolean {
   const path = relative(resolve(parent), resolve(child));
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+}
+
+/** True when the private data directory exists and the process may write to it; changes nothing. */
+function isWritableDirectory(path: string): boolean {
+  try {
+    if (!statSync(path).isDirectory()) return false;
+    accessSync(path, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Newest applied schema version, or 0 when the migration table is unreadable. */
+function appliedSchemaVersion(deps: AppDeps): number {
+  try {
+    const version = deps.db.prepare('SELECT MAX(version) FROM schema_migrations').pluck().get();
+    return typeof version === 'number' ? version : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /** One origin: JSON API under /api and the built React client for everything else. */
@@ -81,10 +104,21 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
     unless(isSignatureUpload, requireJsonContentType),
   );
 
-  // Health contains no personal data.
+  // Liveness: the process answers and the database opens. No personal data.
   app.get('/api/health', (c) => {
     deps.db.prepare('SELECT 1').get();
     return c.json({ status: 'ok' });
+  });
+  // Readiness: only booleans and integers (no path, name or count of people); reads and writes nothing personal.
+  const expectedSchema = MIGRATIONS.at(-1)?.version ?? 0;
+  app.get('/api/ready', (c) => {
+    const actual = appliedSchemaVersion(deps);
+    const dataDirWritable = isWritableDirectory(dataDir);
+    const ready = actual === expectedSchema && dataDirWritable;
+    return c.json(
+      { status: ready ? 'ready' : 'not_ready', schema: { expected: expectedSchema, actual }, data_dir_writable: dataDirWritable },
+      ready ? 200 : 503,
+    );
   });
   app.route('/api/auth', authRoutes(deps));
   app.route('/api/admin', adminRoutes(deps));

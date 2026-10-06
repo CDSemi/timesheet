@@ -459,8 +459,41 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        skill files were left untracked. **WP3 is accepted.**
      - The board and STATE now name WP4 as the active package (phase
        wp4-planning-gov-skill). WP4-PLAN is pending.
-     - Running: GOV-SKILL-FREEZE (committer, package GOV). It commits the three owner
-       skill files, plus the WP3-ACCEPT results and the board switch.
+     - GOV-SKILL-FREEZE is committed and pushed as 3bdffbe: 19 paths, including the
+       three owner skill files. The new digest, which includes the skill, is
+       aab8b32c…; all checks returned 0.
+     - GOV-SKILL-GATE: PASS, 7/7.
+       - The scope is only the three skill files, and the frontmatter is valid.
+       - Hygiene is clean, and verify passes 1420 tests.
+       - Validators exit 0.
+       - The digest of record is aab8b32c…; compared with c31c300c… it adds only the
+         three skill files.
+     - WP4-PLAN is done (opus) and adopted by coordinator decision:
+       - 14 tasks: T01–T07, WP4-DEC, T08–T13;
+       - then WP4-GATE and two area audits;
+       - about 33 dispatches, or 37–41 with fix rounds.
+
+       Docker 28.5.1 is present on this machine; Podman is absent.
+     - Owner questions WP4-F-1..F-6 are pending; F-7 is for awareness and belongs to
+       WP5. T01–T06 do not need the answers.
+     - GOV-SKILL-AUDIT: FIX REQUIRED (fresh opus auditor, 3bdffbe).
+       - GOV-SKILL-01 (Medium): the write path at SKILL.md:267 points outside the
+         repository.
+       - GOV-SKILL-02 (Low): markdown.md:142 gives a wrong location rule.
+       - GOV-SKILL-03 (Medium): the source and licence are not recorded (likely
+         LisaHQ/lisa-skills); skills-lock.json has no entry.
+       - GOV-SKILL-04 (Low): it suggests an obsolete `align` attribute.
+       - N1 suggests one AGENTS.md line.
+
+       These are put to the owner as questions Q1–Q4, because the skill is the owner's
+       content. A GOV fix cycle follows the answers.
+     - WP4-T01 is done (author-reported):
+       - changes: trusted-proxy resolver, absolute-path production config, `/api/ready`
+         returning allowlisted keys, `.env.example`, smoke;
+       - tests: red 23 → green 83; the mutation fails 2 tests;
+       - e2e 127 passed; verify 1449 tests; digest 1c57dbae…;
+       - deviation: one line in the sharing-matrix inventory.
+     - Running: WP4-T01-FREEZE (committer).
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -500,7 +533,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: GOV-SKILL-FREEZE only.
+- Live processes: WP4-T01-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

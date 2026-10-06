@@ -1,0 +1,103 @@
+GOV-SKILL-AUDIT evidence: reading analysis of .claude/skills/readme-md at 3bdffbec685599b02c41c0a1f85931c8d90242f2.
+Reviewer: timesheet-auditor, self-reported model claude-opus-5-5, fresh context, no authorship.
+Files read in full with the Read tool: SKILL.md (282 lines), references/markdown.md (150), references/outlines.md (173).
+Working-tree blobs equal the reviewed commit (scope.txt), so line numbers below are valid for 3bdffbe.
+
+== Tool scans (Grep tool, over .claude/skills/readme-md)
+pattern '\r|[ \t]+$'                                        -> 0 matches (no CR, no trailing whitespace)
+pattern email / user-profile path / 'password|token|secret [:=]' / api key / private key (case-insensitive)
+                                                            -> 0 matches
+pattern '\.\./'                                             -> 3 matches:
+  SKILL.md:267              write `../../../README.md` in the target directory
+  references/markdown.md:131  the root README as `../../README.md`   (legitimate example; same in the sibling copy)
+  references/markdown.md:142  `../../../../docs`, and truncates content past 500 KiB.
+pattern 'https?://|curl|wget|npx|npm |pip |install|network|fetch|credential|password|token|settings|permission|commit|push|ignore|bypass|skip|without asking|override'
+  -> only: badge/link URL templates with <owner>/<repo>/<package> placeholders (markdown.md:21-22, 60-64, 139-140);
+     'install' as README content (SKILL.md:64, 110, 239; outlines.md:36, 49, 85);
+     SKILL.md:80 'Ask before installing, using the network, or running anything that changes files.';
+     SKILL.md:50 'take the usual one for the place without asking' (choice of README role only);
+     SKILL.md:174 'Skip "simply"' (wording); SKILL.md:182 'no skipped levels' (headings);
+     SKILL.md:189 '<api-token>' placeholder; SKILL.md:241 placeholders for tokens and paths;
+     SKILL.md:257-258 Safety: no secrets or credentials, '<password>' / 'example.invalid' placeholders;
+     outlines.md:171 'settings' of a template project. No commit, push, permission or settings action.
+Frontmatter (SKILL.md:1-8): name readme-md, description (folded). No allowed-tools, hooks, model or
+  disable-model-invocation key, so the skill grants no tool and changes no setting.
+.claude/settings.json (read-only): {"agent": "timesheet-coordinator"}; unchanged by 3bdffbe (scope.txt).
+
+== Scope 1: conflicts with AGENTS.md and docs/08
+English authoritative, .vi.md pairs, Vietnamese chat (AGENTS.md:3):
+  SKILL.md:28 language order (requested, existing README, project docs, English) picks English for README.md
+    and Vietnamese for README.vi.md: compatible.
+  SKILL.md:30 keep commands, identifiers and file names verbatim in every language: compatible.
+  SKILL.md:262-263 'translated READMEs such as README.<lang>.md updated or reported as stale': in this
+    repository a stale README.vi.md is not allowed (AGENTS.md:3 'keep matching .vi.md translations'), and a
+    new README without a .vi.md fails the preflight ('Missing translation', validate_package.py:201-204).
+    AGENTS.md outranks a skill, and the skill allows 'updated', so the two can coexist: tension, no finding
+    (review note N1).
+  SKILL.md:268 'report briefly in the conversation's language': Vietnamese in the owner's chat, English in an
+    English dispatch; compatible.
+Task records English-only (AGENTS.md:3, docs/08:50): the skill does not write task records; no conflict.
+Privacy (AGENTS.md:6) and public repository:
+  SKILL.md:257-261 no secrets or credentials; internal hostnames or personal contact data only when the README
+    stays internal. This repository is public, so the condition never holds here: compatible.
+  SKILL.md:73-76 asks to read 'the content of every document you can open (PDFs included)'; reading is local,
+    and nothing tells the agent to publish personal data, but step 9 does not name personal records such as
+    timesheet data or signature images: no conflict, review note N2.
+Deprecated APIs (AGENTS.md:13):
+  references/markdown.md:33-51 offers '<div align="center">' for a centered opening. The 'align' attribute on
+    div is obsolete (non-conforming) in the WHATWG HTML standard, and GitHub's sanitizer strips 'style', so no
+    rendered replacement exists on GitHub. The pattern is optional ('can be centered'). Finding GOV-SKILL-04 (Low).
+Commits and pushes only via timesheet-committer (AGENTS.md:14, docs/08:68-78): the skill never commits,
+  pushes, tags or edits git state; SKILL.md:67 only reads the remote and tags. No conflict.
+Vendor-neutral roles (AGENTS.md:15): not touched. The skill exists under .claude/skills only, not under
+  .agents/skills (precedent: redesign-existing-projects); review note N3.
+UI standards (AGENTS.md:31-39): the skill writes Markdown, not UI components or views; not touched.
+
+== Scope 2: unsafe behaviour
+Fetch or execute remote content: none. SKILL.md:78-81 allows local checks (--help, version, counts, the
+  project's fast test command when dependencies are installed) and requires asking before installing, using
+  the network or changing files. Badge URLs are README text, not agent fetches.
+Request credentials: none; placeholders only (SKILL.md:188-189, 257-258).
+Widen permissions or change settings: none (frontmatter has no allowed-tools/hooks; settings.json unchanged).
+Write outside owned paths: SKILL.md:267 'write `../../../README.md` in the target directory'. Read literally
+  from a target directory it names a file three levels above the target; with the repository root as target
+  it is D:/README.md, outside the repository (provenance.txt, 'resolve the rewritten tokens'). Finding
+  GOV-SKILL-01 (Medium). Otherwise the skill writes only the README of the target or the file the request
+  names (SKILL.md:267-268), and review mode changes no files (SKILL.md:277).
+Bypass gates or audits: none. Tell an agent to ignore project rules: none; SKILL.md:209-210 asks to match the
+  repository's Markdown conventions.
+
+== Damaged tokens: cause (evidence, not a finding by itself)
+The sibling copy ../part-flow/.agents/skills/readme-md differs from the reviewed files in exactly two lines:
+  SKILL.md:267        sibling 'write `README.md` in the target directory'   reviewed '`../../../README.md`'
+  markdown.md:142     sibling '`docs/`, and truncates ...'                  reviewed '`../../../../docs`, ...'
+Each damaged token is the repository-root path rewritten relative to its own file's folder
+  (.claude/skills/readme-md + ../../../README.md = README.md; .claude/skills/readme-md/references +
+  ../../../../docs = docs). This is consistent with an automated link rewrite when the files were copied or
+  moved; the cause was not observed. outlines.md is byte-identical to the sibling copy (blob 64de9ad8).
+markdown.md:142 as written states that GitHub looks for a README in '../../../../docs'; GitHub's documented
+  order is .github/, the repository root, then docs/ (documented GitHub behaviour; not re-fetched, no network).
+  Finding GOV-SKILL-02 (Low).
+
+== Scope 3: provenance and licence
+The three files name no author, source, licence or credits (grep in provenance.txt; the only hit is
+  'credits' in SKILL.md:153, meaning README credits sections).
+The sibling project's skills-lock.json (untracked there) records readme-md as source LisaHQ/lisa-skills,
+  sourceType github, skillPath skills/readme-md/SKILL.md, computedHash b5eee66b...a18a.
+Neither local copy reproduces b5eee66b under the probe that reproduces 8 hashes of this repository's lock,
+  so the exact upstream revision is not confirmed.
+This repository's skills-lock.json pins 48 skills, including commit-message from the same source
+  LisaHQ/lisa-skills (skills-lock.json:28-33), but has no readme-md entry, while README.md:35 and
+  README.vi.md:35 say the skills in .agents/ and .claude/ are pinned by skills-lock.json.
+The licence of LisaHQ/lisa-skills is NOT VERIFIED (no network was used). Whether the owner holds the rights is
+  not recorded. Finding GOV-SKILL-03 (Medium).
+
+== Scope 4: fit with README.md / README.vi.md and the preflight translation rule
+README.md (52 lines) and README.vi.md (54 lines) exist; both are inside the skill's size guidance
+  (SKILL.md:212-214). Relative-link guidance (SKILL.md:190-192, markdown.md:129-132) matches the preflight
+  link check, which resolves '[text](target)' from each file's folder (validate_package.py:194-198).
+The skill's own files sit under .claude/, which the preflight skips (validate_package.py:17), so they need no
+  .vi.md pair; the other skills follow the same rule.
+Coexistence holds when AGENTS.md:3 governs: update README.vi.md in the same change, and give any new README a
+  .vi.md pair. Decision: AGENTS.md 'Agent skills' should mention the skill in one line (optional governance
+  note N1; any edit is a governance change needing a GOV freeze, gate and audit).

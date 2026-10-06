@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createTestContext, type TestContext } from '../support/testApp.ts';
+import { createApp } from '../../src/server/app.ts';
+import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
+import { createTestContext, ORIGIN, type TestContext } from '../support/testApp.ts';
 
 let t: TestContext;
 
@@ -126,6 +131,83 @@ describe('local login and server sessions (FR-01)', () => {
       expect(response.status, `${method} ${path}`).toBe(401);
       expect(response.body.error.code).toBe('unauthenticated');
     }
+  });
+});
+
+/** A socket the in-process app can read, as `serve()` would provide it. */
+const socketOf = (remoteAddress: string) => ({ incoming: { socket: { remoteAddress, remotePort: 40_000, remoteFamily: 'IPv4' } } });
+
+describe('login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary)', () => {
+  const PROXY = '172.18.0.2';
+  const STRANGER = '198.51.100.20';
+  const WRONG_PASSWORD = 'synthetic-wrong-password';
+  let proxyDir: string | undefined;
+
+  function appTrusting(trusted: readonly string[]) {
+    proxyDir = mkdtempSync(join(tmpdir(), 'timesheet-proxy-'));
+    return createApp(
+      {
+        db: t.db,
+        clock: t.clock,
+        config: { ...t.config, trustedProxyAddresses: trusted },
+        loginLimiter: new LoginRateLimiter(),
+        staticDir: null,
+      },
+      { dataDir: join(proxyDir, 'private-data') },
+    );
+  }
+
+  afterEach(() => {
+    if (proxyDir !== undefined) rmSync(proxyDir, { recursive: true, force: true });
+  });
+
+  async function failedLogin(app: ReturnType<typeof createApp>, peer: string, forwarded?: string): Promise<number> {
+    const headers: Record<string, string> = { origin: ORIGIN, 'content-type': 'application/json' };
+    if (forwarded !== undefined) headers['x-forwarded-for'] = forwarded;
+    const response = await app.request(
+      '/api/auth/login',
+      { method: 'POST', headers, body: JSON.stringify({ email: t.emails.employee, password: WRONG_PASSWORD }) },
+      socketOf(peer),
+    );
+    return response.status;
+  }
+
+  it('ignores a spoofed X-Forwarded-For from a peer that is not a trusted proxy', async () => {
+    const app = appTrusting([PROXY]);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(await failedLogin(app, STRANGER, `203.0.113.${attempt + 1}`)).toBe(401);
+    }
+    // A fresh forwarded address per attempt would have evaded the per-account limit if it were trusted.
+    expect(await failedLogin(app, STRANGER, '203.0.113.200')).toBe(429);
+  });
+
+  it('ignores X-Forwarded-For everywhere when no proxy is trusted (the default)', async () => {
+    const app = appTrusting([]);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(await failedLogin(app, PROXY, `203.0.113.${attempt + 1}`)).toBe(401);
+    }
+    expect(await failedLogin(app, PROXY, '203.0.113.200')).toBe(429);
+  });
+
+  it('uses the right-most untrusted forwarded hop from a trusted proxy peer', async () => {
+    const app = appTrusting([PROXY, '10.0.0.9']);
+    const client = '203.0.113.50';
+    // The left-most hops are client-supplied and change per attempt; the proxy appended the real client.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(await failedLogin(app, PROXY, `192.0.2.${attempt + 1}, ${client}, 10.0.0.9`)).toBe(401);
+    }
+    expect(await failedLogin(app, PROXY, `192.0.2.99, ${client}, 10.0.0.9`)).toBe(429);
+    // Another client behind the same proxy has its own bucket.
+    expect(await failedLogin(app, PROXY, '203.0.113.51')).toBe(401);
+  });
+
+  it('falls back to the socket peer when the forwarded header is missing or malformed', async () => {
+    const app = appTrusting([PROXY]);
+    for (const forwarded of [undefined, 'not-an-address', '203.0.113.5:8080', '']) {
+      expect(await failedLogin(app, PROXY, forwarded)).toBe(401);
+    }
+    expect(await failedLogin(app, PROXY, undefined)).toBe(401);
+    expect(await failedLogin(app, PROXY, undefined)).toBe(429);
   });
 });
 

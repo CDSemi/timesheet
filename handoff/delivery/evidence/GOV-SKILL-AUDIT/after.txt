@@ -1,0 +1,66 @@
+GOV-SKILL-AUDIT evidence: HEAD, status, source digest and validators after the audit outputs were written.
+date: 2026-10-05T23:37:47Z
+$ git rev-parse HEAD
+3bdffbec685599b02c41c0a1f85931c8d90242f2
+exit 0
+$ git rev-parse origin/main
+3bdffbec685599b02c41c0a1f85931c8d90242f2
+exit 0
+$ git status --short
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-SKILL-AUDIT.md
+ M handoff/delivery/tasks/GOV-SKILL-FREEZE.md
+ M handoff/delivery/tasks/GOV-SKILL-GATE.md
+ M handoff/delivery/tasks/WP4-PLAN.md
+?? handoff/delivery/GOV_SKILL_REVIEW.md
+?? handoff/delivery/GOV_SKILL_REVIEW.vi.md
+?? handoff/delivery/evidence/GOV-SKILL-AUDIT/
+?? handoff/delivery/evidence/GOV-SKILL-FREEZE/
+?? handoff/delivery/evidence/GOV-SKILL-GATE/
+?? handoff/delivery/evidence/WP4-PLAN/
+?? handoff/delivery/tasks/WP4-T01.md
+exit 0
+$ git diff --quiet 3bdffbe -- .claude AGENTS.md CLAUDE.md docs src tests scripts handoff/prompts handoff/templates
+exit 0
+$ node --version
+v24.21.0
+$ node scripts/source-digest.mjs (working tree)
+aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d  (724 files, handoff/ excluded)
+exit 0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d *-
+pipe exit 0 0 0 0
+
+Validators after the review files existed (workflow Python C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe):
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 70,
+  "local_links": 1563,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit 0
+$ <workflow-python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 172,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit 0
+$ <workflow-python> handoff/delivery/check_recovery.py   (tail)
+  "count": 82,
+  "actual_board_modified": false,
+  "claude_dispatch_executed": false
+}
+exit 0

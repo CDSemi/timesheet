@@ -151,6 +151,24 @@ try {
   const health = await call('GET', '/api/health');
   check('GET /api/health has no personal data', health.status === 200 && health.text === '{"status":"ok"}', health.text);
 
+  // Readiness: 200 with the allowlisted keys only, no login, no path or personal value.
+  const ready = await call('GET', '/api/ready', { withOrigin: false });
+  const readyKeys = ready.json === null ? '' : Object.keys(ready.json).sort().join(',');
+  const readySchemaKeys = ready.json?.schema === undefined ? '' : Object.keys(ready.json.schema).sort().join(',');
+  check(
+    'GET /api/ready returns 200 with the allowlisted keys only',
+    ready.status === 200 &&
+      readyKeys === 'data_dir_writable,schema,status' &&
+      readySchemaKeys === 'actual,expected' &&
+      ready.json.status === 'ready' &&
+      ready.json.data_dir_writable === true &&
+      Number.isInteger(ready.json.schema.expected) &&
+      ready.json.schema.actual === ready.json.schema.expected &&
+      !ready.text.includes(work) &&
+      !ready.text.includes('example.invalid'),
+    ready.text,
+  );
+
   const index = await call('GET', '/');
   check('GET / serves the built React client with CSP', index.status === 200 && index.text.includes('<div id="root">') && (index.headers.get('content-security-policy') ?? '').includes("default-src 'self'"));
   const deepLink = await call('GET', '/some/client/route');

@@ -1,0 +1,290 @@
+# node vitest run tests/integration/health.test.ts tests/integration/config.test.ts tests/integration/auth.test.ts  (before source changes; exit 1)
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/config.test.ts (58 tests | 16 failed) 22ms
+   ❯ production configuration (container-ready, docs/07) (10)
+     × refuses production with DATABASE_PATH = undefined 2ms
+     × refuses production with DATABASE_PATH = "relative/timesheet.db" 0ms
+     × refuses production with DATABASE_PATH = ":memory:" 0ms
+     × refuses production with DATABASE_PATH = "" 0ms
+     × refuses production with DATA_DIR = undefined 1ms
+     × refuses production with DATA_DIR = "relative/private" 2ms
+     × refuses production with DATA_DIR = "" 0ms
+     × refuses production with DATA_DIR = "./private" 0ms
+   ❯ trusted proxy addresses (8)
+     × trusts no proxy by default 1ms
+     × reads an exact, normalized address list 0ms
+     × refuses "172.18.0.0/16" without echoing it 0ms
+     × refuses "proxy.example.invalid" without echoing it 0ms
+     × refuses "*" without echoing it 0ms
+     × refuses "172.18.0.1:8080" without echoing it 0ms
+     × refuses "999.1.1.1" without echoing it 0ms
+     × refuses "fe80::1%eth0" without echoing it 0ms
+ ❯ tests/integration/health.test.ts (7 tests | 6 failed) 1057ms
+   ❯ liveness and readiness (AC-15, docs/03 hosting boundary) (7)
+     × reports ready with exactly the allowlisted keys, without a login 148ms
+     × reveals no path, name, address or count of people, ready or not 142ms
+     × answers 503 when the schema is behind or newer than this build 136ms
+     × answers 503 when the data directory is missing or is not a directory 143ms
+     × reads nothing personal and writes nothing 164ms
+     × is served private (no-store) like every API response 144ms
+ ❯ tests/integration/auth.test.ts (18 tests | 1 failed) 5176ms
+   ❯ login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary) (4)
+     × uses the right-most untrusted forwarded hop from a trusted proxy peer 419ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 23 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/auth.test.ts > login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary) > uses the right-most untrusted forwarded hop from a trusted proxy peer
+AssertionError: expected 429 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 429
+
+ ❯ tests/integration/auth.test.ts:200:59
+    198|     expect(await failedLogin(app, PROXY, `192.0.2.99, ${client}, 10.0.…
+    199|     // Another client behind the same proxy has its own bucket.
+    200|     expect(await failedLogin(app, PROXY, '203.0.113.51')).toBe(401);
+       |                                                           ^
+    201|   });
+    202|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/23]⎯
+
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATABASE_PATH = undefined
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATABASE_PATH = "relative/timesheet.db"
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATABASE_PATH = ":memory:"
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATABASE_PATH = ""
+Error: expected the configuration to be refused
+ ❯ errorOf tests/integration/config.test.ts:36:9
+     34|     throw new Error('non-Error thrown');
+     35|   }
+     36|   throw new Error('expected the configuration to be refused');
+       |         ^
+     37| }
+     38|
+ ❯ tests/integration/config.test.ts:83:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/23]⎯
+
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATA_DIR = undefined
+Error: expected the configuration to be refused
+ ❯ errorOf tests/integration/config.test.ts:36:9
+     34|     throw new Error('non-Error thrown');
+     35|   }
+     36|   throw new Error('expected the configuration to be refused');
+       |         ^
+     37| }
+     38|
+ ❯ tests/integration/config.test.ts:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/23]⎯
+
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATA_DIR = "relative/private"
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATA_DIR = ""
+ FAIL  tests/integration/config.test.ts > production configuration (container-ready, docs/07) > refuses production with DATA_DIR = "./private"
+AssertionError: expected 'DATA_DIR must be an absolute path' to match /DATA_DIR is required in production as…/
+
+- Expected:
+/DATA_DIR is required in production as an absolute path/
+
++ Received:
+"DATA_DIR must be an absolute path"
+
+ ❯ tests/integration/config.test.ts:90:21
+     88|     const env = { ...production, LOCALAPPDATA: LOCAL, DATA_DIR: value …
+     89|     const message = errorOf(() => loadDeliveryConfig(env)).message;
+     90|     expect(message).toMatch(/DATA_DIR is required in production as an …
+       |                     ^
+     91|     expect(message).not.toContain('relative/private');
+     92|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/23]⎯
+
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > trusts no proxy by default
+AssertionError: expected undefined to deeply equal []
+
+- Expected:
+[]
+
++ Received:
+undefined
+
+ ❯ tests/integration/config.test.ts:103:71
+    101| describe('trusted proxy addresses', () => {
+    102|   it('trusts no proxy by default', () => {
+    103|     expect(loadConfig({ LOCALAPPDATA: LOCAL }).trustedProxyAddresses).…
+       |                                                                       ^
+    104|     expect(loadConfig({ LOCALAPPDATA: LOCAL, TRUSTED_PROXY_ADDRESSES: …
+    105|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/23]⎯
+
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > reads an exact, normalized address list
+AssertionError: expected undefined to deeply equal [ '172.18.0.1', '10.0.0.2', 'fd00::1' ]
+
+- Expected:
+[
+  "172.18.0.1",
+  "10.0.0.2",
+  "fd00::1",
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/config.test.ts:112:42
+    110|       TRUSTED_PROXY_ADDRESSES: ' 172.18.0.1 , ::ffff:10.0.0.2,FD00:0:0…
+    111|     });
+    112|     expect(config.trustedProxyAddresses).toEqual(['172.18.0.1', '10.0.…
+       |                                          ^
+    113|   });
+    114|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/23]⎯
+
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "172.18.0.0/16" without echoing it
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "proxy.example.invalid" without echoing it
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "*" without echoing it
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "172.18.0.1:8080" without echoing it
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "999.1.1.1" without echoing it
+ FAIL  tests/integration/config.test.ts > trusted proxy addresses > refuses "fe80::1%eth0" without echoing it
+Error: expected the configuration to be refused
+ ❯ errorOf tests/integration/config.test.ts:36:9
+     34|     throw new Error('non-Error thrown');
+     35|   }
+     36|   throw new Error('expected the configuration to be refused');
+       |         ^
+     37| }
+     38|
+ ❯ tests/integration/config.test.ts:118:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > reports ready with exactly the allowlisted keys, without a login
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/health.test.ts:46:27
+     44|   it('reports ready with exactly the allowlisted keys, without a login…
+     45|     const result = await ready();
+     46|     expect(result.status).toBe(200);
+       |                           ^
+     47|     expect(result.body).toEqual({
+     48|       status: 'ready',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > reveals no path, name, address or count of people, ready or not
+AssertionError: expected [ 'error' ] to deeply equal [ 'data_dir_writable', 'schema', …(1) ]
+
+- Expected
++ Received
+
+  [
+-   "data_dir_writable",
+-   "schema",
+-   "status",
++   "error",
+  ]
+
+ ❯ tests/integration/health.test.ts:64:52
+     62|     for (const text of [good.text, bad.text]) {
+     63|       for (const value of forbidden) expect(text).not.toContain(value);
+     64|       expect(Object.keys(JSON.parse(text)).sort()).toEqual(READY_KEYS);
+       |                                                    ^
+     65|     }
+     66|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > answers 503 when the schema is behind or newer than this build
+AssertionError: expected 404 to be 503 // Object.is equality
+
+- Expected
++ Received
+
+- 503
++ 404
+
+ ❯ tests/integration/health.test.ts:71:27
+     69|     t.db.prepare('DELETE FROM schema_migrations WHERE version = ?').ru…
+     70|     const behind = await ready();
+     71|     expect(behind.status).toBe(503);
+       |                           ^
+     72|     expect(behind.body).toEqual({
+     73|       status: 'not_ready',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > answers 503 when the data directory is missing or is not a directory
+AssertionError: expected 404 to be 503 // Object.is equality
+
+- Expected
++ Received
+
+- 503
++ 404
+
+ ❯ tests/integration/health.test.ts:88:28
+     86|     rmSync(dataDir, { recursive: true, force: true });
+     87|     const missing = await ready();
+     88|     expect(missing.status).toBe(503);
+       |                            ^
+     89|     expect(missing.body.status).toBe('not_ready');
+     90|     expect(missing.body.data_dir_writable).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > reads nothing personal and writes nothing
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/health.test.ts:102:36
+    100|     const auditBefore = t.db.prepare('SELECT COUNT(*) FROM audit_event…
+    101|     const filesBefore = readdirSync(dataDir);
+    102|     expect((await ready()).status).toBe(200);
+       |                                    ^
+    103|     expect((await ready()).status).toBe(200);
+    104|     expect(t.db.prepare('SELECT total_changes()').pluck().get()).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/23]⎯
+
+ FAIL  tests/integration/health.test.ts > liveness and readiness (AC-15, docs/03 hosting boundary) > is served private (no-store) like every API response
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/health.test.ts:111:29
+    109|   it('is served private (no-store) like every API response', async () …
+    110|     const response = await app.request('/api/ready');
+    111|     expect(response.status).toBe(200);
+       |                             ^
+    112|     expect(response.headers.get('cache-control')).toBe('no-store');
+    113|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/23]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  23 failed | 60 passed (83)
+   Start at  16:42:56
+   Duration  6.68s (tests 68%, import 20%, transform 12%)
+

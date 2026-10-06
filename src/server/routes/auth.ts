@@ -1,25 +1,16 @@
-import { getConnInfo } from '@hono/node-server/conninfo';
-import { type Context, Hono } from 'hono';
+import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { verifyAgainstDummy, verifyPassword } from '../auth/passwords.ts';
 import { createAuthSession, revokeAuthSession, SESSION_COOKIE, type SessionUser } from '../auth/sessions.ts';
 import { nowEpoch } from '../clock.ts';
 import { requireUser } from '../http/auth.ts';
+import { resolveClientAddress } from '../http/clientAddress.ts';
 import { ApiError } from '../http/errors.ts';
 import { loginBody } from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
 import { recordAudit } from '../services/audit.ts';
 import { findUserByEmail, normalizeEmail } from '../services/users.ts';
 import type { AppDeps, AppEnv } from '../types.ts';
-
-function clientAddress(c: Context): string {
-  try {
-    return getConnInfo(c).remote.address ?? 'unknown';
-  } catch {
-    // No socket (e.g. in-process tests). Proxy headers are never trusted as identity.
-    return 'unknown';
-  }
-}
 
 export function userJson(user: Pick<SessionUser, 'id' | 'email' | 'displayName' | 'role'>) {
   return { id: user.id, email: user.email, display_name: user.displayName, role: user.role };
@@ -30,7 +21,7 @@ export function authRoutes(deps: AppDeps) {
 
   app.post('/login', async (c) => {
     const body = await readJson(c, loginBody);
-    const address = clientAddress(c);
+    const address = resolveClientAddress(c, deps.config.trustedProxyAddresses ?? []);
     const account = normalizeEmail(body.email);
     const now = nowEpoch(deps.clock);
     const decision = deps.loginLimiter.check(address, account, now);

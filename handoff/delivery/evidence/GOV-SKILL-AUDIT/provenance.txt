@@ -1,0 +1,175 @@
+GOV-SKILL-AUDIT evidence: provenance and licence (read-only, local only; no network was used).
+<sibling> = ../part-flow/.agents/skills/readme-md (another owner project beside this repository; untracked there).
+<timesheet> = this repository. Neither path is a user-profile path.
+
+== Part 1: sibling copy compared with the reviewed files
+$ git hash-object (sibling copy ../part-flow/.agents/skills/readme-md)
+b1409d3f451e99381fe9740f21927dfdcd60ed33
+732b9150f3e1da939d267ef15f87d9bc37b23597
+64de9ad834e66aac906c43fabf83fbbcb9cd4b9c
+exit 0
+$ git -C ../part-flow status --short -- .agents/skills/readme-md
+?? .agents/skills/readme-md/
+exit 0
+$ diff -r <sibling copy> .claude/skills/readme-md
+diff -r <sibling>/SKILL.md .claude/skills/readme-md/SKILL.md
+267c267
+< **Create or improve:** write `README.md` in the target directory, or the
+---
+> **Create or improve:** write `../../../README.md` in the target directory, or the
+diff -r <sibling>/references/markdown.md .claude/skills/readme-md/references/markdown.md
+142c142
+<   `docs/`, and truncates content past 500 KiB.
+---
+>   `../../../../docs`, and truncates content past 500 KiB.
+diff exit 1
+$ resolve the rewritten tokens from their files
+SKILL.md dir .claude/skills/readme-md + ../../../README.md -> README.md
+markdown.md dir .claude/skills/readme-md/references + ../../../../docs -> docs
+literal reading with target = repo root: ../../../README.md -> D:/README.md
+$ grep -rn 'license\|author\|source\|credit' (frontmatter and body)
+.claude/skills/readme-md/SKILL.md:153:emoji, alerts, credits, and headings that others link to; remove one only
+grep exit 0 (1 = no match)
+
+== Part 2: skills CLI lock-hash probe
+Method under test: SHA-256 over the skill folder, files sorted by relative path, each contributing its path then its bytes.
+It reproduces 8 computedHash values of this repository's own skills-lock.json (match=folder+path), so it is a plausible model of the CLI hash; it is a probe, not proof.
+$ node lockhash.mjs <timesheet>/skills-lock.json <timesheet>/.agents/skills   (method probe on the repo's own lock)
+ask-matt lock=2cfee0bfa1d6 skillmd=a490107656cc folder+path=7b98f2744247 folder=2d68c70fe565 match=none
+claude-handoff lock=c0fa5d0eede5 skillmd=7f99b9c489c8 folder+path=f341945f0df6 folder=ed3b5e49e850 match=none
+code-review lock=b4f17857c85c skillmd=3abbdfe52540 folder+path=98ec0d2e2eea folder=b85a24043116 match=none
+codebase-design lock=fb1d8ab98ad1 skillmd=362b0bec8282 folder+path=4dfc8d46420a folder=56e341ee1241 match=none
+commit-message lock=b18e89517dad skillmd=604040bed115 folder+path=b18e89517dad folder=604040bed115 match=folder+path
+design-taste-frontend lock=899b84384f74 skillmd=2e064e92aca0 folder+path=899b84384f74 folder=2e064e92aca0 match=folder+path
+diagnosing-bugs lock=ed5cbc42b8ef skillmd=d96335b1fdb6 folder+path=44f5ce3a0b90 folder=1db15d2647df match=none
+domain-modeling lock=f377a1341e1b skillmd=b62d997256cc folder+path=3ddcbbac23df folder=91fa84db8954 match=none
+git-guardrails-claude-code lock=fa22f1aa2708 skillmd=12d335b84bcf folder+path=96d349f2a02d folder=77aebb9afec9 match=none
+grill-me lock=5e0c683385ea skillmd=19e660207b44 folder+path=da905705e6a5 folder=40f11e5dd87d match=none
+grill-with-docs lock=a610223c9796 skillmd=abc0fa7948db folder+path=5926ff624ebf folder=2a64f2a1e57c match=none
+grilling lock=4fa026e59797 skillmd=d806733216b1 folder+path=0b8c10332fd8 folder=026c490655b9 match=none
+handoff lock=9ea2a5de5ca2 skillmd=96f8045f01f5 folder+path=dbbcc9702932 folder=aa3291b73ecb match=none
+high-end-visual-design lock=f730e4132775 skillmd=2d11cdcefc8b folder+path=f730e4132775 folder=2d11cdcefc8b match=folder+path
+image-to-code lock=3d2ac14d956f skillmd=2944189b448e folder+path=3d2ac14d956f folder=2944189b448e match=folder+path
+imagegen-frontend-mobile lock=7c1d1dc59cd0 skillmd=3cadf1bfbe83 folder+path=7c1d1dc59cd0 folder=3cadf1bfbe83 match=folder+path
+imagegen-frontend-web lock=27255c7c5018 skillmd=23e6d27ab410 folder+path=27255c7c5018 folder=23e6d27ab410 match=folder+path
+implement lock=130cac2d72bf skillmd=30cd7bc1ebfb folder+path=e3dd2debef40 folder=069ad5ca8dc6 match=none
+implement-spec lock=4b91b5634b1a skillmd=5bdaaf884b02 folder+path=bb858ef7b1ce folder=eb5b704330e4 match=none
+improve-codebase-architecture lock=f74b0bf1be26 skillmd=f053ff6d7a70 folder+path=e86b8589914f folder=8476720abbc9 match=none
+loop-me lock=d7fbcf41b5af skillmd=38ac316635d2 folder+path=7a5730021326 folder=43aaaf485172 match=none
+migrate-to-shoehorn lock=7d31e494a384 skillmd=200c11163ecd folder+path=1622e728b2f6 folder=05ce03230ed8 match=none
+pr lock=e6e63bada1f0 skillmd=57658baca2e5 folder+path=5bcbf907aa49 folder=76a4f294cdfe match=none
+prototype lock=62979fe039ef skillmd=f74ae01f4fc4 folder+path=11c1ed639f96 folder=2b92224a779b match=none
+redesign-existing-projects lock=47eced3e960a skillmd=- folder+path=- folder=- match=none
+research lock=2c8b768d5f03 skillmd=524b404b1ca3 folder+path=82e3650ad560 folder=31d23c8bc518 match=none
+retro lock=e63bb774fba4 skillmd=42110f533f16 folder+path=eea0cbc81408 folder=a26a183d92a4 match=none
+scaffold-exercises lock=0f8154a7be9f skillmd=de28db7a0954 folder+path=b4d654b9cade folder=b9b184b384f9 match=none
+setup-matt-pocock-skills lock=a3da0aad329e skillmd=32c466b3403b folder+path=78f960700bb6 folder=46915331e020 match=none
+setup-pre-commit lock=4ae1ad6988eb skillmd=e069e6a23069 folder+path=eee7bdbfcf1c folder=6ca00f60378d match=none
+setup-ts-deep-modules lock=0b0e7124ad12 skillmd=3709fc7d62ea folder+path=5e1b705178b9 folder=00d415cdc56d match=none
+stitch-design-taste lock=c96b580192b3 skillmd=56e41363d61f folder+path=c96b580192b3 folder=29c4c4d0acb2 match=folder+path
+tdd lock=0c09a435ba03 skillmd=4628e7192652 folder+path=0ffb5ce92d16 folder=033bf1d55768 match=none
+teach lock=d5f74fa9a349 skillmd=3377485cbb1d folder+path=782ec916f5f4 folder=5b954e77a182 match=none
+to-questionnaire lock=e2cb00bfeb42 skillmd=77825120815c folder+path=0dd240f5f058 folder=222e2c0f1e7b match=none
+to-spec lock=0ee8caf20fc7 skillmd=c73a2250beac folder+path=69eaf6bfe809 folder=1b0fa486cf84 match=none
+to-tickets lock=4aba8639f46b skillmd=8082bc6ef165 folder+path=fc3fdf87b9b7 folder=5cd506b47ad7 match=none
+triage lock=453a7a098edc skillmd=797f4371a4ce folder+path=7f21890180ed folder=c0aa1e4f9df8 match=none
+vercel-composition-patterns lock=10eb4ec94577 skillmd=fb8f849b4d46 folder+path=2484cf984f79 folder=05be10742cca match=none
+vercel-react-best-practices lock=6b526d013e28 skillmd=3286ace648b4 folder+path=a52c7635cc10 folder=322b0b23d812 match=none
+wait-what lock=b4f3760a199c skillmd=95393f96e730 folder+path=347e80734351 folder=83bb013d0245 match=none
+wayfinder lock=f53b17850d8d skillmd=3362fa360948 folder+path=1ff5eeee5322 folder=68efa48cf1e2 match=none
+web-design-guidelines lock=d8e7d3afe37d skillmd=17e48da905f8 folder+path=d8e7d3afe37d folder=17e48da905f8 match=folder+path
+wizard lock=6b98bd36db34 skillmd=dbefb750eae0 folder+path=6bf8359ab3e0 folder=abdbfa56f51e match=none
+writing-beats lock=1d1c32479fa0 skillmd=b23f7851987d folder+path=be7f4be943b0 folder=c0011729a839 match=none
+writing-for-agents lock=831e996c177c skillmd=1c0c4ebf2d22 folder+path=f5dc99be3709 folder=214795aaf4d3 match=none
+writing-fragments lock=e97c829457cb skillmd=3be6ffe9386d folder+path=458833cb1b83 folder=15525124df4b match=none
+writing-shape lock=175889218686 skillmd=c13cbc364fbc folder+path=8af75ad3a656 folder=09769781ab4d match=none
+exit 0
+
+$ node lockhash.mjs <sibling>/skills-lock.json <sibling>/.agents/skills readme-md
+readme-md lock=b5eee66b2329 skillmd=4c9760d83753 folder+path=c3f31c97a427 folder=27e52e3378c4 match=none
+exit 0
+
+$ node lockhash.mjs <sibling>/skills-lock.json <timesheet>/.claude/skills readme-md
+readme-md lock=b5eee66b2329 skillmd=663f6e204e97 folder+path=035fbaf95e87 folder=c6794b56fdad match=none
+exit 0
+
+$ node lockhash.mjs <timesheet>/skills-lock.json <timesheet>/.claude/skills readme-md
+readme-md lock=(not in lock skillmd=663f6e204e97 folder+path=035fbaf95e87 folder=c6794b56fdad match=none
+exit 0
+
+$ grep -n -A5 '"readme-md"' <sibling>/skills-lock.json
+4:    "readme-md": {
+5-      "source": "LisaHQ/lisa-skills",
+6-      "sourceType": "github",
+7-      "skillPath": "skills/readme-md/SKILL.md",
+8-      "computedHash": "b5eee66b2329027f5c8bdd46c6d7e94751e9d63c316f26cc4beb249304eca18a"
+9-    }
+exit 0
+$ git -C <sibling> status --short -- skills-lock.json .agents/skills/readme-md
+?? .agents/skills/readme-md/
+?? skills-lock.json
+exit 0
+$ grep -n -A5 '"commit-message"' <timesheet>/skills-lock.json
+28:    "commit-message": {
+29-      "source": "LisaHQ/lisa-skills",
+30-      "sourceType": "github",
+31-      "skillPath": "skills/commit-message/SKILL.md",
+32-      "computedHash": "b18e89517dadd89e5f839b0f53e510aefa29f730971ce74de95b0f2500e3a79a"
+33-    },
+exit 0
+$ grep -n 'readme-md' <timesheet>/skills-lock.json
+exit 1 (1 = no entry)
+$ diff <(ls .claude/skills) <(ls .agents/skills)  (timesheet)
+25,26d24
+< readme-md
+< redesign-existing-projects
+exit 1
+
+== Part 3: probe script (lockhash.mjs, kept in the audit temp folder)
+// Read-only probe: compare skills-lock.json computedHash values with candidate hash methods.
+// Usage: node lockhash.mjs <lockfile> <skillsRoot> [name ...]
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join, relative, sep } from 'node:path';
+
+const [lockPath, root, ...names] = process.argv.slice(2);
+const lock = JSON.parse(readFileSync(lockPath, 'utf8')).skills;
+
+function walk(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...walk(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+function folderHash(dir, withPath) {
+  const files = walk(dir)
+    .map((full) => ({ full, rel: relative(dir, full).split(sep).join('/') }))
+    .sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+  const hash = createHash('sha256');
+  for (const f of files) {
+    if (withPath) hash.update(f.rel);
+    hash.update(readFileSync(f.full));
+  }
+  return hash.digest('hex');
+}
+
+for (const name of names.length ? names : Object.keys(lock)) {
+  const dir = join(root, name);
+  let skillMd = '-';
+  let fh = '-';
+  let fhNoPath = '-';
+  try {
+    skillMd = createHash('sha256').update(readFileSync(join(dir, 'SKILL.md'))).digest('hex');
+    fh = folderHash(dir, true);
+    fhNoPath = folderHash(dir, false);
+  } catch {
+    // missing folder
+  }
+  const want = lock[name]?.computedHash ?? '(not in lock)';
+  const match = want === skillMd ? 'skillmd' : want === fh ? 'folder+path' : want === fhNoPath ? 'folder' : 'none';
+  console.log(`${name} lock=${want.slice(0, 12)} skillmd=${skillMd.slice(0, 12)} folder+path=${fh.slice(0, 12)} folder=${fhNoPath.slice(0, 12)} match=${match}`);
+}

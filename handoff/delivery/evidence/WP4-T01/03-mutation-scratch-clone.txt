@@ -1,0 +1,55 @@
+# scratch clone: resolveClientAddress always trusts X-Forwarded-For; vitest run tests/integration/auth.test.ts; exit 1
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/WP4-T01/mutclone
+
+ ❯ tests/integration/auth.test.ts (18 tests | 2 failed) 5517ms
+   ❯ login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary) (4)
+     × ignores a spoofed X-Forwarded-For from a peer that is not a trusted proxy 465ms
+     × ignores X-Forwarded-For everywhere when no proxy is trusted (the default) 495ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/auth.test.ts > login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary) > ignores a spoofed X-Forwarded-For from a peer that is not a trusted proxy
+AssertionError: expected 401 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 401
+
+ ❯ tests/integration/auth.test.ts:180:63
+    178|     }
+    179|     // A fresh forwarded address per attempt would have evaded the per…
+    180|     expect(await failedLogin(app, STRANGER, '203.0.113.200')).toBe(429…
+       |                                                               ^
+    181|   });
+    182|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/auth.test.ts > login limiter client address behind a reverse proxy (O2, docs/03 hosting boundary) > ignores X-Forwarded-For everywhere when no proxy is trusted (the default)
+AssertionError: expected 401 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 401
+
+ ❯ tests/integration/auth.test.ts:188:60
+    186|       expect(await failedLogin(app, PROXY, `203.0.113.${attempt + 1}`)…
+    187|     }
+    188|     expect(await failedLogin(app, PROXY, '203.0.113.200')).toBe(429);
+       |                                                            ^
+    189|   });
+    190|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  16:44:13
+   Duration  7.85s (tests 71%, transform 16%, import 13%)
+

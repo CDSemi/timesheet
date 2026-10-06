@@ -109,6 +109,7 @@ const SELF_ONLY_BEFORE = [
   'GET /api/periods 2',
   'GET /api/periods/current 2',
   'GET /api/policies 2',
+  'GET /api/ready 1',
   'GET /api/revisions/:id/pdf 2',
   'GET /api/revisions/pending-lines 2',
   'GET /api/sessions/:id 2',

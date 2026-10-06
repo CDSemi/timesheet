@@ -484,8 +484,40 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        dự án vẫn để chưa track. **WP3 đã được nghiệm thu.**
      - Board và STATE giờ ghi gói đang làm là WP4 (pha wp4-planning-gov-skill). WP4-PLAN
        đang chờ.
-     - Đang chạy: GOV-SKILL-FREEZE (committer, gói GOV). Commit này gồm 3 tệp skill của
-       chủ dự án, kết quả của WP3-ACCEPT và việc chuyển board sang WP4.
+     - GOV-SKILL-FREEZE đã commit và push thành 3bdffbe: 19 đường dẫn, gồm 3 tệp skill
+       của chủ dự án. Digest mới, đã tính cả skill, là aab8b32c…; mọi kiểm tra đều trả
+       về 0.
+     - GOV-SKILL-GATE: PASS, đạt 7/7.
+       - Phạm vi chỉ gồm 3 tệp skill; frontmatter hợp lệ.
+       - Tệp sạch về định dạng; verify đạt 1420 test.
+       - Các validator đều trả về 0.
+       - Digest chính thức là aab8b32c…; so với c31c300c… chỉ thêm 3 tệp skill.
+     - WP4-PLAN đã xong (opus) và được điều phối viên chấp nhận:
+       - 14 task: T01–T07, WP4-DEC, T08–T13;
+       - sau đó là WP4-GATE và hai audit theo mảng;
+       - khoảng 33 lượt giao việc, hoặc 37–41 nếu có vòng sửa.
+
+       Máy này có Docker 28.5.1, không có Podman.
+     - Đang chờ chủ dự án trả lời các câu hỏi WP4-F-1..F-6; F-7 chỉ để nắm thông tin và
+       thuộc WP5. T01–T06 không cần các câu trả lời này.
+     - GOV-SKILL-AUDIT: FIX REQUIRED (auditor opus mới, 3bdffbe).
+       - GOV-SKILL-01 (Medium): đường dẫn ghi tệp ở SKILL.md:267 trỏ ra ngoài repo.
+       - GOV-SKILL-02 (Low): markdown.md:142 nêu sai quy tắc về vị trí README.
+       - GOV-SKILL-03 (Medium): chưa ghi nguồn gốc và giấy phép (nhiều khả năng là
+         LisaHQ/lisa-skills); skills-lock.json chưa có mục cho skill này.
+       - GOV-SKILL-04 (Low): skill gợi ý dùng thuộc tính `align` đã lỗi thời.
+       - N1 đề xuất thêm một dòng vào AGENTS.md.
+
+       Vì skill là nội dung của chủ dự án, các finding này được hỏi chủ dự án dưới dạng
+       Q1–Q4. Sau khi có câu trả lời sẽ chạy một vòng sửa GOV.
+     - WP4-T01 đã xong (tác giả tự báo):
+       - thay đổi: bộ xác định địa chỉ qua proxy tin cậy, cấu hình production bắt buộc
+         đường dẫn tuyệt đối, `/api/ready` chỉ trả các khóa được phép, `.env.example`,
+         smoke;
+       - test: 23 đỏ → 83 xanh; phép thử đột biến làm 2 test fail;
+       - e2e 127 đạt; verify 1449 test; digest 1c57dbae…;
+       - sai lệch: thêm một dòng vào danh mục route trong sharing-matrix.
+     - Đang chạy: WP4-T01-FREEZE (committer).
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -525,7 +557,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ GOV-SKILL-FREEZE.
+- Process còn sống: chỉ WP4-T01-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

@@ -1,10 +1,14 @@
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { inspect } from 'node:util';
+import { parseTrustedProxyAddresses } from './http/clientAddress.ts';
 import type { DeliveryConfig, OutboundConfig, RedactedText, SmtpSecurity, SmtpSettings } from './types.ts';
 
 export interface AppConfig {
-  /** Bind address; defaults to loopback so nothing is exposed on the network. */
+  /**
+   * Bind address; defaults to loopback so nothing is exposed on the network. A container sets
+   * HOST=0.0.0.0 so the published port reaches it, and only inside the container network.
+   */
   host: string;
   port: number;
   databasePath: string;
@@ -13,6 +17,11 @@ export interface AppConfig {
   cookieSecure: boolean;
   sessionTtlSeconds: number;
   production: boolean;
+  /**
+   * Exact IP addresses of reverse proxies whose X-Forwarded-For is believed (TRUSTED_PROXY_ADDRESSES).
+   * Absent or empty means none: every forwarded header is ignored.
+   */
+  trustedProxyAddresses?: readonly string[];
 }
 
 /** Keep the live SQLite database outside synchronized folders such as Dropbox (doc 07). */
@@ -47,6 +56,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const origins =
     env.APP_ORIGINS ??
     [`http://localhost:${port}`, `http://127.0.0.1:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'].join(',');
+  if (production && (env.DATABASE_PATH === undefined || !isAbsolute(env.DATABASE_PATH))) {
+    throw new Error('DATABASE_PATH is required in production as an absolute path (the host-local SQLite file)');
+  }
   const ttlHours = Number(env.SESSION_TTL_HOURS ?? '168');
   if (!Number.isFinite(ttlHours) || ttlHours <= 0) throw new Error('SESSION_TTL_HOURS must be positive');
   return {
@@ -57,6 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cookieSecure: env.COOKIE_SECURE === undefined ? production : env.COOKIE_SECURE === 'true',
     sessionTtlSeconds: Math.round(ttlHours * 3600),
     production,
+    trustedProxyAddresses: parseTrustedProxyAddresses(env.TRUSTED_PROXY_ADDRESSES),
   };
 }
 
@@ -94,8 +107,11 @@ function isInsideDropbox(path: string): boolean {
   return path.split(/[\\/]/).some((segment) => segment.toLowerCase().startsWith('dropbox'));
 }
 
-function parseDataDir(env: NodeJS.ProcessEnv, databasePath: string): string {
+function parseDataDir(env: NodeJS.ProcessEnv, databasePath: string, production: boolean): string {
   const configured = env.DATA_DIR;
+  if (production && (configured === undefined || !isAbsolute(configured))) {
+    throw new Error('DATA_DIR is required in production as an absolute path (the private data directory)');
+  }
   if (configured !== undefined && !isAbsolute(configured)) throw new Error('DATA_DIR must be an absolute path');
   const dataDir = configured === undefined ? join(dirname(resolve(databasePath)), 'private-data') : resolve(configured);
   if (isInsideDropbox(dataDir)) {
@@ -180,7 +196,7 @@ export function loadDeliveryConfig(
   base: Pick<AppConfig, 'databasePath' | 'port' | 'production'> = loadConfig(env),
 ): DeliveryConfig {
   return {
-    dataDir: parseDataDir(env, base.databasePath),
+    dataDir: parseDataDir(env, base.databasePath, base.production),
     publicBaseUrl: parsePublicBaseUrl(env, base.port, base.production),
     senderAddress: parseSender(env),
     outbound: parseOutbound(env),
