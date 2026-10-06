@@ -4,7 +4,7 @@ import { effectiveVersionOn } from '../../domain/versions.ts';
 import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import type { Db } from '../db/database.ts';
-import { listLedgerEntries } from './ledger.ts';
+import { type LedgerEntry, listLedgerEntries } from './ledger.ts';
 import { listOtLeaveRequests } from './otLeave.ts';
 import { policyJson } from './policies.ts';
 import {
@@ -135,6 +135,23 @@ function renderSections(sections: readonly CsvSection[]): string {
   return `${blocks.join('\n\n')}\n`;
 }
 
+/** A plain-language label for each ledger entry type; a correction names what it corrects. */
+const ENTRY_LABELS: Readonly<Record<LedgerEntry['entryType'], string>> = {
+  credit: 'OT credit',
+  deficit_debit: 'Deficit debit',
+  correction: 'Correction',
+  leave_consumption: 'OT leave used',
+  leave_reversal: 'OT leave reversal',
+  opening_balance: 'Opening balance',
+};
+
+function entryLabel(entry: LedgerEntry, openingIds: ReadonlySet<string>): string {
+  if (entry.entryType === 'correction' && entry.correctsEntryId !== null && openingIds.has(entry.correctsEntryId)) {
+    return 'Opening balance correction';
+  }
+  return ENTRY_LABELS[entry.entryType];
+}
+
 function breakRows(sessions: readonly StoredSession[]): CsvValue[][] {
   return sessions.flatMap((session) =>
     session.breaks.map((item) => [
@@ -192,11 +209,15 @@ export function buildEvidenceCsv(db: Db, clock: Clock, user: SessionUser, from: 
     }
   }
 
-  const ledgerRows = listLedgerEntries(db, user.id)
+  const entries = listLedgerEntries(db, user.id);
+  const openingIds = new Set(entries.filter((entry) => entry.entryType === 'opening_balance').map((entry) => entry.id));
+  const ledgerRows = entries
+    // An entry without a work date (the opening balance and its corrections) belongs to every range.
     .filter((entry) => entry.workDate === null || (entry.workDate >= from && entry.workDate <= to))
     .map((entry) => [
       entry.id,
       entry.entryType,
+      entryLabel(entry, openingIds),
       entry.deltaMinutes,
       entry.workDate,
       entry.postedAt,
@@ -207,6 +228,8 @@ export function buildEvidenceCsv(db: Db, clock: Clock, user: SessionUser, from: 
       entry.origin,
       entry.reason,
       entry.reconciliationRequired,
+      entry.asOfDate,
+      entry.evidenceRef,
     ]);
 
   const leaveRows = listOtLeaveRequests(db, user.id)
@@ -319,6 +342,7 @@ export function buildEvidenceCsv(db: Db, clock: Clock, user: SessionUser, from: 
       header: [
         'id',
         'entry_type',
+        'entry_label',
         'delta_minutes',
         'work_date',
         'posted_at',
@@ -329,6 +353,8 @@ export function buildEvidenceCsv(db: Db, clock: Clock, user: SessionUser, from: 
         'origin',
         'reason',
         'reconciliation_required',
+        'as_of_date',
+        'evidence_ref',
       ],
       rows: ledgerRows,
     },

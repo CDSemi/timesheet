@@ -1,0 +1,604 @@
+# WP4-T10 red-first run on the pre-change source (baseline 1b4d817 + new/changed tests only)
+# Command: TEMP/TMP=<work>; node node_modules/vitest/vitest.mjs run tests/integration/opening-balance.test.ts tests/integration/ledger.test.ts tests/integration/migrations.test.ts tests/integration/evidence-export.test.ts tests/integration/job-retention.test.ts tests/integration/workbook-import.test.ts
+# Exit: 1 (26 failed | 132 passed). Note: the imported-period leave test was then changed to fund the balance with a credit, see 02.
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/job-retention.test.ts (18 tests | 2 failed) 4079ms
+   ❯ migration 0011 (3)
+     × applies on a fresh database from 1 to the latest (13) 221ms
+     × upgrades a populated version 10 database, keeping every job row, and the exception then applies 313ms
+ ❯ tests/integration/opening-balance.test.ts (13 tests | 13 failed) 4629ms
+   ❯ POST /api/ot/opening-balance (F-3) (8)
+     × posts one signed opening balance entry with its as-of date, reason and evidence reference 398ms
+     × shows no opening balance before one is posted 308ms
+     × red-first: a double submission posts once 325ms
+     × red-first: the balance equals the sum of the deltas through credits, the opening balance and its correction 305ms
+     × red-first: refuses zero minutes, a missing reason, missing evidence and a missing as-of date, writing nothing 303ms
+     × red-first: a different value without a correction is refused; a reasoned correction posts exactly one correction entry 286ms
+     × refuses a correction before any opening balance, and the generic credit correction never targets an opening balance 363ms
+     × red-first: concurrent posts from separate connections post once 449ms
+   ❯ ownership (owner only) (2)
+     × red-first: another user and an administrator cannot post or read the owner opening balance 490ms
+     × red-first: a share grantee with OT read and edit access cannot post, correct or read the opening balance 409ms
+   ❯ R4: the reviewed hash includes the balance (1)
+     × red-first: posting an opening balance makes an open review stale 315ms
+   ❯ imported periods (F-2) (2)
+     × an imported workbook posts no ledger event; the explicit opening balance is the only carry-in 362ms
+     × red-first: recording OT leave use on a date inside an imported period answers 409 imported_period and posts nothing 314ms
+ ❯ tests/integration/ledger.test.ts (31 tests | 1 failed) 6132ms
+   ❯ append-only and versioned storage (triggers) (4)
+     × red-first: holds one opening balance per user with its as-of date, reason and evidence, immutable and correctable (F-3) 161ms
+ ❯ tests/integration/workbook-import.test.ts (21 tests | 2 failed) 7736ms
+   ❯ migration 0012 (imports) (3)
+     × is migration 12 and runs on a fresh database from 1 to the latest (13) 386ms
+     × upgrades a populated schema 11 database to 12 (and 13) without touching existing rows 430ms
+ ❯ tests/integration/migrations.test.ts (48 tests | 7 failed) 7909ms
+   ❯ fresh SQLite migrations (6)
+     × applies every migration to an empty file database with the required pragmas 42ms
+   ❯ upgrade from a populated WP1 (version 1) database (2)
+     × applies 0002-0009, keeps every WP1 row unchanged and leaves a consistent, usable schema 217ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 190ms
+   ❯ upgrade from a populated version 3 database (accepted WP2 source 5fafeae) (1)
+     × applies 0004-0009 with unchanged rows and counts, a consistent schema and safe defaults 342ms
+   ❯ migration 0013 opening balance (ot_ledger rebuild, F-3) (3)
+     × red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger 293ms
+     × checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma 279ms
+     × builds the same table on a fresh 1 to 13 database 43ms
+ ❯ tests/integration/evidence-export.test.ts (27 tests | 1 failed) 8032ms
+   ❯ GET /api/ot/evidence.csv (7)
+     × red-first: labels the opening balance and its correction with the as-of date and evidence reference (F-3) 279ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 26 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/evidence-export.test.ts > GET /api/ot/evidence.csv > red-first: labels the opening balance and its correction with the as-of date and evidence reference (F-3)
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/evidence-export.test.ts:358:56
+    356|       body: { minutes: -120, as_of_date: '2026-08-30', reason: 'Synthe…
+    357|     });
+    358|     expect(posted.status, JSON.stringify(posted.body)).toBe(201);
+       |                                                        ^
+    359|     const corrected = await t.request('POST', '/api/ot/opening-balance…
+    360|       cookie: employee,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/26]⎯
+
+ FAIL  tests/integration/job-retention.test.ts > migration 0011 > applies on a fresh database from 1 to the latest (13)
+AssertionError: expected 12 to be 13 // Object.is equality
+
+- Expected
++ Received
+
+- 13
++ 12
+
+ ❯ tests/integration/job-retention.test.ts:315:81
+    313|     const db = openDatabase(join(dir, 'fresh.db'));
+    314|     try {
+    315|       expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))…
+       |                                                                                 ^
+    316|       expect(db.pragma('user_version', { simple: true })).toBe(13);
+    317|       expect(db.prepare('SELECT count(*) FROM job_retention_window').p…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/26]⎯
+
+ FAIL  tests/integration/job-retention.test.ts > migration 0011 > upgrades a populated version 10 database, keeping every job row, and the exception then applies
+AssertionError: expected { applied: [ 11, 12 ], version: 12 } to deeply equal { Object (applied, version) }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      11,
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/job-retention.test.ts:334:73
+    332|       insert.run('old-send', 'send_email', 'send_email:old', 'succeede…
+    333|       expect(() => db.prepare("DELETE FROM jobs WHERE id = 'old-scan'"…
+    334|       expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))…
+       |                                                                         ^
+    335|       expect(db.prepare('SELECT id FROM jobs ORDER BY id').pluck().all…
+    336|       // Closed: the migration alone deletes nothing, and the same gua…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/26]⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > red-first: holds one opening balance per user with its as-of date, reason and evidence, immutable and correctable (F-3)
+SqliteError: table ot_ledger has no column named as_of_date
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insert tests/integration/ledger.test.ts:619:10
+    617|     }) =>
+    618|       t.db
+    619|         .prepare(
+       |          ^
+    620|           `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minut…
+    621|              leave_request_id, work_date, actor_user_id, origin, reaso…
+ ❯ tests/integration/ledger.test.ts:637:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 12 to be 13 // Object.is equality
+
+- Expected
++ Received
+
+- 13
++ 12
+
+ ❯ tests/integration/migrations.test.ts:108:20
+    106| describe('fresh SQLite migrations', () => {
+    107|   it('applies every migration to an empty file database with the requi…
+    108|     expect(LATEST).toBe(13);
+       |                    ^
+    109|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATE…
+    110|     const tables = db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0009, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -9,9 +9,8 @@
+      8,
+      9,
+      10,
+      11,
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/migrations.test.ts:264:71
+    262|     }
+    263|
+    264|     expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).…
+       |                                                                       ^
+    265|
+    266|     const after = snapshot(db);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -8,9 +8,8 @@
+      8,
+      9,
+      10,
+      11,
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/migrations.test.ts:317:37
+    315|       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, wo…
+    316|     );
+    317|     expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7,…
+       |                                     ^
+    318|     expect(getBalance(db, employee).postedMinutes).toBe(45);
+    319|     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0009 with unchanged rows and counts, a consistent schema and safe defaults
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -7,9 +7,8 @@
+      8,
+      9,
+      10,
+      11,
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/migrations.test.ts:506:71
+    504|     const balances = seed.users.map((user) => getBalance(db, user.id));
+    505|
+    506|     expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).…
+       |                                                                       ^
+    507|
+    508|     expect(snapshotV3(db)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger
+AssertionError: expected { applied: [], version: 12 } to deeply equal { applied: [ 13 ], version: 13 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     13,
+-   ],
+-   "version": 13,
++   "applied": [],
++   "version": 12,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1809:71
+    1807|     expect(before.ledger.length).toBeGreaterThanOrEqual(6);
+    1808|
+    1809|     expect(migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).…
+       |                                                                       ^
+    1810|
+    1811|     const ledgerAfter = db.prepare('SELECT rowid AS row_id, * FROM ot_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/integration/migrations.test.ts:1881:77
+    1879|     db.pragma('foreign_keys = ON');
+    1880|     const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE n…
+    1881|     expect(() => migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00…
+       |                                                                             ^
+    1882|     expect(() => migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00…
+    1883|     expect(db.prepare('SELECT max(version) FROM schema_migrations').pl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/26]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > builds the same table on a fresh 1 to 13 database
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -11,7 +11,7 @@
+      9,
+      10,
+      11,
+      12,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1893:30
+    1891|     const fresh = openDatabase(join(dir, 'fresh-13.db'));
+    1892|     try {
+    1893|       expect(migrate(fresh)).toEqual({ applied: ALL_VERSIONS, version:…
+       |                              ^
+    1894|       expect(fresh.prepare("SELECT name FROM pragma_table_info('ot_led…
+    1895|         'id',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > posts one signed opening balance entry with its as-of date, reason and evidence reference
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:97:60
+     95|   it('posts one signed opening balance entry with its as-of date, reas…
+     96|     const response = await postOpening(openingBody(-90));
+     97|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+     98|     expect(response.body.status).toBe('posted');
+     99|     expect(response.body.entry).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > shows no opening balance before one is posted
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:135:25
+    133|   it('shows no opening balance before one is posted', async () => {
+    134|     const read = await t.request('GET', OPENING, { cookie: employee });
+    135|     expect(read.status).toBe(200);
+       |                         ^
+    136|     expect(read.body.opening_balance).toBeNull();
+    137|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > red-first: a double submission posts once
+AssertionError: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:141:54
+    139|   it('red-first: a double submission posts once', async () => {
+    140|     const first = await postOpening(openingBody(240));
+    141|     expect(first.status, JSON.stringify(first.body)).toBe(201);
+       |                                                      ^
+    142|     const again = await postOpening(openingBody(240));
+    143|     expect(again.status, JSON.stringify(again.body)).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > red-first: the balance equals the sum of the deltas through credits, the opening balance and its correction
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:156:58
+    154|       { userId: t.userIds.employee, sourceKey: 'synthetic-credit', min…
+    155|     );
+    156|     expect((await postOpening(openingBody(120))).status).toBe(201);
+       |                                                          ^
+    157|     const corrected = await t.request('POST', CORRECTION, { cookie: em…
+    158|     expect(corrected.status, JSON.stringify(corrected.body)).toBe(201);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > red-first: refuses zero minutes, a missing reason, missing evidence and a missing as-of date, writing nothing
+AssertionError: zero minutes: {"error":{"code":"not_found","message":"Endpoint not found"}}: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:180:77
+    178|     for (const [label, body] of refused) {
+    179|       const response = await postOpening(body);
+    180|       expect(response.status, `${label}: ${JSON.stringify(response.bod…
+       |                                                                             ^
+    181|     }
+    182|     expect((await postOpening(openingBody(0))).body.error.code).toBe('…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > red-first: a different value without a correction is refused; a reasoned correction posts exactly one correction entry
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:191:27
+    189|   it('red-first: a different value without a correction is refused; a …
+    190|     const posted = await postOpening(openingBody(120));
+    191|     expect(posted.status).toBe(201);
+       |                           ^
+    192|     for (const body of [openingBody(150), openingBody(120, { evidence_…
+    193|       const response = await postOpening(body);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > refuses a correction before any opening balance, and the generic credit correction never targets an opening balance
+AssertionError: expected [Function] to throw error matching /Only an original credit or deficit de…/ but got 'Cannot read properties of undefined (…'
+
+- Expected:
+/Only an original credit or deficit debit can be corrected/
+
++ Received:
+"Cannot read properties of undefined (reading 'id')"
+
+ ❯ tests/integration/opening-balance.test.ts:260:7
+    258|         },
+    259|       ),
+    260|     ).toThrow(/Only an original credit or deficit debit can be correct…
+       |       ^
+    261|     expect(ledgerCount()).toBe(1);
+    262|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > POST /api/ot/opening-balance (F-3) > red-first: concurrent posts from separate connections post once
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/opening-balance.test.ts:315:71
+    313|     Atomics.notify(flags, 0);
+    314|     const outcomes = await Promise.all(results);
+    315|     expect(outcomes.filter((outcome) => outcome.status === 'posted')).…
+       |                                                                       ^
+    316|     expect(outcomes.filter((outcome) => outcome.status === 'duplicate'…
+    317|     expect(ledgerCount()).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > ownership (owner only) > red-first: another user and an administrator cannot post or read the owner opening balance
+AssertionError: expected 404 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:333:28
+    331|       // The owner is never a field: naming someone else is refused.
+    332|       const named = await t.request('POST', OPENING, { cookie, body: o…
+    333|       expect(named.status).toBe(422);
+       |                            ^
+    334|     }
+    335|     expect(ledgerCount()).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > ownership (owner only) > red-first: a share grantee with OT read and edit access cannot post, correct or read the opening balance
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:347:57
+    345|     const grantee = await account('<email>');
+    346|     grantShare(t.db, t.clock, { ownerUserId: t.userIds.employee, grant…
+    347|     expect((await postOpening(openingBody(60))).status).toBe(201);
+       |                                                         ^
+    348|     const base = `/api/shared/${t.userIds.employee}/ot`;
+    349|     // The read-only OT share still works.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > R4: the reviewed hash includes the balance > red-first: posting an opening balance makes an open review stale
+AssertionError: {"error":{"code":"inconsistent_reference_schedule","message":"Reference 08:00–17:00 (540 min) must equal required 480 min plus excluded breaks 0 min","details":{"referenceMinutes":540,"requiredMinutes":480,"excludedBreakMinutes":0}}}: expected 422 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 422
+
+ ❯ tests/integration/opening-balance.test.ts:375:56
+    373|       },
+    374|     });
+    375|     expect(policy.status, JSON.stringify(policy.body)).toBe(201);
+       |                                                        ^
+    376|     const session = await t.request('POST', '/api/days/2026-09-15/sess…
+    377|       cookie: employee,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > imported periods (F-2) > an imported workbook posts no ledger event; the explicit opening balance is the only carry-in
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:435:58
+    433|     expect(ledgerCount()).toBe(0);
+    434|     expect(await summary()).toMatchObject({ posted_minutes: 0 });
+    435|     expect((await postOpening(openingBody(150))).status).toBe(201);
+       |                                                          ^
+    436|     expect(ledgerCount()).toBe(1);
+    437|     expect((await summary()).posted_minutes).toBe(150);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/26]⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > imported periods (F-2) > red-first: recording OT leave use on a date inside an imported period answers 409 imported_period and posts nothing
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ tests/integration/opening-balance.test.ts:442:58
+    440|   it('red-first: recording OT leave use on a date inside an imported p…
+    441|     await importPeriod(PB);
+    442|     expect((await postOpening(openingBody(600))).status).toBe(201);
+       |                                                          ^
+    443|     const permission = { approver_name: 'Synthetic Manager', approval_…
+    444|     const inside = await t.request('POST', '/api/ot/leave', {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/26]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > migration 0012 (imports) > is migration 12 and runs on a fresh database from 1 to the latest (13)
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -10,9 +10,8 @@
+      8,
+      9,
+      10,
+      11,
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/workbook-import.test.ts:160:73
+    158|     const db = openDatabase(join(dir, 'fresh.db'));
+    159|     try {
+    160|       expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))…
+       |                                                                         ^
+    161|       expect(db.pragma('user_version', { simple: true })).toBe(13);
+    162|       const columns = db.prepare("SELECT name FROM pragma_table_info('…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/26]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > migration 0012 (imports) > upgrades a populated schema 11 database to 12 (and 13) without touching existing rows
+AssertionError: expected { applied: [ 12 ], version: 12 } to deeply equal { applied: [ 12, 13 ], version: 13 }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      12,
+-     13,
+    ],
+-   "version": 13,
++   "version": 12,
+  }
+
+ ❯ tests/integration/workbook-import.test.ts:206:73
+    204|       );
+    205|       expect(before.slice(0, 4).every((value) => Number(value) > 0)).t…
+    206|       expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))…
+       |                                                                         ^
+    207|       const after = ['users', 'timesheets', 'day_entries', 'work_sessi…
+    208|         db.prepare(`SELECT count(*) FROM ${table}`).pluck().get(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/26]⎯
+
+
+ Test Files  6 failed (6)
+      Tests  26 failed | 132 passed (158)
+   Start at  01:52:43
+   Duration  9.27s (tests 85%, import 10%, transform 5%)
+

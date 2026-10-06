@@ -200,6 +200,29 @@ export const otLeaveReverseBody = z.strictObject({
 });
 export type OtLeaveReverseBody = z.infer<typeof otLeaveReverseBody>;
 
+/*
+ * The explicit opening OT balance (F-3, WP4-T10). The owner is the session user; the minutes are signed and
+ * non-zero, and the service checks the exact codes (`invalid_minutes`, `reason_required`, `evidence_required`).
+ * `expected_version` is the opening balance version the owner saw: 0 when none was recorded.
+ */
+export const openingBalanceBody = z.strictObject({
+  minutes: z.number(),
+  as_of_date: z.string().max(10),
+  reason: z.string().max(2000),
+  evidence_ref: z.string().max(2000),
+  expected_version: z.number().int().min(0),
+});
+export type OpeningBalanceBody = z.infer<typeof openingBalanceBody>;
+
+/** A reasoned correction of the opening balance to `minutes`, with its own evidence, against the version seen. */
+export const openingBalanceCorrectionBody = z.strictObject({
+  minutes: z.number(),
+  reason: z.string().max(2000),
+  evidence_ref: z.string().max(2000),
+  expected_version: z.number().int().positive(),
+});
+export type OpeningBalanceCorrectionBody = z.infer<typeof openingBalanceCorrectionBody>;
+
 /* User administration (WP2-T07, E-11). The password is the admin-set temporary one and is never echoed. */
 const userRole = z.enum(['admin', 'employee']);
 const accountDisplayName = z.string().max(120);

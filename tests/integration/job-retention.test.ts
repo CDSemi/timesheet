@@ -309,11 +309,11 @@ describe('migration 0011', () => {
     expect(MIGRATIONS[10]).toMatchObject({ version: 11, name: 'job_retention' });
   });
 
-  it('applies on a fresh database from 1 to the latest (12)', () => {
+  it('applies on a fresh database from 1 to the latest (13)', () => {
     const db = openDatabase(join(dir, 'fresh.db'));
     try {
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z')).version).toBe(12);
-      expect(db.pragma('user_version', { simple: true })).toBe(12);
+      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z')).version).toBe(13);
+      expect(db.pragma('user_version', { simple: true })).toBe(13);
       expect(db.prepare('SELECT count(*) FROM job_retention_window').pluck().get()).toBe(1);
     } finally {
       db.close();
@@ -331,7 +331,7 @@ describe('migration 0011', () => {
       insert.run('old-scan', JOB_DEADLINE_SCAN, 'deadline_scan:old', 'succeeded');
       insert.run('old-send', 'send_email', 'send_email:old', 'succeeded');
       expect(() => db.prepare("DELETE FROM jobs WHERE id = 'old-scan'").run()).toThrow(/immutable_job/);
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [11, 12], version: 12 });
+      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [11, 12, 13], version: 13 });
       expect(db.prepare('SELECT id FROM jobs ORDER BY id').pluck().all()).toEqual(['old-scan', 'old-send']);
       // Closed: the migration alone deletes nothing, and the same guards hold.
       expect(() => db.prepare("DELETE FROM jobs WHERE id = 'old-scan'").run()).toThrow(/immutable_job/);

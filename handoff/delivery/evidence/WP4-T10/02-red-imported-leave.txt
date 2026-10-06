@@ -1,0 +1,38 @@
+# WP4-T10 red-first: OT leave use inside an imported period (pre-change otLeave.ts) - the defect reproduced (200 used, -60 posted)
+# Command: node node_modules/vitest/vitest.mjs run tests/integration/opening-balance.test.ts -t "imported period answers"
+# Exit: 1
+
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/integration/opening-balance.test.ts (13 tests | 1 failed | 12 skipped) 354ms
+   ❯ imported periods (F-2) (2)
+     × red-first: recording OT leave use on a date inside an imported period answers 409 imported_period and posts nothing 352ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/opening-balance.test.ts > imported periods (F-2) > red-first: recording OT leave use on a date inside an imported period answers 409 imported_period and posts nothing
+AssertionError: {"status":"used","request":{"id":"ad6ddbcb-a10f-486f-994a-dfcf23f1ffeb","request_key":"leave-inside","leave_date":"2026-09-02","requested_minutes":120,"approved_minutes":120,"reserved_minutes":60,"consumed_minutes":60,"released_minutes":0,"reversed_minutes":0,"reversible_minutes":60,"approver_name":"Synthetic Manager","approver_identity":null,"approval_date":"2026-08-25","evidence_ref":"Synthetic chat reference 0001","approval_origin":"self_recorded","note":null,"created_at":"2026-09-29T20:00:00Z","updated_at":"2026-09-29T20:00:00Z","version":2},"entry":{"id":"85ff71f3-7d2e-428c-86ad-0912f94c0d2d","entry_type":"leave_consumption","delta_minutes":-60,"source_key":"ot_leave_use:ad6ddbcb-a10f-486f-994a-dfcf23f1ffeb:use-1","source_ref":null,"corrects_entry_id":null,"leave_request_id":"ad6ddbcb-a10f-486f-994a-dfcf23f1ffeb","work_date":"2026-09-02","origin":"manual","reason":null,"reconciliation_required":false,"posted_at":"2026-09-29T20:00:00Z"},"balance":{"posted_minutes":540,"reserved_minutes":60,"available_minutes":480,"negative":false,"reconciliation_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/opening-balance.test.ts:458:58
+    456|       body: { use_key: 'use-1', minutes: 60, expected_version: inside.…
+    457|     });
+    458|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    459|     expect(refused.body.error.code).toBe('imported_period');
+    460|     expect({ ledger: ledgerCount(), audits: count('SELECT count(*) FRO…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 skipped (13)
+   Start at  01:53:03
+   Duration  2.09s (import 54%, transform 29%, tests 18%)
+

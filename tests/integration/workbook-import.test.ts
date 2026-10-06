@@ -152,13 +152,13 @@ afterAll(() => {
 });
 
 describe('migration 0012 (imports)', () => {
-  it('is the latest migration and runs on a fresh database from 1 to 12', () => {
-    expect(MIGRATIONS.at(-1)).toMatchObject({ version: 12, name: 'imports' });
+  it('is migration 12 and runs on a fresh database from 1 to the latest (13)', () => {
+    expect(MIGRATIONS[11]).toMatchObject({ version: 12, name: 'imports' });
     const dir = mkdtempSync(join(tmpdir(), 'timesheet-import-migration-'));
     const db = openDatabase(join(dir, 'fresh.db'));
     try {
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], version: 12 });
-      expect(db.pragma('user_version', { simple: true })).toBe(12);
+      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
+      expect(db.pragma('user_version', { simple: true })).toBe(13);
       const columns = db.prepare("SELECT name FROM pragma_table_info('imports') ORDER BY cid").pluck().all();
       expect(columns).toEqual([
         'id',
@@ -182,7 +182,7 @@ describe('migration 0012 (imports)', () => {
     }
   });
 
-  it('upgrades a populated schema 11 database to 12 without touching existing rows', async () => {
+  it('upgrades a populated schema 11 database to 12 (and 13) without touching existing rows', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'timesheet-import-upgrade-'));
     const db = openDatabase(join(dir, 'v11.db'));
     try {
@@ -203,13 +203,13 @@ describe('migration 0012 (imports)', () => {
         db.prepare(`SELECT count(*) FROM ${table}`).pluck().get(),
       );
       expect(before.slice(0, 4).every((value) => Number(value) > 0)).toBe(true);
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [12], version: 12 });
+      expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))).toEqual({ applied: [12, 13], version: 13 });
       const after = ['users', 'timesheets', 'day_entries', 'work_sessions', 'ot_ledger', 'audit_events'].map((table) =>
         db.prepare(`SELECT count(*) FROM ${table}`).pluck().get(),
       );
       expect(after).toEqual(before);
       expect(db.prepare('SELECT count(*) FROM imports').pluck().get()).toBe(0);
-      expect(migrate(db)).toEqual({ applied: [], version: 12 });
+      expect(migrate(db)).toEqual({ applied: [], version: 13 });
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

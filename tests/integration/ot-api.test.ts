@@ -486,11 +486,14 @@ describe('route inventory: no route posts a credit or debit', () => {
         'GET /api/ot/evidence.csv',
         'GET /api/ot/ledger',
         'GET /api/ot/leave',
+        'GET /api/ot/opening-balance',
         'GET /api/ot/summary',
         'POST /api/ot/leave',
         'POST /api/ot/leave/:id/cancel',
         'POST /api/ot/leave/:id/consume',
         'POST /api/ot/leave/:id/reverse',
+        'POST /api/ot/opening-balance',
+        'PUT /api/ot/opening-balance',
       ].sort(),
     );
   });
@@ -558,6 +561,10 @@ describe('route inventory: no route posts a credit or debit', () => {
         // writes imported_unverified timesheets and explicit day entries only, never a ledger entry.
         'POST /api/imports',
         'POST /api/imports/:id/commit',
+        // The owner's explicit opening balance (WP4-T10, F-3): the only OT carry-in, posted once by the owner through
+        // the ledger service; PUT is its reasoned correction. Owner-only: never mounted under /api/shared.
+        'POST /api/ot/opening-balance',
+        'PUT /api/ot/opening-balance',
       ].sort(),
     );
     for (const route of appRoutes()) {
@@ -576,6 +583,8 @@ describe('route inventory: no route posts a credit or debit', () => {
     for (const name of files) {
       const source = readFileSync(join(dir, name), 'utf8');
       expect(source, name).not.toMatch(/\b(postCredit|postCorrection|postDeficitDebit)\b/);
+      // The opening balance service is reachable only from the owner's OT router.
+      if (name !== 'ot.ts') expect(source, name).not.toMatch(/\b(postOpeningBalance|correctOpeningBalance)\b/);
     }
     // The leave router may only call the reviewed owner-scoped lifecycle functions.
     const ot = readFileSync(join(dir, 'ot.ts'), 'utf8');

@@ -1,11 +1,26 @@
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { assertCivilDate, diffDays } from '../../domain/dates.ts';
 import type { LedgerBalance } from '../../domain/ledger.ts';
 import { type PersonalRouterOptions, requireUser } from '../http/auth.ts';
-import { ApiError } from '../http/errors.ts';
-import { otLeaveCancelBody, otLeaveConsumeBody, otLeaveCreateBody, otLeaveReverseBody } from '../http/schemas.ts';
+import { ApiError, notFound } from '../http/errors.ts';
+import {
+  openingBalanceBody,
+  openingBalanceCorrectionBody,
+  otLeaveCancelBody,
+  otLeaveConsumeBody,
+  otLeaveCreateBody,
+  otLeaveReverseBody,
+} from '../http/schemas.ts';
 import { readJson } from '../http/validation.ts';
-import { getBalance, type LedgerEntry, listLedgerEntries } from '../services/ledger.ts';
+import {
+  correctOpeningBalance,
+  getBalance,
+  getOpeningBalance,
+  type LedgerEntry,
+  listLedgerEntries,
+  type OpeningBalance,
+  postOpeningBalance,
+} from '../services/ledger.ts';
 import { buildEvidenceCsv, evidenceFilename, provisionalSummary } from '../services/otEvidence.ts';
 import {
   cancelOtLeave,
@@ -68,6 +83,30 @@ function entryJson(entry: LedgerEntry) {
     reason: entry.reason,
     reconciliation_required: entry.reconciliationRequired,
     posted_at: entry.postedAt,
+    as_of_date: entry.asOfDate,
+  };
+}
+
+/** The owner's opening balance with its evidence (owner-only: never on a shared route). */
+function openingJson(opening: OpeningBalance | null) {
+  if (opening === null) return null;
+  return {
+    id: opening.entry.id,
+    minutes: opening.minutes,
+    original_minutes: opening.entry.deltaMinutes,
+    as_of_date: opening.entry.asOfDate,
+    reason: opening.entry.reason,
+    evidence_ref: opening.entry.evidenceRef,
+    version: opening.version,
+    posted_at: opening.entry.postedAt,
+    corrections: opening.corrections.map((correction) => ({
+      id: correction.id,
+      delta_minutes: correction.deltaMinutes,
+      reason: correction.reason,
+      evidence_ref: correction.evidenceRef,
+      reconciliation_required: correction.reconciliationRequired,
+      posted_at: correction.postedAt,
+    })),
   };
 }
 
@@ -79,12 +118,21 @@ function entryJson(entry: LedgerEntry) {
  * user id, and admin role grants no access to other users' data. There is deliberately no
  * route that posts a credit or debit: credits and debits are posted by WP3 finalization inside
  * its own transaction. The only ledger writes reachable here are the owner's explicit leave
- * actions (record use and reverse).
+ * actions (record use and reverse) and the owner's explicit opening balance and its correction
+ * (F-3). The opening balance routes are owner-only: they are not in the share allowlist, and
+ * they also refuse (as not found) any request whose actor is not the subject.
  */
 export function otRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
   const app = new Hono<AppEnv>();
   const auth = options.access ?? requireUser(deps);
   const ctx = { db: deps.db, clock: deps.clock };
+
+  /** F-3: only the owner reads or changes the opening balance; any delegated request is not found. */
+  const ownerOnly = (c: Context<AppEnv>) => {
+    const user = c.get('subject');
+    if (c.get('actor').id !== user.id) throw notFound('Opening balance');
+    return user;
+  };
 
   app.get('/summary', auth, (c) => {
     const user = c.get('subject');
@@ -196,6 +244,58 @@ export function otRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
       entry: entryJson(result.entry),
       balance: balanceJson(result.balance),
     });
+  });
+
+  app.get('/opening-balance', auth, (c) => {
+    const user = ownerOnly(c);
+    return c.json({ opening_balance: openingJson(getOpeningBalance(deps.db, user.id)), balance: balanceJson(getBalance(deps.db, user.id)) });
+  });
+
+  /** F-3: the explicit opening balance, once; a repeat with the same content is a no-op. */
+  app.post('/opening-balance', auth, async (c) => {
+    const user = ownerOnly(c);
+    const body = await readJson(c, openingBalanceBody);
+    const result = postOpeningBalance(ctx, {
+      userId: user.id,
+      actorUserId: user.id,
+      minutes: body.minutes,
+      asOfDate: body.as_of_date,
+      reason: body.reason,
+      evidenceRef: body.evidence_ref,
+      expectedVersion: body.expected_version,
+    });
+    return c.json(
+      {
+        status: result.status,
+        entry: result.entry === null ? null : entryJson(result.entry),
+        opening_balance: openingJson(result.opening),
+        balance: balanceJson(result.balance),
+      },
+      result.status === 'posted' ? 201 : 200,
+    );
+  });
+
+  /** F-3: a reasoned correction of the opening balance (one correction entry) against the version the owner saw. */
+  app.put('/opening-balance', auth, async (c) => {
+    const user = ownerOnly(c);
+    const body = await readJson(c, openingBalanceCorrectionBody);
+    const result = correctOpeningBalance(ctx, {
+      userId: user.id,
+      actorUserId: user.id,
+      minutes: body.minutes,
+      reason: body.reason,
+      evidenceRef: body.evidence_ref,
+      expectedVersion: body.expected_version,
+    });
+    return c.json(
+      {
+        status: result.status,
+        entry: result.entry === null ? null : entryJson(result.entry),
+        opening_balance: openingJson(result.opening),
+        balance: balanceJson(result.balance),
+      },
+      result.status === 'posted' ? 201 : 200,
+    );
   });
 
   app.get('/evidence.csv', auth, (c) => {

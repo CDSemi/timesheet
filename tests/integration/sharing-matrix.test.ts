@@ -83,6 +83,10 @@ const NEVER: ReadonlyArray<readonly [method: string, path: string]> = [
   ['POST', '/ot/leave/x/consume'],
   ['POST', '/ot/leave/x/cancel'],
   ['POST', '/ot/leave/x/reverse'],
+  // The owner's explicit opening balance and its correction (WP4-T10, F-3): owner-only.
+  ['GET', '/ot/opening-balance'],
+  ['POST', '/ot/opening-balance'],
+  ['PUT', '/ot/opening-balance'],
   ['GET', '/ot/evidence.csv?from=2026-09-14&to=2026-09-27'],
   ['GET', '/history'],
   ['GET', '/shares'],
@@ -175,6 +179,9 @@ const SHARING_ADDED = [
 
 /** The owner's own workbook import (WP4-T09, F-1): self-only routes, never reachable under /api/shared. */
 const IMPORTS_ADDED = ['GET /api/imports 2', 'GET /api/imports/:id 2', 'POST /api/imports 4', 'POST /api/imports/:id/commit 2'];
+
+/** The owner's explicit opening balance (WP4-T10, F-3): self-only routes, never reachable under /api/shared. */
+const OPENING_BALANCE_ADDED = ['GET /api/ot/opening-balance 2', 'POST /api/ot/opening-balance 2', 'PUT /api/ot/opening-balance 2'];
 
 const ITEM_SETS: ItemSet[] = (['none', 'view', 'edit'] as const).flatMap((timesheets) =>
   [false, true].flatMap((otRead) =>
@@ -305,7 +312,7 @@ describe('route inventory', () => {
 
   it('keeps every self-only /api route unchanged and adds only the reviewed sharing routes', () => {
     const outside = inventory().filter((route) => !route.includes(' /api/shared/'));
-    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED].sort());
+    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED, ...OPENING_BALANCE_ADDED].sort());
   });
 
   it('WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker', () => {

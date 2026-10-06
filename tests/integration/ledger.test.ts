@@ -602,6 +602,68 @@ describe('append-only and versioned storage (triggers)', () => {
     expect(ledgerRows(employee)).toBe(2);
   });
 
+  it('red-first: holds one opening balance per user with its as-of date, reason and evidence, immutable and correctable (F-3)', () => {
+    const insert = (values: {
+      id: string;
+      type?: string;
+      delta?: number;
+      key?: string;
+      user?: string;
+      workDate?: string | null;
+      asOf?: string | null;
+      evidence?: string | null;
+      reason?: string | null;
+      corrects?: string | null;
+    }) =>
+      t.db
+        .prepare(
+          `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, source_ref, corrects_entry_id,
+             leave_request_id, work_date, actor_user_id, origin, reason, reconciliation_required, posted_at, as_of_date, evidence_ref)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, 'manual', ?, 0, '2026-10-02T18:00:00Z', ?, ?)`,
+        )
+        .run(
+          values.id,
+          values.user ?? employee,
+          values.type ?? 'opening_balance',
+          values.delta ?? -45,
+          values.key ?? values.id,
+          values.corrects ?? null,
+          values.workDate ?? null,
+          values.user ?? employee,
+          values.reason === undefined ? 'Synthetic carried-in balance' : values.reason,
+          values.asOf === undefined ? '2026-08-30' : values.asOf,
+          values.evidence === undefined ? 'Synthetic letter' : values.evidence,
+        );
+    insert({ id: 'opening-1', key: 'opening_balance' });
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: -45, negative: true });
+    // Every fact is required; an opening balance has no work date and only it carries an as-of date.
+    expect(() => insert({ id: 'no-as-of', user: admin, asOf: null })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'bad-as-of', user: admin, asOf: '30/08/2026' })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'no-evidence', user: admin, evidence: null })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'blank-evidence', user: admin, evidence: '  ' })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'no-reason', user: admin, reason: null })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'with-day', user: admin, workDate: '2026-08-30' })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'zero', user: admin, delta: 0 })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'credit-as-of', user: admin, type: 'credit', delta: 5, workDate: '2026-09-21', evidence: null })).toThrow(/CHECK constraint failed/);
+    expect(() => insert({ id: 'credit-evidence', user: admin, type: 'credit', delta: 5, workDate: '2026-09-21', asOf: null })).toThrow(/CHECK constraint failed/);
+    // One per user, whatever the key.
+    expect(() => insert({ id: 'opening-2', key: 'another-opening-key' })).toThrow(/UNIQUE constraint failed/);
+    insert({ id: 'opening-admin', user: admin, key: 'opening_balance', delta: 30 });
+    // A correction may target the opening balance (and keeps its evidence); the chain still ends at the original.
+    insert({ id: 'opening-fix', type: 'correction', delta: 75, key: 'opening_balance:correction:1', asOf: null, corrects: 'opening-1', reason: 'Synthetic recount' });
+    expect(() =>
+      insert({ id: 'opening-chain', type: 'correction', delta: 5, key: 'chain', asOf: null, corrects: 'opening-fix', reason: 'Synthetic recount' }),
+    ).toThrow(/invalid_correction_target/);
+    expect(getBalance(t.db, employee).postedMinutes).toBe(30);
+    // The rebuilt table keeps its append-only triggers for the new rows too.
+    expect(() => t.db.prepare("UPDATE ot_ledger SET evidence_ref = 'x' WHERE id = 'opening-1'").run()).toThrow(/immutable_ledger_entry/);
+    expect(() => t.db.prepare("DELETE FROM ot_ledger WHERE id = 'opening-1'").run()).toThrow(/immutable_ledger_entry/);
+    expect(listLedgerEntries(t.db, employee).map((entry) => [entry.entryType, entry.deltaMinutes, entry.asOfDate, entry.evidenceRef])).toEqual([
+      ['opening_balance', -45, '2026-08-30', 'Synthetic letter'],
+      ['correction', 75, null, 'Synthetic letter'],
+    ]);
+  });
+
   it('keeps leave requests undeletable, with immutable permission facts, monotonic counters and +1 versions', () => {
     insertReservation(employee, 'leave-a', 120);
     expect(() => t.db.prepare('DELETE FROM ot_leave_requests').run()).toThrow(/immutable_leave_request/);

@@ -1,0 +1,137 @@
+# WP4-T10 mutation check in a scratch export of the working tree (temporary index, tree 39abc27d61a9a0ce2232c3662524cfe9958665dc, npm ci exit 0)
+# Mutation: delete CREATE TRIGGER ot_ledger_no_update from migration 0013 (the rebuilt table).
+# Command: node node_modules/vitest/vitest.mjs run tests/integration/ledger.test.ts tests/integration/migrations.test.ts tests/integration/opening-balance.test.ts
+# Mutated exit: 1 (4 failed | 88 passed: the immutability tests fail). Restored byte for byte (cmp): exit 0 (92 passed).
+
+--- mutation diff (scratch export, not the repository) ---
+diff --git a/<project>/src/server/db/migrations/0013_ot_opening_balance.ts b/src/server/db/migrations/0013_ot_opening_balance.ts
+index 8416877..178a9e1 100644
+--- a/<project>/src/server/db/migrations/0013_ot_opening_balance.ts
++++ b/src/server/db/migrations/0013_ot_opening_balance.ts
+@@ -99,8 +99,6 @@ WHEN NEW.corrects_entry_id IS NOT NULL AND NOT EXISTS (
+ )
+ BEGIN SELECT RAISE(ABORT, 'invalid_correction_target'); END;
+ 
+-CREATE TRIGGER ot_ledger_no_update BEFORE UPDATE ON ot_ledger
+-BEGIN SELECT RAISE(ABORT, 'immutable_ledger_entry'); END;
+ CREATE TRIGGER ot_ledger_no_delete BEFORE DELETE ON ot_ledger
+ BEGIN SELECT RAISE(ABORT, 'immutable_ledger_entry'); END;
+ `;
+
+--- mutated run ---
+
+ RUN  v5.0.2 <work>/mut
+
+ ❯ tests/integration/ledger.test.ts (31 tests | 2 failed) 5305ms
+   ❯ append-only and versioned storage (triggers) (4)
+     × rejects UPDATE and DELETE on ledger entries 159ms
+     × red-first: holds one opening balance per user with its as-of date, reason and evidence, immutable and correctable (F-3) 163ms
+ ❯ tests/integration/migrations.test.ts (48 tests | 2 failed) 6826ms
+   ❯ migration 0013 opening balance (ot_ledger rebuild, F-3) (3)
+     × red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger 283ms
+     × builds the same table on a fresh 1 to 13 database 48ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > rejects UPDATE and DELETE on ledger entries
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/integration/ledger.test.ts:560:82
+    558|   it('rejects UPDATE and DELETE on ledger entries', () => {
+    559|     credit(employee, 'ts1-r1-day1', 60);
+    560|     expect(() => t.db.prepare('UPDATE ot_ledger SET delta_minutes = 60…
+       |                                                                                  ^
+    561|     expect(() => t.db.prepare("UPDATE ot_ledger SET reason = 'x'").run…
+    562|     expect(() => t.db.prepare('DELETE FROM ot_ledger').run()).toThrow(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/ledger.test.ts > append-only and versioned storage (triggers) > red-first: holds one opening balance per user with its as-of date, reason and evidence, immutable and correctable (F-3)
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/integration/ledger.test.ts:659:104
+    657|     expect(getBalance(t.db, employee).postedMinutes).toBe(30);
+    658|     // The rebuilt table keeps its append-only triggers for the new ro…
+    659|     expect(() => t.db.prepare("UPDATE ot_ledger SET evidence_ref = 'x'…
+       |                                                                                                        ^
+    660|     expect(() => t.db.prepare("DELETE FROM ot_ledger WHERE id = 'openi…
+    661|     expect(listLedgerEntries(t.db, employee).map((entry) => [entry.ent…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger
+AssertionError: expected [ 'index ot_ledger_corrects', …(8) ] to deeply equal [ 'index ot_ledger_corrects', …(9) ]
+
+- Expected
++ Received
+
+@@ -6,7 +6,6 @@
+    "index sqlite_autoindex_ot_ledger_1",
+    "index sqlite_autoindex_ot_ledger_2",
+    "index sqlite_autoindex_ot_ledger_3",
+    "trigger ot_ledger_correction_target",
+    "trigger ot_ledger_no_delete",
+-   "trigger ot_ledger_no_update",
+  ]
+
+ ❯ tests/integration/migrations.test.ts:1832:62
+    1830|     // Every index and trigger is back; the append-only triggers and t…
+    1831|     const after = schemaObjects(db, 'ot_ledger');
+    1832|     expect(after.map((item) => `${item.type} ${item.name}`)).toEqual([
+       |                                                              ^
+    1833|       'index ot_ledger_corrects',
+    1834|       'index ot_ledger_leave',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0013 opening balance (ot_ledger rebuild, F-3) > builds the same table on a fresh 1 to 13 database
+AssertionError: expected [ 'ot_ledger_correction_target', …(1) ] to deeply equal [ 'ot_ledger_correction_target', …(2) ]
+
+- Expected
++ Received
+
+  [
+    "ot_ledger_correction_target",
+    "ot_ledger_no_delete",
+-   "ot_ledger_no_update",
+  ]
+
+ ❯ tests/integration/migrations.test.ts:1921:116
+    1919|         'evidence_ref',
+    1920|       ]);
+    1921|       expect(schemaObjects(fresh, 'ot_ledger').filter((item) => item.t…
+       |                                                                                                                    ^
+    1922|         'ot_ledger_correction_target',
+    1923|         'ot_ledger_no_delete',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  4 failed | 88 passed (92)
+   Start at  02:01:27
+   Duration  10.91s (tests 59%, import 32%, transform 9%)
+
+
+--- source restored (cmp byte-identical: yes) and rerun ---
+
+ RUN  v5.0.2 <work>/mut
+
+
+ Test Files  3 passed (3)
+      Tests  92 passed (92)
+   Start at  02:01:45
+   Duration  8.39s (tests 83%, import 12%, transform 6%)
+

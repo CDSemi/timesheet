@@ -1,0 +1,36 @@
+# WP4-T10 probe: why the rebuild needs foreign_keys=OFF (SQLite 3.53.4 via better-sqlite3 13.0.3, Node 24.21.0)
+# A 12-step rebuild of a referenced, self-referencing table inside BEGIN EXCLUSIVE with only PRAGMA defer_foreign_keys=ON:
+# foreign_key_check is empty, yet COMMIT fails, because DROP TABLE's implicit DELETE counted deferred violations that the rename never clears.
+# Command: node <work>/probe/rebuild.ts ; exit 0 (the script catches and prints the COMMIT error)
+
+--- probe source (rebuild.ts) ---
+import Database from '../../../../Dropbox/Work.CDSemi/timesheet/node_modules/better-sqlite3/lib/index.js';
+const db = new Database(':memory:');
+db.pragma('foreign_keys = ON');
+db.exec(`
+CREATE TABLE p (id TEXT PRIMARY KEY, parent TEXT, FOREIGN KEY (parent) REFERENCES p(id));
+CREATE TABLE c (id TEXT PRIMARY KEY, pid TEXT REFERENCES p(id));
+INSERT INTO p VALUES ('a', NULL), ('b', 'a');
+INSERT INTO c VALUES ('x', 'a');
+`);
+db.exec('BEGIN EXCLUSIVE');
+try {
+  db.pragma('defer_foreign_keys = ON');
+  db.exec(`
+  CREATE TABLE p_new (id TEXT PRIMARY KEY, parent TEXT, extra TEXT, FOREIGN KEY (parent) REFERENCES p(id));
+  INSERT INTO p_new (id, parent) SELECT id, parent FROM p ORDER BY rowid;
+  DROP TABLE p;
+  ALTER TABLE p_new RENAME TO p;
+  `);
+  console.log('fk_check', db.pragma('foreign_key_check'));
+  console.log('schema', db.prepare("select sql from sqlite_master where name in ('p','c')").pluck().all());
+  db.exec('COMMIT');
+  console.log('A committed');
+} catch (e) { console.log('A failed:', (e as Error).message); if (db.inTransaction) db.exec('ROLLBACK'); }
+--- output ---
+fk_check []
+schema [
+  'CREATE TABLE c (id TEXT PRIMARY KEY, pid TEXT REFERENCES p(id))',
+  'CREATE TABLE "p" (id TEXT PRIMARY KEY, parent TEXT, extra TEXT, FOREIGN KEY (parent) REFERENCES p(id))'
+]
+A failed: FOREIGN KEY constraint failed

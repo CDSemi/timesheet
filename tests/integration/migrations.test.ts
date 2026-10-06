@@ -3,13 +3,19 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, migrate, MigrationError, migrationChecksum } from '../../src/server/db/migrations.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
+import { signOffTimesheet } from '../../src/server/services/finalization.ts';
 import { getHistory } from '../../src/server/services/history.ts';
-import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
+import { getBalance, postCorrection, postCredit, postDeficitDebit, postOpeningBalance } from '../../src/server/services/ledger.ts';
+import { recordOtLeaveUse, reserveOtLeave, reverseOtLeaveUse } from '../../src/server/services/otLeave.ts';
+import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
 import { granteeChangesForReview } from '../../src/server/services/sharedActs.ts';
-import { MutableClock } from '../support/testApp.ts';
+import { createSession } from '../../src/server/services/timesheetCommands.ts';
+import { LA, MutableClock } from '../support/testApp.ts';
 
 const EXPECTED_TABLES = [
   'attachments',
@@ -70,6 +76,10 @@ const V3_TABLES = [
 /** Columns of timesheets before migration 0004 adds imported_unverified. */
 const V3_TIMESHEET_COLUMNS = 'id, user_id, pay_period_id, version, finalized_revision_no, created_at, updated_at';
 
+/** Columns of ot_ledger before migration 0013 adds as_of_date and evidence_ref. */
+const V12_LEDGER_COLUMNS =
+  'id, user_id, entry_type, delta_minutes, source_key, source_ref, corrects_entry_id, leave_request_id, work_date, actor_user_id, origin, reason, reconciliation_required, posted_at';
+
 /** Columns of audit_events before migration 0007 adds via_share_id. */
 const V6_AUDIT_COLUMNS = 'id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json';
 
@@ -99,7 +109,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(12);
+    expect(LATEST).toBe(13);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -133,6 +143,7 @@ describe('fresh SQLite migrations', () => {
       'outbound_pause',
       'job_retention',
       'imports',
+      'ot_opening_balance',
     ]);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
@@ -255,7 +266,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], version: 12 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -272,13 +283,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect.objectContaining({ version: 10, name: 'outbound_pause', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 11, name: 'job_retention', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 12, name: 'imports', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 13, name: 'ot_opening_balance', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -290,7 +302,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 12 });
+    expect(migrate(db)).toEqual({ applied: [], version: 13 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -307,7 +319,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12], version: 12 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -471,7 +483,11 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     return Object.fromEntries(
       V3_TABLES.filter((name) => name !== 'schema_migrations').map((name) => [
         name,
-        target.prepare(`SELECT ${name === 'timesheets' ? V3_TIMESHEET_COLUMNS : name === 'audit_events' ? V6_AUDIT_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
+        target
+          .prepare(
+            `SELECT ${name === 'timesheets' ? V3_TIMESHEET_COLUMNS : name === 'audit_events' ? V6_AUDIT_COLUMNS : name === 'ot_ledger' ? V12_LEDGER_COLUMNS : '*'} FROM ${name} ORDER BY rowid`,
+          )
+          .all(),
       ]),
     );
   }
@@ -496,13 +512,13 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     const balances = seed.users.map((user) => getBalance(db, user.id));
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6, 7, 8, 9, 10, 11, 12], version: 12 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13], version: 13 });
 
     expect(snapshotV3(db)).toEqual(before);
     expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     // Existing timesheets are not imported history; automation stays inactive until the owner records it.
     expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
     expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
@@ -528,7 +544,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     // The retention window is the one seeded row, closed (migration 0011).
     expect(db.prepare('SELECT id, as_of FROM job_retention_window').all()).toEqual([{ id: 1, as_of: null }]);
-    expect(migrate(db)).toEqual({ applied: [], version: 12 });
+    expect(migrate(db)).toEqual({ applied: [], version: 13 });
   });
 });
 
@@ -1701,5 +1717,217 @@ describe('migration 0007 audit access marker', () => {
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(migrate(db, UP_TO_7)).toEqual({ applied: [], version: 7 });
+  });
+});
+
+describe('migration 0013 opening balance (ot_ledger rebuild, F-3)', () => {
+  const AT = '2026-09-29T20:00:00Z';
+  const UP_TO_12 = MIGRATIONS.filter((migration) => migration.version <= 12);
+
+  function schemaObjects(target: Db, table: string) {
+    return target
+      .prepare("SELECT type, name, sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') ORDER BY type, name")
+      .all(table) as Array<{ type: string; name: string; sql: string | null }>;
+  }
+
+  /** Every row of every table except the rebuilt ledger and the migration record, in storage order. */
+  function otherRows(target: Db): Record<string, unknown[]> {
+    const tables = target
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('ot_ledger', 'schema_migrations') ORDER BY name")
+      .pluck()
+      .all() as string[];
+    return Object.fromEntries(tables.map((name) => [name, target.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));
+  }
+
+  /** A version 12 database holding every ledger entry type the schema allowed, referenced by revision lines. */
+  async function populatedV12() {
+    expect(migrate(db, UP_TO_12)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], version: 12 });
+    const clock = new MutableClock(AT);
+    const seed = await seedSynthetic(db, clock, {
+      files: new FileStore(join(dir, 'private-data')),
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+      sampleData: true,
+    });
+    const row = db.prepare("SELECT id, email, display_name, calendar_id FROM users WHERE email = 'employee2@example.invalid'").get() as {
+      id: string;
+      email: string;
+      display_name: string;
+      calendar_id: string;
+    };
+    const owner: SessionUser = { id: row.id, email: row.email, displayName: row.display_name, role: 'employee', calendarId: row.calendar_id, sessionId: 'fixture' };
+    // A finalized period: its credit is a ledger entry referenced by a revision ledger line.
+    createSession({ db, clock, user: owner }, '2026-09-02', {
+      start: { local: '2026-09-02T09:00', zone: LA },
+      end: { local: '2026-09-02T19:00', zone: LA },
+      input_zone: LA,
+      breaks_confirmed: true,
+      breaks: [],
+      reason: 'Synthetic late entry for the schema 12 fixture',
+    });
+    const review = buildReviewPayload(db, clock, owner, '2026-09-18');
+    signOffTimesheet({ db, clock, user: owner }, '2026-09-18', {
+      expectedVersion: review.expectedVersion,
+      reviewedHash: review.payloadHash,
+      signerName: 'Example Employee Two',
+      deficitChoices: [],
+      incompleteEvidenceAcknowledged: true,
+    });
+    const ctx = { db, clock };
+    const manual = { actorUserId: owner.id, origin: 'manual' as const };
+    const credit = postCredit(ctx, { userId: owner.id, sourceKey: 'v12-credit', minutes: 600, workDate: '2026-09-03', ...manual });
+    postCorrection(ctx, { userId: owner.id, sourceKey: 'v12-correction', originalEntryId: credit.entry.id, correctedMinutes: 540, reason: 'Synthetic recount', ...manual });
+    postDeficitDebit(ctx, { userId: owner.id, sourceKey: 'v12-debit', debitMinutes: 30, workDate: '2026-09-04', ...manual });
+    const leave = reserveOtLeave(ctx, {
+      userId: owner.id,
+      actorUserId: owner.id,
+      requestKey: 'v12-leave',
+      leaveDate: '2026-09-25',
+      requestedMinutes: 120,
+      permission: { approverName: 'Synthetic Manager', approvalDate: '2026-09-20', evidenceRef: 'Synthetic chat reference' },
+    });
+    const used = recordOtLeaveUse(ctx, { userId: owner.id, actorUserId: owner.id, requestId: leave.request.id, useKey: 'use-1', minutes: 120 });
+    reverseOtLeaveUse(ctx, {
+      userId: owner.id,
+      actorUserId: owner.id,
+      requestId: leave.request.id,
+      reversalKey: 'rev-1',
+      minutes: 60,
+      reason: 'Synthetic reversal',
+      expectedVersion: used.request.version,
+    });
+    const types = db.prepare('SELECT DISTINCT entry_type FROM ot_ledger ORDER BY entry_type').pluck().all();
+    expect(types).toEqual(['correction', 'credit', 'deficit_debit', 'leave_consumption', 'leave_reversal']);
+    expect(db.prepare('SELECT count(*) FROM revision_ledger_lines WHERE ledger_entry_id IS NOT NULL').pluck().get()).toBeGreaterThan(0);
+    return { owner, users: seed.users.map((user) => user.id) };
+  }
+
+  it('red-first: upgrades a fully populated version 12 database keeping every row, rowid, foreign key, index and trigger', async () => {
+    const { owner, users } = await populatedV12();
+    const before = {
+      ledger: db.prepare('SELECT rowid AS row_id, * FROM ot_ledger ORDER BY rowid').all() as Array<Record<string, unknown>>,
+      others: otherRows(db),
+      objects: schemaObjects(db, 'ot_ledger'),
+      lines: schemaObjects(db, 'revision_ledger_lines'),
+      ledgerKeys: db.pragma('foreign_key_list(ot_ledger)'),
+      lineKeys: db.pragma('foreign_key_list(revision_ledger_lines)'),
+      lineSql: db.prepare("SELECT sql FROM sqlite_master WHERE name = 'revision_ledger_lines'").pluck().get(),
+      balances: users.map((id) => getBalance(db, id)),
+    };
+    expect(before.ledger.length).toBeGreaterThanOrEqual(6);
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).toEqual({ applied: [13], version: 13 });
+
+    const ledgerAfter = db.prepare('SELECT rowid AS row_id, * FROM ot_ledger ORDER BY rowid').all() as Array<Record<string, unknown>>;
+    expect(ledgerAfter.map(({ as_of_date: _asOf, evidence_ref: _evidence, ...rest }) => rest)).toEqual(before.ledger);
+    expect(ledgerAfter.every((entry) => entry.as_of_date === null && entry.evidence_ref === null)).toBe(true);
+    expect(otherRows(db)).toEqual(before.others);
+    expect(users.map((id) => getBalance(db, id))).toEqual(before.balances);
+    // The same foreign keys (the self-reference and the leave link) and the same referencing table.
+    expect(db.pragma('foreign_key_list(ot_ledger)')).toEqual(before.ledgerKeys);
+    expect(db.pragma('foreign_key_list(revision_ledger_lines)')).toEqual(before.lineKeys);
+    expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'revision_ledger_lines'").pluck().get()).toBe(before.lineSql);
+    expect(schemaObjects(db, 'revision_ledger_lines')).toEqual(before.lines);
+    // Every index and trigger is back; the append-only triggers and the old indexes are byte-identical.
+    const after = schemaObjects(db, 'ot_ledger');
+    expect(after.map((item) => `${item.type} ${item.name}`)).toEqual([
+      'index ot_ledger_corrects',
+      'index ot_ledger_leave',
+      'index ot_ledger_one_opening_balance',
+      'index ot_ledger_user_date',
+      'index sqlite_autoindex_ot_ledger_1',
+      'index sqlite_autoindex_ot_ledger_2',
+      'index sqlite_autoindex_ot_ledger_3',
+      'trigger ot_ledger_correction_target',
+      'trigger ot_ledger_no_delete',
+      'trigger ot_ledger_no_update',
+    ]);
+    for (const name of ['ot_ledger_no_update', 'ot_ledger_no_delete', 'ot_ledger_corrects', 'ot_ledger_leave', 'ot_ledger_user_date']) {
+      expect(after.find((item) => item.name === name)?.sql, name).toBe(before.objects.find((item) => item.name === name)?.sql);
+    }
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
+
+    // The rebuilt table is still append-only and its foreign keys are enforced.
+    expectSqliteError(() => db.prepare('UPDATE ot_ledger SET delta_minutes = 1').run(), /immutable_ledger_entry/);
+    expectSqliteError(() => db.prepare("UPDATE ot_ledger SET reason = 'x' WHERE entry_type = 'credit'").run(), /immutable_ledger_entry/);
+    expectSqliteError(() => db.prepare('DELETE FROM ot_ledger').run(), /immutable_ledger_entry/);
+    expectSqliteError(() => db.prepare("DELETE FROM ot_ledger WHERE entry_type = 'leave_reversal'").run(), /immutable_ledger_entry/);
+    expectSqliteError(
+      () =>
+        db
+          .prepare(
+            `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, leave_request_id, work_date, origin, posted_at)
+             VALUES ('orphan', ?, 'leave_consumption', -5, 'orphan', 'no-such-request', '2026-09-25', 'system', '2026-10-06T12:00:00Z')`,
+          )
+          .run(owner.id),
+      /FOREIGN KEY constraint failed/,
+    );
+    expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(before.ledger.length);
+
+    // The upgraded owner can record the opening balance once.
+    const opening = postOpeningBalance(
+      { db, clock: new MutableClock('2026-10-06T12:00:00Z') },
+      { userId: owner.id, actorUserId: owner.id, minutes: 90, asOfDate: '2026-08-16', reason: 'Synthetic carried-in balance', evidenceRef: 'Synthetic letter', expectedVersion: 0 },
+    );
+    expect(opening.status).toBe('posted');
+    expect(getBalance(db, owner.id).postedMinutes).toBe((before.balances[users.indexOf(owner.id)]?.postedMinutes ?? 0) + 90);
+    expect(migrate(db)).toEqual({ applied: [], version: 13 });
+  });
+
+  it('checks foreign keys before the commit: a violation rolls the whole rebuild back and restores the pragma', async () => {
+    await populatedV12();
+    // A dangling link written behind the application's back (foreign keys off) must not survive a migration.
+    db.pragma('foreign_keys = OFF');
+    db.prepare(
+      `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, leave_request_id, work_date, origin, posted_at)
+       VALUES ('dangling', (SELECT id FROM users WHERE email = 'employee2@example.invalid'), 'leave_consumption', -5, 'dangling',
+         'no-such-request', '2026-09-25', 'system', '2026-10-06T12:00:00Z')`,
+    ).run();
+    db.pragma('foreign_keys = ON');
+    const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'ot_ledger'").pluck().get();
+    expect(() => migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).toThrow(MigrationError);
+    expect(() => migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'))).toThrow(/foreign key/);
+    expect(db.prepare('SELECT max(version) FROM schema_migrations').pluck().get()).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'ot_ledger'").pluck().get()).toBe(tableSql);
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(db.inTransaction).toBe(false);
+  });
+
+  it('builds the same table on a fresh 1 to 13 database', () => {
+    const fresh = openDatabase(join(dir, 'fresh-13.db'));
+    try {
+      expect(migrate(fresh)).toEqual({ applied: ALL_VERSIONS, version: 13 });
+      expect(fresh.prepare("SELECT name FROM pragma_table_info('ot_ledger') ORDER BY cid").pluck().all()).toEqual([
+        'id',
+        'user_id',
+        'entry_type',
+        'delta_minutes',
+        'source_key',
+        'source_ref',
+        'corrects_entry_id',
+        'leave_request_id',
+        'work_date',
+        'actor_user_id',
+        'origin',
+        'reason',
+        'reconciliation_required',
+        'posted_at',
+        'as_of_date',
+        'evidence_ref',
+      ]);
+      expect(schemaObjects(fresh, 'ot_ledger').filter((item) => item.type === 'trigger').map((item) => item.name)).toEqual([
+        'ot_ledger_correction_target',
+        'ot_ledger_no_delete',
+        'ot_ledger_no_update',
+      ]);
+      expect(fresh.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(fresh.pragma('foreign_key_check')).toEqual([]);
+      expect(migrate(fresh)).toEqual({ applied: [], version: 13 });
+    } finally {
+      fresh.close();
+    }
   });
 });

@@ -350,6 +350,34 @@ describe('GET /api/ot/evidence.csv', () => {
     expect(employeeExport.body as string).not.toContain(adminSession.body.session.id);
   });
 
+  it('red-first: labels the opening balance and its correction with the as-of date and evidence reference (F-3)', async () => {
+    const posted = await t.request('POST', '/api/ot/opening-balance', {
+      cookie: employee,
+      body: { minutes: -120, as_of_date: '2026-08-30', reason: 'Synthetic carried-in balance', evidence_ref: '=Synthetic letter 0001', expected_version: 0 },
+    });
+    expect(posted.status, JSON.stringify(posted.body)).toBe(201);
+    const corrected = await t.request('PUT', '/api/ot/opening-balance', {
+      cookie: employee,
+      body: { minutes: 60, reason: 'Synthetic recount', evidence_ref: 'Synthetic letter 0002', expected_version: 1 },
+    });
+    expect(corrected.status, JSON.stringify(corrected.body)).toBe(201);
+    postCredit(
+      { db: t.db, clock: t.clock },
+      { userId: t.userIds.employee, sourceKey: 'synthetic-credit', minutes: 90, workDate: '2026-09-29', actorUserId: null, origin: 'system' },
+    );
+    const response = await getCsv(employee);
+    expect(response.status).toBe(200);
+    const ledger = sections(response.body as string).ledger;
+    expect(ledger?.header).toEqual(expect.arrayContaining(['entry_type', 'entry_label', 'as_of_date', 'evidence_ref']));
+    // The opening balance has no work date: it is always part of the export, whatever the range.
+    expect(ledger?.rows.map((row) => [row.entry_type, row.entry_label, row.delta_minutes, row.as_of_date, row.evidence_ref])).toEqual([
+      ['opening_balance', 'Opening balance', '-120', '2026-08-30', "'=Synthetic letter 0001"],
+      ['correction', 'Opening balance correction', '180', '', 'Synthetic letter 0002'],
+      ['credit', 'OT credit', '90', '', ''],
+    ]);
+    expect(ledger?.rows[0]).toMatchObject({ work_date: '', reason: 'Synthetic carried-in balance' });
+  });
+
   it('does not write or post anything while exporting', async () => {
     await seedEvidence();
     const counts = () => ({

@@ -16,6 +16,7 @@ import { type Db, writeTransaction } from '../db/database.ts';
 import { ApiError, notFound, staleVersion } from '../http/errors.ts';
 import { recordAudit } from './audit.ts';
 import { getBalance, type LedgerEntry } from './ledger.ts';
+import { importedPeriodError } from './workbookImport.ts';
 
 /*
  * Internal OT leave service (R-06; owner decisions E-2/E-3, coordinator decisions
@@ -29,7 +30,9 @@ import { getBalance, type LedgerEntry } from './ledger.ts';
  *   creates nothing (E-5).
  * - Record use is the only way to consume (E-3): explicit, on or after the leave date in
  *   the owner's saved reporting zone, X <= reserved, partial allowed, idempotent by key.
- *   The unused remainder stays reserved until it is used or cancelled.
+ *   The unused remainder stays reserved until it is used or cancelled. A leave date inside
+ *   an imported period is refused with 409 `imported_period` (F-2: imported history posts
+ *   no ledger event).
  * - Cancel releases the unused reserved minutes; it posts nothing.
  * - Reverse gives already used minutes back with a compensating positive ledger delta
  *   linked to the request.
@@ -185,6 +188,9 @@ interface LedgerRow {
   reason: string | null;
   reconciliation_required: number;
   posted_at: string;
+  /** Absent on a schema before migration 0013. */
+  as_of_date?: string | null;
+  evidence_ref?: string | null;
 }
 
 const MAX_KEY_LENGTH = 120;
@@ -233,6 +239,8 @@ function toEntry(row: LedgerRow): LedgerEntry {
     reason: row.reason,
     reconciliationRequired: row.reconciliation_required === 1,
     postedAt: row.posted_at,
+    asOfDate: row.as_of_date ?? null,
+    evidenceRef: row.evidence_ref ?? null,
   };
 }
 
@@ -337,6 +345,21 @@ function todayForOwner(db: Db, clock: Clock, userId: string): CivilDate {
   return localDateOf(assertTimeZone(zone, 'reporting_zone'), nowEpoch(clock));
 }
 
+/**
+ * F-2: true when the owner's timesheet of the period holding `date` is imported history
+ * (`imported_unverified = 1`). Whole rows are read, so a schema before migration 0004 (no
+ * flag yet) reads "not imported", like `isImportedTimesheet`.
+ */
+function insideImportedPeriod(db: Db, userId: string, date: CivilDate): boolean {
+  const rows = db
+    .prepare(
+      `SELECT t.* FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
+        WHERE t.user_id = ? AND p.period_start <= ? AND p.period_end >= ?`,
+    )
+    .all(userId, date, date) as Array<{ imported_unverified?: number }>;
+  return rows.some((row) => row.imported_unverified === 1);
+}
+
 /** Writes new counters with an optimistic version check; the schema enforces forward-only counters. */
 function updateCounters(ctx: OtLeaveContext, request: OtLeaveRequest, counters: LeaveCounters): OtLeaveRequest {
   const updatedAt = nowUtc(ctx.clock);
@@ -389,6 +412,8 @@ function appendLeaveEntry(
     reason: values.reason,
     reconciliationRequired: false,
     postedAt: nowUtc(ctx.clock),
+    asOfDate: null,
+    evidenceRef: null,
   };
   ctx.db
     .prepare(
@@ -577,6 +602,8 @@ export function recordOtLeaveUse(ctx: OtLeaveContext, input: RecordOtLeaveUseInp
       return { status: 'duplicate', request, entry: existing, balance: getBalance(ctx.db, input.userId) };
     }
     checkVersion(request, input.expectedVersion);
+    // F-2: an imported period is read-only history and posts no ledger event.
+    if (insideImportedPeriod(ctx.db, input.userId, request.leaveDate)) throw importedPeriodError();
     const plan = planLeaveUse(countersOf(request), input.minutes);
     if (todayForOwner(ctx.db, ctx.clock, input.userId) < request.leaveDate) {
       throw new ApiError(409, 'before_leave_date', 'OT leave can be recorded as used on or after the leave date', {

@@ -5,14 +5,16 @@ import { canDebit, correctionDelta, type LedgerBalance, summarizeBalance } from 
 import { assertWholeMinutes } from '../../domain/overtime.ts';
 import { type Clock, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
-import { ApiError, notFound } from '../http/errors.ts';
+import { ApiError, notFound, staleVersion } from '../http/errors.ts';
 import { normalizeReason } from '../http/validation.ts';
 import { recordAudit } from './audit.ts';
 
 /*
- * Internal OT ledger service (R-06, R-05 debit outcome). There is deliberately no HTTP
- * route: WP3 finalization calls these functions inside its own transaction, and the
- * WP2 leave service builds on them. Every function is owner-scoped by `userId`, runs in
+ * Internal OT ledger service (R-06, R-05 debit outcome). Credits, debits and their
+ * corrections have deliberately no HTTP route: WP3 finalization calls these functions
+ * inside its own transaction, and the WP2 leave service builds on them. The one owner
+ * action here is the explicit opening balance and its correction (F-3, WP4-T10), reached
+ * only through the owner's own OT route. Every function is owner-scoped by `userId`, runs in
  * a short IMMEDIATE transaction (a savepoint when the caller already holds one, so a
  * caller failure rolls the posting back), appends only, and records an audit event for
  * each appended entry.
@@ -27,7 +29,7 @@ export interface LedgerContext {
   clock: Clock;
 }
 
-export type LedgerEntryType = 'credit' | 'deficit_debit' | 'correction' | 'leave_consumption' | 'leave_reversal';
+export type LedgerEntryType = 'credit' | 'deficit_debit' | 'correction' | 'leave_consumption' | 'leave_reversal' | 'opening_balance';
 
 /** `manual`: a person's action; `automatic`: unattended finalization; `system`: setup/maintenance. */
 export type LedgerOrigin = 'manual' | 'automatic' | 'system';
@@ -47,6 +49,10 @@ export interface LedgerEntry {
   reason: string | null;
   reconciliationRequired: boolean;
   postedAt: string;
+  /** F-3: the accounting date an opening balance is stated at; null for every other entry. */
+  asOfDate: CivilDate | null;
+  /** F-3: the evidence reference of an opening balance or of its correction; null otherwise. */
+  evidenceRef: string | null;
 }
 
 interface PostingInput {
@@ -148,6 +154,9 @@ interface LedgerRow {
   reason: string | null;
   reconciliation_required: number;
   posted_at: string;
+  /** Absent on a schema before migration 0013. */
+  as_of_date?: string | null;
+  evidence_ref?: string | null;
 }
 
 const ORIGINS: ReadonlySet<string> = new Set<LedgerOrigin>(['manual', 'automatic', 'system']);
@@ -170,6 +179,8 @@ function toEntry(row: LedgerRow): LedgerEntry {
     reason: row.reason,
     reconciliationRequired: row.reconciliation_required === 1,
     postedAt: row.posted_at,
+    asOfDate: row.as_of_date ?? null,
+    evidenceRef: row.evidence_ref ?? null,
   };
 }
 
@@ -186,6 +197,8 @@ function entryJson(entry: LedgerEntry) {
     work_date: entry.workDate,
     origin: entry.origin,
     reconciliation_required: entry.reconciliationRequired,
+    ...(entry.asOfDate === null ? {} : { as_of_date: entry.asOfDate }),
+    ...(entry.evidenceRef === null ? {} : { evidence_ref: entry.evidenceRef }),
   };
 }
 
@@ -252,8 +265,17 @@ interface NewEntry {
   workDate: CivilDate | null;
   correctsEntryId?: string | null;
   reconciliationRequired?: boolean;
+  /** F-3: only an opening balance has an as-of date. */
+  asOfDate?: CivilDate | null;
+  /** F-3: only an opening balance and its corrections carry an evidence reference. */
+  evidenceRef?: string | null;
 }
 
+/**
+ * The single append path of this service (ADV-A-05: the leave service keeps its own for
+ * leave entries; no third path exists). The F-3 columns are written only when the entry
+ * has them, so every other posting writes exactly the columns every schema version has.
+ */
 function appendEntry(ctx: LedgerContext, posting: NormalizedPosting, values: NewEntry): LedgerEntry {
   const entry: LedgerEntry = {
     id: randomUUID(),
@@ -270,29 +292,52 @@ function appendEntry(ctx: LedgerContext, posting: NormalizedPosting, values: New
     reason: posting.reason,
     reconciliationRequired: values.reconciliationRequired ?? false,
     postedAt: nowUtc(ctx.clock),
+    asOfDate: values.asOfDate ?? null,
+    evidenceRef: values.evidenceRef ?? null,
   };
+  const columns = [
+    'id',
+    'user_id',
+    'entry_type',
+    'delta_minutes',
+    'source_key',
+    'source_ref',
+    'corrects_entry_id',
+    'leave_request_id',
+    'work_date',
+    'actor_user_id',
+    'origin',
+    'reason',
+    'reconciliation_required',
+    'posted_at',
+  ];
+  const params: Array<string | number | null> = [
+    entry.id,
+    entry.userId,
+    entry.entryType,
+    entry.deltaMinutes,
+    entry.sourceKey,
+    entry.sourceRef,
+    entry.correctsEntryId,
+    entry.leaveRequestId,
+    entry.workDate,
+    entry.actorUserId,
+    entry.origin,
+    entry.reason,
+    entry.reconciliationRequired ? 1 : 0,
+    entry.postedAt,
+  ];
+  if (entry.asOfDate !== null) {
+    columns.push('as_of_date');
+    params.push(entry.asOfDate);
+  }
+  if (entry.evidenceRef !== null) {
+    columns.push('evidence_ref');
+    params.push(entry.evidenceRef);
+  }
   ctx.db
-    .prepare(
-      `INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, source_ref, corrects_entry_id,
-         leave_request_id, work_date, actor_user_id, origin, reason, reconciliation_required, posted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      entry.id,
-      entry.userId,
-      entry.entryType,
-      entry.deltaMinutes,
-      entry.sourceKey,
-      entry.sourceRef,
-      entry.correctsEntryId,
-      entry.leaveRequestId,
-      entry.workDate,
-      entry.actorUserId,
-      entry.origin,
-      entry.reason,
-      entry.reconciliationRequired ? 1 : 0,
-      entry.postedAt,
-    );
+    .prepare(`INSERT INTO ot_ledger (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+    .run(...params);
   recordAudit(ctx.db, ctx.clock, {
     actorUserId: entry.actorUserId,
     ownerUserId: entry.userId,
@@ -471,6 +516,192 @@ export function postDeficitDebit(ctx: LedgerContext, input: DeficitDebitInput): 
     }
     const entry = appendEntry(ctx, posting, { entryType: 'deficit_debit', deltaMinutes: -input.debitMinutes, workDate });
     return { status: 'posted', entry, balance: balanceOf(ctx.db, posting.userId) };
+  });
+}
+
+/* ---- F-3 opening balance -------------------------------------------------------------- */
+
+/** The one source key of a user's opening balance; at most one exists (also a unique index). */
+const OPENING_SOURCE_KEY = 'opening_balance';
+/** A correction is keyed by the version it was made against, so a retry finds it and a stale one is refused. */
+const openingCorrectionKey = (version: number) => `opening_balance:correction:${version}`;
+/** A technical bound (about 190 years of minutes) that keeps every later balance sum a safe integer. */
+const MAX_OPENING_MINUTES = 100_000_000;
+const MAX_EVIDENCE_LENGTH = 2000;
+
+/** The opening balance as recorded: the original entry, its corrections in order and the resulting value. */
+export interface OpeningBalance {
+  entry: LedgerEntry;
+  corrections: LedgerEntry[];
+  /** The current value: the original minutes plus every correction. */
+  minutes: number;
+  /** 1 for the original, plus one per correction; a correction must name it. */
+  version: number;
+}
+
+export interface OpeningBalanceInput {
+  userId: string;
+  actorUserId: string;
+  /** Signed, non-zero whole minutes carried in. */
+  minutes: number;
+  asOfDate: CivilDate;
+  reason: string;
+  evidenceRef: string;
+  /** The version the owner saw: 0 when there was none. */
+  expectedVersion: number;
+}
+
+export interface OpeningBalanceCorrectionInput {
+  userId: string;
+  actorUserId: string;
+  /** The corrected value: signed, non-zero whole minutes. */
+  minutes: number;
+  /** Why the value changes (required). */
+  reason: string;
+  /** The evidence of the corrected value (required). */
+  evidenceRef: string;
+  /** The opening balance version the correction was made against. */
+  expectedVersion: number;
+}
+
+export interface OpeningBalanceResult {
+  /** `unchanged`: a correction to the current value appends nothing. */
+  status: 'posted' | 'duplicate' | 'unchanged';
+  entry: LedgerEntry | null;
+  opening: OpeningBalance;
+  balance: LedgerBalance;
+}
+
+function assertOpeningMinutes(value: unknown): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value === 0 || Math.abs(value) > MAX_OPENING_MINUTES) {
+    throw new ApiError(422, 'invalid_minutes', `minutes must be a signed, non-zero whole number of at most ${MAX_OPENING_MINUTES} minutes`);
+  }
+}
+
+function requiredText(value: unknown, max: number, missingCode: string, invalidCode: string, field: string): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text === '') throw new ApiError(422, missingCode, `${field} is required`);
+  if (text.length > max) throw new ApiError(422, invalidCode, `${field} must be at most ${max} characters`);
+  return text;
+}
+
+function assertVersion(value: unknown, min: number): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min) {
+    throw new ApiError(422, 'invalid_expected_version', `expected_version must be a whole number of at least ${min}`);
+  }
+}
+
+function requireActor(actorUserId: unknown): string {
+  if (typeof actorUserId !== 'string' || actorUserId === '') {
+    throw new ApiError(422, 'actor_required', 'A manual ledger posting needs the acting user');
+  }
+  return actorUserId;
+}
+
+function loadOpening(db: Db, userId: string): OpeningBalance | null {
+  const row = db.prepare("SELECT * FROM ot_ledger WHERE user_id = ? AND entry_type = 'opening_balance'").get(userId) as LedgerRow | undefined;
+  if (row === undefined) return null;
+  const corrections = (
+    db.prepare('SELECT * FROM ot_ledger WHERE user_id = ? AND corrects_entry_id = ? ORDER BY rowid').all(userId, row.id) as LedgerRow[]
+  ).map(toEntry);
+  return {
+    entry: toEntry(row),
+    corrections,
+    minutes: corrections.reduce((total, correction) => total + correction.deltaMinutes, row.delta_minutes),
+    version: 1 + corrections.length,
+  };
+}
+
+/** The owner's opening balance, or null when none was recorded. */
+export function getOpeningBalance(db: Db, userId: string): OpeningBalance | null {
+  return loadOpening(db, userId);
+}
+
+/**
+ * Records the owner's explicit opening balance (F-3): signed, non-zero minutes with an as-of
+ * date, a reason and an evidence reference, entered by the owner (never inferred from a
+ * workbook). One per user: a repeat with the same content returns the stored entry
+ * (`duplicate`) and appends nothing; any other content is 409 `opening_balance_exists`, so a
+ * change always goes through {@link correctOpeningBalance}.
+ */
+export function postOpeningBalance(ctx: LedgerContext, input: OpeningBalanceInput): OpeningBalanceResult {
+  const actorUserId = requireActor(input.actorUserId);
+  assertOpeningMinutes(input.minutes);
+  const asOfDate = assertCivilDate(input.asOfDate, 'asOfDate');
+  const reason = requiredText(input.reason, MAX_REASON_LENGTH, 'reason_required', 'invalid_reason', 'reason');
+  const evidenceRef = requiredText(input.evidenceRef, MAX_EVIDENCE_LENGTH, 'evidence_required', 'invalid_evidence_ref', 'evidence_ref');
+  assertVersion(input.expectedVersion, 0);
+  const posting = normalizePosting({ userId: input.userId, sourceKey: OPENING_SOURCE_KEY, actorUserId, origin: 'manual', reason });
+  return writeTransaction(ctx.db, () => {
+    const existing = loadOpening(ctx.db, posting.userId);
+    if (existing !== null) {
+      const recorded = existing.entry;
+      const same =
+        recorded.deltaMinutes === input.minutes && recorded.asOfDate === asOfDate && recorded.reason === reason && recorded.evidenceRef === evidenceRef;
+      if (!same) {
+        throw new ApiError(409, 'opening_balance_exists', 'An opening balance is already recorded; change it with a reasoned correction', {
+          minutes: existing.minutes,
+          version: existing.version,
+        });
+      }
+      return { status: 'duplicate', entry: recorded, opening: existing, balance: balanceOf(ctx.db, posting.userId) };
+    }
+    if (input.expectedVersion !== 0) throw staleVersion();
+    if (findByKey(ctx.db, posting.userId, posting.sourceKey) !== undefined) throw sourceKeyConflict();
+    const entry = appendEntry(ctx, posting, { entryType: 'opening_balance', deltaMinutes: input.minutes, workDate: null, asOfDate, evidenceRef });
+    const opening = loadOpening(ctx.db, posting.userId);
+    if (opening === null) throw new Error('The opening balance was not stored');
+    return { status: 'posted', entry, opening, balance: balanceOf(ctx.db, posting.userId) };
+  });
+}
+
+/**
+ * Changes the owner's opening balance to `minutes` with one `correction` entry of the
+ * difference, linked to the original, with its own reason and evidence (F-3, R-06). The
+ * correction names the version it was made against: a retry of the same correction returns
+ * it (`duplicate`), a different one at an old version is 409 `stale_version`, and the
+ * current value appends nothing (`unchanged`). A truthful correction may make the balance
+ * negative; it is kept and flagged (LG-08).
+ */
+export function correctOpeningBalance(ctx: LedgerContext, input: OpeningBalanceCorrectionInput): OpeningBalanceResult {
+  const actorUserId = requireActor(input.actorUserId);
+  assertOpeningMinutes(input.minutes);
+  const reason = requiredText(input.reason, MAX_REASON_LENGTH, 'reason_required', 'invalid_reason', 'reason');
+  const evidenceRef = requiredText(input.evidenceRef, MAX_EVIDENCE_LENGTH, 'evidence_required', 'invalid_evidence_ref', 'evidence_ref');
+  assertVersion(input.expectedVersion, 1);
+  const posting = normalizePosting({
+    userId: input.userId,
+    sourceKey: openingCorrectionKey(input.expectedVersion),
+    actorUserId,
+    origin: 'manual',
+    reason,
+  });
+  return writeTransaction(ctx.db, () => {
+    const opening = loadOpening(ctx.db, posting.userId);
+    if (opening === null) throw notFound('Opening balance');
+    const existing = findByKey(ctx.db, posting.userId, posting.sourceKey);
+    if (existing !== undefined) {
+      const index = opening.corrections.findIndex((correction) => correction.id === existing.id);
+      const valueThrough = opening.corrections.slice(0, index + 1).reduce((total, correction) => total + correction.deltaMinutes, opening.entry.deltaMinutes);
+      const same = index >= 0 && valueThrough === input.minutes && existing.reason === reason && existing.evidenceRef === evidenceRef;
+      if (!same) throw staleVersion();
+      return { status: 'duplicate', entry: existing, opening, balance: balanceOf(ctx.db, posting.userId) };
+    }
+    if (input.expectedVersion !== opening.version) throw staleVersion();
+    const deltaMinutes = input.minutes - opening.minutes;
+    if (deltaMinutes === 0) return { status: 'unchanged', entry: null, opening, balance: balanceOf(ctx.db, posting.userId) };
+    const projected = balanceOf(ctx.db, posting.userId, deltaMinutes);
+    const entry = appendEntry(ctx, posting, {
+      entryType: 'correction',
+      deltaMinutes,
+      workDate: null,
+      correctsEntryId: opening.entry.id,
+      reconciliationRequired: projected.reconciliationRequired,
+      evidenceRef,
+    });
+    const corrected = loadOpening(ctx.db, posting.userId);
+    if (corrected === null) throw new Error('The opening balance disappeared');
+    return { status: 'posted', entry, opening: corrected, balance: balanceOf(ctx.db, posting.userId) };
   });
 }
 

@@ -116,4 +116,11 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD a67978722f76f28d791a9ed23aa59a642f8122c3; post-HEAD and commit SHA
+  1b4d81722023f085752b85d1646e6fe928919d76; pushed true; remote SHA the same; branch main.
+- Digest b8db09bd...ad55bc (760 files); staged 21.
+- Scope checks: no changes under .claude/, docs/, reference/, src/client/, package.json;
+  note: WP4-T09B.md was tracked-modified (not new) and WP4-T10.md had no changes.
+- Checks: all exit 0 (see evidence/WP4-T09B-FREEZE/checks.txt).
+- Blockers: none.

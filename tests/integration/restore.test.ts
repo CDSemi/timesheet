@@ -1270,7 +1270,7 @@ describe('restore of the private workbook import sources (WP4-T09B, AC-11)', () 
     const backup = await createBackup({ databasePath, dataDir: join(dir, 'private-data'), targetDir: join(dir, 'backups'), clock: new MutableClock(NOW) });
     expect(backup.manifest.schema_version).toBe(11);
     const result = await restoreBackup({ fromDir: backup.directory, toDir: join(work, 'target-v11'), liveDataDir: join(dir, 'private-data'), liveDatabasePath: databasePath, clock: new MutableClock(LATER) });
-    expect(result.schema).toMatchObject({ backup: 11, restored: LATEST, applied: [12] });
+    expect(result.schema).toMatchObject({ backup: 11, restored: LATEST, applied: [12, 13] });
     const restored = openDatabase(result.databasePath);
     try {
       expect(count(restored, 'SELECT count(*) FROM imports')).toBe(0);

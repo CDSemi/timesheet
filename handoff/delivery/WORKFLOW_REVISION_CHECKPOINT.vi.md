@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = a67978722f76f28d791a9ed23aa59a642f8122c3 (WP4-T09-FREEZE).
+  - HEAD = origin/main = 1b4d81722023f085752b85d1646e6fe928919d76 (WP4-T09B-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -719,7 +719,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          bị từ chối, và tệp nguồn bị sửa cũng bị từ chối.
        - Test: 6 đỏ, 57 xanh; phép thử đột biến làm 4 test fail. Verify: 1655 test.
          Digest: b8db09bd….
-     - Đang chạy: WP4-T09B-FREEZE.
+     - WP4-T09B-FREEZE đã commit và push thành 1b4d817 (21 đường dẫn; mọi kiểm tra trả về
+       0). Digest mã nguồn hiện tại trên board là b8db09bd….
+     - WP4-T10 đã xong (tác giả tự báo, opus).
+       - Migration 0013 dựng lại `ot_ledger` với loại `opening_balance`, theo quy trình 12
+         bước.
+       - `migrate()` giờ tắt khóa ngoại trong lúc chạy transaction và chạy
+         `foreign_key_check` trước COMMIT, vì chỉ dùng `defer_foreign_keys` thì lỗi.
+         Audit phải đánh giá thay đổi này.
+       - Các route GET, POST và PUT chỉ cho chủ tài khoản và chống ghi trùng; điều chỉnh
+         cần có lý do.
+       - Ghi dùng nghỉ bù OT trong kỳ đã nhập trả 409.
+       - Test: 26 test viết trước để thấy đỏ; phép thử đột biến làm 4 test fail. Verify:
+         1673 test. Digest: 260ca363….
+       - Câu hỏi I-4 cho chủ dự án: hiện không cho điều chỉnh số dư về 0.
+     - Đang chạy: WP4-T10-FREEZE.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -733,9 +747,8 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-T09B-FREEZE, rồi giao WP4-T10 (brief đã sẵn).
+  1. Ghi kết quả WP4-T10-FREEZE, rồi giao WP4-T11 (brief đã sẵn).
   2. Sau đó làm theo thứ tự:
-     - T10 (brief đã sẵn), T11;
      - T12 (bước 6 và chạy lại toàn bộ diễn tập);
      - T13;
      - WP4-GATE;
@@ -758,7 +771,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T09B-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-T10-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.
