@@ -1,6 +1,6 @@
 # Development guide
 
-Status: **WP1 and WP2 independently accepted; WP3 implemented (T00–T14, documentation in T15), awaiting the package-final gate and independent audits; not accepted.** See the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
+Status: **WP1, WP2 and WP3 independently accepted; WP4 implemented (T01–T12 and the documentation task T13), awaiting the package-final gate WP4-GATE and independent audits; not accepted.** See the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md), the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md), the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
 
 ## Prerequisites
 
@@ -28,6 +28,7 @@ npm run migrate        # apply pending migrations to DATABASE_PATH
 npm run seed           # synthetic example.invalid users and sample data; refused when NODE_ENV=production
 npm start              # built app (API + client) on http://127.0.0.1:3000; also starts the job runner unless JOB_RUNNER=off
 node dist/server/cli.js run-jobs --once --now 2026-10-05T12:00:00Z   # one deterministic job pass (after npm run build); refused when NODE_ENV=production
+npm run drill:container -- --work <empty folder outside the repository> --project <name> --wp3 <previous build folder>   # WP4 operations drill (needs Docker)
 ~~~
 
 Development servers: `npm run dev:server` (API on port 3000, Node type stripping) and `npm run dev:client` (Vite on port 5173, proxying `/api`).
@@ -43,6 +44,7 @@ The seed (`npm run seed`) creates three accounts: `admin@example.invalid`, `empl
 | `DATABASE_PATH` | local app-data path above | SQLite file (WAL, foreign keys, busy timeout, synchronous FULL) |
 | `APP_ORIGINS` | localhost/127.0.0.1 on `PORT` and 5173 | Exact origins allowed to change data; **required** when `NODE_ENV=production` |
 | `COOKIE_SECURE` | `true` in production | Adds `Secure` to the session cookie and sends HSTS |
+| `TRUSTED_PROXY_ADDRESSES` | empty | Exact IP addresses (no CIDR) of the reverse proxies whose `X-Forwarded-For` is believed for the sign-in rate limit; empty ignores every forwarded header. In a container set `HOST=0.0.0.0` (the image does) and publish the port to loopback only; production also requires absolute `DATA_DIR` and `DATABASE_PATH` |
 | `SESSION_TTL_HOURS` | `168` | Absolute server-session lifetime |
 | `STATIC_DIR` | `dist/client` beside the built server | Built client directory |
 | `DATA_DIR` | `private-data` beside the database | Absolute path of the private file store (signatures, PDFs, mail captures); refused inside a Dropbox folder or the static root; never commit it |
@@ -65,6 +67,16 @@ The seed (`npm run seed`) creates three accounts: `admin@example.invalid`, `empl
 
 An individual can share their own timesheets with another account from Settings, item by item: timesheets none, view or edit, read-only OT summary and ledger, and final PDF downloads (a PDF contains the signature image). The grant names the account by its exact email. Edit covers manual day, session, break and batch edits; never Clock in/out, sign-off, corrections or sending. Shares are revocable by the owner or the grantee, effective on the next request, never transitive, and audited; administrators can list and revoke them but not create or use them. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; shared reads and writes go through the explicit allowlist under `/api/shared/{ownerId}`.
 
+## Operations, the drill and import fixtures (WP4)
+
+- **Operations commands.** `node dist/server/cli.js` accepts `migrate`, `seed`, `run-jobs`, `bootstrap --config <file>` / `--new-token`, `backup --to <dir> [--prune]`, `backup prune --in <dir> --dry-run`, `restore --from <backup> --to <empty dir> [--keep-schema [--confirm]]` and `outbound resume|release|drop`. Every one prints counts only. The [operations runbook](docs/11_OPERATIONS_RUNBOOK.md) explains how to use them on the NAS and which drill stage verified each.
+- **Container drill.** `npm run drill:container -- --work <dir> [--project <name>] [--wp3 <dir>] [--keep]` builds the pinned image for linux/amd64, runs it through `compose.example.yaml` on a fresh host folder and checks stages 1 to 6: install and restart, backup under writes, isolated restore with the outbound pause and reconciliation, upgrade, rollback, and workbook import with the opening balance. It needs Docker and a free loopback port, uses synthetic data only, and prints per-stage PASS lines, a `STAGE n` tally and `DRILL STAGES 1-6 PASSED` (exit 0).
+- **Drill flags.** `--work` is the host folder for the drill data, the env file and the raw logs (outside the repository; nothing in it is deleted). `--project` names the Compose project (default `timesheet-drill`); every container, volume and network of the drill carries it and is removed by that name at the end unless `--keep`. `--wp3` is the previous build for stages 4 and 5, prepared outside the repository (`git archive 49651c8` extracted into a folder, then `npm ci` and `npm run build:server` there); without it the drill runs stages 1 to 3 and 6 and says so.
+- **Synthetic workbook generator.** `tests/support/syntheticWorkbook.ts` (`buildSyntheticWorkbook`, `readTemplateBytes`) clones the tracked template's bytes in memory at the ZIP level and adds dated period sheets (payroll date, synthetic names on `example.invalid`, per-day overrides, optional corrected formulas). It reads no clock and writes no file; the tracked template is never re-saved and its SHA-256 is asserted before every use.
+- **New test files in WP4.** Integration: `health`, `audit-access`, `bootstrap`, `backup`, `backup-prune`, `restore`, `jobs-sweep`, `job-retention`, `operations-status`, `workbook-reader`, `workbook-import`, `opening-balance` and `upgrade` (in `tests/integration/`). Client: `importModel` (in `tests/client/`). End to end: `setup`, `admin-status`, `admin-users` and `import` (in `tests/e2e/`). Helpers in `tests/support/`: `concurrency` (a writer worker for backup tests), `schemaV6` (the accepted WP3 schema fixture) and `syntheticWorkbook`.
+- **Migrations up to 0013.** `0007_audit_access` (the recorded share marker on audit rows), `0008_bootstrap`, `0009_operations_backup`, `0010_outbound_pause`, `0011_job_retention`, `0012_imports` and `0013_ot_opening_balance` (rebuilds `ot_ledger`). `migrate()` turns `foreign_keys` off before its exclusive transaction and runs `foreign_key_check` before COMMIT whenever it applied something, so a table rebuild is safe; an older build refuses a database from a newer schema.
+- **New routes.** `GET /api/ready` (readiness without personal data), `GET /api/auth/setup` and `POST /api/auth/bootstrap` (the one-time setup), `/api/imports` (the owner's own workbook import) and `/api/ot/opening-balance` (owner only), and `GET /api/admin/operations` with its backup, disk, outbound and retention blocks.
+
 ## Layout
 
 | Path | Responsibility |
@@ -82,6 +94,8 @@ An individual can share their own timesheets with another account from Settings,
 | `reference/` | Reference data: fixtures read by `tests/domain/`, examples read by the synthetic seed, sanitized workbook template |
 | `handoff/` | Agent workflow (status, prompts, templates, handoffs, reviews, evidence); excluded from `npm run digest` |
 | `scripts/smoke-built-server.mjs` | End-to-end check of the built server, including cross-area 403/404, the OT summary and the evidence CSV headers |
+| `src/server/ops/`, `src/server/import/` | Consistent backup, manifest, prune and isolated restore with the outbound pause; the safe workbook reader and template mapping version 1 |
+| `Dockerfile`, `compose.example.yaml`, `.env.example`, `scripts/container-drill.mjs` | Pinned non-root image, Compose example, secret-free configuration example and the operations drill |
 | `scripts/source-digest.mjs` | Source digest recorded in handoffs |
 | `eslint.config.js` | Lint gate: `@typescript-eslint/no-deprecated` |
 | `.editorconfig`, `.gitattributes` | UTF-8, LF, 2-space indentation (Python 4); CRLF only for Windows `.bat`/`.cmd`/`.ps1`; binary assets |

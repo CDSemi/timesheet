@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 61bf524a53368ac1373ec9fe41f6cc550dc6c68b (WP4-T11-FREEZE).
+  - HEAD = origin/main = 0f6abdf77c313f2dcb45bf624ee56294e5976c78 (WP4-T12-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -754,8 +754,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          sao lưu, bản khôi phục vẫn tạm dừng gửi, và nâng cấp từ schema 6 lên 13.
        - Verify: 1710 test. Digest: de0e215b….
        - Một lệnh thử chạy nền còn sót đã được dừng bằng TaskStop.
-     - Brief WP4-T13 đã sẵn.
-     - Đang chạy: WP4-T12-FREEZE.
+     - WP4-T12-FREEZE đã commit và push thành 0f6abdf (17 đường dẫn; mọi kiểm tra trả về
+       0). Digest mã nguồn hiện tại trên board là de0e215b….
+     - WP4-T13 đã xong (tác giả tự báo).
+       - Mới: runbook docs/11 (EN/VI) và WP4_HANDOFF (EN/VI).
+       - Cập nhật: DEVELOPMENT, README và một câu trong docs/03.
+       - Đối chiếu lệnh: 13 lệnh gắn với các bước diễn tập; 5 lệnh là bước chủ dự án tự
+         làm trên NAS, chưa kiểm.
+       - Các cặp dịch khớp; preflight trả về 0. Digest: 1ed67f55….
+     - Brief WP4-GATE, WP4-AUDIT-A và WP4-AUDIT-B đã sẵn.
+     - Đang chạy: WP4-T13-FREEZE (commit đóng băng cả package).
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -769,7 +777,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-T12-FREEZE, rồi giao WP4-T13 (brief đã sẵn).
+  1. Ghi kết quả WP4-T13-FREEZE, rồi giao WP4-GATE trên commit đó.
   2. Sau đó làm theo thứ tự:
      - WP4-GATE;
      - hai audit mới;
@@ -791,7 +799,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T12-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-T13-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

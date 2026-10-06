@@ -119,4 +119,9 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 61bf524a53368ac1373ec9fe41f6cc550dc6c68b (= origin/main); post-HEAD and commit SHA 0f6abdf77c313f2dcb45bf624ee56294e5976c78 on main; pushed: yes; remote SHA 0f6abdf77c313f2dcb45bf624ee56294e5976c78.
+- Digest de0e215be7594852bf0c26b22438ead5afcacb529187100549047b1ab408f41b (772 files); staged 17.
+- Scope: only scripts/container-drill.mjs and tests/integration/upgrade.test.ts changed outside handoff/; nothing under src/, .claude/, docs/, reference/, tests/support/; package.json unchanged; no .xlsx.
+- Node: bare PATH node was v26.10.0; all checks used the full portable path (v24.21.0).
+- Check exit codes: digest 0, add 0, precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0, check_recovery 0, validate_package --preflight 0. Evidence: evidence/WP4-T12-FREEZE/checks.txt.
+- Blockers: none. No masking or other fixes needed.

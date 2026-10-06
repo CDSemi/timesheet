@@ -1,6 +1,6 @@
 # Hướng dẫn phát triển
 
-Trạng thái: **WP1 và WP2 đã được chấp nhận độc lập; WP3 đã triển khai (T00–T14, tài liệu ở T15), đang chờ gate cuối gói và các audit độc lập; chưa được chấp nhận.** Xem [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) và [bước tiếp theo](handoff/NEXT_ACTION.vi.md). Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
+Trạng thái: **WP1, WP2 và WP3 đã được chấp nhận độc lập; WP4 đã triển khai (T01–T12 và tác vụ tài liệu T13), đang chờ gate cuối gói WP4-GATE và các audit độc lập; chưa được chấp nhận.** Xem [bàn giao WP4](handoff/delivery/WP4_HANDOFF.vi.md), [sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md), [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) và [bước tiếp theo](handoff/NEXT_ACTION.vi.md). Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
 
 ## Điều kiện cần
 
@@ -28,6 +28,7 @@ npm run migrate        # áp migration còn thiếu vào DATABASE_PATH
 npm run seed           # người dùng tổng hợp example.invalid và dữ liệu mẫu; bị từ chối khi NODE_ENV=production
 npm start              # ứng dụng đã build (API + client) tại http://127.0.0.1:3000; đồng thời chạy bộ chạy job trừ khi JOB_RUNNER=off
 node dist/server/cli.js run-jobs --once --now 2026-10-05T12:00:00Z   # một lượt chạy job xác định (sau npm run build); bị từ chối khi NODE_ENV=production
+npm run drill:container -- --work <empty folder outside the repository> --project <name> --wp3 <previous build folder>   # drill vận hành WP4 (cần Docker)
 ~~~
 
 Server phát triển: `npm run dev:server` (API cổng 3000, dùng type stripping của Node) và `npm run dev:client` (Vite cổng 5173, chuyển tiếp `/api`).
@@ -43,6 +44,7 @@ Seed (`npm run seed`) tạo ba tài khoản: `admin@example.invalid`, `employee@
 | `DATABASE_PATH` | đường dẫn app-data cục bộ ở trên | File SQLite (WAL, khóa ngoại, busy timeout, synchronous FULL) |
 | `APP_ORIGINS` | localhost/127.0.0.1 trên `PORT` và 5173 | Các origin chính xác được phép thay đổi dữ liệu; **bắt buộc** khi `NODE_ENV=production` |
 | `COOKIE_SECURE` | `true` khi production | Thêm `Secure` cho cookie phiên và gửi HSTS |
+| `TRUSTED_PROXY_ADDRESSES` | rỗng | Địa chỉ IP chính xác (không CIDR) của các reverse proxy mà `X-Forwarded-For` được tin cho giới hạn đăng nhập; để rỗng thì bỏ qua mọi header chuyển tiếp. Trong container đặt `HOST=0.0.0.0` (image đã đặt) và chỉ publish cổng ra loopback; production cũng yêu cầu `DATA_DIR` và `DATABASE_PATH` tuyệt đối |
 | `SESSION_TTL_HOURS` | `168` | Thời hạn tuyệt đối của phiên server |
 | `STATIC_DIR` | `dist/client` cạnh server đã build | Thư mục client đã build |
 | `DATA_DIR` | `private-data` cạnh CSDL | Đường dẫn tuyệt đối của kho file riêng tư (chữ ký, PDF, mail capture); bị từ chối trong thư mục Dropbox hoặc thư mục tĩnh; không bao giờ commit |
@@ -65,6 +67,16 @@ Seed (`npm run seed`) tạo ba tài khoản: `admin@example.invalid`, `employee@
 
 Một cá nhân có thể chia sẻ timesheet của mình với tài khoản khác từ màn Cài đặt, theo từng mục: timesheet không/xem/sửa, tổng hợp và sổ cái OT chỉ đọc, và tải PDF cuối (PDF chứa ảnh chữ ký). Quyền cấp gọi tài khoản bằng đúng email. Sửa gồm sửa ngày, phiên, giờ nghỉ và hàng loạt thủ công; không bao giờ gồm Clock in/out, sign-off, sửa sau chốt hay gửi. Chia sẻ thu hồi được bởi chủ sở hữu hoặc người được chia sẻ, có hiệu lực từ yêu cầu kế tiếp, không bắc cầu và có audit; admin liệt kê và thu hồi được nhưng không tạo hay dùng. API: `GET|POST /api/shares`, `PUT /api/shares/{id}`, `POST /api/shares/{id}/revoke`; đọc và ghi qua chia sẻ đi theo danh sách cho phép tường minh dưới `/api/shared/{ownerId}`.
 
+## Vận hành, drill và dữ liệu nhập mẫu (WP4)
+
+- **Lệnh vận hành.** `node dist/server/cli.js` nhận `migrate`, `seed`, `run-jobs`, `bootstrap --config <file>` / `--new-token`, `backup --to <dir> [--prune]`, `backup prune --in <dir> --dry-run`, `restore --from <backup> --to <thư mục rỗng> [--keep-schema [--confirm]]` và `outbound resume|release|drop`. Mọi lệnh chỉ in số lượng. [Sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md) giải thích cách dùng trên NAS và stage drill nào đã kiểm chứng từng lệnh.
+- **Drill container.** `npm run drill:container -- --work <dir> [--project <tên>] [--wp3 <dir>] [--keep]` build image đã ghim cho linux/amd64, chạy qua `compose.example.yaml` trên một thư mục máy chủ mới và kiểm tra stage 1 đến 6: cài đặt và khởi động lại, backup khi đang ghi, restore cô lập với tạm dừng gửi ra ngoài và đối soát, nâng cấp, rollback, và nhập workbook cùng số dư mở đầu. Cần Docker và một cổng loopback trống, chỉ dùng dữ liệu tổng hợp, và in các dòng PASS theo stage, một bảng đếm `STAGE n` và `DRILL STAGES 1-6 PASSED` (mã thoát 0).
+- **Cờ của drill.** `--work` là thư mục máy chủ cho dữ liệu drill, file env và log thô (ngoài repo; không xóa gì trong đó). `--project` đặt tên dự án Compose (mặc định `timesheet-drill`); mọi container, volume và network của drill mang tên đó và bị xóa theo tên đó khi kết thúc trừ khi có `--keep`. `--wp3` là bản build trước cho stage 4 và 5, chuẩn bị ngoài repo (`git archive 49651c8` giải nén vào một thư mục, rồi `npm ci` và `npm run build:server` tại đó); không có nó thì drill chạy stage 1 đến 3 và 6 và nói rõ như vậy.
+- **Bộ tạo workbook tổng hợp.** `tests/support/syntheticWorkbook.ts` (`buildSyntheticWorkbook`, `readTemplateBytes`) nhân bản byte của template được theo dõi trong bộ nhớ ở mức ZIP và thêm các sheet kỳ theo ngày (ngày lương, tên tổng hợp trên `example.invalid`, ghi đè theo ngày, công thức đã sửa tùy chọn). Nó không đọc đồng hồ và không ghi file; template được theo dõi không bao giờ được lưu lại và SHA-256 của nó được kiểm tra trước mỗi lần dùng.
+- **File test mới trong WP4.** Tích hợp: `health`, `audit-access`, `bootstrap`, `backup`, `backup-prune`, `restore`, `jobs-sweep`, `job-retention`, `operations-status`, `workbook-reader`, `workbook-import`, `opening-balance` và `upgrade` (trong `tests/integration/`). Client: `importModel` (trong `tests/client/`). Đầu-cuối: `setup`, `admin-status`, `admin-users` và `import` (trong `tests/e2e/`). Helper trong `tests/support/`: `concurrency` (worker ghi cho test backup), `schemaV6` (fixture schema WP3 đã chấp nhận) và `syntheticWorkbook`.
+- **Migration đến 0013.** `0007_audit_access` (dấu share được ghi trên dòng audit), `0008_bootstrap`, `0009_operations_backup`, `0010_outbound_pause`, `0011_job_retention`, `0012_imports` và `0013_ot_opening_balance` (dựng lại `ot_ledger`). `migrate()` tắt `foreign_keys` trước transaction độc quyền và chạy `foreign_key_check` trước COMMIT mỗi khi nó áp dụng gì đó, nên việc dựng lại bảng là an toàn; bản build cũ từ chối CSDL của schema mới hơn.
+- **Route mới.** `GET /api/ready` (kiểm tra sẵn sàng không có dữ liệu cá nhân), `GET /api/auth/setup` và `POST /api/auth/bootstrap` (thiết lập một lần), `/api/imports` (nhập workbook của chính chủ) và `/api/ot/opening-balance` (chỉ chủ sở hữu), và `GET /api/admin/operations` với các khối backup, đĩa, gửi ra ngoài và giữ lại.
+
 ## Cấu trúc
 
 | Đường dẫn | Trách nhiệm |
@@ -82,6 +94,8 @@ Một cá nhân có thể chia sẻ timesheet của mình với tài khoản kh�
 | `reference/` | Dữ liệu tham chiếu: fixture do `tests/domain/` đọc, ví dụ do seed giả đọc, workbook mẫu đã làm sạch |
 | `handoff/` | Quy trình giữa các agent (trạng thái, prompt, mẫu, bàn giao, review, bằng chứng); không tính vào `npm run digest` |
 | `scripts/smoke-built-server.mjs` | Kiểm tra đầu-cuối server đã build, gồm 403/404 chéo vùng, tổng hợp OT và header CSV bằng chứng |
+| `src/server/ops/`, `src/server/import/` | Backup nhất quán, manifest, prune và restore cô lập với tạm dừng gửi ra ngoài; bộ đọc workbook an toàn và mapping template phiên bản 1 |
+| `Dockerfile`, `compose.example.yaml`, `.env.example`, `scripts/container-drill.mjs` | Image không root đã ghim, ví dụ Compose, ví dụ cấu hình không chứa bí mật và drill vận hành |
 | `scripts/source-digest.mjs` | Digest source ghi trong bàn giao |
 | `eslint.config.js` | Gate lint: `@typescript-eslint/no-deprecated` |
 | `.editorconfig`, `.gitattributes` | UTF-8, LF, thụt lề 2 dấu cách (Python 4); CRLF chỉ cho `.bat`/`.cmd`/`.ps1` của Windows; file binary |

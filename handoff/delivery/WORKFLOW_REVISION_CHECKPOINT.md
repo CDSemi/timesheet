@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 61bf524a53368ac1373ec9fe41f6cc550dc6c68b (WP4-T11-FREEZE).
+  - HEAD = origin/main = 0f6abdf77c313f2dcb45bf624ee56294e5976c78 (WP4-T12-FREEZE).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -709,8 +709,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          pause, and the upgrade from schema 6 to 13.
        - Verify: 1710 tests. Digest: de0e215b….
        - A stray background probe was stopped with TaskStop.
-     - The WP4-T13 brief is ready.
-     - Running: WP4-T12-FREEZE.
+     - WP4-T12-FREEZE committed and pushed 0f6abdf (17 paths; all checks 0). The board's
+       current source digest is de0e215b….
+     - WP4-T13 is done (author-reported).
+       - New: docs/11 runbook (EN/VI) and WP4_HANDOFF (EN/VI).
+       - Updated: DEVELOPMENT, README and one docs/03 sentence.
+       - Command map: 13 rows map to drill stages; 5 are owner NAS steps, unverified.
+       - Parity holds; preflight 0. Digest: 1ed67f55….
+     - The WP4-GATE, WP4-AUDIT-A and WP4-AUDIT-B briefs are ready.
+     - Running: WP4-T13-FREEZE (the package freeze).
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -724,7 +731,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-T12-FREEZE, then dispatch WP4-T13 (brief ready).
+  1. Record WP4-T13-FREEZE, then dispatch WP4-GATE on that commit.
   2. Then, in this order:
      - WP4-GATE;
      - two fresh audits;
@@ -745,7 +752,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T12-FREEZE (attempt 1) only.
+- Live processes: WP4-T13-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

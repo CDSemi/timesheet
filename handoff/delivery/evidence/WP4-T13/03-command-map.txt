@@ -1,0 +1,28 @@
+# Runbook command map (docs/11_OPERATIONS_RUNBOOK.md): each command and the drill stage that ran it, or an owner NAS step.
+# <compose> = docker compose --project-name <project> --file <project-dir>/compose.example.yaml ; <cli> = node dist/server/cli.js
+# Drill = npm run drill:container -- --work <dir> --project <name> --wp3 <previous build dir> (scripts/container-drill.mjs)
+# Stage 1 install/bootstrap/restart, 2 backup under writes, 3 restore/pause/reconciliation, 4 upgrade, 5 rollback, 6 import and opening balance.
+
+command | verified by
+<compose> up --detach --build ; ps ; logs --no-color timesheet ; restart | drill stage 1 (compose.example.yaml; stage 1 restart check)
+<compose> exec -T timesheet <cli> bootstrap --config /data/bootstrap.json | drill stage 1
+<compose> exec -T timesheet <cli> bootstrap --new-token | owner NAS step, unverified (tests/integration/bootstrap.test.ts only)
+<compose> exec -T timesheet <cli> backup --to /data/backups | drill stage 2
+<compose> exec -T timesheet <cli> backup --to /data/backups --prune | drill stage 2 for the backup; --prune by tests/integration/backup-prune.test.ts; the Task Scheduler entry is an owner NAS step, unverified
+<compose> exec -T timesheet <cli> backup prune --in /data/backups --dry-run | drill stage 2
+docker run --rm --read-only --network none ... <image> <cli> restore --from /backups/<backup-name> --to /restore | drill stage 3
+<compose> exec -T timesheet <cli> outbound release (preview) | drill stage 3
+<compose> exec -T timesheet <cli> outbound resume ; outbound resume --confirm | drill stage 3
+<compose> exec -T timesheet <cli> outbound release --job <job-id> --confirm ; release --all --confirm | drill stage 3
+<compose> exec -T timesheet <cli> outbound drop --job <job-id> --confirm | owner NAS step, unverified (tests/integration/restore.test.ts only)
+<compose> up --detach --build (upgrade on an older schema) | drill stage 4
+docker run ... <cli> restore --from ... --to /restore --keep-schema (refused, exit 2) and --keep-schema --confirm | drill stage 5
+previous image started with JOB_RUNNER=off | owner NAS step, unverified (rule in docs/07; the drill ran the previous build with its runner on)
+docker buildx imagetools inspect node:24.21.0-trixie-slim | owner NAS step, unverified (run once in WP4-T04 on the developer machine, not a drill stage)
+<compose> build --no-cache | drill stage 1 (the drill builds the image)
+POST /api/imports ; GET /api/imports ; GET /api/imports/{id} ; POST /api/imports/{id}/commit ; GET|POST|PUT /api/ot/opening-balance | drill stage 6
+NAS setup (folder owner, env file, reverse proxy, NTP, Task Scheduler, separate-device copy, host alert script, NAS checklist) | owner NAS step, unverified
+
+Summary: 13 rows are mapped to a drill stage (stage 1: 3, stage 2: 3, stage 3: 4, stage 4: 1, stage 5: 1, stage 6: 1; the --prune row is
+stage 2 for the backup but its scheduling is an owner step); 5 rows are owner NAS steps, unverified (bootstrap --new-token, outbound drop,
+JOB_RUNNER=off on the previous build, imagetools inspect, NAS setup and checklist).

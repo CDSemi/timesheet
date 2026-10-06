@@ -51,7 +51,7 @@ Serialization chuẩn có thứ tự key/array ổn định, phút nguyên, ngà
 
 ## API và ranh giới hosting
 
-Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, chia sẻ (cấp quyền và truy cập ủy quyền dưới path chủ rõ ràng), user (quản trị), nhập workbook của chính chủ và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại.
+Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, chia sẻ (cấp quyền và truy cập ủy quyền dưới path chủ rõ ràng), user (quản trị), nhập workbook của chính chủ và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại. Route nhập workbook là `/api/imports` và số dư mở đầu tường minh là `/api/ot/opening-balance`; cả hai chỉ dành cho chủ sở hữu và không thuộc bất kỳ chia sẻ nào.
 
 Dùng cookie session an toàn, CSRF/origin, rate limit login/token, kiểm loại/kích thước upload và tải file có quyền. Không phục vụ PDF/chữ ký từ path public. Health không có dữ liệu cá nhân.
 

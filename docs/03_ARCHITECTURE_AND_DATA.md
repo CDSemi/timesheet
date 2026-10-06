@@ -51,7 +51,7 @@ Canonical serialization uses stable object keys/array order, integer minutes, IS
 
 ## API and hosting boundary
 
-Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users (administration), the owner's own workbook import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review.
+Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users (administration), the owner's own workbook import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review. The workbook import routes are `/api/imports` and the explicit opening balance is `/api/ot/opening-balance`; both are owner only and are not part of any share.
 
 Use secure cookie sessions, CSRF/origin protection, login/token rate limits, validated upload types/sizes and private file retrieval. Do not serve PDFs/signatures from public static paths. Health contains no personal data.
 
