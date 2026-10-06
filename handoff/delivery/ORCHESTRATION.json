@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T07-FREEZE",
+  "next_task_id": "WP4-T08-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
+    "last_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
     "unpushed": []
   },
   "owner_decisions": [
@@ -227,6 +227,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "WP4-PLAN T08 content (reader, mapping, synthetic generator) does not depend on owner decisions F-1..F-3, which govern T09 (who imports, imported-period semantics) and T10 (opening balance); owner answers still pending",
+      "decision": "Run WP4-T08 before WP4-DEC. WP4-DEC and WP4-T07B follow the owner's answers; T09 and T10 wait for them."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP4-PLAN T07 depends partly on owner decisions F-3 (not-set-up flag) and F-4 (job retention), still unanswered; single-writer chain should not idle",
@@ -9141,9 +9146,111 @@
       "id": "WP4-T07-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T07"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a4a5b9104b1e5403f",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T07-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T07-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T07-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
+      "branch": "main",
+      "commit_sha": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
+      "pushed": true,
+      "source_digest": "cc86af8ac8ab66689f0f4bd870475f1e9460fa3e2036e5885036307837dbb9d3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 72ab2ed, remote SHA identical; 31 paths, the expected set; digest cc86af8a matched; both screenshots synthetic; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight 0.",
+      "next_action": "None; WP4-T08 (independent of F-1..F-3) on e1d97bd."
+    },
+    {
+      "id": "WP4-T08",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T07-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a136c1feb08b4e82d",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 done (digest 6fcd692d); WP4-T08-FREEZE attempt 1 then stopped: git diff --cached --check rc=2 on a blank line at EOF in src/server/import/xlsxReader.ts:553 (a source file, outside the committer's allowed fixes). Same worker resumed for attempt 2 to remove exactly that line and rerun verify and digest.",
+        "attempt 2: removed the one trailing blank line at EOF in xlsxReader.ts (552 lines, single final newline); the other new files had no EOF blank line or trailing whitespace (checked with shell grep); index untouched; verify exit 0 (69 files, 1573 tests, smoke passed); digest d70a03c2 (751 files)."
+      ],
+      "owned_paths": [
+        "src/server/import/xlsxReader.ts",
+        "src/server/import/templateMapping.ts",
+        "tests/support/syntheticWorkbook.ts",
+        "tests/integration/workbook-reader.test.ts",
+        "package.json",
+        "package-lock.json",
+        "handoff/delivery/tasks/WP4-T08.md",
+        "handoff/delivery/evidence/WP4-T08"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T08.md",
+      "report": "handoff/delivery/tasks/WP4-T08.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T08/01-npm-view.txt",
+        "handoff/delivery/evidence/WP4-T08/02-install.txt",
+        "handoff/delivery/evidence/WP4-T08/03-red.txt",
+        "handoff/delivery/evidence/WP4-T08/04-green.txt",
+        "handoff/delivery/evidence/WP4-T08/05-mutation.txt",
+        "handoff/delivery/evidence/WP4-T08/06-template-hash.txt",
+        "handoff/delivery/evidence/WP4-T08/07-verify.txt",
+        "handoff/delivery/evidence/WP4-T08/08-digest.txt",
+        "handoff/delivery/evidence/WP4-T08/09-precommit.txt",
+        "handoff/delivery/evidence/WP4-T08/10-verify-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T08/11-digest-attempt2.txt"
+      ],
+      "baseline_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
+      "source_digest": "d70a03c27dac714707b86d74c5fe28c2973622ea17ab979f563cd5cf9d86ad0b",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: fflate 0.8.3 and fast-xml-parser 5.11.2 (exact) plus 7 transitive packages; npm view deprecated empty for both; install and npm ci (scratch clone, same lockfile) printed no deprecation line; npm audit still flags the pre-existing source-map-js. Reader defaults: package 8 MiB, 256 entries, 16 MiB per entry, 48 MiB total, 64 sheets, 200k cells per sheet; the cap counts real inflated output; CRC-32 and declared size checked; DOCTYPE/ENTITY and macro entries or content types rejected; external links listed, never opened; formulas never evaluated, cached values labelled 'formula cache, not authoritative'. Detected: the 8.5-hour formula, X24 omitting Sunday, TODAY() in W26, floating holidays, unknown labels, duplicate dates, non-date sheet names. 28 tests red-first (26 failed against stubs, the 2 template-hash tests passed), 28 green; mutations M1-M6 each killed. Template hash unchanged 47ef42d5. verify exit 0 (69 files, 1573 tests, smoke passed); digest 6fcd692d (751 files). Deviations: npm ci ran in the scratch clone; the precommit check ran after verify and digest; one 'git add ... > /dev/null' redirect against the rule (no nul file in the project).",
+      "next_action": "None; WP4-T08-FREEZE."
+    },
+    {
+      "id": "WP4-T08-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T08"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -9157,25 +9264,28 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "aacd57ad0fa132aa7",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP4-T07-FREEZE.md",
-        "handoff/delivery/evidence/WP4-T07-FREEZE"
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent aacd57ad0fa132aa7, self-reported claude-sonnet-5-5): no commit; digest 6fcd692d matched; 23 paths staged; precommit 0; git diff --cached --check rc=2 on a blank line at EOF in src/server/import/xlsxReader.ts:553 (source file, not an allowed fix); stopped correctly. Waiting for WP4-T08 attempt 2."
       ],
-      "prompt": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T08-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
+      "baseline_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "cc86af8ac8ab66689f0f4bd870475f1e9460fa3e2036e5885036307837dbb9d3",
+      "source_digest": "d70a03c27dac714707b86d74c5fe28c2973622ea17ab979f563cd5cf9d86ad0b",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T07 with pending handoff records."
+      "next_action": "Commit and push WP4-T08 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

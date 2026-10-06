@@ -117,4 +117,9 @@ Return at most 150 words.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 72ab2ed134c26656643eb00542e54a94bb07a4c7; post-HEAD e1d97bd298949020d2c7aadb9733a1a8acc98ebb.
+- Pushed to origin main; remote SHA e1d97bd298949020d2c7aadb9733a1a8acc98ebb.
+- Digest cc86af8ac8ab66689f0f4bd870475f1e9460fa3e2036e5885036307837dbb9d3 (matches); staged 31 files.
+- Screenshots: both viewed, synthetic data only.
+- Exit codes (Node v24.21.0): precommit 0, diff --check 0, JSON 0, orchestration validator 0, check_recovery 0, preflight 0.
+- Blockers: none. Evidence: evidence/WP4-T07-FREEZE/.

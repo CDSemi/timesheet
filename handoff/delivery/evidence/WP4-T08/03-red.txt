@@ -1,0 +1,532 @@
+# RED: tests written first, run against a naive stub reader (no limits, no checks) and an empty mapping stub
+# command: vitest run tests/integration/workbook-reader.test.ts
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/workbook-reader.test.ts (27 tests | 25 failed) 368ms
+   ❯ tracked template (read only) (3)
+     × previews the three support sheets and reports every README defect with cell provenance 4ms
+     × never evaluates formulas and labels cached results as not authoritative 1ms
+   ❯ synthetic dated sheets (10)
+     × maps dated sheets with labels, clocks and the period dates implied by the payroll date 10ms
+     × accepts a holiday-table name as a holiday label and a floating one with a floating finding 5ms
+     × flags an unknown label at its cell and blocks a clean preview 5ms
+     × flags a duplicate payroll date, whether the sheet names differ or are identical 6ms
+     × flags a date that appears on two payroll sheets or twice on one sheet 6ms
+     × does not map a sheet whose name is not a payroll date and keeps it reported 10ms
+     × detects the three inherited formula defects on a dated sheet, and none once they are corrected 5ms
+     × reports values taken from a formula cache and a payroll cell that disagrees with the sheet name 5ms
+     × flags a half-filled clock pair and a payroll date outside the workbook calendar 7ms
+     × reports hidden sheets 5ms
+   ❯ reader limits and hostile packages (14)
+     × rejects data that is not a ZIP package or is not a workbook 1ms
+     × rejects a package larger than the compressed-size limit 1ms
+     × rejects a package with too many entries 22ms
+     × rejects a zip bomb: an entry whose declared inflated size is over the per-entry limit 161ms
+     × rejects an oversized entry whose header lies about its inflated size, before it is fully inflated 44ms
+     × rejects a package whose entries together inflate beyond the total limit 13ms
+     × rejects an entry whose size or checksum does not match its header 2ms
+     × rejects encrypted entries 1ms
+     × rejects a DOCTYPE or entity payload in any parsed part, including a UTF-16 one 7ms
+     × decodes the predefined entities exactly once and leaves unknown references literal 6ms
+     × rejects macro-bearing packages by entry name or content type 4ms
+     × ignores external links: they are listed, never opened or followed 10ms
+     × does not run anything when a formula is hostile: it stays text with a cached value 9ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 25 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > tracked template (read only) > previews the three support sheets and reports every README defect with cell provenance
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/workbook-reader.test.ts:63:36
+     61|   it('previews the three support sheets and reports every README defec…
+     62|     const preview = previewWorkbook(readTemplateBytes());
+     63|     expect(preview.mappingVersion).toBe(1);
+       |                                    ^
+     64|     expect(preview.sourceSha256).toBe(TEMPLATE_SHA256);
+     65|     expect(preview.sheets.map((sheet) => [sheet.name, sheet.role])).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > tracked template (read only) > never evaluates formulas and labels cached results as not authoritative
+AssertionError: expected undefined to be 'Timesheet!W26' // Object.is equality
+
+- Expected:
+"Timesheet!W26"
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:101:35
+     99|     const timesheet = workbook.sheets.find((sheet) => sheet.name === '…
+    100|     const signature = timesheet?.cells.get('W26');
+    101|     expect(signature?.provenance).toBe('Timesheet!W26');
+       |                                   ^
+    102|     expect(signature?.formula).toBe('TODAY()');
+    103|     expect(signature?.value).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > maps dated sheets with labels, clocks and the period dates implied by the payroll date
+AssertionError: expected [] to deeply equal [ Array(2) ]
+
+- Expected
++ Received
+
+- [
+-   [
+-     "2026.01.09",
+-     "2026-01-09",
+-   ],
+-   [
+-     "2026.01.23",
+-     "2026-01-23",
+-   ],
+- ]
++ []
+
+ ❯ tests/integration/workbook-reader.test.ts:135:85
+    133|     });
+    134|     const preview = previewWorkbook(bytes);
+    135|     expect(preview.periods.map((period) => [period.sheetName, period.p…
+       |                                                                                     ^
+    136|       ['2026.01.09', '2026-01-09'],
+    137|       ['2026.01.23', '2026-01-23'],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > accepts a holiday-table name as a holiday label and a floating one with a floating finding
+AssertionError: expected undefined to deeply equal { category: 'holiday' }
+
+- Expected:
+{
+  "category": "holiday",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:166:50
+    164|     );
+    165|     expect(findings(preview, 'unknown_label')).toEqual([]);
+    166|     expect(preview.periods[0]?.days[8]?.mapping).toEqual({ category: '…
+       |                                                  ^
+    167|     expect(preview.periods[0]?.days[8]?.holidayName).toBe("New Year's …
+    168|     expect(preview.periods[0]?.days[9]?.holidayName).toBe('Floating Ho…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags an unknown label at its cell and blocks a clean preview
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/workbook-reader.test.ts:175:21
+    173|     const preview = previewWorkbook(buildSyntheticWorkbook({ periods: …
+    174|     const unknown = findings(preview, 'unknown_label');
+    175|     expect(unknown).toHaveLength(1);
+       |                     ^
+    176|     expect(unknown[0]?.sources).toEqual(['2026.01.09!J14']);
+    177|     expect(unknown[0]?.severity).toBe('error');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a duplicate payroll date, whether the sheet names differ or are identical
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/workbook-reader.test.ts:188:21
+    186|     );
+    187|     const payroll = differentNames.findings.filter((finding) => findin…
+    188|     expect(payroll).toHaveLength(1);
+       |                     ^
+    189|     expect(payroll[0]?.sources).toEqual(['2026.01.09', '2026-01-09']);
+    190|     expect(differentNames.clean).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a date that appears on two payroll sheets or twice on one sheet
+AssertionError: expected [] to have a length of 7 but got +0
+
+- Expected
++ Received
+
+- 7
++ 0
+
+ ❯ tests/integration/workbook-reader.test.ts:199:18
+    197|     const overlap = previewWorkbook(buildSyntheticWorkbook({ periods: …
+    198|     const days = overlap.findings.filter((finding) => finding.code ===…
+    199|     expect(days).toHaveLength(7);
+       |                  ^
+    200|     expect(days.every((finding) => finding.sources[0]?.startsWith('202…
+    201|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > does not map a sheet whose name is not a payroll date and keeps it reported
+AssertionError: expected [] to deeply equal [ [ 'Notes' ], [ '2026.13.40' ], …(1) ]
+
+- Expected
++ Received
+
+- [
+-   [
+-     "Notes",
+-   ],
+-   [
+-     "2026.13.40",
+-   ],
+-   [
+-     "2026.01.09 (2)",
+-   ],
+- ]
++ []
+
+ ❯ tests/integration/workbook-reader.test.ts:212:56
+    210|     const preview = previewWorkbook(buildNamedSheetWorkbook(['Notes', …
+    211|     const unmapped = findings(preview, 'sheet_name_not_payroll_date');
+    212|     expect(unmapped.map((finding) => finding.sources)).toEqual([['Note…
+       |                                                        ^
+    213|     expect(preview.sheets.filter((sheet) => sheet.role === 'unmapped')…
+    214|     expect(preview.periods.map((period) => period.sheetName)).toEqual(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > detects the three inherited formula defects on a dated sheet, and none once they are corrected
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/integration/workbook-reader.test.ts:219:66
+    217|   it('detects the three inherited formula defects on a dated sheet, an…
+    218|     const inherited = previewWorkbook(buildSyntheticWorkbook({ periods…
+    219|     expect(findings(inherited, 'formula_hours_8_5')[0]?.sources).toCon…
+       |                                                                  ^
+    220|     expect(findings(inherited, 'weekly_total_omits_sunday')[0]?.source…
+    221|     expect(findings(inherited, 'today_signature_date')[0]?.sources).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > reports values taken from a formula cache and a payroll cell that disagrees with the sheet name
+AssertionError: expected undefined to deeply equal { value: 'Worked', …(2) }
+
+- Expected:
+{
+  "fromFormulaCache": true,
+  "source": "2026.01.09!B14",
+  "value": "Worked",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:235:48
+    233|       }),
+    234|     );
+    235|     expect(preview.periods[0]?.days[0]?.label).toEqual({ value: 'Worke…
+       |                                                ^
+    236|     const cache = findings(preview, 'formula_cache_not_authoritative');
+    237|     expect(cache).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a half-filled clock pair and a payroll date outside the workbook calendar
+AssertionError: expected undefined to deeply equal [ '2026.01.10!B15', '2026.01.10!D15' ]
+
+- Expected:
+[
+  "2026.01.10!B15",
+  "2026.01.10!D15",
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:245:67
+    243|   it('flags a half-filled clock pair and a payroll date outside the wo…
+    244|     const preview = previewWorkbook(buildSyntheticWorkbook({ periods: …
+    245|     expect(findings(preview, 'time_pair_incomplete')[0]?.sources).toEq…
+       |                                                                   ^
+    246|     expect(findings(preview, 'payroll_date_not_in_calendar')[0]?.sourc…
+    247|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > synthetic dated sheets > reports hidden sheets
+AssertionError: expected undefined to deeply equal [ '2026.01.09' ]
+
+- Expected:
+[
+  "2026.01.09",
+]
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:251:59
+    249|   it('reports hidden sheets', () => {
+    250|     const preview = previewWorkbook(buildSyntheticWorkbook({ periods: …
+    251|     expect(findings(preview, 'hidden_sheet')[0]?.sources).toEqual(['20…
+       |                                                           ^
+    252|     expect(preview.sheets.at(-1)?.hidden).toBe(true);
+    253|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects data that is not a ZIP package or is not a workbook
+Error: invalid zip data
+ ❯ unzipSync node_modules/fflate/esm/index.mjs:2675:13
+ ❯ readWorkbook src/server/import/xlsxReader.ts:6:3
+      4| export class WorkbookRejectedError extends Error { code = 'malformed_z…
+      5| export function readWorkbook(bytes: Uint8Array): { sheets: { name: str…
+      6|   unzipSync(bytes);
+       |   ^
+      7|   return { sheets: [], notes: [] };
+      8| }
+ ❯ tests/integration/workbook-reader.test.ts:43:26
+ ❯ rejection tests/integration/workbook-reader.test.ts:34:5
+ ❯ reject tests/integration/workbook-reader.test.ts:43:10
+ ❯ tests/integration/workbook-reader.test.ts:261:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package larger than the compressed-size limit
+AssertionError: expected null to be 'package_too_large' // Object.is equality
+
+- Expected:
+"package_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:269:60
+    267|
+    268|   it('rejects a package larger than the compressed-size limit', () => {
+    269|     expect(reject(template, { maxCompressedBytes: 1000 })).toBe('packa…
+       |                                                            ^
+    270|     expect(reject(template)).toBeNull();
+    271|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package with too many entries
+AssertionError: expected null to be 'too_many_entries' // Object.is equality
+
+- Expected:
+"too_many_entries"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:276:32
+    274|     const many: Record<string, Uint8Array> = { ...entriesOfTemplate };
+    275|     for (let index = 0; index < 300; index += 1) many[`customXml/extra…
+    276|     expect(reject(pack(many))).toBe('too_many_entries');
+       |                                ^
+    277|     expect(reject(template, { maxEntries: 10 })).toBe('too_many_entrie…
+    278|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a zip bomb: an entry whose declared inflated size is over the per-entry limit
+AssertionError: expected null to be 'entry_too_large' // Object.is equality
+
+- Expected:
+"entry_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:283:26
+    281|     const bomb = withEntry(template, 'xl/sharedStrings.xml', new Uint8…
+    282|     expect(bomb.length).toBeLessThan(200 * 1024);
+    283|     expect(reject(bomb)).toBe('entry_too_large');
+       |                          ^
+    284|   });
+    285|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects an oversized entry whose header lies about its inflated size, before it is fully inflated
+AssertionError: expected null to be 'entry_too_large' // Object.is equality
+
+- Expected:
+"entry_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:289:65
+    287|     const honest = withEntry(template, 'xl/sharedStrings.xml', new Uin…
+    288|     const lying = patchEntry(honest, 'xl/sharedStrings.xml', { uncompr…
+    289|     expect(reject(lying, { maxEntryInflatedBytes: 64 * 1024 })).toBe('…
+       |                                                                 ^
+    290|     // The same lie against the default limits: the 64 MiB bomb is sto…
+    291|     const big = patchEntry(withEntry(template, 'xl/sharedStrings.xml',…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package whose entries together inflate beyond the total limit
+AssertionError: expected null to be 'total_too_large' // Object.is equality
+
+- Expected:
+"total_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:305:35
+    303|     });
+    304|     const limits = { maxEntryInflatedBytes: 512 * 1024, maxTotalInflat…
+    305|     expect(reject(heavy, limits)).toBe('total_too_large');
+       |                                   ^
+    306|     // Headers claiming tiny sizes do not hide it: the real output is …
+    307|     let lying = heavy;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects an entry whose size or checksum does not match its header
+AssertionError: expected null to be 'entry_integrity' // Object.is equality
+
+- Expected:
+"entry_integrity"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:314:87
+    312|
+    313|   it('rejects an entry whose size or checksum does not match its heade…
+    314|     expect(reject(patchEntry(template, 'xl/sharedStrings.xml', { crc: …
+       |                                                                                       ^
+    315|     expect(reject(patchEntry(template, 'xl/sharedStrings.xml', { uncom…
+    316|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects encrypted entries
+AssertionError: expected null to be 'unsupported_zip' // Object.is equality
+
+- Expected:
+"unsupported_zip"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:319:75
+    317|
+    318|   it('rejects encrypted entries', () => {
+    319|     expect(reject(patchEntry(template, 'xl/workbook.xml', { flags: 1 }…
+       |                                                                           ^
+    320|   });
+    321|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a DOCTYPE or entity payload in any parsed part, including a UTF-16 one
+AssertionError: expected null to be 'doctype_forbidden' // Object.is equality
+
+- Expected:
+"doctype_forbidden"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:327:86
+    325|
+    326|   it('rejects a DOCTYPE or entity payload in any parsed part, includin…
+    327|     expect(reject(withText(template, 'xl/sharedStrings.xml', () => BIL…
+       |                                                                                      ^
+    328|     expect(reject(withText(template, 'xl/worksheets/sheet2.xml', (xml)…
+    329|     expect(reject(withText(template, 'xl/workbook.xml', (xml) => (xml …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > decodes the predefined entities exactly once and leaves unknown references literal
+AssertionError: expected undefined to be 'A &lt; B &amp;amp; &xxe; &#x41; C&D' // Object.is equality
+
+- Expected:
+"A &lt; B &amp;amp; &xxe; &#x41; C&D"
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:339:49
+    337|     const literal = 'A &lt; B &amp;amp; &xxe; &#x41; C&D';
+    338|     const preview = previewWorkbook(buildSyntheticWorkbook({ periods: …
+    339|     expect(preview.periods[0]?.employee?.value).toBe(literal);
+       |                                                 ^
+    340|     // A numeric reference and the five predefined entities are decode…
+    341|     const rewritten = withText(buildSyntheticWorkbook({ periods: [{ pa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects macro-bearing packages by entry name or content type
+AssertionError: expected null to be 'macro_content' // Object.is equality
+
+- Expected:
+"macro_content"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:348:93
+    346|
+    347|   it('rejects macro-bearing packages by entry name or content type', (…
+    348|     expect(reject(withEntry(template, 'xl/vbaProject.bin', strToU8('no…
+       |                                                                                             ^
+    349|     expect(reject(withEntry(template, 'xl/macrosheets/sheet1.xml', str…
+    350|     const macroEnabled = withText(template, '[Content_Types].xml', (xm…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > ignores external links: they are listed, never opened or followed
+AssertionError: expected [] to include 'xl/externalLinks/externalLink1.xml'
+ ❯ tests/integration/workbook-reader.test.ts:371:93
+    369|     );
+    370|     const preview = previewWorkbook(withLink);
+    371|     expect(findings(preview, 'external_link_ignored').map((finding) =>…
+       |                                                                                             ^
+    372|     expect(preview.sheets).toHaveLength(3);
+    373|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/25]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > reader limits and hostile packages > does not run anything when a formula is hostile: it stays text with a cached value
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/workbook-reader.test.ts:379:46
+    377|       (xml ?? '').replace('</sheetData>', '<row r="40"><c r="A40" t="s…
+    378|     );
+    379|     expect(previewWorkbook(hostile).periods).toHaveLength(1);
+       |                                              ^
+    380|     const cell = readWorkbook(hostile).sheets.at(-1)?.cells.get('A40');
+    381|     expect(cell?.formula).toBe("cmd|' /C calc'!A0");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/25]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  25 failed | 2 passed (27)
+   Start at  20:14:26
+   Duration  590ms (tests 77%, import 13%, transform 9%, worker 1%)
+

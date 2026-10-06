@@ -564,8 +564,26 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
          Job-claim expectations in three tests changed to include the sweep; the audit
          will judge whether that weakens them.
-     - Running: WP4-T07-FREEZE (committer). The coordinator writes no file during the
-       commit.
+     - WP4-T07-FREEZE is committed and pushed as e1d97bd (31 paths; all checks 0).
+     - Coordinator decision: T08 does not depend on F-1..F-3, so it runs before WP4-DEC.
+     - WP4-T08 is done (author-reported).
+       - Dependencies: two new ones, with no deprecation.
+       - The reader enforces limits on real inflated output and rejects
+         DOCTYPE/ENTITY and macros.
+       - The README defects are detected.
+       - Tests: 28, red-first; 6 mutations are killed.
+       - The template hash is unchanged.
+       - Verify: 1573 tests. Digest: 6fcd692d….
+     - WP4-T08-FREEZE attempt 1 made no commit. `git diff --cached --check` flagged a
+       blank line at EOF in `src/server/import/xlsxReader.ts`, a source file the
+       committer may not fix.
+     - WP4-T08 attempt 2 removed the one EOF blank line; verify passes 1573 tests and
+       the new digest is d70a03c2….
+     - Running: WP4-T08-FREEZE attempt 2 (same committer).
+     - Waiting on the owner:
+       - F-1..F-3 for T09 and T10;
+       - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
+       - GOV-SKILL Q1–Q4.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -605,7 +623,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T07-FREEZE only.
+- Live processes: WP4-T08-FREEZE (attempt 2) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

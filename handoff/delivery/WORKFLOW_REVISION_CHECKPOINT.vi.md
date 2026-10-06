@@ -599,8 +599,27 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
          Kỳ vọng về số job được nhận trong 3 test đã đổi để tính cả việc dọn tệp; audit
          sẽ đánh giá thay đổi này có làm test yếu đi không.
-     - Đang chạy: WP4-T07-FREEZE (committer). Điều phối viên không ghi tệp nào trong
-       lúc commit.
+     - WP4-T07-FREEZE đã commit và push thành e1d97bd (31 đường dẫn; mọi kiểm tra trả về
+       0).
+     - Quyết định điều phối: T08 không phụ thuộc F-1..F-3, nên chạy trước WP4-DEC.
+     - WP4-T08 đã xong (tác giả tự báo).
+       - Thư viện: thêm 2 thư viện mới, không có cảnh báo deprecation.
+       - Bộ đọc giới hạn theo dung lượng thật sau khi giải nén, và chặn DOCTYPE/ENTITY và
+         macro.
+       - Các lỗi đã ghi trong README đều được phát hiện.
+       - Test: 28 test viết trước để thấy đỏ; 6 phép thử đột biến đều bị bắt.
+       - Hash của template không đổi.
+       - Verify: 1573 test. Digest: 6fcd692d….
+     - WP4-T08-FREEZE lần 1 không tạo commit. `git diff --cached --check` báo một dòng
+       trống ở cuối `src/server/import/xlsxReader.ts`; đây là tệp mã nguồn nên committer
+       không được tự sửa.
+     - WP4-T08 lần 2 đã xóa dòng trống ở cuối tệp; verify đạt 1573 test; digest mới là
+       d70a03c2….
+     - Đang chạy: WP4-T08-FREEZE lần 2 (cùng committer).
+     - Đang chờ chủ dự án:
+       - F-1..F-3 cho T09 và T10;
+       - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
+       - các câu GOV-SKILL Q1–Q4.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -640,7 +659,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T07-FREEZE.
+- Process còn sống: chỉ WP4-T08-FREEZE (lần 2).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.
