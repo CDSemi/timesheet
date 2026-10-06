@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = e7fe5144dc62f5047c79dd5ef69d973f60dfd14d (WP4-ACCEPT, hồ sơ nghiệm thu WP4; source được nghiệm thu là 546cdda, digest 26fcc969).
+  - HEAD = origin/main = 85838b515a86b3cca40cfbba189ba290ec06de58 (WP5-FIXB-FREEZE, bản sửa runbook của WP5; digest ed604d0c).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -990,7 +990,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Digest ed604d0c (775 tệp); digest hiện tại trên board đã cập nhật.
        - WP5-ASSESS-A chuyển sang lần 2, trạng thái pending: kiểm phần chênh mảng A gắn
          digest trên một commit đóng băng WP5 sau này. Lần 1 được giữ trong lịch sử.
-       - Đang chạy: WP5-FIXB-FREEZE (committer).
+       - WP5-FIXB-FREEZE đã commit và push 85838b5 ở lần 3 (105 đường dẫn; mọi kiểm tra
+         trả 0). Lần 1 và lần 2 dừng do lỗi board của coordinator: còn sót lý do đổi
+         model, và một audit pending không phụ thuộc gate nào.
+       - WP5-AC13 đã xong (worker-high, sonnet; tác giả tự báo).
+         - Thêm `tests/integration/ac13-two-week.test.ts` và helper. Một kịch bản ổn
+           định: 14 ngày, ký xác nhận (8:30, sổ OT ghi đúng một lần), crash và khởi
+           động lại quanh lúc gửi, chỉnh sửa, tranh chấp dùng OT hai lần, cô lập người
+           dùng và một lượt quá hạn.
+         - Đạt dưới 3 múi giờ, và 3 lần chạy riêng đều đạt. 2 lỗi cố ý cài vào đều bị
+           bắt. Không thấy lỗi sản phẩm.
+         - lint 0; verify 77 tệp / 1.759 test. Digest 1e59ad31 (777 tệp).
+       - Đang chạy: WP5-AC13-FREEZE (committer).
        - Sau đó:
          - WP5-AC13, một test tích hợp được commit (worker-high, sonnet), và commit
            đóng băng của nó;

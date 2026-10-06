@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "ed604d0c33b144e7fb214d05d4060494542fb21a9e69cd5b61c40097685f692a",
+  "current_source_digest": "1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-FIXB-FREEZE",
+  "next_task_id": "WP5-AC13-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -155,7 +155,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
+    "last_commit": "85838b515a86b3cca40cfbba189ba290ec06de58",
     "unpushed": []
   },
   "owner_decisions": [
@@ -12080,7 +12080,7 @@
       "id": "WP5-FIXB-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-FIXB"
       ],
@@ -12093,8 +12093,8 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "ac4d9c61acb7d00cf",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
@@ -12109,16 +12109,110 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-FIXB-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-FIXB-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-FIXB-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "85838b515a86b3cca40cfbba189ba290ec06de58",
+      "pushed": true,
       "source_digest": "ed604d0c33b144e7fb214d05d4060494542fb21a9e69cd5b61c40097685f692a",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 3), the WP5 runbook fix freeze: parent e7fe514, remote SHA identical; digest ed604d0c (775 files) matched; 105 paths staged; 4 synthetic PNGs viewed; outside handoff/ only docs/11 (+ vi), .env.example and compose.example.yaml (comments only); precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0. The brief asked for a checks.txt log; only commit-message.txt was saved, and the exit codes are in the brief's results.",
+      "next_action": "None; WP5-AC13 next."
+    },
+    {
+      "id": "WP5-AC13",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-FIXB-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a8f5629be6bb6bb7f",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "tests/integration/ac13-two-week.test.ts",
+        "tests/integration/ac13-support.ts",
+        "tests/e2e/ac13-two-week.spec.ts",
+        "handoff/delivery/tasks/WP5-AC13.md",
+        "handoff/delivery/evidence/WP5-AC13"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-AC13.md",
+      "report": "handoff/delivery/tasks/WP5-AC13.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-AC13/run1.txt",
+        "handoff/delivery/evidence/WP5-AC13/run2.txt",
+        "handoff/delivery/evidence/WP5-AC13/run3.txt",
+        "handoff/delivery/evidence/WP5-AC13/tz-Asia_Tokyo.txt",
+        "handoff/delivery/evidence/WP5-AC13/tz-America_New_York.txt",
+        "handoff/delivery/evidence/WP5-AC13/mutation1.txt",
+        "handoff/delivery/evidence/WP5-AC13/mutation2.txt",
+        "handoff/delivery/evidence/WP5-AC13/lint.txt",
+        "handoff/delivery/evidence/WP5-AC13/verify.txt",
+        "handoff/delivery/evidence/WP5-AC13/precommit.txt",
+        "handoff/delivery/evidence/WP5-AC13/digest.txt"
+      ],
+      "baseline_commit": "85838b515a86b3cca40cfbba189ba290ec06de58",
+      "source_digest": "1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (worker-high): tests only. New tests/integration/ac13-two-week.test.ts and helper tests/integration/ac13-support.ts; no application source change; no product defect found. One in-process scenario with a fixed clock: 14 dates with all listed cases, review and sign-off (8:30, ledger posted once, revision 1), a real-process crash and restart around the send (no blind resend, one capture with PDF and recipients), correction, partial OT use with a worker-thread double-spend race, second-user isolation, overdue run at a recorded instant; also passes under TZ=Asia/Tokyo and America/New_York. Three solo runs exit 0 (1705, 1739, 1754 ms). Mutation in a scratch copy: skipping N fails at the 09-24 credit; double credit posting fails at the ledger credits. lint 0; verify 0 (77 files, 1759 tests, smoke passed); precommit PASS. Digest 1e59ad31 (777 files), computed last.",
+      "next_action": "None; WP5-AC13-FREEZE."
+    },
+    {
+      "id": "WP5-AC13-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-AC13"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-AC13-FREEZE.md",
+        "handoff/delivery/evidence/WP5-AC13-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-AC13-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-AC13-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "85838b515a86b3cca40cfbba189ba290ec06de58",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP5 runbook fix with the WP5 plan, both assessment reports and the WP4-ACCEPT results."
+      "next_action": "Commit and push the integrated AC-13 test with the WP5-FIXB-FREEZE results and the draft WP5-REL brief."
     },
     {
       "id": "WP4-RECHECK-B4",
