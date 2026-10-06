@@ -81,6 +81,54 @@ Use synthetic data and local capture only.
 
 Return at most 200 words, beginning with your self-reported model.
 
+## Attempt 2 (coordinator note): area-A delta recheck on the package-final freeze
+
+Attempt 1 passed on 546cdda, digest 26fcc969. After it, these WP5 writers changed the
+source:
+- WP5-FIXB: docs/11, `.env.example` and a `compose.example.yaml` comment;
+- WP5-AC13: the new `tests/integration/ac13-two-week.test.ts` and its helper;
+- WP5-REL: docs/12, docs/11 and README.
+
+So area A needs a digest-bound recheck.
+
+Who runs it: a fresh opus auditor. The auditor must not be:
+- a72a6550bd47db0ff;
+- the WP5-ASSESS-B auditor;
+- the WP5-FINAL-AUDIT auditor;
+- a WP1–WP5 author.
+
+Target: `reviewed_commit` = the WP5-GATE `freeze_commit`, given in the dispatch prompt.
+
+Scope:
+1. **Delta since 546cdda.** List every non-handoff path that changed. Confirm that
+   no application source changed. Judge each docs change against the area-A rules:
+   - docs/05 submission and notifications;
+   - AC-14;
+   - privacy;
+   - the separation of readiness, permission and outcome.
+2. **The AC-13 test.**
+   - Check that `tests/integration/ac13-two-week.test.ts` asserts what attempt 1's
+     probe showed: the 14 dates, OT 8:30, the ledger posting once, the restart with
+     no blind resend, the correction, the double-spend refusal, isolation and the
+     overdue path.
+   - Check that it is deterministic.
+   - Rerun it, and repeat one of its mutations in a scratch copy.
+3. **Reruns.**
+   - Rerun `npm ci`, `npm run verify` and `npm run test:e2e` on a clean export.
+   - Rerun your own short probe for the attempt-1 items that the test does not
+     cover: shares and revocation, sender and recipient faults, and secrets absent
+     from logs, health and CLI output.
+4. **Earlier conclusions.** Confirm attempt 1's conclusions still apply, and judge
+   risks R-WA1..R-WA8 again.
+
+Runtime: folder `D:\.claude-tmp\timesheet\WP5-ASSESS-A2`; ports 47700–47719; no
+Docker. All the attempt-1 runtime rules apply. **Never feed anything to python or node
+through stdin.**
+
+Report: `handoff/delivery/WP5_REVIEW_A2.md` and `.vi.md`. Evidence:
+`handoff/delivery/evidence/WP5-ASSESS-A2/`. Append "### Auditor result (attempt 2)" to
+the Results section below.
+
 ## Results
 
 (Auditor appends here.)

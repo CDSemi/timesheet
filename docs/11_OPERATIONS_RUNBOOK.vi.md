@@ -7,6 +7,8 @@ Sổ tay này dành cho người cài đặt và duy trì ứng dụng Timesheet
 - **[Drill stage N]**: được `npm run drill:container` thực thi (xem "Các stage của drill" bên dưới), kèm số stage.
 - **[owner NAS step, unverified]**: bước trên máy chủ mà drill không làm được (màn hình DSM, Task Scheduler, thiết bị thứ hai, reverse proxy). Lần chạy đầu trên NAS chính là lần kiểm chứng.
 
+Các mục 13 đến 16 (các mục pilot của WP5) được viết từ code và các lần review độc lập. Drill không bao giờ gửi thư thật và không bao giờ kích hoạt tự động nộp, nên mọi bước trong đó đều là **[owner NAS step, unverified]** và không có stage drill nào. Chúng chỉ được dùng sau khi chủ sở hữu cho phép rõ ràng việc gửi thật.
+
 ## Chỗ giữ chỗ và quy ước
 
 Không có giá trị thật nào trong sổ tay này. Hãy thay các chỗ giữ chỗ trên NAS và chỉ giữ giá trị thật trong các file được bảo vệ trên máy chủ, không bao giờ đưa vào git, chat, ảnh chụp màn hình hay log.
@@ -29,6 +31,7 @@ Không có giá trị thật nào trong sổ tay này. Hãy thay các chỗ gi�
 - `<compose-restored>` thay cho `TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml` (mục 6). Biến đặt trong shell thắng `<project-dir>/.env`, nên instance đã restore gắn `<restore-dir>` và có tên dự án Compose riêng; nó không bao giờ dùng chung dữ liệu hay dự án với bản đang chạy.
 - `<compose-previous>` thay cho `TIMESHEET_IMAGE=<previous-image> TIMESHEET_DATA_DIR=<restore-dir> TIMESHEET_ENV_FILE=<rollback-env-file> docker compose --project-name <project>-rollback --file <project-dir>/compose.example.yaml` (mục 8); `<rollback-env-file>` là bản sao quyền 600 của `<env-file>` có thêm `JOB_RUNNER=off`.
 - `<cli>` thay cho `node dist/server/cli.js` (công cụ dòng lệnh bên trong image).
+- Các mục 13 đến 16 thêm các chỗ giữ chỗ sau: `<release-commit>`, `<source-digest>` và `<image-id>` (định danh bản phát hành ghi ở mục 1 bước 8 và trong [12 Ghi chú phát hành](12_RELEASE_NOTES.vi.md)); `<manifest-sha256>` (SHA-256 của `<backup-dir>/<backup-name>/manifest.json`); `<activation-instant-utc>` (một thời điểm UTC trong tương lai, viết `YYYY-MM-DDTHH:MM:SSZ`); `<reason>` (một đoạn ngắn cho dấu vết audit, không bao giờ là dữ liệu cá nhân).
 
 ## Các stage của drill
 
@@ -47,7 +50,7 @@ Drill là `npm run drill:container -- --work <thư mục rỗng> --project <tên
    ~~~
 
 4. Volume dữ liệu là một thư mục cục bộ trên máy chủ, mount thành `/data`: CSDL `/data/timesheet.db`, file riêng tư `/data/private-data` (PDF, chữ ký, nguồn nhập, capture) và backup `/data/backups`. Phải là volume cục bộ của NAS, không bao giờ là chia sẻ SMB hay NFS từ xa và không bao giờ là thư mục đồng bộ. **[Drill stage 1]** cho việc mount; hệ thống file của NAS **[owner NAS step, unverified]**.
-5. Sao chép `.env.example` thành `<env-file>`, quyền 600, và đặt tối thiểu `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` và `TRUSTED_PROXY_ADDRESSES`. Production từ chối khởi động nếu thiếu `DATA_DIR` và `DATABASE_PATH` tuyệt đối tường minh, `APP_ORIGINS` và `PUBLIC_BASE_URL`. Giữ `OUTBOUND_MODE=capture` và không bao giờ đặt `PRODUCTION_SENDING_ENABLED`: gửi thật thuộc pilot WP5, sau khi chủ sở hữu cho phép. Ứng dụng không cần session secret; thông tin đăng nhập SMTP là bí mật duy nhất nó có thể giữ. Sau đó tạo `<project-dir>/.env` với bốn biến ở "Chỗ giữ chỗ và quy ước" (phần đầu `.env.example` chỉ gợi ý một đường dẫn: `<env-file>` là nơi `TIMESHEET_ENV_FILE` trỏ tới). **[Drill stage 1]** (drill ghi một file env tổng hợp và đặt bốn biến).
+5. Sao chép `.env.example` thành `<env-file>`, quyền 600, và đặt tối thiểu `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` và `TRUSTED_PROXY_ADDRESSES`. Production từ chối khởi động nếu thiếu `DATA_DIR` và `DATABASE_PATH` tuyệt đối tường minh, `APP_ORIGINS` và `PUBLIC_BASE_URL`. Giữ `OUTBOUND_MODE=capture` và không bao giờ đặt `PRODUCTION_SENDING_ENABLED`: gửi thật thuộc pilot (mục 13), sau khi chủ sở hữu cho phép. Ứng dụng không cần session secret; thông tin đăng nhập SMTP là bí mật duy nhất nó có thể giữ. Sau đó tạo `<project-dir>/.env` với bốn biến ở "Chỗ giữ chỗ và quy ước" (phần đầu `.env.example` chỉ gợi ý một đường dẫn: `<env-file>` là nơi `TIMESHEET_ENV_FILE` trỏ tới). **[Drill stage 1]** (drill ghi một file env tổng hợp và đặt bốn biến).
 6. Mạng: ví dụ Compose chỉ publish cổng trên loopback (`127.0.0.1:3000`). Đặt reverse proxy của Synology phía trước với HTTPS và chuyển tiếp tới cổng đó; không bao giờ publish cổng ra internet. Đặt `TRUSTED_PROXY_ADDRESSES` đúng địa chỉ IP của proxy như ứng dụng thấy được là peer kết nối (không CIDR, không tên máy), ví dụ gateway của cầu Docker. Nếu để trống, mọi header chuyển tiếp bị bỏ qua và mọi client dùng chung giới hạn đăng nhập của địa chỉ proxy. **[owner NAS step, unverified]**
 7. Thời gian: bật NTP trong DSM để hạn nộp, backup và thời điểm hết hạn đúng **[owner NAS step, unverified]**.
 8. Khởi động và kiểm tra:
@@ -277,6 +280,114 @@ Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy ch
 
 **[Drill stage 3]** đọc trạng thái tạm dừng gửi từ route này sau restore; **[Drill stage 2]** tạo ra một backup mà trạng thái báo cáo. Không hiển thị: kết quả của lần `--prune` gần nhất, và mọi thứ về máy chủ. Vì vậy cần mục 11.
 
+## 13. Kích hoạt pilot
+
+Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho phép rõ ràng ([06 Nghiệm thu](06_TEST_AND_ACCEPTANCE.vi.md)). Không làm gì trong mục này trước khi có phép đó. Sẵn sàng phần mềm, phép của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận là bốn sự thật tách biệt; ghi từng cái riêng. Các lựa chọn dưới đây là khuyến nghị; owner decision pending (D-1 đến D-15 ở [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) mục D). Các khóa cấu hình chỉ được nêu tên ở đây và giá trị của chúng chỉ nằm trong `<env-file>`.
+
+1. Điều kiện tiên quyết. Nếu có điều nào sai, hãy dừng. **[owner NAS step, unverified]**
+   - Phép nằm trong hồ sơ riêng của chủ sở hữu.
+   - Danh sách ở mục 2 đã được đánh dấu và ghi ngày (recommended; owner decision pending (D-13)); cho tới lúc đó NAS CHƯA ĐƯỢC KIỂM CHỨNG và kết quả là "phần mềm sẵn sàng, pilot đang chờ".
+   - Backup, restore cô lập và đối soát (mục 4, 6, 7) đã chạy được trên NAS với dữ liệu tổng hợp.
+   - `<release-commit>`, `<source-digest>` và `<image-id>` đã được ghi (mục 1 bước 8).
+   - Các giá trị thật (`MAIL_FROM`, các khóa `SMTP_*`, `PUBLIC_BASE_URL`, `APP_ORIGINS`, `TRUSTED_PROXY_ADDRESSES`) nằm trong bản riêng của chủ sở hữu, ngoài git, chat và ảnh chụp màn hình.
+2. Tự kiểm tra ở chế độ capture. Giữ `OUTBOUND_MODE=capture` và để trống `PRODUCTION_SENDING_ENABLED`. **[owner NAS step, unverified]**
+   - Trạng thái quản trị cho thấy chế độ gửi `capture`, cờ tắt và kích hoạt là "Not activated".
+   - Với hai tài khoản tổng hợp của [07 Vận hành](07_DEPLOYMENT_AND_OPERATIONS.vi.md) "Trình tự setup" (địa chỉ trên `example.invalid`), ký xác nhận và nộp một kỳ tổng hợp. Thư mục capture dưới `/data/private-data` phải chứa đúng các người nhận đã cấu hình và nội dung đã đóng băng, cùng một PDF có SHA-256 bằng bản PDF tải về. Không có gì rời khỏi NAS.
+   - Kiểm tra `PUBLIC_BASE_URL` và `APP_ORIGINS`: link sâu trong thư đã capture mở `https://<nas-host>/` và đăng nhập được, và một yêu cầu thay đổi trạng thái từ origin đó được chấp nhận.
+   - Lưu cài đặt nộp của tài khoản chủ sở hữu và của mọi tài khoản khác sẽ tồn tại, rồi vô hiệu hóa các tài khoản tổng hợp trong màn hình quản trị và bảo đảm không tài khoản nào bật tự động nộp (mục 16).
+   - Trạng thái quản trị không được có job gửi nào đang xếp hàng hay đang giữ lease. Một job còn xếp hàng khi bật gửi thật sẽ được gửi thật.
+3. Backup trước kích hoạt, kèm tên và hash. **[owner NAS step, unverified]**
+
+   ~~~bash
+   <compose> exec -T timesheet <cli> backup --to /data/backups
+   ls -1 <backup-dir>
+   sha256sum <backup-dir>/<backup-name>/manifest.json
+   ~~~
+
+   Backup in ra `"outcome":"succeeded"`. `<backup-name>` là thư mục mới nhất (tên xếp theo thời gian UTC). Ghi lại `<backup-name>` và `<manifest-sha256>`: manifest liệt kê hash của mọi file, nên hash của chính nó định danh backup đó. Chép `<backup-dir>` sang thiết bị riêng (mục 4 bước 3) và giữ cùng đó một bản sao được bảo vệ của `<env-file>` ở chế độ capture: thẻ rollback (mục 15) cần nó.
+4. Bật gửi thật. **[owner NAS step, unverified]**
+   - Sửa `<env-file>` (quyền 600): `OUTBOUND_MODE=smtp`; `PRODUCTION_SENDING_ENABLED=true`, đúng giá trị đó; `SMTP_HOST`; `SMTP_PORT`; `SMTP_SECURITY` là `starttls` hoặc `tls`; `SMTP_USER` và `SMTP_PASSWORD` đi cùng nhau, hoặc đều không có; `MAIL_FROM` là một địa chỉ người gửi mà nhà cung cấp chấp nhận. Giữ `PUBLIC_BASE_URL`, `APP_ORIGINS` và `TRUSTED_PROXY_ADDRESSES` như đã thử ở bước 2.
+   - Thiếu cờ thì server và CLI từ chối khởi động và nêu tên cờ, không bao giờ nêu giá trị. Khởi động lại đơn thuần không đọc lại `<env-file>`, nên hãy tạo lại container:
+
+     ~~~bash
+     <compose> up --detach --force-recreate --no-build
+     <compose> ps
+     <compose> logs --no-color timesheet
+     ~~~
+
+   - Trạng thái quản trị giờ cho thấy chế độ gửi `smtp` và cờ bật. Thời điểm kích hoạt vẫn trống.
+5. Đặt thời điểm kích hoạt. Trong kỳ đầu theo giai đoạn (bước 6) hãy để trống. Khi chủ sở hữu quyết định bật tự động nộp, đăng nhập bằng quản trị viên, mở developer console của trình duyệt tại `https://<nas-host>/` và chạy **[owner NAS step, unverified]** (không có màn hình cho việc này; lệnh gọi được các test tích hợp bao phủ, không phải drill):
+
+   ~~~js
+   await (await fetch('/api/admin/automation/activation', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active_from: '<activation-instant-utc>', reason: '<reason>' }) })).json()
+   ~~~
+
+   - Thời điểm không được ở quá khứ (422 `activation_in_past`) và bắt buộc có lý do (422 `reason_required`). Origin phải có trong `APP_ORIGINS` (403 `origin_rejected`).
+   - Chỉ kỳ có hạn nộp bằng hoặc sau cả thời điểm này và thời điểm tự động nộp hiệu lực của chính tài khoản mới được tự động chốt; tài khoản chưa từng lưu cài đặt thì không bao giờ ([05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Đến hạn và phục hồi"). Hãy chọn thời điểm sau khi kỳ đầu đã được ký xác nhận bằng tay.
+   - Lệnh gọi được ghi audit. Kiểm tra trạng thái quản trị hiển thị thời điểm đó.
+6. Kỳ đầu theo giai đoạn (recommended; owner decision pending (D-12)).
+   - Ký xác nhận bằng tay với gửi thật; tắt tự động nộp; không có thời điểm kích hoạt.
+   - Lần gửi thật đầu tiên đi tới địa chỉ của chính chủ sở hữu. Việc đổi người nhận không tới được một revision đã có (phong bì đã đổi cần một revision mới được xem, [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Sửa và gửi lại"), nên hãy đặt người nhận của kỳ đầu trong cài đặt của chủ sở hữu trước khi ký, và cùng chủ sở hữu quyết định bộ phận lương nhận thư của kỳ đầu hay một revision sau đó.
+   - Giữ workbook Excel làm đối chiếu cho kỳ đó.
+   - Bật tự động nộp từ kỳ kế tiếp (bước 5), và chỉ sau khi bước 7 đạt.
+7. Sau lần gửi thật đầu tiên. Nhà cung cấp chấp nhận và người nhận đã nhận là hai sự thật tách biệt; ghi từng cái cùng thời điểm của nó. **[owner NAS step, unverified]**
+   - Nhà cung cấp chấp nhận: lịch sử gửi của revision cho thấy lần thử ở trạng thái accepted kèm xác nhận của nhà cung cấp. Khi lỗi sẽ có mã lỗi đã được che: `smtp_auth_failed`, `smtp_tls_failed` và `smtp_config_invalid` là lỗi cấu hình cần sửa trong `<env-file>` rồi tạo lại container (bước 4). Lỗi xác minh chứng chỉ hiện được xếp là tạm thời: nó thử lại rồi cần can thiệp (khuyến nghị: xếp là vĩnh viễn; owner decision pending (D-8)).
+   - Người nhận đã nhận: chủ sở hữu xác nhận trong hộp thư rằng đúng một thư đã đến từ người gửi `MAIL_FROM`, có PDF, và PDF đó bằng bản trong ứng dụng (kể cả thư mục spam). Một thư được chấp nhận mà không bao giờ đến là việc của nhà cung cấp hoặc hộp thư, không phải kết quả của ứng dụng.
+   - Một lần thử `uncertain` không được gửi lại một cách mù quáng: kiểm tra hộp thư và nhà cung cấp, rồi ghi quyết định vào lịch sử gửi trước (mục 7 bước 2, [05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Gửi bền vững").
+   - Sau sự cố ở SMTP thật, một lời nhắc có thể đến hai lần (khuyến nghị: chấp nhận; owner decision pending (D-7)).
+   - Log và trạng thái không chứa mật khẩu hay token. Hãy backup sau kỳ thật đầu tiên (mục 4).
+   - Có gì bất thường: hủy kích hoạt (mục 14).
+
+## 14. Hủy kích hoạt
+
+Hủy kích hoạt khi một lần gửi sai hoặc bất ngờ, nhà cung cấp lỗi, hoặc chủ sở hữu quyết định dừng. Dữ liệu được giữ nguyên. **[owner NAS step, unverified]**
+
+1. Nếu đã đặt thời điểm kích hoạt thì xóa nó trước, khi ứng dụng đang chạy (lệnh gọi được ghi audit và sau đó không có gì được tự động chốt). Dùng lệnh gọi console ở mục 13 bước 5 với `active_from: null` và một lý do. Kiểm tra trạng thái quản trị hiển thị "Not activated".
+2. Xem trạng thái quản trị để biết có lần gửi nào đang xếp hàng hay giữ lease không. Job gửi chạy sau bước 4 sẽ ghi vào thư mục capture và được ghi nhận với bộ gửi capture: đó không phải thư thật. Hãy chờ tới khi không còn gì xếp hàng hay giữ lease (runner khỏe tìm thấy việc trong khoảng một phút), hoặc chấp nhận rằng các lần gửi đó chỉ được capture và báo người nhận bằng tay.
+3. Sửa `<env-file>`: bỏ đặt hoặc xóa `PRODUCTION_SENDING_ENABLED` và đặt `OUTBOUND_MODE=capture`. Xóa các giá trị `SMTP_*` khỏi file và chỉ giữ chúng trong bản riêng của chủ sở hữu.
+4. Tạo lại container để file được đọc, rồi kiểm tra trạng thái:
+
+   ~~~bash
+   <compose> up --detach --force-recreate --no-build
+   <compose> ps
+   ~~~
+
+   Trạng thái quản trị cho thấy chế độ gửi `capture`, cờ tắt và kích hoạt là "Not activated".
+5. Giữ dữ liệu: không bao giờ xóa `<data-dir>`. Không bao giờ chạy hai hàng đợi: không khởi động instance khác trên cùng dữ liệu và không bao giờ khởi động instance đã restore (mục 6) khi bản đang chạy còn chạy.
+6. Một kỳ đã nộp nhầm vẫn nằm trong hồ sơ (đã chốt, đã ghi sổ cái, có audit). Nó được sửa bằng một hiệu chỉnh có lý do, không bao giờ bị xóa ([05 Nộp](05_SUBMISSION_AND_NOTIFICATIONS.vi.md) "Sửa và gửi lại").
+7. Ghi ngày và lý do vào nhật ký riêng của chủ sở hữu.
+
+## 15. Thẻ rollback cho lần cài đặt đầu tiên
+
+Pilot là lần cài đặt đầu tiên, nên không có schema hay image production cũ hơn để rollback về. Rollback nghĩa là dừng gửi thật và quay lại Excel. Hãy điền thẻ này trước khi kích hoạt. Bản riêng của chủ sở hữu giữ giá trị thật; bản được theo dõi chỉ giữ các chỗ giữ chỗ (recommended; owner decision pending (D-11)).
+
+| Trường | Giá trị |
+|---|---|
+| Commit phát hành | `<release-commit>` |
+| Source digest | `<source-digest>` |
+| Image ID build trên NAS | `<image-id>` |
+| Backup trước kích hoạt | `<backup-name>` |
+| Hash manifest của backup đó | `<manifest-sha256>` |
+| Bản sao trên thiết bị riêng của backup và `<env-file>` ở chế độ capture | nơi giữ |
+| Ngày kích hoạt | thời điểm UTC |
+
+1. Hủy kích hoạt (mục 14).
+2. Giữ dữ liệu. Không xóa `<data-dir>` hay `<backup-dir>`.
+3. Quay lại workbook Excel cho kỳ đó (bản riêng của chủ sở hữu; template được theo dõi chỉ là mẫu). Dữ liệu ứng dụng vẫn là hồ sơ về những gì đã nộp.
+4. Thư đã gửi không thu hồi được. Đọc từ lịch sử gửi xem những gì đã đi, để không gì bị gửi hay nhập hai lần bằng tay.
+5. Chỉ restore khi dữ liệu hỏng hoặc sai, không bao giờ đè lên dữ liệu đang chạy. Đối chiếu `sha256sum <backup-dir>/<backup-name>/manifest.json` với `<manifest-sha256>`, rồi restore `<backup-name>` cô lập (mục 6) vào một thư mục thật mới, và đối soát (mục 7). Instance đã restore bị tạm dừng và ở chế độ capture, và các thay đổi sau backup đó không có trong nó. Không bao giờ chạy hai hàng đợi.
+6. Quy tắc R-A3 (recommended; owner decision pending (D-1)): khi rollback restore một backup của schema cũ hơn, bản build cũ chạy với `JOB_RUNNER=off` cho tới khi đối soát xong (mục 8, Rollback). Ở lần cài đặt đầu tiên không có schema production cũ hơn, nên điều này chỉ quan trọng sau một lần nâng cấp sau này có thêm migration; hãy xem lại trước lần nâng cấp đó.
+7. Để thử lại, lặp lại mục 13 từ bước tự kiểm tra với một backup trước kích hoạt mới.
+
+## 16. Ghi chú vận hành cho pilot
+
+1. Migrate một lần trước lần khởi động đầu tiên (R-A2). Nhiều tiến trình cùng mở một file CSDL hoàn toàn mới có thể gặp `SQLITE_BUSY`. Khởi động một instance, chờ tới khi `<compose> ps` báo nó khỏe, rồi mới chạy lệnh CLI nào hoặc khởi động thứ khác trên dữ liệu đó. Để migrate tường minh trước: `<compose> run --rm --no-deps timesheet <cli> migrate`. **[owner NAS step, unverified]**
+2. Giữ đường dẫn tường minh khi dùng CLI trên máy chủ (R-A8). Production từ chối khi thiếu `DATABASE_PATH`, nhưng một lệnh bảo trì CLI chạy ngoài container mà thiếu nó sẽ quay về CSDL phát triển. Trong container, file env đặt cả hai; trên máy chủ hãy đặt `DATA_DIR` và `DATABASE_PATH` tường minh, là đường dẫn tuyệt đối trên `<data-dir>`, cho mọi lệnh.
+3. Bảo vệ backup trước nâng cấp (R-RA2). Một lần `--prune` sau đó trong cùng ngày UTC xóa backup trước nâng cấp đã ghép đôi: hãy chép nó sang chỗ khác (mục 4 bước 3) trước khi nâng cấp, hoặc chạy lần dọn đầu vào ngày khác.
+4. Restore vào một thư mục thật mới (R-RA9). Tạo `<restore-dir>` bằng `mkdir`; không bao giờ trỏ nó vào junction hay liên kết tượng trưng (khi đó restore lỗi `write_failed` thay vì bị từ chối là nằm trong dữ liệu đang chạy).
+5. Lưu cài đặt nộp trước khi kích hoạt (WP3 R8, R-WA3). Khi tự động nộp đã kích hoạt, tài khoản chưa từng lưu chúng nhận lời nhắc trước hạn, kể cả tài khoản quản trị tạo bởi bootstrap. Hãy dùng tài khoản quản trị làm tài khoản timesheet của chủ sở hữu, hoặc lưu cài đặt của nó; kiểm tra cờ "Not set up" trong danh sách tài khoản quản trị đã trống với mọi tài khoản đang hoạt động.
+6. Sau restore và đối soát của nó, hãy backup: instance đã restore báo backup là `never` cho tới lúc đó (mục 7).
+
 ## Bảng ánh xạ lệnh
 
 | Lệnh hoặc bước | Nơi đã kiểm chứng |
@@ -298,3 +409,8 @@ Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy ch
 | `<compose> build --no-cache` | Drill stage 1 (drill build image) |
 | Nhập và số dư mở đầu qua `/api/imports` và `/api/ot/opening-balance` | Drill stage 6 |
 | Cài đặt NAS: chủ sở hữu thư mục, file env, reverse proxy, NTP, Task Scheduler, bản sao trên thiết bị riêng, cảnh báo máy chủ | Owner NAS step, unverified |
+| Kích hoạt pilot: tự kiểm tra capture, backup trước kích hoạt và `sha256sum` của manifest, `OUTBOUND_MODE=smtp` với `PRODUCTION_SENDING_ENABLED=true`, `<compose> up --detach --force-recreate --no-build` | Owner NAS step, unverified (drill không bao giờ gửi thư thật) |
+| `PUT /api/admin/automation/activation` từ console trình duyệt của quản trị viên đã đăng nhập (đặt và xóa) | Owner NAS step, unverified (chỉ có test tích hợp) |
+| Hủy kích hoạt: xóa thời điểm, `OUTBOUND_MODE=capture`, bỏ cờ, tạo lại container | Owner NAS step, unverified |
+| Thẻ rollback cho lần cài đặt đầu tiên | Owner NAS step, unverified |
+| `<compose> run --rm --no-deps timesheet <cli> migrate` | Owner NAS step, unverified |

@@ -28,7 +28,7 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 
 | Thư mục | Phụ trách |
 |---|---|
-| `docs/` | Tài liệu đặc tả 01–10 và sổ tay vận hành 11 (bảng dưới); `docs/agents/` cấu hình skill cho agent |
+| `docs/` | Tài liệu đặc tả 01–10, sổ tay vận hành 11 và ghi chú phát hành 12 (bảng dưới); `docs/agents/` cấu hình skill cho agent |
 | `src/`, `tests/`, `scripts/` | Source ứng dụng, test tự động và script phát triển; xem [DEVELOPMENT](DEVELOPMENT.vi.md) |
 | `handoff/` | Quy trình làm việc giữa các agent: [NEXT_ACTION](handoff/NEXT_ACTION.vi.md) (trạng thái và bước tiếp theo), `prompts/` (hướng dẫn triển khai/review/sửa/tiếp tục), `templates/` (mẫu bàn giao/review/checkpoint) và `delivery/` (trạng thái, bàn giao, review, bằng chứng và kiểm tra gói tài liệu) |
 | `reference/` | Dữ liệu tham chiếu: [fixture](reference/fixtures/README.vi.md) (91 tình huống tham chiếu mà test đọc), [ví dụ](reference/examples/README.vi.md) (cấu hình mẫu an toàn mà seed giả đọc) và [inputs](reference/inputs/README.vi.md) (workbook mẫu đã làm sạch) |
@@ -46,7 +46,8 @@ Mỗi prompt chỉ rõ phạm vi đọc. Không dán toàn bộ tài liệu vào
 | [08 Phối hợp AI](docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) | Phân công model/effort và ước lượng usage |
 | [09 Lộ trình](docs/09_IMPLEMENTATION_ROADMAP.vi.md) | Năm giai đoạn và gate |
 | [10 Quyết định](docs/10_DECISIONS_AND_SOURCES.vi.md) | Mặc định, nguồn gốc, nguồn chính thức |
-| [11 Sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md) | Cài đặt trên NAS, bootstrap, backup, restore, đối soát, nâng cấp, rollback |
+| [11 Sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md) | Cài đặt trên NAS, bootstrap, backup, restore, đối soát, nâng cấp, rollback, kích hoạt pilot |
+| [12 Ghi chú phát hành](docs/12_RELEASE_NOTES.vi.md) | Định danh bản phát hành, phạm vi theo gói, giới hạn đã biết, tóm tắt cài đặt |
 
 [Excel mẫu](reference/inputs/Timesheet_Rev8_2026.xlsx) là mẫu công khai: gồm biểu mẫu, sheet thông tin làm việc và ngày lễ của workbook gốc, đã xóa toàn bộ dữ liệu cá nhân (các sheet chấm công theo ngày, tên nhân viên, ảnh chữ ký, metadata tác giả và đường dẫn máy). Không giữ bản gốc cá nhân. Không đưa workbook vào image production; dùng dữ liệu giả để demo.
 

@@ -7,6 +7,8 @@ This runbook is for the person who installs and keeps the Timesheet application 
 - **[Drill stage N]**: executed by `npm run drill:container` (see "Drill stages" below) with the stage number.
 - **[owner NAS step, unverified]**: a host step the drill cannot perform (DSM screens, Task Scheduler, a second device, the reverse proxy). Treat the first run on the NAS as the verification.
 
+Sections 13 to 16 (the WP5 pilot sections) were written from the code and the independent reviews. The drill never sends real mail and never activates automation, so every step in them is an **[owner NAS step, unverified]** and none carries a drill stage. They are used only after the owner's explicit authorization of real sending.
+
 ## Placeholders and conventions
 
 Nothing in this runbook is a real value. Replace the placeholders on the NAS and keep the real values only in protected host files, never in git, chat, screenshots or logs.
@@ -29,6 +31,7 @@ Nothing in this runbook is a real value. Replace the placeholders on the NAS and
 - `<compose-restored>` stands for `TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml` (section 6). A variable set in the shell wins over `<project-dir>/.env`, so the restored instance binds `<restore-dir>` and has its own Compose project name; it never shares the live data or project.
 - `<compose-previous>` stands for `TIMESHEET_IMAGE=<previous-image> TIMESHEET_DATA_DIR=<restore-dir> TIMESHEET_ENV_FILE=<rollback-env-file> docker compose --project-name <project>-rollback --file <project-dir>/compose.example.yaml` (section 8); `<rollback-env-file>` is a mode 600 copy of `<env-file>` with `JOB_RUNNER=off` added.
 - `<cli>` stands for `node dist/server/cli.js` (the command line tool inside the image).
+- Sections 13 to 16 add these placeholders: `<release-commit>`, `<source-digest>` and `<image-id>` (the release identity recorded in section 1 step 8 and in [12 Release notes](12_RELEASE_NOTES.md)); `<manifest-sha256>` (the SHA-256 of `<backup-dir>/<backup-name>/manifest.json`); `<activation-instant-utc>` (a future UTC instant written `YYYY-MM-DDTHH:MM:SSZ`); `<reason>` (a short text for the audit trail, never personal data).
 
 ## Drill stages
 
@@ -47,7 +50,7 @@ The drill is `npm run drill:container -- --work <empty folder> --project <name> 
    ~~~
 
 4. The data volume is one host-local folder mounted as `/data`: the database `/data/timesheet.db`, private files `/data/private-data` (PDFs, signatures, import sources, capture) and backups `/data/backups`. It must be a local volume of the NAS, never a remote SMB or NFS share and never a synchronized folder. **[Drill stage 1]** for the mount; the NAS file system **[owner NAS step, unverified]**.
-5. Copy `.env.example` to `<env-file>`, mode 600, and set at least `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` and `TRUSTED_PROXY_ADDRESSES`. Production refuses to start without an explicit absolute `DATA_DIR` and `DATABASE_PATH`, `APP_ORIGINS` and `PUBLIC_BASE_URL`. Leave `OUTBOUND_MODE=capture` and never set `PRODUCTION_SENDING_ENABLED`: real sending belongs to the WP5 pilot, after the owner's authorization. The application needs no session secret; SMTP credentials are the only secret it can hold. Then create `<project-dir>/.env` with the four variables of "Placeholders and conventions" (the `.env.example` header only suggests a path: `<env-file>` is wherever `TIMESHEET_ENV_FILE` points). **[Drill stage 1]** (the drill writes a synthetic env file and sets the four variables).
+5. Copy `.env.example` to `<env-file>`, mode 600, and set at least `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` and `TRUSTED_PROXY_ADDRESSES`. Production refuses to start without an explicit absolute `DATA_DIR` and `DATABASE_PATH`, `APP_ORIGINS` and `PUBLIC_BASE_URL`. Leave `OUTBOUND_MODE=capture` and never set `PRODUCTION_SENDING_ENABLED`: real sending belongs to the pilot (section 13), after the owner's authorization. The application needs no session secret; SMTP credentials are the only secret it can hold. Then create `<project-dir>/.env` with the four variables of "Placeholders and conventions" (the `.env.example` header only suggests a path: `<env-file>` is wherever `TIMESHEET_ENV_FILE` points). **[Drill stage 1]** (the drill writes a synthetic env file and sets the four variables).
 6. Network: the Compose example publishes the port on loopback only (`127.0.0.1:3000`). Put the Synology reverse proxy in front with HTTPS and forward to that port; never publish the port to the internet. Set `TRUSTED_PROXY_ADDRESSES` to the exact IP address of the proxy as the application sees it as the connection peer (no CIDR, no host names), for example the Docker bridge gateway. Left empty, every forwarded header is ignored and all clients share the sign-in rate limit of the proxy's address. **[owner NAS step, unverified]**
 7. Time: enable NTP in DSM so that deadlines, backups and expiry instants are right **[owner NAS step, unverified]**.
 8. Start and check:
@@ -277,6 +280,114 @@ An administrator sees operations and delivery, never timesheet details (docs/03)
 
 **[Drill stage 3]** reads the outbound pause from this route after a restore; **[Drill stage 2]** produces a backup that the status reports. Not shown: the result of the last `--prune`, and anything about the host. That is why section 11 is needed.
 
+## 13. Pilot activation
+
+Real sending and the activation instant need the owner's explicit authorization ([06 Acceptance](06_TEST_AND_ACCEPTANCE.md)). Do nothing in this section before it. Software readiness, owner permission, provider acceptance and recipient receipt are four separate facts; record each on its own. The choices below are recommended; owner decision pending (D-1 to D-15 in [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) section D). The configuration keys are named here and their values live only in `<env-file>`.
+
+1. Preconditions. If any is false, stop. **[owner NAS step, unverified]**
+   - The authorization is in the owner's own record.
+   - The section 2 checklist is ticked and dated (recommended; owner decision pending (D-13)); until then the NAS is NOT VERIFIED and the result is "software ready, pilot pending".
+   - A backup, an isolated restore and the reconciliation (sections 4, 6, 7) worked on the NAS with synthetic data.
+   - `<release-commit>`, `<source-digest>` and `<image-id>` are recorded (section 1 step 8).
+   - The real values (`MAIL_FROM`, the `SMTP_*` keys, `PUBLIC_BASE_URL`, `APP_ORIGINS`, `TRUSTED_PROXY_ADDRESSES`) are in the owner's private copy, outside git, chat and screenshots.
+2. Self-test in capture mode. Leave `OUTBOUND_MODE=capture` and `PRODUCTION_SENDING_ENABLED` unset. **[owner NAS step, unverified]**
+   - The administrator status shows the sender mode `capture`, the flag off and the activation as "Not activated".
+   - With the two synthetic accounts of [07 Operations](07_DEPLOYMENT_AND_OPERATIONS.md) "Setup sequence" (addresses on `example.invalid`), sign off and submit one synthetic period. The capture folder under `/data/private-data` must hold exactly the configured recipients and the frozen body, and a PDF whose SHA-256 equals the PDF download. Nothing leaves the NAS.
+   - Check `PUBLIC_BASE_URL` and `APP_ORIGINS`: the deep link in the captured message opens `https://<nas-host>/` and signs in, and a state-changing request from that origin is accepted.
+   - Save the submission settings of the owner's account and of every other account that will exist, then deactivate the synthetic accounts in the administrator screen and make sure none has auto-submit on (section 16).
+   - The administrator status must show no queued or leased send job. A job still queued when sending is switched on would be sent for real.
+3. Pre-activation backup, with its name and hash. **[owner NAS step, unverified]**
+
+   ~~~bash
+   <compose> exec -T timesheet <cli> backup --to /data/backups
+   ls -1 <backup-dir>
+   sha256sum <backup-dir>/<backup-name>/manifest.json
+   ~~~
+
+   The backup prints `"outcome":"succeeded"`. `<backup-name>` is the newest folder (names sort by UTC time). Record `<backup-name>` and `<manifest-sha256>`: the manifest lists the hash of every file, so its own hash identifies the backup. Copy `<backup-dir>` to the separate device (section 4 step 3), and keep with it a protected copy of the capture-mode `<env-file>`: the rollback card (section 15) needs it.
+4. Switch real sending on. **[owner NAS step, unverified]**
+   - Edit `<env-file>` (mode 600): `OUTBOUND_MODE=smtp`; `PRODUCTION_SENDING_ENABLED=true`, exactly that value; `SMTP_HOST`; `SMTP_PORT`; `SMTP_SECURITY` as `starttls` or `tls`; `SMTP_USER` and `SMTP_PASSWORD` together, or neither; `MAIL_FROM` as one sender address that the provider accepts. Leave `PUBLIC_BASE_URL`, `APP_ORIGINS` and `TRUSTED_PROXY_ADDRESSES` as tested in step 2.
+   - Without the flag the server and the CLI refuse to start and name the flag, never a value. A restart alone does not reread `<env-file>`, so recreate the container:
+
+     ~~~bash
+     <compose> up --detach --force-recreate --no-build
+     <compose> ps
+     <compose> logs --no-color timesheet
+     ~~~
+
+   - The administrator status now shows the sender mode `smtp` and the flag on. The activation instant is still empty.
+5. Set the activation instant. In the staged first period (step 6) leave it empty. When the owner decides to enable automation, sign in as the administrator, open the browser's developer console on `https://<nas-host>/` and run **[owner NAS step, unverified]** (there is no screen for it; the call is covered by the integration tests, not by the drill):
+
+   ~~~js
+   await (await fetch('/api/admin/automation/activation', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active_from: '<activation-instant-utc>', reason: '<reason>' }) })).json()
+   ~~~
+
+   - The instant must not be in the past (422 `activation_in_past`) and a reason is required (422 `reason_required`). The origin must be listed in `APP_ORIGINS` (403 `origin_rejected`).
+   - Only a period whose due instant is on or after both this instant and the account's own auto-submit instant is finalized automatically; an account that never saved its settings never is ([05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Deadline and recovery"). Choose an instant after the first period has been signed off by hand.
+   - The call is audited. Check that the administrator status shows the instant.
+6. The staged first period (recommended; owner decision pending (D-12)).
+   - Manual sign-off with real sending; auto-submit off; no activation instant.
+   - The first real send goes to the owner's own address. A change of recipients does not reach an existing revision (a changed envelope needs a new reviewed revision, [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Corrections and resends"), so set the recipients of the first period in the owner's settings before the sign-off, and decide with the owner whether payroll receives the first period's mail or a later revision.
+   - Keep the Excel workbook as the comparison for that period.
+   - Enable automation from the next period (step 5), and only after step 7 passes.
+7. After the first real send. Provider acceptance and recipient receipt are separate facts; record each with its instant. **[owner NAS step, unverified]**
+   - Provider acceptance: the delivery history of the revision shows the attempt as accepted with the provider's acknowledgement. A failure shows a redacted fault code: `smtp_auth_failed`, `smtp_tls_failed` and `smtp_config_invalid` are configuration faults to fix in `<env-file>` and recreate (step 4). A certificate verification failure is currently classified temporary: it retries and then needs intervention (recommended: classify it as permanent; owner decision pending (D-8)).
+   - Recipient receipt: the owner confirms in the mailbox that exactly one message arrived from the `MAIL_FROM` sender, with the PDF, and that the PDF equals the one in the application (the spam folder included). An accepted message that never arrives is a provider or mailbox matter, not an application result.
+   - An `uncertain` attempt is not sent again blindly: check the mailbox and the provider, then record the decision in the delivery history first (section 7 step 2, [05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Durable delivery").
+   - After a crash on real SMTP a reminder may arrive twice (recommended: accept; owner decision pending (D-7)).
+   - The logs and the status hold no password or token. Take a backup after the first real period (section 4).
+   - Anything unexpected: deactivate (section 14).
+
+## 14. Deactivation
+
+Deactivate when a send is wrong or unexpected, the provider fails, or the owner decides to stop. The data stay. **[owner NAS step, unverified]**
+
+1. If the activation instant was set, clear it first, while the application runs (the call is audited and nothing is finalized automatically afterwards). Use the console call of section 13 step 5 with `active_from: null` and a reason. Check that the administrator status shows "Not activated".
+2. Look at the administrator status for queued or leased sends. A send job that runs after step 4 writes to the capture folder and is recorded with the capture sender: it is not mail. Wait until none is queued or leased (a healthy runner finds work within about a minute), or accept that those sends are captured and tell the recipient by hand.
+3. Edit `<env-file>`: unset or delete `PRODUCTION_SENDING_ENABLED` and set `OUTBOUND_MODE=capture`. Remove the `SMTP_*` values from the file and keep them only in the owner's private copy.
+4. Recreate the container so that the file is read, then check the status:
+
+   ~~~bash
+   <compose> up --detach --force-recreate --no-build
+   <compose> ps
+   ~~~
+
+   The administrator status shows the sender mode `capture`, the flag off and the activation "Not activated".
+5. Keep the data: never delete `<data-dir>`. Never run two queues: do not start another instance on the same data, and never start a restored instance (section 6) while the live one runs.
+6. A period submitted in error stays on record (finalized, ledger posted, audited). It is corrected by a reasoned correction, never deleted ([05 Submission](05_SUBMISSION_AND_NOTIFICATIONS.md) "Corrections and resends").
+7. Record the date and the reason in the owner's private log.
+
+## 15. Rollback card for the first installation
+
+The pilot is the first installation, so there is no older production schema or image to roll back to. Rolling back means stopping real sending and returning to Excel. Fill this card before activation. The owner's private copy holds the real values; the tracked copy holds only placeholders (recommended; owner decision pending (D-11)).
+
+| Field | Value |
+|---|---|
+| Release commit | `<release-commit>` |
+| Source digest | `<source-digest>` |
+| Image ID built on the NAS | `<image-id>` |
+| Pre-activation backup | `<backup-name>` |
+| Manifest hash of that backup | `<manifest-sha256>` |
+| Separate-device copy of the backup and the capture-mode `<env-file>` | where it is kept |
+| Date of activation | the UTC instant |
+
+1. Deactivate (section 14).
+2. Keep the data. Do not delete `<data-dir>` or `<backup-dir>`.
+3. Fall back to the Excel workbook for the period (the owner's own copy; the tracked template is only a sample). The application data remain the record of what was submitted.
+4. Mail that was sent cannot be recalled. Read from the delivery history what went out, so that nothing is sent or entered twice by hand.
+5. Restore only if the data are damaged or wrong, never over the live data. Check `sha256sum <backup-dir>/<backup-name>/manifest.json` against `<manifest-sha256>`, then restore `<backup-name>` in isolation (section 6) into a new real folder, and reconcile (section 7). The restored instance is paused and in capture mode, and changes made after that backup are not in it. Never run two queues.
+6. The R-A3 rule (recommended; owner decision pending (D-1)): when a rollback restores a backup of an older schema, the older build runs with `JOB_RUNNER=off` until reconciliation is done (section 8, Rollback). On the first installation there is no older production schema, so this matters only after a later upgrade that adds a migration; revisit it before that upgrade.
+7. To try again, repeat section 13 from the self-test with a new pre-activation backup.
+
+## 16. Pilot operator notes
+
+1. Migrate once before the first start (R-A2). Concurrent openers of a brand-new database file can fail with `SQLITE_BUSY`. Start one instance, wait until `<compose> ps` reports it healthy, and only then run any CLI command or start anything else on that data. To migrate explicitly first: `<compose> run --rm --no-deps timesheet <cli> migrate`. **[owner NAS step, unverified]**
+2. Keep explicit paths for host CLI use (R-A8). Production refuses a missing `DATABASE_PATH`, but a CLI maintenance command run outside the container without it falls back to a development database. Inside the container the env file sets both; on the host set `DATA_DIR` and `DATABASE_PATH` explicitly, as absolute paths on `<data-dir>`, for every command.
+3. Protect the pre-upgrade backup (R-RA2). A later `--prune` on the same UTC day removes the paired pre-upgrade backup: copy it aside (section 4 step 3) before the upgrade, or run the first prune on another day.
+4. Restore into a new real folder (R-RA9). Create `<restore-dir>` with `mkdir`; never point it at a junction or symbolic link (the restore then fails with `write_failed` instead of being refused as inside the live data).
+5. Save the submission settings before activation (WP3 R8, R-WA3). Once automation is active, an account that never saved them gets before-due reminders, including the bootstrap administrator account. Use the administrator account as the owner's timesheet account, or save its settings; check that the "Not set up" flag in the administrator account list is clear for every active account.
+6. After a restore and its reconciliation, take a backup: the restored instance reports the backup as `never` until then (section 7).
+
 ## Command map
 
 | Command or step | Where it was verified |
@@ -298,3 +409,8 @@ An administrator sees operations and delivery, never timesheet details (docs/03)
 | `<compose> build --no-cache` | Drill stage 1 (the drill builds the image) |
 | Import and opening balance through `/api/imports` and `/api/ot/opening-balance` | Drill stage 6 |
 | NAS setup: folder owner, env file, reverse proxy, NTP, Task Scheduler, separate-device copy, host alert | Owner NAS step, unverified |
+| Pilot activation: capture self-test, pre-activation backup and `sha256sum` of its manifest, `OUTBOUND_MODE=smtp` with `PRODUCTION_SENDING_ENABLED=true`, `<compose> up --detach --force-recreate --no-build` | Owner NAS step, unverified (the drill never sends real mail) |
+| `PUT /api/admin/automation/activation` from the signed-in administrator's browser console (set and clear) | Owner NAS step, unverified (integration tests only) |
+| Deactivation: clear the instant, `OUTBOUND_MODE=capture`, flag unset, recreate | Owner NAS step, unverified |
+| Rollback card for the first installation | Owner NAS step, unverified |
+| `<compose> run --rm --no-deps timesheet <cli> migrate` | Owner NAS step, unverified |

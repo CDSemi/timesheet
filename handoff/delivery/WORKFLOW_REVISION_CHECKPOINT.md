@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 85838b515a86b3cca40cfbba189ba290ec06de58 (WP5-FIXB-FREEZE, the WP5 runbook fix; digest ed604d0c).
+  - HEAD = origin/main = 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741 (WP5-AC13-FREEZE, the integrated AC-13 test; digest 1e59ad31).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -945,7 +945,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - It passes under 3 time zones, and the 3 solo runs pass. 2 mutations are
            caught. No product defect was found.
          - lint 0; verify 77 files / 1,759 tests. Digest 1e59ad31 (777 files).
-       - Running: WP5-AC13-FREEZE (committer).
+       - WP5-AC13-FREEZE committed and pushed 8e99d2c (23 paths; all checks 0).
+       - WP5-REL is done (worker, sonnet; author-reported).
+         - New: docs/12 release notes and the WP5_HANDOFF pre-gate snapshot (EN and
+           VI).
+         - docs/11 sections 13–16: pilot activation, deactivation, rollback card and
+           operator notes.
+         - A README link to docs/12.
+         - D-1..D-15 are marked as recommended and pending. The activation instant is
+           set through an admin API call, because no screen exists for it.
+         - All 14 env keys found; verify 1,759. Digest 0a64a75f (779 files).
+       - Running: WP5-REL-FREEZE (committer), the package-final freeze.
        - Then:
          - WP5-AC13, a committed integrated test (worker-high, sonnet), and its
            freeze;

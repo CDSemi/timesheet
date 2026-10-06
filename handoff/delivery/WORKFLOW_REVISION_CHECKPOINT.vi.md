@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 85838b515a86b3cca40cfbba189ba290ec06de58 (WP5-FIXB-FREEZE, bản sửa runbook của WP5; digest ed604d0c).
+  - HEAD = origin/main = 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741 (WP5-AC13-FREEZE, test tích hợp AC-13; digest 1e59ad31).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1001,7 +1001,17 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Đạt dưới 3 múi giờ, và 3 lần chạy riêng đều đạt. 2 lỗi cố ý cài vào đều bị
            bắt. Không thấy lỗi sản phẩm.
          - lint 0; verify 77 tệp / 1.759 test. Digest 1e59ad31 (777 tệp).
-       - Đang chạy: WP5-AC13-FREEZE (committer).
+       - WP5-AC13-FREEZE đã commit và push 8e99d2c (23 đường dẫn; mọi kiểm tra trả 0).
+       - WP5-REL đã xong (worker, sonnet; tác giả tự báo).
+         - Mới: ghi chú phát hành docs/12 và bản chụp hiện trạng trước gate WP5_HANDOFF
+           (EN và VI).
+         - docs/11 mục 13–16: bật pilot, tắt pilot, thẻ rollback và ghi chú cho người
+           vận hành.
+         - Một link tới docs/12 trong README.
+         - D-1..D-15 được ghi theo khuyến nghị và đánh dấu chờ quyết. Mốc kích hoạt
+           được đặt qua một lệnh gọi API admin, vì chưa có màn hình cho việc này.
+         - Tìm thấy đủ 14 biến env; verify 1.759. Digest 0a64a75f (779 tệp).
+       - Đang chạy: WP5-REL-FREEZE (committer), commit đóng băng cuối của package.
        - Sau đó:
          - WP5-AC13, một test tích hợp được commit (worker-high, sonnet), và commit
            đóng băng của nó;

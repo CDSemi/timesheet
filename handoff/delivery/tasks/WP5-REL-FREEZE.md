@@ -1,15 +1,19 @@
-# WP5-AC13-FREEZE dispatch brief
+# WP5-REL-FREEZE dispatch brief
 
-- Mission/task: timesheet-software-readiness / WP5-AC13-FREEZE; package WP5; kind
-  commit; attempt 1; depends on WP5-AC13.
-- This commit freezes the integrated AC-13 test. It also carries the WP5-FIXB-FREEZE
-  results and the draft WP5-REL brief.
+- Mission/task: timesheet-software-readiness / WP5-REL-FREEZE; package WP5; kind
+  commit; attempt 1; depends on WP5-REL.
+- This commit is the WP5 package-final freeze. WP5-GATE gates it, and WP5-FINAL-AUDIT
+  and WP5-ASSESS-A attempt 2 review it. It holds:
+  - the release notes;
+  - the runbook pilot sections;
+  - the WP5 pre-gate handoff;
+  - the closing briefs.
 - Profile/routing: timesheet-committer, requested sonnet/medium, no override. Routing:
   size S, risk M, novelty no. Records in English.
 - Authority: AGENTS.md rule 12, the docs/08 section "Commits and pushes", and the board
   `owner_decisions`.
 - Branch: main (`git.release_declared` is false). Expected HEAD = origin/main =
-  85838b515a86b3cca40cfbba189ba290ec06de58. If either differs, stop and report.
+  8e99d2c6375f71ac94faff9eb859b9b7bcf3e741. If either differs, stop and report.
 - Push after the commit.
 - Runtime:
   - Use Git Bash only. Never use `cmd.exe` in any form, and never open an interactive
@@ -18,7 +22,7 @@
     tail.
   - Call Node 24 by its full portable path; make the first shell call a trivial
     `node --version`, and stop on ENOSPC.
-  - Use `D:\.claude-tmp\timesheet\WP5-AC13-FREEZE` for TEMP/TMP and raw output.
+  - Use `D:\.claude-tmp\timesheet\WP5-REL-FREEZE` for TEMP/TMP and raw output.
   - Never kill processes by PID. Never redirect to /dev/null or nul. Never remove
     folders recursively.
   - Write your results into this brief with the Edit tool.
@@ -26,34 +30,37 @@
 
 ## Expected working-tree set
 
-Outside handoff/, the only changed paths may be these two new files from WP5-AC13:
-- `tests/integration/ac13-two-week.test.ts`;
-- `tests/integration/ac13-support.ts`.
+Outside handoff/, the only changed paths may be these, all from WP5-REL:
+- `docs/12_RELEASE_NOTES.md` and `.vi.md` (new);
+- `docs/11_OPERATIONS_RUNBOOK.md` and `.vi.md`;
+- `README.md` and `README.vi.md`.
 
 Any other changed or untracked path outside handoff/ stops the commit. In particular,
-nothing under `src/`, `scripts/`, migrations, `docs/`, `.claude/`, `reference/`,
-`package.json`, `package-lock.json`, AGENTS.md or CLAUDE.md may change. If anything is
-already staged from an earlier tool run, report it before you continue.
+nothing under `src/`, `tests/`, `scripts/`, migrations, `.claude/`, `reference/`,
+`package.json`, `package-lock.json`, `.env.example`, `compose.example.yaml`, AGENTS.md
+or CLAUDE.md may change. If anything is already staged before you start, report it
+first.
 
 Recompute the digest with Node 24 (`node scripts/source-digest.mjs`) immediately before
 `git add`. It must equal
-1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c (777 files).
+0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba (779 files).
 
 ## Handoff files to stage
 
 New files:
-- `handoff/delivery/tasks/WP5-AC13.md` and `WP5-REL.md`;
+- `handoff/delivery/WP5_HANDOFF.md` and `.vi.md`;
+- `handoff/delivery/tasks/WP5-GATE.md`, `WP5-PILOT.md` and `WP5-FINAL-AUDIT.md`;
 - this brief, as it stands before you append results;
-- every file in `handoff/delivery/evidence/WP5-FIXB-FREEZE/` and
-  `handoff/delivery/evidence/WP5-AC13/`.
+- every file in `handoff/delivery/evidence/WP5-AC13-FREEZE/` and
+  `handoff/delivery/evidence/WP5-REL/`.
 
 Modified files:
-- `handoff/delivery/tasks/WP5-FIXB-FREEZE.md`;
+- `handoff/delivery/tasks/WP5-AC13-FREEZE.md`, `WP5-REL.md` and `WP5-ASSESS-A.md`;
 - `handoff/delivery/ORCHESTRATION.json` and `handoff/delivery/STATE.json`;
 - the checkpoint pair `handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md` and `.vi.md`.
 
 Your appended results and your evidence in
-`handoff/delivery/evidence/WP5-AC13-FREEZE/` stay unstaged.
+`handoff/delivery/evidence/WP5-REL-FREEZE/` stay unstaged.
 
 Any other changed or untracked path stops the commit; report it. That includes:
 - a file named `nul`;
@@ -63,11 +70,11 @@ Any other changed or untracked path stops the commit; report it. That includes:
 ## Checks before committing
 
 Run one command per step, and record each exit code. Save the masked output of every
-step in `handoff/delivery/evidence/WP5-AC13-FREEZE/checks.txt`.
+step in `handoff/delivery/evidence/WP5-REL-FREEZE/checks.txt`.
 1. `node --version`.
 2. The digest.
 3. `git add` with the explicit paths, as its own command and with no redirect.
-4. The precommit check.
+4. The precommit check. It must inspect the staged docs, so record its file count.
 5. `git diff --cached --check`.
 6. JSON parse of STATE.json and ORCHESTRATION.json.
 7. The orchestration validator.
@@ -76,15 +83,19 @@ step in `handoff/delivery/evidence/WP5-AC13-FREEZE/checks.txt`.
    `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
    Write `<user>` in the evidence.
 
+Also use the Grep tool on the staged docs for an `@` outside `example.invalid`,
+`<email>` or placeholder syntax, and for any host name that is not a placeholder.
+Record the count, and never print a match.
+
 Allowed fixes:
 - If `git diff --cached --check` flags only a blank line at EOF in a task record outside
   `evidence/`, remove exactly that line and re-stage it.
 - If the precommit check blocks an email address or the Windows user name in an evidence
   log, replace each such token with `<email>` or `<user>` in that file only, then
-  re-stage and rerun. Count the tokens with the Grep tool and never print them.
+  re-stage and rerun.
 
 When to stop:
-- A block in a test file stops the commit.
+- A block in a docs file stops the commit.
 - If any call is denied by a permission check, stop at once. Do not retry, split or
   rephrase it.
 
@@ -92,18 +103,23 @@ Do not print diffs or file bodies. Keep evidence LF and `.txt` only.
 
 ## Commit message (refine with the commit-message skill; keep the facts)
 
-Subject: Add the integrated AC-13 two-week scenario test
+Subject: Add release notes and the pilot activation, deactivation and rollback runbook
 
-- test(ac13):
-  - one deterministic in-process scenario over 14 fixed dates, with review, sign-off,
-    a crash and restart around the send, a correction, partial OT use with a
-    double-spend race, second-user isolation and an overdue run;
-  - it passes under three time zones;
-  - two mutations are caught.
-- docs(handoff): WP5-FIXB-FREEZE results, the WP5-AC13 record and evidence, the draft
-  WP5-REL brief, and the board, STATE and checkpoint (+ vi).
+- docs(release): new docs/12 release notes (+ vi). They give the release identity,
+  the scope by package, known limits and carried risks, and the readiness, permission
+  and outcome separation.
+- docs(ops): docs/11 (+ vi) gains new sections for pilot activation, deactivation, a
+  rollback card for the first installation, and pilot operator notes. Owner decisions
+  D-1..D-15 are marked as recommended and pending.
+- docs: a README link to docs/12 (+ vi).
+- docs(handoff):
+  - the WP5 pre-gate handoff (+ vi);
+  - the WP5-GATE, WP5-PILOT and WP5-FINAL-AUDIT briefs, and the WP5-ASSESS-A
+    attempt-2 note;
+  - the WP5-AC13-FREEZE results;
+  - board, STATE and checkpoint (+ vi).
 
-Task: WP5-AC13-FREEZE
+Task: WP5-REL-FREEZE
 
 ## Push and report
 
@@ -111,7 +127,7 @@ Push per the profile. Append to this brief:
 - pre- and post-HEAD;
 - commit SHA, whether it was pushed, and the remote SHA;
 - digest and staged count;
-- the scope checks;
+- the scope and privacy Grep checks;
 - check exit codes;
 - any blockers.
 
@@ -119,8 +135,4 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-- Pre-HEAD 85838b5; commit 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741; pushed yes;
-  remote SHA equals it. Branch main. Node v24.21.0.
-- Digest matched (777 files); staged 23 files; scope clean, nothing pre-staged.
-- Exit codes: precommit 0, diff --check 0, JSON 0, validate_orchestration 0,
-  check_recovery 0, validate_package --preflight 0. No blockers.
+(Committer appends here.)

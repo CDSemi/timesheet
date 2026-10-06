@@ -72,7 +72,29 @@ The coordinator fills this section before dispatch. Each line records the owner'
 answer, or "pending, documented with the recommended option and marked as an owner
 decision".
 
-(Coordinator fills in at dispatch.)
+Filled 2026-10-06. The owner has not yet answered D-1..D-15 (board
+`pending_owner_question`). Document each item with the recommended option, and label it
+"recommended; owner decision pending (D-n)" wherever it shapes an instruction. Never
+present it as decided.
+- D-1 (R-A3): the older build runs with `JOB_RUNNER=off` until reconciliation.
+- D-7: reminders are at-least-once after a crash on real SMTP. Say so in the known
+  limits.
+- D-8: a TLS certificate failure is currently classified temporary. Say so in the
+  known limits, with the recommended change as pending.
+- D-9: an owner-only pilot; a temporary password is set out of band; there is no
+  self-service password change yet.
+- D-10: one evidence-backed opening balance, or zero; no historical import for the
+  pilot.
+- D-11: the tracked docs hold placeholders only; real values live in the owner's
+  private copy outside git.
+- D-12: staged activation. In the first period: manual sign-off, the first real send
+  to the owner's own address, auto-submit off and no activation instant. Enable
+  automation from the next period.
+- D-13: the NAS host stays NOT VERIFIED until the owner ticks the docs/11 checklist.
+- D-14: the first release is declared at the owner's pilot authorization. From then
+  on, fixes go through branches and pull requests (docs/08). Agents create no tag.
+- D-2..D-6 and D-15: no instruction in this task depends on them. List them once under
+  known limits as open owner choices with their current safe defaults.
 
 ## Checks
 
@@ -117,4 +139,46 @@ final digest.
 
 ## Results
 
-(Worker appends here.)
+Self-reported model: claude-sonnet-5-5 (timesheet-worker). Attempt 1. Documentation only; nothing
+committed; no application source, test, Compose behaviour or migration changed.
+
+Base recorded before work: HEAD = origin/main = 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741; digest
+1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c (777 files). Node v24.21.0 by full path.
+
+### Changed files
+
+- New: `docs/12_RELEASE_NOTES.md` and `.vi.md`; `handoff/delivery/WP5_HANDOFF.md` and `.vi.md`.
+- Edited: `docs/11_OPERATIONS_RUNBOOK.md` and `.vi.md` (new placeholders bullet; sections 13 pilot
+  activation, 14 deactivation, 15 rollback card, 16 pilot operator notes; five command-map rows; section 1
+  step 5 pointer; a status note); `README.md` and `README.vi.md` (one table row linking docs/12).
+- Evidence: `handoff/delivery/evidence/WP5-REL/` (00 to 06, masked LF `.txt`).
+
+### Facts established from the code (and documented as such)
+
+- The activation instant has no screen: `PUT /api/admin/automation/activation` (administrator, reason
+  required, not in the past, null clears). The runbook gives a same-origin browser-console call; it is marked
+  owner NAS step, unverified. Not a code gap, so no stop.
+- Real SMTP needs `OUTBOUND_MODE=smtp` and `PRODUCTION_SENDING_ENABLED=true`; there is no manual outbound pause
+  command, so deactivation warns that a send job that runs after the switch to capture is only captured.
+- The container must be recreated (`up --detach --force-recreate --no-build`) to reread the env file.
+- TLS certificate failure reaches the adapter as `ESOCKET`, so it is temporary (D-8); `ETLS` is permanent.
+- All D-1..D-15 are written as "recommended; owner decision pending"; none as decided. The release commit and
+  digest are not written into docs/12 (a document cannot hold the digest of its own tree); they are recorded by
+  the gate. docs/12 states the pre-notes base values.
+
+### Checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| EN/VI parity (headings, numbered steps, list items, table rows, fences, checkboxes) for docs/11, docs/12, README, WP5_HANDOFF | all equal | `05-parity.txt` |
+| Env keys named exist in `.env.example` or `src/server/config.ts` (Grep counts per key) | all 14 found (`JOB_RUNNER` in `.env.example` and `src`) | `01-env-keys.txt` |
+| Placeholders | new ones defined in docs/11 "Placeholders and conventions" | docs/11 |
+| `npm run verify` (SMOKE_PORT 47791; DATA_DIR and DATABASE_PATH in the task folder) | exit 0; 77 files, 1759 tests; smoke passed | `02-verify.txt` |
+| `node scripts/precommit-check.mjs` and `--self-test` | exit 0 and 0 (0 staged files; nothing staged by design) | `03-precommit.txt` |
+| `validate_package.py --preflight` (workflow Python) | exit 0, PASS, 87 translation pairs, 2018 local links | `04-preflight.txt` |
+| `node scripts/source-digest.mjs` (last) | `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba`, 779 files | `06-digest.txt` |
+
+### Blockers and notes
+
+None. The precommit check inspects staged files only; the coordinator or committer reruns it on the staged set.
+Section 13 to 16 steps are unverified on the NAS and no real mail was sent.

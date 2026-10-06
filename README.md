@@ -28,7 +28,7 @@ Each prompt names its reading scope. Do not paste every document into every sess
 
 | Folder | Responsibility |
 |---|---|
-| `docs/` | Specification documents 01–10 and the operations runbook 11 (table below); `docs/agents/` configures the agent skills |
+| `docs/` | Specification documents 01–10, the operations runbook 11 and the release notes 12 (table below); `docs/agents/` configures the agent skills |
 | `src/`, `tests/`, `scripts/` | Application source, automated tests and development scripts; see [DEVELOPMENT](DEVELOPMENT.md) |
 | `handoff/` | Agent workflow: [NEXT_ACTION](handoff/NEXT_ACTION.md) (status and next step), `prompts/` (implementation/review/fix/resume instructions), `templates/` (handoff/review/checkpoint forms) and `delivery/` (state, handoffs, reviews, evidence and package validation) |
 | `reference/` | Reference data: [fixtures](reference/fixtures/README.md) (91 reference scenarios that the tests read), [examples](reference/examples/README.md) (safe configuration samples that the synthetic seed reads) and [inputs](reference/inputs/README.md) (the sanitized workbook template) |
@@ -46,7 +46,8 @@ Each prompt names its reading scope. Do not paste every document into every sess
 | [08 AI workflow](docs/08_AI_WORKFLOW_AND_BUDGET.md) | Model/effort allocation and usage estimate |
 | [09 Roadmap](docs/09_IMPLEMENTATION_ROADMAP.md) | Five packages and gates |
 | [10 Decisions](docs/10_DECISIONS_AND_SOURCES.md) | Defaults, provenance, official sources |
-| [11 Runbook](docs/11_OPERATIONS_RUNBOOK.md) | Install on the NAS, bootstrap, backup, restore, reconciliation, upgrade, rollback |
+| [11 Runbook](docs/11_OPERATIONS_RUNBOOK.md) | Install on the NAS, bootstrap, backup, restore, reconciliation, upgrade, rollback, pilot activation |
+| [12 Release notes](docs/12_RELEASE_NOTES.md) | Release identity, scope by package, known limits, setup summary |
 
 The [Excel template](reference/inputs/Timesheet_Rev8_2026.xlsx) is a public sample: the form, working-info and holiday sheets of the original workbook with all personal data removed (dated attendance sheets, employee name, signature images, author metadata and local path). The personal original is not retained. Keep the workbook out of production images; use synthetic demo data.
 
