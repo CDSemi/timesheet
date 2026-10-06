@@ -2,7 +2,10 @@
 // Container drill, stage 1 (WP4-T04): builds the image for linux/amd64, starts it through compose.example.yaml on a fresh
 // host data directory, waits until healthy, records the schema version, creates synthetic data through the API,
 // restarts the container, checks the data persisted, then inspects the image (runtime user, forbidden files).
-// Later stages (backup, restore, outbound pause) extend this file.
+// Stage 2 (WP4-T05): finalizes a synthetic period (signature, PDF), then runs `cli.js backup --to /data/backups` inside
+// the running container while a synthetic writer keeps writing through the API, and verifies the backup outside the
+// container: manifest keys, every file and the database copy against their SHA-256 and size, integrity and foreign
+// keys of the copy, and that the copy is a point-in-time image. Later stages (restore, outbound pause) extend this file.
 //
 // Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--keep]
 //   --work     host directory for the drill data, the env file and the raw logs (created if missing; nothing in it is deleted)
@@ -10,12 +13,14 @@
 //   --keep     leave the container running (default: `docker compose down -v` by project name at the end)
 // Needs Docker and a free loopback port. Everything is synthetic (example.invalid, random per-run passwords); the
 // published port is loopback only; nothing is pushed to or pulled from any registry except the pinned base image.
-import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
+import Database from 'better-sqlite3';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -155,6 +160,212 @@ function forbiddenPaths(paths) {
     else if (/\.(?:db|sqlite)(?:-wal|-shm)?$/i.test(name) && parts[0] !== 'data') offenders.push(path);
   }
   return offenders;
+}
+
+/* ---------------------------------------------------------------------------------------------- stage 2 ---- */
+
+/** The exact key paths a backup manifest may contain (the list of src/server/ops/manifest.ts). */
+const MANIFEST_KEY_PATHS = [
+  'app_version', 'created_at', 'database', 'database.name', 'database.sha256', 'database.size_bytes', 'files', 'files[].kind',
+  'files[].sha256', 'files[].size_bytes', 'files[].storage_key', 'format', 'format_version', 'integrity', 'integrity.files_verified',
+  'integrity.foreign_key_violations', 'integrity.integrity_check', 'schema_version',
+];
+
+function keyPaths(value, prefix = '') {
+  if (Array.isArray(value)) return value.flatMap((item) => keyPaths(item, `${prefix}[]`));
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, child]) => {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
+    return [path, ...keyPaths(child, path)];
+  });
+}
+
+const sha256Of = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+function pngChunk(type, data) {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+
+/** A synthetic 8x8 PNG generated at run time (no image file is committed). */
+function syntheticPng(fill) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(8, 0);
+  header.writeUInt32BE(8, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows = Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(24, fill)]));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(Buffer.concat(rows))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+async function uploadSignature(cookie, fill) {
+  const response = await fetch(`${base}/api/signatures`, {
+    method: 'POST',
+    headers: { origin: publicOrigin, cookie, 'content-type': 'image/png' },
+    body: syntheticPng(fill),
+    signal: AbortSignal.timeout(15_000),
+  });
+  await response.text();
+  return response.status;
+}
+
+/** `docker` without blocking the event loop, so the synthetic writer keeps writing while it runs. */
+function dockerAsync(dockerArgs, env) {
+  return new Promise((done, fail) => {
+    const child = spawn('docker', dockerArgs, { cwd: repo, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.once('error', fail);
+    child.once('close', (status) => done({ status, stdout, stderr }));
+  });
+}
+
+/** Weekdays from 2026-04-06 (past periods; each write is a new session on its own day). */
+function* writerDates() {
+  const day = new Date('2026-04-06T00:00:00Z');
+  for (;;) {
+    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) yield day.toISOString().slice(0, 10);
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+}
+
+async function stageTwo(cookie) {
+  // A finalized period with its signature and rendered PDF, so the backup has both kinds of private file.
+  check('employee uploads a synthetic signature image', (await uploadSignature(cookie, 40)) === 201);
+  const payrollDate = '2026-03-20';
+  const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
+  const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
+    cookie,
+    body: {
+      expected_version: review.json?.expected_version,
+      reviewed_hash: review.json?.payload_hash,
+      signer_name: 'Synthetic Employee',
+      incomplete_evidence_acknowledged: true,
+    },
+  });
+  check('employee signs off a past synthetic period (finalization)', signoff.status === 201, `status ${signoff.status}${signoff.status === 201 ? '' : ` ${signoff.text.slice(0, 200)}`}`);
+  let pdfReady = false;
+  const pdfWaitStart = Date.now();
+  while (!pdfReady && Date.now() - pdfWaitStart < 120_000) {
+    const revisions = await call('GET', '/api/revisions', { cookie });
+    pdfReady = (revisions.json?.revisions ?? []).some((revision) => revision.pdf_state === 'ready');
+    if (!pdfReady) await sleep(1000);
+  }
+  check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
+
+  // The synthetic writer: a new work session on its own day every request, and a signature image every fourth one.
+  const writes = [];
+  let stopWriting = false;
+  const dates = writerDates();
+  const writer = (async () => {
+    for (let index = 0; !stopWriting && index < 400; index += 1) {
+      const workDate = dates.next().value;
+      const created = await call('POST', `/api/days/${workDate}/sessions`, {
+        cookie,
+        body: {
+          start: local(workDate, '09:00'),
+          end: local(workDate, '17:30'),
+          input_zone: 'America/Los_Angeles',
+          breaks_confirmed: true,
+          reason: 'Synthetic drill write during the backup',
+          breaks: [],
+        },
+      });
+      writes.push({ kind: 'session', status: created.status, endedAt: Date.now() });
+      if (index % 4 === 3) writes.push({ kind: 'signature', status: await uploadSignature(cookie, 60 + (index % 100)), endedAt: Date.now() });
+    }
+  })();
+  while (writes.length < 5) await sleep(20);
+
+  const sessionsBefore = 1 + writes.filter((write) => write.kind === 'session' && write.status === 201).length;
+  const backupStart = Date.now();
+  const run = await dockerAsync(
+    ['compose', '--project-name', project, '--file', composeFile, 'exec', '-T', 'timesheet', 'node', 'dist/server/cli.js', 'backup', '--to', '/data/backups'],
+    composeEnv,
+  );
+  const backupEnd = Date.now();
+  await sleep(500);
+  stopWriting = true;
+  await writer;
+  const during = writes.filter((write) => write.endedAt >= backupStart && write.endedAt <= backupEnd);
+  const sessionsTotal = 1 + writes.filter((write) => write.kind === 'session' && write.status === 201).length;
+  let printed = null;
+  try {
+    printed = JSON.parse(run.stdout);
+  } catch {
+    // reported below
+  }
+  check('cli.js backup inside the running container exits 0', run.status === 0 && printed?.outcome === 'succeeded', run.status === 0 ? '' : `exit ${run.status}: ${String(run.stderr).trim().slice(0, 300)}`);
+  check('every synthetic write succeeded', writes.every((write) => write.status === 201), `${writes.length} writes, ${writes.filter((write) => write.status !== 201).length} not 201`);
+  check('writes continued while the backup ran', during.length > 0, `${during.length} writes completed inside the ${backupEnd - backupStart} ms backup window`);
+  check('the backup recorded its success in operations_state', printed?.status_recorded === true);
+  console.log(`INFO  backup duration ${printed?.duration_ms} ms inside the CLI, ${backupEnd - backupStart} ms for docker compose exec; writes before/during/after: ${writes.filter((write) => write.endedAt < backupStart).length}/${during.length}/${writes.filter((write) => write.endedAt > backupEnd).length}`);
+  if (printed === null) throw new Error('no backup summary');
+
+  // Verification outside the container: the host side of the bind mount.
+  const folder = join(dataDir, 'backups', String(printed.backup));
+  check('backup folder name is timesheet-backup-<UTC>-<random>', /^timesheet-backup-\d{8}T\d{6}Z-[0-9a-f]{8}$/.test(String(printed.backup)));
+  const entries = readdirSync(join(dataDir, 'backups')).sort();
+  check('only the finished backup folder exists (no partial folder)', entries.length === 1 && entries[0] === printed.backup, `${entries.length} entries`);
+  check('backup folder holds the database copy, files and manifest only', readdirSync(folder).sort().join(',') === 'files,manifest.json,timesheet.db');
+  const manifestText = readFileSync(join(folder, 'manifest.json'), 'utf8');
+  const manifest = JSON.parse(manifestText);
+  check('manifest has exactly the allowed keys', JSON.stringify([...new Set(keyPaths(manifest))].sort()) === JSON.stringify([...MANIFEST_KEY_PATHS].sort()));
+  check('manifest has no email address, name or host path', !/@|Synthetic|employee|admin|\/data|\\/i.test(manifestText.replace(/"(?:sha256|storage_key)": "[^"]*"/g, '')));
+  const dbBytes = readFileSync(join(folder, 'timesheet.db'));
+  check('database copy matches the manifest SHA-256 and size', sha256Of(dbBytes) === manifest.database.sha256 && dbBytes.length === manifest.database.size_bytes);
+  const copiedKeys = readdirSync(join(folder, 'files')).sort();
+  check('copied file set equals the manifest file list', JSON.stringify(copiedKeys) === JSON.stringify(manifest.files.map((file) => file.storage_key)));
+  const mismatched = manifest.files.filter((file) => {
+    const bytes = readFileSync(join(folder, 'files', file.storage_key));
+    return sha256Of(bytes) !== file.sha256 || bytes.length !== file.size_bytes;
+  });
+  check('every copied file matches its manifest SHA-256 and size', mismatched.length === 0 && manifest.files.length > 0, `${manifest.files.length} files, ${mismatched.length} mismatched`);
+  const kinds = { signature: 0, pdf: 0 };
+  for (const file of manifest.files) kinds[file.kind] = (kinds[file.kind] ?? 0) + 1;
+  check('the backup holds signature images and the PDF', kinds.signature >= 1 && kinds.pdf >= 1);
+
+  const copy = new Database(join(folder, 'timesheet.db'), { readonly: true, fileMustExist: true });
+  try {
+    check('database copy passes integrity_check outside the container', copy.pragma('integrity_check', { simple: true }) === 'ok');
+    check('database copy has no foreign key violation', copy.pragma('foreign_key_check').length === 0);
+    const schemaVersion = copy.prepare('SELECT max(version) FROM schema_migrations').pluck().get();
+    check('schema version of the copy equals the manifest and the running instance', schemaVersion === manifest.schema_version && schemaVersion === printed.schema_version, `schema ${schemaVersion}`);
+    const attachments = copy.prepare('SELECT storage_key, kind, sha256, size_bytes FROM attachments ORDER BY storage_key').all();
+    check('manifest files equal the attachment rows of the copy', JSON.stringify(attachments) === JSON.stringify(manifest.files));
+    const sessionsInCopy = copy.prepare('SELECT count(*) FROM work_sessions').pluck().get();
+    check(
+      'the copy is a point-in-time image: every session written before the backup, none beyond the end state',
+      sessionsInCopy >= sessionsBefore && sessionsInCopy <= sessionsTotal,
+      `sessions before ${sessionsBefore}, in the copy ${sessionsInCopy}, at the end ${sessionsTotal}`,
+    );
+  } finally {
+    copy.close();
+  }
+  console.log(
+    `INFO  manifest summary: schema ${manifest.schema_version}, app ${manifest.app_version}, ${manifest.files.length} files (${kinds.signature} signatures, ${kinds.pdf} PDFs), database ${manifest.database.size_bytes} bytes, integrity ${manifest.integrity.integrity_check}, foreign key violations ${manifest.integrity.foreign_key_violations}`,
+  );
+
+  const refused = await dockerAsync(
+    ['compose', '--project-name', project, '--file', composeFile, 'exec', '-T', 'timesheet', 'node', 'dist/server/cli.js', 'backup', '--to', '/data/private-data/backups'],
+    composeEnv,
+  );
+  check('a target inside DATA_DIR is refused (exit 2)', refused.status === 2);
 }
 
 mkdirSync(dataDir, { recursive: true });
@@ -301,6 +512,11 @@ try {
   const logs = compose(['logs', '--no-color', 'timesheet']).stdout;
   check('container log has no deprecation warning', !/deprecat/i.test(logs));
   check('container log never contains the setup token or a password', !(token && logs.includes(token)) && !logs.includes(adminPassword) && !logs.includes(employeePassword));
+
+  // 7. Stage 2 (WP4-T05): a backup inside the container while writes continue, verified outside it.
+  await stageTwo(relogin.cookie);
+  const logsAfterBackup = compose(['logs', '--no-color', 'timesheet']).stdout;
+  check('container log after the backup has no deprecation warning', !/deprecat/i.test(logsAfterBackup));
 } catch (error) {
   failures += 1;
   console.log(`FAIL  drill stopped: ${error instanceof Error ? error.message : String(error)}`);
@@ -313,5 +529,5 @@ try {
   if (!keep) check('no container of the project remains', left === '');
 }
 
-console.log(failures === 0 ? 'DRILL STAGE 1 PASSED' : `DRILL STAGE 1 FAILED (${failures})`);
+console.log(failures === 0 ? 'DRILL STAGES 1-2 PASSED' : `DRILL STAGES 1-2 FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

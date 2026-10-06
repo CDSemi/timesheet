@@ -524,7 +524,16 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - Digest: 6ec6549d….
        - Two local images (`:drill`, `:arm64-emulated`) are left in place. The arm64 build
          was under emulation only.
-     - Running: WP4-T04-FREEZE (committer). The coordinator writes no file during the
+     - WP4-T04-FREEZE is committed and pushed as 3b2ddf2 (21 paths; all checks 0).
+     - WP4-T05 is done (author-reported, opus).
+       - Design: one online-backup step, no pause; every file is hashed and checked
+         against its recorded hash.
+       - Tests: red 9 → green 9; both mutations are killed.
+       - Migrations: through v9.
+       - Drill stage 2: backup in 348 ms while writes continued; all hashes match.
+       - verify: 1503 tests. Digest: 724d5cd8….
+       - Backup status is not yet in the admin status response; this moves to T07.
+     - Running: WP4-T05-FREEZE (committer). The coordinator writes no file during the
        commit.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
@@ -565,7 +574,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T04-FREEZE only.
+- Live processes: WP4-T05-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

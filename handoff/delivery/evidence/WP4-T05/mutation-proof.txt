@@ -1,0 +1,183 @@
+# WP4-T05 mutation proof (scratch export of the working tree at temporary-index tree 80afa4e3..., npm ci there)
+Export: GIT_INDEX_FILE=<scratch>/idx git read-tree HEAD; git add -A; git write-tree -> 80afa4e336075fadeb9720fc552176ec34614068; git archive | tar -x -C <scratch>/mutation; npm ci -> exit 0
+
+## Mutation 1: copy the live main file, ignoring the WAL
+diff --git a/<scratch>/backup.ts.orig b/src/server/ops/backup.ts
+index e518503..97947fc 100644
+--- a/<scratch>/backup.ts.orig
++++ b/src/server/ops/backup.ts
+@@ -371,7 +371,7 @@ export async function createBackup(request: BackupRequest): Promise<BackupResult
+     } catch (error) {
+       throw new BackupError('write_failed', { cause: error });
+     }
+-    await snapshotDatabase(request.databasePath, databaseCopy);
++    copyFileSync(request.databasePath, databaseCopy); // MUTATION 1: live main file only, WAL ignored
+     await request.hooks?.afterSnapshot?.();
+     const snapshot = inspectCopy(databaseCopy);
+ 
+Command: node node_modules/vitest/vitest.mjs run tests/integration/backup.test.ts  -> exit 1
+
+ RUN  v5.0.2 <scratch>/mutation
+
+ ❯ tests/integration/backup.test.ts (9 tests | 4 failed) 2181ms
+   ❯ backup while a writer loop runs (AC-11) (1)
+     × takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue 425ms
+   ❯ backup refusals, failures and status (4)
+     × records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder 23ms
+     × writes a manifest and a status with exactly the allowed keys and nothing personal 21ms
+   ❯ cli.js backup (1)
+     × runs in production, prints counts only and refuses a target inside DATA_DIR 416ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup.test.ts > backup while a writer loop runs (AC-11) > takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue
+BackupError: The database could not be opened or copied
+ ❯ inspectCopy src/server/ops/backup.ts:267:11
+    265|   } catch (error) {
+    266|     if (error instanceof BackupError) throw error;
+    267|     throw new BackupError('database_unavailable', { cause: error });
+       |           ^
+    268|   } finally {
+    269|     copy?.close();
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:213:22
+
+Caused by: SqliteError: no such table: schema_migrations
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ inspectCopy src/server/ops/backup.ts:256:39
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:213:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'SQLITE_ERROR' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder
+BackupError: The database could not be opened or copied
+ ❯ inspectCopy src/server/ops/backup.ts:267:11
+    265|   } catch (error) {
+    266|     if (error instanceof BackupError) throw error;
+    267|     throw new BackupError('database_unavailable', { cause: error });
+       |           ^
+    268|   } finally {
+    269|     copy?.close();
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:284:16
+
+Caused by: SqliteError: no such table: schema_migrations
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ inspectCopy src/server/ops/backup.ts:256:39
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:284:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'SQLITE_ERROR' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > writes a manifest and a status with exactly the allowed keys and nothing personal
+BackupError: The database could not be opened or copied
+ ❯ inspectCopy src/server/ops/backup.ts:267:11
+    265|   } catch (error) {
+    266|     if (error instanceof BackupError) throw error;
+    267|     throw new BackupError('database_unavailable', { cause: error });
+       |           ^
+    268|   } finally {
+    269|     copy?.close();
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:344:20
+
+Caused by: SqliteError: no such table: schema_migrations
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ inspectCopy src/server/ops/backup.ts:256:39
+ ❯ createBackup src/server/ops/backup.ts:376:22
+ ❯ tests/integration/backup.test.ts:344:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'SQLITE_ERROR' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/backup.test.ts > cli.js backup > runs in production, prints counts only and refuses a target inside DATA_DIR
+AssertionError: expected 'Backup failed (database_unavailable):…' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ Backup failed (database_unavailable): The database could not be opened or copied
++
+
+ ❯ tests/integration/backup.test.ts:490:23
+    488|   it('runs in production, prints counts only and refuses a target insi…
+    489|     const ok = cli(['--to', target]);
+    490|     expect(ok.stderr).toBe('');
+       |                       ^
+    491|     expect(ok.status).toBe(0);
+    492|     const printed = JSON.parse(ok.stdout) as Record<string, unknown>;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 5 passed (9)
+   Start at  18:13:51
+   Duration  8.33s (import 56%, tests 27%, transform 16%)
+
+
+restored: 471f466020a52caab9b1c27018dbdab6b1dea605c593523a1a8ed01a2c86273b orig: 471f466020a52caab9b1c27018dbdab6b1dea605c593523a1a8ed01a2c86273b
+
+## Mutation 2: skip hashing of the copied files
+diff --git a/<scratch>/backup.ts.orig b/src/server/ops/backup.ts
+index e518503..62ed605 100644
+--- a/<scratch>/backup.ts.orig
++++ b/src/server/ops/backup.ts
+@@ -280,9 +280,7 @@ async function copyVerified(store: FileStore, file: SnapshotFile, destination: s
+     throw new BackupError('write_failed', { cause: error });
+   }
+   created.push(destination);
+-  const copied = await hashFile(destination);
+-  if (copied.sizeBytes !== file.size_bytes) throw new BackupError('file_size_mismatch');
+-  if (copied.sha256 !== file.sha256) throw new BackupError('file_hash_mismatch');
++  // MUTATION 2: file hashing skipped; the recorded hash and size are trusted
+   fsyncFile(destination);
+ }
+ 
+Command: node node_modules/vitest/vitest.mjs run tests/integration/backup.test.ts  -> exit 1
+
+ RUN  v5.0.2 <scratch>/mutation
+
+ ❯ tests/integration/backup.test.ts (9 tests | 1 failed) 3836ms
+   ❯ backup refusals, failures and status (4)
+     × records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder 88ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder
+AssertionError: expected null to be an instance of BackupError
+ ❯ tests/integration/backup.test.ts:303:23
+    301|         (error: unknown) => error,
+    302|       );
+    303|       expect(failure).toBeInstanceOf(BackupError);
+       |                       ^
+    304|       expect((failure as BackupError).code).toBe('file_hash_mismatch');
+    305|       expect(backupStatusJson(getBackupStatus(t.db))).toEqual({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  18:14:11
+   Duration  5.27s (tests 74%, import 16%, transform 10%)
+
+
+restored: 471f466020a52caab9b1c27018dbdab6b1dea605c593523a1a8ed01a2c86273b orig: 471f466020a52caab9b1c27018dbdab6b1dea605c593523a1a8ed01a2c86273b repo: 471f466020a52caab9b1c27018dbdab6b1dea605c593523a1a8ed01a2c86273b
+
+## Restored source, same command  -> exit 0
+
+ RUN  v5.0.2 <scratch>/mutation
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  18:14:21
+   Duration  5.31s (tests 76%, import 16%, transform 9%)
+

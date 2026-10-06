@@ -1,0 +1,22 @@
+Add a pinned non-root container image, Compose example and container drill
+
+- build(docker): multi-stage Dockerfile on node:24.21.0-trixie-slim pinned by
+  its index digest. The runtime image holds only dist/, the production
+  node_modules and package.json. It runs as UID/GID 10001 with a /data volume,
+  a read-only root, a /tmp tmpfs, a HEALTHCHECK on /api/ready,
+  NODE_ENV=production and OUTBOUND_MODE=capture.
+- build(docker): .dockerignore keeps the template workbook, handoff, tests,
+  .claude, .env* and docs out of the build context.
+- docs(deploy): compose.example.yaml with a single service, a host-local /data
+  mount, an env_file (mode 600), no public port, restart unless-stopped and a
+  stop grace period.
+- test(drill): scripts/container-drill.mjs stage 1. It builds, waits for
+  health, checks the schema, checks persistence across a restart, checks the
+  runtime user, and runs a forbidden-file scan.
+- docs(handoff): the WP4-T03 freeze result, the WP4-T04 records, the board and
+  the checkpoint (+ vi).
+
+Task: WP4-T04-FREEZE
+Digest: 6ec6549daeb7dd835f44898429e6ef239902e529b144f5b34e8688d880c29870
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

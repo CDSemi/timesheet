@@ -132,6 +132,59 @@ export function operationsStatusJson(status: OperationsStatus) {
   };
 }
 
+/* ---------------------------------------------------------- backup status ---- */
+
+/*
+ * The result of the latest `cli.js backup` (WP4-T05, migration 0009), as data only: the administrator view that shows
+ * it comes in WP4-T07, so it is not yet part of `operationsStatusJson`. Only an outcome, a redacted fault code and two
+ * UTC instants exist: never a path, a storage key, a hash or a count of anyone's records.
+ */
+
+export const BACKUP_OUTCOMES = ['succeeded', 'failed'] as const;
+
+export interface BackupStatus {
+  outcome: (typeof BACKUP_OUTCOMES)[number] | 'never';
+  /** When the latest backup attempt ended (success or failure). */
+  lastAttemptAt: string | null;
+  /** When the latest successful backup ended; kept when a later attempt fails. */
+  lastSuccessAt: string | null;
+  /** The fault code of a failed latest attempt (lowercase code, see `faultCode`); null otherwise. */
+  faultCode: string | null;
+}
+
+interface BackupStatusRow {
+  backup_last_outcome: string | null;
+  backup_last_attempt_at: string | null;
+  backup_last_success_at: string | null;
+  backup_last_fault_code: string | null;
+}
+
+export function getBackupStatus(db: Db): BackupStatus {
+  const row = db
+    .prepare<[], BackupStatusRow>(
+      'SELECT backup_last_outcome, backup_last_attempt_at, backup_last_success_at, backup_last_fault_code FROM operations_state WHERE id = 1',
+    )
+    .get();
+  const outcome = (BACKUP_OUTCOMES as readonly string[]).includes(row?.backup_last_outcome ?? '')
+    ? (row?.backup_last_outcome as (typeof BACKUP_OUTCOMES)[number])
+    : 'never';
+  return {
+    outcome,
+    lastAttemptAt: row?.backup_last_attempt_at ?? null,
+    lastSuccessAt: row?.backup_last_success_at ?? null,
+    faultCode: outcome === 'failed' ? faultCode(row?.backup_last_fault_code ?? null) : null,
+  };
+}
+
+export function backupStatusJson(status: BackupStatus) {
+  return {
+    outcome: status.outcome,
+    last_attempt_at: status.lastAttemptAt,
+    last_success_at: status.lastSuccessAt,
+    fault_code: status.faultCode,
+  };
+}
+
 /* ------------------------------------------------------- submission status ---- */
 
 interface RevisionRow {

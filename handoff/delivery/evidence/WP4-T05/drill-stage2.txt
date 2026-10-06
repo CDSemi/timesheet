@@ -1,0 +1,65 @@
+# WP4-T05 container drill stages 1-2 on Docker Desktop (project ts-wp4-t05, linux/amd64)
+Command: node --trace-deprecation scripts/container-drill.mjs --work <scratch>/drill1 --project ts-wp4-t05  -> exit 0
+After the run: docker ps -a / volume ls / network ls --filter name=ts-wp4-t05 -> nothing (the local image ts-wp4-t05-timesheet:drill is kept; no container runs)
+
+node v24.21.0; docker Docker version 28.5.1, build e180ab8; project ts-wp4-t05
+PASS  docker build --platform linux/amd64  5 s, log in the work directory
+PASS  build output (including npm ci) has no deprecation line
+INFO  image id sha256:20bab27ad193e70e033fa19228e7529a35326befb72b5186f8d4ff5112f80269, linux/amd64, size 110469926 bytes (105.4 MiB)
+PASS  image architecture is amd64
+PASS  image runtime user is numeric and not root  User=10001:10001
+PASS  image sets NODE_ENV=production and OUTBOUND_MODE=capture
+PASS  image declares a HEALTHCHECK and the /data volume
+PASS  image file list was read  10420 paths
+PASS  forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+PASS  production dependencies only (no devDependency in the image)
+PASS  data directory is fresh  no timesheet.db before the first start
+PASS  container becomes healthy  5.3 s (running healthy)
+PASS  /api/ready reports ready with the schema version  schema 9 of 9
+PASS  running process UID is not 0  uid:gid 10001:10001
+PASS  root filesystem is read-only (cannot write under /app)
+PASS  /tmp tmpfs is writable
+PASS  bootstrap CLI prints a single-use setup token
+PASS  first administrator created with the token  status 201
+PASS  setup token cannot be replayed  status 403
+PASS  administrator sign-in
+PASS  administrator lists accounts (calendar id present)
+PASS  administrator creates a synthetic employee  status 201
+PASS  employee records a synthetic work session  status 201
+PASS  session reads back before the restart
+PASS  administrator cannot read the employee session  status 404
+PASS  database and private directory exist on the host data directory
+PASS  container is healthy again after the restart  5.3 s after the restart (6.3 s in all)
+PASS  schema version unchanged after the restart  schema 9
+PASS  stored sign-in session survives the restart
+PASS  synthetic work session persisted byte for byte after the restart
+PASS  container log has no deprecation warning
+PASS  container log never contains the setup token or a password
+PASS  employee uploads a synthetic signature image
+PASS  employee signs off a past synthetic period (finalization)  status 201
+PASS  the container job runner renders the PDF of the finalized period  10.1 s
+PASS  cli.js backup inside the running container exits 0
+PASS  every synthetic write succeeded  82 writes, 0 not 201
+PASS  writes continued while the backup ran  54 writes completed inside the 1024 ms backup window
+PASS  the backup recorded its success in operations_state
+INFO  backup duration 348 ms inside the CLI, 1024 ms for docker compose exec; writes before/during/after: 5/54/23
+PASS  backup folder name is timesheet-backup-<UTC>-<random>
+PASS  only the finished backup folder exists (no partial folder)  1 entries
+PASS  backup folder holds the database copy, files and manifest only
+PASS  manifest has exactly the allowed keys
+PASS  manifest has no email address, name or host path
+PASS  database copy matches the manifest SHA-256 and size
+PASS  copied file set equals the manifest file list
+PASS  every copied file matches its manifest SHA-256 and size  8 files, 0 mismatched
+PASS  the backup holds signature images and the PDF
+PASS  database copy passes integrity_check outside the container
+PASS  database copy has no foreign key violation
+PASS  schema version of the copy equals the manifest and the running instance  schema 9
+PASS  manifest files equal the attachment rows of the copy
+PASS  the copy is a point-in-time image: every session written before the backup, none beyond the end state  sessions before 5, in the copy 26, at the end 67
+INFO  manifest summary: schema 9, app 0.1.0, 8 files (7 signatures, 1 PDFs), database 565248 bytes, integrity ok, foreign key violations 0
+PASS  a target inside DATA_DIR is refused (exit 2)
+PASS  container log after the backup has no deprecation warning
+PASS  cleanup by project name (docker compose down -v)
+PASS  no container of the project remains
+DRILL STAGES 1-2 PASSED

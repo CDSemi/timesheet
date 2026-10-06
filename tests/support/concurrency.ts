@@ -1,15 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
+import { crc32, deflateSync } from 'node:zlib';
 import { isDomainError } from '../../src/domain/errors.ts';
 import type { Clock } from '../../src/server/clock.ts';
 import { openDatabase } from '../../src/server/db/database.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { createPdfJobHandler, JOB_RENDER_PDF } from '../../src/server/jobs/pdfJob.ts';
+import { runJobsOnce } from '../../src/server/jobs/runner.ts';
 import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { ApiError } from '../../src/server/http/errors.ts';
 import type { SessionBody } from '../../src/server/http/schemas.ts';
 import { type SignOffInput, signOffTimesheet } from '../../src/server/services/finalization.ts';
 import { runDeadlineScan } from '../../src/server/services/automation.ts';
-import { getBalance } from '../../src/server/services/ledger.ts';
+import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
+import { createPolicyVersion } from '../../src/server/services/policies.ts';
+import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
 import {
   type CancelOtLeaveInput,
   cancelOtLeave,
@@ -35,7 +42,8 @@ import { createSession } from '../../src/server/services/timesheetCommands.ts';
  * genuinely contend for the SQLite write lock.
  *
  * The same file is the worker entry: when loaded as a worker with the harness role it
- * serves race rounds; when imported by a test it only exports the pool.
+ * serves race rounds, with the writer role it runs the background writer loop (WP4-T05,
+ * below); when imported by a test it only exports the pool and the writer handle.
  */
 
 const WORKER_ROLE = 'timesheet-ot-leave-racer';
@@ -307,4 +315,247 @@ export function callWindowsOverlap(outcomes: readonly RaceOutcome[]): boolean {
   const latestStart = Math.max(...outcomes.map((outcome) => outcome.startedAtMs));
   const earliestFinish = Math.min(...outcomes.map((outcome) => outcome.finishedAtMs));
   return latestStart < earliestFinish;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Background writer loop (WP4-T05, AC-11 "backup while writes occur").
+ *
+ * One worker thread with its OWN production connection (`openDatabase`: WAL, busy timeout, foreign keys) and its own
+ * `FileStore` on the SAME database file and private data directory as the test. Until the test sets the stop flag it
+ * repeats one iteration of real production writes for a fresh synthetic owner: the account row, a work policy, an
+ * opening ledger credit, two day edits (new work sessions), a signature image (file renamed into the store before its
+ * attachment row commits), a manual sign-off (revision, sign-off, ledger events, jobs in one transaction), the PDF job
+ * (render, file rename, then the PDF attachment row) and one more ledger post. After every committed step it bumps a
+ * shared counter, so the test can wait for writes to happen at a chosen moment (for example between the database
+ * snapshot and the file copy of a backup) without sharing a connection or a clock.
+ * ------------------------------------------------------------------------------------------------------------------ */
+
+const WRITER_ROLE = 'timesheet-backup-writer';
+// Int32 slots of the writer control buffer.
+const WRITER_STOP = 0;
+const WRITER_COMMITS = 1;
+const WRITER_SLOTS = 2;
+
+export interface WriterLoopInput {
+  dbPath: string;
+  dataDir: string;
+  nowIso: string;
+  calendarId: string;
+  payrollDate: string;
+}
+
+export interface WriterSummary {
+  iterations: number;
+  commits: number;
+  owners: number;
+  sessions: number;
+  signatures: number;
+  finalizations: number;
+  pdfs: number;
+  ledgerPosts: number;
+  errors: string[];
+}
+
+type WriterMessage = { type: 'started' } | { type: 'stopped'; summary: WriterSummary } | { type: 'failed'; message: string };
+
+interface WriterStart extends WriterLoopInput {
+  type: 'writeLoop';
+  control: SharedArrayBuffer;
+}
+
+const WRITER_ZONE = 'America/Los_Angeles';
+
+function writerPngChunk(type: string, data: Uint8Array): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+
+/** A synthetic 8x8 PNG generated at run time (no image file is committed). */
+function writerPng(fill: number): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(8, 0);
+  header.writeUInt32BE(8, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows = Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(24, fill)]));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    writerPngChunk('IHDR', header),
+    writerPngChunk('IDAT', deflateSync(Buffer.concat(rows))),
+    writerPngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function writerSession(date: string, from: string, to: string): SessionBody {
+  return {
+    start: { local: `${date}T${from}`, zone: WRITER_ZONE },
+    end: { local: `${date}T${to}`, zone: WRITER_ZONE },
+    input_zone: WRITER_ZONE,
+    breaks: [],
+    breaks_confirmed: true,
+  };
+}
+
+async function writeLoop(message: WriterStart): Promise<WriterSummary> {
+  const flags = new Int32Array(message.control);
+  const clock: Clock = { now: () => new Date(message.nowIso) };
+  const db = openDatabase(message.dbPath);
+  const files = new FileStore(message.dataDir);
+  const handlers = { [JOB_RENDER_PDF]: createPdfJobHandler({ db, clock, files }) };
+  const summary: WriterSummary = { iterations: 0, commits: 0, owners: 0, sessions: 0, signatures: 0, finalizations: 0, pdfs: 0, ledgerPosts: 0, errors: [] };
+  const committed = () => {
+    summary.commits += 1;
+    Atomics.add(flags, WRITER_COMMITS, 1);
+    Atomics.notify(flags, WRITER_COMMITS);
+  };
+  parentPort?.postMessage({ type: 'started' } satisfies WriterMessage);
+  try {
+    while (Atomics.load(flags, WRITER_STOP) === 0) {
+      summary.iterations += 1;
+      const round = summary.iterations;
+      try {
+        const id = randomUUID();
+        const email = `writer-${id}@example.invalid`;
+        db.prepare(
+          `INSERT INTO users (id, email, display_name, role, status, password_hash, calendar_id, created_at, updated_at)
+           VALUES (?, ?, 'Synthetic Writer', 'employee', 'active', 'login-disabled-synthetic', ?, ?, ?)`,
+        ).run(id, email, message.calendarId, message.nowIso, message.nowIso);
+        summary.owners += 1;
+        committed();
+        createPolicyVersion(
+          db,
+          clock,
+          {
+            userId: id,
+            calendarId: message.calendarId,
+            effectiveFrom: '2026-01-01',
+            note: 'Synthetic writer policy',
+            rules: {
+              requiredMinutes: 480,
+              thresholdMinutes: 30,
+              roundingStepMinutes: 30,
+              referenceStart: '08:00',
+              referenceEnd: '16:00',
+              deficitMode: 'auto_deduct',
+              breaks: [],
+            },
+          },
+          id,
+        );
+        committed();
+        postCredit({ db, clock }, { userId: id, sourceKey: 'opening-balance', minutes: 300, workDate: '2026-09-01', actorUserId: null, origin: 'system' });
+        summary.ledgerPosts += 1;
+        committed();
+        const user: SessionUser = { id, email, displayName: 'Synthetic Writer', role: 'employee', calendarId: message.calendarId, sessionId: 'writer' };
+        createSession({ db, clock, user }, '2026-09-15', writerSession('2026-09-15', '09:00', '18:00'));
+        summary.sessions += 1;
+        committed();
+        createSession({ db, clock, user }, '2026-09-16', writerSession('2026-09-16', '09:00', '13:00'));
+        summary.sessions += 1;
+        committed();
+        saveSignature(db, clock, files, id, writerPng(round % 200), 'image/png');
+        summary.signatures += 1;
+        committed();
+        const review = buildReviewPayload(db, clock, user, message.payrollDate);
+        signOffTimesheet({ db, clock, user }, message.payrollDate, {
+          expectedVersion: review.expectedVersion,
+          reviewedHash: review.payloadHash,
+          signerName: 'Synthetic Writer',
+          deficitChoices: [],
+          incompleteEvidenceAcknowledged: true,
+        });
+        summary.finalizations += 1;
+        committed();
+        const run = await runJobsOnce({ db, clock, handlers });
+        summary.pdfs += run.succeeded;
+        if (run.succeeded !== 1) summary.errors.push(`round ${round}: pdf job ${JSON.stringify(run)}`);
+        committed();
+        postCredit({ db, clock }, { userId: id, sourceKey: `writer-extra-${round}`, minutes: 15, workDate: '2026-09-20', actorUserId: id, origin: 'manual' });
+        summary.ledgerPosts += 1;
+        committed();
+      } catch (error) {
+        const described = describeError(error);
+        summary.errors.push(`round ${round}: ${described.code} ${described.message}`);
+      }
+    }
+  } finally {
+    db.close();
+  }
+  return summary;
+}
+
+function serveWriter(): void {
+  parentPort?.once('message', (message: WriterStart) => {
+    writeLoop(message).then(
+      (summary) => parentPort?.postMessage({ type: 'stopped', summary } satisfies WriterMessage),
+      (error: unknown) => parentPort?.postMessage({ type: 'failed', message: describeError(error).message } satisfies WriterMessage),
+    );
+  });
+}
+
+if (!isMainThread && (workerData as { role?: string } | null)?.role === WRITER_ROLE) serveWriter();
+
+function nextWriterMessage(worker: Worker): Promise<WriterMessage> {
+  return new Promise((resolve, reject) => {
+    const onMessage = (message: WriterMessage) => {
+      worker.off('error', onError);
+      resolve(message);
+    };
+    const onError = (error: Error) => {
+      worker.off('message', onMessage);
+      reject(error);
+    };
+    worker.once('message', onMessage);
+    worker.once('error', onError);
+  });
+}
+
+/** Handle of a running writer loop; `stop()` ends it after the current step and returns what it did. */
+export class BackgroundWriter {
+  private readonly worker: Worker;
+  private readonly flags: Int32Array;
+  private readonly finished: Promise<WriterMessage>;
+
+  private constructor(worker: Worker, flags: Int32Array, finished: Promise<WriterMessage>) {
+    this.worker = worker;
+    this.flags = flags;
+    this.finished = finished;
+  }
+
+  static async start(input: WriterLoopInput): Promise<BackgroundWriter> {
+    const worker = new Worker(new URL(import.meta.url), { workerData: { role: WRITER_ROLE, index: 0 } });
+    const control = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * WRITER_SLOTS);
+    const started = nextWriterMessage(worker);
+    worker.postMessage({ type: 'writeLoop', ...input, control } satisfies WriterStart);
+    const first = await started;
+    if (first.type !== 'started') throw new Error(`Writer did not start: ${JSON.stringify(first)}`);
+    return new BackgroundWriter(worker, new Int32Array(control), nextWriterMessage(worker));
+  }
+
+  /** Committed steps so far (read across threads). */
+  get commits(): number {
+    return Atomics.load(this.flags, WRITER_COMMITS);
+  }
+
+  /** Resolves once at least `target` steps have committed; rejects after `timeoutMs`. Never blocks the event loop. */
+  async waitForCommits(target: number, timeoutMs = 20_000): Promise<number> {
+    const deadline = Date.now() + timeoutMs;
+    while (this.commits < target) {
+      if (Date.now() > deadline) throw new Error(`The writer reached ${this.commits} of ${target} commits in ${timeoutMs} ms`);
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    return this.commits;
+  }
+
+  async stop(): Promise<WriterSummary> {
+    Atomics.store(this.flags, WRITER_STOP, 1);
+    const message = await this.finished;
+    await this.worker.terminate();
+    if (message.type !== 'stopped') throw new Error(`Writer failed: ${JSON.stringify(message)}`);
+    return message.summary;
+  }
 }

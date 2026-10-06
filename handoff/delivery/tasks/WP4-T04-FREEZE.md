@@ -122,3 +122,8 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1: committed 3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7 on main, pushed; remote SHA
+equal. Pre-HEAD 199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa. Digest matched, 21 staged.
+package.json change only within scripts; secret scan clean. All checks exit 0. No
+blockers. Evidence: handoff/delivery/evidence/WP4-T04-FREEZE/.

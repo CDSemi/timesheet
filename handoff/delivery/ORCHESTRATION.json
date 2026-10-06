@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T04-FREEZE",
+  "next_task_id": "WP4-T05-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
+    "last_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
     "unpushed": []
   },
   "owner_decisions": [
@@ -8822,7 +8822,7 @@
       "id": "WP4-T04-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T04"
       ],
@@ -8835,10 +8835,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a272a9e57d06dc819",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -8847,16 +8847,115 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-T04-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-T04-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T04-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T04-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+      "pushed": true,
       "source_digest": "6ec6549daeb7dd835f44898429e6ef239902e529b144f5b34e8688d880c29870",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 199e792, remote SHA identical; 21 paths, exactly the expected set; digest 6ec6549d matched (738 files); package.json one hunk inside scripts; secret scan clean (9 identifier matches in container-drill.mjs are variable names); precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight 0.",
+      "next_action": "None; WP4-T05 on 3b2ddf2."
+    },
+    {
+      "id": "WP4-T05",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T04-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ad159713d58da58ff",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/ops/backup.ts",
+        "src/server/ops/manifest.ts",
+        "src/server/cli.ts",
+        "src/server/db/migrations/0009_operations_backup.ts",
+        "src/server/db/migrations.ts",
+        "src/server/services/operationsStatus.ts",
+        "tests/integration/backup.test.ts",
+        "tests/integration/migrations.test.ts",
+        "tests/support/concurrency.ts",
+        "scripts/container-drill.mjs",
+        "handoff/delivery/tasks/WP4-T05.md",
+        "handoff/delivery/evidence/WP4-T05"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T05.md",
+      "report": "handoff/delivery/tasks/WP4-T05.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T05/red-first.txt",
+        "handoff/delivery/evidence/WP4-T05/green-backup-test.txt",
+        "handoff/delivery/evidence/WP4-T05/mutation-proof.txt",
+        "handoff/delivery/evidence/WP4-T05/migrations.txt",
+        "handoff/delivery/evidence/WP4-T05/drill-stage2.txt",
+        "handoff/delivery/evidence/WP4-T05/verify.txt",
+        "handoff/delivery/evidence/WP4-T05/digest.txt",
+        "handoff/delivery/evidence/WP4-T05/precommit-check.txt"
+      ],
+      "baseline_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+      "source_digest": "724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: no pause; one SQLite online-backup step from the backup's own read-only connection gives a single point-in-time copy including the WAL; file safety rests on O7 (keys read from the copy, each copied file hashed and compared with its recorded SHA-256 and size); staged in a temporary folder and renamed into place. backup.test.ts red 9/9 against a stub, green 9/9; the writer-loop test ran 13 finalizations, 13 PDFs and 13 signatures with 0 errors; mutations (main file without WAL: 4 tests fail; skipped hashing: 1 test fails). Migrations fresh 1-9 and a populated v8 upgrade; integrity ok, FK empty, rerun applies nothing. Drill stages 1-2: 56 PASS 0 FAIL; backup 348 ms with 54 of 82 writes landing during it; 8 files (7 signatures, 1 PDF), all hashes match. verify exit 0 (1503 tests, 0 deprecation lines); precommit PASS; digest 724d5cd8. Deviations: tests/integration/bootstrap.test.ts (outside the owned paths) now pins UP_TO_8; migrations.test.ts got the new migration name and four NULL status columns; backup status is not yet in operationsStatusJson (carried to WP4-T07); the ts-wp4-t05 image is kept, no container or volume remains.",
+      "next_action": "None; WP4-T05-FREEZE."
+    },
+    {
+      "id": "WP4-T05-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T05"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T05-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T04 with pending handoff records."
+      "next_action": "Commit and push WP4-T05 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

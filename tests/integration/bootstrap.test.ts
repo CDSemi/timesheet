@@ -387,20 +387,23 @@ describe('migration 0008', () => {
     'admin_user_id',
   ];
 
+  /** The migrations up to 0008, so these tests keep pinning what 0008 did on its own after later migrations. */
+  const UP_TO_8 = MIGRATIONS.filter((migration) => migration.version <= 8);
+
   function fresh(): Db {
     return openDatabase(join(dir, `m-${Math.random().toString(16).slice(2)}.db`));
   }
 
   it('is the eighth migration and a fresh 1 to 8 database is consistent and a rerun applies nothing', () => {
-    expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(UP_TO_8.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     const target = fresh();
     try {
-      expect(migrate(target)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8], version: 8 });
+      expect(migrate(target, UP_TO_8)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8], version: 8 });
       expect(target.pragma('user_version', { simple: true })).toBe(8);
       expect(target.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(target.pragma('foreign_key_check')).toEqual([]);
       expect((target.pragma('table_info(bootstrap_state)') as Array<{ name: string }>).map((column) => column.name)).toEqual(EXPECTED_BOOTSTRAP_COLUMNS);
-      expect(migrate(target)).toEqual({ applied: [], version: 8 });
+      expect(migrate(target, UP_TO_8)).toEqual({ applied: [], version: 8 });
     } finally {
       target.close();
     }
@@ -420,12 +423,12 @@ describe('migration 0008', () => {
         .run();
       await createUser(target, clock, { email: 'synthetic@example.invalid', displayName: 'Synthetic', role: 'admin', password: PASSWORD, calendarId: 'c' }, null);
       const before = JSON.stringify(target.prepare('SELECT * FROM users').all()) + JSON.stringify(target.prepare('SELECT * FROM audit_events').all());
-      expect(migrate(target, MIGRATIONS, new Date('2026-10-05T19:00:00Z'))).toEqual({ applied: [8], version: 8 });
+      expect(migrate(target, UP_TO_8, new Date('2026-10-05T19:00:00Z'))).toEqual({ applied: [8], version: 8 });
       expect(JSON.stringify(target.prepare('SELECT * FROM users').all()) + JSON.stringify(target.prepare('SELECT * FROM audit_events').all())).toBe(before);
       expect(target.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(target.pragma('foreign_key_check')).toEqual([]);
       expect(target.prepare('SELECT count(*) FROM bootstrap_state').pluck().get()).toBe(0);
-      expect(migrate(target)).toEqual({ applied: [], version: 8 });
+      expect(migrate(target, UP_TO_8)).toEqual({ applied: [], version: 8 });
     } finally {
       target.close();
     }

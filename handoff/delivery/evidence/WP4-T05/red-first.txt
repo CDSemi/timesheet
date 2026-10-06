@@ -1,0 +1,249 @@
+# WP4-T05 red-first run (2026-10-05, Node v24.21.0, Windows host)
+Command: node node_modules/vitest/vitest.mjs run tests/integration/backup.test.ts  -> exit 1 (9 of 9 tests failed)
+
+## The stub
+// src/server/ops/backup.ts as it stood for the red run (RED-FIRST STUB, replaced by the implementation):
+// it copies the live main file only (no WAL, no online backup API), lists no files and records no status.
+export async function createBackup(request: BackupRequest): Promise<BackupResult> {
+  const name = `timesheet-backup-stub-${Date.now()}`;
+  const directory = join(resolve(request.targetDir), name);
+  mkdirSync(directory, { recursive: true });
+  copyFileSync(request.databasePath, join(directory, BACKUP_DATABASE_NAME));
+  await request.hooks?.afterSnapshot?.();
+  const manifest = buildManifest({ appVersion: '0.0.0', schemaVersion: 0, createdAt: nowUtc(request.clock), database: { sha256: '', sizeBytes: 0 }, files: [] });
+  writeFileSync(join(directory, MANIFEST_FILE_NAME), serializeManifest(manifest));
+  return { directory, name, manifest, durationMs: 0, statusRecorded: false };
+}
+// At the red run migration 0009 did not exist and cli.ts had no backup command; manifest.ts, the data-only
+// getBackupStatus/backupStatusJson in operationsStatus.ts, tests/support/concurrency.ts (writer loop) and
+// tests/integration/backup.test.ts were in place.
+
+## Output
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/backup.test.ts (9 tests | 9 failed) 1675ms
+   ❯ backup while a writer loop runs (AC-11) (1)
+     × takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue 319ms
+   ❯ backup refusals, failures and status (4)
+     × starts with no backup recorded 1ms
+     × refuses a target inside the private data directory and writes nothing 11ms
+     × records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder 1ms
+     × writes a manifest and a status with exactly the allowed keys and nothing personal 2ms
+   ❯ migration 0009 (backup status in operations_state) (3)
+     × applies fresh 1 to 9, is consistent and a rerun applies nothing 9ms
+     × upgrades a populated version 8 database, keeps every row and starts with no backup recorded 204ms
+     × refuses an inconsistent backup status shape 23ms
+   ❯ cli.js backup (1)
+     × runs in production, prints counts only and refuses a target inside DATA_DIR 351ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup.test.ts > backup while a writer loop runs (AC-11) > takes 3 consistent backups while finalizations, PDFs, signatures, day edits and ledger posts continue
+AssertionError: expected '97e8d54f8a7255106f66cf1b213c4a4d7b558…' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ 97e8d54f8a7255106f66cf1b213c4a4d7b558d21310b1c2bfedc3d0d526dddda
+
+ ❯ verifyRestored tests/integration/backup.test.ts:124:29
+    122|     const restoredDb = join(restoreDir, 'restored.db');
+    123|     const dbBytes = readFileSync(join(backup.directory, BACKUP_DATABAS…
+    124|     expect(sha256(dbBytes)).toBe(manifest.database.sha256);
+       |                             ^
+    125|     expect(dbBytes.length).toBe(manifest.database.size_bytes);
+    126|     copyFileSync(join(backup.directory, BACKUP_DATABASE_NAME), restore…
+ ❯ tests/integration/backup.test.ts:228:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > starts with no backup recorded
+SqliteError: no such column: backup_last_outcome
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ getBackupStatus src/server/services/operationsStatus.ts:164:6
+    162| export function getBackupStatus(db: Db): BackupStatus {
+    163|   const row = db
+    164|     .prepare<[], BackupStatusRow>(
+       |      ^
+    165|       'SELECT backup_last_outcome, backup_last_attempt_at, backup_last…
+    166|     )
+ ❯ tests/integration/backup.test.ts:269:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > refuses a target inside the private data directory and writes nothing
+AssertionError: promise resolved "{ …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "directory": "D:\\.claude-tmp\\timesheet\\WP4-T05\\tmp\\timesheet-test-EZKOTP\\private-data\\timesheet-backup-stub-1791248969389",
++   "durationMs": 0,
++   "manifest": {
++     "app_version": "0.0.0",
++     "created_at": "2026-09-29T20:00:00Z",
++     "database": {
++       "name": "timesheet.db",
++       "sha256": "",
++       "size_bytes": 0,
++     },
++     "files": [],
++     "format": "timesheet-backup",
++     "format_version": 1,
++     "integrity": {
++       "files_verified": 0,
++       "foreign_key_violations": 0,
++       "integrity_check": "ok",
++     },
++     "schema_version": 0,
++   },
++   "name": "timesheet-backup-stub-1791248969389",
++   "statusRecorded": false,
+  }
+
+ ❯ tests/integration/backup.test.ts:276:65
+    274|     saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(7)…
+    275|     for (const inside of [dataDirOf(t), join(dataDirOf(t), 'backups'),…
+    276|       await expect(createBackup(request({ targetDir: inside }))).rejec…
+       |                                                                 ^
+    277|     }
+    278|     expect(existsSync(join(dataDirOf(t), 'backups'))).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > records success, then a hash mismatch fails the backup, keeps the last success and leaves no partial folder
+AssertionError: expected 0 to be greater than 0
+ ❯ tests/integration/backup.test.ts:285:38
+    283|   it('records success, then a hash mismatch fails the backup, keeps th…
+    284|     const ok = await createBackup(request());
+    285|     expect(ok.manifest.files.length).toBeGreaterThan(0);
+       |                                      ^
+    286|     expect(ok.statusRecorded).toBe(true);
+    287|     expect(readdirSync(target)).toEqual([ok.name]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup refusals, failures and status > writes a manifest and a status with exactly the allowed keys and nothing personal
+AssertionError: expected [ 'app_version', 'created_at', …(12) ] to deeply equal [ 'app_version', 'created_at', …(16) ]
+
+- Expected
++ Received
+
+@@ -4,14 +4,10 @@
+    "database",
+    "database.name",
+    "database.sha256",
+    "database.size_bytes",
+    "files",
+-   "files[].kind",
+-   "files[].sha256",
+-   "files[].size_bytes",
+-   "files[].storage_key",
+    "format",
+    "format_version",
+    "integrity",
+    "integrity.files_verified",
+    "integrity.foreign_key_violations",
+
+ ❯ tests/integration/backup.test.ts:346:53
+    344|     const backup = await createBackup(request());
+    345|     const manifest = readManifest(backup.directory);
+    346|     expect([...new Set(keyPaths(manifest))].sort()).toEqual([...MANIFE…
+       |                                                     ^
+    347|     expect(Object.keys(backupStatusJson(getBackupStatus(t.db))).sort()…
+    348|     const text = readFileSync(join(backup.directory, MANIFEST_FILE_NAM…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > applies fresh 1 to 9, is consistent and a rerun applies nothing
+AssertionError: expected [ 1, 2, 3, 4, 5, 6, 7, 8 ] to deeply equal [ 1, 2, 3, 4, 5, 6, 7, 8, 9 ]
+
+- Expected
++ Received
+
+@@ -5,7 +5,6 @@
+    4,
+    5,
+    6,
+    7,
+    8,
+-   9,
+  ]
+
+ ❯ tests/integration/backup.test.ts:385:64
+    383|     const db = openDatabase(join(dir, 'fresh.db'));
+    384|     try {
+    385|       expect(MIGRATIONS.map((migration) => migration.version)).toEqual…
+       |                                                                ^
+    386|       expect(MIGRATIONS.at(-1)?.name).toBe('operations_backup');
+    387|       expect(migrate(db)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > upgrades a populated version 8 database, keeps every row and starts with no backup recorded
+AssertionError: expected { applied: [], version: 8 } to deeply equal { applied: [ 9 ], version: 9 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     9,
+-   ],
+-   "version": 9,
++   "applied": [],
++   "version": 8,
+  }
+
+ ❯ tests/integration/backup.test.ts:411:73
+    409|       const snapshot = () => Object.fromEntries(tables.map((name) => […
+    410|       const before = snapshot();
+    411|       expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))…
+       |                                                                         ^
+    412|       const after = snapshot();
+    413|       const strip = (rows: unknown[]) => (rows as Array<Record<string,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > refuses an inconsistent backup status shape
+SqliteError: no such column: backup_last_attempt_at
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/backup.test.ts:433:25
+    431|     try {
+    432|       migrate(db);
+    433|       const update = db.prepare(
+       |                         ^
+    434|         'UPDATE operations_state SET backup_last_attempt_at = ?, backu…
+    435|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/integration/backup.test.ts > cli.js backup > runs in production, prints counts only and refuses a target inside DATA_DIR
+AssertionError: expected 'Usage: cli.js <migrate|seed|run-jobs|…' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ Usage: cli.js <migrate|seed|run-jobs|bootstrap>
++
+
+ ❯ tests/integration/backup.test.ts:490:23
+    488|   it('runs in production, prints counts only and refuses a target insi…
+    489|     const ok = cli(['--to', target]);
+    490|     expect(ok.stderr).toBe('');
+       |                       ^
+    491|     expect(ok.status).toBe(0);
+    492|     const printed = JSON.parse(ok.stdout) as Record<string, unknown>;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed (9)
+   Start at  18:09:26
+   Duration  3.21s (tests 54%, import 30%, transform 16%)
+
