@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type ReviewResponse, type SignOffResponse } from './api.ts';
+import { api, ApiRequestError, type ReviewResponse, type SignOffResponse, type TimesheetView } from './api.ts';
 import { describeError } from './components/errors.ts';
 import { instantText, periodRange } from './components/format.ts';
 import { granteeChangeText } from './components/granteeChangesModel.ts';
+import { ImportedBadge, ImportedNote } from './components/ImportStatus.tsx';
 import { ReviewDays } from './components/ReviewDays.tsx';
 import { ReviewEnvelope } from './components/ReviewEnvelope.tsx';
 import { ReviewDeficits, ReviewEvidence, ReviewOtProposals, ReviewReservations } from './components/ReviewFindings.tsx';
@@ -43,6 +44,8 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [review, setReview] = useState<ReviewResponse | null>(null);
   const [period, setPeriod] = useState<PeriodState | null>(null);
+  // F-2: an imported period is read-only history; its sign-off is shown but disabled, with the reason.
+  const [imported, setImported] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [shown, setShown] = useState<Blocker[]>([]);
   const [notice, setNotice] = useState<{ kind: 'stale' | 'error'; message: string } | null>(null);
@@ -54,12 +57,14 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [fresh, state] = await Promise.all([
+      const [fresh, state, sheet] = await Promise.all([
         api<ReviewResponse>('GET', `/api/timesheets/${payrollDate}/review`),
         loadPeriodState(payrollDate),
+        api<TimesheetView>('GET', `/api/timesheets/${payrollDate}`),
       ]);
       setReview(fresh);
       setPeriod(state);
+      setImported(sheet.timesheet.imported_unverified);
       setPhase({ kind: 'ready' });
     } catch (caught) {
       setPhase(caught instanceof ApiRequestError && caught.status === 404 ? { kind: 'missing' } : { kind: 'failed', message: describeError(caught) });
@@ -165,7 +170,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
           </p>
         </div>
         <div className="period-title" aria-label="Status">
-          <ReviewBadges state={period} fallback="Draft" />
+          {imported ? <ImportedBadge /> : <ReviewBadges state={period} fallback="Draft" />}
         </div>
       </header>
 
@@ -199,7 +204,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
         </section>
       )}
 
-      {done === null && (
+      {done === null && !imported && (
         <p className="card muted" data-mode={mode}>
           {MODE_INTRO[mode]}
         </p>
@@ -236,7 +241,22 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
       <ReviewReservations payload={payload} />
       <ReviewEnvelope payload={payload} error={errors.signature ?? null} />
 
-      {done === null && (
+      {done === null && imported && (
+        <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
+          <h2 id="review-imported-title">Sign off</h2>
+          <ImportedNote id="imported-reason" />
+          <div className="button-row">
+            <button type="button" disabled aria-describedby="imported-reason">
+              Sign off &amp; Submit
+            </button>
+            <a className="button-link" href="#/timesheet">
+              Back to the timesheet
+            </a>
+          </div>
+        </section>
+      )}
+
+      {done === null && !imported && (
         <ReviewSignoff
           mode={mode}
           employeeName={payload.employee.name}

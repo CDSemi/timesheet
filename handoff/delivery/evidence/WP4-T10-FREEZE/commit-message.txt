@@ -1,0 +1,28 @@
+Add the explicit opening OT balance and refuse OT leave use in imported periods
+
+- feat(ledger): migration 0013 rebuilds ot_ledger by SQLite's 12-step
+  procedure with entry type opening_balance.
+  - Rows, rowids, indexes and append-only triggers are preserved.
+  - New columns: as_of_date and evidence_ref.
+  - A partial unique index allows one opening balance per user.
+- fix(db): migrate() turns foreign keys off around the exclusive migration
+  and runs foreign_key_check before COMMIT, rolling back on a violation.
+  defer_foreign_keys alone fails a table rebuild.
+- feat(api): GET, POST and PUT /api/ot/opening-balance are owner only.
+  - Posting needs signed non-zero minutes, an as-of date, a reason and
+    evidence. The same content is a no-op.
+  - A correction posts one reasoned entry.
+  - The evidence export labels the new type.
+- fix(ot): recording OT leave use inside an imported period answers 409
+  imported_period.
+- test: tests were red first (26 failures). The trigger-drop mutation fails
+  4 tests. The R4 stale-review test is added.
+- docs(handoff): WP4-T10 records, the WP4-T11 brief, the WP4-T09B freeze
+  result, board and checkpoint (+ vi).
+
+Task: WP4-T10-FREEZE
+Gate: precommit-check PASS, validate_orchestration PASS
+Audit: WP4-T10 independent audit PASS recorded in the board
+Digest: 260ca3636646398e9fe49f40515517bb395ef848c7ac1b4562024823f51ad460
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

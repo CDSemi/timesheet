@@ -132,4 +132,10 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD 1b4d81722023f085752b85d1646e6fe928919d76; post-HEAD aff904a89c6a85b3963616eddf676cef0979370b.
+- Commit aff904a; pushed yes; remote SHA aff904a89c6a85b3963616eddf676cef0979370b (main).
+- Digest 260ca363...ad460 (762 files); staged 34.
+- Scope checks: working tree matched the brief; nothing under .claude/, docs/, reference/, src/client/, package files.
+- Check exit codes: all 0 (see evidence/WP4-T10-FREEZE/checks.txt).
+- Blockers: none. No fixes, no unstaging, no masking needed.

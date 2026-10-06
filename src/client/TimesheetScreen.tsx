@@ -77,7 +77,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const [clockOutSession, setClockOutSession] = useState<Session | null>(null);
   // Review and delivery status of the shown period, from the server's fields; re-read with every edit.
   // A shared view has no status line: the finalization and delivery routes are the owner's own.
-  const periodStatus = useGridStatus(own ? (view?.period.payroll_date ?? null) : null, view?.timesheet.version);
+  // F-2: an imported period is read-only history with no review or delivery state, so it has no status line.
+  const imported = view?.timesheet.imported_unverified === true;
+  const periodStatus = useGridStatus(own && !imported ? (view?.period.payroll_date ?? null) : null, view?.timesheet.version);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -253,6 +255,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
               onClear={() => setSelected(new Set())}
               onPreview={previewBatch}
+              locked={imported}
             />
           )}
 
@@ -266,6 +269,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               onEdit={setEditDate}
               status={periodStatus}
               editable={canEdit}
+              locked={imported}
             />
           ) : (
             <>
@@ -278,6 +282,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
                 onToggle={toggle}
                 onEdit={setEditDate}
                 editable={canEdit}
+                locked={imported}
               />
             </>
           )}
@@ -310,7 +315,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
           onChanged={load}
           onClose={() => setEditDate(null)}
           request={request}
-          readOnly={!canEdit}
+          readOnly={!canEdit || imported}
         />
       )}
 

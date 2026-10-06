@@ -154,7 +154,7 @@ describe('optimistic versions and audit history', () => {
 
   it('bumps the timesheet version on every change for later review conflicts', async () => {
     const before = await t.request('GET', '/api/timesheets/2026-10-02', { cookie });
-    expect(before.body.timesheet).toEqual({ id: null, version: 0, finalized: false });
+    expect(before.body.timesheet).toEqual({ id: null, version: 0, finalized: false, imported_unverified: false });
     await t.request('PUT', '/api/days/2026-09-21', { cookie, body: day('Worked', { wfh: true }) });
     await t.request('POST', '/api/days/2026-09-21/sessions', { cookie, body: session('2026-09-21', '09:00', '12:00') });
     const after = await t.request('GET', '/api/timesheets/2026-10-02', { cookie });

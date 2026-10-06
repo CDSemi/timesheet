@@ -10,6 +10,7 @@ export function BatchBar({
   onSelectAll,
   onClear,
   onPreview,
+  locked = false,
 }: {
   selectedCount: number;
   category: DayCategory;
@@ -18,15 +19,17 @@ export function BatchBar({
   onSelectAll: () => void;
   onClear: () => void;
   onPreview: () => void;
+  /** True for an imported period (F-2): every control is disabled; the reason is shown next to the period status. */
+  locked?: boolean;
 }) {
   return (
-    <div className="batch-bar" role="group" aria-label="Batch category edit">
+    <div className="batch-bar" role="group" aria-label="Batch category edit" aria-describedby={locked ? 'imported-reason' : undefined} data-locked={locked ? 'imported' : undefined}>
       <p className="batch-count" aria-live="polite">
         {selectedCount} {selectedCount === 1 ? 'day' : 'days'} selected
       </p>
       <label>
         Category for selected days
-        <select value={category} onChange={(event) => onCategory(event.target.value as DayCategory)}>
+        <select value={category} disabled={locked} onChange={(event) => onCategory(event.target.value as DayCategory)}>
           {DAY_CATEGORIES.map((item) => (
             <option key={item} value={item}>
               {item}
@@ -35,13 +38,13 @@ export function BatchBar({
         </select>
       </label>
       <div className="batch-actions">
-        <button type="button" className="secondary" onClick={onSelectAll}>
+        <button type="button" className="secondary" onClick={onSelectAll} disabled={locked}>
           Select all
         </button>
-        <button type="button" className="secondary" onClick={onClear} disabled={selectedCount === 0}>
+        <button type="button" className="secondary" onClick={onClear} disabled={locked || selectedCount === 0}>
           Clear
         </button>
-        <button type="button" onClick={onPreview} disabled={selectedCount === 0 || busy}>
+        <button type="button" onClick={onPreview} disabled={locked || selectedCount === 0 || busy}>
           Preview changes
         </button>
       </div>

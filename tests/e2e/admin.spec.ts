@@ -390,7 +390,7 @@ test.describe('navigation', () => {
   test('Settings for everyone, Admin for administrators only', async ({ page, builtServer, signInThroughUi, signInPageAs }) => {
     await signInThroughUi();
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Settings']);
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
     await page.evaluate("window.location.hash = '#/admin'");
     await expect(page).toHaveURL(/#\/timesheet$/);
     await nav.getByRole('link', { name: 'Settings' }).click();
@@ -398,6 +398,6 @@ test.describe('navigation', () => {
     await page.getByRole('button', { name: 'Sign out' }).click();
 
     await signInPageAs(builtServer.credentials.admin);
-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Settings', 'Admin']);
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
   });
 });

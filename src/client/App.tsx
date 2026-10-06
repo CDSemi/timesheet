@@ -4,6 +4,7 @@ import { AdminScreen } from './AdminScreen.tsx';
 import { AppShell, useHashRoute } from './components/AppShell.tsx';
 import { shareEndedMessage } from './components/sharingModel.ts';
 import { HistoryScreen } from './HistoryScreen.tsx';
+import { ImportScreen } from './ImportScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
@@ -117,6 +118,7 @@ function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }
       {route.id === 'review' && <ReviewScreen key={route.payrollDate} payrollDate={route.payrollDate} />}
       {route.id === 'ot' && <OtScreen />}
       {route.id === 'history' && <HistoryScreen />}
+      {route.id === 'import' && <ImportScreen />}
       {route.id === 'settings' && <SettingsScreen onSharesChanged={() => void refresh()} />}
       {route.id === 'admin' && user.role === 'admin' && <AdminScreen user={user} />}
       {route.id === 'shared' && (

@@ -240,7 +240,7 @@ describe('stale version messages', () => {
 
 describe('reviewStatus', () => {
   it('shows only draft or finalized', () => {
-    expect(reviewStatus({ id: null, version: 1, finalized: false })).toBe('Draft');
-    expect(reviewStatus({ id: 't1', version: 2, finalized: true })).toBe('Finalized');
+    expect(reviewStatus({ id: null, version: 1, finalized: false, imported_unverified: false })).toBe('Draft');
+    expect(reviewStatus({ id: 't1', version: 2, finalized: true, imported_unverified: false })).toBe('Finalized');
   });
 });

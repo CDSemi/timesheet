@@ -5,14 +5,16 @@ import { SharingSwitcher } from './SharingSwitcher.tsx';
 import { parseSharedHash, type SharedView } from './sharingModel.ts';
 
 /**
- * The screens reachable from the navigation. Settings is for everyone; Admin is listed for
- * administrators only. Hiding the entry is a convenience: the server answers 403 on every
- * admin route, so an employee who types #/admin gets the timesheet and no data.
+ * The screens reachable from the navigation. Import (the person's own workbook and opening
+ * balance, F-1) and Settings are for everyone; Admin is listed for administrators only. Hiding
+ * the entry is a convenience: the server answers 403 on every admin route, so an employee who
+ * types #/admin gets the timesheet and no data.
  */
 export const ROUTES = [
   { id: 'timesheet', hash: '#/timesheet', label: 'Timesheet', adminOnly: false },
   { id: 'ot', hash: '#/ot', label: 'OT', adminOnly: false },
   { id: 'history', hash: '#/history', label: 'History', adminOnly: false },
+  { id: 'import', hash: '#/import', label: 'Import', adminOnly: false },
   { id: 'settings', hash: '#/settings', label: 'Settings', adminOnly: false },
   { id: 'admin', hash: '#/admin', label: 'Admin', adminOnly: true },
 ] as const;

@@ -102,6 +102,8 @@ export interface TimesheetRow {
   pay_period_id: string;
   version: number;
   finalized_revision_no: number | null;
+  /** 1 for read-only history imported from a workbook (F-2). Absent on a schema older than migration 0004. */
+  imported_unverified?: number;
 }
 
 /** Consumed and reversed minutes of the owner's OT leave requests, by leave date. */
@@ -175,7 +177,7 @@ function loadDayEntries(db: Db, userId: string, from: CivilDate, to: CivilDate):
 export function findTimesheet(db: Db, scope: UserScope, period: PayPeriod): TimesheetRow | undefined {
   return db
     .prepare(
-      `SELECT t.id, t.user_id, t.pay_period_id, t.version, t.finalized_revision_no
+      `SELECT t.*
          FROM timesheets t JOIN pay_periods p ON p.id = t.pay_period_id
         WHERE t.user_id = ? AND p.calendar_id = ? AND p.period_index = ?`,
     )
@@ -441,6 +443,7 @@ export function getTimesheetView(db: Db, clock: Clock, user: SessionUser, payrol
       id: timesheet?.id ?? null,
       version: timesheet?.version ?? 0,
       finalized: timesheet?.finalized_revision_no !== null && timesheet?.finalized_revision_no !== undefined,
+      imported_unverified: timesheet?.imported_unverified === 1,
     },
     reason_required: requirement.reasonRequired,
     days,

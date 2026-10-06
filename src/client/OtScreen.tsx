@@ -13,6 +13,7 @@ import {
 } from './api.ts';
 import { describeError } from './components/errors.ts';
 import { instantText, minutesText, displayZone, periodRange } from './components/format.ts';
+import { ledgerEntryLabel } from './importModel.ts';
 import { LeaveRow, type LeaveActions } from './components/LeaveRow.tsx';
 import { mismatchDays, mismatchText } from './components/otModel.ts';
 import { ReserveForm } from './components/ReserveForm.tsx';
@@ -62,6 +63,9 @@ function Balances({ balance, provisional }: { balance: OtBalance; provisional: n
         ))}
       </dl>
       <p className="hint">Provisional minutes come from complete days in open periods. They cannot be spent until the period is finalized.</p>
+      <p className="hint">
+        To carry in OT from before this app, record an opening balance on the <a href="#/import">Import</a> screen.
+      </p>
       {balance.negative && (
         <p className="error" role="status" data-flag="negative">
           The posted balance is negative. A correction made after leave was used caused this; it stays visible until it is settled.
@@ -119,7 +123,7 @@ function EvidencePanel({ data }: { data: OtData }) {
                 <tr key={entry.id} data-ledger-type={entry.entry_type}>
                   <td className="mono">{entry.work_date ?? instantText(entry.posted_at, displayZone)}</td>
                   <td>
-                    {entry.entry_type.replaceAll('_', ' ')}
+                    {ledgerEntryLabel(entry)}
                     {entry.reconciliation_required ? ' (reconcile)' : ''}
                   </td>
                   <td className="mono" data-minutes={entry.delta_minutes}>

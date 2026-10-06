@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { OtLedgerEntry, OtSummary, Requester } from '../api.ts';
 import { describeError } from './errors.ts';
+import { ledgerEntryLabel } from '../importModel.ts';
 import { displayZone, instantText, minutesText, periodRange } from './format.ts';
 
 /**
@@ -108,7 +109,7 @@ export function SharingOt({ request, ownerName }: { request: Requester; ownerNam
                   <tr key={entry.id} data-ledger-type={entry.entry_type}>
                     <td className="mono">{entry.work_date ?? instantText(entry.posted_at, displayZone)}</td>
                     <td>
-                      {entry.entry_type.replaceAll('_', ' ')}
+                      {ledgerEntryLabel(entry)}
                       {entry.reconciliation_required ? ' (reconcile)' : ''}
                     </td>
                     <td className="mono" data-minutes={entry.delta_minutes}>

@@ -12,6 +12,7 @@ export function DayList({
   onToggle,
   onEdit,
   editable = true,
+  locked = false,
 }: {
   days: readonly DayView[];
   zone: string;
@@ -21,6 +22,8 @@ export function DayList({
   onEdit: (workDate: string) => void;
   /** False in a view-only shared view: no selection box, and the day button only opens the day to read. */
   editable?: boolean;
+  /** True for an imported period (F-2): the selection boxes are disabled and the day button only opens the day to read. */
+  locked?: boolean;
 }) {
   return (
     <div className="day-list">
@@ -36,6 +39,7 @@ export function DayList({
                       type="checkbox"
                       checked={selected.has(day.workDate)}
                       onChange={() => onToggle(day.workDate)}
+                      disabled={locked}
                       aria-label={`Select ${day.workDate}`}
                     />
                   </label>
@@ -67,9 +71,9 @@ export function DayList({
                       type="button"
                       className="secondary"
                       onClick={() => onEdit(day.workDate)}
-                      aria-label={`${editable ? 'Edit' : 'View'} ${day.workDate}`}
+                      aria-label={`${editable && !locked ? 'Edit' : 'View'} ${day.workDate}`}
                     >
-                      {editable ? 'Edit day' : 'View day'}
+                      {editable && !locked ? 'Edit day' : 'View day'}
                     </button>
                   </div>
                 </div>

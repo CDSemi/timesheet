@@ -167,7 +167,8 @@ export interface TimesheetView {
   reporting_zone: string;
   period: Period;
   current_payroll_date: string;
-  timesheet: { id: string | null; version: number; finalized: boolean };
+  /** `imported_unverified` is true for read-only history imported from a workbook (F-2); a boolean only. */
+  timesheet: { id: string | null; version: number; finalized: boolean; imported_unverified: boolean };
   reason_required: boolean;
   days: DayView[];
   totals: { provisional_credited_minutes: number; pending_days: number };
@@ -559,7 +560,7 @@ export interface OtLeaveRequest {
 
 export interface OtLedgerEntry {
   id: string;
-  entry_type: 'credit' | 'deficit_debit' | 'correction' | 'leave_consumption' | 'leave_reversal';
+  entry_type: 'credit' | 'deficit_debit' | 'correction' | 'leave_consumption' | 'leave_reversal' | 'opening_balance';
   delta_minutes: number;
   source_key: string;
   work_date: string | null;
@@ -567,6 +568,59 @@ export interface OtLedgerEntry {
   reason: string | null;
   reconciliation_required: boolean;
   posted_at: string;
+  /** Only an opening balance has an as-of date (F-3). */
+  as_of_date?: string | null;
+}
+
+/** One reasoned correction of the opening balance, as GET /api/ot/opening-balance lists it. */
+export interface OpeningBalanceCorrection {
+  id: string;
+  delta_minutes: number;
+  reason: string | null;
+  evidence_ref: string | null;
+  reconciliation_required: boolean;
+  posted_at: string;
+}
+
+/** The owner's explicit opening balance (F-3): `minutes` is the current value, `version` guards a correction. */
+export interface OpeningBalance {
+  id: string;
+  minutes: number;
+  original_minutes: number;
+  as_of_date: string | null;
+  reason: string | null;
+  evidence_ref: string | null;
+  version: number;
+  posted_at: string;
+  corrections: OpeningBalanceCorrection[];
+}
+
+/** GET /api/ot/opening-balance; `opening_balance` is null until one is recorded. */
+export interface OpeningBalanceState {
+  opening_balance: OpeningBalance | null;
+  balance: OtBalance;
+}
+
+/** POST and PUT /api/ot/opening-balance: `duplicate` and `unchanged` append nothing. */
+export interface OpeningBalanceResult extends OpeningBalanceState {
+  status: 'posted' | 'duplicate' | 'unchanged';
+}
+
+/** Body of POST /api/ot/opening-balance (`expected_version` is 0 for the first entry). */
+export interface OpeningBalanceRequest {
+  minutes: number;
+  as_of_date: string;
+  reason: string;
+  evidence_ref: string;
+  expected_version: number;
+}
+
+/** Body of PUT /api/ot/opening-balance: the new value, a reason and the version the owner saw. */
+export interface OpeningBalanceCorrectionRequest {
+  minutes: number;
+  reason: string;
+  evidence_ref: string;
+  expected_version: number;
 }
 
 /** Body of POST /api/ot/leave. */
@@ -834,4 +888,159 @@ export interface ReceivedShare {
 export interface SharesResponse {
   given: GivenShare[];
   received: ReceivedShare[];
+}
+
+/*
+ * Workbook import (WP4-T09, owner decisions F-1 and F-2). The server owns every rule (what a day maps to,
+ * which actions a conflict allows, what a commit writes); these types only describe what it sends. The
+ * preview names source cells, never the workbook's personal text.
+ */
+
+export type ImportDecisionAction = 'skip' | 'import';
+
+export type ImportDayReason =
+  | 'finalized_period'
+  | 'imported_period'
+  | 'existing_app_rows'
+  | 'period_not_in_calendar'
+  | 'period_not_ended'
+  | 'unknown_label'
+  | 'unsupported_label'
+  | 'date_cell_missing'
+  | 'date_unexpected'
+  | 'duplicate_date'
+  | 'outside_calendar'
+  | 'floating_holiday'
+  | 'label_from_formula_cache';
+
+export type ImportPeriodState = 'new' | 'existing_app_rows' | 'finalized' | 'imported' | 'not_in_calendar' | 'not_ended';
+
+export interface ImportFinding {
+  code: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  /** Cell-level provenance, `sheet!A1`. */
+  sources: string[];
+}
+
+interface ImportCell<T> {
+  value: T;
+  source: string;
+  from_formula_cache: boolean;
+}
+
+export interface ImportReportDay {
+  sheet: string;
+  payroll_date: string;
+  index: number;
+  work_date: string;
+  date_cell: ImportCell<string> | null;
+  label: ImportCell<string> | null;
+  label_status: 'blank' | 'mapped' | 'unknown' | 'unsupported';
+  category: DayCategory | null;
+  wfh: boolean;
+  holiday_name: string | null;
+  floating_holiday: boolean;
+  start_clock: ImportCell<number> | null;
+  end_clock: ImportCell<number> | null;
+}
+
+export interface ImportPlanPeriod {
+  sheet: string;
+  payroll_date: string;
+  period_start: string | null;
+  period_end: string | null;
+  state: ImportPeriodState;
+}
+
+export interface ImportPlanDay {
+  work_date: string;
+  sheet: string;
+  source: string | null;
+  category: DayCategory | null;
+  wfh: boolean;
+  status: 'importable' | 'blank' | 'decision_required';
+  reasons: ImportDayReason[];
+}
+
+export interface ImportDecisionItem {
+  work_date: string;
+  reasons: ImportDayReason[];
+  allowed_actions: ImportDecisionAction[];
+  sources: string[];
+}
+
+export interface ImportPlan {
+  periods: ImportPlanPeriod[];
+  days: ImportPlanDay[];
+  decisions_required: ImportDecisionItem[];
+  importable_days: number;
+}
+
+export interface ImportDecision {
+  work_date: string;
+  action: ImportDecisionAction;
+}
+
+export interface ImportResult {
+  periods: Array<{ payroll_date: string; timesheet_id: string; day_entries: number }>;
+  day_entries: number;
+  skipped: string[];
+  imported_on_decision: string[];
+}
+
+export interface ImportReport {
+  mapping_version: number;
+  source_sha256: string;
+  source_bytes: number;
+  sheets: Array<{ name: string; role: string; payrollDate?: string; hidden: boolean }>;
+  findings: ImportFinding[];
+  summary: { errors: number; warnings: number; infos: number };
+  clean: boolean;
+  days: ImportReportDay[];
+  rules: string[];
+}
+
+/** One batch as the owner sees it; `plan` is present for a preview and `decisions`/`result` for a committed batch. */
+export interface ImportBatch {
+  id: string;
+  state: 'preview' | 'committed';
+  source_sha256: string;
+  mapping_version: number;
+  size_bytes: number;
+  created_at: string;
+  committed_at: string | null;
+  report: ImportReport;
+  plan: ImportPlan | null;
+  decisions: ImportDecision[] | null;
+  result: ImportResult | null;
+}
+
+export interface ImportSummary {
+  id: string;
+  state: 'preview' | 'committed';
+  source_sha256: string;
+  mapping_version: number;
+  size_bytes: number;
+  created_at: string;
+  committed_at: string | null;
+}
+
+/** The exact content type of the workbook upload; the server refuses every other type (macro-enabled ones are 415). */
+export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/**
+ * Uploads the workbook as the raw body (the second route that is not JSON). The content type is always the exact
+ * .xlsx type, whatever the browser guessed for the file. A new upload answers 201 and the same bytes again answer
+ * 200 with the existing batch (`created` is false), which may already be committed.
+ */
+export async function uploadWorkbook(file: Blob): Promise<{ import: ImportBatch; created: boolean }> {
+  const response = await fetch('/api/imports', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': XLSX_CONTENT_TYPE },
+    body: file,
+  });
+  if (!response.ok) throw await requestFailure(response);
+  return (await response.json()) as { import: ImportBatch; created: boolean };
 }

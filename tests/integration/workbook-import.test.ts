@@ -638,6 +638,25 @@ describe('imported periods are read-only history (F-2)', () => {
     const other = await t.request('PUT', '/api/days/2026-08-18', { cookie: owner, body: { category: 'Vacation', leave_minutes: 0, wfh: false, notes: '', reason: 'Synthetic edit' } });
     expect(other.status, JSON.stringify(other.body)).toBe(200);
   });
+
+  it('red-first: the timesheet read exposes imported_unverified as a boolean only (WP4-T11)', async () => {
+    const before = await t.request('GET', `/api/timesheets/${PB}`, { cookie: owner });
+    expect(before.body.timesheet).toEqual({ id: null, version: 0, finalized: false, imported_unverified: false });
+
+    await importPeriods([{ payrollDate: PB }]);
+    const imported = await t.request('GET', `/api/timesheets/${PB}`, { cookie: owner });
+    expect(imported.status).toBe(200);
+    expect(Object.keys(imported.body.timesheet).sort()).toEqual(['finalized', 'id', 'imported_unverified', 'version']);
+    expect(imported.body.timesheet.imported_unverified).toBe(true);
+    expect(imported.body.timesheet.finalized).toBe(false);
+
+    // Another period of the same owner, and the same period of another user, are not imported.
+    const other = await t.request('GET', `/api/timesheets/${PA}`, { cookie: owner });
+    expect(other.body.timesheet.imported_unverified).toBe(false);
+    const stranger = await account('stranger@example.invalid', 'Synthetic Stranger');
+    const theirs = await t.request('GET', `/api/timesheets/${PB}`, { cookie: stranger.cookie });
+    expect(theirs.body.timesheet.imported_unverified).toBe(false);
+  });
 });
 
 describe('upload validation', () => {
