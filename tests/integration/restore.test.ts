@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/server/app.ts';
 import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
-import { createAuthSession, SESSION_COOKIE } from '../../src/server/auth/sessions.ts';
+import { createAuthSession, SESSION_COOKIE, type SessionUser } from '../../src/server/auth/sessions.ts';
 import type { Clock } from '../../src/server/clock.ts';
 import { loadDeliveryConfig } from '../../src/server/config.ts';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
@@ -41,8 +41,10 @@ import { setAutomationActivation } from '../../src/server/services/automation.ts
 import { getBalance } from '../../src/server/services/ledger.ts';
 import { getOutboundStatus, outboundStatusJson } from '../../src/server/services/operationsStatus.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import { commitImport, previewImport } from '../../src/server/services/workbookImport.ts';
 import { makePng } from '../support/pdfText.ts';
 import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
+import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
 import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -1093,5 +1095,187 @@ describe('restore of a pre-pause backup without upgrading it (rollback)', () => 
     expect(Object.keys(printed).sort()).toEqual(['counts', 'manifest', 'outbound', 'outcome', 'reconciliation', 'schema']);
     expect(printed).toMatchObject({ outcome: 'restored', schema: { backup: WP3_SCHEMA_VERSION, restored: WP3_SCHEMA_VERSION, applied: [] }, outbound: { paused: false, reason: null } });
     for (const value of [to, backupDir, fixture.dataDir, '@']) expect(`${ok.stdout}${ok.stderr}`.includes(value), value).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ import sources (WP4-T09B) ---- */
+
+const IMPORT_NOW = '2026-12-15T20:00:00Z';
+
+interface StoredImport {
+  storageKey: string;
+  sha256: string;
+  sizeBytes: number;
+}
+
+/** Previews one synthetic workbook per payroll date for the seeded employee and commits the first (the other stays a preview). */
+function addImports(t: TestContext, payrollDates: readonly string[]): StoredImport[] {
+  const employee: SessionUser = {
+    id: t.userIds.employee,
+    email: t.emails.employee,
+    displayName: 'Synthetic Employee',
+    role: 'employee',
+    calendarId: t.calendarId,
+    sessionId: 'test',
+  };
+  const ctx = { db: t.db, clock: t.clock, files: new FileStore(dataDirOf(t)), user: employee };
+  const batches = payrollDates.map((payrollDate) => previewImport(ctx, buildSyntheticWorkbook({ periods: [{ payrollDate }] })).batch);
+  const first = batches[0];
+  if (first === undefined) throw new Error('no batch');
+  commitImport({ db: t.db, clock: t.clock, user: employee }, first.id, []);
+  return batches.map((batch) => {
+    const row = t.db.prepare<[string], { storage_key: string; source_sha256: string; size_bytes: number }>('SELECT storage_key, source_sha256, size_bytes FROM imports WHERE id = ?').get(batch.id);
+    if (row === undefined) throw new Error('no imports row');
+    return { storageKey: row.storage_key, sha256: row.source_sha256, sizeBytes: row.size_bytes };
+  });
+}
+
+interface RawManifest {
+  files: Array<{ storage_key: string; kind: string; sha256: string; size_bytes: number }>;
+  integrity: { files_verified: number };
+}
+
+describe('restore of the private workbook import sources (WP4-T09B, AC-11)', () => {
+  let t: TestContext;
+  let stored: StoredImport[];
+  let backupsRoot: string;
+  let backupDir: string;
+  let work: string;
+
+  beforeAll(async () => {
+    t = await createTestContext(IMPORT_NOW);
+    saveSignature(t.db, t.clock, new FileStore(dataDirOf(t)), t.userIds.employee, makePng(31, 8), 'image/png');
+    stored = addImports(t, ['2026-09-04', '2026-09-18']);
+    backupsRoot = scratch('timesheet-t09b-backups-');
+    backupDir = (await createBackup({ databasePath: t.config.databasePath, dataDir: dataDirOf(t), targetDir: backupsRoot, clock: t.clock })).directory;
+    work = scratch('timesheet-t09b-restore-');
+  });
+
+  afterAll(() => {
+    t.close();
+    rmSync(backupsRoot, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  const request = (fromDir: string, toDir: string) => ({ fromDir, toDir, liveDataDir: dataDirOf(t), liveDatabasePath: t.config.databasePath, clock: t.clock });
+
+  async function refusal(fromDir: string, toDir: string): Promise<RestoreError> {
+    const error = await restoreBackup(request(fromDir, toDir)).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(RestoreError);
+    expect(existsSync(toDir) ? readdirSync(toDir) : []).toEqual([]); // nothing remains in the target
+    return error as RestoreError;
+  }
+
+  function tamperedCopy(name: string, change: (folder: string) => void): string {
+    const folder = join(work, name);
+    cpSync(backupDir, folder, { recursive: true });
+    change(folder);
+    return folder;
+  }
+
+  const sourceOf = (folder: string, index: number): string => join(folder, 'files', stored[index]?.storageKey ?? '');
+
+  function rewriteManifest(folder: string, change: (manifest: RawManifest) => void): void {
+    const manifest = JSON.parse(readFileSync(join(folder, MANIFEST_FILE_NAME), 'utf8')) as RawManifest;
+    change(manifest);
+    manifest.integrity.files_verified = manifest.files.length;
+    writeFileSync(join(folder, MANIFEST_FILE_NAME), `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+
+  it('restores every import source into the isolated data directory with a matching hash and size', async () => {
+    const to = join(work, 'target-restored');
+    const result = await restoreBackup(request(backupDir, to));
+    expect(result.manifest.files.filter((file) => file.kind === 'import')).toHaveLength(2);
+    const restored = openDatabase(result.databasePath);
+    try {
+      const rows = restored.prepare<[], { storage_key: string; source_sha256: string; size_bytes: number }>('SELECT storage_key, source_sha256, size_bytes FROM imports').all();
+      expect(rows).toHaveLength(2);
+      const files = new FileStore(result.dataDir);
+      for (const row of rows) {
+        const bytes = files.read(row.storage_key);
+        expect(sha256(bytes)).toBe(row.source_sha256);
+        expect(bytes.length).toBe(row.size_bytes);
+      }
+      expect(rows.map((row) => row.storage_key).sort()).toEqual(stored.map((item) => item.storageKey).sort());
+      expect(restored.prepare('SELECT state FROM imports ORDER BY created_at, rowid').pluck().all()).toEqual(['committed', 'preview']);
+    } finally {
+      restored.close();
+    }
+    // The files folder holds the signature and the two sources, nothing else.
+    expect(readdirSync(join(result.dataDir, 'files'))).toHaveLength(3);
+    expect(JSON.stringify(restoreSummaryJson(result)).includes(stored[0]?.storageKey ?? 'x')).toBe(false);
+  });
+
+  it('refuses an import source whose bytes, size or presence differ from the manifest, leaving the target empty', async () => {
+    const flipped = tamperedCopy('import-hash', (copy) => {
+      const path = sourceOf(copy, 0);
+      const bytes = readFileSync(path);
+      bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 0xff;
+      writeFileSync(path, bytes);
+    });
+    expect((await refusal(flipped, join(work, 'target-import-hash'))).code).toBe('file_hash_mismatch');
+    const longer = tamperedCopy('import-size', (copy) => writeFileSync(sourceOf(copy, 1), Buffer.concat([readFileSync(sourceOf(copy, 1)), Buffer.from([0])])));
+    expect((await refusal(longer, join(work, 'target-import-size'))).code).toBe('file_size_mismatch');
+    const missing = tamperedCopy('import-missing', (copy) => rmSync(sourceOf(copy, 0)));
+    expect((await refusal(missing, join(work, 'target-import-missing'))).code).toBe('file_missing');
+  });
+
+  it('refuses a manifest from before this change (no import sources) when the backed-up database has imports rows', async () => {
+    const legacy = tamperedCopy('legacy-manifest', (copy) => rewriteManifest(copy, (manifest) => {
+      manifest.files = manifest.files.filter((file) => file.kind !== 'import');
+    }));
+    expect((await refusal(legacy, join(work, 'target-legacy'))).code).toBe('attachments_mismatch');
+  });
+
+  it('refuses a manifest that lists a file as an import source which the database does not refer to as one', async () => {
+    const forged = tamperedCopy('forged-manifest', (copy) => rewriteManifest(copy, (manifest) => {
+      const signature = manifest.files.find((file) => file.kind === 'signature');
+      if (signature === undefined) throw new Error('no signature');
+      signature.kind = 'import';
+    }));
+    expect((await refusal(forged, join(work, 'target-forged'))).code).toBe('attachments_mismatch');
+  });
+
+  it('still restores a manifest without import sources when the database has no imports rows (schema 12 and schema 11)', async () => {
+    const plain = await createTestContext(IMPORT_NOW);
+    try {
+      saveSignature(plain.db, plain.clock, new FileStore(dataDirOf(plain)), plain.userIds.employee, makePng(32, 8), 'image/png');
+      expect(count(plain.db, 'SELECT count(*) FROM imports')).toBe(0);
+      const backup = await createBackup({ databasePath: plain.config.databasePath, dataDir: dataDirOf(plain), targetDir: join(work, 'plain-backups'), clock: plain.clock });
+      expect(backup.manifest.files.map((file) => file.kind)).toEqual(['signature']);
+      const result = await restoreBackup({ fromDir: backup.directory, toDir: join(work, 'target-plain'), liveDataDir: dataDirOf(plain), liveDatabasePath: plain.config.databasePath, clock: plain.clock });
+      expect(result.schema).toMatchObject({ backup: LATEST, restored: LATEST });
+    } finally {
+      plain.close();
+    }
+
+    // Schema 11 has no `imports` table: the backup and the restore stay schema-aware, and the restore migrates to 12.
+    const dir = join(work, 'v11');
+    mkdirSync(dir);
+    const databasePath = join(dir, 'v11.db');
+    const db = openDatabase(databasePath);
+    try {
+      migrate(db, MIGRATIONS.slice(0, 11), new Date('2026-10-01T00:00:00Z'));
+      const clock = new MutableClock(NOW);
+      const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(12).toString('hex'), employee: randomBytes(12).toString('hex') } });
+      const employee = seed.users.find((user) => user.role === 'employee');
+      if (employee === undefined) throw new Error('no employee');
+      saveSignature(db, clock, new FileStore(join(dir, 'private-data')), employee.id, makePng(33, 8), 'image/png');
+    } finally {
+      db.close();
+    }
+    const backup = await createBackup({ databasePath, dataDir: join(dir, 'private-data'), targetDir: join(dir, 'backups'), clock: new MutableClock(NOW) });
+    expect(backup.manifest.schema_version).toBe(11);
+    const result = await restoreBackup({ fromDir: backup.directory, toDir: join(work, 'target-v11'), liveDataDir: join(dir, 'private-data'), liveDatabasePath: databasePath, clock: new MutableClock(LATER) });
+    expect(result.schema).toMatchObject({ backup: 11, restored: LATEST, applied: [12] });
+    const restored = openDatabase(result.databasePath);
+    try {
+      expect(count(restored, 'SELECT count(*) FROM imports')).toBe(0);
+    } finally {
+      restored.close();
+    }
   });
 });

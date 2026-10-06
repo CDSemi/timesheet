@@ -21,8 +21,8 @@
   - `src/server/db/migrations/0012_imports.ts`;
   - `tests/integration/backup.test.ts` and `restore.test.ts`;
   - `scripts/container-drill.mjs`, stages 2–3.
-- Baseline: the WP4-T09-FREEZE commit; the coordinator gives the SHA in the dispatch
-  prompt. The working tree differs only in handoff/.
+- Baseline: main at a67978722f76f28d791a9ed23aa59a642f8122c3, the WP4-T09-FREEZE
+  commit (digest 65f38459…, 760 files). The working tree differs only in handoff/.
 
 ## Runtime
 
@@ -112,3 +112,58 @@ Return at most 130 words, beginning with your self-reported model:
 ## Results
 
 (Worker appends here.)
+
+### Worker result (attempt 1)
+
+- Self-reported model: claude-sonnet-5-5 (profile timesheet-worker-high; effort not observable here).
+- Baseline: main at a67978722f76f28d791a9ed23aa59a642f8122c3. Node v24.21.0 (portable, first on PATH in Git Bash; first
+  shell call was `node --version`). npm scripts ran with `npm_config_script_shell` set to Git Bash (no cmd.exe).
+  Raw output: `D:\.claude-tmp\timesheet\WP4-T09B`. Evidence (masked, LF): `handoff/delivery/evidence/WP4-T09B/01..06`.
+- **Backup.** `manifest.ts` gains `referencedFilesSql(hasImports)`: the attachments rows, plus when the `imports` table
+  exists `SELECT storage_key, 'import' AS kind, source_sha256 AS sha256, size_bytes FROM imports`, ordered by storage
+  key. `backup.ts` reads this list from the COPY (table existence checked, so a schema older than 12 still backs up
+  attachments only, as in WP4-T12A), copies each file, hashes the copy and compares hash and size with the row, with
+  the same fault codes as attachments (`file_missing`, `file_size_mismatch`, `file_hash_mismatch`). A storage key that is
+  not in the file-store alphabet is `integrity_check_failed`. The manifest `BackupFileKind` gains the value `import`; the
+  key allowlist `MANIFEST_KEY_PATHS` is unchanged (only the value of `files[].kind` is new): a source is listed by its
+  opaque key, kind, hash and size, no name, email or path. `files_verified` counts it. `manifestSummary` and the CLI
+  output are unchanged (their `files` count includes the sources; `signatures` and `pdfs` do not).
+- **Restore.** `restore.ts` accepts kind `import`, verifies each listed source in the backup folder (hash and size) before
+  any write and again after its copy, exactly like attachments. `inspectCopy` compares the copy's rows (the same
+  `referencedFilesSql`) with the manifest, so every `imports` row has its source file with a matching hash.
+- **Compatibility cases (how the code behaves).**
+  1. Manifest from before this change (no import sources) and a database without `imports` rows: restores (schema 12 with
+     an empty `imports`, and a schema 11 backup with no table, which then migrates to 12). Tested.
+  2. The same manifest but the database has `imports` rows: refused, `attachments_mismatch`, nothing remains in the target.
+     Tested. (The manifest cannot vouch for the sources, so they would be lost.)
+  3. A manifest that lists an `import` source the database does not refer to as one: refused, `attachments_mismatch`.
+  4. A tampered, resized or missing source in the backup folder: `file_hash_mismatch`, `file_size_mismatch`, `file_missing`.
+  5. A backup taken after this change is refused by an older restore tool (`manifest_invalid`: unknown `kind` value).
+     No such tool is deployed, so this is accepted rather than versioned.
+- **Prune.** `prune.ts` never reads file kinds; unchanged. A new test shows a folder with a kind `import` source and file
+  is still a tool folder: expired ones are removed whole, the newest stays with its source.
+- **Doc comment.** `unless` in `security.ts` now names the two exceptions (signature upload and workbook import upload);
+  no code changed there (diff is comment lines only).
+- **Tests (red to green).** Red on a scratch clone of the baseline with only the final tests copied in
+  (`01-red-first.txt`): 6 failed, 51 passed. The failing ones are the backup copy and manifest test, the backup tamper
+  test, the restore of the sources, the restore tamper test, the legacy-manifest refusal and the forged-kind refusal.
+  The tests that must pass on the baseline too (allowlist, older schema 11 backup, schema 11 and empty-imports restore,
+  prune) pass there by design. Green on the working tree: 3 files, 57 passed (`02-green.txt`).
+  Coverage: backup after a committed import (plus a preview batch) restores the sources with matching hash and size;
+  tampered, resized and missing sources fail the backup and the restore; the manifest allowlist holds and holds nothing
+  personal; a schema 11 backup works.
+- **Mutation** (scratch clone with the change; `03-mutation.txt`): `referencedFilesSql(hasTable('imports'))` replaced by
+  `referencedFilesSql(false)` in `backup.ts` (skip the import keys): 4 tests fail, 53 pass; file restored, `cmp` identical.
+- **Verify** (`npm run verify`, NODE_OPTIONS `--trace-deprecation --pending-deprecation`): exit 0, 73 test files, 1655
+  tests passed, build and smoke passed, no deprecation output (`04-verify.txt`). Then `npm run digest`: exit 0,
+  `b8db09bdb3380f3d9536427881504bdaaa69adb8a0aba56266eb0f3bafad55bc` (760 files, handoff/ excluded). No source file
+  changed after verify.
+- **Precommit check** on a temporary index: see `06-precommit.txt`.
+- **Changed paths:** `src/server/ops/backup.ts`, `src/server/ops/manifest.ts`, `src/server/ops/restore.ts`,
+  `src/server/http/security.ts` (comment only), `tests/integration/backup.test.ts`, `tests/integration/restore.test.ts`,
+  `tests/integration/backup-prune.test.ts`, this brief and `handoff/delivery/evidence/WP4-T09B/`. Not changed: `prune.ts`,
+  `tests/support/concurrency.ts` (the writer loop does not commit imports; the import tests are separate), `scripts/container-drill.mjs`
+  (it seeds no imports, so its file-count assertions are unchanged; its line comparing manifest files with attachment
+  rows would need the same schema-aware list once a drill commits an import. The drill needs Docker and was not run).
+- **Deviations:** none. Order note: the source change was written before the red run; the red run was therefore made on a
+  scratch clone of the baseline with only the final tests added, which is the same evidence.

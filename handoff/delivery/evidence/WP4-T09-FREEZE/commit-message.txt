@@ -1,0 +1,26 @@
+Add owner-only workbook import with preview, conflict decisions and idempotent commit
+
+- feat(import): migration 0012 adds `imports`, unique on owner, source SHA-256
+  and mapping version; identity, source and report are immutable and rows are
+  never deleted.
+- feat(import): preview stores the source privately and reports source cells,
+  findings, rules and a conflict plan. Commit writes only imported_unverified
+  timesheets, explicit day entries and owner audit rows in one transaction.
+  Only new, ended, in-calendar periods are importable and every listed day
+  needs a decision. A replay returns the first result, also under concurrency.
+- feat(api): `/api/imports` is owner only with a route-scoped 8 MiB upload
+  limit; others, administrators and share grantees get 404.
+- feat(guard): imported periods answer 409 `imported_period` for sign-off,
+  correction and edits, and are never automated.
+- fix(jobs): the orphan sweep keeps import sources.
+- test: 21 tests written red-first; five mutations are caught. The template
+  hash is unchanged.
+- docs(handoff): WP4-T09 records, the WP4-T09B and WP4-T10 briefs, the
+  WP4-T05B freeze result, board and checkpoint (+ vi).
+
+Task: WP4-T09-FREEZE
+Gate: precommit-check, validate_orchestration, check_recovery and validate_package --preflight PASS
+Audit: WP4-T09 records
+Digest: 65f38459e2058c8070e3cab52b30aaad683372bdbbaa2e7ef4ac8d683edd336c
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

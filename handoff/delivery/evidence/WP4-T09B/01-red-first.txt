@@ -1,0 +1,132 @@
+# WP4-T09B red-first run: scratch clone of main a679787 (baseline source, git archive HEAD, npm ci exit 0) with ONLY the three final test files copied in
+# Command: npm exec -- vitest run tests/integration/backup.test.ts tests/integration/restore.test.ts tests/integration/backup-prune.test.ts   (exit=1)
+# Expected: the six new import-source tests fail (baseline backs up and restores attachments only); the prune test passes (prune never read file kinds).
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/WP4-T09B/mut
+
+ ❯ tests/integration/backup.test.ts (12 tests | 2 failed) 6005ms
+   ❯ backup of the private workbook import sources (WP4-T09B, AC-11) (3)
+     × copies the source of every batch (committed and preview) with the recorded hash and size, and lists it with hash and size only 53ms
+     × fails the backup, as for attachments, when an import source is tampered with, changed in size or missing 34ms
+ ❯ tests/integration/restore.test.ts (32 tests | 4 failed) 13004ms
+   ❯ restore of the private workbook import sources (WP4-T09B, AC-11) (5)
+     × restores every import source into the isolated data directory with a matching hash and size 35ms
+     × refuses an import source whose bytes, size or presence differ from the manifest, leaving the target empty 3ms
+     × refuses a manifest from before this change (no import sources) when the backed-up database has imports rows 44ms
+     × refuses a manifest that lists a file as an import source which the database does not refer to as one 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup.test.ts > backup of the private workbook import sources (WP4-T09B, AC-11) > copies the source of every batch (committed and preview) with the recorded hash and size, and lists it with hash and size only
+AssertionError: expected [] to deeply equal [ { …(4) }, { …(4) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "kind": "import",
+-     "sha256": "0c9e73eab04ee5f880c3411dc017c4bd12b83fab4d1633dc028907cf285e53e2",
+-     "size_bytes": 31354,
+-     "storage_key": "CC9CmPbvviHcQEjb_Yfj-Px9wS9tLaPI",
+-   },
+-   {
+-     "kind": "import",
+-     "sha256": "401ee855a68d3ba24b3301fea1b3fb7be45401dfbfb20310f3a9d0104fd06fd3",
+-     "size_bytes": 31352,
+-     "storage_key": "o4Dq5lbOdoXLUHeHe29fotqUGcP4pLKk",
+-   },
+- ]
++ []
+
+ ❯ tests/integration/backup.test.ts:582:21
+    580|     const backup = await createBackup(request());
+    581|     const imports = backup.manifest.files.filter((file) => file.kind =…
+    582|     expect(imports).toEqual(
+       |                     ^
+    583|       [...stored].sort((a, b) => (a.storageKey < b.storageKey ? -1 : 1…
+    584|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/integration/backup.test.ts > backup of the private workbook import sources (WP4-T09B, AC-11) > fails the backup, as for attachments, when an import source is tampered with, changed in size or missing
+AssertionError: expected null to be an instance of BackupError
+ ❯ failure tests/integration/backup.test.ts:573:19
+    571|       (caught: unknown) => caught,
+    572|     );
+    573|     expect(error).toBeInstanceOf(BackupError);
+       |                   ^
+    574|     return error as BackupError;
+    575|   }
+ ❯ tests/integration/backup.test.ts:610:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of the private workbook import sources (WP4-T09B, AC-11) > restores every import source into the isolated data directory with a matching hash and size
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/integration/restore.test.ts:1191:76
+    1189|     const to = join(work, 'target-restored');
+    1190|     const result = await restoreBackup(request(backupDir, to));
+    1191|     expect(result.manifest.files.filter((file) => file.kind === 'impor…
+       |                                                                            ^
+    1192|     const restored = openDatabase(result.databasePath);
+    1193|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of the private workbook import sources (WP4-T09B, AC-11) > refuses an import source whose bytes, size or presence differ from the manifest, leaving the target empty
+Error: ENOENT: no such file or directory, open 'D:\.claude-tmp\timesheet\WP4-T09B\tmp\timesheet-t09b-restore-z3D121\import-hash\files\IBzDg7Gu_-7ivU-A8gdbpQD7XPy8Awkv'
+ ❯ tests/integration/restore.test.ts:1215:21
+    1213|     const flipped = tamperedCopy('import-hash', (copy) => {
+    1214|       const path = sourceOf(copy, 0);
+    1215|       const bytes = readFileSync(path);
+       |                     ^
+    1216|       bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 0xff;
+    1217|       writeFileSync(path, bytes);
+ ❯ tamperedCopy tests/integration/restore.test.ts:1175:5
+ ❯ tests/integration/restore.test.ts:1213:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of the private workbook import sources (WP4-T09B, AC-11) > refuses a manifest from before this change (no import sources) when the backed-up database has imports rows
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:1167:19
+    1165|       (caught: unknown) => caught,
+    1166|     );
+    1167|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    1168|     expect(existsSync(toDir) ? readdirSync(toDir) : []).toEqual([]); /…
+    1169|     return error as RestoreError;
+ ❯ tests/integration/restore.test.ts:1230:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of the private workbook import sources (WP4-T09B, AC-11) > refuses a manifest that lists a file as an import source which the database does not refer to as one
+AssertionError: expected 'manifest_invalid' to be 'attachments_mismatch' // Object.is equality
+
+Expected: "attachments_mismatch"
+Received: "manifest_invalid"
+
+ ❯ tests/integration/restore.test.ts:1239:71
+    1237|       signature.kind = 'import';
+    1238|     }));
+    1239|     expect((await refusal(forged, join(work, 'target-forged'))).code).…
+       |                                                                       ^
+    1240|   });
+    1241|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  6 failed | 51 passed (57)
+   Start at  01:36:04
+   Duration  14.56s (tests 86%, import 9%, transform 5%)
+

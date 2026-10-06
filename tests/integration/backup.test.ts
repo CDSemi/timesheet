@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, migrate } from '../../src/server/db/migrations.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
@@ -14,7 +15,9 @@ import { BACKUP_DATABASE_NAME, BACKUP_FILES_DIR, type BackupManifest, MANIFEST_F
 import { seedSynthetic } from '../../src/server/seed.ts';
 import { backupStatusJson, getBackupStatus } from '../../src/server/services/operationsStatus.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import { commitImport, previewImport } from '../../src/server/services/workbookImport.ts';
 import { BackgroundWriter, type WriterSummary } from '../support/concurrency.ts';
+import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
 import { createTestContext, MutableClock, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -505,5 +508,141 @@ describe('cli.js backup', () => {
     expect(cli(['--to']).status).toBe(2);
     expect(cli(['--to', target, '--keep-all']).status).toBe(2);
     expect(cli(['--to', target, '--prune', '--dry-run']).status).toBe(2);
+  });
+});
+
+/* ------------------------------------------------------------------ import sources (WP4-T09B) ---- */
+
+const IMPORT_NOW = '2026-12-15T20:00:00Z';
+const IMPORT_PERIODS = ['2026-09-04', '2026-09-18'] as const;
+
+interface StoredImport {
+  id: string;
+  storageKey: string;
+  sha256: string;
+  sizeBytes: number;
+}
+
+/** Previews one synthetic workbook per payroll date for the seeded employee and commits the first (the other stays a preview). */
+function addImports(t: TestContext, payrollDates: readonly string[]): StoredImport[] {
+  const employee: SessionUser = {
+    id: t.userIds.employee,
+    email: t.emails.employee,
+    displayName: 'Synthetic Employee',
+    role: 'employee',
+    calendarId: t.calendarId,
+    sessionId: 'test',
+  };
+  const ctx = { db: t.db, clock: t.clock, files: new FileStore(dataDirOf(t)), user: employee };
+  const batches = payrollDates.map((payrollDate) => previewImport(ctx, buildSyntheticWorkbook({ periods: [{ payrollDate }] })).batch);
+  const first = batches[0];
+  if (first === undefined) throw new Error('no batch');
+  commitImport({ db: t.db, clock: t.clock, user: employee }, first.id, []);
+  return batches.map((batch) => {
+    const row = t.db.prepare<[string], { storage_key: string; source_sha256: string; size_bytes: number }>('SELECT storage_key, source_sha256, size_bytes FROM imports WHERE id = ?').get(batch.id);
+    if (row === undefined) throw new Error('no imports row');
+    return { id: batch.id, storageKey: row.storage_key, sha256: row.source_sha256, sizeBytes: row.size_bytes };
+  });
+}
+
+describe('backup of the private workbook import sources (WP4-T09B, AC-11)', () => {
+  let t: TestContext;
+  let target: string;
+  let stored: StoredImport[];
+
+  beforeAll(async () => {
+    t = await createTestContext(IMPORT_NOW);
+    saveSignature(t.db, t.clock, new FileStore(dataDirOf(t)), t.userIds.employee, makePng(11), 'image/png');
+    stored = addImports(t, IMPORT_PERIODS);
+    target = scratch('timesheet-backups-');
+  });
+
+  afterAll(() => {
+    t.close();
+    rmSync(target, { recursive: true, force: true });
+  });
+
+  const request = () => ({ databasePath: t.config.databasePath, dataDir: dataDirOf(t), targetDir: target, clock: t.clock });
+
+  /** Runs a backup that must fail and returns its error. */
+  async function failure(): Promise<BackupError> {
+    const error = await createBackup(request()).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(BackupError);
+    return error as BackupError;
+  }
+
+  it('copies the source of every batch (committed and preview) with the recorded hash and size, and lists it with hash and size only', async () => {
+    expect(stored).toHaveLength(2);
+    expect(t.db.prepare("SELECT state FROM imports ORDER BY created_at, rowid").pluck().all()).toEqual(['committed', 'preview']);
+    const backup = await createBackup(request());
+    const imports = backup.manifest.files.filter((file) => file.kind === 'import');
+    expect(imports).toEqual(
+      [...stored].sort((a, b) => (a.storageKey < b.storageKey ? -1 : 1)).map((item) => ({ storage_key: item.storageKey, kind: 'import', sha256: item.sha256, size_bytes: item.sizeBytes })),
+    );
+    expect(backup.manifest.files).toHaveLength(3); // the signature and the two sources
+    expect(backup.manifest.integrity.files_verified).toBe(3);
+    expect(readdirSync(join(backup.directory, BACKUP_FILES_DIR)).sort()).toEqual(backup.manifest.files.map((file) => file.storage_key));
+    for (const item of stored) {
+      const bytes = readFileSync(join(backup.directory, BACKUP_FILES_DIR, item.storageKey));
+      expect(sha256(bytes)).toBe(item.sha256);
+      expect(bytes.length).toBe(item.sizeBytes);
+    }
+    // The manifest key allowlist is unchanged and exact; nothing about the owner, the workbook or any path appears.
+    const manifest = readManifest(backup.directory);
+    expect([...new Set(keyPaths(manifest))].sort()).toEqual([...MANIFEST_KEY_PATHS].sort());
+    const text = readFileSync(join(backup.directory, MANIFEST_FILE_NAME), 'utf8');
+    for (const value of [t.emails.employee, '@', dataDirOf(t), target, 'Synthetic', '.xlsx', 'Timesheet']) expect(text.includes(value), value).toBe(false);
+  });
+
+  it('fails the backup, as for attachments, when an import source is tampered with, changed in size or missing', async () => {
+    const [first] = stored;
+    if (first === undefined) throw new Error('no import');
+    const path = new FileStore(dataDirOf(t)).pathOf(first.storageKey);
+    const original = readFileSync(path);
+    const before = readdirSync(target).length;
+    try {
+      const flipped = Buffer.from(original);
+      flipped[flipped.length - 1] = (flipped[flipped.length - 1] ?? 0) ^ 0xff;
+      writeFileSync(path, flipped);
+      expect((await failure()).code).toBe('file_hash_mismatch');
+
+      writeFileSync(path, Buffer.concat([original, Buffer.from([0])]));
+      expect((await failure()).code).toBe('file_size_mismatch');
+
+      rmSync(path);
+      expect((await failure()).code).toBe('file_missing');
+      expect(backupStatusJson(getBackupStatus(t.db))).toMatchObject({ outcome: 'failed', fault_code: 'file_missing' });
+      expect(readdirSync(target).length).toBe(before); // no partial folder
+    } finally {
+      writeFileSync(path, original);
+    }
+    expect((await createBackup(request())).manifest.files.filter((file) => file.kind === 'import')).toHaveLength(2);
+  });
+
+  it('still backs up a schema older than the imports table (version 11: attachments only)', async () => {
+    const dir = scratch('timesheet-backup-v11-');
+    try {
+      const databasePath = join(dir, 'v11.db');
+      const db = openDatabase(databasePath);
+      try {
+        migrate(db, MIGRATIONS.slice(0, 11), new Date('2026-10-01T00:00:00Z'));
+        const clock = new MutableClock(NOW);
+        const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(12).toString('hex'), employee: randomBytes(12).toString('hex') } });
+        const employee = seed.users.find((user) => user.role === 'employee');
+        if (employee === undefined) throw new Error('no employee');
+        saveSignature(db, clock, new FileStore(join(dir, 'private-data')), employee.id, makePng(13), 'image/png');
+        expect(db.prepare("SELECT count(*) FROM sqlite_master WHERE name = 'imports'").pluck().get()).toBe(0);
+      } finally {
+        db.close();
+      }
+      const backup = await createBackup({ databasePath, dataDir: join(dir, 'private-data'), targetDir: join(dir, 'backups'), clock: new MutableClock(NOW) });
+      expect(backup.manifest.schema_version).toBe(11);
+      expect(backup.manifest.files.map((file) => file.kind)).toEqual(['signature']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

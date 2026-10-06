@@ -31,9 +31,10 @@ export const requireJsonContentType = createMiddleware(async (c, next) => {
 });
 
 /**
- * Applies `middleware` to every request except those matching `exempt`. Used for the one
- * route-scoped exception to the global JSON body rules (the signature upload); the
- * predicate must stay an exact method-and-path match so the exception cannot widen.
+ * Applies `middleware` to every request except those matching `exempt`. Used for the two
+ * route-scoped exceptions to the global JSON body rules (the signature upload and the workbook
+ * import upload); each predicate must stay an exact method-and-path match so the exceptions
+ * cannot widen.
  */
 export function unless(exempt: (c: Context) => boolean, middleware: MiddlewareHandler): MiddlewareHandler {
   return async (c, next) => {

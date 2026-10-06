@@ -17,7 +17,20 @@ export const BACKUP_DATABASE_NAME = 'timesheet.db';
 /** Folder of the file copies inside a backup folder (the same layout as the private data directory). */
 export const BACKUP_FILES_DIR = 'files';
 
-export type BackupFileKind = 'signature' | 'pdf';
+/** `signature` and `pdf` are `attachments` rows; `import` is the private source workbook of an `imports` row (WP4-T09B). */
+export type BackupFileKind = 'signature' | 'pdf' | 'import';
+
+/**
+ * The SQL that lists every private file a database refers to, as (storage_key, kind, sha256, size_bytes) ordered by
+ * storage key: the `attachments` rows plus, when the schema has the `imports` table (migration 0012), each batch's
+ * stored source with its `source_sha256` and `size_bytes`. Backup and restore both use it, so they cannot disagree
+ * about which files a snapshot refers to; a schema without `imports` (older than 12) lists attachments only.
+ */
+export function referencedFilesSql(hasImports: boolean): string {
+  const attachments = 'SELECT storage_key, kind, sha256, size_bytes FROM attachments';
+  const imports = "SELECT storage_key, 'import' AS kind, source_sha256 AS sha256, size_bytes FROM imports";
+  return `${hasImports ? `${attachments} UNION ALL ${imports}` : attachments} ORDER BY storage_key`;
+}
 
 export interface ManifestFile {
   storage_key: string;

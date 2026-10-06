@@ -135,4 +135,10 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Self-reported model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD 6fecd88e0328bab3603470ec35b8e9050528fbbc; post-HEAD and commit
+  a67978722f76f28d791a9ed23aa59a642f8122c3; pushed yes; remote SHA the same.
+- Digest 65f38459... (760 files) matched; 32 staged. Scope checks passed (no
+  .xlsx, package files, .claude/, docs/, reference/, src/client/ changes).
+- Exit codes: digest, add, precommit, diff --check, JSON, validator,
+  check_recovery, preflight all 0. No blockers. See evidence/WP4-T09-FREEZE/checks.txt.

@@ -36,6 +36,7 @@ import {
   MANIFEST_KEY_PATHS,
   type ManifestFile,
   manifestSummary,
+  referencedFilesSql,
 } from './manifest.ts';
 
 /*
@@ -51,7 +52,7 @@ import {
  *    copy and every listed file are hashed in the backup folder and compared with the manifest (SHA-256 and size).
  * 3. The database and the files are copied with exclusive creation; every COPY is hashed again.
  * 4. The copied database must pass `integrity_check` and `foreign_key_check`, record the manifest's schema version and
- *    list exactly the manifest's files as attachments. Then pending migrations are applied (an older backup is upgraded
+ *    list exactly the manifest's files (attachments and, from schema 12, the import sources). Then pending migrations are applied (an older backup is upgraded
  *    once, through the same versioned migrations as any start).
  * 5. One transaction sets the outbound pause (`restored`) and marks for explicit reconciliation what the source may
  *    have sent after the snapshot: every `sending` or `preparing` attempt becomes `uncertain` with the code
@@ -279,7 +280,7 @@ function isManifestFile(value: unknown): value is ManifestFile {
   return (
     typeof file.storage_key === 'string' &&
     isStorageKey(file.storage_key) &&
-    (file.kind === 'signature' || file.kind === 'pdf') &&
+    (file.kind === 'signature' || file.kind === 'pdf' || file.kind === 'import') &&
     typeof file.sha256 === 'string' &&
     SHA256.test(file.sha256) &&
     isCount(file.size_bytes)
@@ -674,7 +675,11 @@ function inspectCopy(path: string, manifest: BackupManifest): void {
     const version = Number(copy.prepare('SELECT coalesce(max(version), 0) FROM schema_migrations').pluck().get());
     if (version > MIGRATIONS.length) throw new RestoreError('schema_newer');
     if (version !== manifest.schema_version) throw new RestoreError('schema_mismatch');
-    const rows = copy.prepare<[], ManifestFile>('SELECT storage_key, kind, sha256, size_bytes FROM attachments ORDER BY storage_key').all();
+    // The files the copy refers to: attachments plus, when the schema has the table, the import sources (WP4-T09B). A
+    // manifest that lists fewer or other files than the copy refers to is refused here: a manifest from before this
+    // change (no import sources) restores a database without `imports` rows only, and one with such rows is refused.
+    const hasImports = copy.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'imports'").pluck().get() === 1;
+    const rows = copy.prepare<[], ManifestFile>(referencedFilesSql(hasImports)).all();
     const listed = [...manifest.files].sort((a, b) => (a.storage_key < b.storage_key ? -1 : a.storage_key > b.storage_key ? 1 : 0));
     const same =
       rows.length === listed.length &&

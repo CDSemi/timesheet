@@ -29,6 +29,7 @@ import {
   type BackupManifest,
   buildManifest,
   MANIFEST_FILE_NAME,
+  referencedFilesSql,
   serializeManifest,
 } from './manifest.ts';
 
@@ -41,8 +42,10 @@ import {
  * the file store contract (O7, docs/03 "Atomicity and snapshots"): a file is written to `tmp/`, flushed and renamed to
  * its final key BEFORE the row that refers to it commits, files are immutable, and a referenced file is never removed.
  * So every storage key the snapshot refers to already exists, complete, when the snapshot is taken, and stays. The keys
- * are read from the COPY (not the live database), each file is copied and its copy is hashed and compared with the
- * SHA-256 and size recorded in the snapshot; files and rows written after the snapshot are simply not part of it.
+ * are read from the COPY (not the live database): the `attachments` rows (signatures, PDFs) and, when the schema has
+ * the `imports` table, the stored source workbook of each import batch (WP4-T09B; its hash and size are the row's
+ * `source_sha256` and `size_bytes`). Each file is copied and its copy is hashed and compared with the SHA-256 and
+ * size recorded in the snapshot; files and rows written after the snapshot are simply not part of it.
  *
  * The copy is then checked (`PRAGMA integrity_check`, `PRAGMA foreign_key_check`) and turned into a single
  * self-contained file (journal_mode DELETE, no -wal or -shm). Everything is written into a hidden staging folder
@@ -254,10 +257,10 @@ function inspectCopy(path: string): { schemaVersion: number; files: SnapshotFile
     if (integrity.length !== 1 || integrity[0]?.integrity_check !== 'ok') throw new BackupError('integrity_check_failed');
     if ((copy.pragma('foreign_key_check') as unknown[]).length > 0) throw new BackupError('foreign_key_violation');
     const schemaVersion = Number(copy.prepare('SELECT coalesce(max(version), 0) FROM schema_migrations').pluck().get());
-    const hasAttachments = copy.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'attachments'").pluck().get() === 1;
-    const files = hasAttachments
-      ? copy.prepare<[], SnapshotFile>('SELECT storage_key, kind, sha256, size_bytes FROM attachments ORDER BY storage_key').all()
-      : [];
+    const open = copy;
+    const hasTable = (name: string): boolean => open.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(name) === 1;
+    // Schema-aware: a schema older than migration 0012 has no `imports` table (attachments only, as in WP4-T12A).
+    const files = hasTable('attachments') ? copy.prepare<[], SnapshotFile>(referencedFilesSql(hasTable('imports'))).all() : [];
     for (const file of files) {
       if (!isStorageKey(file.storage_key)) throw new BackupError('integrity_check_failed');
     }

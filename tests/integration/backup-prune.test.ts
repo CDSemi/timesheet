@@ -117,18 +117,22 @@ describe('selectRetention (pure)', () => {
 
 const SHA = '0'.repeat(64);
 
-function writeBackup(target: string, instant: string, options: { manifestInstant?: string; hex?: string } = {}): string {
+function writeBackup(target: string, instant: string, options: { manifestInstant?: string; hex?: string; importSource?: boolean } = {}): string {
   const name = nameOf(instant, options.hex);
   const dir = join(target, name);
   mkdirSync(join(dir, 'files'), { recursive: true });
   writeFileSync(join(dir, 'timesheet.db'), 'synthetic database copy');
   writeFileSync(join(dir, 'files', 'abc'), 'synthetic file');
+  if (options.importSource === true) writeFileSync(join(dir, 'files', 'import-source-0001'), 'synthetic workbook source');
   const manifest = buildManifest({
     appVersion: '0.0.0',
     schemaVersion: 9,
     createdAt: options.manifestInstant ?? instant,
     database: { sha256: SHA, sizeBytes: 23 },
-    files: [{ storageKey: 'abc', kind: 'pdf', sha256: SHA, sizeBytes: 14 }],
+    files: [
+      { storageKey: 'abc', kind: 'pdf', sha256: SHA, sizeBytes: 14 },
+      ...(options.importSource === true ? [{ storageKey: 'import-source-0001', kind: 'import' as const, sha256: SHA, sizeBytes: 25 }] : []),
+    ],
   });
   writeFileSync(join(dir, MANIFEST_FILE_NAME), serializeManifest(manifest));
   return name;
@@ -203,6 +207,18 @@ describe('pruneBackups on disk', () => {
     expect(existsSync(join(outside, outsideBackup, MANIFEST_FILE_NAME))).toBe(true);
     expect(existsSync(join(target, newest, MANIFEST_FILE_NAME))).toBe(true);
     expect(existsSync(join(target, noManifest, 'files', 'abc'))).toBe(true);
+  });
+
+  it('keeps treating a backup folder that holds import sources (kind import) as a folder the backup tool created (WP4-T09B)', () => {
+    const target = freshTarget();
+    const expired = ['2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z'].map((instant) => writeBackup(target, instant, { importSource: true }));
+    const newest = writeBackup(target, '2026-10-06T03:00:00Z', { importSource: true });
+    const dry = pruneBackups({ targetDir: target, clock: clockAt(NOW), dryRun: true });
+    expect(dry).toEqual({ candidates: 3, kept: 1, removed: 2, ignored: 0, dryRun: true });
+    expect(pruneBackups({ targetDir: target, clock: clockAt(NOW), dryRun: false, requiredName: newest })).toEqual({ candidates: 3, kept: 1, removed: 2, ignored: 0, dryRun: false });
+    for (const name of expired) expect(existsSync(join(target, name)), name).toBe(false);
+    expect(readdirSync(target)).toEqual([newest]);
+    expect(readFileSync(join(target, newest, 'files', 'import-source-0001'), 'utf8')).toBe('synthetic workbook source');
   });
 
   it('refuses a candidate that resolves outside the target and removes nothing', () => {
