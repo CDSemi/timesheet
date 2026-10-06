@@ -583,8 +583,24 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - verify: 1525 test; digest 15b7422e….
        - Rủi ro để audit xem: thư mà máy nguồn đã gửi rồi vẫn bị giữ lại, và chỉ có thể
          release hoặc để giữ nguyên.
-     - Đang chạy: WP4-T06-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
-       commit.
+     - WP4-T06-FREEZE đã commit và push thành 72ab2ed (39 đường dẫn; mọi kiểm tra trả về
+       0).
+     - Điều phối viên tách WP4-T07 vì F-3 và F-4 chưa có câu trả lời.
+       - Cờ F-3 và việc giữ lịch sử job theo F-4 chuyển sang WP4-T07B, làm sau khi chủ
+         dự án trả lời.
+       - WP4-T07 đã xong (tác giả tự báo):
+         - các trường trạng thái về sao lưu, dung lượng đĩa và gửi thư, có danh sách
+           khóa được phép cố định;
+         - lịch dọn tệp mồ côi hằng ngày, khóa theo ngày, chỉ xóa tệp không còn được
+           tham chiếu và cũ hơn 24 giờ;
+         - giao diện trạng thái dùng token E-8;
+         - test: 13 đỏ → xanh; đột biến làm 2 test fail;
+         - e2e: 131 đạt; verify: 1545 test; digest cc86af8a….
+
+         Kỳ vọng về số job được nhận trong 3 test đã đổi để tính cả việc dọn tệp; audit
+         sẽ đánh giá thay đổi này có làm test yếu đi không.
+     - Đang chạy: WP4-T07-FREEZE (committer). Điều phối viên không ghi tệp nào trong
+       lúc commit.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -624,7 +640,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T06-FREEZE.
+- Process còn sống: chỉ WP4-T07-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

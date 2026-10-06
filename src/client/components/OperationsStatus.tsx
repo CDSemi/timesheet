@@ -7,6 +7,7 @@ import {
   type SendJobState,
   type SubmissionStatus,
 } from '../api.ts';
+import { backupSummary, diskSummary, outboundBanner } from './adminModel.ts';
 import { describeError } from './errors.ts';
 import { displayZone, instantText } from './format.ts';
 
@@ -15,6 +16,9 @@ import { displayZone, instantText } from './format.ts';
  * pipeline and, per person and period, the revision, PDF and delivery states with redacted fault
  * codes and recipient addresses. It never shows, and the server never sends, a timesheet detail,
  * a template or message content. Colour always comes with text. Reads only.
+ *
+ * WP4-T07 adds the last backup with its age (a warning after 26 hours), the free space of the data volume and,
+ * while outbound delivery is paused, a banner that says why and how many sends are held. Counts only.
  */
 
 type Tone = 'neutral' | 'ok' | 'warn' | 'error';
@@ -102,8 +106,37 @@ function Instant({ value }: { value: string }) {
   return <time dateTime={value}>{instantText(value, displayZone)}</time>;
 }
 
+function PauseBanner({ outbound }: { outbound: OperationsStatusData['outbound'] }) {
+  const banner = outboundBanner(outbound);
+  if (banner === null) return null;
+  return (
+    <section className="warn-box ops-pause stack" role="status" aria-label="Outbound delivery paused" data-ops="pause">
+      <h3>{banner.headline}</h3>
+      <p data-pause="reason">{banner.reason}</p>
+      <dl className="facts ops-counts" data-pause="counts">
+        {banner.counts.map((count) => (
+          <div key={count.label}>
+            <dt>{count.label}</dt>
+            <dd data-pause-count={count.label}>{count.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="hint" data-pause="action">
+        {banner.action}
+        {outbound.paused_at !== null && (
+          <>
+            {' '}
+            Paused since <Instant value={outbound.paused_at} />.
+          </>
+        )}
+      </p>
+    </section>
+  );
+}
+
 function StatusPanel({ status }: { status: OperationsStatusData }) {
   const runner = RUNNER[status.runner.state];
+  const backup = backupSummary(status.backup);
   const sender = status.sender.configured === null ? 'Unknown' : status.sender.configured ? 'Configured' : 'Not configured';
   const mode =
     status.sender.outbound_mode === 'capture'
@@ -113,6 +146,7 @@ function StatusPanel({ status }: { status: OperationsStatusData }) {
         : 'Unknown';
   return (
     <div className="stack" data-ops="status">
+      <PauseBanner outbound={status.outbound} />
       <dl className="facts">
         <div>
           <dt>Sender address</dt>
@@ -133,6 +167,23 @@ function StatusPanel({ status }: { status: OperationsStatusData }) {
               </>
             )}
           </dd>
+        </div>
+        <div>
+          <dt>Last backup</dt>
+          <dd data-fact="backup">
+            <Badge label={{ text: backup.text, tone: backup.tone }} name="backup" />
+            {backup.detail !== null && <span className="ops-code mono hint"> {backup.detail}</span>}
+            {status.backup.last_success_at !== null && (
+              <>
+                {' '}
+                <Instant value={status.backup.last_success_at} />
+              </>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Data volume</dt>
+          <dd data-fact="disk">{diskSummary(status.disk)}</dd>
         </div>
         <div>
           <dt>Automatic submission starts</dt>

@@ -19,6 +19,7 @@ import {
 import { createPdfJobHandler, JOB_RENDER_PDF } from './pdfJob.ts';
 import { createReminderScanHandler, createSendReminderHandler, enqueueReminderScan, JOB_REMINDER_SCAN, JOB_SEND_REMINDER } from './reminderJob.ts';
 import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
+import { createSweepJobHandler, enqueueOrphanSweep, JOB_ORPHAN_SWEEP, type OrphanSweepCounts, sweepLine } from './sweepJob.ts';
 
 /*
  * Job runner (docs/03, docs/05 "Durable delivery"). `runJobsOnce` writes the heartbeat, then
@@ -33,6 +34,8 @@ import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
  * While outbound delivery is paused (WP4-T06, operations_state), the claim (jobStore.ts `claimNextJob`)
  * leaves the outbound kinds out: the pass still renders PDFs and runs the scans, but no send or
  * reminder job is leased, no attempt is spent and nothing reaches the outbound adapter.
+ * A pass that owns the sweep handler also enqueues today's orphan sweep (WP4-T07): one job per UTC day, idempotent, not an
+ * outbound kind, so the pause never holds it back.
  */
 
 export interface JobContext {
@@ -68,8 +71,8 @@ const DEFAULT_MAX_JOBS = 100;
 export const DEFAULT_INTERVAL_MS = 15_000;
 
 /**
- * The production handlers: the PDF job, the send job, the deadline scan and the reminder scan and
- * send jobs; later job kinds register here. The send jobs use the configured outbound mode (capture
+ * The production handlers: the PDF job, the send job, the deadline scan, the reminder scan and
+ * send jobs and the daily orphan sweep (its counts are printed as one line when it removed something); later job kinds register here. The send jobs use the configured outbound mode (capture
  * by default, under the files' private data directory) and the configured sender; reminders link
  * to the configured public base URL.
  */
@@ -78,6 +81,8 @@ export function createJobHandlers(deps: {
   clock: Clock;
   files: FileStore;
   delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound' | 'publicBaseUrl'>;
+  /** Receives the counts of every orphan sweep; by default a sweep that removed something prints one counts-only line. */
+  onSweep?: (counts: OrphanSweepCounts) => void;
 }): JobHandlers {
   const { db, clock, files, delivery } = deps;
   const outbound = createOutboundAdapter(delivery.outbound, { dataDir: files.root });
@@ -87,6 +92,16 @@ export function createJobHandlers(deps: {
     [JOB_DEADLINE_SCAN]: createDeadlineJobHandler({ db, clock }),
     [JOB_REMINDER_SCAN]: createReminderScanHandler({ db, clock }),
     [JOB_SEND_REMINDER]: createSendReminderHandler({ db, clock, outbound, senderAddress: delivery.senderAddress, publicBaseUrl: delivery.publicBaseUrl }),
+    [JOB_ORPHAN_SWEEP]: createSweepJobHandler({
+      db,
+      clock,
+      files,
+      onResult:
+        deps.onSweep ??
+        ((counts) => {
+          if (counts.removedTemporary + counts.removedUnreferenced > 0) console.log(sweepLine(counts));
+        }),
+    }),
   };
 }
 
@@ -103,6 +118,8 @@ export async function runJobsOnce(options: RunnerOptions): Promise<RunSummary> {
   if (kinds.includes(JOB_DEADLINE_SCAN)) enqueueDeadlineScan(db, clock);
   // This bucket's reminder scan (idempotent; nothing at all while the activation instant is null).
   if (kinds.includes(JOB_REMINDER_SCAN)) enqueueReminderScan(db, clock);
+  // Today's orphan sweep (idempotent on the UTC day; not gated by the activation instant or the outbound pause).
+  if (kinds.includes(JOB_ORPHAN_SWEEP)) enqueueOrphanSweep(db, clock);
 
   // Before the claim sweep below can end the job of a dead runner (docs/05 failure table: uncertain, never resent).
   if (kinds.includes(JOB_SEND_EMAIL)) recoverInterruptedSends(db, clock);

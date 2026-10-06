@@ -470,6 +470,25 @@ export interface OperationsStatus {
   sender: { configured: boolean | null; outbound_mode: 'capture' | 'smtp' | 'unknown' };
   runner: { heartbeat_at: string | null; state: 'never' | 'running' | 'stale' };
   activation: { active_from: string | null; recorded_at: string | null; recorded_by: string | null };
+  /** The latest `cli.js backup` (WP4-T05): an outcome, a redacted code and instants; age_seconds counts from the last success. */
+  backup: {
+    outcome: 'never' | 'succeeded' | 'failed';
+    last_attempt_at: string | null;
+    last_success_at: string | null;
+    fault_code: string | null;
+    age_seconds: number | null;
+  };
+  /** Free and total bytes of the data volume; null when the volume cannot be read. */
+  disk: { free_bytes: number | null; total_bytes: number | null };
+  /** The outbound pause (WP4-T06) with counts only. */
+  outbound: {
+    paused: boolean;
+    paused_at: string | null;
+    reason: string | null;
+    awaiting_decision: number;
+    queued_send_jobs: number;
+    held_send_jobs: number;
+  };
   jobs: Record<'queued' | 'leased' | 'succeeded' | 'intervention' | 'cancelled', number>;
   deliveries: Record<'preparing' | 'sending' | 'accepted' | 'failed_temporary' | 'failed_permanent' | 'uncertain', number>;
 }

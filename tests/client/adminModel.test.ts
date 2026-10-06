@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ApiRequestError } from '../../src/client/api.ts';
+import { ApiRequestError, type OperationsStatus } from '../../src/client/api.ts';
 import {
+  BACKUP_WARN_SECONDS,
+  backupSummary,
+  byteText,
   calendarOptions,
   csvFileProblem,
   defaultImportYear,
+  diskSummary,
   issueText,
+  outboundBanner,
   passwordProblem,
   refusalMessage,
 } from '../../src/client/components/adminModel.ts';
@@ -71,5 +76,70 @@ describe('import defaults and file checks', () => {
     expect(csvFileProblem('holidays-synthetic.csv', 1_000)).toBeNull();
     expect(csvFileProblem('holidays.txt', 10)).not.toBeNull();
     expect(csvFileProblem('big.CSV', 50_001)).not.toBeNull();
+  });
+});
+
+const NO_BACKUP: OperationsStatus['backup'] = { outcome: 'never', last_attempt_at: null, last_success_at: null, fault_code: null, age_seconds: null };
+const SUCCESS = '2026-10-04T08:00:00Z';
+
+describe('backup summary', () => {
+  it('warns when no backup was ever recorded', () => {
+    expect(backupSummary(NO_BACKUP)).toEqual({ text: 'No backup recorded', tone: 'warn', detail: null });
+  });
+
+  it('is fine up to 26 hours and warns after, in whole units', () => {
+    const ok = backupSummary({ outcome: 'succeeded', last_attempt_at: SUCCESS, last_success_at: SUCCESS, fault_code: null, age_seconds: BACKUP_WARN_SECONDS });
+    expect(ok).toEqual({ text: 'Last backup 26 hours ago', tone: 'ok', detail: null });
+    const late = backupSummary({ outcome: 'succeeded', last_attempt_at: SUCCESS, last_success_at: SUCCESS, fault_code: null, age_seconds: BACKUP_WARN_SECONDS + 1 });
+    expect(late.tone).toBe('warn');
+    expect(late.detail).toBe('Older than 26 hours');
+    expect(backupSummary({ ...NO_BACKUP, outcome: 'succeeded', last_success_at: SUCCESS, last_attempt_at: SUCCESS, age_seconds: 90 }).text).toBe('Last backup 1 minute ago');
+    expect(backupSummary({ ...NO_BACKUP, outcome: 'succeeded', last_success_at: SUCCESS, last_attempt_at: SUCCESS, age_seconds: 5 * 3600 }).text).toBe('Last backup 5 hours ago');
+    expect(backupSummary({ ...NO_BACKUP, outcome: 'succeeded', last_success_at: SUCCESS, last_attempt_at: SUCCESS, age_seconds: 20 }).text).toBe('Last backup less than a minute ago');
+  });
+
+  it('shows a failed latest attempt as an error with its code, even when an older success exists', () => {
+    const failed = backupSummary({ outcome: 'failed', last_attempt_at: '2026-10-04T11:00:00Z', last_success_at: SUCCESS, fault_code: 'disk_full', age_seconds: 4 * 3600 });
+    expect(failed).toEqual({ text: 'Last backup attempt failed', tone: 'error', detail: 'disk_full' });
+  });
+});
+
+describe('disk summary and byte text', () => {
+  it('formats binary units with one decimal where it helps', () => {
+    expect(byteText(0)).toBe('0 B');
+    expect(byteText(1023)).toBe('1023 B');
+    expect(byteText(1024)).toBe('1.0 KiB');
+    expect(byteText(5 * 1024 ** 3)).toBe('5.0 GiB');
+    expect(byteText(1.5 * 1024 ** 4)).toBe('1.5 TiB');
+  });
+
+  it('states free space of the total and the percentage, or that it is unknown', () => {
+    expect(diskSummary({ free_bytes: 25 * 1024 ** 3, total_bytes: 100 * 1024 ** 3 })).toBe('25.0 GiB free of 100.0 GiB (25% free)');
+    expect(diskSummary({ free_bytes: null, total_bytes: null })).toBe('Unknown');
+    expect(diskSummary({ free_bytes: 0, total_bytes: 0 })).toBe('Unknown');
+  });
+});
+
+describe('outbound banner', () => {
+  const live: OperationsStatus['outbound'] = { paused: false, paused_at: null, reason: null, awaiting_decision: 0, queued_send_jobs: 0, held_send_jobs: 0 };
+
+  it('shows nothing while delivery is not paused', () => {
+    expect(outboundBanner(live)).toBeNull();
+  });
+
+  it('says why delivery is paused and how many sends are held, waiting and awaiting a decision', () => {
+    const banner = outboundBanner({ paused: true, paused_at: '2026-10-04T09:00:00Z', reason: 'restored', awaiting_decision: 1, queued_send_jobs: 2, held_send_jobs: 3 });
+    expect(banner?.headline).toBe('Outbound delivery is paused');
+    expect(banner?.reason).toBe('This instance was restored from a backup, so nothing is sent until the held sends are reconciled.');
+    expect(banner?.counts).toEqual([
+      { label: 'Held for reconciliation', value: 3 },
+      { label: 'Waiting', value: 2 },
+      { label: 'Awaiting a decision', value: 1 },
+    ]);
+  });
+
+  it('falls back to the reason code for any other reason', () => {
+    const banner = outboundBanner({ paused: true, paused_at: '2026-10-04T09:00:00Z', reason: 'maintenance_window', awaiting_decision: 0, queued_send_jobs: 0, held_send_jobs: 0 });
+    expect(banner?.reason).toBe('Paused: maintenance_window.');
   });
 });

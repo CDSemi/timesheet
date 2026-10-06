@@ -21,6 +21,7 @@ import {
   listSubmissionStatus,
   MAX_SUBMISSION_LIMIT,
   operationsStatusJson,
+  statusDataDir,
   submissionStatusJson,
 } from '../services/operationsStatus.ts';
 import { adminRevokeShare, listAllShares } from '../services/shares.ts';
@@ -79,8 +80,9 @@ function accountJson(account: UserAccount) {
  * no password reset route: FR-01 and E-11 do not require one.
  *
  * Operations status (F-3, F-Q3 (b), WP3-T13D): two read-only routes backed by one service with a
- * column allowlist. The administrator sees the pipeline (sender, runner heartbeat, activation, job
- * and delivery totals; per person and period the revision, PDF and delivery states, redacted fault
+ * column allowlist. The administrator sees the pipeline (sender, runner heartbeat, activation, the last
+ * backup and its age, the free space of the data volume, the outbound pause with counts of held and waiting
+ * sends, job and delivery totals; per person and period the revision, PDF and delivery states, redacted fault
  * codes and recipient addresses) and never a person's timesheet details, templates or message content.
  *
  * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
@@ -94,13 +96,14 @@ function accountJson(account: UserAccount) {
  */
 export function adminRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
+  const dataDir = statusDataDir(deps.delivery, deps.config.databasePath);
   // Applies to every /api/admin/* path, including unknown ones: 401 anonymous, 403 employee.
   app.use('*', requireAdmin(deps));
 
   // Operations status: reads only; nothing here can change a record.
   app.get('/operations', (c) =>
     c.json({
-      operations: operationsStatusJson(getOperationsStatus(deps.db, deps.clock, deliverySetupOf(deps.delivery))),
+      operations: operationsStatusJson(getOperationsStatus(deps.db, deps.clock, deliverySetupOf(deps.delivery), dataDir)),
     }),
   );
 

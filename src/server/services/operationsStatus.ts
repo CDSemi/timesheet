@@ -1,3 +1,5 @@
+import { statfsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { type Clock, nowEpoch } from '../clock.ts';
 import type { Db } from '../db/database.ts';
@@ -92,10 +94,51 @@ export function deliverySetupOf(delivery: Pick<DeliveryConfig, 'senderAddress' |
   return { senderConfigured: delivery.senderAddress !== null, outboundMode: delivery.outbound.mode };
 }
 
+export interface DataVolume {
+  /** Bytes available to this process on the data volume; null when the volume cannot be read. */
+  freeBytes: number | null;
+  totalBytes: number | null;
+}
+
+/**
+ * The free and total space of the volume that holds the private data directory (WP4-T07, `fs.statfs`). The directory
+ * may not exist yet (nothing was ever stored), so the nearest existing parent, which is on the same volume, is read.
+ * Byte counts only: never the path.
+ */
+export function readDataVolume(dataDir: string | null): DataVolume {
+  const unknown: DataVolume = { freeBytes: null, totalBytes: null };
+  if (dataDir === null) return unknown;
+  let path = dataDir;
+  for (let depth = 0; depth < 8; depth += 1) {
+    try {
+      const stats = statfsSync(path);
+      return { freeBytes: Number(stats.bavail) * Number(stats.bsize), totalBytes: Number(stats.blocks) * Number(stats.bsize) };
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined;
+      const parent = dirname(path);
+      if (code !== 'ENOENT' || parent === path) return unknown;
+      path = parent;
+    }
+  }
+  return unknown;
+}
+
+/**
+ * The private data directory whose volume the status reports: the configured one, else the default beside the
+ * database (the same default as `createApp`); null for an in-memory database, which has no data directory.
+ */
+export function statusDataDir(delivery: Pick<DeliveryConfig, 'dataDir'> | undefined, databasePath: string): string | null {
+  if (delivery !== undefined) return delivery.dataDir;
+  return databasePath === ':memory:' ? null : join(dirname(resolve(databasePath)), 'private-data');
+}
+
 export interface OperationsStatus {
   sender: DeliverySetup;
   runner: { heartbeatAt: string | null; state: 'never' | 'running' | 'stale' };
   activation: ReturnType<typeof activationJson>;
+  backup: BackupStatus & { ageSeconds: number | null };
+  disk: DataVolume;
+  outbound: OutboundStatus;
   jobs: Record<(typeof JOB_STATES)[number], number>;
   deliveries: Record<(typeof DELIVERY_STATES)[number], number>;
 }
@@ -108,16 +151,25 @@ function totals<S extends string>(db: Db, sql: string, states: readonly S[]): Re
   return out;
 }
 
-export function getOperationsStatus(db: Db, clock: Clock, sender: DeliverySetup): OperationsStatus {
+/** Whole seconds since the last successful backup by the injected clock; null when none was recorded. */
+function backupAgeSeconds(clock: Clock, lastSuccessAt: string | null): number | null {
+  return lastSuccessAt === null ? null : Math.max(0, nowEpoch(clock) - parseUtcInstant(lastSuccessAt));
+}
+
+export function getOperationsStatus(db: Db, clock: Clock, sender: DeliverySetup, dataDir: string | null = null): OperationsStatus {
   const heartbeatAt =
     db.prepare<[], { runner_heartbeat_at: string | null }>('SELECT runner_heartbeat_at FROM operations_state WHERE id = 1').get()
       ?.runner_heartbeat_at ?? null;
   const runnerState =
     heartbeatAt === null ? 'never' : nowEpoch(clock) - parseUtcInstant(heartbeatAt) > HEARTBEAT_STALE_SECONDS ? 'stale' : 'running';
+  const backup = getBackupStatus(db);
   return {
     sender,
     runner: { heartbeatAt, state: runnerState },
     activation: activationJson(getAutomationActivation(db)),
+    backup: { ...backup, ageSeconds: backupAgeSeconds(clock, backup.lastSuccessAt) },
+    disk: readDataVolume(dataDir),
+    outbound: getOutboundStatus(db),
     jobs: totals(db, 'SELECT state, count(*) AS total FROM jobs GROUP BY state', JOB_STATES),
     deliveries: totals(db, 'SELECT state, count(*) AS total FROM delivery_attempts GROUP BY state', DELIVERY_STATES),
   };
@@ -128,6 +180,9 @@ export function operationsStatusJson(status: OperationsStatus) {
     sender: { configured: status.sender.senderConfigured, outbound_mode: status.sender.outboundMode },
     runner: { heartbeat_at: status.runner.heartbeatAt, state: status.runner.state },
     activation: status.activation,
+    backup: { ...backupStatusJson(status.backup), age_seconds: status.backup.ageSeconds },
+    disk: { free_bytes: status.disk.freeBytes, total_bytes: status.disk.totalBytes },
+    outbound: outboundStatusJson(status.outbound),
     jobs: status.jobs,
     deliveries: status.deliveries,
   };
@@ -136,8 +191,8 @@ export function operationsStatusJson(status: OperationsStatus) {
 /* ---------------------------------------------------------- backup status ---- */
 
 /*
- * The result of the latest `cli.js backup` (WP4-T05, migration 0009), as data only: the administrator view that shows
- * it comes in WP4-T07, so it is not yet part of `operationsStatusJson`. Only an outcome, a redacted fault code and two
+ * The result of the latest `cli.js backup` (WP4-T05, migration 0009), as data; the administrator status (WP4-T07)
+ * adds its age to it in `operationsStatusJson`. Only an outcome, a redacted fault code and two
  * UTC instants exist: never a path, a storage key, a hash or a count of anyone's records.
  */
 
@@ -189,8 +244,8 @@ export function backupStatusJson(status: BackupStatus) {
 /* --------------------------------------------------------- outbound status ---- */
 
 /*
- * The outbound pause (WP4-T06, migration 0010) and what awaits reconciliation, as data only: the administrator view
- * that shows it comes in WP4-T07, so it is not yet part of `operationsStatusJson`. Counts and a lowercase reason only:
+ * The outbound pause (WP4-T06, migration 0010) and what awaits reconciliation, as data; the administrator status (WP4-T07) shows
+ * it through `operationsStatusJson`. Counts and a lowercase reason only:
  * never a recipient, a job or attempt id, a revision or a name.
  */
 

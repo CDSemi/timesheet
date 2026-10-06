@@ -1,0 +1,325 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/adminModel.test.ts (17 tests | 8 failed) 8ms
+   ❯ backup summary (3)
+     × warns when no backup was ever recorded 2ms
+     × is fine up to 26 hours and warns after, in whole units 0ms
+     × shows a failed latest attempt as an error with its code, even when an older success exists 0ms
+   ❯ disk summary and byte text (2)
+     × formats binary units with one decimal where it helps 0ms
+     × states free space of the total and the percentage, or that it is unknown 0ms
+   ❯ outbound banner (3)
+     × shows nothing while delivery is not paused 0ms
+     × says why delivery is paused and how many sends are held, waiting and awaiting a decision 1ms
+     × falls back to the reason code for any other reason 0ms
+ ❯ tests/integration/jobs-sweep.test.ts (0 test)
+ ❯ tests/integration/operations-status.test.ts (17 tests | 5 failed) 4984ms
+   ❯ system status (7)
+     × reports an empty system: never a heartbeat, no activation, zero totals 239ms
+     × reports the last backup with its age from the injected clock, and keeps the last success after a failure 237ms
+     × reports the free and total space of the data volume as whole byte counts and never the path 228ms
+     × reports the outbound pause with its reason and the counts of held and waiting sends, and nothing of who they concern 246ms
+   ❯ the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) (2)
+     × returns exactly the allowlisted fields and none of the private content 454ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/jobs-sweep.test.ts [ tests/integration/jobs-sweep.test.ts ]
+Error: Cannot find module '../../src/server/jobs/sweepJob.ts' imported from D:/Dropbox/Work.CDSemi/timesheet/tests/integration/jobs-sweep.test.ts
+ ❯ tests/integration/jobs-sweep.test.ts:9:1
+      7| import { OUTBOUND_JOB_KINDS } from '../../src/server/jobs/jobStore.ts';
+      8| import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/…
+      9| import {
+       | ^
+     10|   createSweepJobHandler,
+     11|   enqueueOrphanSweep,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/adminModel.test.ts > backup summary > warns when no backup was ever recorded
+TypeError: backupSummary is not a function
+ ❯ tests/client/adminModel.test.ts:87:12
+     85| describe('backup summary', () => {
+     86|   it('warns when no backup was ever recorded', () => {
+     87|     expect(backupSummary(NO_BACKUP)).toEqual({ text: 'No backup record…
+       |            ^
+     88|   });
+     89|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > backup summary > is fine up to 26 hours and warns after, in whole units
+TypeError: backupSummary is not a function
+ ❯ tests/client/adminModel.test.ts:91:16
+     89|
+     90|   it('is fine up to 26 hours and warns after, in whole units', () => {
+     91|     const ok = backupSummary({ outcome: 'succeeded', last_attempt_at: …
+       |                ^
+     92|     expect(ok).toEqual({ text: 'Last backup 26 hours ago', tone: 'ok',…
+     93|     const late = backupSummary({ outcome: 'succeeded', last_attempt_at…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > backup summary > shows a failed latest attempt as an error with its code, even when an older success exists
+TypeError: backupSummary is not a function
+ ❯ tests/client/adminModel.test.ts:102:20
+    100|
+    101|   it('shows a failed latest attempt as an error with its code, even wh…
+    102|     const failed = backupSummary({ outcome: 'failed', last_attempt_at:…
+       |                    ^
+    103|     expect(failed).toEqual({ text: 'Last backup attempt failed', tone:…
+    104|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > disk summary and byte text > formats binary units with one decimal where it helps
+TypeError: byteText is not a function
+ ❯ tests/client/adminModel.test.ts:109:12
+    107| describe('disk summary and byte text', () => {
+    108|   it('formats binary units with one decimal where it helps', () => {
+    109|     expect(byteText(0)).toBe('0 B');
+       |            ^
+    110|     expect(byteText(1023)).toBe('1023 B');
+    111|     expect(byteText(1024)).toBe('1.0 KiB');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > disk summary and byte text > states free space of the total and the percentage, or that it is unknown
+TypeError: diskSummary is not a function
+ ❯ tests/client/adminModel.test.ts:117:12
+    115|
+    116|   it('states free space of the total and the percentage, or that it is…
+    117|     expect(diskSummary({ free_bytes: 25 * 1024 ** 3, total_bytes: 100 …
+       |            ^
+    118|     expect(diskSummary({ free_bytes: null, total_bytes: null })).toBe(…
+    119|     expect(diskSummary({ free_bytes: 0, total_bytes: 0 })).toBe('Unkno…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > outbound banner > shows nothing while delivery is not paused
+TypeError: outboundBanner is not a function
+ ❯ tests/client/adminModel.test.ts:127:12
+    125|
+    126|   it('shows nothing while delivery is not paused', () => {
+    127|     expect(outboundBanner(live)).toBeNull();
+       |            ^
+    128|   });
+    129|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > outbound banner > says why delivery is paused and how many sends are held, waiting and awaiting a decision
+TypeError: outboundBanner is not a function
+ ❯ tests/client/adminModel.test.ts:131:20
+    129|
+    130|   it('says why delivery is paused and how many sends are held, waiting…
+    131|     const banner = outboundBanner({ paused: true, paused_at: '2026-10-…
+       |                    ^
+    132|     expect(banner?.headline).toBe('Outbound delivery is paused');
+    133|     expect(banner?.reason).toBe('This instance was restored from a bac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  tests/client/adminModel.test.ts > outbound banner > falls back to the reason code for any other reason
+TypeError: outboundBanner is not a function
+ ❯ tests/client/adminModel.test.ts:142:20
+    140|
+    141|   it('falls back to the reason code for any other reason', () => {
+    142|     const banner = outboundBanner({ paused: true, paused_at: '2026-10-…
+       |                    ^
+    143|     expect(banner?.reason).toBe('Paused: maintenance_window.');
+    144|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reports an empty system: never a heartbeat, no activation, zero totals
+AssertionError: expected { sender: { …(2) }, …(4) } to deeply equal { sender: { …(2) }, …(7) }
+
+- Expected
++ Received
+
+@@ -2,43 +2,24 @@
+    "activation": {
+      "active_from": null,
+      "recorded_at": null,
+      "recorded_by": null,
+    },
+-   "backup": {
+-     "age_seconds": null,
+-     "fault_code": null,
+-     "last_attempt_at": null,
+-     "last_success_at": null,
+-     "outcome": "never",
+-   },
+    "deliveries": {
+      "accepted": 0,
+      "failed_permanent": 0,
+      "failed_temporary": 0,
+      "preparing": 0,
+      "sending": 0,
+      "uncertain": 0,
+    },
+-   "disk": {
+-     "free_bytes": Any<Number>,
+-     "total_bytes": Any<Number>,
+-   },
+    "jobs": {
+      "cancelled": 0,
+      "intervention": 0,
+      "leased": 0,
+      "queued": 0,
+      "succeeded": 0,
+-   },
+-   "outbound": {
+-     "awaiting_decision": 0,
+-     "held_send_jobs": 0,
+-     "paused": false,
+-     "paused_at": null,
+-     "queued_send_jobs": 0,
+-     "reason": null,
+    },
+    "runner": {
+      "heartbeat_at": null,
+      "state": "never",
+    },
+
+ ❯ tests/integration/operations-status.test.ts:290:38
+    288|     const response = await operationsWith(deliveryConfig(null));
+    289|     expect(response.status).toBe(200);
+    290|     expect(response.body.operations).toEqual({
+       |                                      ^
+    291|       sender: { configured: false, outbound_mode: 'capture' },
+    292|       runner: { heartbeat_at: null, state: 'never' },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reports the last backup with its age from the injected clock, and keeps the last success after a failure
+AssertionError: expected undefined to deeply equal { outcome: 'succeeded', …(4) }
+
+- Expected:
+{
+  "age_seconds": 43200,
+  "fault_code": null,
+  "last_attempt_at": "2026-09-29T08:00:00Z",
+  "last_success_at": "2026-09-29T08:00:00Z",
+  "outcome": "succeeded",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/operations-status.test.ts:307:39
+    305|       .run('2026-09-29T08:00:00Z', '2026-09-29T08:00:00Z');
+    306|     const ok = await statusOf('/api/admin/operations', admin);
+    307|     expect(ok.body.operations.backup).toEqual({
+       |                                       ^
+    308|       outcome: 'succeeded',
+    309|       last_attempt_at: '2026-09-29T08:00:00Z',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reports the free and total space of the data volume as whole byte counts and never the path
+TypeError: Cannot destructure property 'free_bytes' of 'response.body.operations.disk' as it is undefined.
+ ❯ tests/integration/operations-status.test.ts:330:25
+    328|   it('reports the free and total space of the data volume as whole byt…
+    329|     const response = await statusOf('/api/admin/operations', admin);
+    330|     const { free_bytes: free, total_bytes: total } = response.body.ope…
+       |                         ^
+    331|     expect(Number.isSafeInteger(free) && Number.isSafeInteger(total)).…
+    332|     expect(total).toBeGreaterThan(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > system status > reports the outbound pause with its reason and the counts of held and waiting sends, and nothing of who they concern
+AssertionError: expected undefined to deeply equal { paused: true, …(5) }
+
+- Expected:
+{
+  "awaiting_decision": 0,
+  "held_send_jobs": 2,
+  "paused": true,
+  "paused_at": "2026-09-29T19:00:00Z",
+  "queued_send_jobs": 1,
+  "reason": "restored",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/operations-status.test.ts:346:47
+    344|     t.db.prepare("UPDATE operations_state SET outbound_paused_at = '20…
+    345|     const response = await statusOf('/api/admin/operations', admin);
+    346|     expect(response.body.operations.outbound).toEqual({
+       |                                               ^
+    347|       paused: true,
+    348|       paused_at: '2026-09-29T19:00:00Z',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) > returns exactly the allowlisted fields and none of the private content
+AssertionError: expected [ 'operations', …(23) ] to deeply equal [ 'operations', …(39) ]
+
+- Expected
++ Received
+
+@@ -2,39 +2,23 @@
+    "operations",
+    "operations.activation",
+    "operations.activation.active_from",
+    "operations.activation.recorded_at",
+    "operations.activation.recorded_by",
+-   "operations.backup",
+-   "operations.backup.age_seconds",
+-   "operations.backup.fault_code",
+-   "operations.backup.last_attempt_at",
+-   "operations.backup.last_success_at",
+-   "operations.backup.outcome",
+    "operations.deliveries",
+    "operations.deliveries.accepted",
+    "operations.deliveries.failed_permanent",
+    "operations.deliveries.failed_temporary",
+    "operations.deliveries.preparing",
+    "operations.deliveries.sending",
+    "operations.deliveries.uncertain",
+-   "operations.disk",
+-   "operations.disk.free_bytes",
+-   "operations.disk.total_bytes",
+    "operations.jobs",
+    "operations.jobs.cancelled",
+    "operations.jobs.intervention",
+    "operations.jobs.leased",
+    "operations.jobs.queued",
+    "operations.jobs.succeeded",
+-   "operations.outbound",
+-   "operations.outbound.awaiting_decision",
+-   "operations.outbound.held_send_jobs",
+-   "operations.outbound.paused",
+-   "operations.outbound.paused_at",
+-   "operations.outbound.queued_send_jobs",
+-   "operations.outbound.reason",
+    "operations.runner",
+    "operations.runner.heartbeat_at",
+    "operations.runner.state",
+    "operations.sender",
+    "operations.sender.configured",
+
+ ❯ tests/integration/operations-status.test.ts:488:46
+    486|     expect(operations.status).toBe(200);
+    487|     expect(keyPaths(submissions.body).sort()).toEqual(SUBMISSION_PATHS…
+    488|     expect(keyPaths(operations.body).sort()).toEqual(OPERATIONS_PATHS);
+       |                                              ^
+    489|
+    490|     const row = t.db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  13 failed | 21 passed (34)
+   Start at  19:37:28
+   Duration  6.29s (tests 80%, import 13%, transform 7%)
+

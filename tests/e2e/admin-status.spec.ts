@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
 import type { Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
@@ -176,7 +179,7 @@ test('the admin sees pipeline states, a fault code and recipients, and no timesh
   await status.screenshot({ path: screenshotPath(`admin-status-panel-${project}-synthetic.png`) });
   await personRow.scrollIntoViewIfNeeded();
   await table.screenshot({ path: screenshotPath(`admin-status-table-${project}-synthetic.png`) });
-  await page.screenshot({ path: screenshotPath(`admin-status-${project}-synthetic.png`), fullPage: true });
+  await page.screenshot({ path: screenshotPath(`admin-status-pipeline-${project}-synthetic.png`), fullPage: true });
 
   // Refresh keeps the same data and the page stays read-only: no write request is sent.
   const writes: string[] = [];
@@ -197,4 +200,78 @@ test('an employee cannot read the status routes and the Admin screen is not offe
     const status = await page.evaluate<number>(`fetch(${JSON.stringify(path)}, { credentials: 'same-origin' }).then((response) => response.status)`);
     expect(status, path).toBe(403);
   }
+});
+
+/*
+ * Test-only: a restored instance is paused with its backed-up sends held for reconciliation, and has an old backup. No route
+ * creates that state (a restore does, from the command line), so a child process writes it into the temporary database of the
+ * BUILT server through its own database module: a backup recorded 30 hours ago, the pause with the reason `restored`, three
+ * send jobs held for reconciliation and one reminder waiting. Counts only; no person is involved.
+ */
+const SEED_PAUSED_SCRIPT = `
+const [dbUrl] = process.argv.slice(1, 2);
+const { openDatabase } = await import(dbUrl);
+const { randomUUID } = await import('node:crypto');
+const db = openDatabase(process.env.SEED_DB_PATH);
+const utc = (date) => date.toISOString().slice(0, 19) + 'Z';
+try {
+  const now = new Date();
+  const backupAt = utc(new Date(now.getTime() - 30 * 3600 * 1000));
+  db.prepare("UPDATE operations_state SET backup_last_outcome = 'succeeded', backup_last_attempt_at = ?, backup_last_success_at = ? WHERE id = 1").run(backupAt, backupAt);
+  db.prepare("UPDATE operations_state SET outbound_paused_at = ?, outbound_paused_reason = 'restored' WHERE id = 1").run(utc(now));
+  const insert = db.prepare("INSERT INTO jobs (id, kind, business_key, payload_json, state, attempts, next_run_at, last_error, created_at, updated_at) VALUES (?, ?, ?, '{}', ?, 0, ?, ?, ?, ?)");
+  for (let index = 0; index < 3; index += 1) {
+    const id = randomUUID();
+    insert.run(id, 'send_email', 'e2e-held:' + id, 'intervention', utc(now), 'reconcile_after_restore', utc(now), utc(now));
+  }
+  const waiting = randomUUID();
+  insert.run(waiting, 'send_reminder', 'e2e-waiting:' + waiting, 'queued', utc(now), null, utc(now), utc(now));
+} finally {
+  db.close();
+}
+`;
+
+function seedPausedInstance(databasePath: string): void {
+  const databaseModule = pathToFileURL(join(resolve(import.meta.dirname, '..', '..'), 'dist', 'server', 'db', 'database.js')).href;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', SEED_PAUSED_SCRIPT, databaseModule], {
+    cwd: resolve(import.meta.dirname, '..', '..'),
+    encoding: 'utf8',
+    env: { ...process.env, SEED_DB_PATH: databasePath },
+  });
+  if (result.status !== 0) throw new Error(`paused-instance seeding failed with ${result.status}: ${result.stderr}`);
+}
+
+test('a paused instance shows why, how many sends are held, an old backup and the disk space', async ({ page, privateServer }, testInfo) => {
+  const project = testInfo.project.name;
+  seedPausedInstance(privateServer.databasePath);
+  await page.goto(`${privateServer.origin}/#/admin`);
+  await page.getByLabel('Email').fill(privateServer.credentials.admin.email);
+  await page.getByLabel('Password').fill(privateServer.credentials.admin.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+
+  const status = page.getByRole('region', { name: 'Operations status' });
+  const banner = status.getByRole('status', { name: 'Outbound delivery paused' });
+  await expect(banner).toBeVisible();
+  await expect(banner.getByRole('heading', { name: 'Outbound delivery is paused' })).toBeVisible();
+  await expect(banner.locator('[data-pause="reason"]')).toContainText('restored from a backup');
+  await expect(banner.locator('[data-pause-count="Held for reconciliation"]')).toHaveText('3');
+  await expect(banner.locator('[data-pause-count="Waiting"]')).toHaveText('1');
+  await expect(banner.locator('[data-pause-count="Awaiting a decision"]')).toHaveText('0');
+
+  // The backup is 30 hours old: a warning with text, not only colour.
+  const backup = status.locator('[data-fact="backup"] [data-status="backup"]');
+  await expect(backup).toHaveText('Last backup 30 hours ago');
+  await expect(backup).toHaveClass(/badge-warn/);
+  await expect(status.locator('[data-fact="backup"]')).toContainText('Older than 26 hours');
+  await expect(status.locator('[data-fact="disk"]')).toHaveText(/ free of .+ \(\d+% free\)/);
+  await expect(status.locator('[data-fact="mode"]')).toHaveText('Capture only (nothing leaves the server)');
+
+  // Nothing of a person: counts and codes only.
+  const text = (await status.innerText()).toLowerCase();
+  for (const needle of ['@', 'e2e-held', 'private-data']) expect(text, `the panel must not show ${needle}`).not.toContain(needle);
+
+  if (project === 'mobile') await expectNoSidewaysScroll(page);
+  await status.scrollIntoViewIfNeeded();
+  await status.screenshot({ path: screenshotPath(`admin-status-${project}-synthetic.png`) });
 });

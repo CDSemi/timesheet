@@ -551,7 +551,20 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - verify: 1525 tests; digest 15b7422e….
        - Risk for the audit: a send that the source already delivered stays held. It can
          only be released or left held.
-     - Running: WP4-T06-FREEZE (committer). The coordinator writes no file during the
+     - WP4-T06-FREEZE is committed and pushed as 72ab2ed (39 paths; all checks 0).
+     - The coordinator split WP4-T07 because F-3 and F-4 are still unanswered.
+       - The F-3 flag and F-4 retention go to WP4-T07B, after the owner answers.
+       - WP4-T07 is done (author-reported):
+         - status fields for backup, disk and outbound, with an exact allowlist;
+         - a daily orphan sweep keyed by day that removes only unreferenced files older
+           than 24 h;
+         - the status UI on E-8 tokens;
+         - tests: red 13 → green; the mutation fails 2 tests;
+         - e2e: 131 passed; verify: 1545 tests; digest cc86af8a….
+
+         Job-claim expectations in three tests changed to include the sweep; the audit
+         will judge whether that weakens them.
+     - Running: WP4-T07-FREEZE (committer). The coordinator writes no file during the
        commit.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
@@ -592,7 +605,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T06-FREEZE only.
+- Live processes: WP4-T07-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

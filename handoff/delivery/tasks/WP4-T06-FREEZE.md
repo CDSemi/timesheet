@@ -124,3 +124,12 @@ most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1 (timesheet-committer, Sonnet 5.5):
+- Pre-HEAD 0c58130217eb0babd2b870b61a1457d7109d1a15; post-HEAD and commit
+  72ab2ed134c26656643eb00542e54a94bb07a4c7; pushed yes; remote SHA the same.
+- Digest 15b7422e17de30a746945f64d6c98d5f6e24f792a37fadb3f0165c7f6f43b781 (match);
+  staged 39; Node v24.21.0.
+- Exit codes: precommit 0, diff --check 0, JSON parse 0, orchestration validator 0,
+  check_recovery 0, preflight 0.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP4-T06-FREEZE/ (unstaged).

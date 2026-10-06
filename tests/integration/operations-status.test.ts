@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/server/app.ts';
 import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
-import { recordHeartbeat } from '../../src/server/jobs/jobStore.ts';
+import { enqueueJob, recordHeartbeat } from '../../src/server/jobs/jobStore.ts';
 import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
 import { runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
@@ -211,6 +211,22 @@ const OPERATIONS_PATHS = [
   'operations.activation.active_from',
   'operations.activation.recorded_at',
   'operations.activation.recorded_by',
+  'operations.backup',
+  'operations.backup.age_seconds',
+  'operations.backup.fault_code',
+  'operations.backup.last_attempt_at',
+  'operations.backup.last_success_at',
+  'operations.backup.outcome',
+  'operations.disk',
+  'operations.disk.free_bytes',
+  'operations.disk.total_bytes',
+  'operations.outbound',
+  'operations.outbound.awaiting_decision',
+  'operations.outbound.held_send_jobs',
+  'operations.outbound.paused',
+  'operations.outbound.paused_at',
+  'operations.outbound.queued_send_jobs',
+  'operations.outbound.reason',
   'operations.deliveries',
   'operations.deliveries.accepted',
   'operations.deliveries.failed_permanent',
@@ -275,9 +291,69 @@ describe('system status', () => {
       sender: { configured: false, outbound_mode: 'capture' },
       runner: { heartbeat_at: null, state: 'never' },
       activation: { active_from: null, recorded_at: null, recorded_by: null },
+      backup: { outcome: 'never', last_attempt_at: null, last_success_at: null, fault_code: null, age_seconds: null },
+      disk: { free_bytes: expect.any(Number), total_bytes: expect.any(Number) },
+      outbound: { paused: false, paused_at: null, reason: null, awaiting_decision: 0, queued_send_jobs: 0, held_send_jobs: 0 },
       jobs: { queued: 0, leased: 0, succeeded: 0, intervention: 0, cancelled: 0 },
       deliveries: { preparing: 0, sending: 0, accepted: 0, failed_temporary: 0, failed_permanent: 0, uncertain: 0 },
     });
+  });
+
+  it('reports the last backup with its age from the injected clock, and keeps the last success after a failure', async () => {
+    t.db
+      .prepare("UPDATE operations_state SET backup_last_outcome = 'succeeded', backup_last_attempt_at = ?, backup_last_success_at = ? WHERE id = 1")
+      .run('2026-09-29T08:00:00Z', '2026-09-29T08:00:00Z');
+    const ok = await statusOf('/api/admin/operations', admin);
+    expect(ok.body.operations.backup).toEqual({
+      outcome: 'succeeded',
+      last_attempt_at: '2026-09-29T08:00:00Z',
+      last_success_at: '2026-09-29T08:00:00Z',
+      fault_code: null,
+      age_seconds: 12 * 3600,
+    });
+    t.clock.set('2026-09-30T12:00:00Z');
+    admin = await t.login('admin'); // the earlier session is older than its lifetime
+    t.db
+      .prepare("UPDATE operations_state SET backup_last_outcome = 'failed', backup_last_attempt_at = ?, backup_last_fault_code = 'disk_full' WHERE id = 1")
+      .run('2026-09-30T11:00:00Z');
+    const failed = await statusOf('/api/admin/operations', admin);
+    expect(failed.body.operations.backup).toEqual({
+      outcome: 'failed',
+      last_attempt_at: '2026-09-30T11:00:00Z',
+      last_success_at: '2026-09-29T08:00:00Z',
+      fault_code: 'disk_full',
+      age_seconds: 28 * 3600,
+    });
+  });
+
+  it('reports the free and total space of the data volume as whole byte counts and never the path', async () => {
+    const response = await statusOf('/api/admin/operations', admin);
+    const { free_bytes: free, total_bytes: total } = response.body.operations.disk;
+    expect(Number.isSafeInteger(free) && Number.isSafeInteger(total)).toBe(true);
+    expect(total).toBeGreaterThan(0);
+    expect(free).toBeGreaterThanOrEqual(0);
+    expect(free).toBeLessThanOrEqual(total);
+    expect(JSON.stringify(response.body)).not.toContain('private-data');
+    expect(JSON.stringify(response.body)).not.toContain(dirname(t.config.databasePath));
+  });
+
+  it('reports the outbound pause with its reason and the counts of held and waiting sends, and nothing of who they concern', async () => {
+    const held = enqueueJob(t.db, t.clock, { kind: 'send_email', businessKey: 'synthetic-held-1' }).job;
+    enqueueJob(t.db, t.clock, { kind: 'send_reminder', businessKey: 'synthetic-held-2' });
+    enqueueJob(t.db, t.clock, { kind: 'send_email', businessKey: 'synthetic-waiting-1' });
+    t.db.prepare("UPDATE jobs SET state = 'intervention', last_error = 'reconcile_after_restore' WHERE kind = 'send_reminder' OR id = ?").run(held.id);
+    t.db.prepare("UPDATE operations_state SET outbound_paused_at = '2026-09-29T19:00:00Z', outbound_paused_reason = 'restored' WHERE id = 1").run();
+    const response = await statusOf('/api/admin/operations', admin);
+    expect(response.body.operations.outbound).toEqual({
+      paused: true,
+      paused_at: '2026-09-29T19:00:00Z',
+      reason: 'restored',
+      awaiting_decision: 0,
+      queued_send_jobs: 1,
+      held_send_jobs: 2,
+    });
+    expect(JSON.stringify(response.body)).not.toContain('synthetic-held');
+    expect(JSON.stringify(response.body)).not.toContain(held.id);
   });
 
   it('reads the sender flag and mode from the injected configuration without echoing the address', async () => {

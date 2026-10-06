@@ -1,0 +1,22 @@
+Add an outbound pause and an isolated restore that holds backed-up sends
+
+- feat(jobs): migration 0010 persists the outbound pause. While it is set,
+  the runner claims no send_email or send_reminder job, so nothing is sent
+  and no attempt is spent. PDF rendering and scans continue.
+- feat(ops): `cli.js restore --from --to` verifies the manifest hashes, the
+  integrity and the schema, and refuses a newer schema, the live DATA_DIR
+  and a non-empty target. It copies the database and files, migrates them,
+  sets the pause with the reason `restored`, marks sending and preparing
+  attempts uncertain, and holds every queued or leased send from the backup
+  for reconciliation.
+- feat(ops): `outbound release --job|--all --confirm` and `outbound drop`
+  (reminders only). A run without `--confirm` only previews. Both are
+  audited and refused while an attempt is uncertain or open.
+  `outbound resume --confirm` is refused while any decision is pending.
+- test(restore): restore and pause tests and AC-08 regressions; drill stage
+  3 includes a second-generation restore.
+- docs(handoff): the WP4-T05 freeze result, the WP4-T06 records, the board
+  and the checkpoint (+ vi).
+
+Task: WP4-T06-FREEZE
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

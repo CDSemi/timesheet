@@ -152,7 +152,8 @@ test('the deadline submits automatically: note off/on, image off/on, an empty pe
 
   // Before the activation nothing is automatic, even long after the deadline.
   const early = runJobsAt(server, new Date(due.getTime() + 60_000));
-  expect(early.claimed, 'no activation: no scan job, nothing to run').toBe(0);
+  // No scan job: the only job a pass may claim is today's daily orphan sweep (WP4-T07), which needs no activation.
+  expect(early.claimed, 'no activation: no scan job, at most the daily orphan sweep').toBeLessThanOrEqual(1);
   expect((await finalizationOf(plain)).finalized_revision_no).toBeNull();
 
   await activate(server);
@@ -268,7 +269,8 @@ test('a period is not submitted automatically while the activation instant is no
   const periods = await person.api.call<PeriodsView>('GET', '/api/periods/current');
   const afterDeadline = new Date(new Date(periods.current.due_at_utc).getTime() + 10 * 60_000);
   const summaries = drainJobsFrom(server, afterDeadline);
-  expect(summaries.every((item) => item.claimed === 0), 'nothing is queued without an activation').toBe(true);
+  // Only the daily orphan sweep (WP4-T07) runs without an activation: at most one per UTC day, so two across a midnight.
+  expect(summaries.reduce((sum, item) => sum + item.claimed, 0), 'nothing but the orphan sweep is queued without an activation').toBeLessThanOrEqual(2);
   expect((await finalizationOf(person)).finalized_revision_no).toBeNull();
   expect((await person.api.call<{ revisions: unknown[] }>('GET', '/api/revisions')).revisions).toEqual([]);
   const status = await admin.call<{ automation: { active_from: string | null } }>('GET', '/api/admin/automation');

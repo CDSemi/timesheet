@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T06-FREEZE",
+  "next_task_id": "WP4-T07-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
+    "last_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
     "unpushed": []
   },
   "owner_decisions": [
@@ -227,6 +227,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "WP4-PLAN T07 depends partly on owner decisions F-3 (not-set-up flag) and F-4 (job retention), still unanswered; single-writer chain should not idle",
+      "decision": "Split WP4-T07: the F-independent part runs now (admin status fields for backup, disk, pause and held sends; daily scheduled orphan sweep; status UI). The F-3 'not set up' flag and any F-4 job-retention migration move to a later WP4-T07B after the owner answers, before WP4-T08."
+    },
     {
       "date": "2026-10-05",
       "basis": "docs/07:30 'Reconcile pending/uncertain jobs before enabling delivery' and docs/07:32 'accepted mail must not be automatically sent again'; WP4-T06 attempt 1 flag (queued sends from a backup go out after resume)",
@@ -9037,9 +9042,108 @@
       "id": "WP4-T06-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T06"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a278668f7ef2f1d6b",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T06-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T06-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T06-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
+      "branch": "main",
+      "commit_sha": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
+      "pushed": true,
+      "source_digest": "15b7422e17de30a746945f64d6c98d5f6e24f792a37fadb3f0165c7f6f43b781",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 0c58130, remote SHA identical; 39 paths, exactly the expected set; digest 15b7422e matched; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight 0.",
+      "next_action": "None; WP4-T07 (F-independent part) on 72ab2ed."
+    },
+    {
+      "id": "WP4-T07",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T06-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "acd9e8a82e1b80fb8",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/services/operationsStatus.ts",
+        "src/server/routes/admin.ts",
+        "src/server/jobs/runner.ts",
+        "src/server/jobs/sweepJob.ts",
+        "src/client/components/OperationsStatus.tsx",
+        "src/client/adminModel.ts",
+        "src/client/styles.css",
+        "tests/integration/operations-status.test.ts",
+        "tests/client/adminModel.test.ts",
+        "tests/e2e/admin-status.spec.ts",
+        "handoff/delivery/tasks/WP4-T07.md",
+        "handoff/delivery/evidence/WP4-T07"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T07.md",
+      "report": "handoff/delivery/tasks/WP4-T07.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T07/summary.txt",
+        "handoff/delivery/evidence/WP4-T07/red.txt",
+        "handoff/delivery/evidence/WP4-T07/mutation.txt",
+        "handoff/delivery/evidence/WP4-T07/e2e.txt",
+        "handoff/delivery/evidence/WP4-T07/verify.txt",
+        "handoff/delivery/evidence/WP4-T07/digest.txt",
+        "handoff/delivery/evidence/WP4-T07/admin-status-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP4-T07/admin-status-mobile-synthetic.png"
+      ],
+      "baseline_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
+      "source_digest": "cc86af8ac8ab66689f0f4bd870475f1e9460fa3e2036e5885036307837dbb9d3",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (F-3 and F-4 parts excluded): the admin operations JSON gains backup (outcome, instants, fault code, age_seconds), disk (free_bytes, total_bytes) and outbound (pause, reason, held, queued and awaiting counts) under an exact key allowlist test; new sweepJob.ts enqueues one job per UTC day with a day key, scheduled by the runner, removes a file only when no attachments row refers to it and it is older than 24 h, reports counts only, is not an outbound kind so the pause never holds it. Tests red 13 failed (jobs-sweep import failed), jobs-sweep 9 tests green; mutation (reference check replaced, scratch clone) fails 2 sweep tests. Screenshots desktop/mobile of a paused instance (3 held, 1 waiting, 30 h backup warning, disk space) viewed; CSS additions have no hard-coded values. test:e2e 0 (131 passed, 5 skipped); verify 0 (1545 tests, smoke passed, 0 deprecation lines); precommit passed; digest cc86af8a. Deviations: src/client/api.ts type gained the blocks; tests/e2e/automation.spec.ts two 'claimed is 0 without activation' assertions now allow the daily sweep; tests/integration/delivery.test.ts and jobs-restart.test.ts expected claimed counts include the sweep (to be judged by the audit as possible weakening); adminModel.ts lives in src/client/components/; queued_send_jobs added.",
+      "next_action": "None; WP4-T07-FREEZE."
+    },
+    {
+      "id": "WP4-T07-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T07"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -9057,21 +9161,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP4-T06-FREEZE.md",
-        "handoff/delivery/evidence/WP4-T06-FREEZE"
+        "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T07-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T07-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
+      "baseline_commit": "72ab2ed134c26656643eb00542e54a94bb07a4c7",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "15b7422e17de30a746945f64d6c98d5f6e24f792a37fadb3f0165c7f6f43b781",
+      "source_digest": "cc86af8ac8ab66689f0f4bd870475f1e9460fa3e2036e5885036307837dbb9d3",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T06 with pending handoff records."
+      "next_action": "Commit and push WP4-T07 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

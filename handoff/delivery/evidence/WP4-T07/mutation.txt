@@ -1,0 +1,54 @@
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/WP4-T07/mut
+
+ ❯ tests/integration/jobs-sweep.test.ts (9 tests | 2 failed) 1356ms
+   ❯ the sweep job (4)
+     × removes an unreferenced old file and an old temporary file, and never a referenced file 187ms
+     × keeps every referenced file even when it is older than any grace 158ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/jobs-sweep.test.ts > the sweep job > removes an unreferenced old file and an old temporary file, and never a referenced file
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/integration/jobs-sweep.test.ts:90:61
+     88|
+     89|     expect(summary).toMatchObject({ claimed: 1, succeeded: 1, interven…
+     90|     expect(existsSync(files.pathOf(referenced.storageKey))).toBe(true);
+       |                                                             ^
+     91|     expect(existsSync(files.pathOf(orphan.storageKey))).toBe(false);
+     92|     expect(existsSync(files.pathOf(freshOrphan.storageKey))).toBe(true…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/jobs-sweep.test.ts > the sweep job > keeps every referenced file even when it is older than any grace
+AssertionError: fDwZTzCu7IKFvkqpvp4_Lh_pits3xL-Q: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/integration/jobs-sweep.test.ts:106:72
+    104|     });
+    105|     await sweepRunner()();
+    106|     for (const key of keys) expect(existsSync(files.pathOf(key)), key)…
+       |                                                                        ^
+    107|   });
+    108|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  19:43:34
+   Duration  2.83s (tests 49%, import 32%, transform 18%)
+
