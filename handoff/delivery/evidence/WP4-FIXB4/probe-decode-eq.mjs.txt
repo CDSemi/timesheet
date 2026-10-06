@@ -1,0 +1,51 @@
+// WP4-FIXB4 check: decoding in 512 KiB steps with a streaming TextDecoder and joining gives exactly the one-call
+// result, for UTF-8 (valid multi-byte text, characters split across steps, invalid and truncated sequences) and UTF-16
+// LE/BE (surrogate pairs split across steps, lone surrogates, odd length). Synthetic bytes only. Usage: node decode-eq.mjs
+const STEP = 512 * 1024;
+function stepped(encoding, data) {
+  const decoder = new TextDecoder(encoding);
+  const pieces = [];
+  for (let start = 0; start < data.length; start += STEP) pieces.push(decoder.decode(data.subarray(start, start + STEP), { stream: true }));
+  pieces.push(decoder.decode());
+  return pieces.join('');
+}
+let seed = 7;
+const rand = () => ((seed = (seed * 1103515245 + 12345) >>> 0) >>> 8) / 16777216;
+const cases = [];
+const utf8 = new TextEncoder();
+// Valid UTF-8 whose multi-byte characters straddle every step boundary at each offset.
+for (const char of ['é', '€', '😀']) {
+  for (let shift = 0; shift < 4; shift += 1) {
+    const prefix = 'a'.repeat(STEP - shift);
+    cases.push(['utf-8', `valid ${JSON.stringify(char)} at boundary-${shift}`, utf8.encode(prefix + char.repeat(5) + 'b'.repeat(STEP) + char)]);
+  }
+}
+// Random bytes (mostly invalid UTF-8), and random bytes with a truncated sequence at the very end.
+for (const size of [STEP + 1, 2 * STEP + 3, 3 * STEP - 1]) {
+  const data = new Uint8Array(size);
+  for (let i = 0; i < size; i += 1) data[i] = Math.floor(rand() * 256);
+  cases.push(['utf-8', `random ${size}`, data]);
+  const cut = utf8.encode(`${'x'.repeat(size - 2)}😀`).subarray(0, size + 1);
+  cases.push(['utf-8', `truncated ${size}`, cut]);
+}
+// UTF-16 with a surrogate pair split at the boundary, lone surrogates and an odd length.
+for (const encoding of ['utf-16le', 'utf-16be']) {
+  for (const size of [STEP + 2, 2 * STEP + 1, 2 * STEP + 4]) {
+    const data = new Uint8Array(size);
+    for (let i = 0; i < size; i += 1) data[i] = Math.floor(rand() * 256);
+    const at = STEP - 2;
+    const pair = encoding === 'utf-16le' ? [0x3d, 0xd8, 0x00, 0xde] : [0xd8, 0x3d, 0xde, 0x00];
+    data.set(pair, at);
+    cases.push([encoding, `random with a pair across the boundary ${size}`, data]);
+  }
+}
+let failures = 0;
+for (const [encoding, name, data] of cases) {
+  const whole = new TextDecoder(encoding).decode(data);
+  const joined = stepped(encoding, data);
+  const same = whole === joined;
+  if (!same) failures += 1;
+  console.log(`${same ? 'same' : 'DIFFERENT'} | ${encoding} | ${name} | ${data.length} bytes -> ${whole.length} chars`);
+}
+console.log(`${cases.length} cases, ${failures} different`);
+process.exitCode = failures === 0 ? 0 : 1;

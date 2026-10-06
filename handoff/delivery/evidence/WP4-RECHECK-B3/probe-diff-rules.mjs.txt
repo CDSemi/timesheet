@@ -1,0 +1,16 @@
+// WP4-RECHECK-B3: shows the `rules` arrays of the new and old stored reports and compares the reports without
+// `sourceCount` and `rules` (the IMPORT_RULES text is service metadata, not reader or mapping output).
+// Usage: node diff-rules.mjs <dump dir>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'sourceCount' && k !== 'rules').map(([k, x]) => [k, strip(x)])) : v);
+for (const name of ['template', 'twelve']) {
+  const n = JSON.parse(readFileSync(join(dir, `new-${name}-report.json`), 'utf8'));
+  const o = JSON.parse(readFileSync(join(dir, `old-${name}-report.json`), 'utf8'));
+  console.log(`${name}: rules new ${n.rules.length}, old ${o.rules.length}; report without sourceCount and rules ${JSON.stringify(strip(n)) === JSON.stringify(strip(o)) ? 'IDENTICAL' : 'DIFFERS'}`);
+  const added = n.rules.filter((r) => !o.rules.includes(r));
+  const removed = o.rules.filter((r) => !n.rules.includes(r));
+  console.log(`  rules added: ${JSON.stringify(added)}; removed: ${JSON.stringify(removed)}`);
+}

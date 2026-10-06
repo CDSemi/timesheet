@@ -254,8 +254,8 @@ test('the upload refuses the wrong file in words, before and after it is sent', 
   await expect(page.locator('[data-error="file"]')).toContainText('.xlsx');
   await expect(send).toBeDisabled();
 
-  await input.setInputFiles({ name: 'big.xlsx', mimeType: XLSX, buffer: Buffer.alloc(8 * 1024 * 1024 + 1, 1) });
-  await expect(page.locator('[data-error="file"]')).toContainText('8 MiB');
+  await input.setInputFiles({ name: 'big.xlsx', mimeType: XLSX, buffer: Buffer.alloc(2 * 1024 * 1024 + 1, 1) });
+  await expect(page.locator('[data-error="file"]')).toContainText('2 MiB');
   await expect(send).toBeDisabled();
 
   // A file that is not a workbook passes the courtesy check; the server refuses it and stores nothing.

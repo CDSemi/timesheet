@@ -58,7 +58,10 @@
    - R-B2-1: the floating flag follows the matched holiday.
    - R-B2-2: a non-UTF encoding is refused.
    - The benign differential against the accepted WP4-T09 reader (export 13a258d) is
-     byte-identical for the template and a 12-dated-sheet workbook.
+     identical for the template and a 12-dated-sheet workbook.
+     - "Identical" means equal after dropping the additive finding field `sourceCount`.
+       That field was introduced by WP4-FIXB and accepted at WP4-REGATE.
+     - WP4-REGATE3 found it to be the only raw difference.
 3. **Regression.**
    - Rerun `npm ci` and `npm run verify` on your export.
    - Rerun the workbook-reader, workbook-import, opening-balance and sharing-matrix
@@ -79,3 +82,38 @@ Return at most 160 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1) - decision: FIX REQUIRED
+
+Self-reported model: claude-opus-5-5 (effort not observable). Date 2026-10-06. Report:
+[WP4_RECHECK_B3](../WP4_RECHECK_B3.md) and its `.vi.md`. Evidence: `handoff/delivery/evidence/WP4-RECHECK-B3/`
+(masked, LF, probes as `*.mjs.txt`, no workbook or binary).
+
+- **Target.** HEAD 972ccda6409a7521a008c55c35a5b5cf416daf1e. Digest
+  635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b (775 files) before and after, both ways, and equal
+  to the gate digest. The export's 775 files hash-equal the commit.
+- **Regression.**
+  - `npm ci`: exit 0.
+  - `npm run verify` with deprecation tracing: exit 0. 76 files with 1755 tests, SMOKE PASSED, no deprecation line.
+  - The four area suites: 128 tests, exit 0.
+  - No regression found.
+- **Scope 1, the budget: not met.**
+  - The rebuilt RECHECK-B2 catalogue (E7 refused in 22-24 ms, Y7 refused) peaks at 140 ms and +87 MiB.
+  - The FIXB3 search at the final limits peaks at 184 ms and +93 MiB.
+  - The independent search covered 104 shapes. Compressible shapes stay at most 379 ms; memory peaks at +123 MiB.
+  - Incompressible parts (a 4.1-5.4 MB upload, inside every limit) exceed the time budget, mostly through the reader's
+    4 KiB-step inflate (264 ms against 38 ms):
+    - formulas: 576-611 ms in memory, `/api/health` stalled 640-648 ms over HTTP;
+    - kept-attribute flood: 508-528 ms, HTTP 554 ms.
+  - The server gives no 5xx and stays up.
+- **Scope 2, correctness: holds (75 PASS, 0 FAIL).**
+  - Decoding is exactly once, and the 255 cap refuses instead of cutting.
+  - R-B2-1 and R-B2-2 hold. Three lenient encoding cases are recorded as risk R-B3-1.
+  - The differential against T09 is identical after dropping `sourceCount`, plus the R3 rule text from 0f7fba2 that
+    was accepted at WP4-REGATE.
+- **Findings.** WP4-RB3-01 (Low): the stated budget and the measured worst case (about 290 ms and +89 MiB) are false
+  for incompressible content. Risks: R-B3-1 to R-B3-4.
+- **Next action.** A bounded fix: cheaper inflate, add incompressible content to the sweep, then re-measure and
+  restate the budget. Then a freeze, a regate and a fresh area-B recheck.
+- **Runtime.** Nothing is left running; the server child was stopped through its handle. No docker command was run.
+  Nothing was committed.

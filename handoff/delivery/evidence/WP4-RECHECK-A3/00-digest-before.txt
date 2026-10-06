@@ -1,0 +1,28 @@
+# 01 HEAD and digest BEFORE (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:00:18Z
+$ git rev-parse HEAD
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+exit 0
+$ git rev-parse origin/main
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+$ git rev-parse 'HEAD^{tree}'
+b0545cec30ac3b652eb5d4211f820fe72955a4da
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  -
+$ ... | wc -l
+775
+$ node24 scripts/source-digest.mjs
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  (775 files, handoff/ excluded)
+exit 0
+gate digest of record: 635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b (775 files)
+$ git status --short (working tree; handoff/ only expected)
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WP4-FIXB3-FREEZE.md
+ M handoff/delivery/tasks/WP4-RECHECK-B3.md
+ M handoff/delivery/tasks/WP4-REGATE3.md
+?? handoff/delivery/evidence/WP4-FIXB3-FREEZE/
+?? handoff/delivery/evidence/WP4-REGATE3/
+$ git status --short -- . ':!handoff' (non-handoff changes; empty expected)
+[end]

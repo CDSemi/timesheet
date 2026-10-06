@@ -1,0 +1,369 @@
+// WP4-FIXB2 probe cases: every package of the first audit (P1b, P6, P7), of the recheck (r1, r2, r3) and the new
+// adversarial shapes of this fix (N*), built in memory from the tracked template with the test-support helpers of
+// PROBE_ROOT. Packages are written only under the task folder (never the repository).
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = process.env.PROBE_ROOT;
+if (!ROOT) throw new Error('PROBE_ROOT required');
+const sw = await import(pathToFileURL(join(ROOT, 'tests/support/syntheticWorkbook.ts')).href);
+const { strFromU8, strToU8 } = await import(pathToFileURL(join(ROOT, 'node_modules/fflate/esm/index.mjs')).href);
+const { buildSyntheticWorkbook, pack, readTemplateBytes, unpack } = sw;
+
+export const MiB = 1024 * 1024;
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const WS_TYPE = `${RNS}/worksheet`;
+const HEAD = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+const TAIL = '</row></sheetData></worksheet>';
+const addDays = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/** A worksheet whose single row is `unit` repeated to about `bytes` bytes. */
+const fill = (unit, bytes, head = HEAD, tail = TAIL) => head + unit.repeat(Math.floor((bytes - head.length - tail.length) / unit.length)) + tail;
+
+/** Template entries plus worksheet parts registered as sheets named by `names`. */
+function withSheets(entries, parts) {
+  let workbook = strFromU8(entries['xl/workbook.xml']);
+  let rels = strFromU8(entries['xl/_rels/workbook.xml.rels']);
+  parts.forEach(({ name, part, xml, relId }, i) => {
+    const id = relId ?? `rIdR${i}`;
+    if (xml !== undefined) entries[part] = strToU8(xml);
+    workbook = workbook.replace('</sheets>', `<sheet name="${name}" sheetId="${500 + i}" r:id="${id}"/></sheets>`);
+    if (relId === undefined) {
+      rels = rels.replace('</Relationships>', `<Relationship Id="${id}" Type="${WS_TYPE}" Target="${part.replace('xl/', '')}"/></Relationships>`);
+    }
+  });
+  entries['xl/workbook.xml'] = strToU8(workbook);
+  entries['xl/_rels/workbook.xml.rels'] = strToU8(rels);
+  return entries;
+}
+
+/** Four worksheet parts (sheet1..3 replaced, one added) filled to `each` bytes with `unit`. */
+function fourParts(unit, each) {
+  const e = unpack(readTemplateBytes());
+  for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(fill(unit, each));
+  return withSheets(e, [{ name: 'Extra', part: 'xl/worksheets/sheet90.xml', xml: fill(unit, each) }]);
+}
+/** `count` worksheet parts of `xml` each, as sheets P0.. */
+function nParts(count, xml) {
+  return withSheets(unpack(readTemplateBytes()), Array.from({ length: count }, (_, i) => ({ name: `P${i}`, part: `xl/worksheets/p${i}.xml`, xml })));
+}
+const EACH = 4 * MiB - 6 * 1024; // four parts plus the template's small parts stay under the 16 MiB total
+
+/** Template whose shared strings gain one big string (index 66) of about `bytes` bytes. */
+function withBigSharedString(e, bytes, first = 'a', body = 'a') {
+  const sst = strFromU8(e['xl/sharedStrings.xml']);
+  const big = first + body.repeat(Math.floor((bytes - sst.length - 40) / body.length));
+  e['xl/sharedStrings.xml'] = strToU8(sst.replace('</sst>', `<si><t>${big}</t></si></sst>`));
+  return e;
+}
+
+/** Holiday Dates sheet with `rows` rows: A = a valid serial date (or shared string `dateIndex`), B = shared string `index`. */
+function holidaySheet(rows, index, dateIndex) {
+  const out = [];
+  for (let r = 2; r < 2 + rows; r += 1) {
+    const a = dateIndex === undefined ? `<c r="A${r}"><v>${46023 + r}</v></c>` : `<c r="A${r}" t="s"><v>${dateIndex}</v></c>`;
+    out.push(`<row r="${r}">${a}<c r="B${r}" t="s"><v>${index}</v></c></row>`);
+  }
+  return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${out.join('')}</sheetData></worksheet>`;
+}
+
+/** One synthetic dated sheet whose labels reference shared string `index`, registered under `count` dated names. */
+function labelAmplifier(count, index, bigBytes, first = 'a', body = 'a') {
+  const e = withBigSharedString(unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] })), bigBytes, first, body);
+  const part = 'xl/worksheets/sheet100.xml';
+  e[part] = strToU8(strFromU8(e[part]).replace(/t="inlineStr"><is><t>Worked<\/t><\/is>/g, `t="s"><v>${index}</v>`));
+  const names = [];
+  for (let i = 1; i < count; i += 1) names.push({ name: addDays('2026-01-09', 14 * i).replace(/-/g, '.'), part, relId: 'rIdSyn0' });
+  return withSheets(e, names);
+}
+
+/** Dated sheets (payroll 2026-01-09 + 14 n) whose label B14 is an inline string of `bytes` characters `ch`. */
+function inlineLabel(sheets, bytes, ch) {
+  const periods = Array.from({ length: sheets }, (_, i) => ({ payrollDate: addDays('2026-01-09', 14 * i) }));
+  const e = unpack(buildSyntheticWorkbook({ periods }));
+  for (let i = 0; i < sheets; i += 1) {
+    const part = `xl/worksheets/sheet${100 + i}.xml`;
+    e[part] = strToU8(strFromU8(e[part]).replace(/(<c r="B14"[^>]*t="inlineStr"><is><t>)Worked(<\/t>)/, `$1${ch.repeat(bytes)}$2`));
+  }
+  return e;
+}
+
+/** A realistic workbook: `n` dated sheets with clocks on weekdays, a vacation day and a holiday label per period. */
+function realistic(n) {
+  const periods = Array.from({ length: n }, (_, i) => {
+    const days = {};
+    for (let d = 0; d < 14; d += 1) if (d % 7 < 5) days[d] = { label: 'Worked', start: 8 * 60, end: 17 * 60 + 30 };
+    days[2] = { label: 'Vacation' };
+    days[9] = { label: 'Work from home', start: 9 * 60, end: 18 * 60 };
+    return { payrollDate: addDays('2026-01-09', 14 * i), days };
+  });
+  return unpack(buildSyntheticWorkbook({ periods }));
+}
+
+function attrs(count, from = 0) {
+  let out = '';
+  for (let i = from; i < from + count; i += 1) out += ` a${i.toString(36)}=""`;
+  return out;
+}
+
+export const CASES = {
+  // --- first audit WP4-AUDIT-B: P1b (in memory) and the P6 HTTP packages, P7 report size ---
+  'P1b one 15 MiB sheet of <c/> (P6 37 KB)': () => { const e = unpack(readTemplateBytes()); e['xl/worksheets/sheet3.xml'] = strToU8(fill('<c/>', 15 * MiB)); return e; },
+  'P1b three 15.8 MiB sheets of <c/> (P6 65 KB)': () => { const e = unpack(readTemplateBytes()); for (const n of [1, 2, 3]) e[`xl/worksheets/sheet${n}.xml`] = strToU8(fill('<c/>', 15.8 * MiB)); return e; },
+  'P1b three 15.8 MiB sheets of <c><v>1</v></c> (113 KB)': () => { const e = unpack(readTemplateBytes()); for (const n of [1, 2, 3]) e[`xl/worksheets/sheet${n}.xml`] = strToU8(fill('<c><v>1</v></c>', 15.8 * MiB)); return e; },
+  'P1b Holiday Dates 150 000 cells in column C': () => {
+    const rows = [];
+    for (let i = 1; i <= 150_000; i += 1) rows.push(`<row r="${i}"><c r="C${i}"><v>1</v></c></row>`);
+    const e = unpack(readTemplateBytes());
+    e['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`);
+    return e;
+  },
+  ...Object.fromEntries([1, 3, 7].map((sheets) => [`P7 ${sheets} payroll sheet(s) x 199 000 <f>8.5</f>`, () => {
+    const dates = ['2026-01-09', '2026-01-23', '2026-02-06', '2026-02-20', '2026-03-06', '2026-03-20', '2026-04-03'];
+    const e = unpack(buildSyntheticWorkbook({ periods: dates.slice(0, sheets).map((payrollDate) => ({ payrollDate })) }));
+    const rows = [];
+    for (let r = 1; r <= 199_000; r += 1) rows.push(`<row r="${r}"><c r="AA${r}"><f>8.5</f></c></row>`);
+    const xml = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+    for (let i = 0; i < sheets; i += 1) e[`xl/worksheets/sheet${100 + i}.xml`] = strToU8(xml);
+    return e;
+  }])),
+  // --- recheck r1 (WP4-RECHECK-B) ---
+  'r1 B-02 Holiday Dates 40 000 cells in column C (under the part limit)': () => {
+    const rows = [];
+    for (let i = 1; i <= 19_999; i += 1) rows.push(`<row r="${i}"><c r="C${i}"><v>1</v></c><c r="D${i}"><v>1</v></c></row>`);
+    const e = unpack(readTemplateBytes());
+    e['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`);
+    return e;
+  },
+  'r1 B-02 Holiday Dates 2 001 date rows in A/B': () => { const e = unpack(readTemplateBytes()); e['xl/worksheets/sheet2.xml'] = strToU8(holidaySheet(2001, 16)); return e; },
+  'r1 B-02 sparse far row A9999999': () => {
+    const e = unpack(readTemplateBytes());
+    e['xl/worksheets/sheet2.xml'] = strToU8(strFromU8(e['xl/worksheets/sheet2.xml']).replace('</sheetData>', '<row r="9999999"><c r="A9999999"><v>46100</v></c></row></sheetData>'));
+    return e;
+  },
+  'r1 P7 3 payroll sheets x 15 000 <f>8.5</f> (accepted size)': () => {
+    const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }, { payrollDate: '2026-02-06' }] }));
+    for (let i = 0; i < 3; i += 1) {
+      const part = `xl/worksheets/sheet${100 + i}.xml`;
+      const extra = [];
+      for (let r = 100; r < 15_100; r += 1) extra.push(`<row r="${r}"><c r="AA${r}"><f>8.5</f></c></row>`);
+      e[part] = strToU8(strFromU8(e[part]).replace('</sheetData>', `${extra.join('')}</sheetData>`));
+    }
+    return e;
+  },
+  'ACCEPT tracked template': () => unpack(readTemplateBytes()),
+  'ACCEPT realistic 12 dated sheets (clocks, leave, WFH)': () => realistic(12),
+  'ACCEPT 26 dated sheets (one year)': () => unpack(buildSyntheticWorkbook({ periods: Array.from({ length: 26 }, (_, i) => ({ payrollDate: addDays('2026-01-09', 14 * i) })) })),
+  'ACCEPT 60 dated sheets': () => unpack(buildSyntheticWorkbook({ periods: Array.from({ length: 60 }, (_, i) => ({ payrollDate: addDays('2024-01-12', 14 * i) })) })),
+  'ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit)': () => realistic(61),
+  'r1 H1a 61 parts of (4 MiB - 64 B) comment padding': () => nParts(61, HEAD + TAIL + '<!--' + 'A'.repeat(4 * MiB - 200) + '-->'),
+  'r1 H1b 61 parts of 199 990 <x/> elements': () => nParts(61, HEAD + '<x/>'.repeat(199_990) + TAIL),
+  'r1 H1c 2 parts of 190 000 <x a="1"/> elements': () => nParts(2, HEAD + '<x a="1"/>'.repeat(190_000) + TAIL),
+  'r1 H1d 61 sheets pointing at one 4 MiB part': () => {
+    const e = unpack(readTemplateBytes());
+    e['xl/worksheets/p0.xml'] = strToU8(HEAD + TAIL + '<!--' + 'A'.repeat(4 * MiB - 200) + '-->');
+    const sheets = withSheets(e, [{ name: 'P0', part: 'xl/worksheets/p0.xml' }]);
+    return withSheets(sheets, Array.from({ length: 60 }, (_, i) => ({ name: `Q${i}`, part: 'xl/worksheets/p0.xml', relId: 'rIdR0' })));
+  },
+  'r1 H2a 4 parts of <1/> (digit tag names)': () => fourParts('<1/>', EACH),
+  'r1 H2b 4 parts of < /> (blank tag names)': () => fourParts('< />', EACH),
+  'r1 H2c 4 parts of <1:c/> (prefixed cells)': () => fourParts('<1:c/>', EACH),
+  'r1 H2d 4 parts of <é/> (non-ASCII tag names)': () => fourParts('<é/>', EACH),
+  'r1 H2e 4 parts of <-/> (punctuation tag names)': () => fourParts('<-/>', EACH),
+  'r1 H3a 199 990 nested <a>': () => { const e = unpack(readTemplateBytes()); e['xl/worksheets/sheet3.xml'] = strToU8(HEAD + '<a>'.repeat(199_990) + '</a>'.repeat(199_990) + TAIL); return e; },
+  'r1 H3b 4 MiB of nested <1> (uncounted)': () => { const e = unpack(readTemplateBytes()); const n = Math.floor((EACH - 200) / 7); e['xl/worksheets/sheet3.xml'] = strToU8(HEAD + '<1>'.repeat(n) + '</1>'.repeat(n) + TAIL); return e; },
+  'r1 H3c 30-deep nesting repeated (counted)': () => { const e = unpack(readTemplateBytes()); const unit = '<a>'.repeat(30) + '</a>'.repeat(30); e['xl/worksheets/sheet3.xml'] = strToU8(HEAD + unit.repeat(Math.floor(199_000 / 30)) + TAIL); return e; },
+  'r1 H4a one <c> with 4 MiB of attributes': () => {
+    const e = unpack(readTemplateBytes());
+    const list = [];
+    let size = 0;
+    for (let i = 0; size < EACH - 400; i += 1) { const a = ` a${i.toString(36)}=""`; list.push(a); size += a.length; }
+    e['xl/worksheets/sheet3.xml'] = strToU8(`${HEAD}<c r="A1"${list.join('')}/>${TAIL}`);
+    return e;
+  },
+  'r1 H4b 4 parts, one <c> each with 4 MiB of attributes': () => {
+    const list = [];
+    let size = 0;
+    for (let i = 0; size < EACH - 400; i += 1) { const a = ` a${i.toString(36)}=""`; list.push(a); size += a.length; }
+    const xml = `${HEAD}<c r="A1"${list.join('')}/>${TAIL}`;
+    const e = unpack(readTemplateBytes());
+    for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(xml);
+    return withSheets(e, [{ name: 'Extra', part: 'xl/worksheets/sheet90.xml', xml }]);
+  },
+  'r1 H4c 4 parts, 49 000 cells each with short attributes': () => {
+    const per = Math.floor((EACH - 400) / 49_000);
+    return fourParts('<c' + ' a=""'.repeat(Math.floor((per - 4) / 5)) + '/>', EACH);
+  },
+  'r1 H5a 49 999 shared strings of 80 bytes': () => {
+    const e = unpack(readTemplateBytes());
+    const sst = strFromU8(e['xl/sharedStrings.xml']);
+    e['xl/sharedStrings.xml'] = strToU8(sst.replace('</sst>', `${'<si><t>' + 'b'.repeat(66) + '</t></si>'}`.repeat(49_999 - 66) + '</sst>'));
+    return e;
+  },
+  'r1 H5b one 4 MiB shared string x 2000 holiday names': () => { const e = withBigSharedString(unpack(readTemplateBytes()), EACH); e['xl/worksheets/sheet2.xml'] = strToU8(holidaySheet(2000, 66)); return e; },
+  'r1 H5c one 4 MiB shared string x 2000 holiday names (upper-case first letter)': () => { const e = withBigSharedString(unpack(readTemplateBytes()), EACH, 'Z'); e['xl/worksheets/sheet2.xml'] = strToU8(holidaySheet(2000, 66)); return e; },
+  'r1 H5d one 1 MiB shared string x 100 holiday names': () => { const e = withBigSharedString(unpack(readTemplateBytes()), 1 * MiB); e['xl/worksheets/sheet2.xml'] = strToU8(holidaySheet(100, 66)); return e; },
+  'r1 H5e one 4 MiB shared string x 60 dated sheets x 10 labels': () => labelAmplifier(60, 66, EACH),
+  'r1 H5f one 4 MiB shared string x 60 dated sheets x 10 labels (upper-case first letter)': () => labelAmplifier(60, 66, EACH, 'Z'),
+  'r1 H6a 3 dated sheets, label B14 an inline string of 4 MiB letters': () => inlineLabel(3, EACH - 30_000, 'q'),
+  'r1 H6b 3 dated sheets, label B14 an inline string of 4 MiB U+0001': () => inlineLabel(3, EACH - 30_000, '\u0001'),
+  'r1 H7 Timesheet X24 formula of 4 MiB with an unterminated quote': () => {
+    const e = unpack(readTemplateBytes());
+    const sheet = strFromU8(e['xl/worksheets/sheet3.xml']);
+    e['xl/worksheets/sheet3.xml'] = strToU8(sheet.replace(/<c r="X24"([^>]*)>[\s\S]*?<\/c>/, `<c r="X24"$1><f>"${'8.5+'.repeat(Math.floor((EACH - sheet.length - 200) / 4))}</f></c>`));
+    return e;
+  },
+  // --- recheck r3: ONE worksheet part of about 3.8 MiB ---
+  ...Object.fromEntries([
+    ['r3 counted <c/>', '<c/>'], ['r3 counted <row/>', '<row/>'], ['r3 <1/> (digit tag name)', '<1/>'], ['r3 <9/>', '<9/>'],
+    ['r3 < /> (empty tag name, space)', '< />'], ['r3 <.a/> (dot-leading)', '<.a/>'],
+  ].map(([name, unit]) => [name, () => { const e = unpack(readTemplateBytes()); e['xl/worksheets/sheet3.xml'] = strToU8(fill(unit, Math.floor(3.8 * MiB))); return e; }])),
+  'r3 one <c> with ~3.8 MiB of a0="" attributes': () => {
+    const e = unpack(readTemplateBytes());
+    const list = [];
+    let size = 0;
+    const SIZE = Math.floor(3.8 * MiB);
+    for (let i = 0; size < SIZE - 400; i += 1) { const a = ` a${i.toString(36)}=""`; list.push(a); size += a.length; }
+    e['xl/worksheets/sheet3.xml'] = strToU8(`${HEAD}<c r="A1"${list.join('')}/>${TAIL}`);
+    return e;
+  },
+  // --- new adversarial shapes (WP4-FIXB2), sized to the new limits ---
+  'N1 tiny elements: 3 parts x 83 000 <a/> (total 249 000)': () => nParts(3, HEAD + '<a/>'.repeat(83_000) + TAIL),
+  'N2 tiny elements: 1 part x 99 990 <x/> + comments, PIs, CDATA': () => nParts(1, HEAD + '<x/><!--c--><?p q?><![CDATA[d]]>'.repeat(24_990) + TAIL),
+  'N3 attribute-heavy: 2 parts x 3 100 <x> of 64 attributes (198 400 per part)': () => nParts(2, HEAD + `<x${attrs(64)}/>`.repeat(3_100) + TAIL),
+  'N4 attribute-heavy: 3 parts x 3 100 cells of 64 attributes (total over)': () => nParts(3, HEAD + `<c r="A1"${attrs(63)}/>`.repeat(3_100) + TAIL),
+  'N5 long attribute values: 4 parts, 63 KiB r="..." on 60 cells each': () => fourParts(`<c r="${'A'.repeat(63 * 1024)}"/>`, 63 * 1024 * 62),
+  'N6 deep nesting: 39 levels repeated to the element limit': () => { const e = unpack(readTemplateBytes()); const unit = '<a>'.repeat(35) + '</a>'.repeat(35); e['xl/worksheets/sheet3.xml'] = strToU8(HEAD + unit.repeat(Math.floor(99_000 / 35)) + TAIL); return e; },
+  'N7 long text nodes: 4 parts, one cell <v> of 4 MiB': () => fourParts(`<c r="A1" t="str"><v>${'v'.repeat(EACH - 400)}</v></c>`, EACH),
+  'N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp;': () => fourParts(`<c r="A1" t="inlineStr"><is><t>${'&amp;'.repeat(Math.floor((EACH - 400) / 5))}</t></is></c>`, EACH),
+  'N9 many parts just under the limit: 4 parts x 4 MiB of valued cells': () => fourParts('<c r="B13" s="1"><v>46031</v></c>', EACH),
+  'N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values': () => fourParts(`<c r="B13"><v>${'1'.repeat(110)}</v></c>`, 30_000 * 132 + 200),
+  'N9c many parts just under the byte limit: 4 parts x 24 000 cells of 140-digit values': () => fourParts(`<c r="B13"><v>${'1'.repeat(140)}</v></c>`, 24_000 * 162 + 200),
+  'N10b shared formula of 8 KiB used by 19 000 cells on 2 dated sheets': () => {
+    const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }] }));
+    for (const part of ['xl/worksheets/sheet100.xml', 'xl/worksheets/sheet101.xml']) {
+      const rows = [`<row r="100"><c r="AA100"><f t="shared" si="0" ref="AA100:AA19100">${'TODAY()+8.5+'.repeat(700)}1</f></c></row>`];
+      for (let r = 101; r < 19_100; r += 1) rows.push(`<row r="${r}"><c r="AA${r}"><f t="shared" si="0"/></c></row>`);
+      e[part] = strToU8(strFromU8(e[part]).replace('</sheetData>', `${rows.join('')}</sheetData>`));
+    }
+    return e;
+  },
+  'N11 shared formula of 1 MiB used by 19 000 cells': () => {
+    const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }));
+    const rows = [`<row r="100"><c r="AA100"><f t="shared" si="0" ref="AA100:AA19100">"${'x'.repeat(MiB)}</f></c></row>`];
+    for (let r = 101; r < 19_100; r += 1) rows.push(`<row r="${r}"><c r="AA${r}"><f t="shared" si="0"/></c></row>`);
+    e['xl/worksheets/sheet100.xml'] = strToU8(strFromU8(e['xl/worksheets/sheet100.xml']).replace('</sheetData>', `${rows.join('')}</sheetData>`));
+    return e;
+  },
+  'N12 whitespace-only 4 MiB shared string as 2000 holiday dates and names': () => { const e = withBigSharedString(unpack(readTemplateBytes()), EACH, ' ', ' '); e['xl/worksheets/sheet2.xml'] = strToU8(holidaySheet(2000, 66, 66)); return e; },
+  'N13 whitespace-only 4 MiB shared string as 61 dated sheets x 10 labels': () => labelAmplifier(61, 66, EACH, ' ', ' '),
+  'N14 sheet name "2026.01.09" + 1 MiB of spaces': () => {
+    const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }));
+    e['xl/workbook.xml'] = strToU8(strFromU8(e['xl/workbook.xml']).replace('name="2026.01.09"', `name="2026.01.09${' '.repeat(MiB)}"`));
+    return e;
+  },
+  'N15b 58 external-link entries with 60 KiB names': () => {
+    const e = unpack(readTemplateBytes());
+    for (let i = 0; i < 58; i += 1) e[`xl/externalLinks/${String(i).padStart(3, '0')}${'n'.repeat(60 * 1024)}.xml`] = strToU8('<x/>');
+    return e;
+  },
+  'N18 most kept cells: 3 parts x 40 000 distinct valued cells (246 000 openings)': () => {
+    const xml = (sheet) => {
+      const rows = [];
+      for (let r = 1; r <= 2000; r += 1) {
+        let cells = '';
+        for (let c = 0; c < 20; c += 1) cells += `<c r="${String.fromCharCode(65 + c)}${r}"><v>${sheet * 100000 + r * 20 + c}</v></c>`;
+        rows.push(`<row r="${r}">${cells}</row>`);
+      }
+      return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+    };
+    const e = unpack(readTemplateBytes());
+    ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml'].forEach((part, i) => { e[part] = strToU8(xml(i)); });
+    return e;
+  },
+  'N20 most cells: 4 parts x 49 900 empty cells with distinct addresses': () => {
+    const xml = () => {
+      const rows = [];
+      for (let r = 1; r <= 2495; r += 1) {
+        let cells = '';
+        for (let c = 0; c < 20; c += 1) cells += `<c r="${String.fromCharCode(65 + c)}${r}"/>`;
+        rows.push(`<row r="${r}">${cells}</row>`);
+      }
+      return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+    };
+    const e = unpack(readTemplateBytes());
+    for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(xml());
+    return withSheets(e, [{ name: 'Extra', part: 'xl/worksheets/sheet90.xml', xml: xml() }]);
+  },
+  'N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V)': () => {
+    const xml = () => {
+      const rows = [];
+      for (let r = 1; r <= 2300; r += 1) {
+        let cells = '';
+        for (let c = 0; c < 20; c += 1) cells += `<c r="${String.fromCharCode(67 + c)}${r}"/>`;
+        rows.push(`<row r="${r}">${cells}</row>`);
+      }
+      return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+    };
+    const e = unpack(readTemplateBytes());
+    for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(xml());
+    return withSheets(e, [{ name: 'Extra', part: 'xl/worksheets/sheet90.xml', xml: xml() }]);
+  },
+  'N21 pinned text: 4 parts of 4 MiB with one non-Latin-1 character and a kept inline string': () => {
+    const xml = `${HEAD}<c r="A1" t="inlineStr"><is><t>kept inline string €</t></is></c>${TAIL}<!--${'p'.repeat(EACH - 300)}-->`;
+    const e = unpack(readTemplateBytes());
+    for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(xml);
+    return withSheets(e, [{ name: 'Extra', part: 'xl/worksheets/sheet90.xml', xml }]);
+  },
+  'N19b most kept text: 49 900 shared strings of 60 characters, 40 000 used as cells': () => {
+    const e = unpack(readTemplateBytes());
+    const sst = strFromU8(e['xl/sharedStrings.xml']);
+    const extra = [];
+    for (let i = 0; i < 49_900; i += 1) extra.push(`<si><t>${String(i).padStart(8, '0')}${'s'.repeat(52)}</t></si>`);
+    e['xl/sharedStrings.xml'] = strToU8(sst.replace('</sst>', `${extra.join('')}</sst>`));
+    const rows = [];
+    for (let r = 1; r <= 2000; r += 1) {
+      let cells = '';
+      for (let c = 0; c < 20; c += 1) cells += `<c r="${String.fromCharCode(65 + c)}${r}" t="s"><v>${66 + ((r * 20 + c) % 49_900)}</v></c>`;
+      rows.push(`<row r="${r}">${cells}</row>`);
+    }
+    e['xl/worksheets/sheet1.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`);
+    return e;
+  },
+  'N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text': () => {
+    const periods = Array.from({ length: 61 }, (_, i) => {
+      const days = {};
+      for (let d = 0; d < 14; d += 1) days[d] = { label: `L${i}-${d}-${'q'.repeat(1024)}`, start: 8 * 60 };
+      return { payrollDate: addDays('2024-01-12', 14 * i), days };
+    });
+    const e = unpack(buildSyntheticWorkbook({ periods }));
+    const out = [];
+    for (let r = 2; r < 2002; r += 1) out.push(`<row r="${r}"><c r="A${r}"><v>${44000 + r}</v></c><c r="B${r}" t="inlineStr"><is><t>Floating ${r} ${'h'.repeat(1024)}</t></is></c></row>`);
+    e['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${out.join('')}</sheetData></worksheet>`);
+    return e;
+  },
+  'N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON)': () => {
+    const e = unpack(readTemplateBytes());
+    const out = [];
+    for (let r = 2; r < 2002; r += 1) out.push(`<row r="${r}"><c r="A${r}"><v>${44000 + r}</v></c><c r="B${r}" t="inlineStr"><is><t>${r}${'\u0001'.repeat(300)}</t></is></c></row>`);
+    e['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${out.join('')}</sheetData></worksheet>`);
+    return e;
+  },
+  'N17 report flood with Excel-sized sheet names (31 chars) and errors everywhere': () => {
+    const periods = Array.from({ length: 61 }, (_, i) => {
+      const days = {};
+      for (let d = 0; d < 14; d += 1) days[d] = { label: `${'u'.repeat(250)}${i}${d}`, start: 8 * 60, date: addDays('2020-01-01', i * 14 + d) };
+      return { payrollDate: addDays('2024-01-12', 14 * i), days, payrollCellDate: '2020-01-01' };
+    });
+    return unpack(buildSyntheticWorkbook({ periods }));
+  },
+};
+
+export function buildCase(name) {
+  const builder = CASES[name];
+  if (!builder) throw new Error(`unknown case ${name}`);
+  return pack(builder());
+}
+
+export const fileOf = (dir, name) => join(dir, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 90)}.xlsx`);

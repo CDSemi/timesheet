@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d (WP4-FIXB2-FREEZE, commit đóng băng vòng sửa 2 của WP4).
+  - HEAD = origin/main = 972ccda6409a7521a008c55c35a5b5cf416daf1e (WP4-FIXB3-FREEZE, commit đóng băng vòng sửa 3 của WP4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -887,7 +887,49 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
            635f909d….
        - Board chuyển WP4-RECHECK-A sang lần 3 (đang chờ) và thêm WP4-REGATE3,
          WP4-RECHECK-B3 (đang chờ).
-       - Đang chạy: WP4-FIXB3-FREEZE.
+       - WP4-FIXB3-FREEZE đã commit và push thành 972ccda (148 đường dẫn; mọi kiểm tra trả
+         về 0). Digest mã nguồn hiện tại trên board là 635f909d….
+       - WP4-REGATE3: **PASS** (digest 635f909d…).
+         - Verify: 1.755 test. e2e: 145 đạt. Diễn tập: 208 PASS.
+         - Ca tệ nhất trong cả gate: 160 ms và +86 MiB.
+         - E7 và Y7 bị từ chối hoặc nằm trong ngân sách.
+         - R-B2-1 và R-B2-2 đạt.
+         - Phép đối chiếu: 0 khác biệt, ngoài trường bổ sung `sourceCount` đã được
+           chấp nhận.
+         - Verifier để lại hai task python chạy nền đang chờ stdin; coordinator đã
+           dừng chúng.
+       - WP4-RECHECK-A lần 3: **PASS** trên 972ccda (digest 635f909d), không có phát
+         hiện.
+         - Phần chênh chỉ gồm FIXB3.
+         - Verify: 1.755 test. Image không có source map.
+         - Kết luận của lần 1 và lần 2 vẫn đúng.
+       - WP4-RECHECK-B3: **FIX REQUIRED**, phát hiện WP4-RB3-01 (Low).
+         - Nội dung không nén được (tệp tải lên 4–5 MB, vẫn trong mọi giới hạn) tốn
+           508–611 ms và làm health đứng 640 ms, do bước giải nén theo từng khối 4 KiB.
+         - Vì vậy con số ca tệ nhất khoảng 290 ms đã ghi là sai. Bộ nhớ vẫn tối đa
+           +123 MiB, không có lỗi 5xx.
+         - Tính đúng (75/75), R-B2-1, R-B2-2, phép đối chiếu và hồi quy đều đạt.
+       - Quyết định của coordinator: khép cả lớp lỗi bằng tính toán chứ không bằng dò
+         tìm. Nghĩa là giải nén tuyến tính, một công thức chi phí theo các giới hạn đang
+         áp dụng, và hạ trần kích thước về mức thực tế (ví dụ 2 MiB) nếu cần.
+       - WP4-FIXB4 đã xong (expert; tác giả tự báo).
+         - Giải nén bằng zlib có sẵn của Node: từ 251 ms xuống 16 ms. Phần lớn hơn 512 KiB
+           được giải mã theo từng đoạn.
+         - Công thức giới hạn: t ≤ 40 ms + 14,8 ns·X + 339 ns·O và
+           m ≤ 15 MiB + 13,3 B·X + 428 B·O.
+         - Trần mới: 2 MiB cho tệp tải lên, 1 MiB mỗi phần, 3 MiB cả gói, và 100 nghìn
+           thẻ mở. Theo công thức là khoảng 121 ms và +95 MiB. Đo thực tế tệ nhất:
+           114 ms và +72 MiB.
+         - Verify: 1.758 test. Digest: b0611629….
+       - WP4-DEPCLEAN2 đã xong: fflate 0.8.3 giờ là dev dependency, lock không đổi gì
+         khác; image runtime không cài nó; audit --omit=dev báo 0 lỗi. Verify: 1.758
+         test. Digest: 26fcc969….
+       - WP4-FIXB4-FREEZE lần 1 dừng đúng quy tắc, không có commit. Validator từ chối
+         board vì coordinator để WP4-RECHECK-A ở trạng thái `done` khi chuyển sang lần 4.
+         Coordinator đã sửa board.
+       - Đang chạy: WP4-FIXB4-FREEZE lần 2, cùng committer.
+       - Sau đó: commit đóng băng, WP4-REGATE4, WP4-RECHECK-B4 với auditor mới, và
+         WP4-RECHECK-A lần 4 (kiểm phần chênh).
        - Sau đó: commit đóng băng, chạy lại gate, kiểm tra lại mảng B (lần B3) bằng
          auditor mới, và kiểm phần chênh của mảng A (lần 3).
        - Sau đó:
@@ -933,7 +975,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-FIXB3-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-FIXB4-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b",
+  "current_source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-FIXB3-FREEZE",
+  "next_task_id": "WP4-FIXB4-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -104,6 +104,10 @@
     },
     {
       "date": "2026-10-06",
+      "observation": "WP4-REGATE3 (and earlier WP4-T12, WP4-FIXB2): agents still fed empty heredocs to 'python -' despite the brief rule, leaving harness background tasks blocked on stdin; the coordinator stopped them with TaskStop (bryvytfht, b4ii7m674) and the agent itself. Dispatch prompts now state the no-stdin rule in capitals and name the failure mode."
+    },
+    {
+      "date": "2026-10-06",
       "observation": "WP4-AUDIT-B: a 'python - <<EOF' heredoc probe opened an interactive Python REPL that looped forever in a background harness task (b9vel2ldq), writing about 2.5 MiB/s to its output file (3.6 GB after 22 minutes). The coordinator stopped it with TaskStop; the file outside Dropbox is left for the owner to delete. Briefs must forbid feeding scripts to python or node through stdin ('-' or heredocs); write the probe to a file in the task folder and run that file. WP4-T12 had a similar stray python heredoc probe."
     },
     {
@@ -140,7 +144,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d",
+    "last_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
     "unpushed": []
   },
   "owner_decisions": [
@@ -246,6 +250,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-06",
+      "basis": "Area B has needed four rechecks on the workbook parse budget (WP4-B-01, RB-01, RB2-01, RB3-01); each fresh auditor found a new shape (unusual tag names, attribute floods, double decoding, now incompressible content) because the budget was claimed from searched shapes rather than derived; real timesheet workbooks are tens of KB (template 26 KB; a 60-dated-sheet workbook previews in ~70 ms)",
+      "decision": "WP4-FIXB4 must close the class by derivation, not search: (1) make inflate linear and cheap; (2) derive an explicit linear cost bound from the enforced limits (bytes, openings, attributes, kept values) with measured per-unit coefficients, covering compressible and incompressible content; (3) lower the route upload and package limits to a realistic workbook ceiling (for example 2 MiB, with the measured size of a realistic multi-year workbook as justification) if needed so the derived bound fits the stated budget with margin; (4) state in the code comment and docs/07 the derived bound and the measured confirmation. The 500 ms / 150 MiB target stays unless the derivation shows it cannot be met at a realistic ceiling; then the expert proposes a restated figure for coordinator acceptance. Reversible by the owner."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP4-PLAN T12 drill stages 4-5 (upgrade of a v6 DB from the accepted WP3 build 49651c8, old-binary refusal, paired pre-upgrade restore) depend only on T04-T07 (done); stage 6 (import no-op) needs T09, which waits for F-1..F-3; the single-writer chain should not idle while the owner answers are pending",
@@ -10910,7 +10919,7 @@
       "status": "pending",
       "reviewed_commit": null,
       "depends_on": [
-        "WP4-REGATE3"
+        "WP4-REGATE4"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -10926,40 +10935,40 @@
       "actual_effort": null,
       "agent_id": null,
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 3,
+      "attempt": 4,
       "history": [
+        "attempt 3 (agent a9f9312409bbc8109, self-reported claude-opus-5-5): PASS on reviewed_commit 972ccda, digest 635f909d; no findings; report handoff/delivery/WP4_RECHECK_A3.md; evidence handoff/delivery/evidence/WP4-RECHECK-A3/. Superseded for digest binding because WP4-FIXB4 changes the source; attempt 4 is an area-A delta recheck on the WP4-REGATE4 freeze by another fresh auditor.",
         "attempt 2 (agent aabafcca9efc225db, self-reported claude-opus-5-5): PASS on reviewed_commit cc34e7f, digest 96445de4; no findings; report handoff/delivery/WP4_RECHECK_A2.md; evidence handoff/delivery/evidence/WP4-RECHECK-A2/. Superseded for digest binding because WP4-FIXB3 changed the source (digest 635f909d); attempt 3 is an area-A delta recheck on the WP4-REGATE3 freeze by another fresh auditor.",
         "attempt 1 (agent a659b8cbd52722f18, self-reported claude-opus-5-5): PASS on reviewed_commit 0f7fba2, digest dfe4541d (775 files); no findings; report handoff/delivery/WP4_RECHECK_A.md; evidence handoff/delivery/evidence/WP4-RECHECK-A/. Superseded for digest binding because WP4-FIXB2 and WP4-DEPCLEAN changed the source (current digest 96445de4); attempt 2 is an area-A delta recheck on the WP4-REGATE2 freeze by a different fresh auditor."
       ],
       "owned_paths": [
-        "handoff/delivery/WP4_RECHECK_A3.md",
-        "handoff/delivery/WP4_RECHECK_A3.vi.md",
+        "handoff/delivery/WP4_RECHECK_A4.md",
+        "handoff/delivery/WP4_RECHECK_A4.vi.md",
         "handoff/delivery/tasks/WP4-RECHECK-A.md",
-        "handoff/delivery/evidence/WP4-RECHECK-A3"
+        "handoff/delivery/evidence/WP4-RECHECK-A4"
       ],
       "prompt": "handoff/delivery/tasks/WP4-RECHECK-A.md",
       "report": "handoff/delivery/tasks/WP4-RECHECK-A.md",
       "evidence": [
-        "handoff/delivery/WP4_RECHECK_A2.md",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/00-README.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/00-digest-before.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/10-delta.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/11-lock.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/12-npm-ci.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/13-verify.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/15-drill.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/16-image-scan-drill.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/18-image-scan-nocache.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/20-p2-backup-restore.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/27-source-checks.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/99-digest-after.txt",
-        "handoff/delivery/evidence/WP4-RECHECK-A2/99b-digest-final.txt"
+        "handoff/delivery/WP4_RECHECK_A3.md",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/00-README.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/00-digest-before.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/10-delta.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/11-source-checks.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/12-npm-ci.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/13-verify.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/14-image-build-steps.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/15-regate3-drill-read.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/27-probe-compare.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/99-digest-after.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-A3/99b-digest-final.txt"
       ],
-      "baseline_commit": "cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d",
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
+      "findings_attempt_3": [],
       "findings_attempt_2": [],
       "findings_attempt_1": [],
       "notes": [
@@ -10968,7 +10977,7 @@
         "Procedure: one read-only grep used 2>/dev/null (no effect). If the source changes again (WP4-FIXB2), this PASS no longer matches current_source_digest: a digest-bound area-A delta recheck (attempt 2) is required.",
         "Attempt 2 (agent aabafcca9efc225db, self-reported claude-opus-5-5): PASS on cc34e7f, digest 96445de4 before and after in the repository and on the export. Delta since 0f7fba2: 9 non-handoff files, all FIXB2 or DEPCLEAN, none an area-A runtime path or imported by one; the lock removes only fast-xml-parser and its 7 transitive packages. npm ci no deprecation line; verify 1750 tests; drill rerun 208 PASS; neither image has a map or sourceMappingURL under /app/dist; the seven attempt-1 probes pass; all attempt-1 conclusions hold. Risks R-RA1..R-RA4 carried (R-RA3 now 560 pdf-lib maps under node_modules, never served); new R-RA5 (Info): with a fully cached build, the drill's deprecation check has no build output to inspect. Two 2>/dev/null slips, no effect; Docker clean."
       ],
-      "next_action": "Attempt 3: area-A delta recheck on the WP4-REGATE3 freeze (brief section 'Attempt 3'), by a fresh auditor other than a659b8cbd52722f18, aabafcca9efc225db, the WP4 authors and the WP4-RECHECK-B3 auditor."
+      "next_action": "Attempt 4: area-A delta recheck on the WP4-REGATE4 freeze by another fresh auditor (not a659b8cbd52722f18, aabafcca9efc225db, a9f9312409bbc8109, a WP4 author or the WP4-RECHECK-B4 auditor). Previous: attempt 3 PASS on 972ccda (digest 635f909d). Attempt 3 (agent a9f9312409bbc8109): delta since cc34e7f is 7 FIXB3 paths, none area-A runtime; package.json, lock and .npmrc unchanged; docs/07 line 46 only, numbers match the code; npm ci clean; verify 1755 tests with DATA_DIR exported, smoke 41; REGATE3 drill read (208 PASS); Dockerfile build steps give 0 maps; the seven attempt-1 probes pass, so attempts 1 and 2 still hold. New Info risks R-RA6 (dev-only source-map-js advisory) and R-RA7 (drill label nit)."
     },
     {
       "id": "WP4-RECHECK-B",
@@ -11365,7 +11374,7 @@
       "id": "WP4-FIXB3-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-FIXB3"
       ],
@@ -11378,10 +11387,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "aaeffec9c7edac640",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -11390,25 +11399,318 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-FIXB3-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-FIXB3-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-FIXB3-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP4-FIXB3-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "pushed": true,
       "source_digest": "635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Commit and push the round-3 fix with the round-2 regate and recheck records."
+      "decision": "committed and pushed (attempt 1), the round-3 fix freeze: parent cc34e7f, remote SHA identical; 148 paths; digest 635f909d (775 files) matched; src/client/importModel.ts unchanged; package files, .claude/, reference/ and migrations unchanged; no .xlsx or .map; all checks 0; no fixes.",
+      "next_action": "None; WP4-REGATE3 on 972ccda."
     },
     {
       "id": "WP4-REGATE3",
       "package": "WP4",
       "kind": "gate",
+      "status": "done",
+      "freeze_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "depends_on": [
+        "WP4-FIXB3-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aecfa5a35b65989fd",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-REGATE3.md",
+        "handoff/delivery/evidence/WP4-REGATE3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-REGATE3.md",
+      "report": "handoff/delivery/tasks/WP4-REGATE3.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-REGATE3/00-head-before.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/02-verify.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/03-e2e.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/04-drill.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/07-migrations.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/08-races-summary.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/11-validate_package.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/11-validate_orchestration.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/11-check_recovery.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/12-r1-cost.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/12-r2-http.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/12-r3-bypass.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/14-b2-cost.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/15-search.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/16-b2-http.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/17-rb2-tests.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/18-rb2-probe.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/19-differential.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/20-strip.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/21-precommit.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/diffscope.txt",
+        "handoff/delivery/evidence/WP4-REGATE3/99-digest-after.txt"
+      ],
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "source_digest": "635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Verifier-reported: 13/13 items plus the round-1, RB-01 and RB2-01 checks. HEAD 972ccda before and after; digest of record 635f909d (775 files) in three forms; equals the committer claim. npm ci no deprecation; verify 0 (76 files, 1755 tests, smoke 41 PASS); e2e 145 passed, 5 skipped; drill --wp3 208 PASS, 0 FAIL; migrations; races 10/10 x 6; validators 0; precommit over the evidence 0; NAS NOT VERIFIED (budget measured on this workstation only). RB-01 probes all pass (worst +77 MiB, 110 ms). RB2-01: E7 family attribute_too_large in 20-26 ms; Y7 +76 MiB / 150 ms; 77-case catalogue no over-budget; over HTTP only 201/422, health worst 102 ms during an upload, largest report 1.608 MiB; FIXB3 66-shape search worst +85 MiB (57%) and 160 ms (32%); whole-gate worst 160 ms and +86 MiB. R-B2-1 and R-B2-2 pass (36/36 non-UTF declarations refused). Differential: structured comparison against WP4-T09 0 differences; whole-JSON differs only by the additive finding field sourceCount (introduced by WP4-FIXB, accepted at WP4-REGATE), equal after dropping it - the coordinator accepts this as the expected additive field. Diff since cc34e7f: FIXB3 source, tests and docs/07 only. Incidents: two empty heredocs fed to 'python -' left two background tasks (bryvytfht, b4ii7m674) waiting on stdin; the coordinator stopped them and the verifier agent with TaskStop; one 2>/dev/null and one rm -f /dev/null-style no-op (device intact).",
+      "next_action": "None; WP4-RECHECK-B3 and WP4-RECHECK-A attempt 3 on 972ccda."
+    },
+    {
+      "id": "WP4-RECHECK-B3",
+      "package": "WP4",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "depends_on": [
+        "WP4-REGATE3"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0e015d15e6c5c5fb",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP4_RECHECK_B3.md",
+        "handoff/delivery/WP4_RECHECK_B3.vi.md",
+        "handoff/delivery/tasks/WP4-RECHECK-B3.md",
+        "handoff/delivery/evidence/WP4-RECHECK-B3"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-RECHECK-B3.md",
+      "report": "handoff/delivery/tasks/WP4-RECHECK-B3.md",
+      "evidence": [
+        "handoff/delivery/WP4_RECHECK_B3.md",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/01-baseline.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/04-verify.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/05-suites.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/10-b2-catalogue.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/11-fixb3-search.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/12-rcb3-run1.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/13-rcb3-run2.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/14-phase-F2.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/15-repeats.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/16-http.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/17-differential.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/18-correct.txt",
+        "handoff/delivery/evidence/WP4-RECHECK-B3/99-digest-after.txt"
+      ],
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "source_digest": "635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b",
+      "reviewed_digest": "635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP4-RB3-01 (Low): the stated parse budget (500 ms event-loop time, measured worst case about 290 ms and +89 MiB in the xlsxReader.ts comment and docs/07) is false for packages whose parts do not compress (high-entropy text; 4.1-5.4 MB uploads inside every stated limit): formula-heavy dated sheets take 576-611 ms and up to +123 MiB in memory and stall /api/health 640-648 ms over HTTP; a kept-attribute flood takes 508-528 ms (554 ms over HTTP). Main cost: the reader's 4 KiB-step inflate (264 ms against 38 ms for compressible controls). Memory never exceeds +150 MiB; no 5xx. Bounded fix: cheaper inflate, incompressible content in the sweep, re-measure and restate."
+      ],
+      "notes": [
+        "Held: E7 and Y7 refused (catalogue peak 140 ms, +87 MiB); FIXB3 search peak 184 ms, +93 MiB; compressible shapes at most 379 ms; correctness 75/75 (decode exactly once, 255 cap refuses instead of cutting); R-B2-1 and R-B2-2 hold; differential against T09 identical after dropping sourceCount, plus the R3 rule text accepted at WP4-REGATE; verify 1755 tests; four area suites 128 tests. Risks R-B3-1..R-B3-4 (R-B3-1: three lenient encoding cases).",
+        "Nothing left running; no docker used."
+      ],
+      "next_action": "Fix WP4-RB3-01 (WP4-FIXB4): bound the cost analytically, make inflate cheap, include incompressible content, and lower the package size to a realistic workbook ceiling if needed; then freeze, regate, a fresh area-B recheck and a digest-bound area-A delta recheck (attempt 4)."
+    },
+    {
+      "id": "WP4-FIXB4",
+      "package": "WP4",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP4-RECHECK-B3",
+      "depends_on": [
+        "WP4-FIXB3-FREEZE"
+      ],
+      "profile": "timesheet-expert",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a25ba7423ae0846ed",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/import/xlsxReader.ts",
+        "src/server/import/templateMapping.ts",
+        "src/server/services/workbookImport.ts",
+        "src/server/routes/imports.ts",
+        "src/server/app.ts",
+        "src/client/importModel.ts",
+        "src/client/ImportScreen.tsx",
+        "src/client/components/ImportPreview.tsx",
+        "tests/integration/workbook-reader.test.ts",
+        "tests/integration/workbook-import.test.ts",
+        "tests/client/importModel.test.ts",
+        "tests/e2e/import.spec.ts",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "handoff/delivery/tasks/WP4-FIXB4.md",
+        "handoff/delivery/evidence/WP4-FIXB4"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-FIXB4.md",
+      "report": "handoff/delivery/tasks/WP4-FIXB4.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-FIXB4/00-README.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/01-baseline.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/02-red-first.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/03-green.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/04-root-causes.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/05-coefficients.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/06-bound.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/07-worst-constructions.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/08-earlier-families.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/09-http.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/10-retained.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/11-differential.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/13-e2e.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/14-verify.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/15-digest.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/16-incidents.txt",
+        "handoff/delivery/evidence/WP4-FIXB4/17-precommit.txt"
+      ],
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "source_digest": "b0611629190b3f180a57a2dcc8baebe2efe2624e9149a5f840a3e7d45e9eb02f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (expert): inflate is one native zlib inflateRawSync per part into one buffer with maxOutputLength (8 MiB incompressible: 251 ms -> 16 ms); a second root cause found: scanning slowed about 2x above ~1 MB per part, so parts over 512 KiB are decoded in steps. Derived bound over XML bytes X and markup openings O (61 unit kinds measured; attributes add no measurable cost): time <= 40 ms + 14.8 ns*X + 339 ns*O; memory <= 15 MiB + 13.3 B*X + 428 B*O. At the old ceilings memory would be +182 MiB (over budget), so the ceilings were lowered: 2 MiB upload, 1 MiB per part, 3 MiB per package, 100,000 openings; the bound at the new ceilings is about 121 ms and +95 MiB (margins 76% and 37%); a 64-sheet workbook is 0.33 MB. Measured worst constructions at most 114 ms and +72 MiB (one 149 ms outlier run); RECHECK-B3 shapes now 413 in 2 ms (were 633 ms); differential identical. Tests: 5 red-first; 20 limit-sized tests re-sized. e2e 0 (145); verify 0 (1,758 tests); digest b0611629 (775 files); precommit PASS. Changed: xlsxReader.ts, app.ts and routes/imports.ts (comments), src/client/importModel.ts, workbook-reader/workbook-import/importModel tests, tests/e2e/import.spec.ts, docs/07 and docs/11 (+ vi). Deviations: fflate no longer imported by src/ (now test-only; package.json not owned, so the dependency was kept - WP4-DEPCLEAN2 moves it to devDependencies); attribute and declared-inflate limits unchanged (no price in the bound); one 2>/dev/null slip; two path-quoting slips (rerun); one sed EBUSY on a Dropbox file. Open hypothesis for the recheck: a unit kind outside the 61 measured families might cost more per byte or opening.",
+      "next_action": "None; WP4-DEPCLEAN2 moves fflate to devDependencies, then WP4-FIXB4-FREEZE."
+    },
+    {
+      "id": "WP4-DEPCLEAN2",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-FIXB4"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a6a48b0c9d59f3cb2",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "package.json",
+        "package-lock.json",
+        "handoff/delivery/tasks/WP4-DEPCLEAN2.md",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-DEPCLEAN2.md",
+      "report": "handoff/delivery/tasks/WP4-DEPCLEAN2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/install.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/lockdiff.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/lockcmp.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/ci.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/audit.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/verify.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/digest.txt",
+        "handoff/delivery/evidence/WP4-DEPCLEAN2/precommit.txt"
+      ],
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: no import of fflate under src/ or scripts/ (only a comment in xlsxReader.ts); only tests/support/syntheticWorkbook.ts imports it (and workbook-reader.test.ts). npm install --save-dev --save-exact fflate@0.8.3: package.json moves fflate to devDependencies at 0.8.3; package-lock.json 3 lines; name/version compare: no package added, removed or changed. Dockerfile runtime stage (line 29) runs npm ci --omit=dev --ignore-scripts, so fflate is omitted at runtime (docker not run). Scratch npm ci 0 deprecation lines; npm audit --omit=dev 0 vulnerabilities. verify 0 (76 files, 1758 tests, 0 deprecation lines, smoke); digest 26fcc969 (775 files); precommit PASS.",
+      "next_action": "None; WP4-FIXB4-FREEZE commits FIXB4 and DEPCLEAN2."
+    },
+    {
+      "id": "WP4-FIXB4-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "history": [
+        "attempt 1 (agent a6dda119886e663af): stopped before commit; validate_orchestration.py exit 1 'Gate/audit lacks digest/execution evidence: WP4-RECHECK-A' because the coordinator moved WP4-RECHECK-A to attempt 4 without changing its status from done to pending (coordinator board error). 215 paths stayed staged; HEAD unchanged at 972ccda. The coordinator fixed the status; attempt 2 re-stages the board and the checkpoint and reruns the checks."
+      ],
+      "depends_on": [
+        "WP4-DEPCLEAN2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "a6dda119886e663af",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-FIXB4-FREEZE.md",
+        "handoff/delivery/evidence/WP4-FIXB4-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-FIXB4-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-FIXB4-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "972ccda6409a7521a008c55c35a5b5cf416daf1e",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Commit and push the round-4 fix (FIXB4 + DEPCLEAN2) with the round-3 regate and recheck records."
+    },
+    {
+      "id": "WP4-REGATE4",
+      "package": "WP4",
+      "kind": "gate",
       "status": "pending",
       "freeze_commit": null,
       "depends_on": [
-        "WP4-FIXB3-FREEZE"
+        "WP4-FIXB4-FREEZE"
       ],
       "profile": "timesheet-verifier",
       "requested_model": "sonnet",
@@ -11426,27 +11728,27 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 0,
       "owned_paths": [
-        "handoff/delivery/tasks/WP4-REGATE3.md",
-        "handoff/delivery/evidence/WP4-REGATE3"
+        "handoff/delivery/tasks/WP4-REGATE4.md",
+        "handoff/delivery/evidence/WP4-REGATE4"
       ],
-      "prompt": "handoff/delivery/tasks/WP4-REGATE3.md",
-      "report": "handoff/delivery/tasks/WP4-REGATE3.md",
+      "prompt": "handoff/delivery/tasks/WP4-REGATE4.md",
+      "report": "handoff/delivery/tasks/WP4-REGATE4.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Gate the round-3 freeze: the REGATE2 run plus RB2-01 (E7, Y7, worst-case search), R-B2-1, R-B2-2 and the benign differential."
+      "next_action": "Gate the round-4 freeze (depends on WP4-FIXB4-FREEZE once it exists): the REGATE3 run plus the RB3-01 incompressible shapes, the derived-bound confirmation, ceilings and the differential."
     },
     {
-      "id": "WP4-RECHECK-B3",
+      "id": "WP4-RECHECK-B4",
       "package": "WP4",
       "kind": "audit",
       "status": "pending",
       "reviewed_commit": null,
       "depends_on": [
-        "WP4-REGATE3"
+        "WP4-REGATE4"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -11464,20 +11766,20 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 0,
       "owned_paths": [
-        "handoff/delivery/WP4_RECHECK_B3.md",
-        "handoff/delivery/WP4_RECHECK_B3.vi.md",
-        "handoff/delivery/tasks/WP4-RECHECK-B3.md",
-        "handoff/delivery/evidence/WP4-RECHECK-B3"
+        "handoff/delivery/WP4_RECHECK_B4.md",
+        "handoff/delivery/WP4_RECHECK_B4.vi.md",
+        "handoff/delivery/tasks/WP4-RECHECK-B4.md",
+        "handoff/delivery/evidence/WP4-RECHECK-B4"
       ],
-      "prompt": "handoff/delivery/tasks/WP4-RECHECK-B3.md",
-      "report": "handoff/delivery/tasks/WP4-RECHECK-B3.md",
+      "prompt": "handoff/delivery/tasks/WP4-RECHECK-B4.md",
+      "report": "handoff/delivery/tasks/WP4-RECHECK-B4.md",
       "evidence": [],
       "baseline_commit": null,
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Fresh recheck of area B on the WP4-REGATE3 freeze: the budget claim with an independent worst-case search, decode-once correctness, R-B2-1, R-B2-2, differential, regression."
+      "next_action": "Fresh recheck of area B on the WP4-REGATE4 freeze: soundness of the derived bound, independent confirmation incl. incompressible content, ceilings, correctness, regression."
     },
     {
       "id": "WP4-AUDIT-B",

@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d (WP4-FIXB2-FREEZE, the WP4 round-2 fix freeze).
+  - HEAD = origin/main = 972ccda6409a7521a008c55c35a5b5cf416daf1e (WP4-FIXB3-FREEZE, the WP4 round-3 fix freeze).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -834,7 +834,50 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
            635f909d….
        - The board moves WP4-RECHECK-A to attempt 3 (pending) and adds WP4-REGATE3 and
          WP4-RECHECK-B3 (pending).
-       - Running: WP4-FIXB3-FREEZE.
+       - WP4-FIXB3-FREEZE committed and pushed 972ccda (148 paths; all checks 0). The
+         board's current source digest is 635f909d….
+       - WP4-REGATE3: **PASS** (digest 635f909d…).
+         - Verify: 1,755 tests. e2e: 145 passed. Drill: 208 PASS.
+         - Whole-gate worst case: 160 ms and +86 MiB.
+         - E7 and Y7 are refused or within the budget.
+         - R-B2-1 and R-B2-2 pass.
+         - The differential has 0 differences beyond the accepted additive
+           `sourceCount` field.
+         - The verifier left two stdin-blocked python tasks running; the coordinator
+           stopped them.
+       - WP4-RECHECK-A attempt 3: **PASS** on 972ccda (digest 635f909d), with no
+         findings.
+         - The delta is FIXB3 only.
+         - Verify: 1,755 tests. The image has no maps.
+         - Attempts 1 and 2 still hold.
+       - WP4-RECHECK-B3: **FIX REQUIRED**, finding WP4-RB3-01 (Low).
+         - Incompressible content (4–5 MB uploads, inside every limit) takes 508–611 ms
+           and stalls health 640 ms, because of the 4 KiB-step inflate.
+         - So the stated worst case of about 290 ms is false. Memory stays at most
+           +123 MiB, with no 5xx.
+         - Correctness (75/75), R-B2-1, R-B2-2, the differential and regression all
+           hold.
+       - Coordinator decision: close the class by derivation, not search. That means a
+         linear inflate, a cost formula over the enforced limits, and realistic
+         ceilings (for example 2 MiB) if needed.
+       - WP4-FIXB4 is done (expert; author-reported).
+         - Native zlib inflate: 251 ms becomes 16 ms. Parts over 512 KiB are decoded
+           in steps.
+         - Derived bound: t ≤ 40 ms + 14.8 ns·X + 339 ns·O and
+           m ≤ 15 MiB + 13.3 B·X + 428 B·O.
+         - New ceilings: 2 MiB upload, 1 MiB per part, 3 MiB per package and
+           100k openings. That gives about 121 ms and +95 MiB. Measured worst:
+           114 ms and +72 MiB.
+         - Verify: 1,758 tests. Digest: b0611629….
+       - WP4-DEPCLEAN2 is done: fflate 0.8.3 is a dev dependency now, with no other
+         lock change; the runtime image omits it; audit --omit=dev finds 0. Verify:
+         1,758 tests. Digest: 26fcc969….
+       - WP4-FIXB4-FREEZE attempt 1 stopped correctly, with no commit. The validator
+         rejected the board because the coordinator had left WP4-RECHECK-A as `done`
+         while moving it to attempt 4. The coordinator fixed the board.
+       - Running: WP4-FIXB4-FREEZE attempt 2, with the same committer.
+       - Then: freeze, WP4-REGATE4, a fresh WP4-RECHECK-B4, and WP4-RECHECK-A
+         attempt 4 (delta).
        - Then: freeze, regate, a fresh recheck of B (B3), and an area-A delta recheck
          (attempt 3).
        - Then:
@@ -878,7 +921,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-FIXB3-FREEZE (attempt 1) only.
+- Live processes: WP4-FIXB4-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

@@ -127,4 +127,9 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d (= origin/main); post-HEAD 972ccda6409a7521a008c55c35a5b5cf416daf1e.
+- Commit 972ccda6409a7521a008c55c35a5b5cf416daf1e on main; pushed yes; remote SHA 972ccda6409a7521a008c55c35a5b5cf416daf1e.
+- Digest 635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b (775 files); 148 staged.
+- Scope: src/client/importModel.ts unchanged; package files, .claude, reference, migrations unchanged; no .xlsx/.map.
+- Checks: node 24.21.0, digest, add, precommit, diff --check, JSON, validate_orchestration, check_recovery, validate_package --preflight all exit 0. No masking, no fixes needed.
+- Blockers: none.

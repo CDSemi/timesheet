@@ -1,0 +1,15 @@
+// WP4-RECHECK-A3 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A3: stages this task's owned files in a private git dir outside the repository (work tree = the repository,
+# nothing is written to the repository's own .git) and runs scripts/precommit-check.mjs over that staged set.
+W=<work>
+REPO=<project>
+NODEBIN="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin"
+export GIT_DIR=$W/pcgit-pc GIT_WORK_TREE=$REPO
+[ -d $GIT_DIR ] || git init -q
+rm -f $GIT_DIR/index
+cd $REPO
+git -c core.autocrlf=false -c safe.directory=* add -- handoff/delivery/WP4_RECHECK_A3.md handoff/delivery/WP4_RECHECK_A3.vi.md handoff/delivery/tasks/WP4-RECHECK-A.md handoff/delivery/evidence/WP4-RECHECK-A3
+echo "staged files: $(git diff --cached --name-only | wc -l)"
+"$NODEBIN/node.exe" scripts/precommit-check.mjs
+echo "exit=$?"

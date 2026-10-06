@@ -1,0 +1,48 @@
+// WP4-FIXB4 diagnostic: does TextDecoder output above about 1 MB (Node's EXTERN_APEX, 1 031 913 bytes, above which it
+// returns an external string) scan slower with indexOf/startsWith, and does a flat copy restore the speed? Synthetic
+// ASCII text only. Usage: node extern.mjs
+import { performance } from 'node:perf_hooks';
+
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+/** Attribute-like walk: an indexOf for every closing quote, a startsWith per element, charCodeAt between. */
+function scan(text) {
+  let count = 0;
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf('"', at);
+    if (open === -1) break;
+    const close = text.indexOf('"', open + 1);
+    if (close === -1) break;
+    if (text.startsWith('xmlns', open + 1)) count += 1;
+    count += text.charCodeAt(close - 1) === 0x61 ? 1 : 0;
+    at = close + 1;
+  }
+  return count;
+}
+function ascii(n) {
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i += 1) out[i] = i % 5 === 0 ? 0x22 : 0x61 + (i % 26);
+  return out;
+}
+const variants = {
+  decoded: (text) => text,
+  'template copy (ownCopy)': (text) => `${text} `.slice(0, -1),
+  'two halves joined': (text) => text.slice(0, text.length >> 1) + text.slice(text.length >> 1),
+};
+const sizes = [1_000_000, 1_031_912, 1_031_913, 2_000_000, 4_000_000];
+for (let round = 0; round < 3; round += 1) {
+  for (const n of sizes) {
+    const parts = [];
+    for (const [name, make] of Object.entries(variants)) {
+      const decoded = utf8.decode(ascii(n));
+      const t0 = performance.now();
+      const text = make(decoded);
+      const made = performance.now() - t0;
+      const t1 = performance.now();
+      scan(text);
+      const ms = performance.now() - t1;
+      parts.push(`${name}: ${(ms / (n / 1e6)).toFixed(2)} ms per million chars (+${made.toFixed(2)} ms to make)`);
+    }
+    if (round === 2) console.log(`n=${n} | ${parts.join(' | ')}`);
+  }
+}

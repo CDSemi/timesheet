@@ -1,0 +1,43 @@
+# 99b HEAD and digest FINAL, after the reports, the task record and the evidence were written (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:14:45Z
+$ git rev-parse HEAD origin/main
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  -
+$ node24 scripts/source-digest.mjs
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  (775 files, handoff/ excluded)
+exit 0
+$ git status --short -- . ':!handoff' (empty expected)
+$ git status --short (this task adds WP4_RECHECK_A3 pair, the brief edit and evidence/WP4-RECHECK-A3)
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WP4-FIXB3-FREEZE.md
+ M handoff/delivery/tasks/WP4-RECHECK-A.md
+ M handoff/delivery/tasks/WP4-RECHECK-B3.md
+ M handoff/delivery/tasks/WP4-REGATE3.md
+?? handoff/delivery/WP4_RECHECK_A3.md
+?? handoff/delivery/WP4_RECHECK_A3.vi.md
+?? handoff/delivery/evidence/WP4-FIXB3-FREEZE/
+?? handoff/delivery/evidence/WP4-RECHECK-A3/
+?? handoff/delivery/evidence/WP4-REGATE3/
+$ git diff --quiet -- handoff/delivery/WP4_RECHECK_A2.md handoff/delivery/WP4_RECHECK_A2.vi.md handoff/delivery/WP4_RECHECK_A.md handoff/delivery/WP4_RECHECK_A.vi.md handoff/delivery/evidence/WP4-RECHECK-A2 handoff/delivery/evidence/WP4-RECHECK-A
+exit 0 (0 = earlier reports and evidence unchanged)
+$ bash <work>/digest-export.sh
+export tree: b0545cec30ac3b652eb5d4211f820fe72955a4da
+freeze tree: b0545cec30ac3b652eb5d4211f820fe72955a4da
+export digest (handoff excluded):
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  -
+export file count: 775
+exit 0
+$ ps -W | grep -ci 'timesheet-dev/node-24' (portable Node processes; this audit started none in the background)
+2
+$ docker: none run by this audit; Compose project ts-wp4-rca3 never created
+[end]
+
+## process follow-up
+$ ps -W | grep -i timesheet-dev (2026-10-06T17:15:03Z)
+(count 0)
+The 2 processes counted above started at 17:14:27 and 17:14:51 UTC. Neither was started by this audit: its commands then were the Python validator (from 17:14:30; it spawns no Node), this final check (from 17:14:45; its one Node call, source-digest.mjs, ended before the listing) and a ps listing at 17:14:51. Both were gone by 17:14:57 UTC. The same portable Node is used by the concurrent WP4-RECHECK-B3. No process of this audit is left.
+[end]

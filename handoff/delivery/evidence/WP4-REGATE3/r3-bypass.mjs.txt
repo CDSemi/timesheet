@@ -1,0 +1,52 @@
+// WP4-RECHECK-B probe R3: isolate the mechanism behind the B-01 bypasses. Each case is ONE worksheet part of about
+// 3.8 MiB (well under the 4 MiB per-part and 16 MiB per-package limits), so nothing but that one part's parse cost is
+// under test. A fresh child builds and reads each case; maxRSS is that child's high-water mark. In memory only.
+// Usage: node r3-bypass.mjs            (parent)
+//        node r3-bypass.mjs --case <n> (child)
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { performance } from 'node:perf_hooks';
+import { strFromU8, strToU8 } from '../export/node_modules/fflate/esm/index.mjs';
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import { pack, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+
+const MiB = 1024 * 1024;
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const HEAD = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+const TAIL = '</row></sheetData></worksheet>';
+const SIZE = Math.floor(3.8 * MiB);
+const fill = (unit) => { const e = unpack(readTemplateBytes()); e['xl/worksheets/sheet3.xml'] = strToU8(HEAD + unit.repeat(Math.floor((SIZE - HEAD.length - TAIL.length) / unit.length)) + TAIL); return e; };
+
+const CASES = {
+  'counted <c/> (the scan catches it)': () => fill('<c/>'),
+  'counted <row/> (the scan catches it)': () => fill('<row/>'),
+  'UNCOUNTED <1/> (digit tag name)': () => fill('<1/>'),
+  'UNCOUNTED <_x/> then... <9/>': () => fill('<9/>'),
+  'UNCOUNTED < /> (empty tag name, space)': () => fill('< />'),
+  'UNCOUNTED <.a/> (dot-leading)': () => fill('<.a/>'),
+  'one <c> with ~3.8 MiB of a0="" attributes (scan counts 1)': () => {
+    const e = unpack(readTemplateBytes());
+    const attrs = [];
+    let size = 0;
+    for (let i = 0; size < SIZE - 400; i += 1) { const a = ` a${i.toString(36)}=""`; attrs.push(a); size += a.length; }
+    e['xl/worksheets/sheet3.xml'] = strToU8(`${HEAD}<c r="A1"${attrs.join('')}/>${TAIL}`);
+    return e;
+  },
+};
+
+const args = process.argv.slice(2);
+if (args[0] !== '--case') {
+  for (const name of Object.keys(CASES)) {
+    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--case', name], { encoding: 'utf8', env: process.env, timeout: 180_000, maxBuffer: 64 * MiB });
+    const err = (child.stderr ?? '').trim().split('\n').filter((l) => !/Experimental|trace-warnings/.test(l)).slice(0, 1).join('');
+    process.stdout.write(`${(child.stdout ?? '').trim() || name} | exit=${child.status}${err ? ' | ' + err.slice(0, 160) : ''}\n`);
+  }
+} else {
+  const bytes = pack(CASES[args[1]]());
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  try { const out = previewWorkbook(bytes); outcome = `accepted (findings=${out.findings.length})`; }
+  catch (error) { outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${String(error.message).slice(0, 80)}`; }
+  console.log(`${args[1]} | 1 part, upload=${bytes.length} B | ms=${Math.round(performance.now() - t0)} | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB | ${outcome}`);
+}

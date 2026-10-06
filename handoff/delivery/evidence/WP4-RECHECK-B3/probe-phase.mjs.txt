@@ -1,0 +1,73 @@
+// WP4-RECHECK-B3 phase breakdown of one preview (auditor's own diagnostic; synthetic packages from the task folder).
+// For one package it times, in a fresh process each: (1) the reader's inflate loop replicated with fflate's streaming
+// Inflate in 4 KiB steps plus crc32 on every entry the reader parses; (2) sha256 of the upload; (3) readWorkbook;
+// (4) mapWorkbook on that result; (5) previewWorkbook as a whole. It only reads the reviewed export's modules.
+// Usage: EXPORT=<export> node phase.mjs <package path> <phase>
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+import { crc32 } from 'node:zlib';
+
+const EXPORT = process.env.EXPORT;
+const [file, phase] = process.argv.slice(2);
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const bytes = new Uint8Array(readFileSync(file));
+const { Inflate, unzipSync } = await import(mod('node_modules/fflate/esm/index.mjs'));
+const { readWorkbook } = await import(mod('src/server/import/xlsxReader.ts'));
+const { mapWorkbook, previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+const t0 = performance.now();
+let note = '';
+if (phase === 'inflate') {
+  // The entries the reader parses: everything except stored filler; inflate each like inflateEntry does.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  const count = view.getUint16(eocd + 10, true);
+  let at = view.getUint32(eocd + 16, true);
+  let inflated = 0;
+  for (let k = 0; k < count; k += 1) {
+    const method = view.getUint16(at + 10, true);
+    const csize = view.getUint32(at + 20, true);
+    const usize = view.getUint32(at + 24, true);
+    const nameLength = view.getUint16(at + 28, true);
+    const extra = view.getUint16(at + 30, true);
+    const comment = view.getUint16(at + 32, true);
+    const local = view.getUint32(at + 42, true);
+    at += 46 + nameLength + extra + comment;
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    const compressed = bytes.subarray(start, start + csize);
+    const data = new Uint8Array(usize);
+    let total = 0;
+    if (method === 0) { data.set(compressed); total = csize; } else {
+      const inflater = new Inflate((chunk) => { if (total + chunk.length <= data.length) data.set(chunk, total); total += chunk.length; });
+      for (let offset = 0; offset < compressed.length; offset += 4096) {
+        const stop = Math.min(offset + 4096, compressed.length);
+        inflater.push(compressed.subarray(offset, stop), stop === compressed.length);
+      }
+    }
+    crc32(data);
+    inflated += total;
+  }
+  note = `${count} entries, ${inflated} bytes inflated`;
+} else if (phase === 'unzipSync') {
+  const out = unzipSync(bytes);
+  note = `${Object.keys(out).length} entries`;
+} else if (phase === 'sha256') {
+  note = createHash('sha256').update(bytes).digest('hex').slice(0, 8);
+} else if (phase === 'read') {
+  const wb = readWorkbook(bytes);
+  note = `${wb.sheets.length} sheets, ${wb.sheets.reduce((n, s) => n + s.cells.size, 0)} cells`;
+} else if (phase === 'map') {
+  const wb = readWorkbook(bytes);
+  const t1 = performance.now();
+  const out = mapWorkbook(wb, { sha256: 'x', bytes: bytes.length });
+  const ms = performance.now() - t1;
+  console.log(`map ms=${Math.round(ms)} (read before it ${Math.round(t1 - t0)} ms) | findings ${out.findings.length}`);
+  process.exit(0);
+} else if (phase === 'preview') {
+  const out = previewWorkbook(bytes);
+  note = `findings ${out.findings.length}`;
+}
+console.log(`${phase} ms=${Math.round(performance.now() - t0)} | ${note}`);

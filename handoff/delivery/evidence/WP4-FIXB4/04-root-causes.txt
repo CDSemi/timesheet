@@ -1,0 +1,299 @@
+# WP4-FIXB4 04 root causes: (a) the inflate step; (b) the decode cost step at about 1 MB a part; (c) stepped decoding is exact.
+## (a) inflate alone, old (fflate Inflate fed in 4 KiB steps, 972ccda) against new (one zlib inflateRawSync call)
+2026-10-06T18:42:15Z
+$ EXPORT=<task>/base node probes/inflate-cmp.mjs <F2-rand100-d2-wide> <A2-rand14> <F2-plain100-d2-wide> <T-upload-rand100-wide>
+F2_rand100_d2_wide_the_most_distinct_formulas_rand100_on_202 | old | 8388438 bytes inflated in 250.2 ms | outputs equal: true
+F2_rand100_d2_wide_the_most_distinct_formulas_rand100_on_202 | old: median 251 ms, max 257.6 ms over 5 runs
+F2_rand100_d2_wide_the_most_distinct_formulas_rand100_on_202 | new | 8388438 bytes inflated in 15.7 ms | outputs equal: true
+F2_rand100_d2_wide_the_most_distinct_formulas_rand100_on_202 | new: median 15.7 ms, max 15.7 ms over 5 runs
+A2_rand14_64_kept_attributes_per_kept_cell_rand14_every_budg | old | 8387752 bytes inflated in 196.9 ms | outputs equal: true
+A2_rand14_64_kept_attributes_per_kept_cell_rand14_every_budg | old: median 194.9 ms, max 196.9 ms over 5 runs
+A2_rand14_64_kept_attributes_per_kept_cell_rand14_every_budg | new | 8387752 bytes inflated in 11.3 ms | outputs equal: true
+A2_rand14_64_kept_attributes_per_kept_cell_rand14_every_budg | new: median 11.3 ms, max 11.4 ms over 5 runs
+F2_plain100_d2_wide_the_most_distinct_formulas_plain100_on_2 | old | 8388366 bytes inflated in 32.9 ms | outputs equal: true
+F2_plain100_d2_wide_the_most_distinct_formulas_plain100_on_2 | old: median 32.5 ms, max 37.5 ms over 5 runs
+F2_plain100_d2_wide_the_most_distinct_formulas_plain100_on_2 | new | 8388366 bytes inflated in 2.7 ms | outputs equal: true
+F2_plain100_d2_wide_the_most_distinct_formulas_plain100_on_2 | new: median 2.2 ms, max 3.5 ms over 5 runs
+T_upload_rand100_wide_the_most_F2_rand100_formulas_the_2_MiB | old | 3140983 bytes inflated in 103.4 ms | outputs equal: true
+T_upload_rand100_wide_the_most_F2_rand100_formulas_the_2_MiB | old: median 99.9 ms, max 103.9 ms over 5 runs
+T_upload_rand100_wide_the_most_F2_rand100_formulas_the_2_MiB | new | 3140983 bytes inflated in 6.6 ms | outputs equal: true
+T_upload_rand100_wide_the_most_F2_rand100_formulas_the_2_MiB | new: median 6.6 ms, max 7 ms over 5 runs
+exit=0
+
+## (b) the cost step: Node returns decoded text of about 1 MB or more as an external string, which the scanner reads about
+## twice as slowly. A four-point curve first showed it, then finer fractions placed it between parts of 1 005 081 and
+## 1 060 728 characters (Node's EXTERN_APEX is 1 031 913 bytes); decoding in 512 KiB steps and joining removes it.
+2026-10-06T17:48:44Z
+COEFF_FRACTIONS=0.25,0.5,0.75,1 node coeff.mjs attributes-inc 5
+attributes-inc@0.25 | upload=562877 B | ms=11.9 | rss=+8.1 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.25 | upload=562877 B | ms=11.8 | rss=+7.8 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.25 | upload=562877 B | ms=12.2 | rss=+7.8 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.25 | upload=562877 B | ms=12.1 | rss=+8.4 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.25 | upload=562877 B | ms=12.2 | rss=+7.2 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.5 | upload=1121595 B | ms=18.1 | rss=+9.8 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.5 | upload=1121595 B | ms=17.7 | rss=+9.9 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.5 | upload=1121595 B | ms=18.3 | rss=+9.4 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.5 | upload=1121595 B | ms=19.1 | rss=+11.1 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.5 | upload=1121595 B | ms=18.0 | rss=+9.6 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.75 | upload=1679471 B | ms=24.3 | rss=+11.3 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.75 | upload=1679471 B | ms=23.8 | rss=+10.9 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.75 | upload=1679471 B | ms=23.5 | rss=+9.6 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.75 | upload=1679471 B | ms=23.7 | rss=+10.2 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@0.75 | upload=1679471 B | ms=23.3 | rss=+9.6 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@1 | upload=2236963 B | ms=48.7 | rss=+11.9 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@1 | upload=2236963 B | ms=48.1 | rss=+10.6 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@1 | upload=2236963 B | ms=51.5 | rss=+11.4 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@1 | upload=2236963 B | ms=48.3 | rss=+11.5 MiB | accepted (cells 4 sheets) | exit=0
+attributes-inc@1 | upload=2236963 B | ms=47.4 | rss=+10.4 MiB | accepted (cells 4 sheets) | exit=0
+-- attributes-inc medians: 0.25: 102312 units 12.1 ms +7.8 MiB; 0.5: 204687 units 18.1 ms +9.8 MiB; 0.75: 307062 units 23.7 ms +10.2 MiB; 1: 409437 units 48.3 ms +11.4 MiB
+== attributes-inc: 409437 attributes at full (upload 2236963 B); median 12.1 -> 48.3 ms, +7.8 -> +11.4 MiB; slope 117.9 ns and 12.3 bytes per attribute; intercept 0.0 ms
+kept-attributes-inc@0.25 | upload=420425 B | ms=46.3 | rss=+11.6 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.25 | upload=420425 B | ms=39.6 | rss=+14.3 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.25 | upload=420425 B | ms=40.7 | rss=+14.9 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.25 | upload=420425 B | ms=42.6 | rss=+14.7 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.25 | upload=420425 B | ms=42.2 | rss=+13.7 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.5 | upload=838813 B | ms=64.3 | rss=+28.0 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.5 | upload=838813 B | ms=65.9 | rss=+27.3 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.5 | upload=838813 B | ms=69.6 | rss=+28.2 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.5 | upload=838813 B | ms=77.6 | rss=+27.3 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.5 | upload=838813 B | ms=64.1 | rss=+28.8 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.75 | upload=1256756 B | ms=87.0 | rss=+47.2 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.75 | upload=1256756 B | ms=87.1 | rss=+48.8 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.75 | upload=1256756 B | ms=92.3 | rss=+46.8 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.75 | upload=1256756 B | ms=88.4 | rss=+46.9 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@0.75 | upload=1256756 B | ms=87.7 | rss=+48.4 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@1 | upload=1675084 B | ms=116.9 | rss=+54.9 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@1 | upload=1675084 B | ms=113.8 | rss=+55.4 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@1 | upload=1675084 B | ms=114.2 | rss=+54.7 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@1 | upload=1675084 B | ms=112.3 | rss=+55.9 MiB | accepted (cells 4 sheets) | exit=0
+kept-attributes-inc@1 | upload=1675084 B | ms=113.4 | rss=+55.1 MiB | accepted (cells 4 sheets) | exit=0
+-- kept-attributes-inc medians: 0.25: 51506 units 42.2 ms +14.3 MiB; 0.5: 103014 units 65.9 ms +28 MiB; 0.75: 154520 units 87.7 ms +47.2 MiB; 1: 206028 units 113.8 ms +55.1 MiB
+== kept-attributes-inc: 206028 kept attributes at full (upload 1675084 B); median 42.2 -> 113.8 ms, +14.3 -> +55.1 MiB; slope 463.4 ns and 276.9 bytes per kept attribute; intercept 18.3 ms
+
+2026-10-06T18:41:36Z
+# The cost step at about 1 MB a part (Node returns decoded text of 1 031 913 bytes or more as an external string).
+# <task>/exp is a copy of the reader modules taken before the stepped decode, with an EXP_FLAT switch in parseXml/decodeXmlBytes:
+#   0 = decode as before (one TextDecoder call); 3 = decode in 512 KiB steps and join (the fix); 1 = template-literal copy; 4 = two halves joined with Array.join.
+# Packages: coeff.mjs attributes-inc at COEFF_XML=4194304 (4 parts); parts per fraction: 0.9 -> 1 005 081 chars, 0.95 -> 1 060 728, 1 -> 1 116 375.
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=18.2 | rss=+10.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=18.0 | rss=+12.2 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=17.9 | rss=+10.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=23.8 | rss=+9.5 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=23.2 | rss=+10.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=23.3 | rss=+9.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=27.5 | rss=+9.4 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=27.2 | rss=+10.9 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=27.3 | rss=+10.9 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=48.0 | rss=+10.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=47.3 | rss=+10.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=47.4 | rss=+9.7 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=47.8 | rss=+11.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=49.2 | rss=+10.9 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=0 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=51.3 | rss=+11.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=19.1 | rss=+8.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=19.7 | rss=+10.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=19.7 | rss=+8.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=26.9 | rss=+10.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=25.9 | rss=+8.6 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=28.1 | rss=+9.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=29.2 | rss=+10.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=31.8 | rss=+8.6 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=29.0 | rss=+8.4 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=29.1 | rss=+7.5 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=31.1 | rss=+8.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=32.0 | rss=+7.7 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=30.0 | rss=+7.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=29.9 | rss=+8.7 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=3 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=31.9 | rss=+9.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=20.6 | rss=+8.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=20.7 | rss=+8.4 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=19.2 | rss=+8.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=27.2 | rss=+8.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=27.6 | rss=+8.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=28.7 | rss=+8.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=31.0 | rss=+8.7 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=31.1 | rss=+8.6 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=32.4 | rss=+8.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=32.7 | rss=+11.5 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=34.2 | rss=+8.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=32.0 | rss=+11.4 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=35.6 | rss=+9.2 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=34.8 | rss=+10.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=1 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=33.7 | rss=+9.4 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=18.5 | rss=+8.6 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=21.1 | rss=+9.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.5
+attributes-inc@0.5 | upload=1121595 B | ms=21.0 | rss=+9.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=28.0 | rss=+7.7 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=27.1 | rss=+6.9 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.75
+attributes-inc@0.75 | upload=1679471 B | ms=27.5 | rss=+7.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=34.4 | rss=+9.5 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=30.8 | rss=+9.3 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.9
+attributes-inc@0.9 | upload=2014615 B | ms=35.0 | rss=+10.2 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=32.6 | rss=+10.0 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=30.7 | rss=+9.6 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@0.95
+attributes-inc@0.95 | upload=2125697 B | ms=30.8 | rss=+9.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=31.1 | rss=+11.1 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=33.2 | rss=+9.8 MiB | accepted (cells 4 sheets)
+$ EXP_FLAT=4 node probes/coeff.mjs --run attributes-inc@1
+attributes-inc@1 | upload=2236963 B | ms=30.9 | rss=+12.1 MiB | accepted (cells 4 sheets)
+## CPU profile (self time) of one run each, EXP_FLAT=0
+$ EXP_FLAT=0 node --cpu-prof --cpu-prof-interval 100 probes/coeff.mjs --run attributes-inc@0.75 ; node probes/profsum.mjs <profile>
+attributes-inc@0.75 | upload=1679471 B | ms=26.7 | rss=+8.4 MiB | accepted (cells 4 sheets)
+    11.7 ms  scanXml xlsxReader.ts:664
+     8.1 ms  compileForInternalLoader realm:383
+     8.1 ms  (program) :0
+     5.6 ms  __require index:8
+$ EXP_FLAT=0 node --cpu-prof --cpu-prof-interval 100 probes/coeff.mjs --run attributes-inc@1 ; node probes/profsum.mjs <profile>
+attributes-inc@1 | upload=2236963 B | ms=53.9 | rss=+11.0 MiB | accepted (cells 4 sheets)
+    36.3 ms  scanXml xlsxReader.ts:664
+     7.1 ms  processChunkSync node:zlib:416
+     6.8 ms  (program) :0
+     6.1 ms  compileForInternalLoader realm:383
+## microbenchmark (no cliff in a bare loop: the step shows only inside the scanner)
+$ node probes/extern.mjs
+n=1000000 | decoded: 0.98 ms per million chars (+0.00 ms to make) | template copy (ownCopy): 1.20 ms per million chars (+0.12 ms to make) | two halves joined: 1.31 ms per million chars (+0.01 ms to make)
+n=1031912 | decoded: 0.97 ms per million chars (+0.00 ms to make) | template copy (ownCopy): 1.18 ms per million chars (+0.13 ms to make) | two halves joined: 1.35 ms per million chars (+0.00 ms to make)
+n=1031913 | decoded: 1.15 ms per million chars (+0.00 ms to make) | template copy (ownCopy): 1.23 ms per million chars (+0.15 ms to make) | two halves joined: 1.35 ms per million chars (+0.00 ms to make)
+n=2000000 | decoded: 1.16 ms per million chars (+0.00 ms to make) | template copy (ownCopy): 1.24 ms per million chars (+0.36 ms to make) | two halves joined: 1.32 ms per million chars (+0.00 ms to make)
+n=4000000 | decoded: 1.15 ms per million chars (+0.00 ms to make) | template copy (ownCopy): 1.24 ms per million chars (+2.08 ms to make) | two halves joined: 1.41 ms per million chars (+0.00 ms to make)
+exit=0
+
+## (c) stepped decoding equals one-call decoding (UTF-8 valid, split, invalid and truncated; UTF-16 LE/BE with split pairs)
+2026-10-06T17:54:29Z
+$ node probes/decode-eq.mjs
+same | utf-8 | valid "é" at boundary-0 | 1048588 bytes -> 1048582 chars
+same | utf-8 | valid "é" at boundary-1 | 1048587 bytes -> 1048581 chars
+same | utf-8 | valid "é" at boundary-2 | 1048586 bytes -> 1048580 chars
+same | utf-8 | valid "é" at boundary-3 | 1048585 bytes -> 1048579 chars
+same | utf-8 | valid "€" at boundary-0 | 1048594 bytes -> 1048582 chars
+same | utf-8 | valid "€" at boundary-1 | 1048593 bytes -> 1048581 chars
+same | utf-8 | valid "€" at boundary-2 | 1048592 bytes -> 1048580 chars
+same | utf-8 | valid "€" at boundary-3 | 1048591 bytes -> 1048579 chars
+same | utf-8 | valid "😀" at boundary-0 | 1048600 bytes -> 1048588 chars
+same | utf-8 | valid "😀" at boundary-1 | 1048599 bytes -> 1048587 chars
+same | utf-8 | valid "😀" at boundary-2 | 1048598 bytes -> 1048586 chars
+same | utf-8 | valid "😀" at boundary-3 | 1048597 bytes -> 1048585 chars
+same | utf-8 | random 524289 | 524289 bytes -> 500454 chars
+same | utf-8 | truncated 524289 | 524290 bytes -> 524288 chars
+same | utf-8 | random 1048579 | 1048579 bytes -> 1001030 chars
+same | utf-8 | truncated 1048579 | 1048580 bytes -> 1048578 chars
+same | utf-8 | random 1572863 | 1572863 bytes -> 1501539 chars
+same | utf-8 | truncated 1572863 | 1572864 bytes -> 1572862 chars
+same | utf-16le | random with a pair across the boundary 524290 | 524290 bytes -> 262145 chars
+same | utf-16le | random with a pair across the boundary 1048577 | 1048577 bytes -> 524289 chars
+same | utf-16le | random with a pair across the boundary 1048580 | 1048580 bytes -> 524290 chars
+same | utf-16be | random with a pair across the boundary 524290 | 524290 bytes -> 262145 chars
+same | utf-16be | random with a pair across the boundary 1048577 | 1048577 bytes -> 524289 chars
+same | utf-16be | random with a pair across the boundary 1048580 | 1048580 bytes -> 524290 chars
+24 cases, 0 different
+exit=0
+
+## (d) diagnostics used while sizing: what the reader and the mapping keep (probes/split.mjs: retained heap after gc against
+## maxRSS; the RSS peak is mostly transient garbage of the scan, not kept data), on the worst mixes of 07, and the tracked
+## template's parsed parts (probes/template-parts.mjs, used to size the re-sized limit tests).
+$ EXPORT=<project> node --expose-gc probes/split.mjs pkgs-worst2/L_memory_45_442_empty_ke...xlsx
+read 72.5 ms, retained +18.1 MiB heap (68109 cells, 25505 formulas; 278 B a cell), maxRSS +48.0 MiB
+map 16.6 ms, retained +0.3 MiB heap more, maxRSS +48.1 MiB in all; result keys mappingVersion,sourceSha256,sourceBytes,sheets,periods,holidays,payrollCalendar,findings,summary,clean; findings 0; JSON 0.01 MiB
+a read cell: {"sheet":"2026.01.09","address":"A1000000","provenance":"2026.01.09!A1000000","type":"blank","value":null,"formula":"000000\"wjnNIXhUMb4dKaQIQAissrIfX6EDgbcNjoHdwH7yz10cY2\"&GsrKdjRotmS84B80knZ0DZP0NtexR7sTClx9ZBkq","cachedValue":null,"cacheNote":"formula cache, not authoritative"}
+exit=0
+$ EXPORT=<project> node --expose-gc probes/split.mjs pkgs-worst2/L_time_24_798_formulas_a...xlsx
+read 77.4 ms, retained +14.8 MiB heap (68756 cells, 24798 formulas; 226 B a cell), maxRSS +54.9 MiB
+map 15.4 ms, retained +0.3 MiB heap more, maxRSS +54.9 MiB in all; result keys mappingVersion,sourceSha256,sourceBytes,sheets,periods,holidays,payrollCalendar,findings,summary,clean; findings 0; JSON 0.01 MiB
+a read cell: {"sheet":"2026.01.09","address":"A1000000","provenance":"2026.01.09!A1000000","type":"blank","value":null,"formula":"000000&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"&\"a\"","cachedValue":null,"cacheNote":"formula cache, not authoritative"}
+exit=0
+$ EXPORT=<project> node --expose-gc probes/split.mjs pkgs-worst2/L_plain100_formulas_plai...xlsx
+read 61.6 ms, retained +18.2 MiB heap (69000 cells, 24000 formulas; 277 B a cell), maxRSS +50.5 MiB
+map 23.2 ms, retained +0.3 MiB heap more, maxRSS +50.5 MiB in all; result keys mappingVersion,sourceSha256,sourceBytes,sheets,periods,holidays,payrollCalendar,findings,summary,clean; findings 0; JSON 0.01 MiB
+a read cell: {"sheet":"2026.01.09","address":"A1000000","provenance":"2026.01.09!A1000000","type":"blank","value":null,"formula":"000000\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b\"a\"b","cachedValue":null,"cacheNote":
+exit=0
+$ EXPORT=<project> node --expose-gc probes/split.mjs pkgs-worst2/T_openings_cells_wide_99...xlsx
+read 91.9 ms, retained +15.8 MiB heap (94600 cells, 0 formulas; 175 B a cell), maxRSS +47.8 MiB
+map 3.5 ms, retained +0.1 MiB heap more, maxRSS +48.1 MiB in all; result keys mappingVersion,sourceSha256,sourceBytes,sheets,periods,holidays,payrollCalendar,findings,summary,clean; findings 0; JSON 0.01 MiB
+a read cell: {"sheet":"2026.01.09","address":"A1000000","provenance":"2026.01.09!A1000000","type":"blank","value":null,"formula":null,"cachedValue":null,"cacheNote":null}
+exit=0
+$ EXPORT=<project> node probes/template-parts.mjs
+parsed  [Content_Types].xml: 2459 B, 21 openings, 42 attributes
+skipped _rels/.rels: 588 B, 5 openings, 13 attributes
+parsed  xl/workbook.xml: 1935 B, 22 openings, 47 attributes
+parsed  xl/_rels/workbook.xml.rels: 1391 B, 11 openings, 31 attributes
+parsed  xl/worksheets/sheet1.xml: 29454 B, 1379 openings, 1723 attributes
+parsed  xl/worksheets/sheet2.xml: 2138 B, 64 openings, 106 attributes
+parsed  xl/worksheets/sheet3.xml: 22486 B, 844 openings, 1482 attributes
+skipped xl/theme/theme1.xml: 7127 B, 203 openings, 262 attributes
+skipped xl/styles.xml: 17150 B, 406 openings, 884 attributes
+parsed  xl/sharedStrings.xml: 2058 B, 134 openings, 6 attributes
+skipped xl/worksheets/_rels/sheet1.xml.rels: 565 B, 5 openings, 13 attributes
+skipped xl/worksheets/_rels/sheet2.xml.rels: 293 B, 3 openings, 7 attributes
+skipped xl/worksheets/_rels/sheet3.xml.rels: 322 B, 3 openings, 7 attributes
+skipped xl/metadata.xml: 733 B, 12 openings, 27 attributes
+skipped xl/tables/table1.xml: 858 B, 6 openings, 26 attributes
+skipped xl/tables/table2.xml: 948 B, 7 openings, 30 attributes
+skipped xl/tables/table3.xml: 904 B, 6 openings, 29 attributes
+skipped xl/tables/table4.xml: 1032 B, 7 openings, 34 attributes
+skipped xl/calcChain.xml: 1163 B, 51 openings, 116 attributes
+skipped customXml/item1.xml: 4978 B, 3 openings, 0 attributes
+skipped customXml/itemProps1.xml: 314 B, 4 openings, 6 attributes
+skipped docProps/core.xml: 582 B, 5 openings, 10 attributes
+skipped docProps/app.xml: 961 B, 25 openings, 9 attributes
+skipped customXml/_rels/item1.xml.rels: 296 B, 3 openings, 7 attributes
+parsed total: 61921 B, 2475 openings, 3437 attributes
+exit=0

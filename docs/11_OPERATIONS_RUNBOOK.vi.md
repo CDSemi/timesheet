@@ -218,7 +218,7 @@ Làm mới image nền khi có bản vá bảo mật, và luôn làm cùng nhau:
 
 Dành cho những người của chủ sở hữu. Mỗi người chỉ nhập workbook của chính mình; quản trị viên không thể nhập cho ai khác (quyết định F-1 của chủ sở hữu). Ứng dụng không bao giờ đọc công thức, macro hay liên kết ngoài của workbook.
 
-1. Đăng nhập và mở Import (`#/import`). Tải lên một file `.xlsx` tối đa 8 MiB (workbook có macro bị từ chối). Bản xem trước liệt kê mọi ngày kèm ô nguồn, nhãn lạ, ngày trùng, ngày lễ thả nổi, các lỗi đã biết của template và xung đột với bản ghi hiện có. **[Drill stage 6]** (qua API; các màn hình được `tests/e2e/import.spec.ts` bao phủ)
+1. Đăng nhập và mở Import (`#/import`). Tải lên một file `.xlsx` tối đa 2 MiB (workbook có macro bị từ chối). Bản xem trước liệt kê mọi ngày kèm ô nguồn, nhãn lạ, ngày trùng, ngày lễ thả nổi, các lỗi đã biết của template và xung đột với bản ghi hiện có. **[Drill stage 6]** (qua API; các màn hình được `tests/e2e/import.spec.ts` bao phủ)
 2. Quyết định cho từng ngày được liệt kê. Mặc định là bỏ qua; chỉ có các lựa chọn mà bản xem trước cho phép. Sau đó xem lại và commit. **[Drill stage 6]**
 3. Kỳ đã nhập hiển thị "Imported, unverified". Đó là lịch sử chỉ đọc: không sự kiện sổ cái, không sign-off hay nộp (409 `imported_period`), không nhắc hạn và không tự động gửi. Tải cùng file lần nữa, hoặc commit hai lần, không thay đổi gì ("Already imported"). **[Drill stage 6]**
 4. Số dư OT mở đầu là khoản OT mang sang duy nhất. Nhập số phút có dấu khác không, ngày hiệu lực, lý do và tham chiếu bằng chứng, rồi xác nhận. Khoản này được ghi một lần; lặp lại là không làm gì, còn giá trị khác bị từ chối. Chỉ thay đổi bằng một điều chỉnh có lý do (điều chỉnh làm số dư ròng về không bị từ chối, câu hỏi mở I-4). **[Drill stage 6]**

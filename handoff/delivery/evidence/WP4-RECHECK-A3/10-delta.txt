@@ -1,0 +1,48 @@
+# 10 Delta since cc34e7f (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:00:50Z
+$ git log --oneline cc34e7f..972ccda
+972ccda6409a7521a008c55c35a5b5cf416daf1e Hold the workbook parse budget with margin
+$ git rev-parse 972ccda^
+cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d
+$ git diff --name-status cc34e7f 972ccda | grep -v handoff/ (outside handoff/)
+M	docs/07_DEPLOYMENT_AND_OPERATIONS.md
+M	docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+M	src/server/import/templateMapping.ts
+M	src/server/import/xlsxReader.ts
+M	src/server/services/workbookImport.ts
+M	tests/integration/workbook-import.test.ts
+M	tests/integration/workbook-reader.test.ts
+exit 0
+$ count of all paths / under handoff/ / outside handoff/
+148
+141
+7
+$ handoff paths status letters and top-level dirs
+    134 A
+      7 M
+      1 handoff/delivery/ORCHESTRATION.json
+      1 handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+      1 handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+      1 handoff/delivery/WP4_RECHECK_A2.md
+      1 handoff/delivery/WP4_RECHECK_A2.vi.md
+      1 handoff/delivery/WP4_RECHECK_B2.md
+      1 handoff/delivery/WP4_RECHECK_B2.vi.md
+    125 handoff/delivery/evidence
+      9 handoff/delivery/tasks
+$ git diff --stat cc34e7f 972ccda -- . ':!handoff'
+ docs/07_DEPLOYMENT_AND_OPERATIONS.md      |   2 +-
+ docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md   |   2 +-
+ src/server/import/templateMapping.ts      |  19 ++-
+ src/server/import/xlsxReader.ts           | 147 +++++++++++++++++-------
+ src/server/services/workbookImport.ts     |   9 +-
+ tests/integration/workbook-import.test.ts |  20 +++-
+ tests/integration/workbook-reader.test.ts | 185 ++++++++++++++++++++++++++----
+ 7 files changed, 308 insertions(+), 76 deletions(-)
+$ git diff --quiet cc34e7f 972ccda -- package.json package-lock.json; echo exit
+exit 0 (0 = unchanged)
+$ git rev-parse cc34e7f:package.json 972ccda:package.json cc34e7f:package-lock.json 972ccda:package-lock.json
+c74a01b9652a945412682f50366bd1a95e175983
+c74a01b9652a945412682f50366bd1a95e175983
+f4f491a61a76469838f69087093d17bf4c186d77
+f4f491a61a76469838f69087093d17bf4c186d77
+[end]

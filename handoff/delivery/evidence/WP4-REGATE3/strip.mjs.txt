@@ -1,0 +1,8 @@
+import { readFileSync } from 'node:fs';
+const [dir] = process.argv.slice(2);
+const strip = (o) => JSON.stringify(o, (k, v) => (k === 'sourceCount' ? undefined : v));
+for (const n of ['template', 'twelve']) {
+  const a = strip(JSON.parse(readFileSync(`${dir}/diff-old/${n}.json`, 'utf8')));
+  const b = strip(JSON.parse(readFileSync(`${dir}/diff-new/${n}.json`, 'utf8')));
+  console.log(n, 'equal after dropping sourceCount:', a === b, a.length);
+}

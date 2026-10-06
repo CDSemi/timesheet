@@ -1,0 +1,148 @@
+# WP4-FIXB4 02 red-first: the new tests (reader ceilings pinned to docs/07, an incompressible upload over 2 MiB refused,
+# the route and client limits pinned to 2 MiB, the client text) against the unchanged limits. Five failures, as intended;
+# the mid-size incompressible test passes under both (it bounds time, or accepts a refusal).
+# Environment: DATA_DIR=<task>/run/data DATABASE_PATH=<task>/run/data/timesheet.db, Node v24.21.0.
+2026-10-06T18:08:03Z
+$ node node_modules/vitest/vitest.mjs run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts tests/client/importModel.test.ts   (new tests, limits unchanged: red-first)
+
+ RUN  v5.0.2 <project>
+
+ ❯ tests/client/importModel.test.ts (33 tests | 2 failed) 18ms
+   ❯ workbook file check (before any upload) (4)
+     × refuses a file above the 2 MiB limit and allows exactly the limit 5ms
+   ❯ import error messages (5)
+     × maps 413 and 415 to the limit and the accepted type 1ms
+ ❯ tests/integration/workbook-reader.test.ts (64 tests | 2 failed) 11719ms
+   ❯ WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded (3)
+     × red-first: the reader ceilings are the values docs/07 states 4ms
+     × red-first: an incompressible upload over 2 MiB is refused before anything is inflated 400ms
+ ❯ tests/integration/workbook-import.test.ts (28 tests | 1 failed) 11576ms
+   ❯ upload validation (7)
+     × red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing 261ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/importModel.test.ts > workbook file check (before any upload) > refuses a file above the 2 MiB limit and allows exactly the limit
+AssertionError: expected 8388608 to be 2097152 // Object.is equality
+
+- Expected
++ Received
+
+- 2097152
++ 8388608
+
+ ❯ tests/client/importModel.test.ts:103:30
+    101|
+    102|   it('refuses a file above the 2 MiB limit and allows exactly the limi…
+    103|     expect(IMPORT_MAX_BYTES).toBe(2 * 1024 * 1024);
+       |                              ^
+    104|     expect(workbookFileProblem({ name: 'hours.xlsx', size: IMPORT_MAX_…
+    105|     const problem = workbookFileProblem({ name: 'hours.xlsx', size: IM…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/client/importModel.test.ts > import error messages > maps 413 and 415 to the limit and the accepted type
+AssertionError: expected 'The workbook is larger than 8 MiB, so…' to match /2 MiB.*not uploaded/
+
+- Expected:
+/2 MiB.*not uploaded/
+
++ Received:
+"The workbook is larger than 8 MiB, so it was not uploaded."
+
+ ❯ tests/client/importModel.test.ts:222:64
+    220|
+    221|   it('maps 413 and 415 to the limit and the accepted type', () => {
+    222|     expect(importErrorMessage(fail(413, 'payload_too_large'))).toMatch…
+       |                                                                ^
+    223|     expect(importErrorMessage(fail(415, 'unsupported_media_type'))).to…
+    224|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > upload validation > red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing
+AssertionError: expected 8388608 to be 2097152 // Object.is equality
+
+- Expected
++ Received
+
+- 2097152
++ 8388608
+
+ ❯ tests/integration/workbook-import.test.ts:727:38
+    725|     expect(overDefault.status).toBe(413);
+    726|     // WP4-FIXB4: the route takes what the reader takes, 2 MiB, and th…
+    727|     expect(DEFAULT_IMPORT_MAX_BYTES).toBe(2 * 1024 * 1024);
+       |                                      ^
+    728|     expect(DEFAULT_IMPORT_MAX_BYTES).toBe(DEFAULT_READER_LIMITS.maxCom…
+    729|     expect(IMPORT_MAX_BYTES).toBe(DEFAULT_IMPORT_MAX_BYTES);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded > red-first: the reader ceilings are the values docs/07 states
+AssertionError: expected { maxCompressedBytes: 8388608, …(17) } to deeply equal { maxCompressedBytes: 2097152, …(17) }
+
+- Expected
++ Received
+
+  {
+    "maxAttributesPerElement": 64,
+    "maxCellsPerSheet": 50000,
+-   "maxCompressedBytes": 2097152,
++   "maxCompressedBytes": 8388608,
+    "maxEntries": 256,
+    "maxEntryInflatedBytes": 16777216,
+    "maxKeptAttributeLength": 255,
+    "maxPartAttributes": 200000,
+    "maxPartElements": 100000,
+-   "maxPartXmlBytes": 1048576,
++   "maxPartXmlBytes": 4194304,
+    "maxRowsPerSheet": 20000,
+    "maxSharedStrings": 50000,
+    "maxSheetNameLength": 100,
+    "maxSheets": 64,
+    "maxTagLength": 65536,
+    "maxTotalAttributes": 500000,
+-   "maxTotalElements": 100000,
++   "maxTotalElements": 150000,
+    "maxTotalInflatedBytes": 50331648,
+-   "maxTotalXmlBytes": 3145728,
++   "maxTotalXmlBytes": 8388608,
+  }
+
+ ❯ tests/integration/workbook-reader.test.ts:1090:35
+    1088|
+    1089|   it('red-first: the reader ceilings are the values docs/07 states', (…
+    1090|     expect(DEFAULT_READER_LIMITS).toEqual({
+       |                                   ^
+    1091|       maxCompressedBytes: 2 * MIB,
+    1092|       maxEntries: 256,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded > red-first: an incompressible upload over 2 MiB is refused before anything is inflated
+AssertionError: expected null to be 'package_too_large' // Object.is equality
+
+- Expected:
+"package_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:1118:26
+    1116|     expect(bytes.length).toBeLessThan(3 * MIB);
+    1117|     const outcome = timed(() => previewWorkbook(bytes));
+    1118|     expect(outcome.code).toBe('package_too_large');
+       |                          ^
+    1119|     expect(outcome.ms).toBeLessThan(500);
+    1120|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  5 failed | 120 passed (125)
+   Start at  11:08:04
+   Duration  13.50s (tests 91%, import 5%, transform 3%)
+
+exit=1

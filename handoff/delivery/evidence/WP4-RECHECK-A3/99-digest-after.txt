@@ -1,0 +1,30 @@
+# 99 HEAD and digest AFTER the checks (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:10:05Z
+$ git rev-parse HEAD origin/main 'HEAD^{tree}'
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+972ccda6409a7521a008c55c35a5b5cf416daf1e
+b0545cec30ac3b652eb5d4211f820fe72955a4da
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  -
+$ node24 scripts/source-digest.mjs
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  (775 files, handoff/ excluded)
+exit 0
+$ git status --short -- . ':!handoff' (empty expected)
+$ git status --short (handoff only)
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WP4-FIXB3-FREEZE.md
+ M handoff/delivery/tasks/WP4-RECHECK-B3.md
+ M handoff/delivery/tasks/WP4-REGATE3.md
+?? handoff/delivery/evidence/WP4-FIXB3-FREEZE/
+?? handoff/delivery/evidence/WP4-REGATE3/
+$ bash <work>/digest-export.sh (export after npm ci, verify, the probes)
+export tree: b0545cec30ac3b652eb5d4211f820fe72955a4da
+freeze tree: b0545cec30ac3b652eb5d4211f820fe72955a4da
+export digest (handoff excluded):
+635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b  -
+export file count: 775
+exit 0
+gate digest of record: 635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b (775 files)
+[end]

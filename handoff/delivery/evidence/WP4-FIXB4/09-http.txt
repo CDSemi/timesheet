@@ -1,0 +1,44 @@
+# WP4-FIXB4 09 over HTTP: the built server (capture mode, job runner off, synthetic users) while GET /api/health is polled
+# back to back during each upload (probes/http.mjs, the recheck's own, probe-http.mjs.txt). Packages: the recheck's
+# incompressible WP4-RB3-01 shapes (A2-rand14 x2, F2-rand100 x2, 4.2-5.4 MB uploads) and the worst constructions of 07.
+## before: <task>/base (972ccda), built
+2026-10-06T18:31:46Z
+$ (cwd <task>/base, the built export of 972ccda) node ../probes/http.mjs <task>/run/http-before <the same 10 packages>
+cli migrate: exit 0
+cli seed: exit 0
+login: 200
+idle /api/health: 200 in 2 ms
+A2_rand14_64_kept_attributes_per_kept_cell_rand1 | 4209751 B -> 201  in 523 ms | worst /api/health 526 ms over 2 polls, non-200 0 HEALTH>500ms
+A2_rand14_wide_64_kept_attributes_per_kept_cell_ | 4209801 B -> 201  in 508 ms | worst /api/health 510 ms over 2 polls, non-200 0 HEALTH>500ms
+F2_rand100_d2_wide_the_most_distinct_formulas_ra | 5435526 B -> 201  in 633 ms | worst /api/health 638 ms over 2 polls, non-200 0 HEALTH>500ms
+F2_rand100_t_wide_the_most_distinct_formulas_ran | 5435528 B -> 201  in 560 ms | worst /api/health 562 ms over 2 polls, non-200 0 HEALTH>500ms
+L_time_24_798_formulas_amp100_46_823_empty_kept_ | 89024 B -> 201  in 115 ms | worst /api/health 114 ms over 2 polls, non-200 0
+L_memory_45_442_empty_kept_cells_25_505_formulas | 1894316 B -> 201  in 235 ms | worst /api/health 236 ms over 2 polls, non-200 0
+T_upload_rand100_wide_the_most_F2_rand100_formul | 2033470 B -> 201  in 240 ms | worst /api/health 241 ms over 2 polls, non-200 0
+T_openings_cells_wide_99_600_kept_cells_with_a_d | 1114622 B -> 201  in 177 ms | worst /api/health 176 ms over 2 polls, non-200 0
+L_plain100_formulas_plain100_up_to_the_XML_limit | 86740 B -> 201  in 82 ms | worst /api/health 81 ms over 2 polls, non-200 0
+R_F2_hits_wide_the_most_distinct_formulas_hits_o | 88485 B -> 201  in 119 ms | worst /api/health 120 ms over 2 polls, non-200 0
+stored: 10 preview rows, largest report_json 21721 bytes; files in the store 11
+server exit: code null signal SIGTERM; stderr error lines: 0
+exit=0
+
+## after: <task>/final (the working tree), built
+2026-10-06T18:31:35Z
+$ (cwd <task>/final, the built export of the working tree, tree 3aaa001d0a220a59d36b8eea14a0a54f7eee9a99) node ../probes/http.mjs <task>/run/http-after <10 packages>
+cli migrate: exit 0
+cli seed: exit 0
+login: 200
+idle /api/health: 200 in 2 ms
+A2_rand14_64_kept_attributes_per_kept_cell_rand1 | 4209751 B -> 413 payload_too_large in 3 ms | worst /api/health 2 ms over 2 polls, non-200 0
+A2_rand14_wide_64_kept_attributes_per_kept_cell_ | 4209801 B -> 413 payload_too_large in 2 ms | worst /api/health 2 ms over 2 polls, non-200 0
+F2_rand100_d2_wide_the_most_distinct_formulas_ra | 5435526 B -> 413 payload_too_large in 2 ms | worst /api/health 1 ms over 2 polls, non-200 0
+F2_rand100_t_wide_the_most_distinct_formulas_ran | 5435528 B -> 413 payload_too_large in 2 ms | worst /api/health 1 ms over 2 polls, non-200 0
+L_time_24_798_formulas_amp100_46_823_empty_kept_ | 89024 B -> 201  in 107 ms | worst /api/health 106 ms over 2 polls, non-200 0
+L_memory_45_442_empty_kept_cells_25_505_formulas | 1894316 B -> 201  in 81 ms | worst /api/health 80 ms over 2 polls, non-200 0
+T_upload_rand100_wide_the_most_F2_rand100_formul | 2033470 B -> 201  in 68 ms | worst /api/health 67 ms over 2 polls, non-200 0
+T_openings_cells_wide_99_600_kept_cells_with_a_d | 1114622 B -> 201  in 83 ms | worst /api/health 82 ms over 2 polls, non-200 0
+L_plain100_formulas_plain100_up_to_the_XML_limit | 86740 B -> 201  in 66 ms | worst /api/health 65 ms over 2 polls, non-200 0
+R_F2_hits_wide_the_most_distinct_formulas_hits_o | 88485 B -> 201  in 66 ms | worst /api/health 66 ms over 2 polls, non-200 0
+stored: 6 preview rows, largest report_json 21721 bytes; files in the store 7
+server exit: code null signal SIGTERM; stderr error lines: 0
+exit=0

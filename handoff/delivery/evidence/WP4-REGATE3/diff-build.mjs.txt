@@ -1,0 +1,20 @@
+// WP4-REGATE2 differential: build benign synthetic workbooks (template + realistic 12 dated sheets) once, from the export's support code.
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildSyntheticWorkbook, readTemplateBytes } from '../export/tests/support/syntheticWorkbook.ts';
+const out = process.argv[2];
+mkdirSync(out, { recursive: true });
+const periods = [];
+for (let i = 0; i < 12; i += 1) {
+  const payrollDate = new Date(Date.UTC(2026, 0, 9) + i * 14 * 86400000).toISOString().slice(0, 10);
+  const days = {};
+  for (let d = 0; d < 5; d += 1) days[d] = { start: 8 * 60 + ((i + d) % 4) * 15, end: 17 * 60 + ((i * 7 + d) % 3) * 10 };
+  if (i % 3 === 0) days[2] = { label: 'Holiday', start: undefined };
+  if (i % 4 === 1) days[4] = { labelFormulaCache: 'Worked', start: 9 * 60, end: 18 * 60 };
+  if (i === 5) days[1] = { label: 'Vacation Day Synthetic' };
+  if (i === 7) days[3] = { date: null };
+  if (i === 9) days[5] = { start: 8 * 60, end: 12 * 60 };
+  periods.push({ payrollDate, cleanFormulas: i % 2 === 0, employee: `Synthetic Person ${i} (p${i}@example.invalid)`, days });
+}
+writeFileSync(join(out, 'twelve.xlsx'), buildSyntheticWorkbook({ periods }));
+writeFileSync(join(out, 'template.xlsx'), readTemplateBytes());

@@ -1,0 +1,4 @@
+# Print the 6 slowest and the 6 most memory-hungry lines of a cost log (fields: ms, +MiB, case, outcome).
+f="$1"
+echo "-- slowest"; grep -E "preview ms=|previewImport ms=" "$f" | sed -E 's/^([^|]*)\|.*ms=([0-9]+).*\(\+([0-9]+)\).*\| (accepted|rejected:[a-z_]+|[0-9]{3} [^|]*|THROWN[^|]*).*/\2 ms +\3 MiB | \1| \4/' | sort -t' ' -k1 -n -r | head -6
+echo "-- most memory"; grep -E "preview ms=|previewImport ms=" "$f" | sed -E 's/^([^|]*)\|.*ms=([0-9]+).*\(\+([0-9]+)\).*\| (accepted|rejected:[a-z_]+|[0-9]{3} [^|]*|THROWN[^|]*).*/+\3 MiB \2 ms | \1| \4/' | sort -t' ' -k1.2 -n -r | head -6

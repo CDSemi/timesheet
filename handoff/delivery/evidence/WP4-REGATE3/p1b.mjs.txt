@@ -1,0 +1,63 @@
+// WP4-AUDIT-B probe P1b: cost of one synchronous preview for packages inside every reader limit.
+// Each case runs in a fresh child process (process.execPath) so maxRSS belongs to that case only.
+// Usage: node probes/p1b-cost.mjs            (parent: runs every case)
+//        node probes/p1b-cost.mjs <case>     (child: one case)
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { performance } from 'node:perf_hooks';
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import { pack, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const { strToU8 } = require('fflate');
+const MiB = 1024 * 1024;
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+const sheetOf = (cellXml, bytes) => {
+  const head = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+  const tail = '</row></sheetData></worksheet>';
+  return head + cellXml.repeat(Math.floor((bytes - head.length - tail.length) / cellXml.length)) + tail;
+};
+
+const CASES = {
+  'one-sheet-15MiB-empty-c': () => ({ 'xl/worksheets/sheet3.xml': sheetOf('<c/>', 15 * MiB) }),
+  'three-sheets-15.8MiB-empty-c': () => ({
+    'xl/worksheets/sheet1.xml': sheetOf('<c/>', 15.8 * MiB),
+    'xl/worksheets/sheet2.xml': sheetOf('<c/>', 15.8 * MiB),
+    'xl/worksheets/sheet3.xml': sheetOf('<c/>', 15.8 * MiB),
+  }),
+  'three-sheets-15.8MiB-valued-c': () => ({
+    'xl/worksheets/sheet1.xml': sheetOf('<c><v>1</v></c>', 15.8 * MiB),
+    'xl/worksheets/sheet2.xml': sheetOf('<c><v>1</v></c>', 15.8 * MiB),
+    'xl/worksheets/sheet3.xml': sheetOf('<c><v>1</v></c>', 15.8 * MiB),
+  }),
+  'holiday-sheet-150k-cells': () => {
+    const rows = [];
+    for (let i = 1; i <= 150_000; i += 1) rows.push(`<row r="${i}"><c r="C${i}"><v>1</v></c></row>`);
+    return { 'xl/worksheets/sheet2.xml': `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>` };
+  },
+};
+
+const which = process.argv[2];
+if (which === undefined) {
+  for (const name of Object.keys(CASES)) {
+    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), name], { encoding: 'utf8', env: process.env });
+    process.stdout.write(`${child.stdout.trim()} | exit=${child.status}${child.stderr.trim() ? ' | stderr=' + child.stderr.trim().split('\n')[0] : ''}\n`);
+  }
+} else {
+  const entries = { ...unpack(readTemplateBytes()) };
+  for (const [name, xml] of Object.entries(CASES[which]())) entries[name] = strToU8(xml);
+  const bytes = pack(entries);
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  try {
+    const out = previewWorkbook(bytes);
+    outcome = `accepted (errors=${out.summary.errors})`;
+  } catch (error) {
+    outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${error.message}`;
+  }
+  const ms = Math.round(performance.now() - t0);
+  console.log(`${which} | upload=${bytes.length} bytes | ms=${ms} | maxRSS before=${Math.round(baseline / 1024)} MiB after=${Math.round(process.resourceUsage().maxRSS / 1024)} MiB | ${outcome}`);
+}

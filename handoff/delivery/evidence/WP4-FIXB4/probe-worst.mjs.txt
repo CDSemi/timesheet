@@ -1,0 +1,242 @@
+// WP4-FIXB4 confirmation catalogue: the worst constructions at the new ceilings (2 MiB upload, 1 MiB a part, 3 MiB of
+// XML a package, 100 000 markup openings, 500 000 attributes), for run-cost.mjs (CASES=<this file>). Synthetic data
+// only. Groups:
+//   P  an incompressible part at the part limit (each costliest unit kind);
+//   T  incompressible content at each package limit (XML bytes, openings, attributes, the upload ceiling);
+//   L  the mixes the derived bound (bound.mjs) names as the worst for time and for memory, and neighbouring mixes;
+//   R  the recheck's costliest shapes (WP4-RECHECK-B3 A2, F2, X) rebuilt at the new ceilings.
+// Every builder sizes itself to the ceilings below; a builder whose upload would pass the 2 MiB ceiling shrinks its
+// counts until it fits (incompressible content binds on the upload before the XML total). `stats` records what the
+// reader will count, and whether the package is inside every ceiling.
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const EXPORT = process.env.EXPORT;
+if (!EXPORT) throw new Error('EXPORT required');
+const { strToU8, zipSync } = await import(pathToFileURL(join(EXPORT, 'node_modules/fflate/esm/index.mjs')).href);
+
+const MiB = 1024 * 1024;
+const UPLOAD = 2 * MiB;
+const PART = MiB;
+const TOTAL = 3 * MiB;
+const OPENINGS = 100_000;
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const bytesOf = (s) => Buffer.byteLength(s);
+
+function random(seed, alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') {
+  let a = seed >>> 0;
+  return (n) => {
+    let s = '';
+    for (let i = 0; i < n; i += 1) {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      s += alphabet[((t ^ (t >>> 14)) >>> 0) % alphabet.length];
+    }
+    return s;
+  };
+}
+const REFS = ['&amp;', '&lt;', '&#65;', '&#x1F600;', '&quot;'];
+function referenceText(seed) {
+  const letter = random(seed);
+  const pick = random(seed + 100, '01234');
+  return (n) => {
+    let s = '';
+    while (s.length < n) s += pick(1) === '0' ? letter(3) : REFS[Number(pick(1))];
+    return s.slice(0, n).replace(/&[^;]*$/, '');
+  };
+}
+const column = (i) => `${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + (Math.floor(i / 26) % 26))}${String.fromCharCode(65 + (Math.floor(i / 676) % 26))}`;
+const address = (i) => `${column(i % 17_576)}${1_000_000 + i}`;
+const dated = (i) => new Date(Date.UTC(2026, 0, 9) + 14 * i * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '.');
+const DATED = [0, 1, 2].map(dated);
+
+function count(xml) {
+  return { bytes: bytesOf(xml), openings: (xml.match(/<(?!\/)/g) ?? []).length, attributes: (xml.match(/\s[A-Za-z_:][-A-Za-z0-9_:.]*\s*=\s*["']/g) ?? []).length };
+}
+
+/** A minimal package: content types, workbook, relationships, the worksheets and optional shared strings. */
+function pkg(names, parts, sst) {
+  const entries = {
+    '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets>${names.map((name, i) => `<sheet name="${name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${RNS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`,
+  };
+  parts.forEach((xml, i) => { entries[`xl/worksheets/sheet${i + 1}.xml`] = xml; });
+  if (sst !== undefined) entries['xl/sharedStrings.xml'] = sst;
+  const zippable = {};
+  for (const [name, data] of Object.entries(entries)) zippable[name] = [strToU8(data), { level: 6, mtime: 1_767_225_600_000 }];
+  const out = zipSync(zippable);
+  const parsed = Object.values(entries).map(count);
+  const total = parsed.reduce((t, p) => ({ bytes: t.bytes + p.bytes, openings: t.openings + p.openings, attributes: t.attributes + p.attributes }), { bytes: 0, openings: 0, attributes: 0 });
+  const maxPart = Math.max(...parsed.map((p) => p.bytes));
+  const inside = maxPart <= PART && total.bytes <= TOTAL && total.openings <= OPENINGS && total.attributes <= 500_000 && out.length <= UPLOAD;
+  out.stats = `xml ${total.bytes} B (max part ${maxPart}), openings ${total.openings}, attributes ${total.attributes}, upload ${out.length} B, ${inside ? 'inside every ceiling' : 'OUTSIDE a ceiling'}`;
+  return out;
+}
+
+const HEAD = (wide) => `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${NS}">${wide ? '<!--ā-->' : ''}<sheetData>`;
+const TAIL = '</sheetData></worksheet>';
+/** `units` (strings) in rows of 20 over `parts` worksheet parts, dealt round robin. */
+function sheets(units, parts, wide) {
+  // Round robin, so every kind of unit is spread evenly over the parts.
+  return Array.from({ length: parts }, (_, p) => {
+    let inner = '';
+    const mine = units.filter((_, i) => i % parts === p);
+    for (let k = 0; k < mine.length; k += 20) inner += `<row r="${1_000_000 + k / 20}">${mine.slice(k, k + 20).join('')}</row>`;
+    return `${HEAD(wide)}${inner}${TAIL}`;
+  });
+}
+
+/** Builds with `n` units, then shrinks `n` until the package fits the upload ceiling and the XML limits. */
+function fitted(n, build) {
+  let units = n;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const out = build(units);
+    if (!out.stats.includes('OUTSIDE')) return out;
+    units = Math.floor(units * 0.96);
+  }
+  return build(units);
+}
+
+const ROOM = PART - 4096; // bytes for units in one part
+const OPEN = OPENINGS - 400; // openings for units in a package
+
+export const CASES = {};
+const def = (name, build) => { CASES[name] = build; };
+
+// P: one incompressible part at the 1 MiB part limit
+def('P-refs-text-wide one 1 MiB part: one kept inline string of random text dense with references, two-byte', () => {
+  const r = referenceText(21);
+  return pkg([DATED[0]], [`${HEAD(true)}<row r="14"><c r="B14" t="inlineStr"><is><t>${r(ROOM - 200)}</t></is></c></row>${TAIL}`]);
+});
+def('P-rand100-wide one 1 MiB dated part of distinct random formulas (F2-rand100), two-byte', () => {
+  const r = random(22);
+  return fitted(Math.floor(ROOM / 105), (n) => pkg([DATED[0]], sheets(Array.from({ length: n }, (_, i) => `<c><f>${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}</f></c>`), 1, true)));
+});
+def('P-cell-max-wide one 1 MiB part of kept cells with r, t and si decoded and copied, two-byte', () => {
+  const r = random(23);
+  return fitted(Math.floor(ROOM / 70), (n) => pkg([DATED[0]], sheets(Array.from({ length: n }, (_, i) => `<c r="${address(i)}" t="&#65;${r(13)}" si="&#66;${r(13)}"/>`), 1, true)));
+});
+def('P-a2-wide one 1 MiB dated part of cells with 64 kept-name attributes of random text (A2-rand14), two-byte', () => {
+  const r = random(24);
+  const names = ['r', 't', 'si', 'x:r', 'y:t', 'z:si'];
+  return fitted(Math.floor(ROOM / 1350), (n) => pkg([DATED[0]], sheets(Array.from({ length: n }, () => `<c${Array.from({ length: 64 }, (_, j) => ` ${names[j % 6]}="&#65;${r(13)}"`).join('')}/>`), 1, true)));
+});
+
+// T: incompressible content at each package limit
+def('T-xml-refs-wide three 1 MiB parts of kept text dense with references (the package XML limit), two-byte', () => {
+  const r = referenceText(31);
+  return pkg(DATED, DATED.map(() => `${HEAD(true)}<row r="14"><c r="B14" t="inlineStr"><is><t>${r(ROOM - 200)}</t></is></c></row>${TAIL}`));
+});
+def('T-xml-rand-skipped three parts of random comment text, as much as the upload ceiling allows', () => {
+  const r = random(32);
+  return fitted(ROOM - 200, (n) => pkg(DATED, DATED.map(() => `${HEAD(false)}${TAIL}<!--${r(n)}-->`)));
+});
+def('T-openings-cells-wide 99 600 kept cells with a decoded random t (the opening limit), three dated parts, two-byte', () => {
+  const r = random(33);
+  return fitted(OPEN - 5_000, (n) => pkg(DATED, sheets(Array.from({ length: n }, () => `<c t="&#65;${r(13)}"/>`), 3, true)));
+});
+def('T-attributes one-character random values up to the attribute limit, three parts', () => {
+  const r = random(34);
+  const n = Math.floor((500_000 - 2_000) / 64);
+  return pkg(DATED, sheets(Array.from({ length: n }, () => `<x${Array.from({ length: 64 }, () => ` a="${r(1)}"`).join('')}/>`), 3, false));
+});
+def('T-upload-rand100-wide the most F2-rand100 formulas the 2 MiB upload ceiling allows, three dated parts, two-byte', () => {
+  const r = random(35);
+  return fitted(Math.min(Math.floor(OPEN / 2.05), Math.floor((3 * ROOM) / 105)), (n) => pkg(DATED, sheets(Array.from({ length: n }, (_, i) => `<c><f>${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}</f></c>`), 3, true)));
+});
+def('T-upload-text-wide the most random kept text the 2 MiB upload ceiling allows, three dated parts, two-byte', () => {
+  const r = random(36);
+  return fitted(ROOM - 300, (n) => pkg(DATED, DATED.map(() => `${HEAD(true)}<row r="14"><c r="B14" t="inlineStr"><is><t>${r(n)}</t></is></c></row>${TAIL}`)));
+});
+
+// L: the bound's worst mixes (bound.mjs at 3 MiB, 100 000 openings) and neighbours
+def('L-time 24 798 formulas-amp100 + 46 823 empty kept cells, three dated parts, two-byte (the worst mix for time)', () => {
+  const units = [];
+  for (let i = 0; i < 24_798; i += 1) units.push(`<c><f>${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(12)}</f></c>`);
+  for (let i = 0; i < 46_823; i += 1) units.push('<c/>');
+  return fitted(units.length, (n) => pkg(DATED, sheets(units.slice(0, n), 3, true)));
+});
+def('L-memory 45 442 empty kept cells + 25 505 formulas-rand100, three dated parts, two-byte (the worst mix for memory)', () => {
+  const r = random(41);
+  const units = [];
+  for (let i = 0; i < 25_505; i += 1) units.push(`<c><f>${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}</f></c>`);
+  for (let i = 0; i < 45_442; i += 1) units.push('<c/>');
+  return fitted(units.length, (n) => pkg(DATED, sheets(units.slice(0, n), 3, true)));
+});
+def('L-memory-ascii the same mix in one-byte parts', () => {
+  const r = random(42);
+  const units = [];
+  for (let i = 0; i < 25_505; i += 1) units.push(`<c><f>${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}</f></c>`);
+  for (let i = 0; i < 45_442; i += 1) units.push('<c/>');
+  return fitted(units.length, (n) => pkg(DATED, sheets(units.slice(0, n), 3, false)));
+});
+def('L-plain100 formulas-plain100 up to the XML limit with empty cells in the openings left, two-byte', () => {
+  const units = [];
+  const formulas = 24_000;
+  for (let i = 0; i < formulas; i += 1) units.push(`<c><f>${String(i).padStart(6, '0')}${'"a"b'.repeat(24)}</f></c>`);
+  for (let i = 0; i < 45_000; i += 1) units.push('<c/>');
+  return fitted(units.length, (n) => pkg(DATED, sheets(units.slice(0, n), 3, true)));
+});
+def('L-text-cells kept text dense with references in the bytes, empty kept cells in the openings, two-byte', () => {
+  const r = referenceText(43);
+  const cells = Array.from({ length: Math.floor((OPEN - 200) / 3 / 1.06) }, () => '<c/>');
+  return pkg(DATED, DATED.map(() => {
+    let inner = '';
+    for (let k = 0; k < cells.length; k += 20) inner += `<row r="${1_000_000 + k / 20}">${cells.slice(k, k + 20).join('')}</row>`;
+    const room = ROOM - bytesOf(inner) - 300;
+    return `${HEAD(true)}${inner}<row r="2000000"><c r="B14" t="inlineStr"><is><t>${r(room)}</t></is></c></row>${TAIL}`;
+  }));
+});
+def('L-cellmax-rand-text kept cells with r, t, si + F2-rand100 formulas + kept text with references, two-byte', () => {
+  const r = random(44);
+  const refs = referenceText(45);
+  return fitted(100, (pct) => {
+    const units = [];
+    for (let i = 0; i < Math.floor(200 * pct); i += 1) units.push(`<c r="${address(i)}" t="&#65;${r(13)}" si="&#66;${r(13)}"/>`);
+    for (let i = 0; i < Math.floor(150 * pct); i += 1) units.push(`<c><f>${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}</f></c>`);
+    const parts = sheets(units, 3, true).map((xml) => xml.replace(TAIL, `<row r="3000000"><c r="C3" t="inlineStr"><is><t>${refs(Math.max(0, ROOM - bytesOf(xml) - 300))}</t></is></c></row>${TAIL}`));
+    return pkg(DATED, parts);
+  });
+});
+
+// R: the recheck's costliest shapes rebuilt at the new ceilings
+def('R-A2-rand14-wide 64 kept-name random attributes a cell over three dated parts at the XML limit, two-byte', () => {
+  const r = random(51);
+  const names = ['r', 't', 'si', 'x:r', 'y:t', 'z:si'];
+  return fitted(Math.floor((3 * ROOM) / 1350), (n) => pkg(DATED, sheets(Array.from({ length: n }, () => `<c${Array.from({ length: 64 }, (_, j) => ` ${names[j % 6]}="&#65;${r(13)}"`).join('')}/>`), 3, true)));
+});
+for (const [key, body] of Object.entries({
+  amp100: (i) => `${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(12)}`,
+  hits: (i) => `${String(i).padStart(6, '0')}+8.5-TODAY()${'&amp;"a"'.repeat(10)}`,
+  plain100: (i) => `${String(i).padStart(6, '0')}${'"a"b'.repeat(24)}`,
+})) {
+  def(`R-F2-${key}-wide the most distinct formulas (${key}) on three dated parts, two-byte`, () => {
+    const n = Math.min(Math.floor(OPEN / 2.05), Math.floor((3 * ROOM) / (17 + body(0).length)));
+    return fitted(n, (m) => pkg(DATED, sheets(Array.from({ length: m }, (_, i) => `<c><f>${body(i)}</f></c>`), 3, true)));
+  });
+}
+def('R-F2-cached-wide formulas with a kept str cached value each, three dated parts, two-byte', () => {
+  const unit = (i) => `<c t="str"><f>${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(6)}</f><v>${String(i).padStart(6, '0')}${'v'.repeat(40)}</v></c>`;
+  const n = Math.min(Math.floor(OPEN / 3.05), Math.floor((3 * ROOM) / 125));
+  return fitted(n, (m) => pkg(DATED, sheets(Array.from({ length: m }, (_, i) => unit(i)), 3, true)));
+});
+def('R-X-cells3-text-wide the most cells with decoded r, t, si plus kept text of mixed references in the bytes left', () => {
+  const big = '&amp;a&zz;&#;&';
+  return pkg(DATED, DATED.map(() => {
+    const cells = Array.from({ length: Math.floor((ROOM - 100 * 1024) / 36) }, () => '<c r="&#65;1" t="&#65;" si="&#65;"/>');
+    let inner = '';
+    for (let k = 0; k < cells.length; k += 20) inner += `<row r="${1_000_000 + k / 20}">${cells.slice(k, k + 20).join('')}</row>`;
+    const room = ROOM - bytesOf(inner) - 300;
+    return `${HEAD(true)}${inner}<row r="2000000"><c r="B14" t="inlineStr"><is><t>${big.repeat(Math.max(0, Math.floor(room / big.length)))}</t></is></c></row>${TAIL}`;
+  }));
+});
+def('R-shared-strings-wide 19 000 random shared strings each used by a cell, two-byte', () => {
+  const r = random(52);
+  const n = 19_000;
+  const sst = `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS}"><!--ā-->${Array.from({ length: n }, (_, i) => `<si><t>${String(i).padStart(6, '0')}${r(30)}</t></si>`).join('')}</sst>`;
+  return pkg(DATED, sheets(Array.from({ length: n }, (_, i) => `<c r="${address(i)}" t="s"><v>${i}</v></c>`), 3, true), sst);
+});

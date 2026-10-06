@@ -1,0 +1,96 @@
+// WP4-AUDIT-B probe P6: event-loop blocking of the BUILT server by one small workbook upload inside every reader
+// limit. A second client sends GET /api/health 300 ms after the upload starts, on its own connection.
+// DATA_DIR and DATABASE_PATH are explicit under the task folder; the server child is stopped through its handle.
+// Usage (from the scratch export): node ../probes/p6-blocking.mjs <work folder>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { createRequire } from 'node:module';
+import { pack, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const { strToU8 } = require('fflate');
+const work = process.argv[2];
+mkdirSync(work, { recursive: true });
+const port = await new Promise((resolve) => {
+  const s = createServer();
+  s.listen(0, '127.0.0.1', () => {
+    const p = s.address().port;
+    s.close(() => resolve(p));
+  });
+});
+const origin = `http://localhost:${port}`;
+const pw = randomBytes(18).toString('base64url');
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: join(work, 'timesheet.db'),
+  DATA_DIR: join(work, 'data'),
+  APP_ORIGINS: origin,
+  MAIL_FROM: 'probe-sender@example.invalid',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: randomBytes(18).toString('base64url'),
+  SEED_EMPLOYEE_PASSWORD: pw,
+  SEED_EMPLOYEE2_PASSWORD: randomBytes(18).toString('base64url'),
+};
+for (const args of [['migrate'], ['seed']]) spawnSync(process.execPath, ['dist/server/cli.js', ...args], { env, encoding: 'utf8' });
+const server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: 'ignore' });
+const fail = (e) => {
+  console.log('FATAL', e?.message ?? e);
+  server.kill('SIGTERM');
+  process.exitCode = 2;
+};
+process.on('uncaughtException', fail);
+process.on('unhandledRejection', fail);
+
+/** One request on its own connection (agent: false), with a timing and the transport error if any. */
+function send(method, path, { body, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const req = httpRequest({ host: '127.0.0.1', port, method, path, agent: false, headers: { origin, ...headers, ...(body ? { 'content-length': body.length } : {}) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, ms: Math.round(performance.now() - t0), headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', (e) => resolve({ status: 0, ms: Math.round(performance.now() - t0), error: e.code ?? e.message }));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+for (let i = 0; i < 100; i += 1) {
+  const r = await send('GET', '/api/ready');
+  if (r.status === 200) break;
+  await new Promise((r2) => setTimeout(r2, 100));
+}
+const login = await send('POST', '/api/auth/login', { body: Buffer.from(JSON.stringify({ email: 'employee@example.invalid', password: pw })), headers: { 'content-type': 'application/json' } });
+const cookie = String(login.headers['set-cookie']?.[0] ?? '').split(';')[0];
+
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const holiday = (n) => {
+  const rows = [];
+  for (let i = 1; i <= n; i += 1) rows.push(`<row r="${i}"><c r="C${i}"><v>1</v></c></row>`);
+  return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+};
+const ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+for (const n of [150_000, 20_000]) {
+  const e = unpack(readTemplateBytes());
+  e['xl/worksheets/sheet2.xml'] = strToU8(holiday(n));
+  const bytes = Buffer.from(pack(e));
+  const r = await send('POST', '/api/imports', { body: bytes, headers: { cookie, 'content-type': ct } });
+  console.log(`holiday sheet with ${n} cells: upload ${bytes.length} bytes -> ${r.status} in ${r.ms} ms ${r.text.slice(0, 200)}`);
+}
+const tpl = Buffer.from(readTemplateBytes());
+const t = await send('POST', '/api/imports', { body: tpl, headers: { cookie, 'content-type': ct } });
+console.log(`tracked template: ${tpl.length} bytes -> ${t.status} in ${t.ms} ms; body keys ${t.status === 200 || t.status === 201 ? Object.keys(JSON.parse(t.text)).join(',') : t.text.slice(0, 200)}`);
+const idle = await send('GET', '/api/health');
+console.log(`idle GET /api/health afterwards -> ${idle.status}`);
+server.kill('SIGTERM');
+await new Promise((r) => server.once('exit', r));
+console.log(`server stopped through its handle: ${server.signalCode ?? server.exitCode}`);

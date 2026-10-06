@@ -1,0 +1,22 @@
+// WP4-REGATE3 independent probe for R-B2-1 and R-B2-2 (synthetic data only).
+import { strFromU8, strToU8 } from '../export/node_modules/fflate/esm/index.mjs';
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import { buildSyntheticWorkbook, pack, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+const tpl = readTemplateBytes();
+const parts = Object.keys(unpack(tpl));
+const out = (label, fn) => { try { const p = fn(); console.log(label, '-> accepted, sheets', p.sheets.length); } catch (e) { console.log(label, '->', e.name === 'WorkbookRejectedError' ? 'rejected:' + e.code : 'THROWN ' + e.name + ' ' + e.message.slice(0, 80)); } };
+const declare = (part, decl) => { const e = unpack(tpl); const x = strFromU8(e[part]); e[part] = strToU8(x.replace(/^<\?xml[^?]*\?>/, decl)); return pack(e); };
+for (const part of ['xl/workbook.xml', 'xl/worksheets/sheet2.xml', 'xl/sharedStrings.xml', 'xl/_rels/workbook.xml.rels'].filter((p) => parts.includes(p))) {
+  for (const enc of ['ISO-8859-1', 'latin1', 'windows-1252', 'GBK', 'EUC-JP', 'ASCII', 'UTF-32', 'UTF-7']) {
+    out(`${part} dq ${enc}`, () => previewWorkbook(declare(part, `<?xml version="1.0" encoding="${enc}"?>`)));
+  }
+  out(`${part} single-quoted ISO-8859-1`, () => previewWorkbook(declare(part, `<?xml version='1.0' encoding='ISO-8859-1'?>`)));
+  out(`${part} UTF-8 (control)`, () => previewWorkbook(declare(part, `<?xml version="1.0" encoding="UTF-8"?>`)));
+  out(`${part} no encoding (control)`, () => previewWorkbook(declare(part, `<?xml version="1.0"?>`)));
+}
+// R-B2-1: two holidays whose names share a 300-char stem; the second is floating. Days must follow their own holiday.
+const stem = 'Founders Day ' + 'x'.repeat(300);
+const wb = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09', employee: 'MARK' }] });
+const p = previewWorkbook(wb);
+console.log('baseline preview days', p.periods[0].days.length, 'floating flags', p.periods[0].days.map((d) => d.floating_holiday ?? false).join(','));
+console.log('stem length', stem.length);

@@ -23,8 +23,8 @@ import {
 export const XLSX_FILE_EXTENSION = '.xlsx';
 
 /** The server's route-scoped upload limit (the reader's package limit, WP4-T09). */
-export const IMPORT_MAX_BYTES = 8 * 1024 * 1024;
-const IMPORT_MAX_TEXT = '8 MiB';
+export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const IMPORT_MAX_TEXT = '2 MiB';
 
 /** The server's technical bound on an opening balance (WP4-T10), in minutes. */
 export const OPENING_MAX_MINUTES = 100_000_000;

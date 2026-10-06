@@ -1,0 +1,150 @@
+# WP4-FIXB4 11 benign differential against the accepted WP4-T09 reader (13a258d, <task>/t09) and the correctness probe
+# Must be identical after dropping sourceCount. The stored report also differs in its 'rules' text, by the not_due rule
+# added after T09 (WP4-T09B); the recheck recorded the same for 972ccda (its 17-differential.txt has the same hashes).
+## (1) the WP4-RECHECK-B3 differential (diff-build/dump/compare/rules, probe-diff-*.mjs.txt), final against T09
+2026-10-06T18:32:35Z
+# benign differential: the final tree (<task>/final, tree 3aaa001d0a220a59d36b8eea14a0a54f7eee9a99) against the accepted WP4-T09 reader (<task>/t09, 13a258d)
+$ EXPORT=<task>/final node probes/diff-build.mjs <task>/run/diff/in
+built template (25878 B) and twelve; holiday labels used: fixed 14 chars, floating 16 chars
+exit=0
+$ EXPORT=<task>/final node probes/diff-dump.mjs <in> <out> new
+new: dumped template and twelve
+exit=0
+$ EXPORT=<task>/t09 node probes/diff-dump.mjs <in> <out> old
+old: dumped template and twelve
+exit=0
+$ node probes/diff-compare.mjs <out>
+template cells: raw IDENTICAL (new 3a54617be692 old 3a54617be692); without sourceCount IDENTICAL; cells 1055
+template preview: raw differs (new 1b70af23c0b7 old 94b16ca643a3); without sourceCount IDENTICAL
+template report: raw differs (new 80ee603379eb old aa61fcaf45ab); without sourceCount DIFFERS at $.rules.3, $.rules.4, $.rules.5, $.rules.6, $.rules.7; days 0, floating flags 0, holiday days 0, findings 6, decisions 0
+twelve cells: raw IDENTICAL (new af432365cd8d old af432365cd8d); without sourceCount IDENTICAL; cells 7403
+twelve preview: raw differs (new b71851f819ba old 557cbb64495c); without sourceCount IDENTICAL
+twelve report: raw differs (new 3118c748fcb0 old 3375ab5bb4bd); without sourceCount DIFFERS at $.rules.3, $.rules.4, $.rules.5, $.rules.6, $.rules.7; days 168, floating flags 12, holiday days 23, findings 44, decisions 49
+differential: 2 DIFFERENCES
+exit=1
+$ node probes/diff-rules.mjs <out>
+template: rules new 8, old 7; report without sourceCount and rules IDENTICAL
+  rules added: ["A period whose payroll due instant has not passed yet is skipped by explicit decision, so that an import cannot make a live period unsignable."]; removed: []
+twelve: rules new 8, old 7; report without sourceCount and rules IDENTICAL
+  rules added: ["A period whose payroll due instant has not passed yet is skipped by explicit decision, so that an import cannot make a live period unsignable."]; removed: []
+exit=0
+
+## (2) the WP4-RECHECK-B2 differential as WP4-FIXB3 ran it (fixb3probes/diff.mjs, probe-fixb3-diff.mjs.txt)
+2026-10-06T18:32:51Z
+$ PROBE_ROOT=<task>/final PROBE_T09=<task>/t09 node fixb3probes/diff.mjs   (the WP4-RECHECK-B2 differential as WP4-FIXB3 ran it)
+node v24.21.0
+== tracked template: 25878 bytes, sha256 47ef42d5e4a9b7ae...
+reader: 3 sheets, 1055 cells; old 19 ms, new 6 ms; header/notes equal: true; cell differences: 0
+reader sha256 old 6ab40f6bd7df25ce new 6ab40f6bd7df25ce
+preview.sheets: EQUAL (sha256 ce512e8bcfaea792, 197 chars)
+preview.periods: EQUAL (sha256 4f53cda18c2baa0c, 2 chars)
+preview.holidays: EQUAL (sha256 e998ab148cbb35c5, 828 chars)
+preview.payrollCalendar: EQUAL (sha256 1f33ac8879ef65b8, 54 chars)
+preview.summary: EQUAL (sha256 391f025ed3259073, 35 chars)
+preview.clean: EQUAL (sha256 b5bea41b6c623f7c, 4 chars)
+preview.mappingVersion: EQUAL (sha256 6b86b273ff34fce1, 1 chars)
+days: 0, labelled 0, mapped 0, holiday-mapped 0, from formula cache 0, clocks 0; any truncated: false
+findings: old 6, new 6, folded 0, capped 0; problems: none
+codes: floating_holiday,formula_hours_8_5,weekly_total_omits_sunday,today_signature_date,volatile_today_formula
+report floating_holiday flags: 0 of 0 days; differences from T09: 0
+realistic workbook: 15 label cells rewritten to shared strings (rich text, phonetic run, xml:space, character references)
+== realistic 12 dated sheets (synthetic): 86444 bytes, sha256 39ab4b566509cd0b...
+reader: 15 sheets, 7403 cells; old 47 ms, new 13 ms; header/notes equal: true; cell differences: 0
+reader sha256 old 70eb929a112ebf4c new 70eb929a112ebf4c
+preview.sheets: EQUAL (sha256 6ab1c2a522b304b4, 1252 chars)
+preview.periods: EQUAL (sha256 afadb857ffce09d0, 57327 chars)
+preview.holidays: EQUAL (sha256 e998ab148cbb35c5, 828 chars)
+preview.payrollCalendar: EQUAL (sha256 1f33ac8879ef65b8, 54 chars)
+preview.summary: EQUAL (sha256 10cb789246342e35, 37 chars)
+preview.clean: EQUAL (sha256 fcbcf165908dd18a, 5 chars)
+preview.mappingVersion: EQUAL (sha256 6b86b273ff34fce1, 1 chars)
+days: 168, labelled 147, mapped 131, holiday-mapped 22, from formula cache 3, clocks 60; any truncated: false
+findings: old 60, new 60, folded 0, capped 0; problems: none
+codes: floating_holiday,formula_hours_8_5,weekly_total_omits_sunday,today_signature_date,volatile_today_formula,unknown_label,formula_cache_not_authoritative,time_pair_incomplete,day_date_unexpected,payroll_cell_mismatch,hidden_sheet
+report floating_holiday flags: 10 of 168 days; differences from T09: 0
+shared-string labels as read (sheet 1, B14..R14): 2026.01.09!B14="Work from home"->worked ; 2026.01.09!F14="Vacation"->leave ; 2026.01.09!J14="Sick day"->leave ; 2026.01.09!N14="Shutdown"->shutdown ; 2026.01.09!R14="Christmas Day"->holiday
+exit=0
+
+## (3) the WP4-RECHECK-B3 correctness probe on the final export (probe-correct.mjs.txt)
+2026-10-06T18:32:52Z
+$ EXPORT=<task>/final WORK=<task>/run/correct node probes/correct.mjs   (the recheck's correctness probe)
+PASS decode once: text &amp;amp; -> &amp; | "&amp;"
+PASS decode once: text &amp;lt; -> &lt; | "&lt;"
+PASS decode once: text &#38;#65; -> &#65; | "&#65;"
+PASS decode once: text &#x26;amp; -> &amp; | "&amp;"
+PASS CDATA is not decoded: &amp; stays &amp; | "&amp;"
+PASS segments split by a comment are not joined into a reference (&am + p; stays literal, decoded never) | "&amp;"
+PASS decode once: <v> &amp;quot; -> &quot; | "&quot;"
+PASS decode once: formula "&amp;amp;"&amp;A1 -> "&amp;"&A1 | "\"&amp;\"&A1"
+PASS decode once: shared string &amp;amp; -> &amp; | "&amp;"
+PASS rich runs "&amp;" + "lt;" stay two literal pieces: &lt; (no second decode after joining) | "&lt;"
+PASS decode once: kept attribute r="&#75;1" -> K1, text &#x1F600;&amp;#x1F600; -> U+1F600 + &#x1F600; | "😀&#x1F600;"
+PASS decode once: sheet name S&amp;amp;T -> S&amp;T; relationship id r&amp;Id matched once | "S&amp;T" worksheet
+PASS decode once through the mapping: label &amp;amp;Worked -> &amp;Worked, unknown | "&amp;Worked"
+PASS a kept attribute of exactly 255 characters is accepted | accepted
+PASS a kept attribute of 256 characters refuses the package (attribute_too_large), nothing is cut | attribute_too_large
+PASS the cap counts characters as written: 51 x &amp; (255 written) accepted, 51 decoded & kept whole | accepted
+PASS an unkept attribute of 1 000 characters is not capped | accepted
+PASS a 255-character written sheet name (255) decodes whole (59 characters) and maps to payroll 2026-05-29 | 2026-05-29 name length 59
+PASS the same sheet name with one more written character is refused, not cut to a payroll date | attribute_too_large
+PASS R-B2-1: both holidays are listed with the same 200-character cut name | 200/false 200/true
+PASS R-B2-1: the label matching the fixed holiday is not floating | Holiday false
+PASS R-B2-1: the label matching the floating holiday is floating and needs a decision | Holiday true
+PASS R-B2-1: the fixed holiday day needs no floating decision | []
+PASS R-B2-1: the stored report keeps the same flags
+PASS R-B2-2: encoding "ISO-8859-1" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-8" accepted | accepted
+PASS R-B2-2: encoding "utf-8" accepted | accepted
+PASS R-B2-2: encoding "UTF-16" accepted | accepted
+PASS R-B2-2: encoding "utf-16le" accepted | accepted
+PASS R-B2-2: encoding "UTF-16BE" accepted | accepted
+PASS R-B2-2: no declared encoding accepted | accepted
+LENIENT leading white space before an ISO-8859-1 declaration: accepted (read as UTF-8)
+LENIENT a "?" inside the version before an ISO-8859-1 encoding: accepted (read as UTF-8)
+LENIENT mismatched quotes around ISO-8859-1: accepted (read as UTF-8)
+correctness: 75 PASS, 0 FAIL
+exit=0

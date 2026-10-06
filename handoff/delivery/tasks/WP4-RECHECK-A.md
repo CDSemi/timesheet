@@ -146,6 +146,34 @@ Report: `handoff/delivery/WP4_RECHECK_A3.md` and `.vi.md`. Evidence:
 `handoff/delivery/evidence/WP4-RECHECK-A3/`. Append the attempt-3 results after the
 attempt-2 results.
 
+## Attempt 4 (coordinator note): area-A delta recheck on the round-4 freeze
+
+Attempt 3 passed on 972ccda. WP4-FIXB4 then changed area-B parsing and may change the
+upload ceiling. It may touch the route limit in `src/server/app.ts` or
+`routes/imports.ts`, and the limit sentences in docs/03, docs/07 and docs/11.
+
+Who runs it: a fresh auditor, digest-bound. The auditor must not be:
+- a659b8cbd52722f18, aabafcca9efc225db or a9f9312409bbc8109;
+- a WP4 author;
+- the WP4-RECHECK-B4 auditor.
+
+Target: `reviewed_commit` = the WP4-REGATE4 `freeze_commit`.
+
+Scope:
+1. **Delta since 972ccda.** List every non-handoff path that changed.
+   - For each path that touches area-A runtime, such as `app.ts`, check that only the
+     import route limit changed and that the other routes keep their limits.
+   - The docs/11 changes, if any, must be limited to the import ceiling.
+2. **Rerun** `npm ci` and `npm run verify`. Read the WP4-REGATE4 drill result.
+3. **Earlier conclusions.** Confirm the conclusions of attempts 1–3 still apply.
+
+Runtime settings:
+- folder `D:\.claude-tmp\timesheet\WP4-RECHECK-A4`;
+- **never feed anything to python or node through stdin.**
+
+Report: `handoff/delivery/WP4_RECHECK_A4.md` and `.vi.md`. Evidence:
+`handoff/delivery/evidence/WP4-RECHECK-A4/`.
+
 ## Results
 
 ### Auditor result (attempt 1): decision PASS
@@ -258,3 +286,70 @@ authored nothing in WP4 and shared no file with WP4-RECHECK-B2.
 - The no-cache build used Compose project `ts-wp4-rca2` (build only); both images were removed by name. No container,
   volume, network or image of `ts-wp4-rca2` is left (`19`).
 - None of this audit's processes is left running.
+
+### Auditor result (attempt 3): decision PASS
+
+Self-reported model: claude-opus-5-5 (board agent `a9f9312409bbc8109` as recorded by the coordinator; effort not
+observable). Date 2026-10-06, 17:00 to about 17:25 UTC. Not committed. Report: [WP4_RECHECK_A3](../WP4_RECHECK_A3.md)
+(VI: `WP4_RECHECK_A3.vi.md`). Evidence: `handoff/delivery/evidence/WP4-RECHECK-A3/` (index `00-README.txt`; masked, LF).
+`WP4_RECHECK_A2.md`, `WP4_RECHECK_A.md` and their evidence are unchanged.
+
+**Target and digest.** Reviewed commit `972ccda6409a7521a008c55c35a5b5cf416daf1e` (= `origin/main`, the WP4-REGATE3
+`freeze_commit`; parent `cc34e7f`).
+- HEAD and the digest were recorded before (17:00 UTC), after the checks (17:10 UTC) and again after the reports were
+  written (`99b`).
+- Both forms were used in the repository (ls-tree and `scripts/source-digest.mjs`). The same digest was computed on the
+  `git archive` export, whose tree `b0545cec…` equals the freeze tree.
+- The digest was `635f909da72873548d93407fb3d250806a7e1c29f101cb32e91234c2c9ec3f7b` (775 files) every time, equal to the
+  gate digest. No non-handoff file changed.
+
+**Separation.**
+- The delta authors are WP4-FIXB3 `a25ba7423ae0846ed` (opus, expert), committer `aaeffec9c7edac640` and verifier
+  `aecfa5a35b65989fd` (both sonnet). The strongest author model is opus, so the reviewer is not weaker.
+- The reviewer is none of `a659b8cbd52722f18`, `aabafcca9efc225db`, `af8b9184c8adf6eb0` or the WP4-RECHECK-B3 auditor
+  `a0e015d15e6c5c5fb`.
+- It authored nothing in WP4 and shared no file with WP4-RECHECK-B3.
+
+| # | Attempt-3 scope item | Result | Evidence |
+|---|---|---|---|
+| 1 | Delta since cc34e7f | 148 paths: 141 under `handoff/`, 7 outside it, all FIXB3 owned (`xlsxReader.ts`, `templateMapping.ts`, `workbookImport.ts`, 2 workbook tests, docs/07 EN and VI). No area-A runtime, image or ops path changed; each is blob-identical to `cc34e7f` and `0f7fba2`. Outside area B, only `finalization`, `otLeave` and `timesheetCommands` import a changed module, and only `importedPeriodError` and `isImportedTimesheet`, which are identical. | `10`, `11` |
+| 1 | Package files | `package.json`, `package-lock.json` and `.npmrc` are unchanged (`git diff --quiet` exit 0, same blob ids). | `10`, `11` |
+| 1 | docs/07 | Line 46 only, EN and VI. The word diff changes two sentences: the reader refusal list (8 MiB, 150,000, kept attribute values 255, declared encoding) and the budget sentence (measured worst case about 290 ms / +89 MiB; the 500 ms / 150 MiB claim unchanged). The numbers equal the code; no operations text changed. | `11` |
+| 2 | `npm ci`, verify | `npm ci`: exit 0, 161 packages, no deprecation line, `npm audit --omit=dev` 0. `npm run verify` with `DATA_DIR`/`DATABASE_PATH` exported and deprecation tracing: exit 0, 76 files / 1755 tests, the same 41 smoke checks as attempt 2, no deprecation line, the exported `DATA_DIR` stays empty. | `12`, `13`, `13b` |
+| 3 | REGATE3 drill | Read: exit 0, 208 PASS (33/31/57/35/27/23), 0 FAIL; check names identical to attempt 2's drill (stage 1 maps and 404, stage 2 backup with import sources, stage 3 restore, pause and R-A5 release, stages 4-5). Not rerun (see "Not run"). The Dockerfile build-stage commands without Docker give `dist/` 116 files, 0 `*.map`, 0 `sourceMappingURL`, and the same bundle the REGATE3 container served. | `14`, `15` |
+| 4 | Earlier conclusions | All still apply. Attempt-1 probes rerun unchanged: P2 31, P8 8, P4 16, P7 23, P3 10, R-A1 24 and A-03 15 PASS, check lines identical to attempt 2. Area-A code is byte-identical to `0f7fba2`. Changed counts: digest, tests 1750 to 1755 (area B). | `20`-`27` |
+
+**Findings:** none.
+
+**Risks (non-blocking):**
+- R-RA1 (Info), unchanged: 6 of 12 same-second pairs this run, 3 of which removed the just-printed backup.
+- R-RA2 (Low), unchanged.
+- R-RA3 (Info): not re-measured, because the dependencies are unchanged (attempt 2: 560).
+- R-RA4 (Info), unchanged.
+- R-RA5 (Info), still applies. The REGATE3 image build took 8 s with unchanged package files, so its `npm ci` layers were
+  very likely cached; this is an inference.
+- R-RA6 (Info, new): the full `npm audit` reports 1 high (GHSA-68fv-2mgg-jv7q) in `source-map-js` 1.2.1. It is a dev-only
+  dependency (`vite` → `postcss`, lock `"dev": true`), not in the image, and the lock is unchanged.
+- R-RA7 (Info, new): the drill's bundle check labels the decoded string length "bytes" (454,172 against 454,210 bytes).
+- Wording nit in docs/11 section 4, unchanged.
+
+**Not run:**
+- The container drill and the image layer scan, by this audit. The brief asks to read the REGATE3 result. The image
+  inputs and all area-A code are unchanged, and the build stage was reproduced without Docker. Running the drill would
+  also have loaded the host during WP4-RECHECK-B3's timing runs. No Docker command ran, and `ts-wp4-rca3` was never
+  created.
+- NAS and native arm64: NOT VERIFIED.
+- e2e: not rerun (REGATE3: 145 passed, 5 skipped).
+- P1, P1b, P5, P6 and P9: not rerun as separate probes, because their code is unchanged.
+- The area-B correctness of FIXB3 belongs to WP4-RECHECK-B3.
+
+**Validators:** `validate_package.py --preflight` (workflow Python): exit 0, PASS, 80 translation pairs (`28`).
+`precommit-check.mjs` over this task's files, staged in a private git dir outside the repository and run last: exit 0,
+0 findings on every run (31 files in the last one) (`29`).
+
+**Procedure:**
+- `11` keeps two wrong first attempts of read-only checks (an awk range that missed an exported const, and a wrong docs/10
+  file name), each followed by its corrected rerun.
+- No probe failed, and no command was rerun after a failure.
+- No `/dev/null` redirect, stdin script, PID kill or recursive removal was used.
+- Nothing of this audit is left running.

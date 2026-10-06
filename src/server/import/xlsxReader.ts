@@ -1,5 +1,4 @@
-import { crc32 } from 'node:zlib';
-import { Inflate } from 'fflate';
+import { crc32, inflateRawSync } from 'node:zlib';
 
 /*
  * Safe, read-only .xlsx reader (WP4-T08). The input is untrusted: the reader never evaluates a formula, never
@@ -9,8 +8,8 @@ import { Inflate } from 'fflate';
  * Safety rules (each is covered by a test in tests/integration/workbook-reader.test.ts):
  *  - the ZIP central directory is the only authority for the entry list; the compressed size, the entry count and
  *    every declared inflated size are checked before any byte is inflated;
- *  - inflating is streamed in small steps and counted, so a header that lies about the inflated size cannot make
- *    the reader allocate more than the per-entry limit (plus one step) before it stops;
+ *  - inflating is one native call whose output is counted, so a header that lies about the inflated size cannot make
+ *    the reader inflate or allocate more than the per-entry cap before it stops;
  *  - every inflated entry must match its CRC-32 and declared size;
  *  - `vbaProject.bin`, macro sheets and macro content types are rejected;
  *  - DOCTYPE and ENTITY declarations are rejected and entities are never expanded; the five predefined entities and
@@ -18,7 +17,8 @@ import { Inflate } from 'fflate';
  *  - external links are listed and ignored; only the workbook, its relationships, the shared strings and the
  *    worksheets are parsed;
  *  - parsing has a stated worst-case cost (WP4-FIXB2, recheck finding RB-01, which reopened audit finding WP4-B-01;
- *    the budget and its measurements are next to `DEFAULT_READER_LIMITS`). No general XML parser builds a tree: the
+ *    the budget, its bound derived from the limits (WP4-FIXB4) and its measurements are next to
+ *    `DEFAULT_READER_LIMITS`). No general XML parser builds a tree: the
  *    XML is read by the bounded scanner below, in one pass over the decoded text of a part. A part whose decoded XML
  *    is over the per-part size limit is refused before it is inflated or decoded, and the XML parsed per package is
  *    capped. The scanner counts every markup opening (every `<` that does not start an end tag, whatever follows it:
@@ -82,44 +82,58 @@ export type ReaderLimits = {
 
 /*
  * The parse budget (WP4-FIXB2). Reading any package the reader accepts, or refuses after reading, must take at most
- * 500 ms of event-loop time and add at most 150 MiB of memory on the reference host (Node 24 on an x64 developer
- * workstation, one preview at a time). Why: a preview runs synchronously on the single event loop of a small NAS that
- * also serves every other request, so half a second is the longest a hostile upload may stall the others (a NAS CPU
- * three to four times slower makes it 1.5 to 2 s, a pause, not a hang); and a small NAS has 1 to 2 GiB of memory for
- * its own system and every container, so a preview may add at most 150 MiB to what the server already uses (a Node
+ * 500 ms of event-loop time and add at most 150 MiB of memory on the reference host (Node 24.21 on a Windows 11 x64
+ * developer workstation, one preview at a time). Why: a preview runs synchronously on the single event loop of a small
+ * NAS that also serves every other request, so half a second is the longest a hostile upload may stall the others (a
+ * NAS CPU three to four times slower makes it 1.5 to 2 s, a pause, not a hang); and a small NAS has 1 to 2 GiB of memory
+ * for its own system and every container, so a preview may add at most 150 MiB to what the server already uses (a Node
  * process with the reader loaded starts at about 66 MiB).
  *
- * How the limits keep it: the work is linear in the XML bytes allowed (4 MiB a part, 8 MiB a package) with a small
- * constant (every value is decoded once, and a run of `&` costs no more than its length), and the memory is bounded by
- * the counted limits (every markup opening, attribute and kept cell, and kept attribute values of at most 255
- * characters), not by the shape of the XML: kept values are own copies, so no decoded part outlives its scan.
+ * The bound is derived from the limits (WP4-FIXB4, recheck finding WP4-RB3-01), not claimed from searched shapes. The
+ * work is linear: each byte of a parsed part is inflated once (one native call into one buffer), decoded once and
+ * scanned once; each markup opening, attribute and kept value costs a bounded amount; and the memory follows the same
+ * counts, because kept values are own copies and no decoded part outlives its scan. The cost of each kind of unit was
+ * measured on the reference host: 61 unit families (skipped bytes, kept text plain and dense with references, markup
+ * openings, attributes, kept cells and attributes, values, formulas, shared strings, relationships, content types,
+ * rows), compressible and incompressible, in one-byte and two-byte parts, each at half and all of the limits, five
+ * fresh processes each. Prices that cover every measured unit (linear-programming duality: then no mix of units
+ * inside the limits costs more) give, for X bytes of XML, O markup openings and A attributes in a package:
  *
- * Measured worst case (WP4-FIXB3: the 210 earlier probe and recheck shapes, plus a systematic search that pushes every
- * limit to its maximum together with the costliest decode paths, two-byte text, kept values in every part and the
- * mapped sheet roles; the worst shapes repeated five times): about 290 ms in the slowest single run (about 210 ms over
- * the repeats), for 150 000 kept cells over 8 MiB of parts, and +89 MiB for the same cells in parts that decode as
- * two-byte strings: 58 % and 60 % of the budget. The recheck's WP4-RB2-01 shapes, 610 ms and +158 MiB before, are now
- * refused: a 65 000-character kept attribute in about 25 ms, four 4 MiB parts of 200 000 cells at the package XML
- * total. The tracked template takes about 10 ms and +11 MiB, 12 dated sheets about 25 ms and +13 MiB, 61 dated sheets
- * about 60 ms and +32 MiB.
+ *   time   <= 40 ms  + 14.8 ns x X + 339 ns x O + 0 x A
+ *   memory <= 15 MiB + 13.3 B  x X + 428 B  x O + 0 x A
+ *
+ * (An attribute costs less than the bytes it needs, so it adds no price of its own.) At the limits below, X = 3 MiB
+ * and O = 100 000, that is about 121 ms and +95 MiB: 24 % and 63 % of the budget. At the earlier ceilings (8 MiB and
+ * 150 000) the memory bound was about +182 MiB, over the budget, so the ceilings were lowered to these; the upload
+ * ceiling of 2 MiB binds before the XML total for incompressible content.
+ *
+ * Measured confirmation (WP4-FIXB4): 23 worst constructions at these ceilings (an incompressible part at the part limit
+ * for each costly unit, incompressible content at the XML, opening, attribute and upload ceilings, the bound's own
+ * worst mixes for time and for memory, the recheck's costliest shapes rebuilt here; five runs each) took at most
+ * 108 ms and +63 MiB in the medians, at most 114 ms and +72 MiB in single runs bar one outlier of 149 ms (the same
+ * shape: at most 84 ms over nine more runs); the whole import service call at most 108 ms and +46 MiB. All 210 earlier
+ * probe and recheck shapes, the WP4-FIXB3 search and the WP4-RECHECK-B3 catalogues, at their own sizes and rebuilt at
+ * these ceilings, stay at or under 93 ms and +56 MiB. The tracked template takes about 10 ms and +8 MiB, 12 dated
+ * sheets about 22 ms and +13 MiB, 26 (a year) about 31 ms and +14 MiB, 61 dated sheets about 55 ms and +24 MiB.
  *
  * Realistic sizes (synthetic workbooks cloned from the tracked template; the largest part is the template's own
  * 29 KB Timesheet sheet with 1 379 markup openings, 1 720 attributes, 529 cells and 353 rows; no element has more than
  * 9 attributes, no start tag is longer than 643 characters and no kept attribute value is longer than 81, a relationship
- * type): 12 dated sheets are 325 KB of XML, 12 500 openings and 21 000 attributes; 61 dated sheets (64 sheets, the sheet
- * limit) are 1.4 MB, 53 400 openings and 92 400 attributes. The limits below leave these a margin: openings 72x a part
- * and 2.8x the largest package, attributes 116x and 5.4x, start-tag length 100x, kept attribute values 3x, XML bytes
- * 142x a part and 6x a package, sheet names 3x Excel's own limit of 31 characters.
+ * type): 12 dated sheets are 325 KB of XML, 12 500 openings, 21 000 attributes and an 86 KB upload; 26 (a year) a
+ * 153 KB upload; 61 dated sheets (64 sheets, the sheet limit; three years of biweekly sheets, 78, are over it) are
+ * 1.4 MB, 53 400 openings, 92 400 attributes and a 328 KB upload. The limits below leave these a margin: the upload
+ * 6x the largest package, XML bytes 36x a part and 2.2x a package, openings 72x a part and 1.9x a package, attributes
+ * 116x and 5.4x, start-tag length 100x, kept attribute values 3x, sheet names 3x Excel's own limit of 31 characters.
  */
 export const DEFAULT_READER_LIMITS: Readonly<ReaderLimits> = {
-  maxCompressedBytes: 8 * 1024 * 1024,
+  maxCompressedBytes: 2 * 1024 * 1024,
   maxEntries: 256,
   maxEntryInflatedBytes: 16 * 1024 * 1024,
   maxTotalInflatedBytes: 48 * 1024 * 1024,
-  maxPartXmlBytes: 4 * 1024 * 1024,
-  maxTotalXmlBytes: 8 * 1024 * 1024,
+  maxPartXmlBytes: 1024 * 1024,
+  maxTotalXmlBytes: 3 * 1024 * 1024,
   maxPartElements: 100_000,
-  maxTotalElements: 150_000,
+  maxTotalElements: 100_000,
   maxAttributesPerElement: 64,
   maxPartAttributes: 200_000,
   maxTotalAttributes: 500_000,
@@ -221,7 +235,6 @@ export type ReadWorkbook = {
 /** Only the content types, workbook, relationships, shared strings and worksheets are ever inflated. */
 const SHARED_STRINGS_PART = 'xl/sharedStrings.xml';
 
-const INFLATE_STEP = 4096;
 const EOCD_SIGNATURE = 0x06054b50;
 const CENTRAL_SIGNATURE = 0x02014b50;
 const LOCAL_SIGNATURE = 0x04034b50;
@@ -350,44 +363,36 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
   }
   const compressed = bytes.subarray(start, end);
 
-  // The declared size is only a claim; the cap that counts is the real output, stopped as soon as it is exceeded. The
-  // output goes straight into one buffer of the declared size (WP4-FIXB3: no list of chunks to copy again), and
-  // whatever does not fit is only counted: within the cap it is an integrity error, over it the matching limit.
+  // The declared size is only a claim; the cap that counts is the real output, stopped as soon as it is exceeded.
+  // WP4-FIXB4 (recheck finding WP4-RB3-01): one native inflate call (zlib) instead of fflate's streaming inflate in
+  // 4 KiB steps, whose cost per byte was about seven times higher on content that does not compress. Its output
+  // buffer is allocated once at the declared size (plus one byte, so an honest entry fills one buffer and a lying one
+  // is seen), and zlib stops with ERR_BUFFER_TOO_LARGE as soon as the real output passes the cap: the work is linear in
+  // at most the cap, whatever the header says.
   const cap = Math.min(limits.maxEntryInflatedBytes, limits.maxPartXmlBytes, budget.left, budget.xmlLeft);
-  const data = new Uint8Array(Math.min(entry.uncompressedSize, cap));
-  let total = 0;
+  let data: Uint8Array;
   let overflow = false;
   if (entry.method === 0) {
-    total = compressed.length;
-    overflow = total > cap;
-    if (total <= data.length) data.set(compressed);
+    data = compressed;
+    overflow = data.length > cap;
   } else {
-    const inflater = new Inflate((chunk) => {
-      if (total + chunk.length <= data.length) data.set(chunk, total);
-      total += chunk.length;
-      if (total > cap) overflow = true;
-    });
     try {
-      for (let offset = 0; offset < compressed.length && !overflow; offset += INFLATE_STEP) {
-        const stop = Math.min(offset + INFLATE_STEP, compressed.length);
-        inflater.push(compressed.subarray(offset, stop), stop === compressed.length);
-      }
-      if (compressed.length === 0) inflater.push(compressed, true);
-    } catch {
-      reject('malformed_zip', 'ZIP entry could not be inflated');
+      data = inflateRawSync(compressed, { chunkSize: Math.max(64, Math.min(entry.uncompressedSize, cap) + 1), maxOutputLength: Math.max(1, cap) });
+      overflow = data.length > cap;
+    } catch (error) {
+      if ((error as { code?: unknown }).code !== 'ERR_BUFFER_TOO_LARGE') reject('malformed_zip', 'ZIP entry could not be inflated');
+      data = new Uint8Array(0);
+      overflow = true;
     }
   }
   if (overflow) {
-    if (total > limits.maxEntryInflatedBytes) {
-      reject('entry_too_large', `An entry inflates beyond ${limits.maxEntryInflatedBytes} bytes`);
-    }
-    if (total > limits.maxPartXmlBytes) {
-      reject('part_too_large', `A package part inflates beyond ${limits.maxPartXmlBytes} bytes of XML`);
-    }
-    if (total > budget.left) reject('total_too_large', `Entries inflate beyond ${limits.maxTotalInflatedBytes} bytes`);
+    // The output passed the smallest of these caps; name that one (the first, when several are equal).
+    if (cap === limits.maxEntryInflatedBytes) reject('entry_too_large', `An entry inflates beyond ${limits.maxEntryInflatedBytes} bytes`);
+    if (cap === limits.maxPartXmlBytes) reject('part_too_large', `A package part inflates beyond ${limits.maxPartXmlBytes} bytes of XML`);
+    if (cap === budget.left) reject('total_too_large', `Entries inflate beyond ${limits.maxTotalInflatedBytes} bytes`);
     reject('total_xml_too_large', `The package holds more than ${limits.maxTotalXmlBytes} bytes of XML`);
   }
-  if (total !== entry.uncompressedSize || total !== data.length || (crc32(data) >>> 0) !== entry.crc) {
+  if (data.length !== entry.uncompressedSize || (crc32(data) >>> 0) !== entry.crc) {
     reject('entry_integrity', 'ZIP entry size or checksum does not match its header');
   }
   budget.left -= data.length;
@@ -399,9 +404,29 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
 // XML
 
 function decodeXmlBytes(data: Uint8Array): string {
-  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) return new TextDecoder('utf-16le').decode(data.subarray(2));
-  if (data.length >= 2 && data[0] === 0xfe && data[1] === 0xff) return new TextDecoder('utf-16be').decode(data.subarray(2));
-  return utf8.decode(data);
+  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) return decodeFlat('utf-16le', data.subarray(2));
+  if (data.length >= 2 && data[0] === 0xfe && data[1] === 0xff) return decodeFlat('utf-16be', data.subarray(2));
+  return decodeFlat('utf-8', data);
+}
+
+/** Bytes decoded at a time when a part is longer than this (see `decodeFlat`). */
+const DECODE_STEP = 512 * 1024;
+
+/**
+ * The decoded text of a part, as one flat string. Node hands back a decoded string of about 1 MB or more as an
+ * external string, and the scanner reads such a string about twice as slowly, a step in the cost above that size
+ * (WP4-FIXB4). A longer part is therefore decoded in steps (a streaming decoder, so a character split between two
+ * steps decodes as in one call) and the pieces are joined into one ordinary string.
+ */
+function decodeFlat(encoding: 'utf-8' | 'utf-16le' | 'utf-16be', data: Uint8Array): string {
+  if (data.length <= DECODE_STEP) return encoding === 'utf-8' ? utf8.decode(data) : new TextDecoder(encoding).decode(data);
+  const decoder = new TextDecoder(encoding);
+  const pieces: string[] = [];
+  for (let start = 0; start < data.length; start += DECODE_STEP) {
+    pieces.push(decoder.decode(data.subarray(start, start + DECODE_STEP), { stream: true }));
+  }
+  pieces.push(decoder.decode());
+  return pieces.join('');
 }
 
 const PREDEFINED: ReadonlyArray<readonly [name: string, code: number]> = [
@@ -443,6 +468,8 @@ function referenceCode(text: string, amp: number, semi: number): number {
 
 /** The longest reference decoded, from `&` to `;` (`&#1234567;`, `&#x10FFFF;`). */
 const LONGEST_REFERENCE = 10;
+/** Text up to this length is decoded by concatenation, longer text into one buffer. */
+const SHORT_TEXT = 256;
 
 /**
  * Decode the five predefined entities and numeric references in one pass; any other `&name;` stays literal. Every
@@ -455,7 +482,11 @@ function decodeXml(text: string): string {
   if (amp === -1) return text;
   let semi = text.indexOf(';', amp + 1);
   if (semi === -1) return text;
-  let out: Uint16Array | null = null; // a reference is at least 4 characters and decodes to at most 2
+  // A short text (a kept attribute value, a cell value) is built by concatenation; a long one in one buffer, a
+  // reference being at least 4 characters and decoding to at most 2 (WP4-FIXB4: no buffer for every short value).
+  const short = text.length <= SHORT_TEXT;
+  let built = '';
+  let out: Uint16Array | null = null;
   let length = 0;
   let from = 0;
   while (amp !== -1) {
@@ -473,17 +504,23 @@ function decodeXml(text: string): string {
       amp = text.indexOf('&', amp + 1);
       continue;
     }
-    out ??= new Uint16Array(text.length);
-    for (let at = from; at < amp; at += 1) out[length++] = text.charCodeAt(at);
-    if (code > 0xffff) {
-      out[length++] = 0xd800 + ((code - 0x10000) >> 10);
-      out[length++] = 0xdc00 + ((code - 0x10000) & 0x3ff);
+    if (short) {
+      built += text.slice(from, amp) + String.fromCodePoint(code);
     } else {
-      out[length++] = code;
+      out ??= new Uint16Array(text.length);
+      for (let at = from; at < amp; at += 1) out[length++] = text.charCodeAt(at);
+      if (code > 0xffff) {
+        out[length++] = 0xd800 + ((code - 0x10000) >> 10);
+        out[length++] = 0xdc00 + ((code - 0x10000) & 0x3ff);
+      } else {
+        out[length++] = code;
+      }
     }
     from = semi + 1;
     amp = text.indexOf('&', from);
   }
+  if (from === 0) return text;
+  if (short) return built + text.slice(from);
   if (out === null) return text;
   for (let at = from; at < text.length; at += 1) out[length++] = text.charCodeAt(at);
   const chunks: string[] = [];
@@ -493,7 +530,7 @@ function decodeXml(text: string): string {
 
 /**
  * A copy of `value` that does not keep alive the string it was cut from (WP4-FIXB3). V8 represents a slice of 13 or
- * more characters as a view into its parent, here a whole decoded part of up to 4 MiB (two bytes a character when it
+ * more characters as a view into its parent, here a whole decoded part of up to 1 MiB (two bytes a character when it
  * holds one non-Latin-1 character), so one kept value per part used to keep every part in memory. Appending a
  * character and slicing it off again makes V8 flatten the value into a string of its own first; shorter slices are
  * copies already.
@@ -606,6 +643,18 @@ function sameText(text: string, a: number, b: number, length: number): boolean {
   return true;
 }
 
+/** Notes where a kept attribute's value stands, as `[name, start, end, ...]`: a repeated name keeps its last place. */
+function notePending(pending: Array<string | number>, name: string, start: number, end: number): void {
+  for (let index = 0; index < pending.length; index += 3) {
+    if (pending[index] === name) {
+      pending[index + 1] = start;
+      pending[index + 2] = end;
+      return;
+    }
+  }
+  pending.push(name, start, end);
+}
+
 function setAttribute(node: XmlNode, name: string, value: string): void {
   const list = (node.attributes ??= []);
   for (let index = 0; index < list.length; index += 2) {
@@ -640,6 +689,8 @@ type Frame = {
  */
 function scanXml(text: string, schema: PartSchema, limits: ReaderLimits, budget: Budget, handlers: StreamHandlers): XmlNode | null {
   const frames: Frame[] = [];
+  /** Kept attributes of the current start tag, `[name, start, end, ...]`; reused for every tag. */
+  const pending: Array<string | number> = [];
   let depth = 0;
   let root: XmlNode | null = null;
   let rootSeen = false;
@@ -783,15 +834,23 @@ function scanXml(text: string, schema: PartSchema, limits: ReaderLimits, budget:
       const declaration = text.startsWith('xmlns', attributeStart) && (attributeEnd - attributeStart === 5 || text.charCodeAt(attributeStart + 5) === 0x3a);
       const kept = node === null || declaration ? undefined : keptName(text, attributeLocal, attributeEnd, schema.attributes);
       if (node !== null && kept !== undefined) {
-        // A kept value is short in any real part; it is decoded here, once, and nothing decodes it again (WP4-FIXB3).
+        // A kept value is short in any real part. Only where it stands is noted here; the last occurrence of each name
+        // (the one that counts) is decoded once when the tag ends, so repeating a kept name costs no decoding (WP4-FIXB4).
         if (valueEnd - (at + 1) > limits.maxKeptAttributeLength) {
           reject('attribute_too_large', `A kept attribute value is longer than ${limits.maxKeptAttributeLength} characters`);
         }
-        setAttribute(node, kept, ownCopy(decodeXml(text.slice(at + 1, valueEnd))));
+        notePending(pending, kept, at + 1, valueEnd);
       }
       at = valueEnd + 1;
     }
     if (at - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);
+    if (node !== null) {
+      // Decoded here, once, and nothing decodes the value again (WP4-FIXB3).
+      for (let index = 0; index < pending.length; index += 3) {
+        setAttribute(node, pending[index] as string, ownCopy(decodeXml(text.slice(pending[index + 1] as number, pending[index + 2] as number))));
+      }
+      pending.length = 0;
+    }
     if (streamed && node !== null) {
       handlers.opened?.(node);
       if (selfClosing) handlers.closed?.(node);
@@ -915,13 +974,21 @@ const MAX_ID_LENGTH = 255;
 function readWorksheet(name: string, data: Uint8Array, shared: readonly string[], limits: ReaderLimits, budget: Budget): Map<string, ReadCell> {
   const cells = new Map<string, ReadCell>();
   const sharedFormulas = new Map<string, string>();
+  /** `sheet!`, made once per sheet, so each cell's provenance is one join of two strings. */
+  const prefix = ownCopy(`${name}!`);
   let rowNumber = 0;
   let columnIndex = 0;
   const readCell = (cell: XmlNode): void => {
     const declared = attr(cell, 'r');
     let address: string;
-    const match = declared === undefined ? null : CELL_ADDRESS.exec(declared.toUpperCase());
-    if (match) {
+    // An address already written in upper case (every real one) is used as it is: no copy, no match array (WP4-FIXB4).
+    const canonical = declared !== undefined && CELL_ADDRESS.test(declared);
+    const match = canonical || declared === undefined ? null : CELL_ADDRESS.exec(declared.toUpperCase());
+    if (canonical) {
+      address = declared;
+      columnIndex = 0;
+      for (let at = 0; declared.charCodeAt(at) >= 65; at += 1) columnIndex = columnIndex * 26 + (declared.charCodeAt(at) - 64);
+    } else if (match) {
       address = `${match[1]}${match[2]}`;
       columnIndex = columnNumber(match[1] ?? 'A');
     } else {
@@ -953,7 +1020,7 @@ function readWorksheet(name: string, data: Uint8Array, shared: readonly string[]
     cells.set(address, {
       sheet: name,
       address,
-      provenance: `${name}!${address}`,
+      provenance: prefix + address,
       type: isFormula ? 'blank' : stored.type,
       value: isFormula ? null : stored.value,
       formula,

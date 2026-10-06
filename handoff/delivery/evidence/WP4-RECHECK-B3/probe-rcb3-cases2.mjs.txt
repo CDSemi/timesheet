@@ -1,0 +1,123 @@
+// WP4-RECHECK-B3 independent worst-case catalogue, round 2 (auditor's own; synthetic data only): refinements around
+// the costliest shapes of round 1 (kept-attribute decode floods, formulas with references on mapped sheets) and
+// combinations that spend the attribute, opening and byte budgets together. Same limits and stats as round 1.
+import { countXml, dated, H, pkg } from './rcb3-cases.mjs';
+
+const { sheet, sheetsFor, DATED, keptAttrCell, WS_HEAD, WS_TAIL, NS, RNS, WS_TYPE, PART_LIMIT, TOTAL_OPENINGS, PART_ATTRIBUTES, TOTAL_ATTRIBUTES, FIXED_OPENINGS, FIXED_ATTRIBUTES, bytesOf, strToU8, zipSync } = H;
+
+export const CASES = {};
+const def = (name, build) => { CASES[name] = build; };
+
+/** Deterministic pseudo-random letters (mulberry32), so a package does not compress (upload near its real XML size). */
+function letters(seed) {
+  let a = seed >>> 0;
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  return (n) => {
+    let s = '';
+    for (let i = 0; i < n; i += 1) {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      s += abc[((t ^ (t >>> 14)) >>> 0) % 62];
+    }
+    return s;
+  };
+}
+
+// A2: decoded length around the own-copy threshold, more references per value, random (incompressible) values
+const A2 = {
+  ref13: () => () => `&#65;${'B'.repeat(12)}`,
+  ref20: () => () => `&#65;${'B'.repeat(19)}`,
+  ref40: () => () => `&#65;${'B'.repeat(39)}`,
+  two14: () => () => `&#65;&#66;${'C'.repeat(12)}`,
+  rand14: () => { const r = letters(7); return () => `&#65;${r(13)}`; },
+  rand13amp: () => { const r = letters(11); return () => `&amp;${r(12)}`; },
+};
+for (const [key, make] of Object.entries(A2)) {
+  for (const wide of [false, true]) {
+    def(`A2-${key}${wide ? '-wide' : ''} 64 kept attributes per kept cell (${key}), every budget at its limit, 3 dated sheets${wide ? ', two-byte parts' : ''}`, () => {
+      const value = make();
+      const unit = () => `<c${Array.from({ length: 64 }, (_, j) => ` ${['r', 't', 'si', 'x:r', 'y:t', 'z:si'][j % 6]}="${value()}"`).join('')}/>`;
+      return pkg({ sheets: sheetsFor(DATED(3), () => ({ unit, cost: { openings: 1, attributes: 64 }, perRow: 500, wide })) });
+    });
+  }
+}
+
+// F2: formulas with references, hits for both expressions, other lengths, other sheet sets (all two-byte parts)
+const F2 = {
+  amp60: (i) => `${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(7)}`,
+  amp100: (i) => `${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(12)}`,
+  amp140: (i) => `${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(17)}`,
+  hits: (i) => `${String(i).padStart(6, '0')}+8.5-TODAY()${'&amp;"a"'.repeat(10)}`,
+  plain100: (i) => `${String(i).padStart(6, '0')}${'"a"b'.repeat(24)}`,
+  rand100: (() => { const r = letters(5); return (i) => `${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}`; })(),
+};
+for (const [key, body] of Object.entries(F2)) {
+  for (const [sheetsKey, names] of Object.entries({ d2: DATED(2), d3: DATED(3), t: ['Timesheet', dated(0)] })) {
+    def(`F2-${key}-${sheetsKey}-wide the most distinct formulas (${key}) on ${names.join(', ')}, two-byte parts`, () => {
+      const unit = (i) => `<c><f>${body(i)}</f></c>`;
+      return pkg({ sheets: sheetsFor(names, () => ({ unit, cost: { openings: 2, attributes: 0 }, perRow: 2000, wide: true })) });
+    });
+  }
+}
+def('F2-cached-wide formulas with a kept str cached value each, 2 dated sheets, two-byte parts', () => {
+  const unit = (i) => `<c t="str"><f>${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(6)}</f><v>${String(i).padStart(6, '0')}${'v'.repeat(40)}</v></c>`;
+  return pkg({ sheets: sheetsFor(DATED(2), () => ({ unit, cost: { openings: 3, attributes: 1 }, perRow: 2000, wide: true })) });
+});
+
+// C2: kept children alive until their cell closes; the workbook part's kept nodes alive until the read ends
+for (const tag of ['f', 'v']) {
+  def(`C2-children-${tag}-wide one kept cell per part holding the most <${tag}> children with decoded text, two-byte parts`, () => {
+    const names = DATED(2);
+    const per = Math.min(99_990, Math.floor((TOTAL_OPENINGS - FIXED_OPENINGS(2)) / 2) - 10);
+    const child = (i) => `<${tag}>${String(i).padStart(6, '0')}${'&amp;x'.repeat(8)}</${tag}>`;
+    return pkg({ sheets: names.map((name) => ({ name, xml: `${WS_HEAD(true)}<row r="1"><c r="A1">${Array.from({ length: per - 4 }, (_, i) => child(i)).join('')}</c></row>${WS_TAIL}` })) });
+  });
+}
+def('C2-workbookPr-wide the workbook part holding the most kept workbookPr nodes with 4 kept 20-character attributes, then the most cells', () => {
+  const r = letters(3);
+  const nodes = [];
+  let bytes = 0;
+  for (let i = 0; i < 99_000 && bytes < PART_LIMIT - 8192; i += 1) {
+    const node = `<workbookPr date1904="${r(20)}" name="${r(20)}" id="${r(20)}" state="${r(20)}"/>`;
+    nodes.push(node);
+    bytes += bytesOf(node);
+  }
+  const entries = {};
+  entries['[Content_Types].xml'] = '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>';
+  entries['xl/workbook.xml'] = `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><!--ā-->${nodes.join('')}<sheets><sheet name="${dated(0)}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  entries['xl/_rels/workbook.xml.rels'] = `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${WS_TYPE}" Target="worksheets/sheet1.xml"/></Relationships>`;
+  const cellsLeft = Math.min(49_900, TOTAL_OPENINGS - nodes.length - 60);
+  const rows = [];
+  for (let k = 0, left = cellsLeft; left > 0; k += 1) { const n = Math.min(1999, left); rows.push(`<row r="${k + 1}">${'<c/>'.repeat(n)}</row>`); left -= n; }
+  entries['xl/worksheets/sheet1.xml'] = `${WS_HEAD(true)}${rows.join('')}${WS_TAIL}`;
+  const zippable = {};
+  for (const [name, data] of Object.entries(entries)) zippable[name] = [strToU8(data), { level: 6, mtime: 1_767_225_600_000 }];
+  const out = zipSync(zippable);
+  const parts = Object.values(entries).map((x) => ({ bytes: bytesOf(x), ...countXml(x) }));
+  out.stats = `xml ${parts.reduce((t, p) => t + p.bytes, 0)} B (max part ${Math.max(...parts.map((p) => p.bytes))}), openings ${parts.reduce((t, p) => t + p.openings, 0)} (max part ${Math.max(...parts.map((p) => p.openings))}), attributes ${parts.reduce((t, p) => t + p.attributes, 0)} (max part ${Math.max(...parts.map((p) => p.attributes))}), upload ${out.length} B`;
+  return out;
+});
+
+// X: combinations that spend the attribute, opening and byte budgets together (dated sheets, two-byte parts)
+def('X-attr-formula-wide 64 decoded kept attributes a cell up to the attribute limit, then the most &amp; formulas in the openings and bytes left', () => {
+  const names = DATED(3);
+  const attrCells = Math.floor((TOTAL_ATTRIBUTES - FIXED_ATTRIBUTES(3) - 400) / 64 / 3);
+  const unit = (i) => (i < attrCells ? keptAttrCell(64, '&#65;1') : `<c><f>${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(11)}</f></c>`);
+  return pkg({ sheets: sheetsFor(names, () => ({ unit, cost: (i) => (i < attrCells ? { openings: 1, attributes: 64 } : { openings: 2, attributes: 0 }), perRow: 500, wide: true })) });
+});
+def('X-attr14-formula-wide 64 decoded 14-character kept attributes a cell (half the bytes), then the most &amp; formulas', () => {
+  const names = DATED(3);
+  const attrCells = Math.floor(4_000_000 / (64 * 24) / 3);
+  const unit = (i) => (i < attrCells ? keptAttrCell(64, `&#65;${'B'.repeat(13)}`) : `<c><f>${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(11)}</f></c>`);
+  return pkg({ sheets: sheetsFor(names, () => ({ unit, cost: (i) => (i < attrCells ? { openings: 1, attributes: 64 } : { openings: 2, attributes: 0 }), perRow: 500, wide: true })) });
+});
+def('X-cells3-text-wide the most cells with decoded r, t, si, plus one kept text of the bytes left full of mixed references', () => {
+  const names = DATED(3);
+  const big = '&amp;a&zz;&#;&'.repeat(Math.floor(2_800_000 / 3 / 14));
+  const tail = `<row r="14"><c r="B14" t="inlineStr"><is><t>${big}</t></is></c></row>`;
+  return pkg({ sheets: sheetsFor(names, () => ({ unit: () => '<c r="&#65;1" t="&#65;" si="&#65;"/>', cost: { openings: 1, attributes: 3 }, perRow: 2000, wide: true, tail })) });
+});
+// unused helpers kept for symmetry with round 1
+void sheet; void keptAttrCell; void WS_TAIL; void PART_ATTRIBUTES; void TOTAL_ATTRIBUTES;

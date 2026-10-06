@@ -1,0 +1,35 @@
+// WP4-RECHECK-B3 differential compare (auditor's own): new (972ccda) against old (accepted WP4-T09, 13a258d). For the
+// reader cells, the preview and the stored report it reports raw byte equality, then equality after dropping the
+// additive finding field `sourceCount` (introduced by WP4-FIXB, accepted at WP4-REGATE) and lists any other difference.
+// Usage: node diff-compare.mjs <dump dir>
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'sourceCount').map(([k, x]) => [k, strip(x)])) : v);
+const paths = (a, b, at = '$', found = []) => {
+  if (found.length > 5) return found;
+  if (typeof a !== typeof b || Array.isArray(a) !== Array.isArray(b) || (a === null) !== (b === null)) { found.push(at); return found; }
+  if (a && typeof a === 'object') {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) paths(a[k], b[k], `${at}.${k}`, found);
+  } else if (a !== b) found.push(at);
+  return found;
+};
+const h = (s) => createHash('sha256').update(s).digest('hex').slice(0, 12);
+let problems = 0;
+for (const name of ['template', 'twelve']) {
+  for (const kind of ['cells', 'preview', 'report']) {
+    const n = readFileSync(join(dir, `new-${name}-${kind}.json`), 'utf8');
+    const o = readFileSync(join(dir, `old-${name}-${kind}.json`), 'utf8');
+    const sn = JSON.stringify(strip(JSON.parse(n)));
+    const so = JSON.stringify(strip(JSON.parse(o)));
+    const rawSame = n === o;
+    const same = sn === so;
+    if (!same) problems += 1;
+    const extra = kind === 'report' ? (() => { const r = JSON.parse(n); return `; days ${r.days.length}, floating flags ${r.days.filter((d) => d.floating_holiday).length}, holiday days ${r.days.filter((d) => d.holiday_name !== null).length}, findings ${r.findings.length}, decisions ${r.plan.decisions_required.length}`; })() : kind === 'cells' ? `; cells ${JSON.parse(n).cells.reduce((t, s) => t + s.cells.length, 0)}` : '';
+    console.log(`${name} ${kind}: raw ${rawSame ? 'IDENTICAL' : 'differs'} (new ${h(n)} old ${h(o)}); without sourceCount ${same ? 'IDENTICAL' : `DIFFERS at ${paths(JSON.parse(sn), JSON.parse(so)).join(', ')}`}${extra}`);
+  }
+}
+console.log(problems === 0 ? 'differential: identical after dropping sourceCount' : `differential: ${problems} DIFFERENCES`);
+process.exitCode = problems === 0 ? 0 : 1;

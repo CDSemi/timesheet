@@ -1,0 +1,43 @@
+// WP4-RECHECK-A3 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A3: masks raw logs and helper sources into LF evidence copies (adapted from evidence/WP4-RECHECK-A2/mask.mjs.txt).
+// <work> = this task folder, <project> = the repository folder, <user> = the Windows account name,
+// <email> = any email address (all addresses are synthetic example.invalid ones).
+// ANSI codes removed, CRLF -> LF, trailing whitespace removed, a final newline.
+// Usage: node mask.mjs <work dir (Windows form)> <project dir (Windows form)> <out dir> <src=dest>...
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [work, project, out, ...pairs] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const BACKSLASH = String.fromCharCode(92);
+const variants = (path) => {
+  const forward = path.replaceAll(BACKSLASH, '/');
+  const drive = path[0].toLowerCase();
+  return [
+    path,
+    path.replaceAll(BACKSLASH, BACKSLASH + BACKSLASH),
+    forward,
+    `file:///${forward}`,
+    `/${drive}/${forward.slice(3)}`,
+    `/${drive.toUpperCase()}/${forward.slice(3)}`,
+  ];
+};
+const user = process.env.USERNAME ?? '';
+function mask(text) {
+  let result = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  for (const variant of variants(work).sort((a, b) => b.length - a.length)) result = result.split(variant).join('<work>');
+  for (const variant of variants(project).sort((a, b) => b.length - a.length)) result = result.split(variant).join('<project>');
+  if (user.length >= 3) result = result.split(user).join('<user>');
+  // An address needs an alphabetic top-level domain, so package@version strings stay readable.
+  result = result.replace(/[\w.%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b/g, '<email>');
+  result = result.replace(/\r\n?/g, '\n').split('\n').map((line) => line.replace(/[ \t]+$/, '')).join('\n');
+  return result.endsWith('\n') ? result : `${result}\n`;
+}
+for (const pair of pairs) {
+  const [source, dest] = pair.split('=');
+  const header = dest.endsWith('.mjs.txt') || dest.endsWith('.sh.txt')
+    ? '// WP4-RECHECK-A3 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).\n'
+    : '';
+  writeFileSync(join(out, dest), header + mask(readFileSync(source, 'utf8')));
+}
+console.log(`masked ${pairs.length} files`);

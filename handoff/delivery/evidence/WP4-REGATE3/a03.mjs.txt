@@ -1,0 +1,35 @@
+// WP4-REGATE A-03 probe: bootstrap refusals for invalid synthetic files with SECRET-LIKE markers.
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const [exportDir, work] = process.argv.slice(2);
+mkdirSync(work, { recursive: true });
+const base = () => ({
+  schema_version: 1,
+  calendar: { name: 'Synthetic calendar', reporting_zone: 'America/Los_Angeles', normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+  holidays: [{ date: '2026-01-01', name: 'Synthetic holiday' }],
+  policy: { effective_from: '2026-01-01', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '17:00',
+    breaks: [{ start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false }, { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false }, { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false }], deficit_mode: 'ignore' },
+  payroll: { anchor_payroll_date: '2026-10-02', cycle_days: 14, period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+});
+const variants = {
+  zone: (c) => { c.calendar.reporting_zone = 'SECRET-LIKE-ZONE-111'; },
+  calname: (c) => { c.calendar.name = 'SECRET-LIKE-NAME-222'; c.calendar.normal_weekdays_iso = [9]; },
+  holname: (c) => { c.holidays = [{ date: '2026-02-30', name: 'SECRET-LIKE-NAME-333' }]; },
+  holdup: (c) => { c.holidays = [{ date: '2026-01-01', name: 'SECRET-LIKE-NAME-444' }, { date: '2026-01-01', name: 'SECRET-LIKE-NAME-555' }]; },
+  policy: (c) => { c.policy.required_minutes = 470; },
+  extrakey: (c) => { c.SECRET_LIKE_KEY_666 = 'SECRET-LIKE-VALUE-777'; },
+  nonnumber: (c) => { c.policy.required_minutes = 'SECRET-LIKE-VALUE-888'; },
+};
+for (const [name, mutate] of Object.entries(variants)) {
+  const dir = join(work, name);
+  mkdirSync(join(dir, 'data'), { recursive: true });
+  const cfg = base(); mutate(cfg);
+  const file = join(dir, 'bootstrap.json');
+  writeFileSync(file, JSON.stringify(cfg));
+  const env = { ...process.env, NODE_ENV: 'production', DATABASE_PATH: join(dir, 'timesheet.db'), DATA_DIR: join(dir, 'data'), APP_ORIGINS: 'https://timesheet.example.invalid', PUBLIC_BASE_URL: 'https://timesheet.example.invalid', COOKIE_SECURE: 'false', OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off' };
+  const r = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), 'bootstrap', '--config', file], { env, encoding: 'utf8' });
+  const out = `${r.stdout}${r.stderr}`;
+  console.log(`== ${name}: exit=${r.status}; contains SECRET-LIKE: ${/SECRET-LIKE/.test(out)}`);
+  console.log(out.trim());
+}

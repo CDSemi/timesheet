@@ -1,0 +1,14 @@
+// usage: node diff-run.mjs <repoDir> <workbooksDir> <outDir>  : previews each .xlsx with that repo's reader and writes JSON.
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [repo, wbs, out] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const { previewWorkbook } = await import(pathToFileURL(join(repo, 'src/server/import/templateMapping.ts')).href);
+for (const n of ['template', 'twelve']) {
+  const t0 = performance.now();
+  const r = previewWorkbook(new Uint8Array(readFileSync(join(wbs, `${n}.xlsx`))));
+  const ms = Math.round(performance.now() - t0);
+  writeFileSync(join(out, `${n}.json`), JSON.stringify(r, null, 1));
+  console.log(n, 'ms', ms, 'sheets', r.sheets.length, 'periods', r.periods.length, 'days', JSON.stringify(r.periods.map((p) => p.days?.length ?? null)).slice(0, 80), 'findings', r.findings.length, 'errors', r.summary.errors);
+}

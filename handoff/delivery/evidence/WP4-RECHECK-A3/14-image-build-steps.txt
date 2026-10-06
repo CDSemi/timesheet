@@ -1,0 +1,65 @@
+# 14 Image build steps without Docker: the Dockerfile build-stage commands on a second export (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:07:33Z
+Purpose: reproduce the A-01 mechanism (no source map, no sourceMappingURL in dist/) on this freeze's source without starting Docker.
+Dockerfile build stage (unchanged since 0f7fba2, blob 9497a054): npm ci; npm run build:server -- --sourceMap false && BUILD_SOURCEMAPS=off npm run build:client
+$ git archive 972ccda | tar -x -C <work>/export-img
+exit 0 0
+$ npm ci
+
+added 161 packages, and audited 162 packages in 20s
+
+42 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+exit 0
+$ npm run build:server -- --sourceMap false
+
+> timesheet@0.1.0 build:server
+> tsc -p tsconfig.server.json --sourceMap false
+
+exit 0
+$ BUILD_SOURCEMAPS=off npm run build:client
+
+> timesheet@0.1.0 build:client
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 107 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:   0.25 kB
+dist/client/assets/index-B8sNpoCz.css   21.92 kB │ gzip:   4.61 kB
+dist/client/assets/index-ZGs6tcbH.js   454.21 kB │ gzip: 128.64 kB
+
+✓ built in 317ms
+exit 0
+$ find dist -type f | wc -l
+116
+$ find dist -name '*.map' | wc -l
+0
+$ grep -rl sourceMappingURL dist | wc -l
+0
+$ ls dist/server/import dist/server/services/workbookImport.js
+dist/server/services/workbookImport.js
+
+dist/server/import:
+templateMapping.js
+xlsxReader.js
+$ grep -c 'maxKeptAttributeLength' dist/server/import/xlsxReader.js (the FIXB3 code is in this build)
+3
+$ ls dist/client/assets
+index-B8sNpoCz.css
+index-ZGs6tcbH.js
+Control (normal local build in <work>/export from npm run verify): maps present there, as designed for local development
+$ find <work>/export/dist -name '*.map' | wc -l ; grep -rl sourceMappingURL <work>/export/dist | wc -l
+114
+114
+date_utc: 2026-10-06T17:08:10Z
+[end]

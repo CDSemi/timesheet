@@ -1,0 +1,32 @@
+// WP4-FIXB3 retained-memory probe: what a read workbook keeps alive after a full garbage collection, for one package
+// built by cost.mjs. Unlike maxRSS (which also counts garbage V8 has not collected yet), the retained heap and external
+// memory after `gc()` are stable from run to run, so they show whether kept values pin their decoded parts: a pinned
+// two-byte part of 2 MiB keeps 4 MiB alive. Usage: PROBE_ROOT=<tree> PROBE_PKGS=<dir> node --expose-gc retained.mjs <case>...
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const { readWorkbook } = await import(pathToFileURL(join(process.env.PROBE_ROOT, 'src/server/import/xlsxReader.ts')).href);
+const MiB = 1024 * 1024;
+const used = () => {
+  globalThis.gc();
+  globalThis.gc();
+  const m = process.memoryUsage();
+  return m.heapUsed + m.external;
+};
+for (const name of process.argv.slice(2)) {
+  const file = join(process.env.PROBE_PKGS, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 90)}.xlsx`);
+  const bytes = new Uint8Array(readFileSync(file));
+  const before = used();
+  let workbook;
+  let outcome;
+  try {
+    workbook = readWorkbook(bytes);
+    outcome = `accepted, ${workbook.sheets.reduce((n, s) => n + s.cells.size, 0)} cells`;
+  } catch (error) {
+    outcome = `rejected:${error.code ?? error.message}`;
+  }
+  const after = used();
+  console.log(`${name} | retained after gc (heap + external): +${((after - before) / MiB).toFixed(1)} MiB | ${outcome}`);
+  workbook = undefined;
+}

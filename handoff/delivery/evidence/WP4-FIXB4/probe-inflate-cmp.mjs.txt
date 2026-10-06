@@ -1,0 +1,68 @@
+// WP4-FIXB4: the inflate step alone, old against new, on the same packages. Old: fflate's streaming Inflate fed in
+// 4 KiB steps into one preallocated buffer (972ccda's inflateEntry); new: one zlib inflateRawSync call with the output
+// buffer sized from the declared size and maxOutputLength at the cap (this task's inflateEntry). Every deflated entry
+// of each package is inflated by both, five times in a fresh process each; the outputs of both are compared.
+// Synthetic packages only. Usage: EXPORT=<tree with fflate> node inflate-cmp.mjs <package>...
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
+
+const args = process.argv.slice(2);
+function entries(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  const count = view.getUint16(eocd + 10, true);
+  let at = view.getUint32(eocd + 16, true);
+  const out = [];
+  for (let k = 0; k < count; k += 1) {
+    const method = view.getUint16(at + 10, true);
+    const compressed = view.getUint32(at + 20, true);
+    const size = view.getUint32(at + 24, true);
+    const nameLength = view.getUint16(at + 28, true);
+    const extra = view.getUint16(at + 30, true);
+    const comment = view.getUint16(at + 32, true);
+    const local = view.getUint32(at + 42, true);
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    if (method === 8) out.push({ data: bytes.subarray(start, start + compressed), size });
+    at += 46 + nameLength + extra + comment;
+  }
+  return out;
+}
+if (args[0] === '--one') {
+  const { Inflate } = await import(pathToFileURL(join(process.env.EXPORT, 'node_modules/fflate/esm/index.mjs')).href);
+  const list = entries(new Uint8Array(readFileSync(args[2])));
+  const oldWay = ({ data, size }) => {
+    const out = new Uint8Array(size);
+    let total = 0;
+    const inflater = new Inflate((chunk) => { if (total + chunk.length <= out.length) out.set(chunk, total); total += chunk.length; });
+    for (let offset = 0; offset < data.length; offset += 4096) inflater.push(data.subarray(offset, Math.min(offset + 4096, data.length)), offset + 4096 >= data.length);
+    return out;
+  };
+  const newWay = ({ data, size }) => inflateRawSync(data, { chunkSize: Math.max(64, size + 1), maxOutputLength: Math.max(1, 1024 * 1024 * 16) });
+  const way = args[1] === 'old' ? oldWay : newWay;
+  const t0 = performance.now();
+  let bytes = 0;
+  for (const entry of list) bytes += way(entry).length;
+  const ms = performance.now() - t0;
+  const same = list.every((entry) => Buffer.compare(Buffer.from(oldWay(entry)), Buffer.from(newWay(entry))) === 0);
+  console.log(`${args[1]} | ${bytes} bytes inflated in ${ms.toFixed(1)} ms | outputs equal: ${same}`);
+} else {
+  const self = fileURLToPath(import.meta.url);
+  for (const file of args) {
+    const name = file.split(/[\\/]/).pop().slice(0, 60);
+    for (const way of ['old', 'new']) {
+      const runs = [];
+      for (let k = 0; k < 5; k += 1) {
+        const child = spawnSync(process.execPath, [self, '--one', way, file], { encoding: 'utf8', env: process.env });
+        runs.push(Number(/in ([\d.]+) ms/.exec(child.stdout)?.[1]));
+        if (k === 0) console.log(`${name} | ${child.stdout.trim()}`);
+      }
+      runs.sort((a, b) => a - b);
+      console.log(`${name} | ${way}: median ${runs[2]} ms, max ${runs[4]} ms over 5 runs`);
+    }
+  }
+}

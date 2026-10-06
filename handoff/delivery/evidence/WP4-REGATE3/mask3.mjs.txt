@@ -1,0 +1,15 @@
+// WP4-REGATE3 evidence masker: strip ANSI, LF, mask task path, user name and email.
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { basename } from 'node:path';
+const [, , outDir, ...files] = process.argv;
+mkdirSync(outDir, { recursive: true });
+for (const f of files) {
+  const base = basename(f);
+  let s = readFileSync(f, 'utf8').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+  s = s
+    .replace(/[A-Za-z]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP4-REGATE3/gi, '<task>')
+    .replace(/\/d\/\.claude-tmp\/timesheet\/WP4-REGATE3/g, '<task>')
+    .replace(/<user>/g, '<user>')
+    .replace(/[A-Za-z0-9._%+-]+@gmail\.com/g, '<email>');
+  writeFileSync(`${outDir}/${base.endsWith('.txt') ? base : `${base}.txt`}`, s.endsWith('\n') ? s : `${s}\n`);
+}

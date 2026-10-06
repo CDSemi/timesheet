@@ -1,0 +1,9 @@
+. <task>/env.sh
+cd $T/export
+run() { name="$1"; shift; ok=0; last=""; for i in 1 2 3 4 5 6 7 8 9 10; do out=$(npx vitest run "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && ok=$((ok+1)); last=$(echo "$out" | grep -E '^\s+Tests ' | tail -1); done; echo "$name: $ok/10 exit 0; $last"; }
+run ot-leave-concurrency tests/integration/ot-leave-concurrency.test.ts
+run finalization-concurrency tests/integration/finalization-concurrency.test.ts
+run deadline-race tests/integration/deadline-race.test.ts
+run "sharing revocation race" tests/integration/sharing.test.ts -t "revocation race"
+run "workbook-import two concurrent identical commits" tests/integration/workbook-import.test.ts -t "two concurrent identical commits"
+run "opening-balance concurrent posts" tests/integration/opening-balance.test.ts -t "concurrent posts"

@@ -1,0 +1,8 @@
+// WP4-FIXB4 helper: prints the coefficient family names (imports nothing from the tree). Usage: node list-families.mjs
+import { readFileSync } from 'node:fs';
+const text = readFileSync(new URL('./coeff.mjs', import.meta.url), 'utf8');
+const base = [...text.matchAll(/^  '([a-z0-9-]+)': \(f\)/gm)].map((m) => m[1]);
+const f2 = ['amp100', 'hits', 'plain100', 'rand100'].map((k) => `formulas-${k}`);
+const all = [...base, ...f2, 'kept-attribute-a2-inc'];
+const wide = all.filter((n) => !n.startsWith('bytes-') && !n.endsWith('-comp')).map((n) => `${n}-wide`);
+console.log([...all, ...wide].map((n) => `=${n}`).join(','));

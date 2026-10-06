@@ -1,0 +1,24 @@
+// WP4-REGATE migration probe: fresh 1..13 and WP3 (schema 6) upgrade through the built CLIs, then integrity/fk and a rerun.
+import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [exportDir, wp3Dir, work] = process.argv.slice(2);
+const Database = (await import(pathToFileURL(join(exportDir, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href)).default;
+const run = (cliDir, name, label) => {
+  mkdirSync(join(work, name, 'data'), { recursive: true });
+  const db = join(work, name, 'timesheet.db');
+  const env = { ...process.env, DATABASE_PATH: db, DATA_DIR: join(work, name, 'data') };
+  const go = (dir) => spawnSync(process.execPath, [join(dir, 'dist', 'server', 'cli.js'), 'migrate'], { env, encoding: 'utf8' });
+  return { env, db, go, label };
+};
+const check = (db) => { const d = new Database(db, { readonly: true }); const r = { integrity: d.pragma('integrity_check', { simple: true }), fk: d.pragma('foreign_key_check').length, version: d.pragma('user_version', { simple: true }) }; d.close(); return r; };
+const fresh = run(exportDir, 'fresh');
+console.log('fresh 1..13:', fresh.go(exportDir).stdout.trim().replace(/"database":"[^"]*",/, ''), JSON.stringify(check(fresh.db)));
+console.log('fresh rerun:', fresh.go(exportDir).stdout.trim().replace(/"database":"[^"]*",/, ''));
+const up = run(wp3Dir, 'wp3');
+const w = up.go(wp3Dir);
+console.log('WP3 49651c8 build creates:', w.stdout.trim().replace(/"database":"[^"]*",/, ''), JSON.stringify(check(up.db)));
+const u = up.go(exportDir);
+console.log('current CLI upgrades:', u.stdout.trim().replace(/"database":"[^"]*",/, ''), JSON.stringify(check(up.db)));
+console.log('upgrade rerun:', up.go(exportDir).stdout.trim().replace(/"database":"[^"]*",/, ''));

@@ -1,0 +1,25 @@
+# WP4-FIXB4 12 the probed code is the final code
+# The probes ran against the working tree (or its export <task>/final). Comments in xlsxReader.ts and docs were edited after
+# some runs; this compares a snapshot taken right after the last code change with the final files, comments removed by the
+# tree's own TypeScript (probes/code-same.mjs, probe-code-same.mjs.txt), and the exported tree with the final working tree.
+2026-10-06T18:44:03Z
+$ EXPORT=<project> node probes/code-same.mjs <snapshot> <final> ... (six files)
+same code: src_server_import_xlsxReader.ts vs xlsxReader.ts
+same code: src_server_import_templateMapping.ts vs templateMapping.ts
+same code: src_server_services_workbookImport.ts vs workbookImport.ts
+same code: src_server_routes_imports.ts vs imports.ts
+same code: src_server_app.ts vs app.ts
+same code: src_client_importModel.ts vs importModel.ts
+exit=0
+$ (temporary index) git write-tree of the final working tree; git diff --stat <exported tree> <final tree> -- . :(exclude)handoff
+exported 3aaa001d0a220a59d36b8eea14a0a54f7eee9a99, working tree at the first gate 3aaa001d0a220a59d36b8eea14a0a54f7eee9a99 (same tree); diff: empty, exit=0
+
+## after the gate of 13-15 first ran, two comment lines of tests/integration/workbook-reader.test.ts were corrected (the
+## measured sizes above); the gate was rerun. The probed export differs from the final tree only in those two lines:
+$ (temporary index) git write-tree of the final working tree; git diff 3aaa001d <final> -- . :(exclude)handoff
+tree at the final gate 2be0b0bfbe3c5d2a58f8759cd233ca4d79b65c23 (the comparison excludes handoff/)
+ tests/integration/workbook-reader.test.ts | 4 ++--
+-    // 0.33 MB upload (the ceilings are 3 MiB and 2 MiB since WP4-FIXB4; 64 sheets is the sheet limit).
++    // 0.32 MB upload (the ceilings are 3 MiB and 2 MiB since WP4-FIXB4; 64 sheets is the sheet limit).
+-    // About 1.7 MiB of upload for 2.8 MiB of XML and 48 000 openings: the most of this shape the ceilings allow.
++    // About 1.8 MiB of upload for 2.9 MiB of XML and 54 000 openings: near the most of this shape the ceilings allow.

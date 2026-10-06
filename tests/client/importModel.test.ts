@@ -99,11 +99,11 @@ describe('workbook file check (before any upload)', () => {
     expect(workbookFileProblem({ name: 'hours.xlsx', size: 0 })).toBe('The file is empty.');
   });
 
-  it('refuses a file above the 8 MiB limit and allows exactly the limit', () => {
-    expect(IMPORT_MAX_BYTES).toBe(8 * 1024 * 1024);
+  it('refuses a file above the 2 MiB limit and allows exactly the limit', () => {
+    expect(IMPORT_MAX_BYTES).toBe(2 * 1024 * 1024);
     expect(workbookFileProblem({ name: 'hours.xlsx', size: IMPORT_MAX_BYTES })).toBeNull();
     const problem = workbookFileProblem({ name: 'hours.xlsx', size: IMPORT_MAX_BYTES + 1 });
-    expect(problem).toContain('8 MiB');
+    expect(problem).toContain('2 MiB');
   });
 });
 
@@ -219,7 +219,7 @@ describe('import error messages', () => {
     new ApiRequestError(status, code, message, details);
 
   it('maps 413 and 415 to the limit and the accepted type', () => {
-    expect(importErrorMessage(fail(413, 'payload_too_large'))).toMatch(/8 MiB.*not uploaded/);
+    expect(importErrorMessage(fail(413, 'payload_too_large'))).toMatch(/2 MiB.*not uploaded/);
     expect(importErrorMessage(fail(415, 'unsupported_media_type'))).toMatch(/\.xlsx/);
   });
 

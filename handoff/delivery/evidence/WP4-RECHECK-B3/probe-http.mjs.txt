@@ -1,0 +1,71 @@
+// WP4-RECHECK-B3 HTTP probe (auditor's own): the BUILT server of the export over real HTTP, capture mode, job runner
+// off, DATA_DIR and DATABASE_PATH explicit under the task folder, synthetic example.invalid users. For each package
+// given on the command line it uploads to POST /api/imports while polling GET /api/health back to back, and records the
+// status, reason, request time and the worst health latency. Then it lists stored report sizes and kept files, and the
+// server's error output. The server child is stopped through its handle.
+// Usage (cwd = export): node ../probes/http.mjs <work folder> <package>...
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { basename, join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+
+const require = createRequire(join(process.cwd(), 'package.json'));
+const Database = require('better-sqlite3');
+const [work, ...packages] = process.argv.slice(2);
+mkdirSync(work, { recursive: true });
+const port = await new Promise((resolve) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
+const origin = `http://localhost:${port}`;
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const DATABASE_PATH = join(work, 'timesheet.db');
+const DATA_DIR = join(work, 'data');
+const env = { ...process.env, NODE_ENV: 'development', PORT: String(port), HOST: '127.0.0.1', DATABASE_PATH, DATA_DIR, APP_ORIGINS: origin, MAIL_FROM: 'probe-sender@example.invalid', OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off', SEED_ADMIN_PASSWORD: pw.admin, SEED_EMPLOYEE_PASSWORD: pw.employee, SEED_EMPLOYEE2_PASSWORD: pw.employee2 };
+for (const a of ['migrate', 'seed']) console.log(`cli ${a}: exit ${spawnSync(process.execPath, ['dist/server/cli.js', a], { env, encoding: 'utf8' }).status}`);
+const server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: ['ignore', 'ignore', 'pipe'] });
+let serverErr = '';
+server.stderr.on('data', (c) => { serverErr += c.toString('utf8'); });
+const stop = async () => { if (server.exitCode === null && server.signalCode === null) { server.kill('SIGTERM'); await new Promise((r) => server.once('exit', r)); } };
+try {
+  const send = (method, path, { body, headers = {} } = {}) => new Promise((resolve) => {
+    const t0 = performance.now();
+    const req = httpRequest({ host: '127.0.0.1', port, method, path, agent: false, headers: { origin, ...headers, ...(body ? { 'content-length': body.length } : {}) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => { const buf = Buffer.concat(chunks); let json = null; try { json = JSON.parse(buf.toString('utf8')); } catch { /* not JSON */ } resolve({ status: res.statusCode, ms: performance.now() - t0, headers: res.headers, size: buf.length, json }); });
+    });
+    req.on('error', (e) => resolve({ status: 0, ms: performance.now() - t0, error: e.code ?? e.message, json: null }));
+    if (body) req.write(body);
+    req.end();
+  });
+  for (let i = 0; i < 100; i += 1) { if ((await send('GET', '/api/ready')).status === 200) break; await new Promise((r) => setTimeout(r, 100)); }
+  const login = await send('POST', '/api/auth/login', { body: Buffer.from(JSON.stringify({ email: 'employee@example.invalid', password: pw.employee })), headers: { 'content-type': 'application/json' } });
+  const cookie = String(login.headers['set-cookie']?.[0] ?? '').split(';')[0];
+  console.log(`login: ${login.status}`);
+  const idle = await send('GET', '/api/health');
+  console.log(`idle /api/health: ${idle.status} in ${Math.round(idle.ms)} ms`);
+  for (const file of packages) {
+    const bytes = readFileSync(file);
+    let done = false;
+    let worst = 0;
+    let polls = 0;
+    let bad = 0;
+    const poller = (async () => { while (!done) { const h = await send('GET', '/api/health'); polls += 1; if (h.status !== 200) bad += 1; worst = Math.max(worst, h.ms); } })();
+    const r = await send('POST', '/api/imports', { body: bytes, headers: { cookie, 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+    done = true;
+    await poller;
+    const reason = r.json?.error ? `${r.json.error.code}${r.json.error.details?.reason ? '/' + r.json.error.details.reason : ''}` : '';
+    console.log(`${basename(file).slice(0, 48)} | ${bytes.length} B -> ${r.status} ${reason} in ${Math.round(r.ms)} ms | worst /api/health ${Math.round(worst)} ms over ${polls} polls, non-200 ${bad}${worst > 500 ? ' HEALTH>500ms' : ''}`);
+  }
+  const db = new Database(DATABASE_PATH, { readonly: true, fileMustExist: true });
+  const s = db.prepare('SELECT count(*) AS n, coalesce(max(length(CAST(report_json AS BLOB))), 0) AS largest FROM imports').get();
+  let files = 0;
+  try { files = readdirSync(join(DATA_DIR, 'files')).length; } catch { files = 0; }
+  console.log(`stored: ${s.n} preview rows, largest report_json ${s.largest} bytes; files in the store ${files}`);
+  db.close();
+} finally {
+  await stop();
+  console.log(`server exit: code ${server.exitCode} signal ${server.signalCode}; stderr error lines: ${serverErr.split('\n').filter((l) => /error|exception|\bat\s/i.test(l)).length}`);
+}

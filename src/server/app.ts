@@ -28,7 +28,7 @@ export interface AppOptions {
   dataDir?: string;
   /** Route-scoped size limit of the signature upload (bytes); default 256 KiB. */
   signatureMaxBytes?: number;
-  /** Route-scoped size limit of the workbook import upload (bytes); default 8 MiB, the reader's package limit. */
+  /** Route-scoped size limit of the workbook import upload (bytes); default 2 MiB, the reader's package limit. */
   importMaxBytes?: number;
 }
 
@@ -98,7 +98,7 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
     '/api/*',
     noStore,
     // The two raw uploads are the only exceptions: the signature image (256 KiB, image types) and
-    // the owner's workbook (8 MiB, .xlsx only) each have their own limit and content type in their
+    // the owner's workbook (2 MiB, .xlsx only) each have their own limit and content type in their
     // router. Everything else stays JSON-only with a 64 KiB limit.
     unless(
       isRawUpload,

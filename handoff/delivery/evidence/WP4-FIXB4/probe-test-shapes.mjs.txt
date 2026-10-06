@@ -1,0 +1,63 @@
+// WP4-FIXB4: the sizes of the two incompressible packages of the new reader test (randomFormulas at 1.2 MiB and 0.92 MiB a
+// sheet), rebuilt exactly as the test builds them, to check the numbers its comments state. Usage: EXPORT=<tree> node test-shapes.mjs
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+
+const at = (rel) => pathToFileURL(join(process.env.EXPORT, rel)).href;
+const { buildSyntheticWorkbook, withText } = await import(at('tests/support/syntheticWorkbook.ts'));
+const { readWorkbook } = await import(at('src/server/import/xlsxReader.ts'));
+const { previewWorkbook } = await import(at('src/server/import/templateMapping.ts'));
+const MIB = 1024 * 1024;
+const PERIODS = [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }, { payrollDate: '2026-02-06' }];
+function letters(seed) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let state = seed >>> 0;
+  return (count) => {
+    let out = '';
+    for (let index = 0; index < count; index += 1) {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let mixed = Math.imul(state ^ (state >>> 15), state | 1);
+      mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+      out += alphabet[((mixed ^ (mixed >>> 14)) >>> 0) % alphabet.length];
+    }
+    return out;
+  };
+}
+let openings = 0;
+let xml = 0;
+function randomFormulas(bytesPerSheet) {
+  const random = letters(5);
+  let bytes = buildSyntheticWorkbook({ periods: [...PERIODS] });
+  for (let index = 0; index < 3; index += 1) {
+    bytes = withText(bytes, `xl/worksheets/sheet${100 + index}.xml`, (text) => {
+      const rows = [];
+      let size = 0;
+      for (let row = 100; size < bytesPerSheet; row += 1) {
+        let cells = '';
+        for (let column = 0; column < 20; column += 1) cells += `<c r="${String.fromCharCode(65 + column)}${row}"><f>"${random(46)}"&amp;${random(40)}</f></c>`;
+        rows.push(`<row r="${row}">${cells}</row>`);
+        size += cells.length + 20;
+      }
+      const out = (text ?? '').replace('</sheetData>', `${rows.join('')}</sheetData>`);
+      openings += (out.match(/<(?!\/)/g) ?? []).length;
+      xml += Buffer.byteLength(out);
+      return out;
+    });
+  }
+  return bytes;
+}
+for (const perSheet of [1.2 * MIB, 0.92 * MIB]) {
+  openings = 0;
+  xml = 0;
+  const bytes = randomFormulas(perSheet);
+  let outcome;
+  const t0 = performance.now();
+  try {
+    previewWorkbook(bytes);
+    outcome = `previews, inflatedBytes ${readWorkbook(bytes).inflatedBytes}`;
+  } catch (error) {
+    outcome = `refused: ${error.code}`;
+  }
+  console.log(`${(perSheet / MIB).toFixed(2)} MiB a sheet: upload ${bytes.length} B (${(bytes.length / MIB).toFixed(2)} MiB); the three dated sheets ${xml} B of XML (${(xml / MIB).toFixed(2)} MiB), ${openings} openings; ${outcome} in ${(performance.now() - t0).toFixed(0)} ms`);
+}

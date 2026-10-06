@@ -1,0 +1,186 @@
+// WP4-RECHECK-B2 probe DIFF: differential of the new streaming scanner (cc34e7f, <task>/export) against the
+// accepted WP4-T09 reader (13a258d, fast-xml-parser, <task>/t09) on benign workbooks: the tracked template and a
+// realistic 12-dated-sheet synthetic workbook (built in memory from the template by the test support, plus Excel-style
+// shared strings with rich-text runs, phonetic runs, xml:space and character references). Synthetic data only;
+// nothing is written to the repository. Compares (1) the reader output cell by cell and (2) the mapped preview: sheets,
+// periods/days (dates, labels, source cells, mapping, holiday names, clocks), holidays, calendar, summary, clean and
+// the findings. Findings are compared exactly, except that the new reader adds `sourceCount` and caps `sources` at 20
+// and folds findings past 25 per code (WP4-FIXB, accepted at WP4-REGATE): the probe checks new.sourceCount ==
+// old.sources.length and new.sources == old.sources.slice(0, 20), and reports any folding.
+// Usage: PROBE_ROOT=<export under test> PROBE_T09=<export of 13a258d> node diff.mjs
+// WP4-FIXB3: copied from evidence/WP4-RECHECK-B2/probe-b2-diff.mjs.txt; only these imports changed (the two exports
+// are given by environment variables instead of fixed sibling folders).
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const at = (root, path) => pathToFileURL(join(root, path)).href;
+const { strFromU8, strToU8 } = await import(at(process.env.PROBE_ROOT, 'node_modules/fflate/esm/index.mjs'));
+const NEW_MAP = await import(at(process.env.PROBE_ROOT, 'src/server/import/templateMapping.ts'));
+const NEW_READ = await import(at(process.env.PROBE_ROOT, 'src/server/import/xlsxReader.ts'));
+const OLD_MAP = await import(at(process.env.PROBE_T09, 'src/server/import/templateMapping.ts'));
+const OLD_READ = await import(at(process.env.PROBE_T09, 'src/server/import/xlsxReader.ts'));
+const { buildSyntheticWorkbook, pack, readTemplateBytes, unpack } = await import(at(process.env.PROBE_ROOT, 'tests/support/syntheticWorkbook.ts'));
+
+const sha = (s) => createHash('sha256').update(s).digest('hex');
+const DAY = 86_400_000;
+let sharedLabelCells = 0;
+const payroll = (i) => new Date(Date.UTC(2026, 0, 9) + i * 14 * DAY).toISOString().slice(0, 10);
+
+function realistic12() {
+  const labels = ['Worked', 'Work from home', 'Holiday', 'Shutdown', 'Vacation', 'Sick day', 'Off day (overtime used)', 'Training & travel <ext>', 'Presidents Day', 'Floating Holiday', 'Tết Nguyên Đán', 'worked ', ' WORK FROM HOME'];
+  const periods = [];
+  for (let i = 0; i < 12; i += 1) {
+    const days = {};
+    for (let d = 0; d < 14; d += 1) {
+      const pick = (i * 14 + d) % 17;
+      if (d % 7 >= 5 && pick % 3 !== 0) continue; // most weekends blank
+      const day = { label: labels[(i * 5 + d) % labels.length] };
+      if (pick % 4 === 0) { day.start = 8 * 60 + (pick % 3) * 15; day.end = 17 * 60 + 30; }
+      if (pick === 5) day.start = 9 * 60; // start only
+      if (pick === 7 && i % 3 === 0) day.labelFormulaCache = 'Worked';
+      if (pick === 11 && i % 4 === 1) day.date = null; // blank date
+      if (pick === 13 && i % 5 === 2) day.date = payroll(i + 40); // unexpected date
+      days[d] = day;
+    }
+    // A Sunday with clocks.
+    days[6] = { label: 'Worked', start: 10 * 60, end: 14 * 60 };
+    periods.push({
+      payrollDate: payroll(i),
+      employee: i % 2 === 0 ? 'Test Person Alpha (<email>)' : 'Nguyễn Thử & Co <<email>>',
+      days,
+      cleanFormulas: i % 3 === 1,
+      payrollCellDate: i === 7 ? payroll(8) : undefined,
+      hidden: i === 10,
+    });
+  }
+  const entries = unpack(buildSyntheticWorkbook({ periods }));
+  // Excel-style shared strings: rich-text runs with run properties, a phonetic run, xml:space and character references.
+  let sst = strFromU8(entries['xl/sharedStrings.xml']);
+  const before = (sst.match(/<si>/g) ?? []).length;
+  const extra = [
+    '<si><r><rPr><b/><sz val="11"/></rPr><t xml:space="preserve">Work </t></r><r><t>from home</t></r></si>',
+    '<si><t>V&#97;cation</t><rPh sb="0" eb="1"><t>PHONETIC</t></rPh><phoneticPr fontId="1"/></si>',
+    '<si><t xml:space="preserve">  Sick day  </t></si>',
+    '<si><t>&#x53;hutdown</t></si>',
+    '<si><t>Christmas Day</t></si>',
+  ];
+  sst = sst.replace(/count="\d+"/, `count="${before + extra.length}"`).replace(/uniqueCount="\d+"/, `uniqueCount="${before + extra.length}"`).replace('</sst>', `${extra.join('')}</sst>`);
+  entries['xl/sharedStrings.xml'] = strToU8(sst);
+  // Point some labels of the first three dated sheets at those shared strings (t="s").
+  for (let s = 0; s < 3; s += 1) {
+    const part = `xl/worksheets/sheet${100 + s}.xml`;
+    let xml = strFromU8(entries[part]);
+    const targets = ['B14', 'F14', 'J14', 'N14', 'R14'];
+    targets.forEach((address, k) => {
+      const next = xml.replace(new RegExp(`<c r="${address}"([^>]*?) t="inlineStr"><is><t>[^<]*</t></is></c>`), `<c r="${address}"$1 t="s"><v>${before + k}</v></c>`);
+      if (next !== xml) sharedLabelCells += 1;
+      xml = next;
+    });
+    entries[part] = strToU8(xml);
+  }
+  return pack(entries);
+}
+
+function cellsOf(workbook) {
+  return {
+    date1904: workbook.date1904,
+    entryCount: workbook.entryCount,
+    inflatedBytes: workbook.inflatedBytes,
+    notes: workbook.notes,
+    sheets: workbook.sheets.map((s) => ({ name: s.name, part: s.part, kind: s.kind, hidden: s.hidden, cells: [...s.cells.values()].map((c) => [c.address, c.provenance, c.type, c.value, c.formula, c.cachedValue, c.cacheNote]) })),
+  };
+}
+
+function compareFindings(oldF, newF) {
+  const problems = [];
+  let folded = 0;
+  let capped = 0;
+  const newListed = newF.filter((f) => !(f.details && 'omitted_findings' in f.details));
+  folded = newF.length - newListed.length;
+  if (folded === 0 && newListed.length !== oldF.length) problems.push(`count old ${oldF.length} new ${newListed.length}`);
+  for (let i = 0; i < Math.min(oldF.length, newListed.length); i += 1) {
+    const o = oldF[i];
+    const n = newListed[i];
+    const { sourceCount, sources, ...nRest } = n;
+    const { sources: oSources, ...oRest } = o;
+    if (JSON.stringify(nRest) !== JSON.stringify(oRest)) problems.push(`finding ${i} differs: ${JSON.stringify(oRest).slice(0, 160)} vs ${JSON.stringify(nRest).slice(0, 160)}`);
+    if (sourceCount !== oSources.length) problems.push(`finding ${i} sourceCount ${sourceCount} != ${oSources.length}`);
+    if (JSON.stringify(sources) !== JSON.stringify(oSources.slice(0, 20))) problems.push(`finding ${i} sources differ`);
+    if (oSources.length > 20) capped += 1;
+  }
+  return { problems, folded, capped, old: oldF.length, new: newF.length };
+}
+
+function run(label, bytes) {
+  const out = [];
+  out.push(`== ${label}: ${bytes.length} bytes, sha256 ${sha(bytes).slice(0, 16)}...`);
+  const t0 = performance.now();
+  const oldWb = OLD_READ.readWorkbook(bytes);
+  const t1 = performance.now();
+  const newWb = NEW_READ.readWorkbook(bytes);
+  const t2 = performance.now();
+  const oc = cellsOf(oldWb);
+  const nc = cellsOf(newWb);
+  const totalCells = nc.sheets.reduce((n, s) => n + s.cells.length, 0);
+  let cellDiffs = 0;
+  const examples = [];
+  for (let s = 0; s < Math.max(oc.sheets.length, nc.sheets.length); s += 1) {
+    const os = oc.sheets[s];
+    const ns = nc.sheets[s];
+    if (!os || !ns || JSON.stringify({ ...os, cells: 0 }) !== JSON.stringify({ ...ns, cells: 0 })) { cellDiffs += 1; examples.push(`sheet ${s} header`); continue; }
+    const om = new Map(os.cells.map((c) => [c[0], c]));
+    for (const c of ns.cells) {
+      const o = om.get(c[0]);
+      if (JSON.stringify(o) !== JSON.stringify(c)) { cellDiffs += 1; if (examples.length < 6) examples.push(`${ns.name}!${c[0]}: old ${JSON.stringify(o)} new ${JSON.stringify(c)}`); }
+      om.delete(c[0]);
+    }
+    cellDiffs += om.size;
+    for (const k of om.keys()) if (examples.length < 6) examples.push(`${os.name}!${k} only in old`);
+  }
+  const headerSame = JSON.stringify({ ...oc, sheets: 0 }) === JSON.stringify({ ...nc, sheets: 0 });
+  out.push(`reader: ${nc.sheets.length} sheets, ${totalCells} cells; old ${Math.round(t1 - t0)} ms, new ${Math.round(t2 - t1)} ms; header/notes equal: ${headerSame}; cell differences: ${cellDiffs}${examples.length ? ' e.g. ' + examples.join(' ; ') : ''}`);
+  out.push(`reader sha256 old ${sha(JSON.stringify(oc)).slice(0, 16)} new ${sha(JSON.stringify(nc)).slice(0, 16)}`);
+
+  const oldP = OLD_MAP.mapWorkbook(oldWb, { sha256: 'x', bytes: bytes.length });
+  const newP = NEW_MAP.mapWorkbook(newWb, { sha256: 'x', bytes: bytes.length });
+  const parts = ['sheets', 'periods', 'holidays', 'payrollCalendar', 'summary', 'clean', 'mappingVersion'];
+  for (const key of parts) {
+    const a = JSON.stringify(oldP[key]);
+    const b = JSON.stringify(newP[key]);
+    out.push(`preview.${key}: ${a === b ? 'EQUAL' : 'DIFFERENT'} (sha256 ${sha(b).slice(0, 16)}, ${b.length} chars)`);
+    if (a !== b && key === 'periods') {
+      for (let p = 0; p < oldP.periods.length; p += 1) for (let d = 0; d < 14; d += 1) {
+        const x = JSON.stringify(oldP.periods[p]?.days[d]);
+        const y = JSON.stringify(newP.periods[p]?.days[d]);
+        if (x !== y) out.push(`   ${oldP.periods[p].sheetName} day ${d}: old ${x} new ${y}`);
+      }
+    }
+  }
+  const days = newP.periods.flatMap((p) => p.days);
+  const mapped = days.filter((d) => d.mapping !== null).length;
+  const labelled = days.filter((d) => d.label !== null).length;
+  const truncated = JSON.stringify(newP).includes('"truncated":true');
+  out.push(`days: ${days.length}, labelled ${labelled}, mapped ${mapped}, holiday-mapped ${days.filter((d) => d.holidayName !== null).length}, from formula cache ${days.filter((d) => d.label?.fromFormulaCache).length}, clocks ${days.filter((d) => d.startMinutes || d.endMinutes).length}; any truncated: ${truncated}`);
+  const f = compareFindings(oldP.findings, newP.findings);
+  out.push(`findings: old ${f.old}, new ${f.new}, folded ${f.folded}, capped ${f.capped}; problems: ${f.problems.length ? f.problems.join(' | ') : 'none'}`);
+  out.push(`codes: ${[...new Set(newP.findings.map((x) => x.code))].join(',')}`);
+  // WP4-FIXB3 (R-B2-1): the report's floating flag, as T09 computed it (the day's holiday name among the floating
+  // holidays' names) and as the fixed service takes it (from the matched holiday), on the same preview.
+  if (typeof NEW_MAP.matchedHoliday === 'function') {
+    const floatingNames = new Set(oldP.holidays.filter((h) => h.floating).map((h) => h.name));
+    const oldFlags = oldP.periods.flatMap((p) => p.days.map((d) => d.holidayName !== null && floatingNames.has(d.holidayName)));
+    const newFlags = newP.periods.flatMap((p) => p.days.map((d) => NEW_MAP.matchedHoliday(d)?.floating === true));
+    const differ = oldFlags.filter((flag, i) => flag !== newFlags[i]).length;
+    out.push(`report floating_holiday flags: ${newFlags.filter(Boolean).length} of ${newFlags.length} days; differences from T09: ${differ}`);
+  }
+  return out.join('\n');
+}
+
+console.log(`node ${process.version}`);
+console.log(run('tracked template', readTemplateBytes()));
+const realistic = realistic12();
+console.log(`realistic workbook: ${sharedLabelCells} label cells rewritten to shared strings (rich text, phonetic run, xml:space, character references)`);
+console.log(run('realistic 12 dated sheets (synthetic)', realistic));
+const sample = NEW_MAP.previewWorkbook(realistic).periods[0].days.slice(0, 5).map((d) => `${d.label?.source}=${JSON.stringify(d.label?.value)}->${d.mapping?.category ?? 'unmapped'}`);
+console.log(`shared-string labels as read (sheet 1, B14..R14): ${sample.join(' ; ')}`);

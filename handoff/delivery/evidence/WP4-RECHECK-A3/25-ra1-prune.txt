@@ -1,0 +1,47 @@
+# 25-ra1-prune rerun: R-A1 prune refusal, normal pruning, same-second tie (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:06:46Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (each probe passes its own pair under its work folder to every child)
+sed: -e expression #1, char 8: unterminated `s' command
+sed: -e expression #1, char 0: no previous regular expression
+PASS  clock set back (2025-01-01) with a 2026 backup: dry run refused with clock_behind_backups (refusal, exit 2 class)  clock_behind_backups
+PASS  clock set back (2025-01-01) with a 2026 backup: real run refused with clock_behind_backups (refusal, exit 2 class)  clock_behind_backups
+PASS  clock set back: nothing removed or changed  3 folders
+PASS  clock set back, real run that names the new backup: still refused before any removal
+PASS  refusal message names no folder, instant or path  A backup is dated after the system clock, so the clock may be wrong; check the host time. Nothing was removed
+PASS  boundary: newest backup exactly at the clock instant is accepted (dry run counts)  {"candidates":3,"kept":1,"removed":2,"ignored":0,"dryRun":true}
+PASS  boundary: one second behind the newest backup is refused
+PASS  recent backup still present
+PASS  a future-dated folder that is not the tool's (bad manifest or bad name) is only counted and does not refuse the run  {"candidates":1,"kept":1,"removed":0,"ignored":2,"dryRun":true}
+INFO  normal run on 180 nightly backups: {"candidates":180,"kept":13,"removed":167,"ignored":0,"dryRun":false}; kept 20260531,20260630,20260731,20260831,20260920,20260927,20260930,20261001,20261002,20261003,20261004,20261005,20261006
+PASS  normal prune still prunes: exit-0 class result, removes the expired backups  kept 13, removed 167, expected kept 13
+PASS  kept set equals the independent 7/4/6 computation (and includes the newest)
+PASS  cli migrate on a fresh synthetic database (explicit DATABASE_PATH and DATA_DIR)  {"database":"<work>\\live\\timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13],"version":13}
+PASS  CLI dry run with a backup dated 2099: exit 2, stdout empty, stderr names the code  exit 2; Prune refused (clock_behind_backups): A backup is dated after the system clock, so the clock may be wrong; check the host time. Nothing was removed
+PASS  CLI dry run: stderr holds no folder name or path, and nothing changed
+PASS  CLI backup --prune with a backup dated 2099: backup succeeds, prune refused with exit 2 and code  exit 2; stdout lines 1; Prune refused (clock_behind_backups): A backup is dated after the system clock, so the clock may be wrong; check the host time. Nothing was removed
+PASS  CLI backup --prune refused: the three earlier folders are untouched and the new verified backup is kept
+PASS  CLI refusal stderr holds no folder name or path
+PASS  CLI backup --prune without a future-dated backup still prunes (exit 0, pruned 2, kept 2)  {"outcome":"succeeded","backup":"<new backup>","schema_version":13,"files":0,"signatures":0,"pdfs":0,"database_bytes":552960,"duration_ms":42,"status_recorded":true}
+{"outcome":"pruned","candidates":4,"kept":2,"removed":2,"ignored":0}
+PASS  CLI normal prune: the two expired folders are gone; yesterday and the new backup stay
+INFO  same second, the just-created backup has the smaller random suffix: {"candidates":2,"kept":1,"removed":1,"ignored":0,"dryRun":false}; kept the earlier backup
+PASS  same second (the just-created backup has the smaller random suffix): exactly one complete backup of that second survives
+INFO  same second, the just-created backup has the greater random suffix: {"candidates":2,"kept":1,"removed":1,"ignored":0,"dryRun":false}; kept the just-created backup
+PASS  same second (the just-created backup has the greater random suffix): exactly one complete backup of that second survives
+INFO  run 0: same second false; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup kept; folders left 1
+INFO  run 2: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup kept; folders left 1
+INFO  run 3: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup REMOVED; folders left 1
+INFO  run 5: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup REMOVED; folders left 1
+INFO  run 6: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup REMOVED; folders left 1
+INFO  run 9: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup kept; folders left 1
+INFO  run 10: same second true; prune {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}; the just-created backup kept; folders left 1
+INFO  back-to-back CLI pairs: 6 of 12 shared a UTC second; in 3 of them --prune removed the backup it had just created and printed
+PASS  back-to-back CLI runs: every pair leaves exactly one complete backup per UTC second (no pair leaves none)
+INFO  paired pre-upgrade backup at 2026-10-06T03:00Z, nightly later the same UTC day (2026-10-06T19:00:00Z) with --prune: {"candidates":3,"kept":2,"removed":1,"ignored":0,"dryRun":false}; paired backup REMOVED
+PASS  paired pre-upgrade backup, nightly later the same UTC day: removed by the retention rule (risk, recorded)
+INFO  paired pre-upgrade backup at 2026-10-06T03:00Z, nightly on the next UTC day (2026-10-07T00:30:00Z) with --prune: {"candidates":3,"kept":3,"removed":0,"ignored":0,"dryRun":false}; paired backup kept
+PASS  paired pre-upgrade backup, nightly on the next UTC day: kept
+RA1 PROBE PASSED
+exit 0
+date_utc: 2026-10-06T17:06:57Z
+[end]

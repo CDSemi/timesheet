@@ -1,0 +1,108 @@
+# WP4-FIXB4 06 the derived bound
+# bound.mjs (probe-bound.mjs.txt) reads the '@@' units of 05 and computes, by linear-programming duality, the cheapest prices
+# (per XML byte, per opening, per attribute) that cover every measured unit; then time <= T0 + tX*X + tO*O + tA*A and
+# memory <= M0 + mX*X + mO*O + mA*A for ANY mix of units within X bytes, O openings and A attributes. T0, M0 are the largest
+# fixed costs (intercepts) measured. It also prints the costliest mix (the primal optimum), which 07 builds and measures.
+# Chosen ceilings: X = 3 MiB (3145728), O = 100000, A = 500000 (unchanged). The other limit sets show why: at the old ceilings
+# (8 MiB, 150 000) the memory bound is over 150 MiB; 3 MiB with 120 000 openings leaves only 31 % memory margin.
+2026-10-06T18:15:32Z
+$ node probes/bound.mjs 3145728 100000 500000 raw/coeff-6-1r.txt raw/coeff-6-2r.txt raw/coeff-6-3.txt raw/coeff-6-4.txt
+limits: X=3145728 XML bytes, O=100000 openings, A=500000 attributes; 61 measured units
+  kept-text-refs-inc           b=    1.00 o=0.000 a=0.000 |    12.0 ns     7.8 B per kept text byte
+  formula-bytes-inc            b=    1.00 o=0.000 a=0.000 |     6.7 ns     1.4 B per formula byte
+  shared-strings-inc           b=   79.15 o=4.050 a=2.050 |  1891.5 ns   817.5 B per shared string with its cell
+  relationships                b=  162.40 o=1.000 a=3.000 |  1341.1 ns   723.6 B per relationship
+  content-types                b=  125.00 o=1.000 a=2.000 |   644.5 ns   399.4 B per content type
+  attributes-min               b=    5.06 o=0.016 a=1.000 |    32.5 ns     7.2 B per attribute
+  cells-min                    b=    5.15 o=1.050 a=0.050 |   396.7 ns   518.0 B per kept cell
+  kept-cell-max-inc            b=   67.16 o=1.050 a=3.050 |  1029.9 ns   778.9 B per kept cell with r, t and si
+  relationship-max-inc         b=  125.00 o=1.000 a=4.000 |  1532.0 ns   985.1 B per relationship with four kept attributes
+  formulas-min                 b=   20.15 o=2.050 a=0.050 |   934.0 ns   707.1 B per distinct formula
+  values-min                   b=   20.15 o=2.050 a=0.050 |   724.8 ns   722.2 B per kept cell with value
+  rows                         b=   16.66 o=1.000 a=1.000 |   412.1 ns    17.6 B per kept row
+  bytes-comp                   b=    1.00 o=0.000 a=0.000 |     1.6 ns     1.8 B per XML byte
+  bytes-inc                    b=    1.00 o=0.000 a=0.000 |     2.7 ns     1.2 B per XML byte
+  bytes-wide-inc               b=    1.00 o=0.000 a=0.000 |     3.2 ns     1.3 B per XML byte
+  kept-text-comp               b=    1.00 o=0.000 a=0.000 |     1.3 ns     5.0 B per kept text byte
+  kept-text-inc                b=    1.00 o=0.000 a=0.000 |     4.3 ns     4.5 B per kept text byte
+  kept-text-amp                b=    1.00 o=0.000 a=0.000 |     9.2 ns     2.6 B per kept text byte
+  kept-text-bare-amp-inc       b=    1.00 o=0.000 a=0.000 |     3.9 ns     2.8 B per kept text byte
+  openings                     b=    4.00 o=1.000 a=0.000 |    13.6 ns    44.4 B per opening
+  attributes                   b=    6.90 o=0.016 a=1.000 |    32.5 ns     8.4 B per attribute
+  attributes-inc               b=   10.89 o=0.016 a=0.999 |    66.3 ns     1.5 B per attribute
+  cells                        b=   20.15 o=1.050 a=1.050 |   549.5 ns   460.2 B per kept cell
+  kept-attributes-inc          b=   21.57 o=0.525 a=1.025 |   393.2 ns   202.1 B per kept attribute
+  kept-attribute-flood-inc     b=   22.91 o=0.016 a=0.999 |   114.7 ns    24.4 B per attribute named t
+  values-inc                   b=   58.15 o=2.050 a=2.050 |   999.1 ns   789.5 B per kept cell with value
+  formulas-comp                b=  115.15 o=2.050 a=1.050 |  1940.1 ns  1174.2 B per distinct formula
+  formulas-inc                 b=  129.13 o=2.050 a=1.050 |  1840.4 ns  1614.5 B per distinct formula
+  formulas-amp100              b=  117.13 o=2.050 a=0.050 |  2432.6 ns  1275.4 B per distinct formula
+  formulas-hits                b=  113.17 o=2.050 a=0.050 |  1287.7 ns  1837.0 B per distinct formula
+  formulas-plain100            b=  117.13 o=2.050 a=0.050 |  2277.7 ns  2030.9 B per distinct formula
+  formulas-rand100             b=  114.16 o=2.050 a=0.050 |  2235.5 ns  1726.4 B per distinct formula
+  kept-attribute-a2-inc        b= 1561.53 o=1.051 a=64.107 |  9331.0 ns     0.0 B per kept cell with 64 kept-name attributes
+  kept-text-refs-inc-wide      b=    1.00 o=0.000 a=0.000 |    14.6 ns    10.1 B per kept text byte
+  formula-bytes-inc-wide       b=    1.00 o=0.000 a=0.000 |     6.9 ns     4.1 B per formula byte
+  shared-strings-inc-wide      b=   79.15 o=4.050 a=2.050 |  2108.5 ns   959.7 B per shared string with its cell
+  relationships-wide           b=  162.40 o=1.000 a=3.000 |  1562.5 ns  1228.8 B per relationship
+  content-types-wide           b=  125.00 o=1.000 a=2.000 |   595.7 ns   430.1 B per content type
+  attributes-min-wide          b=    5.06 o=0.016 a=1.000 |    35.7 ns    12.2 B per attribute
+  cells-min-wide               b=    5.15 o=1.050 a=0.050 |   432.7 ns   506.7 B per kept cell
+  kept-cell-max-inc-wide       b=   67.16 o=1.050 a=3.050 |  1276.0 ns   841.0 B per kept cell with r, t and si
+  relationship-max-inc-wide    b=  125.00 o=1.000 a=4.000 |  1938.2 ns   763.2 B per relationship with four kept attributes
+  formulas-min-wide            b=   20.15 o=2.050 a=0.050 |   818.6 ns   699.6 B per distinct formula
+  values-min-wide              b=   20.15 o=2.050 a=0.050 |   735.7 ns   737.4 B per kept cell with value
+  rows-wide                    b=   16.66 o=1.000 a=1.000 |   495.8 ns    28.1 B per kept row
+  kept-text-inc-wide           b=    1.00 o=0.000 a=0.000 |     4.0 ns     5.8 B per kept text byte
+  kept-text-amp-wide           b=    1.00 o=0.000 a=0.000 |    11.5 ns     8.4 B per kept text byte
+  kept-text-bare-amp-inc-wide  b=    1.00 o=0.000 a=0.000 |     4.7 ns     5.2 B per kept text byte
+  openings-wide                b=    4.00 o=1.000 a=0.000 |    16.9 ns    32.0 B per opening
+  attributes-wide              b=    6.90 o=0.016 a=1.000 |    45.8 ns     0.0 B per attribute
+  attributes-inc-wide          b=   10.89 o=0.016 a=0.999 |    56.9 ns     0.0 B per attribute
+  cells-wide                   b=   20.15 o=1.050 a=1.050 |   510.3 ns   434.0 B per kept cell
+  kept-attributes-inc-wide     b=   21.57 o=0.525 a=1.025 |   412.8 ns   316.8 B per kept attribute
+  kept-attribute-flood-inc-wide b=   22.91 o=0.016 a=0.999 |   220.7 ns     1.5 B per attribute named t
+  values-inc-wide              b=   58.15 o=2.050 a=2.050 |  1109.7 ns   871.8 B per kept cell with value
+  formulas-inc-wide            b=  129.13 o=2.050 a=1.050 |  1754.5 ns  1561.9 B per distinct formula
+  formulas-amp100-wide         b=  117.13 o=2.050 a=0.050 |  2115.0 ns  1730.3 B per distinct formula
+  formulas-hits-wide           b=  113.17 o=2.050 a=0.050 |  2305.9 ns  2080.4 B per distinct formula
+  formulas-plain100-wide       b=  117.13 o=2.050 a=0.050 |  2386.1 ns  2144.6 B per distinct formula
+  formulas-rand100-wide        b=  114.16 o=2.050 a=0.050 |  2273.2 ns  2391.6 B per distinct formula
+  kept-attribute-a2-inc-wide   b= 1561.53 o=1.051 a=64.107 |  8362.7 ns   461.5 B per kept cell with 64 kept-name attributes
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+        = 40.4 + 46.6 + 33.9 + 0.0 = 121.0 ms (24 % of 500 ms; margin 76 %)
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=13.26 B/byte, mO=428.3 B/opening, mA=0.0 B/attribute
+        = 14.6 + 39.8 + 40.8 + 0.0 = 95.2 MiB (63 % of 150 MiB; margin 37 %)
+worst mix for time:   24798 x formulas-amp100 + 46823 x cells-min-wide -> 121.0 ms
+worst mix for memory: 45442 x cells-min + 25505 x formulas-rand100-wide -> 95.2 MiB
+exit=0
+$ node probes/bound.mjs 8388608 150000 500000 <same files>
+limits: X=8388608 XML bytes, O=150000 openings, A=500000 attributes; 61 measured units
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=10.10 B/byte, mO=604.2 B/opening, mA=0.0 B/attribute
+worst mix for time:   71471 x formulas-amp100 + 3318 x cells-min-wide -> 215.7 ms
+worst mix for memory: 35437 x kept-text-refs-inc-wide + 73171 x formulas-rand100-wide -> 181.8 MiB
+$ node probes/bound.mjs 4194304 150000 500000 <same files>
+limits: X=4194304 XML bytes, O=150000 openings, A=500000 attributes; 61 measured units
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=13.26 B/byte, mO=428.3 B/opening, mA=0.0 B/attribute
+worst mix for time:   32300 x formulas-amp100 + 79795 x cells-min-wide -> 153.5 ms
+worst mix for memory: 77995 x cells-min + 33222 x formulas-rand100-wide -> 128.9 MiB
+$ node probes/bound.mjs 3145728 120000 500000 <same files>
+limits: X=3145728 XML bytes, O=120000 openings, A=500000 attributes; 61 measured units
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=13.26 B/byte, mO=428.3 B/opening, mA=0.0 B/attribute
+worst mix for time:   23882 x formulas-amp100 + 67660 x cells-min-wide -> 127.8 ms
+worst mix for memory: 66329 x cells-min + 24563 x formulas-rand100-wide -> 103.4 MiB
+$ node probes/bound.mjs 3145728 100000 500000 <same files>
+limits: X=3145728 XML bytes, O=100000 openings, A=500000 attributes; 61 measured units
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=13.26 B/byte, mO=428.3 B/opening, mA=0.0 B/attribute
+worst mix for time:   24798 x formulas-amp100 + 46823 x cells-min-wide -> 121.0 ms
+worst mix for memory: 45442 x cells-min + 25505 x formulas-rand100-wide -> 95.2 MiB
+$ node probes/bound.mjs 2097152 100000 500000 <same files>
+limits: X=2097152 XML bytes, O=100000 openings, A=500000 attributes; 61 measured units
+time:   T <= T0 + tX*X + tO*O + tA*A with T0=40.4 ms, tX=14.83 ns/byte, tO=339.4 ns/opening, tA=0.0 ns/attribute
+memory: M <= M0 + mX*X + mO*O + mA*A with M0=14.6 MiB, mX=13.26 B/byte, mO=428.3 B/opening, mA=0.0 B/attribute
+worst mix for time:   15005 x formulas-amp100 + 65943 x cells-min-wide -> 105.4 ms
+worst mix for memory: 65107 x cells-min + 15433 x formulas-rand100-wide -> 82.0 MiB

@@ -1,0 +1,26 @@
+// WP4-RECHECK-B3 evidence masking (auditor's own): copies logs and probes into the evidence folder as LF text with
+// ANSI codes removed and machine paths masked (<task>, <project>, <home>). Usage: node mask.mjs <dest> <src>=<name>...
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dest, ...pairs] = process.argv.slice(2);
+mkdirSync(dest, { recursive: true });
+const rules = [
+  [/file:\/\/\/<task>/gi, '<task>'],
+  [/D:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP4-RECHECK-B3/gi, '<task>'],
+  [/\/d\/\.claude-tmp\/timesheet\/WP4-RECHECK-B3/gi, '<task>'],
+  [/D:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet/gi, '<project>'],
+  [/\/d\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/C:[\\/]+Users[\\/]+[^\\/\s"']+/gi, '<home>'],
+  [/\/c\/Users\/[^/\s"']+/gi, '<home>'],
+  // eslint-disable-next-line no-control-regex
+  [/\u001b\[[0-9;]*m/g, ''],
+  [/\r\n/g, '\n'],
+];
+for (const pair of pairs) {
+  const at = pair.lastIndexOf('=');
+  let text = readFileSync(pair.slice(0, at), 'utf8');
+  for (const [re, to] of rules) text = text.replace(re, to);
+  writeFileSync(join(dest, pair.slice(at + 1)), text.endsWith('\n') ? text : `${text}\n`);
+}
+console.log(`masked ${pairs.length} files into ${dest.replace(/.*handoff/, 'handoff')}`);

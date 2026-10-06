@@ -1,0 +1,99 @@
+# WP4-FIXB4 03 green: the three test files after the ceilings and the re-sized limit tests (125/125), and the new tests verbose.
+# Commands: node node_modules/vitest/vitest.mjs run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts
+#           tests/client/importModel.test.ts ; then --reporter=verbose -t "WP4-FIXB4" on the reader file.
+## three files
+
+ RUN  v5.0.2 <project>
+
+
+ Test Files  3 passed (3)
+      Tests  125 passed (125)
+   Start at  11:13:25
+   Duration  10.80s (tests 87%, import 8%, transform 5%)
+
+# (the shell printed exit=0 after this run; the run itself was captured without an exit line)
+## the new tests, verbose
+2026-10-06T18:13:47Z
+$ node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/workbook-reader.test.ts -t "WP4-FIXB4"   (after the ceilings: green)
+
+ RUN  v5.0.2 <project>
+
+ ↓ tests/integration/workbook-reader.test.ts > tracked template (read only) > keeps the published SHA-256 and is cloned in memory only
+ ↓ tests/integration/workbook-reader.test.ts > tracked template (read only) > previews the three support sheets and reports every README defect with cell provenance
+ ↓ tests/integration/workbook-reader.test.ts > tracked template (read only) > never evaluates formulas and labels cached results as not authoritative
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > maps dated sheets with labels, clocks and the period dates implied by the payroll date
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > accepts a holiday-table name as a holiday label and a floating one with a floating finding
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags an unknown label at its cell and blocks a clean preview
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a duplicate payroll date, whether the sheet names differ or are identical
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a date that appears on two payroll sheets or twice on one sheet
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > does not map a sheet whose name is not a payroll date and keeps it reported
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > detects the three inherited formula defects on a dated sheet, and none once they are corrected
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > reports values taken from a formula cache and a payroll cell that disagrees with the sheet name
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > flags a half-filled clock pair and a payroll date outside the workbook calendar
+ ↓ tests/integration/workbook-reader.test.ts > synthetic dated sheets > reports hidden sheets
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects data that is not a ZIP package or is not a workbook
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package larger than the compressed-size limit
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package with too many entries
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a zip bomb: an entry whose declared inflated size is over the per-entry limit
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects an oversized entry whose header lies about its inflated size, before it is fully inflated
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a package whose entries together inflate beyond the total limit
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects an entry whose size or checksum does not match its header
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects encrypted entries
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects a DOCTYPE or entity payload in any parsed part, including a UTF-16 one
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > decodes the predefined entities exactly once and leaves unknown references literal
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > rejects macro-bearing packages by entry name or content type
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > ignores external links: they are listed, never opened or followed
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > does not run anything when a formula is hostile: it stays text with a cached value
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > only ever fails with a typed rejection when bytes of a valid package are corrupted (deterministic)
+ ↓ tests/integration/workbook-reader.test.ts > reader limits and hostile packages > keeps the tracked template unchanged after the hostile cases
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses the 65 KB package of three 15.8 MiB empty-cell sheets as an oversized part, quickly (P1b, P6)
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses sheets of <c><v>1</v></c> cells before it allocates for them (P1b)
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > counts element openings before parsing, so a part under the size limit cannot hide a huge tree
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > also sees namespace-prefixed cells and rows
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > applies each new limit when it is lowered (part size, elements, rows, total XML, total elements)
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > bounds the total XML parsed per package, not only each part
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > keeps the template and a realistic workbook of 60 dated sheets inside every limit, with room to spare
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses the 2.7 MB formula-heavy package of the audit (3 x 199 000 formula cells)
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > caps the stored findings: the first sources of a finding plus a total count, whatever the cell count
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > keeps small findings whole: the count equals the listed sources
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > collapses a flood of one kind of finding into a bounded list with a truthful summary
+ ↓ tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses a holiday table with more rows than any calendar has
+ ↓ tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > previews a sheet of 150 000 cells in column C instead of overflowing the stack (the audit gave a 500)
+ ↓ tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > refuses such a sheet with a typed 422 reason under the default limits
+ ↓ tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > reads a far sparse row without walking every row number before it
+ ↓ tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > maps 150 000 cells without a spread over the cell list and without a loop up to the largest row
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3): refuses a part of tags led by a digit, a space, a dot or a hyphen, which the old count let through
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H2a, H2b, H2e): four near-limit parts of such tags are refused, not parsed for seconds
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: counts every markup opening, whatever follows the "<": elements, comments, processing instructions, CDATA
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H1c): four near-limit parts of counted elements are over the package total
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3, r1 H4a, H4b): bounds the attributes of one element, of a part and of a package, and the bytes of one tag
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5d): a 1 MiB shared string used as 100 holiday names gives a report of kilobytes, not 100 MiB
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5b): a near-limit shared string used as 2 000 holiday names builds a bounded report and never throws
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H6a, H6b, H5e): labels of megabytes are cut to the text limit, flagged, and never matched
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a shared formula of megabytes used by thousands of cells is examined once, and still counted per cell
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: megabytes of whitespace used as 2 000 holiday dates and names are examined over a bounded prefix
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > keeps the tracked template and a realistic workbook of 12 dated sheets previewing, untruncated, inside the budget
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, E7): a kept attribute value over 255 characters is refused; one at the cap is decoded once
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, Y7): four near-limit parts of pinned two-byte cells are over the package limits
+ ↓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound
+ ✓ tests/integration/workbook-reader.test.ts > WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded > red-first: the reader ceilings are the values docs/07 states 1ms
+ ✓ tests/integration/workbook-reader.test.ts > WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded > red-first: an incompressible upload over 2 MiB is refused before anything is inflated 309ms
+ ✓ tests/integration/workbook-reader.test.ts > WP4-FIXB4: the ceilings are the documented ones, and incompressible packages at them stay bounded > a mid-size incompressible package at the ceilings previews inside a generous bound, or is refused 317ms
+ ↓ tests/integration/workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > decodes every kept text and attribute value exactly one level, and leaves CDATA as written
+ ↓ tests/integration/workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > red-first (R-B2-2): refuses a part that declares an encoding other than UTF-8 or UTF-16
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 61 skipped (64)
+   Start at  11:13:47
+   Duration  910ms (tests 77%, transform 12%, import 10%)
+
+exit=0
+
+## the sizes of the two incompressible test packages, rebuilt as the test builds them (probes/test-shapes.mjs); the mid-size
+## test's comment was corrected to these numbers afterwards (1.8 MiB upload, 2.9 MiB XML, 54 000 openings), see 12
+2026-10-06T18:46:43Z
+$ EXPORT=<project> node probes/test-shapes.mjs
+1.20 MiB a sheet: upload 2445850 B (2.33 MiB); the three dated sheets 3839817 B of XML (3.66 MiB), 68670 openings; refused: package_too_large in 0 ms
+0.92 MiB a sheet: upload 1887301 B (1.80 MiB); the three dated sheets 2962692 B of XML (2.83 MiB), 53295 openings; previews, inflatedBytes 3025630 in 102 ms
+exit=0

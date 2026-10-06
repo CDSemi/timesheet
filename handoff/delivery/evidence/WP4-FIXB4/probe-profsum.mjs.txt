@@ -1,0 +1,14 @@
+// WP4-FIXB4 diagnostic: self time per function from a V8 .cpuprofile (top 15). Usage: node profsum.mjs <file>
+import { readFileSync } from 'node:fs';
+
+const profile = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+const self = new Map();
+const deltas = profile.timeDeltas;
+for (let index = 0; index < profile.samples.length; index += 1) {
+  const node = byId.get(profile.samples[index]);
+  const frame = node.callFrame;
+  const key = `${frame.functionName || '(anonymous)'} ${frame.url.split('/').pop()}:${frame.lineNumber + 1}`;
+  self.set(key, (self.get(key) ?? 0) + (deltas[index] ?? 0) / 1000);
+}
+for (const [key, ms] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 15)) console.log(`${ms.toFixed(1).padStart(8)} ms  ${key}`);

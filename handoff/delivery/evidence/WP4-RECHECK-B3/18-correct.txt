@@ -1,0 +1,81 @@
+2026-10-06T17:26:02Z
+PASS decode once: text &amp;amp; -> &amp; | "&amp;"
+PASS decode once: text &amp;lt; -> &lt; | "&lt;"
+PASS decode once: text &#38;#65; -> &#65; | "&#65;"
+PASS decode once: text &#x26;amp; -> &amp; | "&amp;"
+PASS CDATA is not decoded: &amp; stays &amp; | "&amp;"
+PASS segments split by a comment are not joined into a reference (&am + p; stays literal, decoded never) | "&amp;"
+PASS decode once: <v> &amp;quot; -> &quot; | "&quot;"
+PASS decode once: formula "&amp;amp;"&amp;A1 -> "&amp;"&A1 | "\"&amp;\"&A1"
+PASS decode once: shared string &amp;amp; -> &amp; | "&amp;"
+PASS rich runs "&amp;" + "lt;" stay two literal pieces: &lt; (no second decode after joining) | "&lt;"
+PASS decode once: kept attribute r="&#75;1" -> K1, text &#x1F600;&amp;#x1F600; -> U+1F600 + &#x1F600; | "😀&#x1F600;"
+PASS decode once: sheet name S&amp;amp;T -> S&amp;T; relationship id r&amp;Id matched once | "S&amp;T" worksheet
+PASS decode once through the mapping: label &amp;amp;Worked -> &amp;Worked, unknown | "&amp;Worked"
+PASS a kept attribute of exactly 255 characters is accepted | accepted
+PASS a kept attribute of 256 characters refuses the package (attribute_too_large), nothing is cut | attribute_too_large
+PASS the cap counts characters as written: 51 x &amp; (255 written) accepted, 51 decoded & kept whole | accepted
+PASS an unkept attribute of 1 000 characters is not capped | accepted
+PASS a 255-character written sheet name (255) decodes whole (59 characters) and maps to payroll 2026-05-29 | 2026-05-29 name length 59
+PASS the same sheet name with one more written character is refused, not cut to a payroll date | attribute_too_large
+PASS R-B2-1: both holidays are listed with the same 200-character cut name | 200/false 200/true
+PASS R-B2-1: the label matching the fixed holiday is not floating | Holiday false
+PASS R-B2-1: the label matching the floating holiday is floating and needs a decision | Holiday true
+PASS R-B2-1: the fixed holiday day needs no floating decision | []
+PASS R-B2-1: the stored report keeps the same flags
+PASS R-B2-2: encoding "ISO-8859-1" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "ISO-8859-1" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "latin1" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "windows-1252" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "US-ASCII" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-32" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-7" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "Shift_JIS" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF8" in sst refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in ctDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in wbDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in relsDecl refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in sheet refused | unsupported_encoding
+PASS R-B2-2: encoding " UTF-8 " in sst refused | unsupported_encoding
+PASS R-B2-2: encoding "UTF-8" accepted | accepted
+PASS R-B2-2: encoding "utf-8" accepted | accepted
+PASS R-B2-2: encoding "UTF-16" accepted | accepted
+PASS R-B2-2: encoding "utf-16le" accepted | accepted
+PASS R-B2-2: encoding "UTF-16BE" accepted | accepted
+PASS R-B2-2: no declared encoding accepted | accepted
+LENIENT leading white space before an ISO-8859-1 declaration: accepted (read as UTF-8)
+LENIENT a "?" inside the version before an ISO-8859-1 encoding: accepted (read as UTF-8)
+LENIENT mismatched quotes around ISO-8859-1: accepted (read as UTF-8)
+correctness: 75 PASS, 0 FAIL
+exit: 0

@@ -1,0 +1,20 @@
+// WP4-FIXB4 helper: bytes, markup openings and attributes of each part of the tracked template (read only), to size
+// the limit tests. Usage: EXPORT=<tree> node template-parts.mjs
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const mod = (rel) => pathToFileURL(join(process.env.EXPORT, rel)).href;
+const { unzipSync, strFromU8 } = await import(mod('node_modules/fflate/esm/index.mjs'));
+const entries = unzipSync(new Uint8Array(readFileSync(join(process.env.EXPORT, 'reference/inputs/Timesheet_Rev8_2026.xlsx'))));
+let total = { bytes: 0, openings: 0, attributes: 0 };
+for (const [name, data] of Object.entries(entries)) {
+  if (!name.endsWith('.xml') && !name.endsWith('.rels')) continue;
+  const text = strFromU8(data);
+  const openings = (text.match(/<(?!\/)/g) ?? []).length;
+  const attributes = (text.match(/\s[A-Za-z_:][-A-Za-z0-9_:.]*\s*=\s*["']/g) ?? []).length;
+  const parsed = name === '[Content_Types].xml' || name === 'xl/workbook.xml' || name === 'xl/_rels/workbook.xml.rels' || name === 'xl/sharedStrings.xml' || name.startsWith('xl/worksheets/sheet');
+  console.log(`${parsed ? 'parsed ' : 'skipped'} ${name}: ${data.length} B, ${openings} openings, ${attributes} attributes`);
+  if (parsed) total = { bytes: total.bytes + data.length, openings: total.openings + openings, attributes: total.attributes + attributes };
+}
+console.log(`parsed total: ${total.bytes} B, ${total.openings} openings, ${total.attributes} attributes`);

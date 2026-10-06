@@ -1,0 +1,88 @@
+// WP4-FIXB3 cost probe: one synchronous preview (reader + mapping) per case in a fresh child process, so the
+// event-loop time and the maxRSS high-water mark belong to that case only; then JSON.stringify of the preview model.
+// Cases: the WP4-FIXB2 catalogue (cases.mjs: the first audit's P1b/P7, the recheck's r1/r3, N*), the WP4-RECHECK-B2
+// catalogue (b2cases.mjs, prefixed "B2 ") and this task's search (search.mjs, prefixed "S3 "). Packages are built once
+// by a child that imports the helpers of PROBE_BUILD_ROOT and are kept under PROBE_PKGS (never the repository).
+// Flags: OVER-TARGET above 350 ms or +105 MiB (70 % of the budget), OVER-BUDGET above 500 ms or +150 MiB.
+// Usage: PROBE_ROOT=<export> PROBE_PKGS=<dir> node cost.mjs [filter] [repeat]
+//        node cost.mjs --build <case> | --run <case>
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const MiB = 1024 * 1024;
+const PKGS = process.env.PROBE_PKGS;
+if (!PKGS) throw new Error('PROBE_PKGS required');
+const fileOf = (name) => join(PKGS, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 90)}.xlsx`);
+const args = process.argv.slice(2);
+
+async function allCases() {
+  const { CASES: fixb2 } = await import('./cases.mjs');
+  const { CASES: b2 } = await import('./b2cases.mjs');
+  const { CASES: search } = await import('./search.mjs');
+  return {
+    ...fixb2,
+    ...Object.fromEntries(Object.entries(b2).map(([name, build]) => [`B2 ${name}`, build])),
+    ...Object.fromEntries(Object.entries(search).map(([name, build]) => [`S3 ${name}`, build])),
+  };
+}
+
+if (args[0] === '--build') {
+  const cases = await allCases();
+  const { pack } = await import(pathToFileURL(join(process.env.PROBE_ROOT, 'tests/support/syntheticWorkbook.ts')).href);
+  mkdirSync(PKGS, { recursive: true });
+  const built = await cases[args[1]]();
+  writeFileSync(fileOf(args[1]), built instanceof Uint8Array ? built : pack(built));
+} else if (args[0] === '--run') {
+  const { previewWorkbook } = await import(pathToFileURL(join(process.env.PROBE_ROOT, 'src/server/import/templateMapping.ts')).href);
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  let jsonMs = 0;
+  let previewMs;
+  try {
+    const out = previewWorkbook(bytes);
+    previewMs = performance.now() - t0;
+    const t1 = performance.now();
+    let size;
+    try {
+      size = `preview JSON ${(JSON.stringify(out).length / MiB).toFixed(3)} MiB`;
+    } catch (error) {
+      size = `JSON.stringify THROWN ${error.name}: ${error.message}`;
+    }
+    jsonMs = Math.round(performance.now() - t1);
+    outcome = `accepted (sheets=${out.sheets.length}, periods=${out.periods.length}, holidays=${out.holidays.length}, errors=${out.summary.errors}, findings=${out.findings.length}); ${size}`;
+  } catch (error) {
+    previewMs = performance.now() - t0;
+    outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${String(error.message).slice(0, 120)}`;
+  }
+  const after = process.resourceUsage().maxRSS;
+  const delta = Math.round((after - baseline) / 1024);
+  const flag = previewMs > 500 || delta > 150 ? ' OVER-BUDGET' : previewMs > 350 || delta > 105 ? ' OVER-TARGET' : '';
+  console.log(`${args[1]} | upload=${bytes.length} B | preview ms=${Math.round(previewMs)} (+${jsonMs} ms JSON) | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(after / 1024)} MiB (+${delta})${flag} | ${outcome}`);
+} else {
+  const cases = await allCases();
+  const filter = args[0] ?? '';
+  const repeat = Number(args[1] ?? 1);
+  const opts = { encoding: 'utf8', env: process.env, timeout: 300_000, maxBuffer: 64 * MiB };
+  const clean = (s) => (s ?? '').trim().split('\n').filter((l) => !l.includes('ExperimentalWarning') && !l.includes('--trace-warnings')).slice(0, 2).join(' / ').slice(0, 300);
+  const self = fileURLToPath(import.meta.url);
+  const selected = Object.keys(cases).filter((name) => (filter.endsWith('*') ? name.startsWith(filter.slice(0, -1)) : name.includes(filter)));
+  for (const name of selected) {
+    if (!existsSync(fileOf(name))) {
+      const build = spawnSync(process.execPath, [self, '--build', name], { ...opts, env: { ...process.env, PROBE_ROOT: process.env.PROBE_BUILD_ROOT ?? process.env.PROBE_ROOT } });
+      if (build.status !== 0) {
+        process.stdout.write(`${name} | BUILD FAILED exit=${build.status} ${clean(build.stderr)}\n`);
+        continue;
+      }
+    }
+    for (let k = 0; k < repeat; k += 1) {
+      const child = spawnSync(process.execPath, [self, '--run', name], opts);
+      const err = clean(child.stderr);
+      process.stdout.write(`${(child.stdout ?? '').trim() || name} | exit=${child.status}${child.signal ? ' signal=' + child.signal : ''}${err ? ' | stderr=' + err : ''}\n`);
+    }
+  }
+}

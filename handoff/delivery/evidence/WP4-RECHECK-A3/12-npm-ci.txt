@@ -1,0 +1,81 @@
+# 12 npm ci on the export (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:02:42Z
+$ node --version; npm --version
+v24.21.0
+11.18.0
+DATA_DIR=<work>\data
+DATABASE_PATH=<work>\data\timesheet.db
+$ npm ci
+
+added 161 packages, and audited 162 packages in 4s
+
+42 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+exit 0
+$ grep -ci deprecat in the npm ci output above: see 12-npm-ci-deprecation-count below
+date_utc: 2026-10-06T17:02:47Z
+[end]
+
+## 12b deprecation lines in npm ci output (excluding this log's own header lines)
+0
+$ npm ls --all --omit=dev | wc -l ; npm ls fast-xml-parser
+timesheet@0.1.0 <work>\export
+`-- (empty)
+
+exit 1
+$ ls node_modules | grep -ci fast-xml
+0
+$ npm audit --omit=dev
+found 0 vulnerabilities
+exit 0
+$ npm audit (all, info only)
+# npm audit report
+
+source-map-js  1.0.0 - 1.2.1
+Severity: high
+source-map-js allows event-loop denial of service through indexed source-map section offsets - https://github.com/advisories/GHSA-68fv-2mgg-jv7q
+fix available via `npm audit fix`
+node_modules/source-map-js
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+exit 1
+[end]
+
+## 12c where source-map-js comes from (dev or prod)
+$ npm ls source-map-js
+timesheet@0.1.0 <work>\export
+`-- vite@8.3.1
+  `-- postcss@8.5.28
+    `-- source-map-js@1.2.1
+
+exit 0
+$ npm ls source-map-js --omit=dev
+timesheet@0.1.0 <work>\export
+`-- (empty)
+
+exit 1
+$ node -p lock entry dev flag for node_modules/source-map-js (probe file)
+[end 12c]
+(the 'node -p' line above was a header only; nothing ran. The lock entry was read with grep instead:)
+$ grep -n -A8 '"node_modules/source-map-js"' package-lock.json
+2644:    "node_modules/source-map-js": {
+2645-      "version": "1.2.1",
+2646-      "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz",
+2647-      "integrity": "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==",
+2648-      "dev": true,
+2649-      "license": "BSD-3-Clause",
+2650-      "engines": {
+2651-        "node": ">=0.10.0"
+2652-      }
+Note: package-lock.json is byte-identical to cc34e7f (blob f4f491a6), so this advisory is a registry-side publication, not a change in the freeze. npm audit --omit=dev = 0.
+[end]

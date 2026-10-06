@@ -1,0 +1,155 @@
+// WP4-FIXB3 systematic worst-case search. Every shape is a minimal package (content types, workbook, relationships,
+// optional shared strings and four worksheet parts of just under 4 MiB, so the 16 MiB XML total is spent on hostile
+// content) generated from a grid:
+//   content   x  text width  x  pinning  x  sheet roles
+// content: the most kept cells, valued cells, inline strings, shared strings used by cells, entity-dense kept text,
+//          attribute floods with kept attributes at their cap, kept attribute values full of references;
+// width:   ASCII filler, ASCII filler with one non-Latin-1 character (each part decodes as a two-byte string), or
+//          two-byte text throughout;
+// pinning: one kept value per part (it used to pin the decoded part) or none;
+// roles:   generic sheet names (100 characters) or the mapped roles (Working Infos, Holiday Dates, Timesheet and a
+//          dated sheet), so the mapping does its most work.
+// Each count is pushed to the limit of the build under test that it targets: KEPT_ATTRIBUTE (the cap on a kept
+// attribute value), and the opening and attribute limits of the defaults. Synthetic data only.
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = process.env.PROBE_ROOT;
+if (!ROOT) throw new Error('PROBE_ROOT required');
+const { strToU8, zipSync } = await import(pathToFileURL(join(ROOT, 'node_modules/fflate/esm/index.mjs')).href);
+
+const MiB = 1024 * 1024;
+/** Bytes of one part and the parts per package: the per-part and per-package XML limits of the build under test. */
+const PART = Number(process.env.SEARCH_PART_BYTES ?? 4 * MiB) - 4096;
+const PARTS = Number(process.env.SEARCH_PARTS ?? 4);
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+/** The longest kept attribute value the fixed reader accepts. */
+const KEPT_ATTRIBUTE = 255;
+/** Markup openings per package and per part (defaults of the fixed reader); shapes stay just under them. */
+const OPENINGS = Number(process.env.SEARCH_OPENINGS ?? 200_000);
+const PART_OPENINGS = Number(process.env.SEARCH_PART_OPENINGS ?? 100_000);
+
+const bytesOf = (text) => Buffer.byteLength(text);
+const ws = (inner) => `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${NS}"><sheetData>${inner}</sheetData></worksheet>`;
+const column = (i) => `${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + (Math.floor(i / 26) % 26))}${String.fromCharCode(65 + (Math.floor(i / 676) % 26))}`;
+const address = (i) => `${column(i % 17_576)}${1_000_000 + Math.floor(i / 17_576) * 100_000 + i}`;
+
+const ROLES = {
+  generic: [1, 2, 3, 4].map((k) => `${'G'.repeat(99)}${k}`),
+  mapped: ['Working Infos', 'Holiday Dates', 'Timesheet', '2026.01.09'],
+};
+
+/** Filler that brings a part to PART bytes: an ASCII comment, the same with one 'ā', or 'ā' throughout. */
+function filled(xml, width) {
+  const room = PART - bytesOf(xml) - 16;
+  if (room <= 0) return xml;
+  if (width === 'ascii') return `${xml}<!--${'a'.repeat(room)}-->`;
+  if (width === 'one-wide') return `${xml}<!--ā${'a'.repeat(room - 2)}-->`;
+  return `${xml}<!--${'ā'.repeat(Math.floor(room / 2))}-->`;
+}
+
+/** A wide or narrow kept text of `chars` characters. */
+const text = (chars, width) => (width === 'two-byte' ? 'ā' : 'w').repeat(chars);
+
+function pkg(names, parts, sst) {
+  const entries = {};
+  entries['[Content_Types].xml'] = `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`;
+  entries['xl/workbook.xml'] = `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets>${names.map((name, i) => `<sheet name="${name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`;
+  entries['xl/_rels/workbook.xml.rels'] = `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${RNS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`;
+  parts.forEach((xml, i) => { entries[`xl/worksheets/sheet${i + 1}.xml`] = xml; });
+  if (sst !== undefined) entries['xl/sharedStrings.xml'] = sst;
+  const zippable = {};
+  for (const [name, data] of Object.entries(entries)) zippable[name] = [strToU8(data), { level: 6, mtime: 1_767_225_600_000 }];
+  return zipSync(zippable);
+}
+
+/** Rows of 20 cells; `cell(i)` gives cell i's XML; `openingsPerCell` sizes the count to the opening limits. */
+function rows(count, cell) {
+  let out = '';
+  for (let start = 0; start < count; start += 20) {
+    let cells = '';
+    for (let i = start; i < Math.min(count, start + 20); i += 1) cells += cell(i);
+    out += `<row r="${1_000_000 + start / 20}">${cells}</row>`;
+  }
+  return out;
+}
+
+/** How many cells of `perCell` openings fit one part (rows of 20 add one opening each). */
+function cellsPerPart(perCell, parts = PARTS) {
+  const perPart = Math.min(PART_OPENINGS, Math.floor(OPENINGS / parts)) - 40;
+  return Math.min(49_900, Math.floor(perPart / (perCell + 1 / 20)));
+}
+
+const CONTENT = {
+  // Empty cells with distinct 10-character addresses: the most kept cells.
+  cells: (width, pin) => {
+    const n = cellsPerPart(1);
+    const xml = ws(`${pin ? `<row r="1"><c r="ZZZ1" t="str"><v>${text(20, width)}</v></c></row>` : ''}${rows(n, (i) => `<c r="${address(i)}"/>`)}`);
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+  // Cells with a kept 20-character string value each: the most kept strings.
+  strings: (width, pin) => {
+    const n = Math.min(cellsPerPart(2), Math.floor((PART - 400) / (width === 'two-byte' ? 82 : 66))); // WP4-FIXB4: also fits the part bytes
+    const xml = ws(`${rows(n, (i) => `<c r="${address(i)}" t="str"><v>${text(16, width)}${String(i).padStart(4, '0').slice(-4)}</v></c>`)}`);
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+  // Inline strings as long as the part allows: the most kept text.
+  inline: (width) => {
+    const n = cellsPerPart(4);
+    const per = Math.floor((PART - 400) / n / (width === 'two-byte' ? 2 : 1)) - 60;
+    const xml = ws(rows(n, (i) => `<c r="${address(i)}" t="inlineStr"><is><t>${text(Math.max(1, per), width)}</t></is></c>`));
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+  // 49 900 shared strings used by three parts of cells (the fourth part is the shared-strings table).
+  shared: (width) => {
+    const count = Math.min(49_900, Math.floor((PART - 400) / (width === 'two-byte' ? 26 : 24))); // WP4-FIXB4: also fits the part bytes
+    const per = Math.floor((PART - 400) / count / (width === 'two-byte' ? 2 : 1)) - 18;
+    const items = Array.from({ length: count }, (_, i) => `<si><t>${String(i).padStart(6, '0')}${text(Math.max(1, per - 6), width)}</t></si>`).join('');
+    const sst = filled(`<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS}">${items}</sst>`, width);
+    const n = cellsPerPart(2, PARTS);
+    const xml = ws(rows(n, (i) => `<c r="${address(i)}" t="s"><v>${i % count}</v></c>`));
+    return { parts: Array.from({ length: PARTS - 1 }, () => filled(xml, width)), sst };
+  },
+  // Kept text dense with references: &amp; (decoded), &#x1F600; (astral, decoded), bare & (never a reference).
+  'amp': (width) => ({ parts: Array.from({ length: PARTS }, () => filled(ws(`<row r="1"><c r="A1" t="inlineStr"><is><t>${'&amp;'.repeat(Math.floor((PART - 300) / 5))}</t></is></c></row>`), width)) }),
+  'astral': (width) => ({ parts: Array.from({ length: PARTS }, () => filled(ws(`<row r="1"><c r="A1" t="inlineStr"><is><t>${'&#x1F600;'.repeat(Math.floor((PART - 300) / 9))}</t></is></c></row>`), width)) }),
+  'bare-amp': (width) => ({ parts: Array.from({ length: PARTS }, () => filled(ws(`<row r="1"><c r="A1" t="inlineStr"><is><t>${'&'.repeat(PART - 300)}</t></is></c></row>`), width)) }),
+  // Kept attributes at the cap, full of references, on cells with an inline string (the E7 path), as many as fit.
+  'kept-attributes': (width) => {
+    const value = '&amp;'.repeat(Math.floor(KEPT_ATTRIBUTE / 5));
+    const n = Math.min(cellsPerPart(4), Math.floor((PART - 400) / (value.length * 2 + 60)));
+    const xml = ws(rows(n, (i) => `<c r="${address(i)}" t="${value}"><is><t>${text(4, width)}</t></is></c>`));
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+  // Bare & in kept attribute values at the cap (the E7 shape after the cap).
+  'kept-bare-amp': (width) => {
+    const value = '&'.repeat(KEPT_ATTRIBUTE);
+    const n = Math.min(cellsPerPart(4), Math.floor((PART - 400) / (value.length + 60)));
+    const xml = ws(rows(n, (i) => `<c r="${address(i)}" t="${value}"><is><t>x</t></is></c>`));
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+  // Attribute floods: 64 attributes per element (unkept ones) up to the part and package limits, on kept cells.
+  'attributes': (width) => {
+    const many = Array.from({ length: 63 }, (_, k) => ` a${k}="&amp;"`).join('');
+    const n = Math.min(Math.floor(124_000 / 64), Math.floor((PART - 400) / 860)); // WP4-FIXB4: also fits the part bytes
+    const xml = ws(rows(n, (i) => `<c r="${address(i)}"${many}/>`));
+    return { parts: Array.from({ length: PARTS }, () => filled(xml, width)) };
+  },
+};
+
+export const CASES = {};
+for (const [content, build] of Object.entries(CONTENT)) {
+  for (const width of ['ascii', 'one-wide', 'two-byte']) {
+    for (const roles of ['generic', 'mapped']) {
+      const pins = content === 'cells' ? [true, false] : [true];
+      for (const pin of pins) {
+        const name = `${content} ${width} ${roles}${content === 'cells' ? (pin ? ' pinned' : ' unpinned') : ''}`;
+        CASES[name] = () => {
+          const { parts, sst } = build(width, pin);
+          return pkg(ROLES[roles].slice(0, parts.length), parts, sst);
+        };
+      }
+    }
+  }
+}

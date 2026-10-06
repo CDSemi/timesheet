@@ -1,0 +1,73 @@
+E1 4 parts x 4 MiB of bare & in one kept inline string each | upload=18672 B | preview ms=44 (+0 ms JSON) | maxRSS 67 -> 112 MiB (+45) | rejected:total_xml_too_large | exit=0
+E2 4 parts x 4 MiB of &#1234567; (out of range, digits parsed, kept literal) | upload=34960 B | preview ms=80 (+0 ms JSON) | maxRSS 68 -> 117 MiB (+49) | rejected:total_xml_too_large | exit=0
+E3 4 parts x 4 MiB of &#x1F600; (astral, decoded to surrogate pairs) | upload=34952 B | preview ms=119 (+0 ms JSON) | maxRSS 68 -> 111 MiB (+43) | rejected:total_xml_too_large | exit=0
+E4 4 parts x 4 MiB of &abcdefgh; (unknown 8-letter names) | upload=34952 B | preview ms=75 (+0 ms JSON) | maxRSS 67 -> 105 MiB (+38) | rejected:total_xml_too_large | exit=0
+E5 4 parts x 4 MiB of &amp; (decoded, for reference) | upload=26812 B | preview ms=121 (+0 ms JSON) | maxRSS 66 -> 105 MiB (+38) | rejected:total_xml_too_large | exit=0
+E6 4 parts x 4 MiB of &;&a; (short non-references) | upload=26816 B | preview ms=132 (+0 ms JSON) | maxRSS 67 -> 101 MiB (+35) | rejected:total_xml_too_large | exit=0
+E7 4 parts, 64 cells each with a 65 000-char t="&&&..." (kept attribute, decoded twice per cell) | upload=24780 B | preview ms=22 (+0 ms JSON) | maxRSS 67 -> 87 MiB (+21) | rejected:attribute_too_large | exit=0
+E8 4 parts, 64 cells each with a 65 000-char r="&&&..." (kept attribute, decoded and upper-cased) | upload=20648 B | preview ms=23 (+0 ms JSON) | maxRSS 68 -> 89 MiB (+21) | rejected:attribute_too_large | exit=0
+E9 4 dated sheets, a formula of 4 MiB of bare & (kept text, cut at 8 192) | upload=18625 B | preview ms=47 (+0 ms JSON) | maxRSS 69 -> 116 MiB (+47) | rejected:total_xml_too_large | exit=0
+E10 shared strings 4 MiB of & plus 3 parts of 4 MiB & (16 MiB of & in kept text) | upload=18579 B | preview ms=45 (+0 ms JSON) | maxRSS 67 -> 111 MiB (+44) | rejected:total_xml_too_large | exit=0
+E11 relationships part of 4 MiB: targets of bare & (each decoded once) | upload=15956 B | preview ms=24 (+0 ms JSON) | maxRSS 67 -> 86 MiB (+19) | rejected:attribute_too_large | exit=0
+T1 2 parts x 99 990 <x/> (just under the part and package opening limits) | upload=2305 B | preview ms=21 (+0 ms JSON) | maxRSS 67 -> 81 MiB (+14) | rejected:too_many_elements | exit=0
+T2 4 parts x 49 990 prefixed kept cells <x:c/> (cells and openings just under) | upload=3952 B | preview ms=84 (+0 ms JSON) | maxRSS 68 -> 123 MiB (+55) | rejected:too_many_elements | exit=0
+T3 2 parts x 99 990 <ā/> (non-Latin-1 names, two-byte part) | upload=2993 B | preview ms=25 (+0 ms JSON) | maxRSS 67 -> 81 MiB (+14) | rejected:too_many_elements | exit=0
+T4 2 parts x 99 990 astral names <𐀀/> | upload=3577 B | preview ms=31 (+0 ms JSON) | maxRSS 67 -> 80 MiB (+13) | rejected:too_many_elements | exit=0
+T5 4 parts of 65 000-char element names (self-closing) | upload=19616 B | preview ms=102 (+0 ms JSON) | maxRSS 68 -> 117 MiB (+50) | rejected:total_xml_too_large | exit=0
+T6 4 parts of 32 000-char names, open and close (end tags compared) | upload=20660 B | preview ms=100 (+0 ms JSON) | maxRSS 67 -> 118 MiB (+51) | rejected:total_xml_too_large | exit=0
+T7 4 parts, end tags padded with 4 MiB of white space (end tags have no length limit) | upload=18564 B | preview ms=93 (+0 ms JSON) | maxRSS 68 -> 117 MiB (+49) | rejected:total_xml_too_large | exit=0
+T8 4 parts, start tags of 65 000 spaces <x   ...   /> | upload=19796 B | preview ms=108 (+0 ms JSON) | maxRSS 67 -> 116 MiB (+49) | rejected:total_xml_too_large | exit=0
+T9 2 parts x 99 990 <Row/> and <C/> (case differs from kept names) | upload=3481 B | preview ms=27 (+0 ms JSON) | maxRSS 68 -> 81 MiB (+13) | rejected:too_many_elements | exit=0
+T10 2 parts x 99 990 <a.b-c·d:e/> (every name character class) | upload=6591 B | preview ms=41 (+0 ms JSON) | maxRSS 68 -> 82 MiB (+14) | rejected:too_many_elements | exit=0
+T11 4 parts x 19 999 kept rows <row/> (row limit) and a cell each | upload=2912 B | preview ms=33 (+0 ms JSON) | maxRSS 68 -> 77 MiB (+9) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=4, truncated=0); preview JSON 0.001 MiB | exit=0
+A1 64 attributes x 3 124 elements x 2 parts + 1 562 (499 840 attributes) | upload=17360 B | preview ms=49 (+0 ms JSON) | maxRSS 67 -> 90 MiB (+23) | accepted (sheets=3, periods=0, holidays=0, errors=0, findings=3, truncated=0); preview JSON 0.001 MiB | exit=0
+A2 kept cells with 64 attributes, all named r (3 124 x 2 + 1 562) | upload=20473 B | preview ms=83 (+0 ms JSON) | maxRSS 67 -> 82 MiB (+16) | accepted (sheets=3, periods=0, holidays=0, errors=0, findings=3, truncated=0); preview JSON 0.001 MiB | exit=0
+A3 4 parts, 64 attributes of 1 000-char names per element (tag just under 64 KiB) | upload=71492 B | preview ms=92 (+0 ms JSON) | maxRSS 68 -> 117 MiB (+49) | rejected:total_xml_too_large | exit=0
+A4 namespace declarations: 64 xmlns:pN per element x 3 124 x 2 + 1 562 | upload=36074 B | preview ms=100 (+0 ms JSON) | maxRSS 68 -> 108 MiB (+40) | accepted (sheets=3, periods=0, holidays=0, errors=0, findings=3, truncated=0); preview JSON 0.001 MiB | exit=0
+A5 4 parts, 64 KiB attribute values full of > and quotes | upload=20624 B | preview ms=38 (+0 ms JSON) | maxRSS 67 -> 117 MiB (+50) | rejected:total_xml_too_large | exit=0
+A6 65 attributes on one element (one over the per-element cap) | upload=1322 B | preview ms=4 (+0 ms JSON) | maxRSS 69 -> 70 MiB (+1) | rejected:too_many_attributes | exit=0
+A7 retained kept nodes: 66 000 <sheetData r t si/> under the root (non-streamed, 198 000 attributes) | upload=6165 B | preview ms=72 (+0 ms JSON) | maxRSS 68 -> 92 MiB (+24) | accepted (sheets=1, periods=0, holidays=0, errors=0, findings=1, truncated=0); preview JSON 0.001 MiB | exit=0
+D1 40-deep blocks (37 below row) repeated to 99 990 openings x 2 parts | upload=7683 B | preview ms=28 (+0 ms JSON) | maxRSS 67 -> 82 MiB (+15) | rejected:too_many_elements | exit=0
+D2 kept nesting: a cell with 33 330 <is><r><t>x</t></r></is> children x 2 parts | upload=5471 B | preview ms=63 (+0 ms JSON) | maxRSS 67 -> 102 MiB (+35) | rejected:too_many_elements | exit=0
+X1 4 dated sheets, label B14 = 4 MiB CDATA | upload=18729 B | preview ms=43 (+0 ms JSON) | maxRSS 68 -> 116 MiB (+48) | rejected:total_xml_too_large | exit=0
+X2 2 parts, one kept <t> of 99 990 CDATA sections | upload=7041 B | preview ms=33 (+0 ms JSON) | maxRSS 67 -> 83 MiB (+16) | rejected:too_many_elements | exit=0
+X3 4 parts, 4 MiB text in an element the reader does not keep | upload=18564 B | preview ms=42 (+0 ms JSON) | maxRSS 68 -> 116 MiB (+48) | rejected:total_xml_too_large | exit=0
+X4 4 dated sheets, formula = 4 MiB of quotes and 8.5 (cut at 8 192) | upload=26769 B | preview ms=46 (+0 ms JSON) | maxRSS 67 -> 116 MiB (+49) | rejected:total_xml_too_large | exit=0
+X5 4 dated sheets, label B14 = 2 M two-byte characters (4 MiB UTF-8) | upload=18701 B | preview ms=39 (+0 ms JSON) | maxRSS 67 -> 115 MiB (+48) | rejected:total_xml_too_large | exit=0
+X6 4 parts, one <v> of 4 MiB of digits (t=s and number parsing) | upload=18684 B | preview ms=46 (+0 ms JSON) | maxRSS 67 -> 112 MiB (+45) | rejected:total_xml_too_large | exit=0
+X7 4 parts, one <v> of 4 MiB of white space (blank test) | upload=18600 B | preview ms=45 (+0 ms JSON) | maxRSS 68 -> 111 MiB (+43) | rejected:total_xml_too_large | exit=0
+K1 2 parts x 99 990 empty comments | upload=3567 B | preview ms=17 (+0 ms JSON) | maxRSS 67 -> 83 MiB (+16) | rejected:too_many_elements | exit=0
+K2 2 parts x 99 990 processing instructions | upload=2983 B | preview ms=15 (+0 ms JSON) | maxRSS 69 -> 81 MiB (+12) | rejected:too_many_elements | exit=0
+K3 2 parts, one kept <t> split by 99 990 comments, each segment an &amp; | upload=6257 B | preview ms=91 (+0 ms JSON) | maxRSS 67 -> 94 MiB (+27) | rejected:too_many_elements | exit=0
+K4 4 parts, one 4 MiB comment each | upload=18492 B | preview ms=43 (+0 ms JSON) | maxRSS 68 -> 116 MiB (+48) | rejected:total_xml_too_large | exit=0
+K5 4 parts, one 4 MiB processing instruction each | upload=18488 B | preview ms=42 (+0 ms JSON) | maxRSS 67 -> 116 MiB (+49) | rejected:total_xml_too_large | exit=0
+M1 4 parts just under 4 MiB: 23 000 kept str cells of 156 characters | upload=289052 B | preview ms=122 (+0 ms JSON) | maxRSS 67 -> 129 MiB (+62) | rejected:total_xml_too_large | exit=0
+M2 61 dated sheets of 270 000 bytes each (template form plus comment padding; 16 MiB) | upload=368510 B | preview ms=81 (+0 ms JSON) | maxRSS 68 -> 112 MiB (+44) | rejected:total_xml_too_large | exit=0
+M3 256 ZIP entries: 4 parsed 4 MiB parts and 249 unparsed entries declaring 32 MB | upload=82514 B | preview ms=42 (+0 ms JSON) | maxRSS 67 -> 117 MiB (+49) | rejected:total_xml_too_large | exit=0
+S1 49 999 shared strings of 60 characters (string and part opening limits) | upload=136857 B | preview ms=65 (+0 ms JSON) | maxRSS 68 -> 97 MiB (+29) | accepted (sheets=1, periods=0, holidays=0, errors=0, findings=1, truncated=0); preview JSON 0.001 MiB | exit=0
+S2 33 332 rich-text shared strings (si, r, t) | upload=95660 B | preview ms=63 (+0 ms JSON) | maxRSS 67 -> 91 MiB (+24) | accepted (sheets=1, periods=0, holidays=0, errors=0, findings=1, truncated=0); preview JSON 0.001 MiB | exit=0
+S3 49 999 shared strings and 49 000 cells using distinct ones | upload=247119 B | preview ms=104 (+0 ms JSON) | maxRSS 67 -> 115 MiB (+48) | rejected:too_many_elements | exit=0
+S4 one shared string of 99 998 runs (rope of runs), used by 2 000 holiday names | upload=45765 B | preview ms=61 (+1 ms JSON) | maxRSS 68 -> 107 MiB (+39) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4, truncated=2000); preview JSON 0.567 MiB | exit=0
+L1 61 dated sheets x 14 labels, inline strings of 17 000 letters (about 16 MiB) | upload=391299 B | preview ms=77 (+0 ms JSON) | maxRSS 68 -> 115 MiB (+48) | rejected:total_xml_too_large | exit=0
+L2 61 dated sheets x 14 labels of 1 000 raw U+0001 (escaped 6x in JSON) | upload=342095 B | preview ms=87 (+3 ms JSON) | maxRSS 68 -> 103 MiB (+35) | accepted (sheets=64, periods=61, holidays=9, errors=854, findings=107, truncated=879); preview JSON 1.261 MiB | exit=0
+L3 61 dated sheets x 14 labels of 1 000 euro signs (3 UTF-8 bytes each) | upload=349306 B | preview ms=89 (+2 ms JSON) | maxRSS 68 -> 101 MiB (+34) | accepted (sheets=64, periods=61, holidays=9, errors=854, findings=107, truncated=879); preview JSON 0.771 MiB | exit=0
+L4 2 000 holidays of 1 020-char names, 61 x 14 labels equal to them (complete, compared) | upload=377189 B | preview ms=122 (+3 ms JSON) | maxRSS 69 -> 125 MiB (+56) | accepted (sheets=64, periods=61, holidays=2000, errors=0, findings=79, truncated=2854); preview JSON 1.174 MiB | exit=0
+L5 report near the cap: 2 000 holiday names and 854 labels of 200 three-byte characters | upload=368821 B | preview ms=112 (+4 ms JSON) | maxRSS 67 -> 120 MiB (+53) | accepted (sheets=64, periods=61, holidays=2000, errors=854, findings=131, truncated=2904); preview JSON 2.070 MiB | exit=0
+L6 report over the cap: 2 000 holiday names and 854 labels of 200 raw U+0001 | upload=358015 B | preview ms=93 (+4 ms JSON) | maxRSS 69 -> 109 MiB (+40) | accepted (sheets=64, periods=61, holidays=2000, errors=854, findings=131, truncated=2904); preview JSON 3.646 MiB | exit=0
+Y1 4 parts x 49 990 empty cells, 10-char addresses, 97-char sheet names | upload=530685 B | preview ms=148 (+0 ms JSON) | maxRSS 69 -> 150 MiB (+81) | rejected:too_many_elements | exit=0
+Y2 Y1 with every part pinned two-byte (kept 20-char str value and a non-Latin-1 comment filling 4 MiB) | upload=545625 B | preview ms=146 (+0 ms JSON) | maxRSS 69 -> 138 MiB (+69) | rejected:total_xml_too_large | exit=0
+Y3 Y2 with mapped roles (Working Infos, Holiday Dates, Timesheet, a dated sheet) | upload=545639 B | preview ms=137 (+0 ms JSON) | maxRSS 69 -> 135 MiB (+66) | rejected:total_xml_too_large | exit=0
+Y4 2 parts x 33 300 cells with distinct 14-char inline strings | upload=322317 B | preview ms=119 (+0 ms JSON) | maxRSS 67 -> 126 MiB (+59) | rejected:too_many_elements | exit=0
+Y5 Working Infos calendar: 19 990 contiguous A cells (row limit) of a 1 024-space shared string | upload=91737 B | preview ms=62 (+0 ms JSON) | maxRSS 67 -> 89 MiB (+22) | accepted (sheets=1, periods=0, holidays=0, errors=0, findings=0, truncated=0); preview JSON 0.000 MiB | exit=0
+Y6 2 dated sheets x 49 990 distinct formulas of about 43 characters (examined once each) | upload=605919 B | preview ms=149 (+0 ms JSON) | maxRSS 70 -> 156 MiB (+86) | rejected:too_many_elements | exit=0
+Y7 Y1 with every part pinned two-byte: one non-Latin-1 char, a kept 20-char str value, ASCII comment filling 4 MiB | upload=545605 B | preview ms=150 (+0 ms JSON) | maxRSS 68 -> 144 MiB (+76) | rejected:total_xml_too_large | exit=0
+Y8 Y7 with mapped roles (Working Infos, Holiday Dates, Timesheet, a dated sheet) | upload=545619 B | preview ms=160 (+0 ms JSON) | maxRSS 70 -> 143 MiB (+73) | rejected:total_xml_too_large | exit=0
+Y9 mechanism control: Y7 without the kept 20-char value (nothing pins the decoded parts) | upload=545489 B | preview ms=140 (+0 ms JSON) | maxRSS 69 -> 141 MiB (+71) | rejected:total_xml_too_large | exit=0
+E7b E7 with t="&&&..." of 65 500 chars (tag at 65 515 of 65 536) | upload=24564 B | preview ms=24 (+0 ms JSON) | maxRSS 67 -> 88 MiB (+21) | rejected:attribute_too_large | exit=0
+E7c E7 without r: <c t="&&&..."> of 65 520 chars | upload=23168 B | preview ms=22 (+0 ms JSON) | maxRSS 67 -> 87 MiB (+20) | rejected:attribute_too_large | exit=0
+E7d mechanism control: E7 without the <is> child (t decoded once per cell) | upload=21804 B | preview ms=26 (+0 ms JSON) | maxRSS 67 -> 88 MiB (+21) | rejected:attribute_too_large | exit=0
+Z1 openings limit passed at the end of the 4th part (after 4 x 49 990 cells) | upload=530708 B | preview ms=150 (+0 ms JSON) | maxRSS 68 -> 147 MiB (+80) | rejected:too_many_elements | exit=0
+Z2 tag too large at the end of the 4th part (after 12 MiB of bare &) | upload=18675 B | preview ms=50 (+0 ms JSON) | maxRSS 68 -> 110 MiB (+42) | rejected:total_xml_too_large | exit=0
+Z3 malformed at the very end of the 4th part (after 4 x 4 MiB of &) | upload=18671 B | preview ms=44 (+0 ms JSON) | maxRSS 67 -> 113 MiB (+46) | rejected:total_xml_too_large | exit=0
+Z4 too many holidays after a maximal Working Infos and Timesheet | upload=278823 B | preview ms=117 (+0 ms JSON) | maxRSS 70 -> 127 MiB (+58) | rejected:too_many_holidays | exit=0
+exit 0

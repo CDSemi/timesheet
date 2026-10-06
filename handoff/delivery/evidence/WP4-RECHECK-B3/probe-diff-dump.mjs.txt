@@ -1,0 +1,38 @@
+// WP4-RECHECK-B3 differential dump (auditor's own): for one export (EXPORT), reads each input with that export's own
+// previewWorkbook and previewImport (fresh migrated, seeded database under the task folder, fixed clock
+// 2026-10-06T12:00:00Z) and writes the preview JSON, the stored report_json (plan included) and the reader's cell list.
+// Usage: EXPORT=<export> node diff-dump.mjs <inputs dir> <out dir> <label>
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const EXPORT = process.env.EXPORT;
+const [inputs, out, label] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const { readWorkbook } = await import(mod('src/server/import/xlsxReader.ts'));
+const { previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+const { openDatabase } = await import(mod('src/server/db/database.ts'));
+const { migrate } = await import(mod('src/server/db/migrations.ts'));
+const { seedSynthetic } = await import(mod('src/server/seed.ts'));
+const { FileStore } = await import(mod('src/server/files/fileStore.ts'));
+const { previewImport } = await import(mod('src/server/services/workbookImport.ts'));
+for (const name of ['template', 'twelve']) {
+  const bytes = new Uint8Array(readFileSync(join(inputs, `${name}.xlsx`)));
+  const wb = readWorkbook(bytes);
+  const cells = wb.sheets.map((s) => ({ name: s.name, part: s.part, kind: s.kind, hidden: s.hidden, cells: [...s.cells.values()] }));
+  writeFileSync(join(out, `${label}-${name}-cells.json`), JSON.stringify({ notes: wb.notes, date1904: wb.date1904, cells }));
+  writeFileSync(join(out, `${label}-${name}-preview.json`), JSON.stringify(previewWorkbook(bytes)));
+  const dir = join(out, `${label}-${name}-db-${randomBytes(4).toString('hex')}`);
+  const db = openDatabase(join(dir, 'timesheet.db'));
+  migrate(db);
+  const clock = { now: () => new Date('2026-10-06T12:00:00Z') };
+  const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+  const e = seed.users.find((u) => u.role === 'employee');
+  const user = { id: e.id, email: e.email, displayName: 'Synthetic Employee', role: 'employee', calendarId: seed.calendarId ?? '', sessionId: 'probe' };
+  previewImport({ db, clock, files: new FileStore(join(dir, 'files')), user }, bytes);
+  writeFileSync(join(out, `${label}-${name}-report.json`), db.prepare('SELECT report_json FROM imports').pluck().get());
+  db.close();
+}
+console.log(`${label}: dumped template and twelve`);

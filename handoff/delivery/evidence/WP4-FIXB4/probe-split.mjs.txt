@@ -1,0 +1,33 @@
+// WP4-FIXB4 diagnostic: where the memory of one preview goes. For one package (fresh process, --expose-gc): heap
+// retained after readWorkbook, after mapWorkbook, and the sizes of what each returns. Synthetic packages only.
+// Usage: EXPORT=<tree> node --expose-gc split.mjs <package path>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+
+const mod = (rel) => pathToFileURL(join(process.env.EXPORT, rel)).href;
+const { readWorkbook } = await import(mod('src/server/import/xlsxReader.ts'));
+const { mapWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+const bytes = new Uint8Array(readFileSync(process.argv[2]));
+const MiB = 1024 * 1024;
+const heap = () => { globalThis.gc(); return process.memoryUsage().heapUsed / MiB; };
+const rss0 = process.resourceUsage().maxRSS / 1024;
+const h0 = heap();
+let t0 = performance.now();
+const read = readWorkbook(bytes);
+const readMs = performance.now() - t0;
+const rss1 = process.resourceUsage().maxRSS / 1024;
+const h1 = heap();
+t0 = performance.now();
+const mapped = mapWorkbook(read, { sha256: "0".repeat(64), bytes: bytes.length });
+const mapMs = performance.now() - t0;
+const rss2 = process.resourceUsage().maxRSS / 1024;
+const h2 = heap();
+const cells = read.sheets.reduce((n, s) => n + s.cells.size, 0);
+const formulas = read.sheets.reduce((n, s) => n + [...s.cells.values()].filter((c) => c.formula !== null).length, 0);
+const keys = Object.keys(mapped);
+console.log(`read ${readMs.toFixed(1)} ms, retained +${(h1 - h0).toFixed(1)} MiB heap (${cells} cells, ${formulas} formulas; ${((h1 - h0) * MiB / Math.max(1, cells)).toFixed(0)} B a cell), maxRSS +${(rss1 - rss0).toFixed(1)} MiB`);
+console.log(`map ${mapMs.toFixed(1)} ms, retained +${(h2 - h1).toFixed(1)} MiB heap more, maxRSS +${(rss2 - rss0).toFixed(1)} MiB in all; result keys ${keys.join(',')}; findings ${mapped.findings?.length}; JSON ${(JSON.stringify(mapped).length / MiB).toFixed(2)} MiB`);
+const sample = [...(read.sheets.find((s) => s.cells.size > 0)?.cells.values() ?? [])][0];
+console.log(`a read cell: ${JSON.stringify(sample).slice(0, 300)}`);

@@ -1,0 +1,122 @@
+// WP4-RECHECK-B3 cost runner (auditor's own). One fresh child process per case and run, so the event-loop time and the
+// maxRSS high-water mark belong to that one preview. A package is built once by a child and written under PKG_DIR
+// (the task folder, never the repository); the timed child reads it, records maxRSS, runs ONE synchronous call and
+// records maxRSS again.
+// Modes:
+//   --run  : previewWorkbook (reader + mapping), as the earlier probes measured it; JSON of the preview timed apart.
+//   --full : previewImport, the whole synchronous service call of POST /api/imports (sha256, reader, mapping, report,
+//            report serialization twice, private file write with fsync, SQLite insert with the plan, batch JSON) plus the
+//            response JSON, against a fresh migrated and seeded database under FULL_DIR (task folder).
+// Budget under test (xlsxReader.ts, docs/07): 500 ms of event-loop time and +150 MiB per preview.
+// Flags: OVER-TARGET above 350 ms or +105 MiB (70 %), OVER-BUDGET above 500 ms or +150 MiB.
+// Usage: CASES=<module path> PKG_DIR=<dir> EXPORT=<export dir> [FULL_DIR=<dir>] node run-cost.mjs [filter] [repeat] [mode]
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const MiB = 1024 * 1024;
+const { CASES: CASES_MODULE, PKG_DIR, EXPORT } = process.env;
+if (!CASES_MODULE || !PKG_DIR || !EXPORT) throw new Error('CASES, PKG_DIR and EXPORT required');
+const fileOf = (name) => join(PKG_DIR, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 100)}.xlsx`);
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const args = process.argv.slice(2);
+const cases = async () => (await import(pathToFileURL(CASES_MODULE).href)).CASES;
+
+const statsOf = (name) => (existsSync(`${fileOf(name)}.stats`) ? ` | ${readFileSync(`${fileOf(name)}.stats`, 'utf8')}` : '');
+
+function flagOf(ms, delta) {
+  return ms > 500 || delta > 150 ? ' OVER-BUDGET' : ms > 350 || delta > 105 ? ' OVER-TARGET' : '';
+}
+
+if (args[0] === '--build') {
+  const all = await cases();
+  mkdirSync(PKG_DIR, { recursive: true });
+  const built = await all[args[1]]();
+  writeFileSync(fileOf(args[1]), built);
+  if (built.stats) writeFileSync(`${fileOf(args[1])}.stats`, built.stats);
+} else if (args[0] === '--run') {
+  const { previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  let ms;
+  let jsonMs = 0;
+  try {
+    const out = previewWorkbook(bytes);
+    ms = performance.now() - t0;
+    const t1 = performance.now();
+    const json = JSON.stringify(out);
+    jsonMs = performance.now() - t1;
+    const floating = out.periods.reduce((n, p) => n + p.days.filter((d) => d.holidayName !== null).length, 0);
+    outcome = `accepted (sheets=${out.sheets.length}, periods=${out.periods.length}, holidays=${out.holidays.length}, holidayDays=${floating}, errors=${out.summary.errors}, findings=${out.findings.length}); preview JSON ${(Buffer.byteLength(json) / MiB).toFixed(3)} MiB`;
+  } catch (error) {
+    ms = performance.now() - t0;
+    outcome = error?.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error?.name}: ${String(error?.message).slice(0, 120)}`;
+  }
+  const after = process.resourceUsage().maxRSS;
+  const delta = Math.round((after - baseline) / 1024);
+  console.log(`${args[1]} | upload=${bytes.length} B | preview ms=${Math.round(ms)} (+${Math.round(jsonMs)} ms JSON) | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(after / 1024)} MiB (+${delta})${flagOf(ms, delta)} | ${outcome}${statsOf(args[1])}`);
+} else if (args[0] === '--full') {
+  const FULL_DIR = process.env.FULL_DIR;
+  if (!FULL_DIR) throw new Error('FULL_DIR required');
+  const dir = join(FULL_DIR, randomBytes(6).toString('hex'));
+  mkdirSync(dir, { recursive: true });
+  const { openDatabase } = await import(mod('src/server/db/database.ts'));
+  const { migrate } = await import(mod('src/server/db/migrations.ts'));
+  const { seedSynthetic } = await import(mod('src/server/seed.ts'));
+  const { FileStore } = await import(mod('src/server/files/fileStore.ts'));
+  const { previewImport } = await import(mod('src/server/services/workbookImport.ts'));
+  const db = openDatabase(join(dir, 'timesheet.db'));
+  migrate(db);
+  const clock = { now: () => new Date('2026-10-06T12:00:00Z') };
+  const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+  const employee = seed.users.find((u) => u.role === 'employee');
+  const user = { id: employee.id, email: employee.email, displayName: 'Synthetic Employee', role: 'employee', calendarId: seed.calendarId ?? '', sessionId: 'probe' };
+  const files = new FileStore(join(dir, 'files-root'));
+  // Warm the service path once with the tracked template so the timed call is not the first compilation.
+  const { readTemplateBytes } = await import(mod('tests/support/syntheticWorkbook.ts'));
+  previewImport({ db, clock, files, user }, readTemplateBytes());
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  try {
+    const { created, batch } = previewImport({ db, clock, files, user }, bytes);
+    const response = JSON.stringify({ import: batch, created });
+    outcome = `${created ? 201 : 200} report ${(Buffer.byteLength(JSON.stringify(batch.report)) / MiB).toFixed(3)} MiB, response ${(Buffer.byteLength(response) / MiB).toFixed(3)} MiB, days ${batch.report.days.length}, decisions ${batch.plan?.decisions_required.length}`;
+  } catch (error) {
+    outcome = error?.status ? `${error.status} ${error.code}${error.details?.reason ? '/' + error.details.reason : ''}` : `THROWN ${error?.name}: ${String(error?.message).slice(0, 120)}`;
+  }
+  const ms = performance.now() - t0;
+  const after = process.resourceUsage().maxRSS;
+  const delta = Math.round((after - baseline) / 1024);
+  db.close();
+  console.log(`${args[1]} | upload=${bytes.length} B | full previewImport ms=${Math.round(ms)} | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(after / 1024)} MiB (+${delta})${flagOf(ms, delta)} | ${outcome}${statsOf(args[1])}`);
+} else {
+  const all = await cases();
+  const filter = args[0] ?? '';
+  const repeat = Number(args[1] ?? 1);
+  const mode = args[2] ?? '--run';
+  const opts = { encoding: 'utf8', env: process.env, timeout: 300_000, maxBuffer: 64 * MiB };
+  const clean = (s) => (s ?? '').trim().split('\n').filter((l) => !l.includes('ExperimentalWarning') && !l.includes('--trace-warnings')).slice(0, 2).join(' / ').slice(0, 300);
+  const self = fileURLToPath(import.meta.url);
+  const selected = Object.keys(all).filter((name) => (filter === '' ? true : filter.endsWith('*') ? name.startsWith(filter.slice(0, -1)) : name.split(' ')[0] === filter || name.includes(filter)));
+  for (const name of selected) {
+    if (!existsSync(fileOf(name))) {
+      const build = spawnSync(process.execPath, ['--max-old-space-size=4096', self, '--build', name], opts);
+      if (build.status !== 0) {
+        process.stdout.write(`${name} | BUILD FAILED exit=${build.status} ${clean(build.stderr)}\n`);
+        continue;
+      }
+    }
+    for (let k = 0; k < repeat; k += 1) {
+      const child = spawnSync(process.execPath, [self, mode, name], opts);
+      const err = clean(child.stderr);
+      process.stdout.write(`${(child.stdout ?? '').trim() || name} | exit=${child.status}${child.signal ? ' signal=' + child.signal : ''}${err ? ' | stderr=' + err : ''}\n`);
+    }
+  }
+}

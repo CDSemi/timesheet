@@ -1,0 +1,27 @@
+// WP4-AUDIT-B probe P7: size of the stored preview report (findings with one source per matching cell) for a
+// small upload inside every reader limit. In memory only.
+import { createRequire } from 'node:module';
+import { performance } from 'node:perf_hooks';
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import { buildSyntheticWorkbook, pack, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const { strToU8 } = require('fflate');
+for (const sheets of [1, 3, 7]) {
+  const periods = Array.from({ length: sheets }, (_, i) => ({ payrollDate: ['2026-01-09', '2026-01-23', '2026-02-06', '2026-02-20', '2026-03-06', '2026-03-20', '2026-04-03'][i] }));
+  const e = unpack(buildSyntheticWorkbook({ periods }));
+  const rows = [];
+  for (let r = 1; r <= 199_000; r += 1) rows.push(`<row r="${r}"><c r="AA${r}"><f>8.5</f></c></row>`);
+  const xml = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+  for (let i = 0; i < sheets; i += 1) e[`xl/worksheets/sheet${100 + i}.xml`] = strToU8(xml);
+  const bytes = pack(e);
+  const t0 = performance.now();
+  let out;
+  try {
+    const preview = previewWorkbook(bytes);
+    const json = JSON.stringify(preview.findings);
+    out = `findings JSON ${(json.length / 1024 / 1024).toFixed(1)} MiB, sources=${preview.findings.reduce((n, f) => n + f.sources.length, 0)}`;
+  } catch (error) {
+    out = `${error.name}:${error.code ?? error.message}`;
+  }
+  console.log(`${sheets} payroll sheet(s) x 199 000 formula cells: upload ${bytes.length} bytes, ${Math.round(performance.now() - t0)} ms, ${out}, maxRSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`);
+}

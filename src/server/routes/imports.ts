@@ -17,7 +17,7 @@ export const IMPORT_UPLOAD_PATH = '/api/imports';
 /** True only for `POST /api/imports`; the global JSON-only rule is relaxed for nothing else on this router. */
 export const isWorkbookUpload = (c: Context): boolean => c.req.method === 'POST' && c.req.path === IMPORT_UPLOAD_PATH;
 
-/** Route-scoped upload limit: the reader's own package limit (8 MiB). Every other /api route keeps 64 KiB. */
+/** Route-scoped upload limit: the reader's own package limit (2 MiB). Every other /api route keeps 64 KiB. */
 export const DEFAULT_IMPORT_MAX_BYTES = DEFAULT_READER_LIMITS.maxCompressedBytes;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

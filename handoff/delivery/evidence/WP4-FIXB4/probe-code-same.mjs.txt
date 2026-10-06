@@ -1,0 +1,18 @@
+// WP4-FIXB4 check: two TypeScript files differ only in comments (and blank lines). Each is transpiled with comments
+// removed by the tree's own TypeScript, and the outputs are compared. Usage: EXPORT=<tree> node code-same.mjs <a.ts> <b.ts>...
+// (pairs: a1 b1 a2 b2 ...)
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const require = createRequire(join(process.env.EXPORT, 'package.json'));
+const ts = require('typescript');
+const files = process.argv.slice(2);
+let differ = 0;
+const strip = (file) => ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { removeComments: true, target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext } }).outputText.split('\n').filter((line) => line.trim() !== '').join('\n');
+for (let index = 0; index < files.length; index += 2) {
+  const same = strip(files[index]) === strip(files[index + 1]);
+  if (!same) differ += 1;
+  console.log(`${same ? 'same code' : 'CODE DIFFERS'}: ${files[index].split(/[\\/]/).pop()} vs ${files[index + 1].split(/[\\/]/).pop()}`);
+}
+process.exitCode = differ === 0 ? 0 : 1;

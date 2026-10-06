@@ -1,0 +1,180 @@
+# 11 Read-only source checks (WP4-RECHECK-A3)
+date_utc: 2026-10-06T17:01:34Z
+
+## A. Importers of the three changed modules at 972ccda
+$ git grep -n -e xlsxReader -e templateMapping -e workbookImport 972ccda -- src scripts | grep -iE 'import|require'
+972ccda:src/server/import/templateMapping.ts:3:import { type CellValue, readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
+972ccda:src/server/routes/imports.ts:10:import { DEFAULT_READER_LIMITS } from '../import/xlsxReader.ts';
+972ccda:src/server/routes/imports.ts:11:import { commitImport, getImport, listImports, previewImport, XLSX_MEDIA_TYPE } from '../services/workbookImport.ts';
+972ccda:src/server/services/finalization.ts:41:import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
+972ccda:src/server/services/otLeave.ts:19:import { importedPeriodError } from './workbookImport.ts';
+972ccda:src/server/services/timesheetCommands.ts:45:import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
+972ccda:src/server/services/workbookImport.ts:21:} from '../import/templateMapping.ts';
+972ccda:src/server/services/workbookImport.ts:22:import { type ReaderLimits, type WorkbookRejectionCode, WorkbookRejectedError } from '../import/xlsxReader.ts';
+
+## B. The two workbookImport exports used by area C/A-adjacent services: byte-identical function bodies?
+$ git show cc34e7f:src/server/services/workbookImport.ts | awk '/export function importedPeriodError/,/^}/' | sha256sum   vs 972ccda
+importedPeriodError: cc34e7f e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | 972ccda e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | lines 0 | EQUAL
+$ git show cc34e7f:src/server/services/workbookImport.ts | awk '/export function isImportedTimesheet/,/^}/' | sha256sum   vs 972ccda
+isImportedTimesheet: cc34e7f eafe84159038e5e99c2b241b26534fe8f02ea67f9516ba3a5597091a11bcc642 | 972ccda eafe84159038e5e99c2b241b26534fe8f02ea67f9516ba3a5597091a11bcc642 | lines 4 | EQUAL
+
+## C. Area-A runtime and ops paths: blob/tree ids at 0f7fba2 (attempt 1), cc34e7f (attempt 2), 972ccda (this freeze)
+src/server/ops  7195d4864442  7195d4864442  7195d4864442  same-as-cc34e7f  same-as-0f7fba2
+src/server/db  1765db862015  1765db862015  1765db862015  same-as-cc34e7f  same-as-0f7fba2
+src/server/jobs  3622d63c3088  3622d63c3088  3622d63c3088  same-as-cc34e7f  same-as-0f7fba2
+src/server/cli.ts  d49e0a16a678  d49e0a16a678  d49e0a16a678  same-as-cc34e7f  same-as-0f7fba2
+src/server/app.ts  bf52b22838b5  bf52b22838b5  bf52b22838b5  same-as-cc34e7f  same-as-0f7fba2
+src/server/index.ts  a5aa137c42e6  a5aa137c42e6  a5aa137c42e6  same-as-cc34e7f  same-as-0f7fba2
+src/server/config.ts  6fd5d92db473  6fd5d92db473  6fd5d92db473  same-as-cc34e7f  same-as-0f7fba2
+src/server/services/bootstrap.ts  53e848e016f3  53e848e016f3  53e848e016f3  same-as-cc34e7f  same-as-0f7fba2
+src/server/services/automation.ts  9cf8e7451c84  9cf8e7451c84  9cf8e7451c84  same-as-cc34e7f  same-as-0f7fba2
+src/server/services/operationsStatus.ts  6b24899594a0  6b24899594a0  6b24899594a0  same-as-cc34e7f  same-as-0f7fba2
+src/server/routes  c2166352d144  c2166352d144  c2166352d144  same-as-cc34e7f  same-as-0f7fba2
+src/server/mail  b3c8d649fb0a  b3c8d649fb0a  b3c8d649fb0a  same-as-cc34e7f  same-as-0f7fba2
+src/server/files  c3bbcdd2e31a  c3bbcdd2e31a  c3bbcdd2e31a  same-as-cc34e7f  same-as-0f7fba2
+Dockerfile  9497a0546353  9497a0546353  9497a0546353  same-as-cc34e7f  same-as-0f7fba2
+compose.example.yaml  1f4d2f95b62f  1f4d2f95b62f  1f4d2f95b62f  same-as-cc34e7f  same-as-0f7fba2
+.dockerignore  3e34488821d3  3e34488821d3  3e34488821d3  same-as-cc34e7f  same-as-0f7fba2
+.env.example  dd6ba6bd707f  dd6ba6bd707f  dd6ba6bd707f  same-as-cc34e7f  same-as-0f7fba2
+scripts  a41a60d5a0a6  a41a60d5a0a6  a41a60d5a0a6  same-as-cc34e7f  same-as-0f7fba2
+docs/03_ARCHITECTURE_AND_DATA.md  200cacc891d7  200cacc891d7  200cacc891d7  same-as-cc34e7f  same-as-0f7fba2
+docs/10_DECISIONS_AND_OPEN_QUESTIONS.md  fatal: path
+0f7fba2:docs  fatal: path
+cc34e7f:docs  fatal: path
+972ccda:docs  CHANGED-since-cc34e7f  differs-from-0f7fba2
+docs/11_OPERATIONS_RUNBOOK.md  62c8e401fdbb  62c8e401fdbb  62c8e401fdbb  same-as-cc34e7f  same-as-0f7fba2
+package.json  6f6ad47c6d08  c74a01b9652a  c74a01b9652a  same-as-cc34e7f  differs-from-0f7fba2
+package-lock.json  cbec4fa14e6d  f4f491a61a76  f4f491a61a76  same-as-cc34e7f  differs-from-0f7fba2
+vite.config.ts  aef80e7ae30b  aef80e7ae30b  aef80e7ae30b  same-as-cc34e7f  same-as-0f7fba2
+tsconfig.json  298fd3be64b4  298fd3be64b4  298fd3be64b4  same-as-cc34e7f  same-as-0f7fba2
+
+## D. Non-handoff delta since attempt-1 baseline 0f7fba2
+$ git diff --name-status 0f7fba2 972ccda -- . ':!handoff'
+M	docs/07_DEPLOYMENT_AND_OPERATIONS.md
+M	docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+M	package-lock.json
+M	package.json
+M	src/server/import/templateMapping.ts
+M	src/server/import/xlsxReader.ts
+M	src/server/services/workbookImport.ts
+M	tests/integration/workbook-import.test.ts
+M	tests/integration/workbook-reader.test.ts
+
+## E. docs/07 hunk location (EN and VI): changed line numbers
+--- a/docs/07_DEPLOYMENT_AND_OPERATIONS.md
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+@@ -46 +46 @@ The original source had 11 sheets (8 dated periods plus 3 support/template sheet
+--- a/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+@@ -46 +46 @@ Nguồn gốc có 11 sheet (8 kỳ có ngày và 3 sheet hỗ trợ/mẫu); mẫ
+
+## F. docs/07 numbers versus the reader limits at 972ccda
+972ccda:src/server/import/xlsxReader.ts:49:  maxPartXmlBytes: number;
+972ccda:src/server/import/xlsxReader.ts:51:  maxTotalXmlBytes: number;
+972ccda:src/server/import/xlsxReader.ts:56:  maxPartElements: number;
+972ccda:src/server/import/xlsxReader.ts:58:  maxTotalElements: number;
+972ccda:src/server/import/xlsxReader.ts:60:  maxAttributesPerElement: number;
+972ccda:src/server/import/xlsxReader.ts:62:  maxPartAttributes: number;
+972ccda:src/server/import/xlsxReader.ts:64:  maxTotalAttributes: number;
+972ccda:src/server/import/xlsxReader.ts:71:  maxKeptAttributeLength: number;
+972ccda:src/server/import/xlsxReader.ts:74:  maxSheetNameLength: number;
+972ccda:src/server/import/xlsxReader.ts:119:  maxPartXmlBytes: 4 * 1024 * 1024,
+972ccda:src/server/import/xlsxReader.ts:120:  maxTotalXmlBytes: 8 * 1024 * 1024,
+972ccda:src/server/import/xlsxReader.ts:121:  maxPartElements: 100_000,
+972ccda:src/server/import/xlsxReader.ts:122:  maxTotalElements: 150_000,
+972ccda:src/server/import/xlsxReader.ts:123:  maxAttributesPerElement: 64,
+972ccda:src/server/import/xlsxReader.ts:124:  maxPartAttributes: 200_000,
+972ccda:src/server/import/xlsxReader.ts:125:  maxTotalAttributes: 500_000,
+972ccda:src/server/import/xlsxReader.ts:127:  maxKeptAttributeLength: 255,
+972ccda:src/server/import/xlsxReader.ts:129:  maxSheetNameLength: 100,
+972ccda:src/server/import/xlsxReader.ts:156:  | 'attribute_too_large'
+972ccda:src/server/import/xlsxReader.ts:157:  | 'unsupported_encoding'
+972ccda:src/server/import/xlsxReader.ts:325:  /** Decoded XML bytes still allowed for the parsed parts (`maxTotalXmlBytes`). */
+972ccda:src/server/import/xlsxReader.ts:327:  /** Markup openings still allowed over the whole package (`maxTotalElements`). */
+972ccda:src/server/import/xlsxReader.ts:329:  /** Attributes still allowed over the whole package (`maxTotalAttributes`). */
+972ccda:src/server/import/xlsxReader.ts:335:  if (entry.uncompressedSize > limits.maxPartXmlBytes) {
+972ccda:src/server/import/xlsxReader.ts:336:    reject('part_too_large', `A package part declares more than ${limits.maxPartXmlBytes} bytes of XML`);
+972ccda:src/server/import/xlsxReader.ts:356:  const cap = Math.min(limits.maxEntryInflatedBytes, limits.maxPartXmlBytes, budget.left, budget.xmlLeft);
+972ccda:src/server/import/xlsxReader.ts:384:    if (total > limits.maxPartXmlBytes) {
+972ccda:src/server/import/xlsxReader.ts:385:      reject('part_too_large', `A package part inflates beyond ${limits.maxPartXmlBytes} bytes of XML`);
+972ccda:src/server/import/xlsxReader.ts:388:    reject('total_xml_too_large', `The package holds more than ${limits.maxTotalXmlBytes} bytes of XML`);
+972ccda:src/server/import/xlsxReader.ts:511:   * reads it, and is an own copy of at most `maxKeptAttributeLength` characters as written (WP4-FIXB3).
+972ccda:src/server/import/xlsxReader.ts:685:    if (openings > limits.maxPartElements) reject('too_many_elements', `A package part has more than ${limits.maxPartElements} markup openings`);
+972ccda:src/server/import/xlsxReader.ts:686:    if (budget.elementsLeft < 0) reject('too_many_elements', `The package has more than ${limits.maxTotalElements} markup openings in its parsed parts`);
+972ccda:src/server/import/xlsxReader.ts:779:      if (inElement > limits.maxAttributesPerElement) reject('too_many_attributes', `An element has more than ${limits.maxAttributesPerElement} attributes`);
+972ccda:src/server/import/xlsxReader.ts:780:      if (attributes > limits.maxPartAttributes) reject('too_many_attributes', `A package part has more than ${limits.maxPartAttributes} attributes`);
+972ccda:src/server/import/xlsxReader.ts:781:      if (budget.attributesLeft < 0) reject('too_many_attributes', `The package has more than ${limits.maxTotalAttributes} attributes in its parsed parts`);
+972ccda:src/server/import/xlsxReader.ts:787:        if (valueEnd - (at + 1) > limits.maxKeptAttributeLength) {
+972ccda:src/server/import/xlsxReader.ts:788:          reject('attribute_too_large', `A kept attribute value is longer than ${limits.maxKeptAttributeLength} characters`);
+972ccda:src/server/import/xlsxReader.ts:828:    reject('unsupported_encoding', 'A package part declares an encoding other than UTF-8 or UTF-16');
+972ccda:src/server/import/xlsxReader.ts:984:    xmlLeft: limits.maxTotalXmlBytes,
+972ccda:src/server/import/xlsxReader.ts:985:    elementsLeft: limits.maxTotalElements,
+
+## G. git diff --stat 972ccda HEAD (working tree non-handoff; empty expected)
+[end]
+
+## B2 (corrected rerun of B: importedPeriodError is an exported const at line 248, so the awk range in B matched nothing)
+$ git show cc34e7f:src/server/services/workbookImport.ts | sed -n '/^export const importedPeriodError/,/^}/p;/^export function isImportedTimesheet/,/^}/p' | sha256sum
+16
+708ca4169ac7cd43d9fac906111c5d197d0fd2499423fd613ad1acdf6b2b8dc2 *-
+$ git show 972ccda:src/server/services/workbookImport.ts | sed -n '/^export const importedPeriodError/,/^}/p;/^export function isImportedTimesheet/,/^}/p' | sha256sum
+16
+708ca4169ac7cd43d9fac906111c5d197d0fd2499423fd613ad1acdf6b2b8dc2 *-
+$ cmp of the two extracts
+cmp exit 0 (0 = identical)
+extract at 972ccda:
+export const importedPeriodError = (): ApiError =>
+  new ApiError(409, 'imported_period', 'This period was imported from a workbook; it is read-only history and cannot be edited, signed or submitted');
+
+/**
+ * True when the owner's timesheet row is imported history (`imported_unverified = 1`). The whole row is read, so a
+ * schema older than 0004 (the upgrade tests seed such databases through the current edit services before migrating
+ * them) has no flag and reads "not imported"; every migrated database has the column.
+ */
+export function isImportedTimesheet(db: Db, userId: string, timesheetId: string): boolean {
+export function isImportedTimesheet(db: Db, userId: string, timesheetId: string): boolean {
+  const row = db.prepare('SELECT * FROM timesheets WHERE id = ? AND user_id = ?').get(timesheetId, userId) as { imported_unverified?: number } | undefined;
+  const row = db.prepare('SELECT * FROM timesheets WHERE id = ? AND user_id = ?').get(timesheetId, userId) as { imported_unverified?: number } | undefined;
+  return row?.imported_unverified === 1;
+  return row?.imported_unverified === 1;
+}
+}
+
+## C2 (corrected docs/10 name; C listed a wrong file name)
+docs/10_DECISIONS_AND_SOURCES.md  49612accbdf4  49612accbdf4  49612accbdf4  same-as-cc34e7f  same-as-0f7fba2
+docs/10_DECISIONS_AND_SOURCES.vi.md  97271e4e8ab9  97271e4e8ab9  97271e4e8ab9  same-as-cc34e7f  same-as-0f7fba2
+docs/11_OPERATIONS_RUNBOOK.vi.md  e260321467f3  e260321467f3  e260321467f3  same-as-cc34e7f  same-as-0f7fba2
+docs/03_ARCHITECTURE_AND_DATA.vi.md  8b4fd41121ed  8b4fd41121ed  8b4fd41121ed  same-as-cc34e7f  same-as-0f7fba2
+[end B2/C2]
+
+## H. docs/07 word-level diff (EN, then VI): only the reader-limit sentence and the budget sentence of paragraph 46 change
+$ git diff --word-diff=plain cc34e7f 972ccda -- docs/07_DEPLOYMENT_AND_OPERATIONS.md | grep -oE '\[-[^]]*-\]|\{\+[^}]*\+\}'
+[-16-]
+{+8+}
+[-200,000-]
+{+150,000+}
+{+kept attribute values (255 characters),+}
+{+with a declared encoding other than UTF-8 or UTF-16,+}
+[-host.-]
+{+host; the worst case measured inside them (WP4-FIXB3, a systematic search over every limit) is about 290 ms and +89 MiB, 58 % and 60 % of that budget.+}
+$ the same for docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+[-16-]
+{+8+}
+[-200.000-]
+{+150.000+}
+{+giá trị thuộc tính được giữ lại (255 ký tự),+}
+{+khai báo bảng mã khác UTF-8 hoặc UTF-16,+}
+[-chiếu.-]
+{+chiếu; trường hợp xấu nhất đo được trong các giới hạn đó (WP4-FIXB3, tìm kiếm có hệ thống trên mọi giới hạn) là khoảng 290 ms và +89 MiB, tức 58 % và 60 % ngân sách.+}
+Code at 972ccda (section F): maxTotalXmlBytes 8 MiB, maxTotalElements 150_000, maxKeptAttributeLength 255, 'unsupported_encoding' for a declared encoding other than UTF-8 or UTF-16. The docs/11 '8 MiB' upload line is maxCompressedBytes (8 MiB, unchanged).
+$ git show 972ccda:src/server/import/xlsxReader.ts | grep -n 'maxCompressedBytes:'
+42:  maxCompressedBytes: number;
+115:  maxCompressedBytes: 8 * 1024 * 1024,
+$ git diff cc34e7f 972ccda -- src/server/import/xlsxReader.ts | grep -E '^[-+].*max[A-Za-z]+: '
++  maxKeptAttributeLength: number;
+-  maxTotalXmlBytes: 16 * 1024 * 1024,
++  maxTotalXmlBytes: 8 * 1024 * 1024,
+-  maxTotalElements: 200_000,
++  maxTotalElements: 150_000,
++  maxKeptAttributeLength: 255,
+[end H]

@@ -7,6 +7,7 @@ import { Worker } from 'node:worker_threads';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatUtcInstant } from '../../src/domain/instants.ts';
 import { payPeriodForPayrollDate } from '../../src/domain/periods.ts';
+import { IMPORT_MAX_BYTES } from '../../src/client/importModel.ts';
 import { createApp } from '../../src/server/app.ts';
 import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
 import type { SessionUser } from '../../src/server/auth/sessions.ts';
@@ -15,8 +16,10 @@ import { openDatabase } from '../../src/server/db/database.ts';
 import { migrate, MIGRATIONS } from '../../src/server/db/migrations.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
 import { ApiError } from '../../src/server/http/errors.ts';
+import { DEFAULT_READER_LIMITS } from '../../src/server/import/xlsxReader.ts';
 import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSweepJobHandler, JOB_ORPHAN_SWEEP } from '../../src/server/jobs/sweepJob.ts';
+import { DEFAULT_IMPORT_MAX_BYTES } from '../../src/server/routes/imports.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
 import { listOverdueRecords, runDeadlineScan, setAutomationActivation } from '../../src/server/services/automation.ts';
 import { getCalendar } from '../../src/server/services/calendars.ts';
@@ -720,6 +723,13 @@ describe('upload validation', () => {
     expect(tooLarge.body.error.code).toBe('payload_too_large');
     const overDefault = await upload(new Uint8Array(8 * 1024 * 1024 + 1));
     expect(overDefault.status).toBe(413);
+    // WP4-FIXB4: the route takes what the reader takes, 2 MiB, and the client states the same limit.
+    expect(DEFAULT_IMPORT_MAX_BYTES).toBe(2 * 1024 * 1024);
+    expect(DEFAULT_IMPORT_MAX_BYTES).toBe(DEFAULT_READER_LIMITS.maxCompressedBytes);
+    expect(IMPORT_MAX_BYTES).toBe(DEFAULT_IMPORT_MAX_BYTES);
+    const overCeiling = await upload(new Uint8Array(2 * 1024 * 1024 + 1));
+    expect(overCeiling.status).toBe(413);
+    expect(overCeiling.body.error.code).toBe('payload_too_large');
 
     const macroType = await upload(bytes, owner, MACRO_TYPE);
     expect(macroType.status).toBe(415);
@@ -756,8 +766,9 @@ describe('upload validation', () => {
     expect(oversized.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'part_too_large' } });
     expect(performance.now() - started).toBeLessThan(5000); // 8.8 s and a blocked event loop before the fix
 
-    // 150 000 Holiday Dates cells: a 422, never the 500 of the stack overflow.
-    const holidays = withEntry(base, 'xl/worksheets/sheet2.xml', new TextEncoder().encode(sheet('<c r="C1"/>', 2 * 1024 * 1024)));
+    // Holiday Dates cells over the cell limit (150 000 in the audit; 85 000 fit the 1 MiB part limit since WP4-FIXB4):
+    // a 422, never the 500 of the stack overflow.
+    const holidays = withEntry(base, 'xl/worksheets/sheet2.xml', new TextEncoder().encode(sheet('<c r="C1"/>', 0.9 * 1024 * 1024)));
     const crowded = await upload(holidays);
     expect(crowded.status).toBe(422);
     expect(crowded.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'too_many_cells' } });
@@ -769,7 +780,7 @@ describe('upload validation', () => {
     const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
     const head = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
     const tail = '</row></sheetData></worksheet>';
-    const near = 4 * 1024 * 1024 - 6 * 1024;
+    const near = 1024 * 1024 - 6 * 1024; // just under the 1 MiB part limit (WP4-FIXB4; the recheck used 4 MiB)
     const encode = (text: string) => new TextEncoder().encode(text);
     const base = readTemplateBytes();
 
@@ -784,9 +795,10 @@ describe('upload validation', () => {
     expect(refused.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'malformed_xml' } });
     expect(performance.now() - started).toBeLessThan(5000);
 
-    // A long sheet name would be copied into every source of the report (a megabyte of name: a 124 MiB response before).
+    // A long sheet name would be copied into every source of the report (a megabyte of name: a 124 MiB response before;
+    // half a megabyte is used now, as a megabyte is over the 1 MiB part limit since WP4-FIXB4).
     const sheetName = PB.replace(/-/g, '.');
-    const lengths = [[140, 'sheet_name_too_long'], [10_000, 'attribute_too_large'], [1024 * 1024, 'tag_too_large']] as const;
+    const lengths = [[140, 'sheet_name_too_long'], [10_000, 'attribute_too_large'], [512 * 1024, 'tag_too_large']] as const;
     for (const [padding, reason] of lengths) {
       const named = withText(workbook([{ payrollDate: PB }]), 'xl/workbook.xml', (xml) => (xml ?? '').replace(`name="${sheetName}"`, `name="${sheetName}${' '.repeat(padding)}"`));
       const longName = await upload(named);
@@ -797,7 +809,8 @@ describe('upload validation', () => {
     expect(storedFiles()).toEqual([]);
 
     // r2 H5d and H5b: one shared string of 1 MiB used as 100 holiday names (a 99.8 MiB report before) and of 4 MiB used
-    // as 2 000 holiday names (a RangeError and a 500 internal_error after 5 s before): both preview with a small report.
+    // as 2 000 holiday names (a RangeError and a 500 internal_error after 5 s before; just under 1 MiB here, the part
+    // limit since WP4-FIXB4): both preview with a small report.
     const holidaySheet = (rows: number) => {
       const out: string[] = [];
       for (let row = 2; row < 2 + rows; row += 1) out.push(`<row r="${row}"><c r="A${row}"><v>${46_023 + row}</v></c><c r="B${row}" t="s"><v>66</v></c></row>`);
