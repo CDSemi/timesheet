@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "wp5-recheck",
+  "phase": "gov-recovery",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-ACCEPT",
+  "next_task_id": "GOV-RECOVERY-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -159,7 +159,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+    "last_commit": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
     "unpushed": []
   },
   "owner_decisions": [
@@ -12938,7 +12938,7 @@
       "id": "WP5-ACCEPT",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-ACCREC"
       ],
@@ -12951,10 +12951,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ad09bbee397fa1bbd",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -12963,8 +12963,92 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-ACCEPT.md",
       "report": "handoff/delivery/tasks/WP5-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-ACCEPT/checks.txt",
+        "handoff/delivery/evidence/WP5-ACCEPT/commit-message.txt"
+      ],
       "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "branch": "main",
+      "commit_sha": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
+      "pushed": true,
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed, the WP5 acceptance records with no source change: parent 014bd47, remote SHA identical; working-tree and ls-tree digests 150420e7 (779 files); nothing pre-staged; 74 handoff paths (60 new, 14 modified); secrets Grep 0; no tag; precommit (74 files, 0 findings), diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0.",
+      "next_action": "None; WP5 accepted. GOV-RECOVERY next, then the owner's pilot review."
+    },
+    {
+      "id": "GOV-RECOVERY-FIX",
+      "package": "GOV",
+      "kind": "fix",
+      "status": "done",
+      "depends_on": [],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5ca255294bd29bf6",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a5ca255294bd29bf6, self-reported claude-sonnet-5-5): synthetic boards set status running explicitly; 4 software_ready probes (1 accepted, 3 rejected: running task, pending task, next_task_id set); CHECK_RECOVERY_BOARD/CHECK_RECOVERY_STATE env overrides default to the real paths; probes 82 -> 86; check_recovery on the real board and on a software_ready copy, validate_orchestration, preflight and precommit (0 staged files) exit 0; digest 150420e7 unchanged. Attempt 2 adds the missing 'every package passed' rejection probe."
+      ],
+      "owned_paths": [
+        "handoff/delivery/check_recovery.py",
+        "handoff/delivery/tasks/GOV-RECOVERY-FIX.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-FIX"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-RECOVERY-FIX.md",
+      "report": "handoff/delivery/tasks/GOV-RECOVERY-FIX.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-RECOVERY-FIX/results.txt"
+      ],
+      "baseline_commit": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (worker), attempt 2: check_recovery.py only. Synthetic boards set status running explicitly; software_ready probes: 1 accepted and 4 rejected (running task, pending task, next_task_id set, a package not independently passed); CHECK_RECOVERY_BOARD and CHECK_RECOVERY_STATE env overrides default to the real paths; probes 82 -> 87 on the real board and on a software_ready copy; validate_orchestration and preflight exit 0; source digest 150420e7 unchanged; real board and STATE untouched.",
+      "next_action": "None; GOV-RECOVERY-FREEZE, gate and fresh GOV audit."
+    },
+    {
+      "id": "GOV-RECOVERY-FREEZE",
+      "package": "GOV",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "GOV-RECOVERY-FIX"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-RECOVERY-FREEZE.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-RECOVERY-FREEZE.md",
+      "report": "handoff/delivery/tasks/GOV-RECOVERY-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -12972,7 +13056,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP5 acceptance records (no source change)."
+      "next_action": "Commit and push the check_recovery governance fix with the WP5-ACCEPT results and the GOV-RECOVERY briefs."
     },
     {
       "id": "WP4-RECHECK-B4",

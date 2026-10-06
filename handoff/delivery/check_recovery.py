@@ -6,6 +6,7 @@ Derived from the historical probe handoff/delivery/evidence/orchestration/check-
 import copy
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -14,8 +15,11 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("workflow", ROOT / "handoff/delivery/validate_orchestration.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-real_board = json.loads((ROOT / "handoff/delivery/ORCHESTRATION.json").read_text(encoding="utf-8"))
-live_state = json.loads((ROOT / "handoff/delivery/STATE.json").read_text(encoding="utf-8"))
+# Optional overrides point the live-board probe at a copy (e.g. a software_ready rehearsal); defaults stay real.
+BOARD_PATH = Path(os.environ.get("CHECK_RECOVERY_BOARD") or ROOT / "handoff/delivery/ORCHESTRATION.json")
+STATE_PATH = Path(os.environ.get("CHECK_RECOVERY_STATE") or ROOT / "handoff/delivery/STATE.json")
+real_board = json.loads(BOARD_PATH.read_text(encoding="utf-8"))
+live_state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
 configured = module.profiles()
 passed = []
 PACKAGES = module.PACKAGES
@@ -52,9 +56,9 @@ def accepts(name, value, expected_state=None):
     passed.append(name)
 
 
-def rejects(name, value, expected):
+def rejects(name, value, expected, expected_state=None):
     try:
-        module.validate(value, state, configured)
+        module.validate(value, expected_state or state, configured)
     except ValueError as error:
         if expected not in str(error):
             raise AssertionError(f"{name}: unexpected failure: {error}") from error
@@ -75,7 +79,8 @@ def make_task(name, kind, depends_on, report=REPORT, package=None):
 
 def synthetic():
     value = copy.deepcopy(real_board)
-    value.update(tasks=[make_task("S-PLAN", "plan", []), make_task("S-IMPL", "implement", ["S-PLAN"]),
+    value.update(status="running",  # explicit: never inherited from the live board
+                 tasks=[make_task("S-PLAN", "plan", []), make_task("S-IMPL", "implement", ["S-PLAN"]),
                         make_task("S-GATE", "gate", ["S-IMPL"]), make_task("S-AUDIT", "audit", ["S-GATE"]),
                         make_task("S-COMMIT", "commit", ["S-AUDIT"]), make_task("S-NEXT", "plan", ["S-COMMIT"])],
                  auxiliary_lookups=[], active_package=BASE, next_task_id="S-PLAN", current_source_digest="a" * 64,
@@ -413,6 +418,34 @@ def suite():
                                     owned_paths=[EVIDENCE])
     value["next_task_id"] = "S-IMPL"
     accepts("English-only report without a Vietnamese pair accepted", value)
+
+    # software_ready completion rules; the synthetic board states its own mission status.
+    ready_state = synthetic_state(BASE)
+    for phase in ready_state["phases"]:
+        phase["independent_review"] = "passed"
+
+    def ready_board():
+        board = finished()
+        task_of(board, "S-NEXT").update(status="cancelled")
+        board.update(status="software_ready", next_task_id=None)
+        return board
+
+    accepts("software_ready with all tasks closed, no next task and every package passed accepted",
+            ready_board(), ready_state)
+    value = ready_board()
+    task_of(value, "S-NEXT").update(status="running", attempt=1, agent_id="synthetic-late")
+    rejects("software_ready with a running task rejected", value, "Ready mission still has active work", ready_state)
+    value = ready_board()
+    task_of(value, "S-NEXT").update(status="pending")
+    rejects("software_ready with a pending required task rejected", value, "Required tasks remain", ready_state)
+    unaudited = copy.deepcopy(ready_state)
+    unaudited["phases"][-1]["independent_review"] = "not_started"
+    rejects("software_ready with a package lacking its independent audit rejected", ready_board(),
+            "Software readiness requires every package audit", unaudited)
+    value = ready_board()
+    value["next_task_id"] = "S-NEXT"
+    rejects("software_ready with next_task_id set rejected", value, "Ready mission still has active work",
+            ready_state)
 
 
 # One acceptance probe validates the live board and STATE exactly as they are.

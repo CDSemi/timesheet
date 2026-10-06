@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 014bd47a8d906c944d2781eba4f2b91c5a532419 (WP5-FIXD2-FREEZE, the status wording fix; digest 150420e7).
+  - HEAD = origin/main = dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc (WP5-ACCEPT, the WP5 acceptance records; accepted source 014bd47, digest 150420e7).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -1038,7 +1038,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - Parity and preflight pass.
        - STATE marks WP5 passed. NEXT_ACTION (EN and VI) points to GOV-RECOVERY and
          the owner's pilot review.
-       - Running: WP5-ACCEPT (committer).
+       - WP5-ACCEPT committed and pushed dd0c7d1 (74 handoff paths; secrets Grep 0;
+         all checks 0; no tag). **WP5 accepted. WP1–WP5 software readiness is
+         complete.**
+       - GOV-RECOVERY-FIX is done (attempt 2).
+         - The synthetic boards set their own status.
+         - New `software_ready` probes: 1 accepted and 4 rejected.
+         - Environment overrides default to the real files.
+         - Probes went from 82 to 87, and the suite passes on a `software_ready` copy.
+         - The source digest is unchanged.
+       - Running: GOV-RECOVERY-FREEZE (committer). Then GOV-RECOVERY-GATE, a fresh
+         GOV-RECOVERY-AUDIT, and the mission status `software_ready`.
        - Then: a freeze, a docs-delta regate, WP5-PKTID, WP5-RECHECK (fresh opus),
          ACCREC and ACCEPT.
        - Then:

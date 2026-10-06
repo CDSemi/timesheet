@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 014bd47a8d906c944d2781eba4f2b91c5a532419 (WP5-FIXD2-FREEZE, bản sửa câu chữ về trạng thái; digest 150420e7).
+  - HEAD = origin/main = dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc (WP5-ACCEPT, hồ sơ nghiệm thu WP5; source được nghiệm thu là 014bd47, digest 150420e7).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1091,7 +1091,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Parity và preflight đều đạt.
        - STATE ghi WP5 đã đạt. NEXT_ACTION (EN và VI) trỏ tới GOV-RECOVERY và việc chủ
          dự án duyệt pilot.
-       - Đang chạy: WP5-ACCEPT (committer).
+       - WP5-ACCEPT đã commit và push dd0c7d1 (74 đường dẫn handoff; Grep bí mật ra 0;
+         mọi kiểm tra trả 0; không tạo tag). **WP5 đã nghiệm thu. Độ sẵn sàng phần mềm
+         WP1–WP5 đã hoàn tất.**
+       - GOV-RECOVERY-FIX đã xong (lần 2).
+         - Các board giả lập tự đặt trạng thái riêng.
+         - Probe `software_ready` mới: 1 trường hợp chấp nhận và 4 trường hợp từ chối.
+         - Biến môi trường ghi đè mặc định trỏ về tệp thật.
+         - Số probe tăng từ 82 lên 87, và bộ kiểm tra chạy đạt trên bản copy
+           `software_ready`.
+         - Digest source không đổi.
+       - Đang chạy: GOV-RECOVERY-FREEZE (committer). Sau đó là GOV-RECOVERY-GATE, một
+         lượt GOV-RECOVERY-AUDIT bằng auditor mới, rồi trạng thái mission
+         `software_ready`.
        - Sau đó: commit đóng băng, chạy lại gate cho phần docs thay đổi, WP5-PKTID,
          WP5-RECHECK (auditor opus mới), ACCREC và ACCEPT.
        - Sau đó:
