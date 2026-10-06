@@ -146,3 +146,11 @@ Return at most 150 words, beginning with your self-reported model.
 ## Results
 
 (Committer appends here.)
+
+Committer results (attempt 1, Sonnet 5.5):
+- Pre-HEAD aff904a89c6a85b3963616eddf676cef0979370b; post-HEAD/commit 61bf524a53368ac1373ec9fe41f6cc550dc6c68b.
+- Pushed: yes; remote main = 61bf524a53368ac1373ec9fe41f6cc550dc6c68b.
+- Digest 70561b0d855fe98e8eb76003075b97e09b908b62213618165a0585d6aedac38a (772 files); 53 files staged.
+- Scope: working tree equaled the expected set; no extras. Real paths: src/client/OtScreen.tsx, src/client/components/SharingOt.tsx, src/client/components/otModel.ts. No change under .claude/, docs/, reference/, migrations, package files; no .xlsx.
+- Checks: node v24.21.0, digest, add, precommit, diff --check, JSON parse, validate_orchestration, check_recovery, validate_package --preflight: all rc=0. Details in evidence/WP4-T11-FREEZE/checks.txt.
+- Blockers: none. Note: the brief and its commit-time state were staged before this append.

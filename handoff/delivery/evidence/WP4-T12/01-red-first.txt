@@ -1,0 +1,69 @@
+# Red-first: scratch copy (git archive HEAD, the drill copied in, stages 2-5 cut out), stage 6 run against deliberately wrong expectations (2 opening_balance entries, sign-off 201). Expected FAIL lines: the opening_balance entry count and the sign-off status. The other two FAIL lines (preview baseline, commit baseline) were real defects of the first draft of stage 6 (the preview stores its batch row; compared against the pre-preview counts) and were fixed in the final script.
+node v24.21.0; docker Docker version 28.5.1, build e180ab8; project ts-wp4-t12
+PASS  docker build --platform linux/amd64  8 s, log in the work directory
+PASS  build output (including npm ci) has no deprecation line
+INFO  image id sha256:8a3d96a216a481b3c9d0b87060fe2744c4bd19b250302c479bdb1b15ba184323, linux/amd64, size 111297763 bytes (106.1 MiB)
+PASS  image architecture is amd64
+PASS  image runtime user is numeric and not root  User=10001:10001
+PASS  image sets NODE_ENV=production and OUTBOUND_MODE=capture
+PASS  image declares a HEALTHCHECK and the /data volume
+PASS  image file list was read  10612 paths
+PASS  forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+PASS  production dependencies only (no devDependency in the image)
+PASS  data directory is fresh  no timesheet.db before the first start
+PASS  container becomes healthy  5.4 s (running healthy)
+PASS  /api/ready reports ready with the schema version  schema 13 of 13
+PASS  running process UID is not 0  uid:gid 10001:10001
+PASS  root filesystem is read-only (cannot write under /app)
+PASS  /tmp tmpfs is writable
+PASS  bootstrap CLI prints a single-use setup token
+PASS  first administrator created with the token  status 201
+PASS  setup token cannot be replayed  status 403
+PASS  administrator sign-in
+PASS  administrator lists accounts (calendar id present)
+PASS  administrator creates a synthetic employee  status 201
+PASS  employee records a synthetic work session  status 201
+PASS  session reads back before the restart
+PASS  administrator cannot read the employee session  status 404
+PASS  database and private directory exist on the host data directory
+PASS  container is healthy again after the restart  5.4 s after the restart (6.4 s in all)
+PASS  schema version unchanged after the restart  schema 13
+PASS  stored sign-in session survives the restart
+PASS  synthetic work session persisted byte for byte after the restart
+PASS  container log has no deprecation warning
+PASS  container log never contains the setup token or a password
+STAGE 1 (build, image, start, persistence): 31 PASS, 0 FAIL
+INFO  scratch copy for the red-first run: stages 2-5 skipped, stage 6 runs with a deliberately wrong expectation
+PASS  the stage 1 instance starts again for stage 6 (healthy)  5.5 s (running healthy)
+PASS  the job runner is off in the container (counts cannot move in the background)
+PASS  the synthetic owner and the administrator sign in
+PASS  another synthetic user exists and signs in  status 201/200
+INFO  counts before the first import: timesheets 1, day_entries 1, work_sessions 1, ot_ledger 0, timesheet_revisions 0, signoffs 0, jobs 2, delivery_attempts 0, imports 0, opening_balance 0
+PASS  the owner previews the workbook through /api/imports (201, new batch, plan with decisions to make)  status 201, 3 days need a decision, 17 importable
+FAIL  the preview wrote no timesheet, day entry or other row
+PASS  every listed day gets a decision (skip, or import where the plan allows it)  1 skip, 2 import
+PASS  the commit answers 200 committed  status 200 
+INFO  counts after the first commit: timesheets 3, day_entries 20, work_sessions 1, ot_ledger 0, timesheet_revisions 0, signoffs 0, jobs 2, delivery_attempts 0, imports 1, opening_balance 0
+FAIL  the commit wrote only timesheets (two imported periods) and day entries: no session, ledger entry, revision, sign-off, job or delivery attempt
+PASS  the identical workbook returns the same batch (200, not created)
+PASS  committing the identical workbook again answers 200 replayed
+PASS  committing the batch with other decisions is refused (409 import_already_committed)
+INFO  counts after the second commit: timesheets 3, day_entries 20, work_sessions 1, ot_ledger 0, timesheet_revisions 0, signoffs 0, jobs 2, delivery_attempts 0, imports 1, opening_balance 0
+PASS  the eight table counts (timesheets, day_entries, work_sessions, ot_ledger, timesheet_revisions, signoffs, jobs, delivery_attempts) and the import batches are unchanged by the second commit
+PASS  the opening balance posts once (201 posted) and a repeat is a no-op (200 duplicate)  status 201/200
+PASS  a different opening balance is refused (409 opening_balance_exists)
+INFO  counts after the opening balance: timesheets 3, day_entries 20, work_sessions 1, ot_ledger 1, timesheet_revisions 0, signoffs 0, jobs 2, delivery_attempts 0, imports 1, opening_balance 1
+FAIL  exactly one opening_balance entry exists, and it is the only new ledger row
+PASS  the owner reads the opening balance back (150 minutes, as of 2026-01-01)
+FAIL  a sign-off of an imported period answers 409 imported_period  status 200/409 imported_period
+PASS  the refused sign-off wrote nothing
+PASS  another synthetic user gets 404 for the batch (read and commit) and lists none  status 404/404/200
+PASS  an administrator gets 404 for the batch as well
+INFO  counts at the end of stage 6: timesheets 3, day_entries 20, work_sessions 1, ot_ledger 1, timesheet_revisions 0, signoffs 0, jobs 2, delivery_attempts 0, imports 1, opening_balance 1
+PASS  the ownership attempts wrote nothing
+PASS  the stage 6 instance log has no deprecation warning and never contains a password
+STAGE 6 (import and opening balance): 19 PASS, 4 FAIL
+PASS  cleanup by project name (docker compose down -v)
+PASS  no container of the project remains
+SUMMARY stage 1: 31 PASS; stage 6: 19 PASS 4 FAIL; total 52 PASS, 4 FAIL
+DRILL STAGES 1-3 and 6 FAILED (4)

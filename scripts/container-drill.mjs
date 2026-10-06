@@ -30,12 +30,23 @@
 // send attempt appears (balances, counts and health checked). A control copy of the same backup without the hold shows that
 // the previous build would otherwise send the queued mail.
 //
+// Stage 6 (WP4-T12, import and opening balance, inside the container, runner off so no background job moves the counts): an
+// owner previews a synthetic workbook through /api/imports (generated in memory from the tracked template; nothing is
+// written to the repository), decides every listed day and commits it; the identical workbook committed again leaves the
+// eight table counts (timesheets, day_entries, work_sessions, ot_ledger, timesheet_revisions, signoffs, jobs,
+// delivery_attempts) unchanged; the opening balance posted twice leaves exactly one opening_balance entry; a sign-off of an
+// imported period answers 409 imported_period; another user (and an administrator) gets 404 for the batch.
+// The earlier stages are extended for the features added since: the stage 2 backup holds the import sources (committed and
+// preview batches, hashes equal to the uploaded workbooks) and a `backup prune --dry-run` inside the container counts what
+// it would remove and removes nothing; the stage 3 restore holds every import source, and the outbound pause is read from
+// /api/admin/operations; stage 4 migrates from the WP3 schema to the image's latest schema (migrations 0011-0013 included).
+//
 // Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--wp3 <dir>] [--keep]
 //   --work     host directory for the drill data, the env file and the raw logs (created if missing; nothing in it is deleted)
 //   --project  Compose project name; every container, volume and network of the drill carries it (default timesheet-drill)
 //   --wp3      the previous build for stages 4 and 5, prepared outside the repository and outside --work's data directories:
 //              `git archive 49651c8 | tar -x -C <dir>`, then `npm ci` and `npm run build:server` inside <dir> (git is only read).
-//              Without it the drill runs stages 1-3 only and says so.
+//              Without it the drill runs stages 1-3 and 6 only and says so.
 //   --keep     leave the container running (default: `docker compose down -v` by project name at the end)
 // Needs Docker and a free loopback port. Everything is synthetic (example.invalid, random per-run passwords); the
 // published port is loopback only; nothing is pushed to or pulled from any registry except the pinned base image.
@@ -47,6 +58,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
 import Database from 'better-sqlite3';
+import { buildSyntheticWorkbook, readTemplateBytes } from '../tests/support/syntheticWorkbook.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -99,9 +111,20 @@ const composeFile = join(repo, 'compose.example.yaml');
 const forwardSlashes = (path) => path.replaceAll('\\', '/');
 
 let failures = 0;
+let passes = 0;
 function check(label, condition, detail = '') {
   console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
-  if (!condition) failures += 1;
+  if (condition) passes += 1;
+  else failures += 1;
+}
+/** Per-stage tally: the PASS and FAIL lines printed since the previous stage report. */
+const stageTally = [];
+let tallyMark = { passes: 0, failures: 0 };
+function stageReport(stage, title) {
+  const line = { stage, title, passes: passes - tallyMark.passes, failures: failures - tallyMark.failures };
+  tallyMark = { passes, failures };
+  stageTally.push(line);
+  console.log(`STAGE ${stage} (${title}): ${line.passes} PASS, ${line.failures} FAIL`);
 }
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -258,6 +281,55 @@ async function uploadSignature(cookie, fill) {
   return response.status;
 }
 
+/* ------------------------------------------------------------------------------------- synthetic imports ---- */
+
+const TEMPLATE_SHA256 = '47ef42d5e4a9b7aea0be545ed563d3d22987609b59bd846c1c08dec2d29c6331';
+const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/**
+ * A synthetic workbook, generated in memory from the tracked sanitized template (the WP4-T08 generator): dated sheets, a
+ * fictional employee name, nothing written to disk. The template hash is asserted before every use.
+ */
+function syntheticWorkbook(periods) {
+  const template = readTemplateBytes();
+  if (sha256Of(template) !== TEMPLATE_SHA256) throw new Error('the tracked template workbook changed');
+  return buildSyntheticWorkbook({ periods, template });
+}
+
+/** The raw-body upload of /api/imports (the only route besides the signature upload that is not JSON). */
+async function uploadWorkbook(cookie, bytes) {
+  const response = await fetch(`${base}/api/imports`, {
+    method: 'POST',
+    headers: { origin: publicOrigin, cookie, 'content-type': XLSX_MEDIA_TYPE },
+    body: bytes,
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await response.text();
+  return { status: response.status, json: parseJson(text), text };
+}
+
+/** Decides every listed day: `import` where the plan allows it (non-authoritative labels), otherwise `skip`. */
+const decideAll = (plan) => (plan?.decisions_required ?? []).map((item) => ({ work_date: item.work_date, action: item.allowed_actions.includes('import') ? 'import' : 'skip' }));
+
+/** Import batches of a database file (read-only; [] when the schema has no imports table): identity, state and source hash. */
+function importFacts(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    if (db.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'imports'").pluck().get() === 0) return [];
+    return db.prepare('SELECT id, state, source_sha256, size_bytes, storage_key FROM imports ORDER BY id').all();
+  } finally {
+    db.close();
+  }
+}
+
+/** Every private file a database refers to, as the manifest lists it: attachments plus import sources, by storage key. */
+function referencedFiles(db) {
+  const hasImports = db.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'imports'").pluck().get() === 1;
+  const attachments = 'SELECT storage_key, kind, sha256, size_bytes FROM attachments';
+  const imports = "SELECT storage_key, 'import' AS kind, source_sha256 AS sha256, size_bytes FROM imports";
+  return db.prepare(`${hasImports ? `${attachments} UNION ALL ${imports}` : attachments} ORDER BY storage_key`).all();
+}
+
 /** `docker` without blocking the event loop, so the synthetic writer keeps writing while it runs. */
 function dockerAsync(dockerArgs, env) {
   return new Promise((done, fail) => {
@@ -307,6 +379,23 @@ async function stageTwo(cookie) {
     if (!pdfReady) await sleep(1000);
   }
   check('the container job runner renders the PDF of the finalized period', pdfReady, `${((Date.now() - pdfWaitStart) / 1000).toFixed(1)} s`);
+
+  // Two import batches before the backup, so it holds import sources: one committed and one still a preview. The periods
+  // (payroll 2026-02-20 and 2026-01-23) end long before the synthetic writer's first day, so nothing meets them later.
+  const uploads = [];
+  const committedWorkbook = syntheticWorkbook([{ payrollDate: '2026-02-20', days: { 1: { label: 'Vacation' } } }]);
+  const previewWorkbook = syntheticWorkbook([{ payrollDate: '2026-01-23' }]);
+  const committedPreview = await uploadWorkbook(cookie, committedWorkbook);
+  const committedBatch = committedPreview.json?.import;
+  check('employee previews a synthetic workbook through /api/imports (201, new batch)', committedPreview.status === 201 && committedPreview.json?.created === true && committedBatch?.state === 'preview', `status ${committedPreview.status}`);
+  const committedResult = await call('POST', `/api/imports/${committedBatch?.id}/commit`, { cookie, body: { decisions: decideAll(committedBatch?.plan) } });
+  check('the batch commits with a decision for every listed day', committedResult.status === 200 && committedResult.json?.status === 'committed' && committedResult.json?.import?.state === 'committed', `status ${committedResult.status}`);
+  const previewOnly = await uploadWorkbook(cookie, previewWorkbook);
+  check('a second workbook stays a preview batch (not committed)', previewOnly.status === 201 && previewOnly.json?.import?.state === 'preview');
+  const importSources = [
+    { id: committedBatch?.id, state: 'committed', sha256: sha256Of(committedWorkbook), size: committedWorkbook.length },
+    { id: previewOnly.json?.import?.id, state: 'preview', sha256: sha256Of(previewWorkbook), size: previewWorkbook.length },
+  ];
 
   // The synthetic writer: a new work session on its own day every request, and a signature image every fourth one.
   const writes = [];
@@ -376,9 +465,18 @@ async function stageTwo(cookie) {
     return sha256Of(bytes) !== file.sha256 || bytes.length !== file.size_bytes;
   });
   check('every copied file matches its manifest SHA-256 and size', mismatched.length === 0 && manifest.files.length > 0, `${manifest.files.length} files, ${mismatched.length} mismatched`);
-  const kinds = { signature: 0, pdf: 0 };
+  const kinds = { signature: 0, pdf: 0, import: 0 };
   for (const file of manifest.files) kinds[file.kind] = (kinds[file.kind] ?? 0) + 1;
   check('the backup holds signature images and the PDF', kinds.signature >= 1 && kinds.pdf >= 1);
+  const manifestImports = manifest.files.filter((file) => file.kind === 'import');
+  const expectedSources = importSources.map((source) => ({ kind: 'import', sha256: source.sha256, size_bytes: source.size })).sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1));
+  check(
+    'the backup holds both import sources (committed and preview), with the SHA-256 and size of the uploaded workbooks',
+    JSON.stringify(manifestImports.map((file) => ({ kind: file.kind, sha256: file.sha256, size_bytes: file.size_bytes })).sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1))) === JSON.stringify(expectedSources),
+    `${kinds.import} import sources`,
+  );
+  const sourceBytesMismatched = manifestImports.filter((file) => sha256Of(readFileSync(join(folder, 'files', file.storage_key))) !== file.sha256);
+  check('every import source file in the backup hashes to its manifest entry', sourceBytesMismatched.length === 0 && manifestImports.length === importSources.length);
 
   const copy = new Database(join(folder, 'timesheet.db'), { readonly: true, fileMustExist: true });
   try {
@@ -386,8 +484,8 @@ async function stageTwo(cookie) {
     check('database copy has no foreign key violation', copy.pragma('foreign_key_check').length === 0);
     const schemaVersion = copy.prepare('SELECT max(version) FROM schema_migrations').pluck().get();
     check('schema version of the copy equals the manifest and the running instance', schemaVersion === manifest.schema_version && schemaVersion === printed.schema_version, `schema ${schemaVersion}`);
-    const attachments = copy.prepare('SELECT storage_key, kind, sha256, size_bytes FROM attachments ORDER BY storage_key').all();
-    check('manifest files equal the attachment rows of the copy', JSON.stringify(attachments) === JSON.stringify(manifest.files));
+    const attachments = referencedFiles(copy);
+    check('manifest files equal the attachment and import-source rows of the copy', JSON.stringify(attachments) === JSON.stringify(manifest.files));
     const sessionsInCopy = copy.prepare('SELECT count(*) FROM work_sessions').pluck().get();
     check(
       'the copy is a point-in-time image: every session written before the backup, none beyond the end state',
@@ -406,7 +504,41 @@ async function stageTwo(cookie) {
     composeEnv,
   );
   check('a target inside DATA_DIR is refused (exit 2)', refused.status === 2);
-  return String(printed.backup);
+
+  // Pruning, dry run only: two older folders of the same UTC day (manifest only, written by this script) are expired next to
+  // the real backup, so a prune would remove two. The dry run inside the container prints the counts and removes nothing.
+  const backupsDir = join(dataDir, 'backups');
+  const [, stamp] = /^timesheet-backup-(\d{8}T\d{6}Z)-/.exec(String(printed.backup)) ?? [];
+  const realInstant = new Date(`${stamp?.slice(0, 4)}-${stamp?.slice(4, 6)}-${stamp?.slice(6, 8)}T${stamp?.slice(9, 11)}:${stamp?.slice(11, 13)}:${stamp?.slice(13, 15)}Z`);
+  const decoys = [];
+  for (const secondsBefore of [1, 2]) {
+    const instant = new Date(realInstant.getTime() - secondsBefore * 1000);
+    if (instant.toISOString().slice(0, 10) !== realInstant.toISOString().slice(0, 10)) continue;
+    const iso = instant.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const name = `timesheet-backup-${iso.replace(/[-:]/g, '')}-${randomBytes(4).toString('hex')}`;
+    mkdirSync(join(backupsDir, name));
+    writeFileSync(join(backupsDir, name, 'manifest.json'), `${JSON.stringify({ ...manifest, created_at: iso }, null, 2)}\n`);
+    decoys.push(name);
+  }
+  const foldersBefore = readdirSync(backupsDir).sort();
+  const dry = await dockerAsync(
+    ['compose', '--project-name', project, '--file', composeFile, 'exec', '-T', 'timesheet', 'node', 'dist/server/cli.js', 'backup', 'prune', '--in', '/data/backups', '--dry-run'],
+    composeEnv,
+  );
+  const dryJson = parseJson(dry.stdout);
+  check(
+    'backup prune --dry-run inside the container exits 0 and prints counts only (candidates, keep, remove, ignored)',
+    dry.status === 0 && dryJson?.outcome === 'dry_run' && JSON.stringify(Object.keys(dryJson).sort()) === JSON.stringify(['candidates', 'ignored', 'keep', 'outcome', 'remove']) && !PRIVATE_OUTPUT.test(dry.stdout),
+    dry.stdout.trim(),
+  );
+  check('the dry run counts the two expired same-day folders and keeps the real backup', dryJson?.candidates === 1 + decoys.length && dryJson?.keep === 1 && dryJson?.remove === decoys.length && dryJson?.ignored === 0);
+  const foldersAfter = readdirSync(backupsDir).sort();
+  check(
+    'the dry run removed nothing: every folder, manifest and the real backup files are still there',
+    JSON.stringify(foldersAfter) === JSON.stringify(foldersBefore) && decoys.every((name) => existsSync(join(backupsDir, name, 'manifest.json'))) && readdirSync(folder).sort().join(',') === 'files,manifest.json,timesheet.db',
+    `${foldersAfter.length} folders`,
+  );
+  return { backupName: String(printed.backup), importSources };
 }
 
 /* ---------------------------------------------------------------------------------------------- stage 3 ---- */
@@ -490,7 +622,7 @@ async function waitPdfReady(cookie, revisionId) {
   return ready.ok;
 }
 
-async function stageThree({ backupName, cookie, adminPassword }) {
+async function stageThree({ backupName, cookie, adminPassword, importSources }) {
   const backupFolder = join(dataDir, 'backups', backupName);
   const manifest = JSON.parse(readFileSync(join(backupFolder, 'manifest.json'), 'utf8'));
 
@@ -565,8 +697,24 @@ async function stageThree({ backupName, cookie, adminPassword }) {
   );
   const restoredFacts = businessFacts(atRestore);
   check('restored balances (ledger entries and sums per user), revisions, sign-offs, files and sessions equal the backup', JSON.stringify(restoredFacts) === JSON.stringify(backupFacts));
+  // The import sources (WP4-T09B): every batch of the backup is in the restored copy, and its source file is restored with the
+  // hash of the workbook that was uploaded.
+  const restoredImports = importFacts(atRestore);
+  check(
+    'restored import batches (ids, states, source hashes and sizes) equal the backup and the uploaded workbooks',
+    JSON.stringify(restoredImports) === JSON.stringify(importFacts(join(backupFolder, 'timesheet.db'))) &&
+      restoredImports.length === importSources.length &&
+      importSources.every((source) => restoredImports.some((row) => row.id === source.id && row.state === source.state && row.source_sha256 === source.sha256 && row.size_bytes === source.size)),
+    `${restoredImports.length} batches`,
+  );
+  const lostSources = restoredImports.filter((row) => {
+    const path = join(restoredFiles, row.storage_key);
+    return !existsSync(path) || sha256Of(readFileSync(path)) !== row.source_sha256;
+  });
+  check('every import source file is restored and hashes to its batch', lostSources.length === 0 && restoredImports.length > 0, `${restoredImports.length - lostSources.length} of ${restoredImports.length} sources`);
   const totals = {
     users: restoredFacts.users,
+    import_batches: restoredImports.length,
     revisions: restoredFacts.revisions_per_user.reduce((sum, value) => sum + value, 0),
     ledger_entries: restoredFacts.ledger_per_user.reduce((sum, row) => sum + row.entries, 0),
     ledger_minutes: restoredFacts.ledger_per_user.reduce((sum, row) => sum + row.minutes, 0),
@@ -597,6 +745,16 @@ async function stageThree({ backupName, cookie, adminPassword }) {
   const restoredRevisions = await call('GET', '/api/revisions', { cookie });
   check('revisions through the API equal the source', JSON.stringify(restoredRevisions.json?.revisions) === JSON.stringify(sourceRevisions.json?.revisions), `${restoredRevisions.json?.revisions?.length} revisions`);
 
+  const restoredList = await call('GET', '/api/imports', { cookie });
+  check(
+    'the employee lists the same import batches through the API of the restored instance',
+    restoredList.status === 200 && JSON.stringify((restoredList.json?.imports ?? []).map((item) => item.id).sort()) === JSON.stringify(importSources.map((source) => source.id).sort()),
+    `${restoredList.json?.imports?.length} batches`,
+  );
+  const committedSource = importSources.find((source) => source.state === 'committed');
+  const restoredBatch = await call('GET', `/api/imports/${committedSource?.id}`, { cookie });
+  check('the committed batch reads back as committed with its report on the restored instance', restoredBatch.status === 200 && restoredBatch.json?.import?.state === 'committed' && restoredBatch.json?.import?.source_sha256 === committedSource?.sha256);
+
   // While paused: a new sign-off (a send job created after the restore) waits; its PDF renders, its send is not claimed.
   const later = await signOffPeriod(cookie, '2026-04-17');
   check('a sign-off on the paused restored instance creates a send job (not held: created after the restore)', later.status === 201, `status ${later.status}`);
@@ -610,9 +768,11 @@ async function stageThree({ backupName, cookie, adminPassword }) {
   const operations = await call('GET', '/api/admin/operations', { cookie: adminLogin.cookie });
   const ops = operations.json?.operations;
   check('the restored runner keeps running (heartbeat) while paused', ops?.runner?.state === 'running', `waited ${((Date.now() - waitStart) / 1000).toFixed(0)} s`);
+  check('/api/admin/operations reports outbound delivery paused with reason restored', operations.status === 200 && ops?.outbound?.paused === true && ops?.outbound?.reason === 'restored' && typeof ops?.outbound?.paused_at === 'string', JSON.stringify({ paused: ops?.outbound?.paused, reason: ops?.outbound?.reason, queued: ops?.outbound?.queued_send_jobs, held: ops?.outbound?.held_send_jobs }));
   const acceptedAtRestore = restoredOutbound.attempts.filter((attempt) => attempt.state === 'accepted').length;
   check('no job is leased and nothing more was accepted while paused', ops?.jobs?.leased === 0 && (ops?.deliveries?.accepted ?? 0) === acceptedAtRestore, `jobs ${JSON.stringify(ops?.jobs)}`);
   check('nothing was captured while paused', !existsSync(join(restoredDir, 'private-data', 'mail-capture')));
+  check('nothing was sent while paused: no delivery attempt beyond the restored ones', Object.values(ops?.deliveries ?? {}).reduce((sum, value) => sum + value, 0) === restoredOutbound.attempts.length, JSON.stringify(ops?.deliveries));
 
   // Clean stop, then the attempt counters on a host copy: every restored outbound job unchanged, the new one unclaimed.
   compose(['stop', '--timeout', '45', 'timesheet']);
@@ -659,6 +819,9 @@ async function stageThree({ backupName, cookie, adminPassword }) {
     heldDb.close();
   }
   check('the second restore holds the queued send job of the paused instance', heldRevisions.includes(later.revisionId), `${heldRevisions.length} held send jobs`);
+  const importsSecond = importFacts(join(work, 'restored-2-at-restore.db'));
+  const sourcesSecond = importsSecond.filter((row) => existsSync(join(restoredDir2, 'private-data', 'files', row.storage_key)) && sha256Of(readFileSync(join(restoredDir2, 'private-data', 'files', row.storage_key))) === row.source_sha256);
+  check('the second restore (a backup of a restored instance) also holds every import source', importsSecond.length === importSources.length && sourcesSecond.length === importSources.length, `${sourcesSecond.length} of ${importsSecond.length} sources`);
 
   composeEnv.TIMESHEET_DATA_DIR = forwardSlashes(restoredDir2);
   compose(['up', '--detach', '--no-build']);
@@ -997,6 +1160,14 @@ async function stageFour() {
   check('upgraded database passes integrity_check and has no foreign key violation', afterUpgrade.integrity === 'ok' && afterUpgrade.foreignKeyViolations === 0);
   check('schema_migrations: contiguous 1..latest, and the old rows are unchanged', afterUpgrade.schema === target && afterUpgrade.migrations.map((row) => row.version).join() === Array.from({ length: target }, (_, index) => index + 1).join() && JSON.stringify(afterUpgrade.migrations.slice(0, oldVersion)) === JSON.stringify(preFacts.migrations));
   const appliedNow = afterUpgrade.migrations.slice(oldVersion);
+  check('migrations 0011 (job retention), 0012 (imports) and 0013 (opening balance) are among the applied ones', [11, 12, 13].every((version) => appliedNow.some((row) => row.version === version)), `versions ${appliedNow.map((row) => row.version).join(',')}`);
+  const upgradedImports = new Database(databasePath, { readonly: true, fileMustExist: true });
+  try {
+    const tables = upgradedImports.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('imports', 'job_retention_window') ORDER BY name").pluck().all();
+    check('the upgraded database has the imports table (empty) and the retention window row', tables.join() === 'imports,job_retention_window' && upgradedImports.prepare('SELECT count(*) FROM imports').pluck().get() === 0 && upgradedImports.prepare('SELECT count(*) FROM job_retention_window').pluck().get() === 1);
+  } finally {
+    upgradedImports.close();
+  }
   check('the new migrations ran exactly once, in one transaction (one application instant, one row each)', appliedNow.length === target - oldVersion && new Set(appliedNow.map((row) => row.applied_at)).size === 1, `${appliedNow.length} applied (versions ${appliedNow.map((row) => row.version).join(',')})`);
   const changed = snapshotMismatches(databasePath, preSnapshot);
   check('every pre-upgrade row of every table is unchanged (jobs, sessions and heartbeat aside; PDFs, attempts and audit rows may be appended)', changed.length === 0, changed.length === 0 ? `${Object.keys(preSnapshot).length} tables compared` : `differs: ${changed.join(',')}`);
@@ -1125,6 +1296,127 @@ async function stageFive(four) {
   const heldNow = after.outboundJobs.filter((job) => job.state === 'intervention' && job.last_error === 'reconcile_after_restore');
   check('the held send jobs are untouched (state, attempts), still not queued, no delivery attempt in the database', JSON.stringify(after.outboundJobs) === JSON.stringify(restoredFacts.outboundJobs) && heldNow.length === four.queuedSends && after.attempts.length === 0 && after.schema === oldVersion);
   check('rolled-back database is still consistent at the previous schema', after.integrity === 'ok' && after.foreignKeyViolations === 0);
+}
+
+/* ---------------------------------------------------------------------------------------------- stage 6 ---- */
+
+/** The eight tables whose counts an identical second import commit must leave unchanged (docs/07 "Workbook import"). */
+const COUNT_TABLES = ['timesheets', 'day_entries', 'work_sessions', 'ot_ledger', 'timesheet_revisions', 'signoffs', 'jobs', 'delivery_attempts'];
+
+/** Row counts read inside the container (the database is live, so the host does not open it): counts only. */
+function countsInContainer() {
+  const script = [
+    "const Database = require('better-sqlite3');",
+    "const db = new Database('/data/timesheet.db', { readonly: true, fileMustExist: true });",
+    'const counts = {};',
+    `for (const table of ${JSON.stringify(COUNT_TABLES)}) counts[table] = db.prepare('SELECT count(*) FROM ' + table).pluck().get();`,
+    "counts.imports = db.prepare('SELECT count(*) FROM imports').pluck().get();",
+    `counts.opening_balance = db.prepare("SELECT count(*) FROM ot_ledger WHERE entry_type = 'opening_balance'").pluck().get();`,
+    'console.log(JSON.stringify(counts));',
+  ].join('\n');
+  const run = compose(['exec', '-T', 'timesheet', 'node', '-e', script], { allowFailure: true });
+  const counts = parseJson(run.stdout);
+  if (run.status !== 0 || counts === null) throw new Error(`counts could not be read: ${String(run.stderr).trim().slice(0, 300)}`);
+  return counts;
+}
+
+const sameCounts = (left, right, keys = [...COUNT_TABLES, 'imports', 'opening_balance']) => keys.every((key) => left[key] === right[key]);
+const printCounts = (label, counts) => console.log(`INFO  counts ${label}: ${COUNT_TABLES.map((table) => `${table} ${counts[table]}`).join(', ')}, imports ${counts.imports}, opening_balance ${counts.opening_balance}`);
+
+async function stageSix({ employeePassword, adminPassword }) {
+  // The job runner stays off for this stage: the scan jobs it enqueues every minute would move the jobs count between two
+  // reads. Everything else is the production image on the production compose file, on the stage 1 data directory.
+  writeFileSync(envFile, `${readFileSync(envFile, 'utf8').trimEnd()}\nJOB_RUNNER=off\n`, { mode: 0o600 });
+  compose(['stop', '--timeout', '45', 'timesheet'], { allowFailure: true });
+  composeEnv.TIMESHEET_DATA_DIR = forwardSlashes(dataDir);
+  compose(['up', '--detach', '--no-build', '--force-recreate']);
+  const healthy = await waitHealthy(180_000);
+  check('the stage 1 instance starts again for stage 6 (healthy)', healthy.ok, `${healthy.seconds.toFixed(1)} s (${healthy.state})`);
+  if (!healthy.ok) throw new Error('stage 6 instance not healthy');
+  const runnerFlag = compose(['exec', '-T', 'timesheet', 'printenv', 'JOB_RUNNER'], { allowFailure: true }).stdout.trim();
+  check('the job runner is off in the container (counts cannot move in the background)', runnerFlag === 'off');
+
+  const employee = await call('POST', '/api/auth/login', { body: { email: 'employee@example.invalid', password: employeePassword } });
+  const admin = await call('POST', '/api/auth/login', { body: { email: 'admin@example.invalid', password: adminPassword } });
+  check('the synthetic owner and the administrator sign in', employee.status === 200 && admin.status === 200);
+  const users = await call('GET', '/api/admin/users', { cookie: admin.cookie });
+  const otherPassword = password();
+  const createdOther = await call('POST', '/api/admin/users', {
+    cookie: admin.cookie,
+    body: { email: 'employee2@example.invalid', display_name: 'Synthetic Employee Two', role: 'employee', password: otherPassword, calendar_id: users.json?.users?.[0]?.calendar_id },
+  });
+  const other = await call('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: otherPassword } });
+  check('another synthetic user exists and signs in', createdOther.status === 201 && other.status === 200, `status ${createdOther.status}/${other.status}`);
+
+  // 1. Preview a synthetic workbook, decide every listed day, commit.
+  const workbook = syntheticWorkbook([
+    { payrollDate: '2026-02-06', days: { 1: { label: 'Vacation' }, 2: { label: 'Banana Day' }, 3: { label: 'Floating Holiday' }, 4: { labelFormulaCache: 'Worked' } } },
+    { payrollDate: '2026-03-06' },
+  ]);
+  const start = countsInContainer();
+  printCounts('before the first import', start);
+  const preview = await uploadWorkbook(employee.cookie, workbook);
+  const batch = preview.json?.import;
+  const required = batch?.plan?.decisions_required ?? [];
+  check('the owner previews the workbook through /api/imports (201, new batch, plan with decisions to make)', preview.status === 201 && preview.json?.created === true && batch?.state === 'preview' && required.length >= 3, `status ${preview.status}, ${required.length} days need a decision, ${batch?.plan?.importable_days} importable`);
+  const previewed = countsInContainer();
+  check('the preview stored only the batch: no timesheet, day entry, session, ledger entry, revision, sign-off, job or delivery attempt', previewed.imports === start.imports + 1 && sameCounts(previewed, start, [...COUNT_TABLES, 'opening_balance']));
+  const decisions = decideAll(batch?.plan);
+  check('every listed day gets a decision (skip, or import where the plan allows it)', decisions.length === required.length && decisions.length > 0, `${decisions.filter((item) => item.action === 'skip').length} skip, ${decisions.filter((item) => item.action === 'import').length} import`);
+  const first = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions } });
+  check('the commit answers 200 committed', first.status === 200 && first.json?.status === 'committed' && first.json?.import?.state === 'committed', `status ${first.status} ${first.status === 200 ? '' : first.text.slice(0, 200)}`);
+  const committed = countsInContainer();
+  printCounts('after the first commit', committed);
+  check(
+    'the commit wrote only timesheets (two imported periods) and day entries: no session, ledger entry, revision, sign-off, job or delivery attempt',
+    committed.timesheets === previewed.timesheets + 2 && committed.day_entries > previewed.day_entries && sameCounts(committed, previewed, ['work_sessions', 'ot_ledger', 'timesheet_revisions', 'signoffs', 'jobs', 'delivery_attempts', 'imports', 'opening_balance']),
+  );
+
+  // 2. The identical workbook again: the same batch, and a committed batch commits as a no-op.
+  const again = await uploadWorkbook(employee.cookie, workbook);
+  check('the identical workbook returns the same batch (200, not created)', again.status === 200 && again.json?.created === false && again.json?.import?.id === batch?.id);
+  const second = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions } });
+  check('committing the identical workbook again answers 200 replayed', second.status === 200 && second.json?.status === 'replayed' && JSON.stringify(second.json?.import?.result) === JSON.stringify(first.json?.import?.result));
+  const different = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: employee.cookie, body: { decisions: [] } });
+  check('committing the batch with other decisions is refused (409 import_already_committed)', different.status === 409 && different.json?.error?.code === 'import_already_committed');
+  const afterSecond = countsInContainer();
+  printCounts('after the second commit', afterSecond);
+  check(`the eight table counts (${COUNT_TABLES.join(', ')}) and the import batches are unchanged by the second commit`, sameCounts(afterSecond, committed, [...COUNT_TABLES, 'imports']));
+
+  // 3. The opening balance, posted twice: exactly one entry.
+  const opening = { minutes: 150, as_of_date: '2026-01-01', reason: 'Synthetic carried-in balance', evidence_ref: 'Synthetic ledger note 1', expected_version: 0 };
+  const postedOnce = await call('POST', '/api/ot/opening-balance', { cookie: employee.cookie, body: opening });
+  const postedTwice = await call('POST', '/api/ot/opening-balance', { cookie: employee.cookie, body: opening });
+  check('the opening balance posts once (201 posted) and a repeat is a no-op (200 duplicate)', postedOnce.status === 201 && postedOnce.json?.status === 'posted' && postedTwice.status === 200 && postedTwice.json?.status === 'duplicate', `status ${postedOnce.status}/${postedTwice.status}`);
+  const changed = await call('POST', '/api/ot/opening-balance', { cookie: employee.cookie, body: { ...opening, minutes: 200 } });
+  check('a different opening balance is refused (409 opening_balance_exists)', changed.status === 409 && changed.json?.error?.code === 'opening_balance_exists');
+  const afterOpening = countsInContainer();
+  printCounts('after the opening balance', afterOpening);
+  check('exactly one opening_balance entry exists, and it is the only new ledger row', afterOpening.opening_balance === 1 && afterOpening.ot_ledger === afterSecond.ot_ledger + 1 && sameCounts(afterOpening, afterSecond, COUNT_TABLES.filter((table) => table !== 'ot_ledger')));
+  const stated = await call('GET', '/api/ot/opening-balance', { cookie: employee.cookie });
+  check('the owner reads the opening balance back (150 minutes, as of 2026-01-01)', stated.status === 200 && stated.json?.opening_balance?.minutes === 150 && stated.json?.opening_balance?.as_of_date === '2026-01-01');
+
+  // 4. An imported period is read-only history: a sign-off attempt is 409 imported_period and writes nothing.
+  const review = await call('GET', '/api/timesheets/2026-03-06/review', { cookie: employee.cookie });
+  const signoff = await call('POST', '/api/timesheets/2026-03-06/signoff', {
+    cookie: employee.cookie,
+    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: 'Synthetic Employee', incomplete_evidence_acknowledged: true },
+  });
+  check('a sign-off of an imported period answers 409 imported_period', review.status === 200 && signoff.status === 409 && signoff.json?.error?.code === 'imported_period', `status ${review.status}/${signoff.status} ${signoff.json?.error?.code}`);
+  check('the refused sign-off wrote nothing', sameCounts(countsInContainer(), afterOpening));
+
+  // 5. Ownership: another user, and an administrator, cannot see or commit the batch.
+  const otherRead = await call('GET', `/api/imports/${batch?.id}`, { cookie: other.cookie });
+  const otherCommit = await call('POST', `/api/imports/${batch?.id}/commit`, { cookie: other.cookie, body: { decisions } });
+  const otherList = await call('GET', '/api/imports', { cookie: other.cookie });
+  const adminRead = await call('GET', `/api/imports/${batch?.id}`, { cookie: admin.cookie });
+  check('another synthetic user gets 404 for the batch (read and commit) and lists none', otherRead.status === 404 && otherCommit.status === 404 && otherList.status === 200 && otherList.json?.imports?.length === 0, `status ${otherRead.status}/${otherCommit.status}/${otherList.status}`);
+  check('an administrator gets 404 for the batch as well', adminRead.status === 404);
+  const end = countsInContainer();
+  printCounts('at the end of stage 6', end);
+  check('the ownership attempts wrote nothing', sameCounts(end, afterOpening));
+  const log = compose(['logs', '--no-color', 'timesheet']).stdout;
+  check('the stage 6 instance log has no deprecation warning and never contains a password', !/deprecat/i.test(log) && !log.includes(employeePassword) && !log.includes(adminPassword) && !log.includes(otherPassword));
 }
 
 mkdirSync(dataDir, { recursive: true });
@@ -1272,21 +1564,31 @@ try {
   check('container log has no deprecation warning', !/deprecat/i.test(logs));
   check('container log never contains the setup token or a password', !(token && logs.includes(token)) && !logs.includes(adminPassword) && !logs.includes(employeePassword));
 
-  // 7. Stage 2 (WP4-T05): a backup inside the container while writes continue, verified outside it.
-  const backupName = await stageTwo(relogin.cookie);
+  stageReport(1, 'build, image, start, persistence');
+
+  // 7. Stage 2 (WP4-T05, extended in WP4-T12): a backup inside the container while writes continue, verified outside it.
+  const two = await stageTwo(relogin.cookie);
   const logsAfterBackup = compose(['logs', '--no-color', 'timesheet']).stdout;
   check('container log after the backup has no deprecation warning', !/deprecat/i.test(logsAfterBackup));
+  stageReport(2, 'backup, import sources, prune dry run');
 
-  // 8. Stage 3 (WP4-T06): isolated restore of that backup, a paused restored instance, then the explicit resume.
-  await stageThree({ backupName, cookie: relogin.cookie, adminPassword });
+  // 8. Stage 3 (WP4-T06, extended in WP4-T12): isolated restore of that backup, a paused restored instance, then the explicit resume.
+  await stageThree({ backupName: two.backupName, cookie: relogin.cookie, adminPassword, importSources: two.importSources });
+  stageReport(3, 'restore, pause, release');
 
   // 9. Stages 4 and 5 (WP4-T12A): upgrade of an older database, then rollback to it, with the previous build.
   if (previousBuild === null) {
     console.log('INFO  stages 4 and 5 (upgrade, rollback) skipped: no --wp3 previous build given');
   } else {
     const four = await stageFour();
+    stageReport(4, 'upgrade from the WP3 schema');
     await stageFive(four);
+    stageReport(5, 'rollback to the WP3 build');
   }
+
+  // 10. Stage 6 (WP4-T12): workbook import, identical second commit, opening balance, imported period, ownership.
+  await stageSix({ employeePassword, adminPassword });
+  stageReport(6, 'import and opening balance');
 } catch (error) {
   failures += 1;
   console.log(`FAIL  drill stopped: ${error instanceof Error ? error.message : String(error)}`);
@@ -1300,6 +1602,7 @@ try {
   if (!keep) check('no container of the project remains', left === '');
 }
 
-const stages = previousBuild === null ? '1-3' : '1-5';
+const stages = previousBuild === null ? '1-3 and 6' : '1-6';
+console.log(`SUMMARY ${stageTally.map((line) => `stage ${line.stage}: ${line.passes} PASS${line.failures === 0 ? '' : ` ${line.failures} FAIL`}`).join('; ')}; total ${passes} PASS, ${failures} FAIL`);
 console.log(failures === 0 ? `DRILL STAGES ${stages} PASSED` : `DRILL STAGES ${stages} FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

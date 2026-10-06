@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, type Migration, migrate, MigrationError } from '../../src/server/db/migrations.ts';
+import { postOpeningBalance } from '../../src/server/services/ledger.ts';
 import { buildSchemaV6, WP3_MIGRATIONS, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
+import { MutableClock } from '../support/testApp.ts';
 
 /*
  * WP4-T12A: the upgrade path of a populated database from schema 6 (the accepted WP3 build) to the latest schema
@@ -172,6 +174,64 @@ describe('upgrade of a populated schema 6 database to the latest schema (AC-11)'
     expect(version(db)).toBe(LATEST);
     expect(capture(db, everything.shapes)).toEqual(everything);
     expect(db.inTransaction).toBe(false);
+  });
+});
+
+describe('migrations 0011 to 0013 on a populated schema 6 database (job retention, imports, opening balance)', () => {
+  let dir: string;
+  let db: Db;
+  let employeeId: string;
+  let balanceBefore: { entries: number; minutes: number };
+  const ledgerOf = (userId: string): { entries: number; minutes: number } =>
+    db.prepare<[string], { entries: number; minutes: number }>('SELECT count(*) AS entries, coalesce(sum(delta_minutes), 0) AS minutes FROM ot_ledger WHERE user_id = ?').get(userId) ?? { entries: 0, minutes: 0 };
+
+  beforeAll(async () => {
+    dir = scratch();
+    const fixture = await buildSchemaV6(dir);
+    employeeId = fixture.employeeId;
+    db = openDatabase(fixture.databasePath);
+    balanceBefore = ledgerOf(employeeId);
+    migrate(db);
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const names = (type: string): string[] => db.prepare<[string], { name: string }>('SELECT name FROM sqlite_master WHERE type = ? ORDER BY name').all(type).map((row) => row.name);
+
+  it('applies the three migrations among the pending ones and gives them their objects', () => {
+    const applied = db.prepare<[], { version: number; name: string }>('SELECT version, name FROM schema_migrations WHERE version BETWEEN 11 AND 13 ORDER BY version').all();
+    expect(applied.map((row) => row.version)).toEqual([11, 12, 13]);
+    expect(PENDING).toEqual(expect.arrayContaining([11, 12, 13]));
+    expect(names('table')).toEqual(expect.arrayContaining(['imports', 'job_retention_window']));
+    expect(names('index')).toEqual(expect.arrayContaining(['imports_idempotency', 'ot_ledger_one_opening_balance']));
+    expect(names('trigger')).toEqual(expect.arrayContaining(['imports_no_delete', 'imports_commit_once', 'ot_ledger_no_update', 'ot_ledger_no_delete']));
+    const columns = db.prepare<[], { name: string }>("SELECT name FROM pragma_table_info('operations_state')").all().map((row) => row.name);
+    expect(columns).toEqual(expect.arrayContaining(['job_retention_last_run_at', 'job_retention_last_deleted']));
+    expect(db.prepare('SELECT count(*) FROM imports').pluck().get()).toBe(0);
+    expect(db.prepare('SELECT as_of FROM job_retention_window').pluck().get()).toBeNull();
+  });
+
+  it('keeps the OT ledger of the old database through the 0013 table rebuild', () => {
+    expect(balanceBefore.entries).toBeGreaterThan(0);
+    expect(ledgerOf(employeeId)).toEqual(balanceBefore);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(() => db.prepare('UPDATE ot_ledger SET delta_minutes = delta_minutes + 1').run()).toThrow();
+    expect(() => db.prepare('DELETE FROM ot_ledger').run()).toThrow();
+  });
+
+  it('accepts exactly one opening balance on the upgraded database and posts nothing for a repeat', () => {
+    const ctx = { db, clock: new MutableClock('2026-10-05T12:00:00Z') };
+    const input = { userId: employeeId, actorUserId: employeeId, minutes: 90, asOfDate: '2026-01-01', reason: 'Synthetic carried balance', evidenceRef: 'Synthetic note 1', expectedVersion: 0 };
+    expect(postOpeningBalance(ctx, input)).toMatchObject({ status: 'posted' });
+    expect(postOpeningBalance(ctx, input)).toMatchObject({ status: 'duplicate' });
+    expect(db.prepare("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND entry_type = 'opening_balance'").pluck().get(employeeId)).toBe(1);
+    expect(ledgerOf(employeeId)).toEqual({ entries: balanceBefore.entries + 1, minutes: balanceBefore.minutes + 90 });
+    expect(() => postOpeningBalance(ctx, { ...input, minutes: 120 })).toThrow(expect.objectContaining({ status: 409, code: 'opening_balance_exists' }));
+    expect(ledgerOf(employeeId).entries).toBe(balanceBefore.entries + 1);
   });
 });
 
