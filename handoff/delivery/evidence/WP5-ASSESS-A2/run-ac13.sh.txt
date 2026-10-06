@@ -1,0 +1,17 @@
+# WP5-ASSESS-A2: the AC-13 integrated test alone, three times, then once with another machine zone; output to raw/
+source <task>/env.sh
+cd "$T/src" || exit 2
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+R="node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts --reporter=verbose"
+for n in 1 2 3; do
+  echo "== AC-13 run $n start $(date -u +%Y-%m-%dT%H:%M:%SZ): $R" > "$T/raw/06-ac13-run$n.txt"
+  s=$(date +%s%3N)
+  $R >> "$T/raw/06-ac13-run$n.txt" 2>&1
+  e=$?
+  f=$(date +%s%3N)
+  echo "== AC-13 run $n exit $e wall ${f}-${s} = $((f - s)) ms end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/raw/06-ac13-run$n.txt"
+done
+echo "== AC-13 TZ=Pacific/Kiritimati start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$T/raw/06-ac13-tz-kiritimati.txt"
+echo "node zone check: $(TZ=Pacific/Kiritimati node -e 'console.log(Intl.DateTimeFormat().resolvedOptions().timeZone, new Date(0).getTimezoneOffset())')" >> "$T/raw/06-ac13-tz-kiritimati.txt"
+TZ=Pacific/Kiritimati $R >> "$T/raw/06-ac13-tz-kiritimati.txt" 2>&1
+echo "== AC-13 TZ=Pacific/Kiritimati exit $? end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/raw/06-ac13-tz-kiritimati.txt"

@@ -1,0 +1,210 @@
+// WP5-ASSESS-A2 probe helpers (auditor-owned; synthetic data, local capture only).
+// Starts only its own child servers and stops them through their own handles. Adapted from the
+// WP5-ASSESS-A attempt-1 helpers (evidence lib.mjs.txt); this copy is the attempt-2 auditor's own.
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+export const T = '<task>';
+export const SRC = join(T, 'src');
+export const requireSrc = createRequire(pathToFileURL(join(SRC, 'package.json')).href);
+export const Database = requireSrc('better-sqlite3');
+export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+export const secret = () => randomBytes(18).toString('base64url');
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export const utc = (date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+/** One run folder per probe execution (nothing is deleted; the task folder keeps every run). */
+export function newRunDir(name) {
+  const base = join(T, 'runs');
+  mkdirSync(base, { recursive: true });
+  let n = 1;
+  while (existsSync(join(base, `${name}-${n}`))) n += 1;
+  const dir = join(base, `${name}-${n}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export class Recorder {
+  constructor(dir) {
+    this.dir = dir;
+    this.results = [];
+    this.logPath = join(dir, 'probe-log.txt');
+    this.secrets = new Set();
+  }
+  addSecret(value) {
+    if (typeof value === 'string' && value.length >= 6) this.secrets.add(value);
+  }
+  mask(text) {
+    let out = String(text);
+    for (const value of this.secrets) out = out.split(value).join('<secret>');
+    for (const form of [T, T.replaceAll('\\', '\\\\'), T.replaceAll('\\', '/')]) out = out.split(form).join('<task>');
+    return out;
+  }
+  log(line) {
+    appendFileSync(this.logPath, `${this.mask(line)}\n`);
+  }
+  check(id, label, condition, detail = '') {
+    const ok = Boolean(condition);
+    const text = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    this.results.push({ id, label, ok, detail: this.mask(text) });
+    this.log(`${ok ? 'PASS' : 'FAIL'}  [${id}] ${label}${text === '' ? '' : `  ${text}`}`);
+    return ok;
+  }
+  write() {
+    const pass = this.results.filter((r) => r.ok).length;
+    const fail = this.results.length - pass;
+    writeFileSync(join(this.dir, 'probe-results.json'), `${this.mask(JSON.stringify({ pass, fail, results: this.results }, null, 2))}\n`);
+    this.log(`SUMMARY pass=${pass} fail=${fail} total=${this.results.length}`);
+    return { pass, fail };
+  }
+}
+
+/** A child server of this probe only; stopped through its own handle. */
+export class Server {
+  constructor(name, env, rec, port) {
+    this.name = name;
+    this.env = env;
+    this.rec = rec;
+    this.port = port;
+    this.child = null;
+    this.output = '';
+    this.starts = 0;
+  }
+  async start() {
+    this.starts += 1;
+    const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: SRC, env: this.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    this.child = child;
+    child.stdout.on('data', (chunk) => (this.output += String(chunk)));
+    child.stderr.on('data', (chunk) => (this.output += String(chunk)));
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (child.exitCode !== null) throw new Error(`${this.name} exited early (${child.exitCode})`);
+      try {
+        const response = await fetch(`http://127.0.0.1:${this.port}/api/health`, { signal: AbortSignal.timeout(2000) });
+        if (response.ok && child.exitCode === null) {
+          this.rec.log(`server ${this.name} start #${this.starts} healthy on port ${this.port}`);
+          return;
+        }
+      } catch {
+        // not listening yet
+      }
+      await sleep(150);
+    }
+    throw new Error(`${this.name} did not become healthy`);
+  }
+  async stop() {
+    const child = this.child;
+    if (child === null || child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await exited;
+    this.rec.log(`server ${this.name} stopped (own child handle), exit ${child.exitCode ?? child.signalCode}`);
+  }
+}
+
+export function runCli(rec, env, args, label) {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { cwd: SRC, env, encoding: 'utf8' });
+  const out = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  rec.log(`cli ${label ?? args.join(' ')} -> exit ${result.status}: ${out.split('\n').join(' | ')}`);
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '', out };
+}
+
+export class Client {
+  constructor(base, origin, rec, who) {
+    this.base = base;
+    this.origin = origin;
+    this.rec = rec;
+    this.who = who;
+    this.cookie = '';
+  }
+  async raw(method, path, { body, headers = {}, withOrigin = true, origin } = {}) {
+    const h = { ...headers, connection: 'close' };
+    if (withOrigin) h.origin = origin ?? this.origin;
+    if (this.cookie !== '') h.cookie = this.cookie;
+    let payload;
+    if (body !== undefined && !(body instanceof Uint8Array)) {
+      h['content-type'] = 'application/json';
+      payload = JSON.stringify(body);
+    } else if (body instanceof Uint8Array) {
+      payload = body;
+    }
+    const response = await fetch(`${this.base}${path}`, { method, headers: h, body: payload });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    let json = null;
+    try {
+      json = JSON.parse(buffer.toString('utf8'));
+    } catch {
+      json = null;
+    }
+    return { status: response.status, headers: response.headers, json, buffer, text: buffer.toString('utf8') };
+  }
+  async call(method, path, body, opts = {}) {
+    const r = await this.raw(method, path, { ...opts, body });
+    this.rec.log(`${this.who} ${method} ${path} -> ${r.status}${r.status >= 400 ? ` ${r.text.slice(0, 300)}` : ''}`);
+    return r;
+  }
+  async login(email, password) {
+    const r = await this.raw('POST', '/api/auth/login', { body: { email, password } });
+    this.cookie = (r.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    this.rec.addSecret(this.cookie.split('=')[1]);
+    this.rec.log(`${this.who} login -> ${r.status}`);
+    return r;
+  }
+}
+
+/** Every capture folder of a data directory with its decoded content (synthetic only). */
+export function listCaptures(dataDir) {
+  const root = join(dataDir, 'mail-capture');
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.tmp-'))
+    .map((entry) => {
+      const folder = join(root, entry.name);
+      const files = readdirSync(folder).sort();
+      const metadata = files.includes('metadata.json') ? JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8')) : null;
+      const eml = files.includes('message.eml') ? readFileSync(join(folder, 'message.eml'), 'utf8') : '';
+      const pdf = files.includes('attachment.pdf') ? readFileSync(join(folder, 'attachment.pdf')) : null;
+      return { id: entry.name, files, metadata, eml, pdf, pdfSha256: pdf === null ? null : sha256(pdf) };
+    });
+}
+
+/** Decodes the text/plain part of a captured message (quoted-printable or base64) and the main headers. */
+export function plainBody(eml) {
+  const header = eml.split(/\r?\n\r?\n/)[0] ?? '';
+  const parts = eml.split(/\r?\n--/);
+  let text = '';
+  for (const part of parts) {
+    if (!/Content-Type: text\/plain/i.test(part)) continue;
+    const [head, ...rest] = part.split(/\r?\n\r?\n/);
+    const bodyRaw = rest.join('\n\n');
+    if (/Content-Transfer-Encoding: base64/i.test(head)) text = Buffer.from(bodyRaw.replace(/\s+/g, ''), 'base64').toString('utf8');
+    else if (/Content-Transfer-Encoding: quoted-printable/i.test(head)) {
+      const soft = bodyRaw.replace(/=\r?\n/g, '');
+      const bytes = [];
+      for (let i = 0; i < soft.length; i += 1) {
+        if (soft[i] === '=' && /^[0-9A-F]{2}$/i.test(soft.slice(i + 1, i + 3))) {
+          bytes.push(parseInt(soft.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else bytes.push(...Buffer.from(soft[i], 'utf8'));
+      }
+      text = Buffer.from(bytes).toString('utf8');
+    } else text = bodyRaw;
+    break;
+  }
+  const headers = {};
+  for (const name of ['From', 'To', 'Cc', 'Bcc', 'Subject', 'Message-ID', 'Date']) {
+    const value = header.match(new RegExp(`^${name}: (.*)$`, 'mi'))?.[1];
+    if (value !== undefined) headers[name] = value.trim();
+  }
+  return { text: text.trim(), headers };
+}
+
+/** LA calendar date of an instant. */
+export function laDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}

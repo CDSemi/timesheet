@@ -1,0 +1,143 @@
+run dir <task>\runs\probe-1; node v24.21.0; real now 2026-10-06T22:10:10Z; LA date 2026-10-06
+cli bootstrap --config <run>/bootstrap-config.json -> exit 0: Company calendar and default policy created (0 holiday dates). | Setup token (shown once, valid until 2026-10-06T23:10:10Z; only its hash is stored): |  |   5XTNH-2VPTW-OX4ZY-HOHSN-UX3HO-SW5JQ-CBFSU-Q5NBR |  | Open the application and enter it on the Setup screen to create the first administrator. | Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+PASS  [BOOT-1] production bootstrap CLI creates the calendar and prints a setup token once  exit 0
+server scenario start #1 healthy on port 47702
+admin POST /api/auth/bootstrap -> 201
+PASS  [BOOT-2] the first administrator is created from the setup token  201
+admin login -> 200
+admin GET /api/calendar -> 200
+admin POST /api/admin/users -> 201
+A login -> 200
+A POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+B login -> 200
+B POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+C login -> 200
+C POST /api/policies -> 201
+A GET /api/periods/current -> 200
+current period {"payroll_date":"2026-10-09","nominal_payroll_date":"2026-10-09","period_start":"2026-09-23","period_end":"2026-10-06","due_local_date":"2026-10-08","due_local_time":"17:00","due_at_utc":"2026-10-09T00:00:00Z","is_exception":false}; work date 2026-09-23; next-period date 2026-10-07
+A POST /api/settings/submission -> 201
+B POST /api/settings/submission -> 201
+A POST /api/signatures -> 201
+PASS  [SETUP-1] A and B save settings; A uploads a synthetic signature; C never saves settings  201/201/201
+A POST /api/days/2026-09-23/sessions -> 201
+B POST /api/days/2026-09-23/sessions -> 201
+A GET /api/timesheets/2026-10-09/review -> 200
+A POST /api/timesheets/2026-10-09/signoff -> 201
+PASS  [SELF-1] A signs off payroll 2026-10-09 (201, revision 1)  201
+cli run-jobs 2026-10-06T22:10:13Z pdf + send -> exit 0: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T22:11:14Z retry -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=ee6ffae9-29a7-43d8-8d54-a1a92d594e61 -> 200
+PASS  [SELF-2] capture holds exactly the configured To/Cc, MAIL_FROM, no Bcc, and the PDF equal to the download (AC-14)  {"envelope":{"from":"timesheet-pilot-sender@example.invalid","to":["payroll-a@example.invalid","manager-a@example.invalid"]},"state":"accepted"}
+PASS  [SELF-3] the capture-mode attempt is recorded as accepted with provider response "captured" (the owner screen words state accepted as "Accepted by the mail server"); the record has no sender field  {"state":"accepted","provider_response":"captured","keys":["id","job_id","revision_id","revision_no","payroll_date","attempt_no","channel","to","cc","subject","message_id","provider_message_id","state","provider_response","accepted_at","decision","decided_at","decision_required","started_at","updated_at","job"]}
+PASS  [SELF-4] docs/11 s13 step 2: the captured submission message carries no deep link (no http(s) URL in the message)  body: "Hello,\n\nAttached is the timesheet of Alice Synthetic for 2026-09-23 to 2026-10-06 (payroll date 2026-10-09).\r\nStatus: Submitted.\r\nSubmission TS-20261009-d7ea5f2de1, revision 1."
+admin GET /api/admin/operations -> 200
+FAIL  [OPS-1] administrator status: sender {configured, outbound_mode=capture}, activation.active_from null ("Not activated")  {}
+FAIL  [OPS-2] docs/11 s13 step 2 / s14 step 4: the administrator status JSON carries no PRODUCTION_SENDING_ENABLED flag field (only sender.configured and sender.outbound_mode)  sender keys []; top-level keys ["operations"]
+PASS  [OPS-3] administrator status carries no timesheet details or addresses  761 bytes
+admin PUT /api/admin/automation/activation -> 422 {"error":{"code":"activation_in_past","message":"The activation instant cannot be before the current time"}}
+admin PUT /api/admin/automation/activation -> 422 {"error":{"code":"reason_required","message":"Recording or clearing the activation needs a reason"}}
+admin PUT /api/admin/automation/activation -> 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+A PUT /api/admin/automation/activation -> 403 {"error":{"code":"forbidden","message":"Administrator access required"}}
+PASS  [ACT-1] activation refusals: past 422 activation_in_past, blank reason 422 reason_required, foreign Origin 403 origin_rejected, employee 403; nothing recorded  422 activation_in_past / 422 reason_required / 403 origin_rejected / 403
+A POST /api/shares -> 201
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/timesheets/2026-10-09 -> 200
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/ot/summary -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/revisions/ee6ffae9-29a7-43d8-8d54-a1a92d594e61/pdf -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B PUT /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/days/2026-10-07 -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B POST /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/timesheets/2026-10-09/signoff -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/signatures/418a7148-0abd-43ae-b557-06b5c481a0e0 -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/revisions/ee6ffae9-29a7-43d8-8d54-a1a92d594e61/resend -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/settings/submission -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/ot/leave -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/shares -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+PASS  [SHARE-1] view-only grant: timesheet 200; OT, PDF and edit refused; sign-off, signature image, resend, settings, leave and re-sharing never reachable under /api/shared (404/403)  grant 201 view 200 ot 403 pdf 403 edit 403 never-mounted 404,404,404,404,404,404
+A PUT /api/shares/a1b63cab-60ca-4566-8d38-93366f460484 -> 200
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/ot/summary -> 200
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/days/2026-10-07 -> 200
+B PUT /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/days/2026-10-07 -> 200
+PASS  [SHARE-2] a change applies on the next request: OT 200, PDF 200 with the same bytes and an audited download, edit 200 attributed to the grantee; the change issues a new id  change 200 ot 200 pdf 200 edit 200 audit(actor=B) 2 pdfAudit 1 newId true
+A POST /api/shares/2b24fbde-f853-4c3c-939f-09ff5422f57f/revoke -> 200
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/timesheets/2026-10-09 -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/revisions/ee6ffae9-29a7-43d8-8d54-a1a92d594e61/pdf -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+B GET /api/shared/3475cbaf-7dcd-4b68-a500-04dd7752d64c/ot/summary -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+PASS  [SHARE-3] revocation applies on the next request (404 on timesheet, PDF and OT)  revoke 200 view 404 pdf 404 ot 404
+admin POST /api/admin/users/26f8f228-be52-4c02-be16-9223ed58d4f2/deactivate -> 200
+B GET /api/auth/me -> 401 {"error":{"code":"unauthenticated","message":"Sign in required"}}
+admin POST /api/admin/users/26f8f228-be52-4c02-be16-9223ed58d4f2/reactivate -> 200
+B login -> 200
+PASS  [SHARE-4] deactivation applies on the next request (401); reactivation restores sign-in  200/401/200/200
+B GET /api/timesheets/2026-10-09/finalization -> 200
+A GET /api/periods/current -> 200
+period due at 2026-10-09T00:00:00Z; B finalization null
+cli run-jobs 2026-10-08T00:01:00Z no activation -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-08T22:01:00Z no activation -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-09T00:05:00Z no activation -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  [LINK-1] without an activation instant no reminder, overdue warning or outcome notice is decided or captured across the 24 h and 2 h windows and the deadline, so the capture self-test holds no message with a deep link  new captures 0; overdue(B) 0; reminder occurrences 0
+admin PUT /api/admin/automation/activation -> 200
+admin GET /api/admin/operations -> 200
+FAIL  [ACT-2] recording an activation instant is audited and the administrator status shows it  200 2026-10-06T22:12:15Z
+cli run-jobs 2026-10-22T00:01:00Z after activation, next period 24 h window -> exit 0: {"claimed":8,"succeeded":8,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T00:03:00Z after activation, send reminders -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+PASS  [LINK-2] positive control: after activation, the before-due reminders are captured to each account's own address and carry the login-required deep link on PUBLIC_BASE_URL  [{"to":["pilot-admin@example.invalid"],"link":"https://timesheet.example.invalid/#/review/2026-10-23"},{"to":["bob.synthetic@example.invalid"],"link":"https://timesheet.example.invalid/#/review/2026-10-23"},{"to":["carol.synthetic@example.invalid"],"link":"https://timesheet.example.invalid/#/review/2026-10-23"},{"to":["alice.synthetic@example.invalid"],"link":"https://timesheet.example.invalid/#/review/2026-10-23"}]
+admin PUT /api/admin/automation/activation -> 200
+admin GET /api/admin/operations -> 200
+FAIL  [ACT-3] clearing the activation (null with a reason) is accepted and the status returns to "Not activated" (active_from null)  200
+anon GET /api/health -> 200
+anon GET /api/ready -> 200
+PASS  [PRIV-1] health and readiness expose no personal data or path  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+server scenario stopped (own child handle), exit SIGTERM
+cli faults bootstrap -> exit 0: Company calendar and default policy created (0 holiday dates). | Setup token (shown once, valid until 2026-10-06T23:10:16Z; only its hash is stored): |  |   PKHVY-AWEAO-QK4M4-TJ2SL-GTGRL-DWV6B-HZYO5-CEIHV |  | Open the application and enter it on the Setup screen to create the first administrator. | Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+server faults start #1 healthy on port 47703
+fadmin POST /api/auth/bootstrap -> 201
+fadmin login -> 200
+fadmin GET /api/calendar -> 200
+fadmin POST /api/admin/users -> 201
+G login -> 200
+G POST /api/policies -> 201
+G POST /api/signatures -> 201
+fadmin POST /api/admin/users -> 201
+H login -> 200
+H POST /api/policies -> 201
+H POST /api/signatures -> 201
+G GET /api/periods/current -> 200
+G POST /api/days/2026-09-23/sessions -> 201
+H POST /api/days/2026-09-23/sessions -> 201
+G POST /api/settings/submission -> 201
+G GET /api/timesheets/2026-10-09/review -> 200
+G POST /api/timesheets/2026-10-09/signoff -> 201
+cli run-jobs 2026-10-06T22:10:19Z faults: no sender -> exit 0: {"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T22:12:19Z faults: no sender b -> exit 0: {"claimed":1,"succeeded":0,"retried":0,"intervention":1,"lost":0}
+G GET /api/deliveries -> 200
+G GET /api/revisions -> 200
+fadmin GET /api/admin/submissions -> 200
+PASS  [F-1] missing sender: the attempt fails permanently with sender_missing, the revision list shows it failed, never accepted; nothing captured  [["failed_permanent","sender_missing"]]
+PASS  [F-2] the administrator submission status shows the fault code and the frozen recipients, with no timesheet details  {"submissions":[{"user_id":"3c9dc716-4a21-415b-8b21-956b7d0caa25","display_name":"Gina Synthetic","period":{"payroll_date":"2026-10-09","period_start":"2026-09-23","period_end":"2026-10-06","due_at":"2026-10-09T00:00:00Z"},"revision":{"no":1,"origin":"employee","review_state":"signed","finalized_at"
+H GET /api/timesheets/2026-10-09/review -> 200
+H POST /api/timesheets/2026-10-09/signoff -> 201
+cli run-jobs 2026-10-06T22:20:19Z faults: with sender (Hugo) -> exit 0: {"claimed":2,"succeeded":1,"retried":1,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T22:22:19Z faults: with sender (Hugo) b -> exit 0: {"claimed":1,"succeeded":0,"retried":0,"intervention":1,"lost":0}
+H GET /api/deliveries -> 200
+G GET /api/deliveries -> 200
+PASS  [F-3] missing recipient: Hugo's sign-off is accepted, the delivery fails permanently with recipient_missing, never accepted; nothing captured  [["failed_permanent","recipient_missing"]]
+PASS  [F-4] Gina's permanent failure is not retried automatically once a sender exists  ["failed_permanent"]
+server faults stopped (own child handle), exit SIGTERM
+cli run-jobs smtp without flag -> exit 1: file:///<task>/src/dist/server/config.js:162
+ |         throw new Error('OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag');
+ |               ^
+ | 
+ | Error: OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag
+ |     at parseOutbound (file:///<task>/src/dist/server/config.js:162:15)
+ |     at loadDeliveryConfig (file:///<task>/src/dist/server/config.js:175:19)
+ |     at runJobs (file:///<task>/src/dist/server/cli.js:85:22)
+ |     at main (file:///<task>/src/dist/server/cli.js:411:16)
+ |     at file:///<task>/src/dist/server/cli.js:466:26
+ |     at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+ |     at async node:internal/modules/esm/loader:647:26
+ |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+ | 
+ | Node.js v24.21.0
+PASS  [F-5] OUTBOUND_MODE=smtp without PRODUCTION_SENDING_ENABLED: server and CLI refuse, the message names the flag, the SMTP password never appears  server exit 1 cli 1
+PASS  [PRIV-2] server logs and CLI outputs of both instances hold no password or session cookie; each setup token appears only in its own bootstrap output  leaked 0; secrets tracked 18
+SUMMARY pass=22 fail=4 total=26

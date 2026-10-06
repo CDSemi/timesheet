@@ -25,11 +25,15 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+  "current_source_digest": "1b8ceae441a1f41a51086303cc12b8e06ddfe9fc405cf2d5bb01baba12896af7",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-REL-FREEZE",
+  "next_task_id": "WP5-FIXD-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-06",
+      "observation": "WP5-PILOT worker ran `python - <<'EOF'` (an empty heredoc on stdin) despite the capitalised no-stdin rule; the background task b4fr6819n looped writing errors (about 1 GB, growing 2 MB/s) into the session tasks folder. The coordinator TaskStopped the task and the agent. The owner is asked to delete D:\\.claude-tmp\\claude\\D--Dropbox-Work-CDSemi-timesheet\\44e3451e-da20-4a12-94bb-6b94fc5f531e\\tasks\\b4fr6819n.output. This is the fourth stdin incident; later briefs repeat the rule and add: do not call python at all unless the brief names a script file."
+    },
     {
       "date": "2026-10-06",
       "observation": "WP4-REGATE4 verifier piped a probe into `head`, which left one Node 24 server child running from its task folder (it may not kill by PID), and ran one stray `rm -rf /dev/null` (no effect, but a recursive-delete form the briefs forbid). The harness reported background work left after hand-back; the coordinator TaskStopped the agent. Later briefs forbid piping probe or server output into head/tail and require explicit free ports; the owner is told a stray node.exe from D:\\.claude-tmp\\timesheet\\WP4-REGATE4 may remain. Follow-up: the WP4-RECHECK-A attempt-4 process listing (evidence 98-processes-after.txt, 2026-10-06T20:01Z) shows no portable Node 24 process left, so the stray server ended with the TaskStop."
@@ -129,7 +133,7 @@
     "asked": "2026-10-06",
     "source": "WP5-PLAN section D (handoff/delivery/tasks/WP5-PLAN.md). D-2..D-6 restate WP4-I-1..I-5 (kept below for reference); D-1 is R-A3.",
     "question": "Decide before the pilot; recommendations in brackets. D-1 (R-A3) rollback residual: [a] keep JOB_RUNNER=off until reconciliation, or b restore --keep-schema --confirm also clears the activation instant. D-2 (I-1) imported days into a draft app period: [a] never. D-3 (I-2) 'Off day (overtime used)': [b] import as Off with no ledger effect if history is imported before the pilot, otherwise keep a (skip). D-4 (I-3) import an unended period: [a] no. D-5 (I-4) correct a mistaken opening balance to net 0: [a] yes, by a reasoned offsetting correction, if an opening balance is recorded. D-6 (I-5) preview quota: [a] at most 20 uncommitted per person, post-pilot for an owner-only pilot. D-7 reminder after a crash on real SMTP: [a] accept at-least-once. D-8 TLS certificate failure: [b] treat as a permanent configuration fault shown at once (subject to the assessment), else keep a and document. D-9 pilot cohort/passwords: [a] owner-only pilot, temporary password set out of band; a change-password route before others join. D-10 opening balance/history: [a] one evidence-backed opening balance or zero; skip the historical import for the pilot. D-11 real pilot values: [a] tracked packet with placeholders, real values in a private owner copy outside git. D-12 staged activation: [a] first period manual sign-off with the first real send to the owner's own address, auto-submit off, no activation instant; automation from the next period. D-13 pilot host: [a] the NAS after runbook sections 1, 2, 4 and 6 (NOT VERIFIED until the owner ticks the checklist). D-14 first release declaration: [a] at the owner's pilot authorization. D-15 (F-Q6) holiday-preview privacy: [a] keep.",
-    "blocking": "Nothing in the assessment. D-1, D-7, D-8 and D-13 must be answered before activation; an answer that differs from the current default for D-3, D-5, D-6 or D-8 becomes a WP5-OWNFIX before the package-final freeze.",
+    "blocking": "Nothing in software readiness. D-1, D-7, D-8 and D-13 must be answered before activation. An answer that differs from the current default for D-3, D-5, D-6 or D-8 causes a fix round (fix, freeze, gate, independent audit) before activation, after which the release identity in the pilot packet is refreshed.",
     "superseded_wp4_question": {
     "id": "WP4-I-1..I-5",
     "asked": "2026-10-06",
@@ -155,7 +159,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "8e99d2c6375f71ac94faff9eb859b9b7bcf3e741",
+    "last_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
     "unpushed": []
   },
   "owner_decisions": [
@@ -11906,11 +11910,10 @@
       "id": "WP5-ASSESS-A",
       "package": "WP5",
       "kind": "audit",
-      "status": "pending",
-      "reviewed_commit": null,
+      "status": "done",
+      "reviewed_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
       "depends_on": [
-        "WP4-REGATE4",
-        "WP5-FIXB-FREEZE"
+        "WP5-GATE"
       ],
       "profile": "timesheet-auditor",
       "requested_model": "opus",
@@ -11921,13 +11924,14 @@
         "risk": "H",
         "novelty": true
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ae2ff553c3346bb10",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 2,
       "history": [
+        "attempt 2 (agent ae2ff553c3346bb10, self-reported claude-opus-5-5): FIX REQUIRED on reviewed_commit 74d5bfe, digest 0a64a75f; findings WP5-A2-01 and WP5-A2-02 (both Low, docs/11 runbook); report handoff/delivery/WP5_REVIEW_A2.md; evidence handoff/delivery/evidence/WP5-ASSESS-A2/. Current result.",
         "attempt 1 (agent a72a6550bd47db0ff, self-reported claude-opus-5-5): PASS on reviewed_commit 546cdda, digest 26fcc969; no findings; AC-13 77/77, faults 12/12, verify 1758, e2e 145/5, targeted 747; risks R-WA1..R-WA8; report handoff/delivery/WP5_REVIEW_A.md; evidence handoff/delivery/evidence/WP5-ASSESS-A/. Superseded for digest binding because WP5-FIXB changed docs (digest ed604d0c); attempt 2 is a digest-bound area-A delta recheck on a later WP5 freeze by a different fresh auditor (it may be folded into the WP5 final audit pass)."
       ],
       "owned_paths": [
@@ -11939,31 +11943,38 @@
       "prompt": "handoff/delivery/tasks/WP5-ASSESS-A.md",
       "report": "handoff/delivery/tasks/WP5-ASSESS-A.md",
       "evidence": [
-        "handoff/delivery/WP5_REVIEW_A.md",
-        "handoff/delivery/evidence/WP5-ASSESS-A/00-README.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/00-baseline.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/01-npm-ci.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/02-verify.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/03-e2e.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/04-targeted.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/10-ac13-probe-log.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/11-faults-probe-log.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/12-capture-listing.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/98-process-listing.txt",
-        "handoff/delivery/evidence/WP5-ASSESS-A/99-digest-after.txt"
+        "handoff/delivery/WP5_REVIEW_A2.md",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/00-README.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/00-baseline.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/01-delta.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/02-npm-ci.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/03-verify.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/04-e2e-run1.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/04-e2e-run2.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/06-ac13-run1.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/06-ac13-tz-env-not-applied.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/07-mutation.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/08-admin-operations.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/08-probe-log-run2.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/98-process-listing.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A2/99-digest-after.txt"
       ],
-      "baseline_commit": null,
-      "source_digest": null,
-      "reviewed_digest": null,
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+      "reviewed_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
       "author_agent_ids": [],
-      "decision": null,
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-A2-01 (Low, docs/11 EN/VI section 13 step 2 first bullet, section 13 step 4 third bullet, section 14 step 4): the runbook says the administrator status shows the PRODUCTION_SENDING_ENABLED flag off/on, but GET /api/admin/operations returns only sender {configured, outbound_mode} and the screen shows 'Sender address' and 'Outbound mode'; at deactivation a leftover flag line in <env-file> cannot be seen from the status. docs/11 convention, the owner-only flag gate (config.ts, AGENTS rule 6, docs/07), AC-14. Bounded docs fix: name what the status shows ('Outbound mode: Capture only' or 'SMTP (real sending)'), state SMTP mode needs the flag, and add a file check in section 14 that the flag line is gone (e.g. grep -c '^PRODUCTION_SENDING_ENABLED=' <env-file> prints 0).",
+        "WP5-A2-02 (Low, docs/11 EN/VI section 13 step 2 third bullet): the capture self-test asks to check a deep link, but captured submissions carry no URL and, without an activation instant, no reminder or notice is decided, so no captured message holds a link; PUBLIC_BASE_URL is first exercised by a real reminder after automation is enabled. docs/05 'Reminders and review links', docs/11 convention. Bounded docs fix: replace the bullet with opening https://<nas-host>/#/review/<payroll-date> (must ask for sign-in then open the review) and add, in section 13 step 5 or 7, a check of the first reminder link after the activation instant is set."
+      ],
       "findings_attempt_1": [],
       "notes": [
         "Attempt 1 notes. Clean export of 546cdda, Node 24.21.0: npm ci exit 0, no deprecation line; verify 76 files / 1758 tests, smoke 41; e2e 145 passed / 5 skipped; targeted suites 28 files / 747 tests. AC-13 probe (production-mode server, https example.invalid origin, capture, five synthetic users) 77 PASS / 0 FAIL: the two-week period with confirmed and unknown breaks, flexible start, N boundaries 30/31/45/46, both Sundays, Friday overnight, holiday, 4 h + 4 h leave, deficit choose-mode, review and sign-off (total 8:30, ledger posted once), restarts before and after the PDF with one send, correction (reason, r2, +30 only, r1 kept, no send on edit), resend, injected uncertain outcome with no blind resend, partial OT use with concurrent refusals, 28 swapped-id refusals, shares and revocation, deadline runs (activation boundary, downtime recovery oldest first, never-configured and before-account periods untouched, overdue once, automatic presentation options). Fault probe 12 PASS / 0 FAIL: sender and recipient faults visible and never 'sent'; no secret in logs, health, readiness or CLI output. PDFs rendered and viewed.",
         "Risks (not defects): R-WA1 Low outcome-notice wording after downtime recovery; R-WA2 Low partial leave not visible on the PDF; R-WA3 Low (WP3 R8 extended) never-configured accounts, including the bootstrap administrator, get before-due reminders after activation; R-WA4 Info a share change issues a new id; R-WA5 Info probe-side keep-alive reset; R-WA6 Info long holiday label ellipsis (WP3 R1); R-WA7 Info the live runner path is covered by e2e and suites, not by the CLI-driven probe; R-WA8 Info days without records print 'Worked' on automatic PDFs (owner decision).",
         "Digest 26fcc969 (775 files) before and after in the repo, ls-tree forms and the export; no listener on 47700-47719 and no task process left at the end."
       ],
-      "next_action": "Attempt 2: digest-bound area-A delta recheck on a later WP5 freeze (after WP5-FIXB and any further WP5 writer), by a fresh auditor that is not a72a6550bd47db0ff, the WP5-ASSESS-B auditor or a WP5 author. At dispatch, replace the placeholder gate dependency WP4-REGATE4 with the gate of the reviewed freeze (its freeze_commit must equal reviewed_commit). R-WA1..R-WA3 and R-WA8 go to the owner and the pilot packet."
+      "next_action": "Docs fix of WP5-A2-01 and WP5-A2-02 (docs/11 sections 13-14 EN/VI; R-A2-1 and R-A2-2 may join), combined with any WP5-FINAL-AUDIT findings; then a freeze, a regate and a recheck of those lines on the new digest. Attempt 2 (agent ae2ff553c3346bb10, self-reported claude-opus-5-5) on 74d5bfe, digest 0a64a75f before and after: delta 10 non-handoff paths in 3 commits, no application source; .env.example/compose comments and the README row have no area-A effect; docs/11 and docs/12 keep privacy and the readiness/permission/outcome separation. AC-13 test asserts every attempt-1 item and is deterministic over 3 runs, 4 zones (TZ set at run time because Git Bash drops TZ) and 2 shifted wall clocks; mutation 1 repeated and an own signature-ownership mutation both fail it. npm ci 0; verify 77 files / 1759, smoke 41; e2e run 1 one ERR_NO_BUFFER_SPACE failure, rerun 145 passed / 5 skipped; own probe 26/26. Risks: R-A2-1 Low wording (capture sender after deactivation), R-A2-2 Low <compose-restored> keeps the live env file (OUTBOUND_MODE from it), R-A2-3 Info WP5-AC13 TZ runs did not change zone, R-A2-4 Info overdue warning may trail its record by one reminder bucket, R-A2-5 Info optional test additions. One cp stderr went to /dev/null (no effect). Nothing left running."
     },
     {
       "id": "WP5-ASSESS-B",
@@ -12274,7 +12285,7 @@
       "id": "WP5-REL-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-REL"
       ],
@@ -12287,10 +12298,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ad3735dbe78ca31ff",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -12299,16 +12310,278 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-REL-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-REL-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-REL-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-REL-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "8e99d2c6375f71ac94faff9eb859b9b7bcf3e741",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "pushed": true,
       "source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed, the WP5 package-final freeze: parent 8e99d2c, remote SHA identical; digest 0a64a75f (779 files) matched; nothing pre-staged; 28 paths staged, the set matched the brief; precommit (28 files, 0 findings), diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0; Grep of staged docs 11/12: 0 email addresses, 0 http hosts.",
+      "next_action": "None; WP5-GATE on 74d5bfe."
+    },
+    {
+      "id": "WP5-GATE",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "depends_on": [
+        "WP5-REL-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a92a87044232710ce",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-GATE.md",
+        "handoff/delivery/evidence/WP5-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-GATE.md",
+      "report": "handoff/delivery/tasks/WP5-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-GATE/00-digest.txt",
+        "handoff/delivery/evidence/WP5-GATE/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP5-GATE/02-lint.txt",
+        "handoff/delivery/evidence/WP5-GATE/03-verify.txt",
+        "handoff/delivery/evidence/WP5-GATE/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-GATE/05-ac13-1.txt",
+        "handoff/delivery/evidence/WP5-GATE/05-ac13-2.txt",
+        "handoff/delivery/evidence/WP5-GATE/05-ac13-3.txt",
+        "handoff/delivery/evidence/WP5-GATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-GATE/08-config-live.txt",
+        "handoff/delivery/evidence/WP5-GATE/08-config-restored.txt",
+        "handoff/delivery/evidence/WP5-GATE/08-config-rollback.txt",
+        "handoff/delivery/evidence/WP5-GATE/09-keys-map.txt",
+        "handoff/delivery/evidence/WP5-GATE/10-audit.txt",
+        "handoff/delivery/evidence/WP5-GATE/12-diffscope.txt",
+        "handoff/delivery/evidence/WP5-GATE/13-lstree.txt",
+        "handoff/delivery/evidence/WP5-GATE/15-docker-ps.txt"
+      ],
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS on 74d5bfe (verifier; self-reported claude-sonnet-5-5); NAS items NOT VERIFIED. Digest of record 0a64a75f (779 files) equal in the clean export, ls-tree form and npm run digest; HEAD 74d5bfe before and after. npm ci (lockfile identical), lint and verify exit 0 with 0 deprecation lines under --trace-deprecation: 77 files, 1759 tests, smoke passed; e2e 145 passed / 5 skipped; AC-13 alone x3 pass (4.08, 4.07, 4.13 s); drill --wp3 stages 1-6 208 PASS / 0 FAIL (33/31/57/35/27/23), image sha256:0addd2000b42...9fd8, forbidden-file scan PASS; docker compose config live, restored (own project, restore dir) and rollback (previous tag, JOB_RUNNER off) exit 0 with no container; docs/11 section 4 keeps the protected env-file copy and release identity; every env key in docs/11 and docs/12 exists in .env.example or config.ts (Compose variables in compose.example.yaml, one Dockerfile ARG); npm audit --omit=dev 0; validate_package, validate_orchestration and check_recovery PASS; precommit self-test and evidence check PASS; scope since 546cdda only WP5-FIXB, WP5-AC13 and WP5-REL paths plus handoff. Cleanup: drill image removed by tag, project down, docker ps empty, no listener on 47740-47759.",
+      "next_action": "None; WP5-PILOT, then WP5-FINAL-AUDIT and WP5-ASSESS-A attempt 2 on 74d5bfe."
+    },
+    {
+      "id": "WP5-PILOT",
+      "package": "WP5",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP5-GATE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aad76e5cb4fc7e5b8",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_PILOT_PACKET.md",
+        "handoff/delivery/WP5_PILOT_PACKET.vi.md",
+        "handoff/delivery/tasks/WP5-PILOT.md",
+        "handoff/delivery/evidence/WP5-PILOT"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-PILOT.md",
+      "report": "handoff/delivery/tasks/WP5-PILOT.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-PILOT/00-digest-before.txt",
+        "handoff/delivery/evidence/WP5-PILOT/00-digest-after.txt",
+        "handoff/delivery/evidence/WP5-PILOT/01-commands.txt",
+        "handoff/delivery/evidence/WP5-PILOT/03-make-samples.txt",
+        "handoff/delivery/evidence/WP5-PILOT/04-extract.txt",
+        "handoff/delivery/evidence/WP5-PILOT/05-ready-check.txt",
+        "handoff/delivery/evidence/WP5-PILOT/06-parity.txt",
+        "handoff/delivery/evidence/WP5-PILOT/07-precommit.txt",
+        "handoff/delivery/evidence/WP5-PILOT/08-preflight.txt",
+        "handoff/delivery/evidence/WP5-PILOT/sample-index.txt"
+      ],
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (worker): handoff only. New WP5_PILOT_PACKET.md and .vi.md; 8 captured messages (manual, manual correction, automatic with note off and on, 4 notices), 4 PDFs with text extracts, 4 *-synthetic.png renders all viewed; D-1..D-15 all pending; EN/VI parity OK; precommit 0 (33 files), self-test 0, preflight 0; HEAD 74d5bfe and digest 0a64a75f identical before and after. Incident: the worker ran `python` with a heredoc on stdin; the background task b4fr6819n looped writing errors (about 1 GB at report time); the coordinator TaskStopped the task and the agent.",
+      "next_action": "None; WP5-FINAL-AUDIT on 74d5bfe."
+    },
+    {
+      "id": "WP5-FINAL-AUDIT",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "depends_on": [
+        "WP5-GATE",
+        "WP5-PILOT"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa1cfbf127d14be7b",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_REVIEW_FINAL.md",
+        "handoff/delivery/WP5_REVIEW_FINAL.vi.md",
+        "handoff/delivery/tasks/WP5-FINAL-AUDIT.md",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-FINAL-AUDIT.md",
+      "report": "handoff/delivery/tasks/WP5-FINAL-AUDIT.md",
+      "evidence": [
+        "handoff/delivery/WP5_REVIEW_FINAL.md",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/00-README.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/00-digest-before.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/04-dist-hashes-export1.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/08-drill.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/10-image-forbidden-scan.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/12-compose-config.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/17-check-live.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/18-activation-browser-run2.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/19-env-reread.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/24-restored-instance.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/25-check-restored.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/28-docker-cleanup.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/29-verify.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/30-env-keys-packet.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/36-final-state.txt",
+        "handoff/delivery/evidence/WP5-FINAL-AUDIT/99-digest-after.txt"
+      ],
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "source_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+      "reviewed_digest": "0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-F-01 (Low, docs/11 EN/VI section 13 step 2 first bullet, step 4 second and third bullets, section 14 step 4; WP5_PILOT_PACKET EN/VI section 2 self-test first box and section 6 step 1): the activation and deactivation checks say the administrator status shows the sending flag off/on, but the status has no such field (it shows Sender address, Outbound mode and activation); 'the server and the CLI refuse to start' without the flag is true for the server and for backup/restore only, not for migrate, outbound or bootstrap. Bounded docs fix: name the facts the screen shows (Outbound mode 'Capture only (nothing leaves the server)' or 'SMTP (real sending)' and the activation), check the flag in <env-file> without printing values (grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>), and say the server and the CLI commands that read the mail settings (backup, restore) refuse to start.",
+        "WP5-F-02 (Low, WP5_PILOT_PACKET EN/VI section 8): says an answer that differs from the current default for D-3, D-5, D-6 or D-8 becomes a follow-up 'before the package-final freeze', which is already past; the recommended D-8 option (b) differs from the default. Bounded handoff fix: say such an answer causes a fix round (fix, freeze, gate, independent audit) before activation, after which the release identity in sections 0 and 6 is refreshed. The same stale wording is in the board pending_owner_question.blocking (coordinator record)."
+      ],
+      "notes": [
+        "Held: digest 0a64a75f (779 files) before and after in the repo, ls-tree form and two exports. WP5-B-01 and WP5-B-02 resolved: docker compose config exits 0 for the live, restored and rollback forms; the restored instance started from a synthetic backup under its own project, bound <restore-dir> and the release image, started paused and holds data only up to the backup; the env-file copy step and checklist line are present EN and VI. Area B PASS: dist byte-identical across exports, drill 208/0, image non-root with 0 forbidden files, verify 1759, operations output private. Docs and packet: every env key exists, all owner decisions read as pending, EN/VI parity holds; the console activation step was run word for word in Edge and works safely.",
+        "Risks: R-F1 the restored inspection instance reads the live env file (SMTP after activation; the outbound pause holds sends); R-F2 no documented way to promote restored data to live or to upgrade again after a rollback (not needed for the first period); R-F3 image IDs differ per build (dist stable); R-F4 root needed on DSM for data/backup listing and Docker commands; R-F5 the activation instant shows in the browser zone without a label; R-F6 browser console paste guard; R-F7 base image pin one rebuild behind (R-B5-2). O-1: WP5_HANDOFF calls WP5-B-01 Low (it was Medium); fold into WP5-ACCREC. One stray 2>/dev/null (no effect). Docker listing empty, images removed, nothing running."
+      ],
+      "next_action": "Docs fix of WP5-F-01 and WP5-F-02 together with WP5-A2-01 and WP5-A2-02 (one writer), then a freeze, a regate, a packet identity refresh and one fresh recheck of the changed lines on the new digest."
+    },
+    {
+      "id": "WP5-FIXD",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-FINAL-AUDIT",
+      "depends_on": [],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ab0515a696cf9ca63",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "handoff/delivery/WP5_PILOT_PACKET.md",
+        "handoff/delivery/WP5_PILOT_PACKET.vi.md",
+        "handoff/delivery/tasks/WP5-FIXD.md",
+        "handoff/delivery/evidence/WP5-FIXD"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-FIXD.md",
+      "report": "handoff/delivery/tasks/WP5-FIXD.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-FIXD/summary.txt",
+        "handoff/delivery/evidence/WP5-FIXD/verify.txt",
+        "handoff/delivery/evidence/WP5-FIXD/precommit.txt",
+        "handoff/delivery/evidence/WP5-FIXD/preflight.txt"
+      ],
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "source_digest": "1b8ceae441a1f41a51086303cc12b8e06ddfe9fc405cf2d5bb01baba12896af7",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (worker): docs/11 EN and VI sections 13-16 and the pilot packet EN and VI sections 1, 2, 6 and 8. F-01/A2-01: section 13 steps 2 and 4, section 14 step 4 and packet sections 2 and 6 name the status text, the activation state and the grep -c flag check (0 or 1); the refusal sentence names the server, backup and restore. A2-02: section 13 step 2 deep-link bullet replaced; new section 13 step 7 first-reminder link bullet; packet section 1 box matched. F-02: packet section 8 reworded (fix round before activation, identity refreshed). R-A2-1 (section 14), R-A2-2/R-F1 (section 15), R-F4/R-F6 (section 13 intro), R-F5 (section 13 step 5). Parity counts EN = VI; Grep finds no flag off/on claim and no capture-test deep link. verify 0; precommit 0 (no staged file); preflight 0. Digest 1b8ceae4 (779 files), computed last; only docs/11 EN/VI changed outside handoff/.",
+      "next_action": "None; WP5-FIXD-FREEZE."
+    },
+    {
+      "id": "WP5-FIXD-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-FIXD"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-FIXD-FREEZE.md",
+        "handoff/delivery/evidence/WP5-FIXD-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-FIXD-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-FIXD-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "74d5bfec6700126da4105b5d97f5efe943f896f5",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "1b8ceae441a1f41a51086303cc12b8e06ddfe9fc405cf2d5bb01baba12896af7",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP5 package-final freeze (release notes, runbook pilot sections, pre-gate handoff, closing briefs)."
+      "next_action": "Commit and push the WP5 documentation fix round with the gate, pilot packet and both review records."
     },
     {
       "id": "WP4-RECHECK-B4",

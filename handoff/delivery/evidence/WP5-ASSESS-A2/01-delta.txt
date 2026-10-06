@@ -1,0 +1,102 @@
+git log --oneline 546cddaf6747aef85e8b6d9b7712de9e28f138bf..74d5bfec6700126da4105b5d97f5efe943f896f5:
+74d5bfe Add release notes and the pilot activation, deactivation and rollback runbook
+8e99d2c Add the integrated AC-13 two-week scenario test
+85838b5 Fix the runbook Compose binding and keep the env file with off-device backups
+e7fe514 Record WP4 acceptance: final gate and independent rechecks pass at 546cdda
+
+git diff --name-status 546cddaf6747aef85e8b6d9b7712de9e28f138bf 74d5bfec6700126da4105b5d97f5efe943f896f5 -- . ':!handoff':
+M	.env.example
+M	README.md
+M	README.vi.md
+M	compose.example.yaml
+M	docs/11_OPERATIONS_RUNBOOK.md
+M	docs/11_OPERATIONS_RUNBOOK.vi.md
+A	docs/12_RELEASE_NOTES.md
+A	docs/12_RELEASE_NOTES.vi.md
+A	tests/integration/ac13-support.ts
+A	tests/integration/ac13-two-week.test.ts
+
+git diff --stat 546cddaf6747aef85e8b6d9b7712de9e28f138bf 74d5bfec6700126da4105b5d97f5efe943f896f5 -- . ':!handoff':
+ .env.example                            |   5 +-
+ README.md                               |   5 +-
+ README.vi.md                            |   5 +-
+ compose.example.yaml                    |   3 +
+ docs/11_OPERATIONS_RUNBOOK.md           | 158 +++++++++++-
+ docs/11_OPERATIONS_RUNBOOK.vi.md        | 158 +++++++++++-
+ docs/12_RELEASE_NOTES.md                |  85 +++++++
+ docs/12_RELEASE_NOTES.vi.md             |  85 +++++++
+ tests/integration/ac13-support.ts       | 115 +++++++++
+ tests/integration/ac13-two-week.test.ts | 428 ++++++++++++++++++++++++++++++++
+ 10 files changed, 1021 insertions(+), 26 deletions(-)
+
+non-handoff changes per commit:
+== e7fe514 Record WP4 acceptance: final gate and independent rechecks pass at 546cdda
+== 85838b5 Fix the runbook Compose binding and keep the env file with off-device backups
+M	.env.example
+M	compose.example.yaml
+M	docs/11_OPERATIONS_RUNBOOK.md
+M	docs/11_OPERATIONS_RUNBOOK.vi.md
+== 8e99d2c Add the integrated AC-13 two-week scenario test
+A	tests/integration/ac13-support.ts
+A	tests/integration/ac13-two-week.test.ts
+== 74d5bfe Add release notes and the pilot activation, deactivation and rollback runbook
+M	README.md
+M	README.vi.md
+M	docs/11_OPERATIONS_RUNBOOK.md
+M	docs/11_OPERATIONS_RUNBOOK.vi.md
+A	docs/12_RELEASE_NOTES.md
+A	docs/12_RELEASE_NOTES.vi.md
+
+src/ migrations/ scripts/ package files touched:
+(end)
+diff --git a/.env.example b/.env.example
+index dd6ba6b..18b223f 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,6 +1,7 @@
+ # Timesheet configuration example. Every value below is a synthetic placeholder.
+-# Copy to a protected host file (for example /volume1/docker/timesheet/.env, mode 600) that is
+-# never committed, never pasted into chat and never shown in screenshots or logs.
++# Copy to a protected host file (for example <project-dir>/timesheet.env, mode 600) that is
++# never committed, never pasted into chat and never shown in screenshots or logs. Compose finds it
++# through TIMESHEET_ENV_FILE (see docs/11_OPERATIONS_RUNBOOK.md, "Placeholders and conventions").
+ #
+ # The application needs NO session secret and NO token-signing secret: a session is a random
+ # 256-bit token that the database stores only as a hash, so there is nothing to configure or
+diff --git a/README.md b/README.md
+index fb9ab87..5cbc521 100644
+--- a/README.md
++++ b/README.md
+@@ -28,7 +28,7 @@ Each prompt names its reading scope. Do not paste every document into every sess
+ 
+ | Folder | Responsibility |
+ |---|---|
+-| `docs/` | Specification documents 01–10 and the operations runbook 11 (table below); `docs/agents/` configures the agent skills |
++| `docs/` | Specification documents 01–10, the operations runbook 11 and the release notes 12 (table below); `docs/agents/` configures the agent skills |
+ | `src/`, `tests/`, `scripts/` | Application source, automated tests and development scripts; see [DEVELOPMENT](DEVELOPMENT.md) |
+ | `handoff/` | Agent workflow: [NEXT_ACTION](handoff/NEXT_ACTION.md) (status and next step), `prompts/` (implementation/review/fix/resume instructions), `templates/` (handoff/review/checkpoint forms) and `delivery/` (state, handoffs, reviews, evidence and package validation) |
+ | `reference/` | Reference data: [fixtures](reference/fixtures/README.md) (91 reference scenarios that the tests read), [examples](reference/examples/README.md) (safe configuration samples that the synthetic seed reads) and [inputs](reference/inputs/README.md) (the sanitized workbook template) |
+@@ -46,7 +46,8 @@ Each prompt names its reading scope. Do not paste every document into every sess
+ | [08 AI workflow](docs/08_AI_WORKFLOW_AND_BUDGET.md) | Model/effort allocation and usage estimate |
+ | [09 Roadmap](docs/09_IMPLEMENTATION_ROADMAP.md) | Five packages and gates |
+ | [10 Decisions](docs/10_DECISIONS_AND_SOURCES.md) | Defaults, provenance, official sources |
+-| [11 Runbook](docs/11_OPERATIONS_RUNBOOK.md) | Install on the NAS, bootstrap, backup, restore, reconciliation, upgrade, rollback |
++| [11 Runbook](docs/11_OPERATIONS_RUNBOOK.md) | Install on the NAS, bootstrap, backup, restore, reconciliation, upgrade, rollback, pilot activation |
++| [12 Release notes](docs/12_RELEASE_NOTES.md) | Release identity, scope by package, known limits, setup summary |
+ 
+ The [Excel template](reference/inputs/Timesheet_Rev8_2026.xlsx) is a public sample: the form, working-info and holiday sheets of the original workbook with all personal data removed (dated attendance sheets, employee name, signature images, author metadata and local path). The personal original is not retained. Keep the workbook out of production images; use synthetic demo data.
+ 
+diff --git a/compose.example.yaml b/compose.example.yaml
+index 1f4d2f9..e3ab485 100644
+--- a/compose.example.yaml
++++ b/compose.example.yaml
+@@ -3,6 +3,9 @@
+ #
+ #   docker compose up -d --build
+ #
++# The four TIMESHEET_* variables below (env file, data directory, image tag, port) are set in <project-dir>/.env;
++# see docs/11_OPERATIONS_RUNBOOK.md, "Placeholders and conventions".
++#
+ # One instance, one host-local data directory (SQLite WAL needs local storage: never a remote SMB/NFS share or a
+ # synchronized folder). The container runs as UID/GID 10001, so the host directory must belong to that user
+ # (for example `chown 10001:10001 ./data && chmod 700 ./data`).

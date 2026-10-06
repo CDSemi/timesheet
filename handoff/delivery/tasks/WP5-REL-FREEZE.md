@@ -135,4 +135,8 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 8e99d2c; post-HEAD/commit 74d5bfec6700126da4105b5d97f5efe943f896f5; pushed yes; remote SHA same.
+- Digest equal to expected (779 files); 28 staged; nothing pre-staged.
+- Node v24.21.0. Checks all exit 0 (precommit, diff --check, JSON, orchestration, recovery, preflight).
+- Grep staged docs: emails 0, http hosts 0.
+- Blockers: none.

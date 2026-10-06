@@ -1,0 +1,40 @@
+// Every UPPER_SNAKE token in inline code or fences of the given documents, and where it is defined:
+// .env.example (as a KEY= line, commented or not), src/server/config.ts, other src/ files, compose.example.yaml, Dockerfile.
+// Usage: node env-keys.mjs <repo-or-export-root> <doc> [...docs]
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, ...docs] = process.argv.slice(2);
+const read = (p) => readFileSync(join(root, p), 'utf8');
+const envExample = read('.env.example');
+const config = read('src/server/config.ts');
+const compose = read('compose.example.yaml');
+const dockerfile = read('Dockerfile');
+function srcFiles(dir) {
+  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? srcFiles(`${dir}/${e.name}`) : e.name.endsWith('.ts') ? [`${dir}/${e.name}`] : []));
+}
+const src = srcFiles('src/server').map((p) => [p, read(p)]);
+const tokens = new Map();
+for (const doc of docs) {
+  const text = read(doc);
+  const spans = [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const fences = [...text.matchAll(/~~~[a-z]*\n([\s\S]*?)~~~/g)].map((m) => m[1]);
+  for (const chunk of [...spans, ...fences]) {
+    for (const m of chunk.matchAll(/\b([A-Z][A-Z0-9]*_[A-Z0-9_]+|NODE_ENV|HOST|PORT)\b/g)) {
+      if (!tokens.has(m[1])) tokens.set(m[1], new Set());
+      tokens.get(m[1]).add(doc);
+    }
+  }
+}
+let missing = 0;
+for (const [key, where] of [...tokens.entries()].sort()) {
+  const inEnv = new RegExp(`^#?\\s*${key}=`, 'm').test(envExample);
+  const inConfig = new RegExp(`\\b${key}\\b`).test(config);
+  const inSrc = src.filter(([, t]) => new RegExp(`process\\.env\\.${key}\\b|env\\.${key}\\b|'${key}'`).test(t)).map(([p]) => p);
+  const inCompose = compose.includes(key);
+  const inDocker = dockerfile.includes(key);
+  const status = inEnv || inConfig ? 'OK ' : inSrc.length || inCompose || inDocker ? 'OTH' : 'NO ';
+  if (status === 'NO ') missing += 1;
+  console.log(`${status} ${key}: .env.example=${inEnv} config.ts=${inConfig} src=${JSON.stringify(inSrc)} compose=${inCompose} Dockerfile=${inDocker} docs=${JSON.stringify([...where])}`);
+}
+console.log(`keys: ${tokens.size}; defined nowhere: ${missing}`);

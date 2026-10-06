@@ -1,0 +1,12 @@
+## WP5-ASSESS-A2 probe run history (node <task>/probe/probe.mjs, ports 47702 and 47703)
+run 1 (<task>/runs/probe-1, 2026-10-06T22:10:11Z): 22 PASS, 4 FAIL. All four failures were a probe defect: the probe read
+  `sender` and `activation` at the top level of GET /api/admin/operations, but the route wraps the status as
+  {"operations": {...}} (see 08-admin-operations.txt). OPS-1, OPS-2, ACT-2 and ACT-3 read undefined. The probe was fixed
+  to read `operations.sender` and `operations.activation`; nothing else changed. The run-1 probe log is kept as
+  08-probe-log-run1.txt.
+  Observation (not a failure): in run 1 the post-activation passes at 2026-10-22T00:01Z and 00:03Z captured four before-due
+  reminders but not Bob's overdue warning, although the overdue record was written at 00:01Z; in run 2 the same passes
+  also captured the overdue warning. Cause: the per-minute deadline_scan and the five-minute reminder_scan of one pass have
+  the same next_run_at and created_at and are claimed by id (random), so when the reminder scan runs first the warning
+  waits for the next five-minute bucket (08-inspect-probe-1.txt, 08-inspect-probe-2.txt: reminder occurrences).
+run 2 (<task>/runs/probe-2, 2026-10-06T22:10:42Z): 26 PASS, 0 FAIL (run of record).

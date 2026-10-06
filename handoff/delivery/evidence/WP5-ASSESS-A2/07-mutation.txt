@@ -1,0 +1,95 @@
+== mutation scratch copy start 2026-10-06T22:09:36Z
+git archive 74d5bfec6700126da4105b5d97f5efe943f896f5 | tar -x -C <task>/mut: exit 0/0
+
+added 161 packages in 4s
+npm ci (scratch copy) exit 0
+scratch copy: overtime.ts equals the export: yes; signatures.ts equals the export: yes
+== control (unmutated) 2026-10-06T22:09:42Z
+
+ RUN  v5.0.2 <task>/mut
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  15:09:43
+   Duration  8.59s (import 54%, tests 26%, transform 19%)
+
+== control exit 0
+== mutation 1 diff (src/domain/overtime.ts):
+48c48
+<   const activatedMinutes = normalExcessMinutes > rule.thresholdMinutes ? normalExcessMinutes : 0;
+---
+>   const activatedMinutes = normalExcessMinutes > 0 ? normalExcessMinutes : 0;
+== mutation 1 run 2026-10-06T22:09:52Z
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/ac13-two-week.test.ts (1 test | 1 failed) 557ms
+   ❯ AC-13 integrated scenario (1)
+     × runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline 556ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ac13-two-week.test.ts > AC-13 integrated scenario > runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline
+AssertionError: credit 2026-09-24: expected 30 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 30
+
+ ❯ tests/integration/ac13-two-week.test.ts:203:134
+    201|       '2026-10-01': 0, '2026-10-02': 240, '2026-10-04': 30, '2026-10-0…
+    202|     };
+    203|     for (const [date, minutes] of Object.entries(expectedCredits)) exp…
+       |                                                                                                                                      ^
+    204|     expect(days['2026-10-02'].calculation).toMatchObject({ regular_min…
+    205|     expect(days['2026-10-03'].sessions).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  15:09:53
+   Duration  2.48s (import 50%, transform 26%, tests 23%)
+
+== mutation 1 exit 1
+mutation 1 restored, equals the export: yes
+== mutation 3 diff (src/server/services/signatures.ts):
+197c197
+<     .prepare<[string, string], SignatureRow>(`SELECT ${COLUMNS} FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'`)
+---
+>     .prepare<[string, string], SignatureRow>(`SELECT ${COLUMNS} FROM attachments WHERE id = ? AND (user_id = ? OR 1 = 1) AND kind = 'signature'`)
+== mutation 3 run 2026-10-06T22:09:56Z
+
+ RUN  v5.0.2 <task>/mut
+
+ ❯ tests/integration/ac13-two-week.test.ts (1 test | 1 failed) 1614ms
+   ❯ AC-13 integrated scenario (1)
+     × runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline 1613ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ac13-two-week.test.ts > AC-13 integrated scenario > runs two weeks of entries, sign-off, send, restart, correction, partial OT use, isolation and an overdue deadline
+AssertionError: Bob GET /api/signatures/29441e5c-33b7-4b14-967c-d1a73f053c92: expected [ 403, 404 ] to include 200
+ ❯ tests/integration/ac13-two-week.test.ts:389:51
+    387|     for (const [method, path, body] of swaps) {
+    388|       const response = await call(b, method, path, body);
+    389|       expect([403, 404], `Bob ${method} ${path}`).toContain(response.s…
+       |                                                   ^
+    390|     }
+    391|     expect(tableCounts()).toEqual(beforeSwaps);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  15:09:56
+   Duration  3.50s (tests 47%, import 34%, transform 18%)
+
+== mutation 3 exit 1
+mutation 3 restored, equals the export: yes
+== mutation checks end 2026-10-06T22:10:00Z

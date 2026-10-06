@@ -1,0 +1,100 @@
+// WP5-FINAL-AUDIT probe: executes the docs/11 section 13 step 5 browser-console activation call (and the section 14
+// step 1 clear) VERBATIM from the runbook text of the clean export, in the installed Edge (headless), signed in through
+// the UI as the synthetic administrator. Placeholders are replaced only: <activation-instant-utc> and <reason>.
+// Usage: node b01-browser.mjs <runbook.md> <base> <alt-base-not-in-APP_ORIGINS> <state.json> <future-instant>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { chromium } from 'file:///<task>/src/node_modules/playwright-core/index.mjs';
+
+const [runbookPath, base, altBase, stateFile, futureInstant] = process.argv.slice(2);
+const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+const runbook = readFileSync(runbookPath, 'utf8').replace(/\r\n/g, '\n');
+const fence = /~~~js\n([\s\S]*?)\n\s*~~~/.exec(runbook);
+if (!fence) throw new Error('no js fence in the runbook');
+const snippet = fence[1].trim();
+console.log(`INFO  documented snippet (verbatim from the export): ${snippet}`);
+const jsFences = runbook.match(/~~~js/g)?.length ?? 0;
+console.log(`INFO  js fences in the runbook: ${jsFences}`);
+
+let passes = 0;
+let failures = 0;
+function check(label, ok, detail = '') {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (ok) passes += 1;
+  else failures += 1;
+}
+const fill = (instantLiteral, reason) =>
+  snippet.replace("'<activation-instant-utc>'", instantLiteral).replace('<reason>', reason);
+async function consoleRun(page, code) {
+  // The same as typing the line into the developer console of the page (top-level await): evaluated in the page's
+  // main world through the DevTools protocol, so the page's own origin, cookies and fetch are used.
+  return page.evaluate(`(async () => { return ${code}; })()`);
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+try {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(`${base}/`);
+  await page.getByLabel('Email').fill('admin@example.invalid');
+  await page.getByLabel('Password').fill(state.adminPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForTimeout(1500);
+  const cookies = await context.cookies();
+  console.log(`INFO  cookies stored by the browser: ${JSON.stringify(cookies.map((c) => ({ name: c.name, domain: c.domain, secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite })))}`);
+  check('administrator signed in through the UI (session cookie stored)', cookies.length > 0);
+
+  async function adminFacts(tag) {
+    await page.goto(`${base}/#/admin`);
+    // A goto that changes only the hash is a same-document navigation; reload so the screen fetches the status again
+    // (run 1 of this probe read a stale screen after the set call).
+    await page.reload();
+    await page.locator('[data-fact="activation"]').waitFor({ timeout: 15_000 });
+    const facts = {};
+    for (const name of ['sender', 'mode', 'runner', 'backup', 'activation']) {
+      facts[name] = (await page.locator(`[data-fact="${name}"]`).innerText()).replace(/\s+/g, ' ').trim();
+    }
+    const jobs = {};
+    for (const s of ['queued', 'leased', 'succeeded', 'intervention', 'cancelled']) {
+      const cell = page.locator(`[data-job-state="${s}"]`);
+      jobs[s] = (await cell.count()) > 0 ? (await cell.first().innerText()).trim() : 'n/a';
+    }
+    const flagText = await page.getByText(/PRODUCTION_SENDING_ENABLED|sending flag|production flag/i).count();
+    console.log(`INFO  admin status (${tag}): ${JSON.stringify(facts)} jobs ${JSON.stringify(jobs)}; elements naming a production-sending flag: ${flagText}`);
+    return facts;
+  }
+
+  const initial = await adminFacts('before');
+  check('admin status shows the activation as "Not activated" before', initial.activation === 'Not activated', initial.activation);
+
+  const past = await consoleRun(page, fill("'2026-01-01T00:00:00Z'", 'Synthetic audit check, past instant'));
+  console.log(`INFO  past instant -> ${JSON.stringify(past)}`);
+  check('a past instant is refused with activation_in_past', JSON.stringify(past).includes('activation_in_past'));
+
+  const noReason = await consoleRun(page, fill(`'${futureInstant}'`, ''));
+  console.log(`INFO  blank reason -> ${JSON.stringify(noReason)}`);
+  check('a blank reason is refused with reason_required', JSON.stringify(noReason).includes('reason_required'));
+
+  const set = await consoleRun(page, fill(`'${futureInstant}'`, 'Synthetic audit activation test'));
+  console.log(`INFO  set -> ${JSON.stringify({ active_from: set?.automation?.active_from, recorded_by_present: typeof set?.automation?.recorded_by === 'string' })}`);
+  check('the documented call records the activation instant', set?.automation?.active_from === futureInstant);
+  const afterSet = await adminFacts('after set');
+  check('admin status shows an instant instead of "Not activated"', afterSet.activation !== 'Not activated' && afterSet.activation.length > 0, afterSet.activation);
+
+  const clear = await consoleRun(page, fill('null', 'Synthetic audit deactivation test'));
+  console.log(`INFO  clear -> ${JSON.stringify({ active_from: clear?.automation?.active_from })}`);
+  check('the same call with active_from: null clears the instant (section 14 step 1)', clear?.automation?.active_from === null);
+  const afterClear = await adminFacts('after clear');
+  check('admin status shows "Not activated" after the clear', afterClear.activation === 'Not activated', afterClear.activation);
+
+  // An origin that is not in APP_ORIGINS (same server, other host name).
+  const other = await context.newPage();
+  await other.goto(`${altBase}/`);
+  const rejected = await consoleRun(other, fill(`'${futureInstant}'`, 'Synthetic audit origin test'));
+  console.log(`INFO  from ${altBase} -> ${JSON.stringify(rejected)}`);
+  check('from an origin not in APP_ORIGINS the call is refused with 403 origin_rejected', JSON.stringify(rejected).includes('origin_rejected'));
+  writeFileSync(`${stateFile}.browser.json`, JSON.stringify({ initial, afterSet, afterClear }, null, 2));
+} finally {
+  await browser.close();
+}
+console.log(`RESULT browser: ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

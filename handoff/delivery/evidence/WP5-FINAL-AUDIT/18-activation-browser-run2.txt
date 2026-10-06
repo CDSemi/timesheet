@@ -1,0 +1,21 @@
+INFO  documented snippet (verbatim from the export): await (await fetch('/api/admin/automation/activation', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active_from: '<activation-instant-utc>', reason: '<reason>' }) })).json()
+INFO  js fences in the runbook: 1
+INFO  cookies stored by the browser: [{"name":"ts_session","domain":"127.0.0.1","secure":true,"httpOnly":true,"sameSite":"Strict"}]
+PASS  administrator signed in through the UI (session cookie stored)
+INFO  admin status (before): {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 15:19","backup":"No backup recorded","activation":"Not activated"} jobs {"queued":"1","leased":"0","succeeded":"3","intervention":"0","cancelled":"0"}; elements naming a production-sending flag: 0
+PASS  admin status shows the activation as "Not activated" before  Not activated
+INFO  past instant -> {"error":{"code":"activation_in_past","message":"The activation instant cannot be before the current time"}}
+PASS  a past instant is refused with activation_in_past
+INFO  blank reason -> {"error":{"code":"reason_required","message":"Recording or clearing the activation needs a reason"}}
+PASS  a blank reason is refused with reason_required
+INFO  set -> {"active_from":"2027-01-01T00:00:00Z","recorded_by_present":true}
+PASS  the documented call records the activation instant
+INFO  admin status (after set): {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 15:19","backup":"No backup recorded","activation":"2026-12-31 16:00"} jobs {"queued":"1","leased":"0","succeeded":"3","intervention":"0","cancelled":"0"}; elements naming a production-sending flag: 0
+PASS  admin status shows an instant instead of "Not activated"  2026-12-31 16:00
+INFO  clear -> {"active_from":null}
+PASS  the same call with active_from: null clears the instant (section 14 step 1)
+INFO  admin status (after clear): {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 15:19","backup":"No backup recorded","activation":"Not activated"} jobs {"queued":"1","leased":"0","succeeded":"3","intervention":"0","cancelled":"0"}; elements naming a production-sending flag: 0
+PASS  admin status shows "Not activated" after the clear  Not activated
+INFO  from http://localhost:47761 -> {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  from an origin not in APP_ORIGINS the call is refused with 403 origin_rejected
+RESULT browser: 9 PASS, 0 FAIL

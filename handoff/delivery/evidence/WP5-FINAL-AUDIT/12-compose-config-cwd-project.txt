@@ -1,0 +1,68 @@
+### 4 live from cwd = <project-dir>
+{
+  "name": "ts-wp5-final-live",
+  "networks": {
+    "default": {
+      "name": "ts-wp5-final-live_default",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "timesheet": {
+      "build": {
+        "context": "<task>\\b01\\proj",
+        "dockerfile": "Dockerfile"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "APP_ORIGINS": "http://127.0.0.1:47761",
+        "DATABASE_PATH": "/data/timesheet.db",
+        "DATA_DIR": "/data/private-data",
+        "HOST": "0.0.0.0",
+        "MAIL_FROM": "timesheet@example.invalid",
+        "NODE_ENV": "production",
+        "OUTBOUND_MODE": "capture",
+        "PORT": "3000",
+        "PUBLIC_BASE_URL": "https://timesheet.example.invalid",
+        "TRUSTED_PROXY_ADDRESSES": ""
+      },
+      "image": "ts-wp5-final-timesheet:74d5bfe",
+      "init": true,
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 3000,
+          "published": "47761",
+          "protocol": "tcp"
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "45s",
+      "tmpfs": [
+        "/tmp:size=64m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "<task>/b01/live-data",
+          "target": "/data",
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ]
+    }
+  }
+}exit 0

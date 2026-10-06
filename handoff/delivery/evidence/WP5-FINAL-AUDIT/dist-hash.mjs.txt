@@ -1,0 +1,33 @@
+// Lists every file under <dir> with its SHA-256 and size (sorted), and prints a tree hash over the listing.
+// Usage: node dist-hash.mjs <dir> <listing-out>
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = process.argv[2];
+const out = process.argv[3];
+if (!root || !out) throw new Error('usage: node dist-hash.mjs <dir> <listing-out>');
+const files = [];
+function walk(dir, rel) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const relPath = rel === '' ? entry.name : `${rel}/${entry.name}`;
+    if (entry.isDirectory()) walk(join(dir, entry.name), relPath);
+    else files.push(relPath);
+  }
+}
+walk(root, '');
+files.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+let total = 0;
+let maps = 0;
+let mapRefs = 0;
+const lines = files
+  .map((p) => {
+    const data = readFileSync(join(root, p));
+    total += data.length;
+    if (p.endsWith('.map')) maps += 1;
+    if (data.includes('sourceMappingURL')) mapRefs += 1;
+    return `${createHash('sha256').update(data).digest('hex')} ${data.length} ${p}\n`;
+  })
+  .join('');
+writeFileSync(out, lines);
+console.log(`files=${files.length} bytes=${total} maps=${maps} sourceMappingURL=${mapRefs} tree=${createHash('sha256').update(lines).digest('hex')}`);

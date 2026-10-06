@@ -1,0 +1,30 @@
+// EN/VI structural parity of the pilot packet: headings, table rows, checkboxes, list items, links and code spans.
+import { readFileSync } from 'node:fs';
+const dir = process.argv[2];
+const en = readFileSync(`${dir}/WP5_PILOT_PACKET.md`, 'utf8').split('\n');
+const vi = readFileSync(`${dir}/WP5_PILOT_PACKET.vi.md`, 'utf8').split('\n');
+const count = (lines, re) => lines.filter((l) => re.test(l)).length;
+const rules = [
+  ['h2', /^## /], ['h3', /^### /], ['table rows', /^\|/], ['empty checkboxes', /^- \[ \]/], ['ticked boxes', /^- \[[xX]\]/],
+  ['bullets', /^- (?!\[)/], ['numbered', /^\d+\. /], ['blank lines', /^$/],
+];
+let bad = 0;
+console.log(`lines EN ${en.length} VI ${vi.length}`);
+for (const [name, re] of rules) {
+  const a = count(en, re); const b = count(vi, re);
+  console.log(`${a === b ? 'OK  ' : 'DIFF'} ${name}: EN ${a} VI ${b}`);
+  if (a !== b) bad += 1;
+}
+const spans = (lines) => (lines.join('\n').match(/`[^`\n]+`/g) ?? []).sort();
+const sa = spans(en); const sb = spans(vi);
+const missing = sa.filter((s) => !sb.includes(s));
+console.log(`code spans EN ${sa.length} VI ${sb.length}; in EN not in VI: ${missing.length}`);
+for (const s of missing.slice(0, 40)) console.log('  ', s);
+const links = (lines) => (lines.join('\n').match(/\]\([^)]+\)/g) ?? []).map((l) => l.replace('.vi.md', '.md')).sort();
+console.log(`links EN ${links(en).length} VI ${links(vi).length}`);
+const rowCells = (lines) => lines.filter((l) => /^\|/.test(l)).map((l) => l.split('|').length);
+const ra = rowCells(en); const rb = rowCells(vi);
+const cellDiff = ra.map((v, i) => (v === rb[i] ? null : i)).filter((v) => v !== null);
+console.log(`table column-count mismatches: ${cellDiff.length}`);
+console.log(bad === 0 && cellDiff.length === 0 ? 'PARITY OK' : 'PARITY DIFFERENCES');
+process.exitCode = bad === 0 && cellDiff.length === 0 ? 0 : 1;

@@ -1,0 +1,134 @@
+// WP5-PILOT sample generator. Synthetic data only, capture mode only, example.invalid addresses only.
+// Imports the BUILT production modules of the clean git-archive export of 74d5bfe (dist/), runs the production
+// services and the production job handlers with fixed clocks, and leaves the capture folders in RUN_DIR.
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const REPO = process.env.PILOT_REPO;
+const RUN = process.env.RUN_DIR;
+if (!REPO || !RUN) throw new Error('PILOT_REPO and RUN_DIR are required');
+mkdirSync(RUN, { recursive: true });
+const dist = (rel) => pathToFileURL(join(REPO, 'dist', rel)).href;
+const m = {
+  db: await import(dist('server/db/database.js')),
+  mig: await import(dist('server/db/migrations.js')),
+  seed: await import(dist('server/seed.js')),
+  fin: await import(dist('server/services/finalization.js')),
+  review: await import(dist('server/services/reviewPayload.js')),
+  policies: await import(dist('server/services/policies.js')),
+  cmds: await import(dist('server/services/timesheetCommands.js')),
+  sigs: await import(dist('server/services/signatures.js')),
+  settings: await import(dist('server/services/submissionSettings.js')),
+  auto: await import(dist('server/services/automation.js')),
+  files: await import(dist('server/files/fileStore.js')),
+  runner: await import(dist('server/jobs/runner.js')),
+  config: await import(dist('server/config.js')),
+  users: await import(dist('server/services/users.js')),
+};
+const { randomBytes } = await import('node:crypto');
+const LA = 'America/Los_Angeles';
+const fixedClock = (iso) => ({ now: () => new Date(iso) });
+const la = (local) => ({ local, zone: LA });
+const sess = (date, from, to) => ({ start: la(`${date}T${from}`), end: la(`${date}T${to}`), input_zone: LA, breaks: [], breaks_confirmed: true });
+const sessionUser = (db, id) => {
+  const row = db.prepare('SELECT id, email, display_name, role, calendar_id FROM users WHERE id = ?').get(id);
+  return { id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'sample' };
+};
+
+const SENDER = 'timesheet-sender@example.invalid';
+const EARLY = '2026-09-14T15:00:00Z';
+const ENTRY = '2026-09-28T20:00:00Z';
+const SIGN = '2026-09-29T06:30:00Z'; // 2026-09-28 23:30 PDT
+const AUTO = '2026-09-30T06:30:00Z'; // after the 2026-09-29 17:00 PDT deadline
+const FIX = '2026-09-30T09:00:00Z';
+const PAYROLL = '2026-10-02';
+const dbPath = join(RUN, 'sample.db');
+const dataDir = join(RUN, 'private-data');
+
+const db = m.db.openDatabase(dbPath);
+m.mig.migrate(db);
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') };
+const seed = await m.seed.seedSynthetic(db, fixedClock(EARLY), { passwords });
+const admin = seed.users.find((u) => u.role === 'admin');
+const early = fixedClock(EARLY);
+const files = new m.files.FileStore(dataDir);
+
+const POLICY = (userId) => m.policies.createPolicyVersion(db, early, {
+  userId, calendarId: seed.calendarId, effectiveFrom: '2026-09-14', note: 'Synthetic sample policy',
+  rules: { requiredMinutes: 480, thresholdMinutes: 30, roundingStepMinutes: 30, referenceStart: '08:00', referenceEnd: '16:00', deficitMode: 'ignore', breaks: [] },
+}, userId);
+
+const people = {};
+async function person(key, displayName, email, to, settingsExtra, authorizeImage) {
+  const id = await m.users.createUser(db, early, { email, displayName, role: 'employee', password: randomBytes(18).toString('base64url'), calendarId: seed.calendarId }, admin.id);
+  POLICY(id);
+  m.settings.saveSubmissionSettings(db, early, id, { expectedSeq: 0, to: [to], cc: ['payroll-copy@example.invalid'], ...settingsExtra });
+  if (authorizeImage) m.sigs.saveSignatureAndAuthorizeAutoImage(db, early, files, id, m.seed.syntheticSignaturePng(7), 'image/png');
+  else m.sigs.saveSignature(db, early, files, id, m.seed.syntheticSignaturePng(7), 'image/png');
+  people[key] = sessionUser(db, id);
+}
+await person('manual', 'Sample Manual Employee', 'sample.manual@example.invalid', 'payroll-manual@example.invalid', { autoSubmit: false }, false);
+await person('autooff', 'Sample Auto Employee Note Off', 'sample.auto.off@example.invalid', 'payroll-auto-off@example.invalid', { autoSubmit: true }, true);
+await person('autoon', 'Sample Auto Employee Note On', 'sample.auto.on@example.invalid', 'payroll-auto-on@example.invalid', { autoSubmit: true, autoNoteEnabled: true }, true);
+m.auto.setAutomationActivation(db, early, { actorUserId: admin.id, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic sample activation' });
+db.prepare("UPDATE users SET status = 'deactivated' WHERE id IN (?, ?)").run(admin.id, seed.users.find((u) => u.role === 'employee').id);
+
+const entry = fixedClock(ENTRY);
+const sundaySessions = {};
+for (const [key, user] of Object.entries(people)) {
+  const ctx = { db, clock: entry, user };
+  m.cmds.createSession(ctx, '2026-09-14', sess('2026-09-14', '08:00', '19:00'));
+  m.cmds.createSession(ctx, '2026-09-17', sess('2026-09-17', '09:00', '11:15'));
+  m.cmds.createSession(ctx, '2026-09-20', sess('2026-09-20', '10:00', '15:00'));
+  m.cmds.createSession(ctx, '2026-09-22', sess('2026-09-22', '09:00', '17:46'));
+  sundaySessions[key] = m.cmds.createSession(ctx, '2026-09-27', sess('2026-09-27', '08:00', '15:30'));
+}
+
+const delivery = m.config.loadDeliveryConfig({ DATA_DIR: dataDir, MAIL_FROM: SENDER, PUBLIC_BASE_URL: 'https://timesheet.example.invalid' }, { databasePath: dbPath, port: 3000, production: false });
+console.log('outbound mode:', delivery.outbound.mode, 'sender:', delivery.senderAddress);
+async function passes(startIso, count = 4) {
+  let t = new Date(startIso).getTime();
+  for (let i = 0; i < count; i += 1) {
+    const clock = fixedClock(new Date(t).toISOString());
+    const s = await m.runner.runJobsOnce({ db, clock, owner: 'runner-sample', handlers: m.runner.createJobHandlers({ db, clock, files, delivery }) });
+    console.log('pass', new Date(t).toISOString(), JSON.stringify(s));
+    t += 120000;
+  }
+}
+
+// 1. Manual sign-off (original revision, signature image, send).
+const signClock = fixedClock(SIGN);
+const review = m.review.buildReviewPayload(db, signClock, people.manual, PAYROLL);
+const signed = m.fin.signOffTimesheet({ db, clock: signClock, user: people.manual }, PAYROLL, {
+  expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Sample Manual Employee', deficitChoices: [], incompleteEvidenceAcknowledged: true,
+});
+console.log('manual sign-off:', signed.status);
+await passes(SIGN, 4);
+// 2. Automatic deadline for the two automatic accounts (note off, note on).
+await passes(AUTO, 6);
+// 3. Manual correction revision of the manual account, with the explicit choice to e-mail it.
+const fixClock = fixedClock(FIX);
+const target = sundaySessions.manual;
+const sessionRow = db.prepare("SELECT id, version FROM work_sessions WHERE user_id = ? AND work_date = '2026-09-27'").get(people.manual.id);
+m.cmds.updateSession({ db, clock: fixClock, user: people.manual }, sessionRow.id, { ...sess('2026-09-27', '08:00', '15:46'), expected_version: sessionRow.version, reason: 'Synthetic correction: the session ended at 15:46' });
+const review2 = m.review.buildReviewPayload(db, fixClock, people.manual, PAYROLL);
+const revised = m.fin.reviseTimesheet({ db, clock: fixClock, user: people.manual }, PAYROLL, {
+  expectedVersion: review2.expectedVersion, reviewedHash: review2.payloadHash, signerName: 'Sample Manual Employee', deficitChoices: [], incompleteEvidenceAcknowledged: true,
+  kind: 'correction', reason: 'Synthetic correction of the Sunday end time', sendEmail: true,
+});
+console.log('manual correction:', revised.status, 'revision', revised.revision.revision_no);
+await passes(FIX, 6);
+
+const rows = db.prepare(
+  `SELECT r.id, u.display_name AS name, r.revision_no, r.revision_kind, r.origin, r.review_state, a.sha256, a.storage_key
+     FROM timesheet_revisions r JOIN users u ON u.id = r.user_id
+     LEFT JOIN revision_files f ON f.revision_id = r.id AND f.kind = 'pdf' AND f.state = 'ready'
+     LEFT JOIN attachments a ON a.id = f.attachment_id ORDER BY u.display_name, r.revision_no`).all();
+for (const r of rows) {
+  console.log('revision', JSON.stringify({ name: r.name, no: r.revision_no, kind: r.revision_kind, origin: r.origin, review: r.review_state, pdf_sha256: r.sha256 }));
+}
+const attempts = db.prepare('SELECT d.id, d.state, r.revision_no, u.display_name AS name FROM delivery_attempts d JOIN timesheet_revisions r ON r.id = d.revision_id JOIN users u ON u.id = d.user_id ORDER BY d.rowid').all();
+for (const a of attempts) console.log('attempt', JSON.stringify(a));
+db.close();
+console.log('SAMPLES DONE');

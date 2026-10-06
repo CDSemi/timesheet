@@ -1,0 +1,96 @@
+// EN/VI structural parity: per file pair, counts of headings by level, numbered items, bullets, table rows,
+// fences, checkboxes, links; plus the exact sequence of fenced blocks and of inline code spans, and the
+// heading-number skeleton. Usage: node parity.mjs <en.md> <vi.md> [...more pairs]
+import { readFileSync } from 'node:fs';
+
+function facts(path) {
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const out = { lines: lines.length, h: {}, numbered: 0, bullets: 0, tableRows: 0, fences: 0, checkboxes: 0, links: 0 };
+  const fencedBlocks = [];
+  const codeSpans = [];
+  const linkTargets = [];
+  const headingNumbers = [];
+  let inFence = false;
+  let fenceBuf = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^(~~~|```)/.test(trimmed)) {
+      out.fences += 1;
+      if (inFence) {
+        fencedBlocks.push(fenceBuf.join('\n'));
+        fenceBuf = [];
+      }
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      fenceBuf.push(line.trim());
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) {
+      out.h[h[1].length] = (out.h[h[1].length] ?? 0) + 1;
+      const num = /^(\d+(?:\.\d+)*)\./.exec(h[2]);
+      headingNumbers.push(`${h[1].length}:${num ? num[1] : '-'}`);
+    }
+    if (/^\s*\d+\.\s/.test(line)) out.numbered += 1;
+    if (/^\s*[-*]\s/.test(line)) out.bullets += 1;
+    if (/^\s*\|/.test(line)) out.tableRows += 1;
+    const boxes = line.match(/\[ \]|\[x\]/gi);
+    if (boxes) out.checkboxes += boxes.length;
+    for (const m of line.matchAll(/\]\(([^)]+)\)/g)) {
+      out.links += 1;
+      linkTargets.push(m[1]);
+    }
+    for (const m of line.matchAll(/`([^`]+)`/g)) codeSpans.push(m[1]);
+  }
+  return { out, fencedBlocks, codeSpans, linkTargets, headingNumbers };
+}
+
+let failures = 0;
+const pairs = process.argv.slice(2);
+for (let i = 0; i < pairs.length; i += 2) {
+  const en = facts(pairs[i]);
+  const vi = facts(pairs[i + 1]);
+  const a = JSON.stringify(en.out);
+  const b = JSON.stringify(vi.out);
+  console.log(`== ${pairs[i]} vs ${pairs[i + 1]}`);
+  console.log(`EN ${a}`);
+  console.log(`VI ${b}`);
+  const checks = [
+    ['counts', a === b],
+    ['fenced blocks identical', JSON.stringify(en.fencedBlocks) === JSON.stringify(vi.fencedBlocks)],
+    ['heading level/number skeleton', JSON.stringify(en.headingNumbers) === JSON.stringify(vi.headingNumbers)],
+    ['code spans (sequence)', JSON.stringify(en.codeSpans) === JSON.stringify(vi.codeSpans)],
+    ['code spans (multiset)', JSON.stringify([...en.codeSpans].sort()) === JSON.stringify([...vi.codeSpans].sort())],
+  ];
+  for (const [label, ok] of checks) {
+    console.log(`${ok ? 'PASS' : 'DIFF'}  ${label}`);
+    if (!ok) failures += 1;
+  }
+  if (JSON.stringify(en.codeSpans) !== JSON.stringify(vi.codeSpans)) {
+    const enSet = [...en.codeSpans].sort();
+    const viSet = [...vi.codeSpans].sort();
+    const onlyEn = enSet.filter((x) => !viSet.includes(x));
+    const onlyVi = viSet.filter((x) => !enSet.includes(x));
+    console.log(`  code spans only in EN: ${JSON.stringify(onlyEn)}`);
+    console.log(`  code spans only in VI: ${JSON.stringify(onlyVi)}`);
+    for (let k = 0; k < Math.max(en.codeSpans.length, vi.codeSpans.length); k += 1) {
+      if (en.codeSpans[k] !== vi.codeSpans[k]) {
+        console.log(`  first sequence difference at #${k}: EN ${JSON.stringify(en.codeSpans[k])} VI ${JSON.stringify(vi.codeSpans[k])}`);
+        break;
+      }
+    }
+  }
+  const enLinks = en.linkTargets.map((t) => t.replace(/\.vi\.md/g, '.md'));
+  const viLinks = vi.linkTargets.map((t) => t.replace(/\.vi\.md/g, '.md'));
+  const linkOk = JSON.stringify(enLinks) === JSON.stringify(viLinks);
+  console.log(`${linkOk ? 'PASS' : 'INFO'}  link targets equal after mapping .vi.md to .md (${en.linkTargets.length}/${vi.linkTargets.length})`);
+  if (!linkOk) {
+    for (let k = 0; k < Math.max(enLinks.length, viLinks.length); k += 1) {
+      if (enLinks[k] !== viLinks[k]) console.log(`  link #${k}: EN ${en.linkTargets[k]} VI ${vi.linkTargets[k]}`);
+    }
+  }
+}
+console.log(failures === 0 ? 'PARITY OK' : `PARITY DIFFERENCES: ${failures}`);

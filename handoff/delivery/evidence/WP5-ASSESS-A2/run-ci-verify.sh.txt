@@ -1,0 +1,19 @@
+# WP5-ASSESS-A2: npm ci then npm run verify on the clean export; output to raw/
+source <task>/env.sh
+cd "$T/src" || exit 2
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+echo "== npm ci start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$T/raw/02-npm-ci.txt"
+npm ci >> "$T/raw/02-npm-ci.txt" 2>&1
+ci=$?
+echo "== npm ci exit $ci end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/raw/02-npm-ci.txt"
+echo "lockfile change vs export index (git diff --name-only package-lock.json):" >> "$T/raw/02-npm-ci.txt"
+git diff --name-only -- package-lock.json package.json >> "$T/raw/02-npm-ci.txt" 2>&1
+echo "(end lockfile check)" >> "$T/raw/02-npm-ci.txt"
+cmp package-lock.json "$REPO/package-lock.json" >> "$T/raw/02-npm-ci.txt" 2>&1
+echo "cmp export vs repo package-lock.json exit $?" >> "$T/raw/02-npm-ci.txt"
+if [ $ci -ne 0 ]; then exit $ci; fi
+echo "== npm run verify start $(date -u +%Y-%m-%dT%H:%M:%SZ) SMOKE_PORT=$SMOKE_PORT" > "$T/raw/03-verify.txt"
+npm run verify >> "$T/raw/03-verify.txt" 2>&1
+v=$?
+echo "== npm run verify exit $v end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/raw/03-verify.txt"
+exit $v

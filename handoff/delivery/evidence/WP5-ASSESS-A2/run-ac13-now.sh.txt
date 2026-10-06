@@ -1,0 +1,13 @@
+# WP5-ASSESS-A2: the AC-13 test with the wall clock moved to another date and season (preload); output to raw/
+source <task>/env.sh
+cd "$T/src" || exit 2
+PRE="file:///<task>/probe/shiftnow.mjs"
+export NODE_OPTIONS="--import=$PRE --trace-deprecation --pending-deprecation"
+R="node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts --reporter=verbose"
+for now in 2027-01-20T12:00:00Z 2025-06-15T12:00:00Z; do
+  f="$T/raw/06-ac13-now-$(echo $now | tr -d ':').txt"
+  echo "== AC-13 AUDIT_NOW=$now start $(date -u +%Y-%m-%dT%H:%M:%SZ) NODE_OPTIONS=--import=<task>/probe/shiftnow.mjs" > "$f"
+  echo "node wall clock check (same NODE_OPTIONS): $(AUDIT_NOW=$now node -e 'console.log(new Date().toISOString(), Date.now())')" >> "$f"
+  AUDIT_NOW=$now $R >> "$f" 2>&1
+  echo "== AC-13 AUDIT_NOW=$now exit $? end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f"
+done

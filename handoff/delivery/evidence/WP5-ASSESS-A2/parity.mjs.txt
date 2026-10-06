@@ -1,0 +1,55 @@
+// WP5-ASSESS-A2 EN/VI structure parity and area-A token parity for the delta documents. Run: node <task>/probe/parity.mjs
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const SRC = '<task>\\src';
+const pairs = [
+  ['docs/11_OPERATIONS_RUNBOOK.md', 'docs/11_OPERATIONS_RUNBOOK.vi.md'],
+  ['docs/12_RELEASE_NOTES.md', 'docs/12_RELEASE_NOTES.vi.md'],
+  ['README.md', 'README.vi.md'],
+];
+const shape = (text) => {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let inFence = false;
+  const s = { h2: 0, h3: 0, numbered: 0, bullets: 0, fences: 0, checkboxes: 0, tableRows: 0 };
+  for (const line of lines) {
+    if (/^\s*~~~|^\s*```/.test(line)) {
+      s.fences += 1;
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (/^## /.test(line)) s.h2 += 1;
+    if (/^### /.test(line)) s.h3 += 1;
+    if (/^\s*\d+\. /.test(line)) s.numbered += 1;
+    if (/^\s*- \[[ x]\] /.test(line)) s.checkboxes += 1;
+    else if (/^\s*- /.test(line)) s.bullets += 1;
+    if (/^\|/.test(line)) s.tableRows += 1;
+  }
+  return s;
+};
+// Tokens that carry area-A meaning (keys, codes, routes, placeholders): the translation must keep each one as often.
+const TOKENS = [
+  'PRODUCTION_SENDING_ENABLED', 'OUTBOUND_MODE', 'MAIL_FROM', 'PUBLIC_BASE_URL', 'APP_ORIGINS', 'TRUSTED_PROXY_ADDRESSES', 'SMTP_',
+  'activation_in_past', 'reason_required', 'origin_rejected', 'smtp_auth_failed', 'smtp_tls_failed', 'smtp_config_invalid',
+  '/api/admin/automation/activation', 'active_from', 'uncertain', 'capture', 'JOB_RUNNER=off', 'D-7', 'D-8', 'D-12', 'D-13', 'D-1)', 'R-WA', 'example.invalid',
+];
+const tokenCounts = (text) => Object.fromEntries(TOKENS.map((t) => [t, text.split(t).length - 1]));
+let diffs = 0;
+for (const [en, vi] of pairs) {
+  const a = readFileSync(join(SRC, en), 'utf8');
+  const b = readFileSync(join(SRC, vi), 'utf8');
+  const sa = shape(a);
+  const sb = shape(b);
+  const ta = tokenCounts(a);
+  const tb = tokenCounts(b);
+  const shapeDiff = Object.keys(sa).filter((k) => sa[k] !== sb[k]);
+  const tokenDiff = TOKENS.filter((t) => ta[t] !== tb[t]);
+  diffs += shapeDiff.length + tokenDiff.length;
+  console.log(`${en} vs ${vi}`);
+  console.log(`  shape EN ${JSON.stringify(sa)}`);
+  console.log(`  shape VI ${JSON.stringify(sb)}`);
+  console.log(`  shape differences: ${shapeDiff.length === 0 ? 'none' : shapeDiff.map((k) => `${k} ${sa[k]}/${sb[k]}`).join(', ')}`);
+  console.log(`  token differences (EN/VI): ${tokenDiff.length === 0 ? 'none' : tokenDiff.map((t) => `${t} ${ta[t]}/${tb[t]}`).join(', ')}`);
+}
+console.log(`total differences: ${diffs}`);

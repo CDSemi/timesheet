@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741 (WP5-AC13-FREEZE, test tích hợp AC-13; digest 1e59ad31).
+  - HEAD = origin/main = 74d5bfec6700126da4105b5d97f5efe943f896f5 (WP5-REL-FREEZE, commit đóng băng cuối của WP5; digest 0a64a75f).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1011,7 +1011,60 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - D-1..D-15 được ghi theo khuyến nghị và đánh dấu chờ quyết. Mốc kích hoạt
            được đặt qua một lệnh gọi API admin, vì chưa có màn hình cho việc này.
          - Tìm thấy đủ 14 biến env; verify 1.759. Digest 0a64a75f (779 tệp).
-       - Đang chạy: WP5-REL-FREEZE (committer), commit đóng băng cuối của package.
+       - WP5-REL-FREEZE đã commit và push 74d5bfe, commit đóng băng cuối của package:
+         28 đường dẫn, digest 0a64a75f, mọi kiểm tra trả 0, và không thấy email hay
+         host nào trong docs đã stage.
+       - WP5-GATE: **PASS** trên 74d5bfe (digest 0a64a75f, 779 tệp; NAS chưa kiểm).
+         - verify 1.759, không có dòng deprecation nào; e2e 145/bỏ qua 5.
+         - AC-13 đạt cả 3 lần (mỗi lần khoảng 4,1 giây).
+         - Drill: 208 PASS.
+         - `docker compose config` trả 0 cho bản đang chạy, bản khôi phục và bản
+           rollback.
+         - Đủ biến env; audit 0; các validator PASS; phạm vi sạch; Docker sạch.
+       - Đang chạy song song:
+         - WP5-PILOT (worker, sonnet; chỉ ghi trong handoff, cổng 47780–47789);
+         - WP5-ASSESS-A lần 2 (auditor opus mới; kiểm phần chênh của mảng A trên
+           74d5bfe; cổng 47700–47719).
+       - WP5-PILOT đã xong (worker, sonnet; tác giả tự báo).
+         - `WP5_PILOT_PACKET` EN và VI: 8 thư giả lập đã bắt, 4 PDF và 4 ảnh
+           `*-synthetic.png`, đã xem hết.
+         - D-1..D-15 vẫn chờ quyết. Digest không đổi; precommit và preflight trả 0.
+         - Sự cố: một heredoc `python -` chạy vòng lặp, sinh khoảng 1 GB output.
+           Coordinator đã dừng tác vụ và agent. Đã nhờ chủ dự án xóa tệp output.
+       - WP5-ASSESS-A lần 2: **FIX REQUIRED** trên 74d5bfe (digest 0a64a75f).
+         - Phần mềm đạt mọi kiểm tra của mảng A. Không có thay đổi nào trong source
+           ứng dụng.
+         - Test AC-13 chặt chẽ và ổn định; các đột biến đều làm nó fail.
+         - verify 1.759; e2e 145/bỏ qua 5 ở lần chạy lại, sau một lỗi
+           `ERR_NO_BUFFER_SPACE` ở lần 1; probe 26/26.
+         - Phát hiện, cả hai đều Low và chỉ trong docs/11:
+           - WP5-A2-01: màn hình trạng thái không có trường "cờ";
+           - WP5-A2-02: không thể kiểm deep link trong lần tự kiểm ở chế độ capture.
+         - Rủi ro R-A2-1..5. Trong đó, các lần chạy TZ của WP5-AC13 thực ra không đổi
+           múi giờ.
+       - WP5-FINAL-AUDIT: **FIX REQUIRED** trên 74d5bfe (digest 0a64a75f).
+         - B-01 và B-02 đã được giải quyết; bản khôi phục được khởi động thật, gắn đúng
+           và ở trạng thái tạm dừng.
+         - Mảng B: PASS. Bước kích hoạt qua console đã chạy thử trên Edge và an toàn.
+         - Phát hiện, cả hai đều Low:
+           - WP5-F-01: cùng lỗi "cờ" trên màn hình trạng thái, cộng thêm câu chữ về việc
+             CLI từ chối chạy (trong runbook và packet);
+           - WP5-F-02: mục 8 của packet nhắc tới một commit đóng băng đã diễn ra rồi.
+         - Rủi ro R-F1..R-F7. O-1 (mức độ của B-01 ghi trong WP5_HANDOFF) đưa vào
+           ACCREC.
+       - WP5-FIXD đã xong (worker, sonnet; tác giả tự báo).
+         - Đã sửa F-01, F-02, A2-01, A2-02, cùng R-A2-1, R-A2-2/R-F1, R-F4, R-F5 và
+           R-F6.
+         - Ngoài handoff/ chỉ docs/11 EN và VI thay đổi, cộng thêm packet.
+         - Parity và Grep đều sạch; verify trả 0. Digest 1b8ceae4 (779 tệp).
+       - Đang chạy: WP5-FIXD-FREEZE (committer), có Grep tìm bí mật trong evidence của
+         các audit.
+       - Sau đó:
+         - commit đóng băng;
+         - chạy lại gate, đặt TZ ngay trong tiến trình (R-A2-3);
+         - cập nhật thông tin phiên bản trong packet;
+         - một lượt kiểm tra lại bằng auditor mới;
+         - ACCREC và ACCEPT.
        - Sau đó:
          - WP5-AC13, một test tích hợp được commit (worker-high, sonnet), và commit
            đóng băng của nó;

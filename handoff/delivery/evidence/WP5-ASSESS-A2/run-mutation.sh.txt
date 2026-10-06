@@ -1,0 +1,42 @@
+# WP5-ASSESS-A2: mutation checks of the AC-13 test in a scratch copy (never in the repository); output to raw/
+source <task>/env.sh
+M="$T/mut"
+OUT="$T/raw/07-mutation.txt"
+R="node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts"
+echo "== mutation scratch copy start $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT"
+if [ ! -d "$M/src" ]; then
+  mkdir -p "$M"
+  (cd "$REPO" && git archive "$REVIEWED") | tar -x -C "$M"
+  echo "git archive $REVIEWED | tar -x -C <task>/mut: exit ${PIPESTATUS[0]}/${PIPESTATUS[1]}" >> "$OUT"
+  (cd "$M" && npm ci --no-audit --no-fund) >> "$OUT" 2>&1
+  echo "npm ci (scratch copy) exit $?" >> "$OUT"
+fi
+cd "$M" || exit 2
+echo "scratch copy: overtime.ts equals the export: $(cmp -s src/domain/overtime.ts "$T/src/src/domain/overtime.ts" && echo yes || echo no); signatures.ts equals the export: $(cmp -s src/server/services/signatures.ts "$T/src/src/server/services/signatures.ts" && echo yes || echo no)" >> "$OUT"
+
+echo "== control (unmutated) $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT"
+$R >> "$OUT" 2>&1
+echo "== control exit $?" >> "$OUT"
+
+# Mutation 1 (repeats WP5-AC13 mutation 1): the N threshold is skipped (any weekday excess activates).
+cp src/domain/overtime.ts "$T/tmp/overtime.ts.orig"
+sed -i 's/const activatedMinutes = normalExcessMinutes > rule.thresholdMinutes ? normalExcessMinutes : 0;/const activatedMinutes = normalExcessMinutes > 0 ? normalExcessMinutes : 0;/' src/domain/overtime.ts
+echo "== mutation 1 diff (src/domain/overtime.ts):" >> "$OUT"
+diff "$T/tmp/overtime.ts.orig" src/domain/overtime.ts >> "$OUT" 2>&1
+echo "== mutation 1 run $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT"
+$R >> "$OUT" 2>&1
+echo "== mutation 1 exit $?" >> "$OUT"
+cp "$T/tmp/overtime.ts.orig" src/domain/overtime.ts
+echo "mutation 1 restored, equals the export: $(cmp -s src/domain/overtime.ts "$T/src/src/domain/overtime.ts" && echo yes || echo no)" >> "$OUT"
+
+# Mutation 3 (auditor's own, isolation): the signature read drops its ownership filter (parameter count kept).
+cp src/server/services/signatures.ts "$T/tmp/signatures.ts.orig"
+sed -i "s/FROM attachments WHERE id = ? AND user_id = ? AND kind = 'signature'/FROM attachments WHERE id = ? AND (user_id = ? OR 1 = 1) AND kind = 'signature'/" src/server/services/signatures.ts
+echo "== mutation 3 diff (src/server/services/signatures.ts):" >> "$OUT"
+diff "$T/tmp/signatures.ts.orig" src/server/services/signatures.ts >> "$OUT" 2>&1
+echo "== mutation 3 run $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT"
+$R >> "$OUT" 2>&1
+echo "== mutation 3 exit $?" >> "$OUT"
+cp "$T/tmp/signatures.ts.orig" src/server/services/signatures.ts
+echo "mutation 3 restored, equals the export: $(cmp -s src/server/services/signatures.ts "$T/src/src/server/services/signatures.ts" && echo yes || echo no)" >> "$OUT"
+echo "== mutation checks end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT"

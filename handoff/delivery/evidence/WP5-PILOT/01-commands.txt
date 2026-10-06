@@ -1,0 +1,32 @@
+WP5-PILOT commands and exit codes (Git Bash, Node v24.21.0 portable first on PATH; no cmd.exe, no interactive shell,
+nothing fed to an interpreter through stdin; <task> = the task folder under the scratch drive, <export> = its clean export)
+
+Base: HEAD = origin/main = 74d5bfec6700126da4105b5d97f5efe943f896f5; digest 0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba, 779 files.
+
+1. node --version                                                            -> v24.21.0
+2. git archive 74d5bfe | tar -x -C <task>/export                              exit 0 (clean export of the gated freeze)
+3. npm ci (in <export>)                                                      exit 0
+4. npm run build:server (in <export>)                                        exit 0
+5. node make-samples.mjs   (DATA_DIR, DATABASE_PATH, RUN_DIR inside <task>)   exit 0   03-make-samples.txt
+   production services and job handlers, fixed clocks, capture mode, example.invalid users; outbound mode printed: capture;
+   PRODUCTION_SENDING_ENABLED never set; 8 messages captured (4 with a PDF), no job in intervention, no failure.
+6. node extract.mjs                                                          exit 0   04-extract.txt, msg-*, pdf-text-*, pilot-*-synthetic.png
+   4 PDFs, 1 page each, each stored hash equals the captured attachment (pdf_hash_ok true), 4 renders in the installed Edge
+   (playwright-core channel msedge); each PNG viewed with the image reader after it was made.
+7. node ready-check.mjs (server on port 47780, own handle, stopped with child.kill) exit 0   05-ready-check.txt
+   /api/health 200, /api/ready 200 (schema 13/13, data_dir_writable true); the server stopped through its handle (SIGTERM).
+8. node parity.mjs  (EN/VI structural parity of the packet)                  exit 0   06-parity.txt   PARITY OK
+   (lines 307/307, h2 12, h3 8, table rows 128, boxes 34, bullets 15, numbered 6, code spans 264/264, links 19/19)
+9. git read-tree HEAD / git add <new paths> with a private GIT_INDEX_FILE inside <task> (the repository index is untouched)
+   node scripts/precommit-check.mjs --self-test                              exit 0   07-precommit-selftest.txt  (12 rules)
+   node scripts/precommit-check.mjs over the temporary index                  exit 0   07-precommit.txt (final run after the results)
+10. python handoff/delivery/validate_package.py --preflight (codex runtime Python 3.12) exit 0   08-preflight.txt  PASS, 88 translation pairs
+11. Digest before and after: git ls-tree form and node scripts/source-digest.mjs  00-digest-before.txt, 00-digest-after.txt
+    both 0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba, 779 files; ls-tree listings identical (cmp exit 0);
+    no change outside handoff/.
+
+Ports used: 47780 only (one run). Nothing is left running by this task.
+Incident (recorded honestly): one Bash call of this task started the system Python with an empty heredoc on stdin by mistake
+(a violation of the stdin rule). It produced no file and no data, but it left a background interpreter task that loops on an
+error and writes to the harness task output file; the worker has no handle tool to stop it (it must not kill by PID). The
+coordinator should stop that background task (output file b4fr6819n.output under the session's tasks folder).

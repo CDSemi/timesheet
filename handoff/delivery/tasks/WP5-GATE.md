@@ -70,4 +70,31 @@ Return at most 200 words, beginning with your self-reported model.
 
 ## Results
 
-(Verifier appends here.)
+### Verifier result (attempt 1) - decision: PASS (NAS items NOT VERIFIED)
+
+Self-reported model: claude-sonnet-5-5. Freeze 74d5bfec6700126da4105b5d97f5efe943f896f5 (HEAD = origin/main before and
+after). Node v24.21.0 portable, Git Bash, Python from the codex runtime (the system Python 3.14 lacks tzdata and stops
+validate_package at times()). Raw output `D:\.claude-tmp\timesheet\WP5-GATE`; masked LF evidence in
+`handoff/delivery/evidence/WP5-GATE/`. DATA_DIR and DATABASE_PATH set inside the task folder; SMOKE_PORT 47741/47742.
+
+Digest of record `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba`, 779 files (handoff/ excluded): equal in
+three forms (clean `git archive` export hashed with `git hash-object --no-filters`, `git ls-tree` form, `npm run digest`).
+Equals the committer's claim; recomputed last, unchanged.
+
+| # | Item | Result |
+|---|---|---|
+| 1 | `npm ci` exit 0 (lockfile cmp identical); lint exit 0; `npm run verify` exit 0 | 77 files, 1759 tests passed, SMOKE PASSED; NODE_OPTIONS `--trace-deprecation --pending-deprecation`: 0 deprecation lines in ci, lint, verify |
+| 2 | `npm run test:e2e` exit 0 | 145 passed, 5 skipped (4.6 min) |
+| 3 | AC-13 alone x3 | exit 0 x3; 1 test passed each; 4.08 s, 4.07 s, 4.13 s |
+| 4 | drill, `--wp3` = `git archive 49651c8` + npm ci + build:server | exit 0; stages 33/31/57/35/27/23 = 208 PASS, 0 FAIL; image `sha256:0addd2000b42...9fd8` (110002055 B); forbidden-file scan PASS |
+| 5 | `docker compose config` (live, restored, rollback; synthetic scratch project, no container) | exit 0 x3; live binds `<project>/data`, `timesheet:aaaaaaa`; restored: own project name `-restored`, restore dir; rollback: `-rollback`, previous tag, restore dir, `JOB_RUNNER: "off"` from the rollback env file. docs/11 section 4 step 3 keeps the protected env-file copy (mode 600) with the release commit, source digest and image ID |
+| 6 | Env keys of docs/11 and 12 | All present in `.env.example` or `src/server/config.ts` (JOB_RUNNER read in `src/server/index.ts`, documented in `.env.example`). Not in either: TIMESHEET_DATA_DIR/IMAGE/PORT (Compose variables, in compose.example.yaml), NODE_IMAGE_DIGEST (Dockerfile ARG), SQLITE_BUSY, WP5_HANDOFF (not env keys) |
+| 7 | `npm audit --omit=dev` exit 0 (0 vulnerabilities); validate_package --preflight, validate_orchestration, check_recovery exit 0/0/0, all PASS; precommit `--self-test` PASS (12 rules); precommit over this evidence folder PASS (22 files, 0 findings) | |
+| 8 | Diff scope 546cdda..74d5bfe, non-handoff | .env.example, compose.example.yaml, docs/11 and docs/12 (EN, VI), README (EN, VI), tests/integration/ac13-support.ts and ac13-two-week.test.ts: only WP5-FIXB, WP5-AC13, WP5-REL paths; rest handoff records |
+| 9 | Digest last | see above |
+
+Cleanup: drill image `ts-wp5-gate-timesheet:drill` removed by exact tag, project `ts-wp5-gate` down -v; `docker ps --all
+--filter name=ts-wp5-gate` empty; no image, network or volume of the project remains; no listener on 47740-47759.
+
+Limits: NAS target NOT VERIFIED (no owner access); sections 13-16 are owner NAS steps, unverified. Nothing committed, sent or
+edited outside this brief and the evidence folder. Failing items: none.

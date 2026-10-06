@@ -211,3 +211,129 @@ findings); run 3, last, after this section was written, is recorded in `97-preco
 
 The coordinator records WP5-ASSESS-A as PASS at digest `26fcc969…`, waits for WP5-ASSESS-B, then follows WP5-PLAN section E;
 R-WA1 to R-WA3 and R-WA8 go to the owner and the pilot packet.
+
+### Auditor result (attempt 2)
+
+Self-reported model: claude-opus-5-5 (profile timesheet-auditor; fresh context; not a72a6550bd47db0ff, not the WP5-ASSESS-B or
+WP5-FINAL-AUDIT auditor, no WP1–WP5 authorship). Status: done. Decision: **FIX REQUIRED** (two Low documentation findings; the
+software passes every area-A check). Report: `handoff/delivery/WP5_REVIEW_A2.md` and `.vi.md`. Evidence:
+`handoff/delivery/evidence/WP5-ASSESS-A2/` (index `00-README.txt`). Raw output: `D:\.claude-tmp\timesheet\WP5-ASSESS-A2`.
+
+#### Baseline and digest binding
+
+- `reviewed_commit` `74d5bfec6700126da4105b5d97f5efe943f896f5` (WP5-GATE `freeze_commit`); HEAD = `origin/main` = `74d5bfe`
+  before and after.
+- Digest `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba` (779 files), equal to the gate digest of record,
+  before (21:54 UTC) and after every run (22:12 UTC) in three forms:
+  - `scripts/source-digest.mjs` in the repository;
+  - the `git ls-tree` form of HEAD and of `74d5bfe`;
+  - the `git archive 74d5bfe` export. Its change list was empty after every run.
+- The delta base `546cdda` is `26fcc969…` in the `git ls-tree` form. Files: `00-baseline.txt`, `99-digest-after.txt`.
+
+#### Delta since 546cdda and its area-A effect
+
+There are 10 non-handoff paths in 3 commits (`01-delta.txt`). No application source changed: nothing under `src/`, migrations,
+`scripts/`, the package files, the Dockerfile or the configs.
+
+- WP5-FIXB `85838b5`:
+  - `.env.example` header comment and three `compose.example.yaml` comment lines. No key, value or Compose behaviour changed;
+    no area-A effect.
+  - docs/11 sections 1, 2, 4, 6–9 and the placeholders. The env-file copy is protected; the restored instance runs under its
+    own project (risk R-A2-2 noted).
+- WP5-AC13 `8e99d2c`: the test and its helper; judged below.
+- WP5-REL `74d5bfe`: docs/12, docs/11 sections 13–16 and one README row.
+  - Privacy holds, and readiness, permission and outcome stay separate.
+  - Most docs/11 and docs/12 claims match the code and my probe: the activation route and its codes, eligibility, the flag
+    refusal, the fault codes, the D-7 and D-8 notes, the capture path and the queued-send count.
+  - Two claims do not: findings WP5-A2-01 and WP5-A2-02.
+  - EN/VI parity holds (`05-parity.txt`).
+
+#### Commands (clean export, Node v24.21.0 by full path, npm 11.18.0, Git Bash as the npm script shell)
+
+| Command | Exit | Result |
+|---|---|---|
+| `npm ci` | 0 | 161 packages, lockfile unchanged, 0 deprecation lines |
+| `npm run verify` (`SMOKE_PORT=47701`) | 0 | 77 files / 1,759 tests; build; SMOKE PASSED (41) |
+| `npm run test:e2e` run 1 | 1 | 144 passed, 1 failed (`net::ERR_NO_BUFFER_SPACE` console error, `submission.spec.ts:62` desktop), 5 skipped |
+| `npm run test:e2e` run 2 (rerun once; WP5-PILOT active on the machine) | 0 | 145 passed, 5 skipped, 4.0 min |
+| AC-13 test alone x3 | 0, 0, 0 | 1 test each; 1,723 / 1,746 / 1,906 ms (wall 4.23 / 4.03 / 4.24 s) |
+| AC-13 test, machine zone set at run time (Tokyo, Kiritimati, UTC, New York) | 0 x4 | zone visible in vitest "Start at" |
+| AC-13 test, wall clock moved to 2027-01-20 and 2025-06-15 | 0 x2 | |
+| Mutations in a scratch copy outside the repository | control 0; mutation 1: 1; mutation 3: 1 | see below |
+| `node probe/probe.mjs` run 2 (run of record; ports 47702, 47703) | 0 | 26 PASS, 0 FAIL |
+| `node probe/probe.mjs` run 1 | 1 | 22 PASS, 4 FAIL: probe defect (it read the status JSON without its `operations` wrapper), fixed in the probe |
+| `validate_package.py --preflight` (workflow Python) | 0 | PASS, 89 translation pairs, 2,068 local links |
+| `netstat -ano`, `ps -W` | 0 | no listener on 47700–47719; no portable-Node process of this task |
+
+#### AC-13 test assessment and mutation result
+
+- The test asserts what attempt 1's probe showed:
+  - the 14 dates;
+  - the credited total 510 = 8:30, in the review and in the captured PDF;
+  - the ledger posted once: 6 credits and one −60, posted 540, 8 rows, unchanged later;
+  - a real runner process that dies after `sending`; the restarted runner marks the attempt uncertain and resends nothing
+    blindly (409 until the decision, then exactly one accepted attempt and one capture with the frozen envelope);
+  - the correction: a reason is required, revision 2, only +30, r1 kept, no send on the edit or with `send_email: false`;
+  - the two-connection double spend: exactly one `used` and one `409 exceeds_reserved`;
+  - 11 swapped identifiers returning 403/404 with no write; the swapped routes exist;
+  - the overdue path at the recorded instant: one record, no automatic revision or send, Bob's own warning only.
+- It is deterministic: injected clock, no sleeps or ports, three passes, four zones, two shifted wall clocks.
+- Mutation 1, repeating WP5-AC13's (the N threshold skipped), fails: `credit 2026-09-24: expected 30 to be +0`.
+- Mutation 3, my own (the signature read without its ownership filter), fails: `Bob GET /api/signatures/<id>: expected [403, 404]
+  to include 200`.
+- Both mutated files were restored and compared equal to the export (`07-mutation.txt`).
+
+#### Findings
+
+- **WP5-A2-01 (Low).** File: docs/11 section 13 step 2 bullet 1, step 4 bullet 3 and section 14 step 4 (EN and VI).
+  - The runbook tells the operator to see "the flag off/on" in the administrator status. The status has no such field:
+    `GET /api/admin/operations` returns `operations.sender` = `{configured, outbound_mode}`, and `OperationsStatus.tsx` shows the
+    same. In capture mode the server never reads the flag (`config.ts` `parseOutbound`). Reproduction: probe check `OPS-2`.
+  - Fix: name the "Outbound mode" text instead, and add an env-file check that the flag line is gone at deactivation.
+- **WP5-A2-02 (Low).** File: docs/11 section 13 step 2 bullet 3 (EN and VI).
+  - The capture self-test is told to open "the deep link in the captured message". No such message exists before activation:
+    - submissions carry no link (`mail/message.ts`; `SELF-4`);
+    - reminders and notices are not decided while the activation instant is null (`notifications.ts`; `LINK-1`: 0 occurrences
+      and 0 captures);
+    - after activation every reminder carries `https://timesheet.example.invalid/#/review/<date>` (`LINK-2`).
+  - Fix: check `https://<nas-host>/#/review/<payroll-date>` by hand, and check the first reminder link after activation.
+
+#### Risks (separate from defects; details in the report)
+
+- R-A2-1 (Low): the wording "capture sender" in section 14 step 2. The owner's history shows "Accepted by the mail server";
+  the API shows `captured`.
+- R-A2-2 (Low, overlaps area B): `<compose-restored>` reuses the live env file. After activation it would read smtp; the
+  restore pause holds every send until the resume.
+- R-A2-3 (Info): WP5-AC13's TZ runs never changed the zone, because Git Bash drops `TZ`. Re-proven here with a preload.
+- R-A2-4 (Info): an overdue warning can follow its overdue record by up to one five-minute reminder bucket (scan order inside a
+  pass).
+- R-A2-5 (Info): optional test additions.
+- R-WA1..R-WA8 were re-judged: unchanged; R-WA4 confirmed; R-WA7 reduced.
+
+#### Readiness, permission, pilot
+
+- Software readiness of area A: the software of `74d5bfe` / `0a64a75f…` passes. The docs need the two Low fixes and an area-A
+  recheck of those lines on the new digest.
+- Owner permission: none requested or given.
+- Pilot result: none.
+
+#### Runtime note
+
+One shell call redirected the error of a failed `cp` to `/dev/null`, against the brief's rule. The copy wrote nothing.
+Everything else followed the runtime rules: no `cmd.exe`, nothing fed to an interpreter through stdin, no recursive removal,
+and only my own child servers stopped through their handles.
+
+#### Files written
+
+- `handoff/delivery/WP5_REVIEW_A2.md` and `handoff/delivery/WP5_REVIEW_A2.vi.md`.
+- This results section.
+- `handoff/delivery/evidence/WP5-ASSESS-A2/`.
+
+Nothing else in the repository was changed. Nothing is left running. The precommit check over these files is recorded in
+`97-precommit.txt`.
+
+#### Next action
+
+The coordinator dispatches a bounded docs fix of WP5-A2-01 and WP5-A2-02 under FIX_FINDINGS: docs/11 EN and VI, sections 13
+and 14 only; R-A2-1 and R-A2-2 optional in the same pass. Then come the freeze, a regate and an area-A recheck of those lines
+on the new digest.

@@ -1,0 +1,46 @@
+// WP5-PILOT: starts the built server of the clean export in capture mode on a task port, reads /api/health and
+// /api/ready (the packet's URL check steps), then stops the child through its own handle. Synthetic, local only.
+import { spawn } from 'node:child_process';
+import { join } from 'node:path';
+
+const REPO = process.env.PILOT_REPO;
+const RUN = process.env.READY_RUN_DIR;
+const PORT = '47780';
+const env = {
+  ...process.env,
+  PORT,
+  HOST: '127.0.0.1',
+  DATA_DIR: join(RUN, 'private-data'),
+  DATABASE_PATH: join(RUN, 'ready.db'),
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: 'timesheet-sender@example.invalid',
+  PUBLIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+  APP_ORIGINS: `http://127.0.0.1:${PORT}`,
+};
+delete env.PRODUCTION_SENDING_ENABLED;
+let log = '';
+const child = spawn(process.execPath, [join(REPO, 'dist/server/index.js')], { cwd: REPO, env, stdio: ['ignore', 'pipe', 'pipe'] });
+child.stdout.setEncoding('utf8').on('data', (c) => (log += c));
+child.stderr.setEncoding('utf8').on('data', (c) => (log += c));
+const exited = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+let ok = false;
+try {
+  for (let i = 0; i < 60; i += 1) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${PORT}/api/health`);
+      if (r.status === 200) { ok = true; break; }
+    } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  console.log('server up:', ok);
+  for (const path of ['/api/health', '/api/ready']) {
+    const r = await fetch(`http://127.0.0.1:${PORT}${path}`);
+    console.log(path, r.status, await r.text());
+  }
+} finally {
+  child.kill();
+  const result = await exited;
+  console.log('server stopped through its handle:', JSON.stringify(result));
+  console.log('--- server log (no secrets expected) ---');
+  console.log(log.replaceAll(RUN, '<run>').replaceAll(REPO, '<export>'));
+}

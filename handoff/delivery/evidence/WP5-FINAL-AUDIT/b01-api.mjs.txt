@@ -1,0 +1,171 @@
+// WP5-FINAL-AUDIT probe: synthetic API steps around the docs/11 live and restored instances (B-01 recheck).
+// Synthetic example.invalid accounts, random per-run passwords kept only in the raw state file, capture mode.
+// Usage:
+//   node b01-api.mjs seed <base> <origin> <token-file> <state.json>
+//   node b01-api.mjs postbackup <base> <origin> <state.json>
+//   node b01-api.mjs check <base> <origin> <state.json> <label>
+import { randomBytes } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { deflateSync, crc32 } from 'node:zlib';
+
+const [cmd, base, origin, ...rest] = process.argv.slice(2);
+if (!cmd || !base || !origin) throw new Error('usage: node b01-api.mjs <cmd> <base> <origin> ...');
+let passes = 0;
+let failures = 0;
+function check(label, ok, detail = '') {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (ok) passes += 1;
+  else failures += 1;
+}
+async function call(method, path, { cookie, body, raw, contentType } = {}) {
+  const headers = { origin };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (raw !== undefined) headers['content-type'] = contentType;
+  const response = await fetch(`${base}${path}`, {
+    method,
+    headers,
+    body: raw !== undefined ? raw : body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // not JSON
+  }
+  const cookies = response.headers.getSetCookie().map((line) => line.split(';')[0]);
+  return { status: response.status, json, text, cookie: cookies.find((item) => item.includes('=')), setCookie: response.headers.getSetCookie() };
+}
+const password = () => `Syn-${randomBytes(12).toString('hex')}`;
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+function local(date, time) {
+  // America/Los_Angeles in March 2026 before DST (2026-03-08) is UTC-8; dates used here are 2026-03-02..03.
+  // The API takes UTC instants (Z); the wall time is converted with the fixed -08:00 offset of those dates.
+  return new Date(`${date}T${time}:00-08:00`).toISOString().replace('.000Z', 'Z');
+}
+function pngChunk(type, data) {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const out = Buffer.alloc(8 + data.length + 4);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+function syntheticPng(fill) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(8, 0);
+  header.writeUInt32BE(8, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows = Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(24, fill)]));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(Buffer.concat(rows))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+if (cmd === 'seed') {
+  const [tokenFile, stateFile] = rest;
+  const token = /([A-Z2-7]{5}(?:-[A-Z2-7]{5}){7})/.exec(readFileSync(tokenFile, 'utf8'))?.[1];
+  check('setup token read from the bootstrap output', token !== undefined);
+  const adminPassword = password();
+  const employeePassword = password();
+  const setup = await call('POST', '/api/auth/bootstrap', { body: { token: token ?? '', email: 'admin@example.invalid', display_name: 'Synthetic Admin', password: adminPassword } });
+  check('first administrator created with the token', setup.status === 201, `status ${setup.status}`);
+  const admin = await call('POST', '/api/auth/login', { body: { email: 'admin@example.invalid', password: adminPassword } });
+  check('administrator sign-in', admin.status === 200 && admin.cookie !== undefined, `status ${admin.status}; Set-Cookie attributes: ${admin.setCookie.map((c) => c.split(';').slice(1).map((s) => s.trim().split('=')[0]).join(',')).join(' | ')}`);
+  const users = await call('GET', '/api/admin/users', { cookie: admin.cookie });
+  const calendarId = users.json?.users?.[0]?.calendar_id;
+  const created = await call('POST', '/api/admin/users', {
+    cookie: admin.cookie,
+    body: { email: 'employee@example.invalid', display_name: 'Synthetic Employee', role: 'employee', password: employeePassword, calendar_id: calendarId },
+  });
+  check('administrator creates a synthetic employee', created.status === 201, `status ${created.status}`);
+  const employee = await call('POST', '/api/auth/login', { body: { email: 'employee@example.invalid', password: employeePassword } });
+  check('employee sign-in', employee.status === 200 && employee.cookie !== undefined);
+  const before = await call('POST', '/api/days/2026-03-02/sessions', {
+    cookie: employee.cookie,
+    body: { start: local('2026-03-02', '09:00'), end: local('2026-03-02', '18:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, reason: 'Synthetic audit record before the backup', breaks: [] },
+  });
+  check('employee records a synthetic session before the backup', before.status === 201, `status ${before.status} ${before.status === 201 ? '' : before.text.slice(0, 200)}`);
+  const sig = await call('POST', '/api/signatures', { cookie: employee.cookie, raw: syntheticPng(40), contentType: 'image/png' });
+  check('employee uploads a synthetic signature', sig.status === 201, `status ${sig.status}`);
+  const payrollDate = '2026-03-20';
+  const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie: employee.cookie });
+  const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
+    cookie: employee.cookie,
+    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: 'Synthetic Employee', incomplete_evidence_acknowledged: true },
+  });
+  check('employee signs off the synthetic period 2026-03-20', signoff.status === 201, `status ${signoff.status} ${signoff.status === 201 ? '' : signoff.text.slice(0, 200)}`);
+  const revisionId = signoff.json?.revision?.id;
+  let pdfReady = false;
+  const started = Date.now();
+  while (!pdfReady && Date.now() - started < 120_000) {
+    const revisions = await call('GET', '/api/revisions', { cookie: employee.cookie });
+    pdfReady = (revisions.json?.revisions ?? []).some((r) => r.id === revisionId && r.pdf_state === 'ready');
+    if (!pdfReady) await sleep(1000);
+  }
+  check('the container runner renders the PDF', pdfReady, `${((Date.now() - started) / 1000).toFixed(1)} s`);
+  writeFileSync(stateFile, JSON.stringify({ adminPassword, employeePassword, sessionBefore: before.json?.session?.id, revisionId }, null, 2));
+} else if (cmd === 'presession') {
+  // Rerun of the seed's first session after a probe error (the seed sent a local offset instead of a UTC instant).
+  const [stateFile] = rest;
+  const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  const employee = await call('POST', '/api/auth/login', { body: { email: 'employee@example.invalid', password: state.employeePassword } });
+  const before = await call('POST', '/api/days/2026-03-02/sessions', {
+    cookie: employee.cookie,
+    body: { start: local('2026-03-02', '09:00'), end: local('2026-03-02', '18:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, reason: 'Synthetic audit record before the backup', breaks: [] },
+  });
+  check('employee records a synthetic session before the backup', before.status === 201, `status ${before.status} ${before.status === 201 ? '' : before.text.slice(0, 200)}`);
+  state.sessionBefore = before.json?.session?.id;
+  writeFileSync(stateFile, JSON.stringify(state, null, 2));
+} else if (cmd === 'postbackup') {
+  const [stateFile] = rest;
+  const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  const employee = await call('POST', '/api/auth/login', { body: { email: 'employee@example.invalid', password: state.employeePassword } });
+  const after = await call('POST', '/api/days/2026-03-03/sessions', {
+    cookie: employee.cookie,
+    body: { start: local('2026-03-03', '09:00'), end: local('2026-03-03', '17:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, reason: 'Synthetic audit record after the backup', breaks: [] },
+  });
+  check('employee records a synthetic session after the backup', after.status === 201, `status ${after.status}`);
+  state.sessionAfter = after.json?.session?.id;
+  writeFileSync(stateFile, JSON.stringify(state, null, 2));
+} else if (cmd === 'check') {
+  const [stateFile, label] = rest;
+  const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  console.log(`== check ${label} at ${base}`);
+  const health = await call('GET', '/api/health');
+  const ready = await call('GET', '/api/ready');
+  check('/api/health 200 with status only', health.status === 200 && JSON.stringify(health.json) === '{"status":"ok"}', health.text);
+  check('/api/ready 200, keys status/schema/data_dir_writable only', ready.status === 200 && Object.keys(ready.json ?? {}).join(',') === 'status,schema,data_dir_writable', ready.text);
+  const employee = await call('POST', '/api/auth/login', { body: { email: 'employee@example.invalid', password: state.employeePassword } });
+  check('employee sign-in', employee.status === 200);
+  const sBefore = await call('GET', `/api/sessions/${state.sessionBefore}`, { cookie: employee.cookie });
+  console.log(`INFO  session written before the backup: status ${sBefore.status}`);
+  if (state.sessionAfter) {
+    const sAfter = await call('GET', `/api/sessions/${state.sessionAfter}`, { cookie: employee.cookie });
+    console.log(`INFO  session written after the backup: status ${sAfter.status}`);
+  }
+  const revisions = await call('GET', '/api/revisions', { cookie: employee.cookie });
+  console.log(`INFO  revisions: ${JSON.stringify((revisions.json?.revisions ?? []).map((r) => ({ no: r.revision_no ?? r.no, pdf_state: r.pdf_state, id_match: r.id === state.revisionId })))}`);
+  const admin = await call('POST', '/api/auth/login', { body: { email: 'admin@example.invalid', password: state.adminPassword } });
+  const ops = await call('GET', '/api/admin/operations', { cookie: admin.cookie });
+  const o = ops.json?.operations ?? ops.json;
+  console.log(`INFO  operations status ${ops.status}`);
+  console.log(`INFO  operations.sender ${JSON.stringify(o?.sender)}`);
+  console.log(`INFO  operations.activation ${JSON.stringify(o?.activation)}`);
+  console.log(`INFO  operations.outbound ${JSON.stringify(o?.outbound)}`);
+  console.log(`INFO  operations.jobs ${JSON.stringify(o?.jobs)}`);
+  console.log(`INFO  operations.backup ${JSON.stringify(o?.backup)}`);
+  console.log(`INFO  operations top-level keys ${JSON.stringify(Object.keys(o ?? {}))}`);
+  const text = ops.text;
+  console.log(`INFO  operations JSON mentions the employee address: ${text.includes('employee@example.invalid')}; the display name: ${text.includes('Synthetic Employee')}; a session id: ${text.includes(String(state.sessionBefore))}`);
+  check('operations JSON holds no password',!text.includes(state.adminPassword) && !text.includes(state.employeePassword));
+  writeFileSync(`${stateFile}.${label}.ops.json`, text);
+}
+console.log(`RESULT ${cmd}: ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

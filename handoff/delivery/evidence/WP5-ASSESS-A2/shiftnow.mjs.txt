@@ -1,0 +1,18 @@
+// WP5-ASSESS-A2 preload (NODE_OPTIONS=--import): moves the wall clock of this Node process to AUDIT_NOW (a constant
+// shift of Date.now() and of `new Date()` without arguments), so a test that truly ignores the wall clock still passes
+// on another date and season. Every Node child process inherits NODE_OPTIONS and AUDIT_NOW.
+const target = Date.parse(process.env.AUDIT_NOW ?? '');
+if (!Number.isNaN(target)) {
+  const RealDate = Date;
+  const shift = target - RealDate.now();
+  class ShiftedDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(RealDate.now() + shift);
+      else super(...args);
+    }
+    static now() {
+      return RealDate.now() + shift;
+    }
+  }
+  globalThis.Date = ShiftedDate;
+}

@@ -1,0 +1,13 @@
+# WP5-ASSESS-A2: the AC-13 test under other machine zones, set at run time (Git Bash drops TZ); output to raw/
+source <task>/env.sh
+cd "$T/src" || exit 2
+PRE="file:///<task>/probe/settz.mjs"
+export NODE_OPTIONS="--import=$PRE --trace-deprecation --pending-deprecation"
+R="node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts --reporter=verbose"
+for zone in Asia/Tokyo Pacific/Kiritimati Etc/UTC America/New_York; do
+  f="$T/raw/06-ac13-zone-$(echo $zone | tr '/' '_').txt"
+  echo "== AC-13 AUDIT_TZ=$zone start $(date -u +%Y-%m-%dT%H:%M:%SZ) NODE_OPTIONS=--import=<task>/probe/settz.mjs" > "$f"
+  echo "node zone check (same NODE_OPTIONS): $(AUDIT_TZ=$zone node -e 'console.log(process.env.TZ, Intl.DateTimeFormat().resolvedOptions().timeZone, new Date().getTimezoneOffset())')" >> "$f"
+  AUDIT_TZ=$zone $R >> "$f" 2>&1
+  echo "== AC-13 AUDIT_TZ=$zone exit $? end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f"
+done

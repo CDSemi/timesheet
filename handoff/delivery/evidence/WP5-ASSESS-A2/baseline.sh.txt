@@ -1,0 +1,28 @@
+# WP5-ASSESS-A2 digest binding: run as `bash baseline.sh <label>`; prints to stdout
+source <task>/env.sh
+label="$1"
+echo "label: $label"
+echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "node: $(node --version)"
+echo "npm: $(npm --version)"
+echo "git: $(git --version)"
+cd "$REPO" || exit 2
+echo "HEAD: $(git rev-parse HEAD)"
+echo "origin/main: $(git rev-parse origin/main)"
+echo "reviewed_commit: $REVIEWED"
+echo "delta base: $BASE"
+echo "repo digest (node scripts/source-digest.mjs): $(node scripts/source-digest.mjs)"
+echo "ls-tree HEAD: $(git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum)"
+echo "ls-tree $REVIEWED: $(git ls-tree -r --format='%(path) %(objectname)' $REVIEWED | grep -v '^handoff/' | LC_ALL=C sort | sha256sum)"
+echo "ls-tree $REVIEWED file count: $(git ls-tree -r --name-only $REVIEWED | grep -vc '^handoff/')"
+echo "ls-tree $BASE (delta base): $(git ls-tree -r --format='%(path) %(objectname)' $BASE | grep -v '^handoff/' | LC_ALL=C sort | sha256sum)"
+echo "git status --short:"
+git status --short
+echo "(end status)"
+if [ -d "$T/src/.git" ]; then
+  cd "$T/src" || exit 3
+  echo "export digest: $(node scripts/source-digest.mjs)"
+  echo "export changes vs initial index (git diff --name-only; untracked non-ignored):"
+  git diff --name-only; git ls-files --others --exclude-standard
+  echo "(end export status)"
+fi

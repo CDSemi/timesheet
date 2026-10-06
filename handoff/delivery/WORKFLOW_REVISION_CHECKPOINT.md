@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741 (WP5-AC13-FREEZE, the integrated AC-13 test; digest 1e59ad31).
+  - HEAD = origin/main = 74d5bfec6700126da4105b5d97f5efe943f896f5 (WP5-REL-FREEZE, the WP5 package-final freeze; digest 0a64a75f).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -955,7 +955,60 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - D-1..D-15 are marked as recommended and pending. The activation instant is
            set through an admin API call, because no screen exists for it.
          - All 14 env keys found; verify 1,759. Digest 0a64a75f (779 files).
-       - Running: WP5-REL-FREEZE (committer), the package-final freeze.
+       - WP5-REL-FREEZE committed and pushed 74d5bfe, the package-final freeze: 28
+         paths, digest 0a64a75f, all checks 0, and no email or host found in the
+         staged docs.
+       - WP5-GATE: **PASS** on 74d5bfe (digest 0a64a75f, 779 files; NAS NOT
+         VERIFIED).
+         - verify 1,759 with 0 deprecation lines; e2e 145/5 skipped.
+         - AC-13 passed 3 times (about 4.1 s each).
+         - Drill: 208 PASS.
+         - `docker compose config` exits 0 for the live, restored and rollback forms.
+         - Env keys present; audit 0; validators PASS; scope clean; Docker clean.
+       - Running, in parallel:
+         - WP5-PILOT (worker, sonnet; handoff only, ports 47780–47789);
+         - WP5-ASSESS-A attempt 2 (fresh opus; area-A delta on 74d5bfe; ports
+           47700–47719).
+       - WP5-PILOT is done (worker, sonnet; author-reported).
+         - `WP5_PILOT_PACKET` EN and VI: 8 synthetic captured messages, 4 PDFs and 4
+           `*-synthetic.png` renders, all viewed.
+         - D-1..D-15 are pending. Digest unchanged; precommit and preflight 0.
+         - Incident: a `python -` heredoc runaway, about 1 GB of output. The
+           coordinator stopped the task and the agent. The owner is asked to delete
+           the output file.
+       - WP5-ASSESS-A attempt 2: **FIX REQUIRED** on 74d5bfe (digest 0a64a75f).
+         - The software passes every area-A check. No application source changed.
+         - The AC-13 test is sound and deterministic, and mutations fail it.
+         - verify 1,759; e2e 145/5 on the rerun, after one `ERR_NO_BUFFER_SPACE` on
+           run 1; probe 26/26.
+         - Findings, both Low and docs/11 only:
+           - WP5-A2-01: the status screen shows no "flag" field;
+           - WP5-A2-02: the deep-link check cannot be done in the capture self-test.
+         - Risks R-A2-1..5. Among them, the WP5-AC13 TZ runs did not actually change
+           the zone.
+       - WP5-FINAL-AUDIT: **FIX REQUIRED** on 74d5bfe (digest 0a64a75f).
+         - B-01 and B-02 are resolved; the restored instance was started for real,
+           bound correctly and came up paused.
+         - Area B: PASS. The console activation step was tried in Edge and is safe.
+         - Findings, both Low:
+           - WP5-F-01: the same status "flag" issue, plus the CLI-refusal wording
+             (runbook and packet);
+           - WP5-F-02: packet section 8 names a freeze that has already happened.
+         - Risks R-F1..R-F7. O-1 (the B-01 severity in WP5_HANDOFF) goes into
+           ACCREC.
+       - WP5-FIXD is done (worker, sonnet; author-reported).
+         - F-01, F-02, A2-01 and A2-02 are fixed, and so are R-A2-1, R-A2-2/R-F1,
+           R-F4, R-F5 and R-F6.
+         - Only docs/11 EN and VI changed outside handoff/, plus the packet.
+         - Parity and Grep are clean; verify 0. Digest 1b8ceae4 (779 files).
+       - Running: WP5-FIXD-FREEZE (committer). It includes a secrets Grep over the
+         audit evidence.
+       - Then:
+         - a freeze;
+         - a regate, which applies TZ inside the process (R-A2-3);
+         - a packet identity refresh;
+         - one fresh recheck;
+         - ACCREC and ACCEPT.
        - Then:
          - WP5-AC13, a committed integrated test (worker-high, sonnet), and its
            freeze;

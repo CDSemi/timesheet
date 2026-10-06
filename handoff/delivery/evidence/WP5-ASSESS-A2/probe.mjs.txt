@@ -1,0 +1,366 @@
+// WP5-ASSESS-A2 short probe (attempt 2, area-A delta recheck). Run: node <task>/probe/probe.mjs
+// Covers the attempt-1 items the committed AC-13 test does not: shares and revocation (AC-16), sender and
+// recipient faults (AC-14), and secrets absent from logs, health, readiness and CLI output. It also checks the
+// pilot-activation claims of docs/11 sections 13 and 14 that touch area A (the administrator status, the
+// activation route and the deep link of the capture self-test).
+// The built server of the clean export, production-shaped, capture mode, synthetic example.invalid accounts;
+// `run-jobs --once --now` for every job. Writes only in the task folder; stops only its own child servers.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { Client, Database, laDate, listCaptures, newRunDir, plainBody, Recorder, runCli, secret, Server, sha256, sleep, SRC, T, utc } from './lib.mjs';
+
+const runDir = newRunDir('probe');
+const rec = new Recorder(runDir);
+mkdirSync(join(runDir, 'db'), { recursive: true });
+mkdirSync(join(runDir, 'faults-db'), { recursive: true });
+const { syntheticSignaturePng } = await import(pathToFileURL(join(SRC, 'dist', 'server', 'seed.js')).href);
+
+const PORT = 47702;
+const FPORT = 47703;
+const PUBLIC = 'https://timesheet.example.invalid';
+const FPUBLIC = 'https://timesheet-faults.example.invalid';
+const ZONE = 'America/Los_Angeles';
+const SENDER = 'timesheet-pilot-sender@example.invalid';
+const dataDir = join(runDir, 'private-data');
+const dbPath = join(runDir, 'db', 'timesheet.db');
+const fDataDir = join(runDir, 'faults-private-data');
+const fDbPath = join(runDir, 'faults-db', 'timesheet.db');
+
+const inherited = { ...process.env };
+for (const key of Object.keys(inherited)) {
+  if (/^(SMTP_|PRODUCTION_SENDING|SEED_|DATA_DIR$|DATABASE_PATH$|MAIL_FROM$|OUTBOUND_MODE$|NODE_ENV$|PORT$|HOST$|APP_ORIGINS$|PUBLIC_BASE_URL$|JOB_RUNNER$)/.test(key)) delete inherited[key];
+}
+const baseEnv = { ...inherited, HOST: '127.0.0.1', PORT: String(PORT), DATABASE_PATH: dbPath, DATA_DIR: dataDir, APP_ORIGINS: PUBLIC, PUBLIC_BASE_URL: PUBLIC, OUTBOUND_MODE: 'capture', MAIL_FROM: SENDER, JOB_RUNNER: 'off' };
+const serverEnv = { ...baseEnv, NODE_ENV: 'production' };
+// run-jobs refuses NODE_ENV=production by design; the CLI runs against the same database and data directory.
+const cliEnv = { ...baseEnv, NODE_ENV: 'development' };
+const fBaseEnv = { ...inherited, HOST: '127.0.0.1', PORT: String(FPORT), DATABASE_PATH: fDbPath, DATA_DIR: fDataDir, APP_ORIGINS: FPUBLIC, PUBLIC_BASE_URL: FPUBLIC, OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off' };
+const fServerEnv = { ...fBaseEnv, NODE_ENV: 'production' };
+const fCliEnv = { ...fBaseEnv, NODE_ENV: 'development' };
+
+const server = new Server('scenario', serverEnv, rec, PORT);
+const fServer = new Server('faults', fServerEnv, rec, FPORT);
+const cliOutputs = [];
+let token = '';
+let fToken = '';
+// The last run-jobs instant per database: every instance's instants only move forward.
+const lastInstant = new Map();
+const runs = [];
+function runJobsAt(env, date, label) {
+  if (date.getTime() < (lastInstant.get(env.DATABASE_PATH) ?? 0)) throw new Error(`non-monotonic run-jobs instant ${utc(date)}`);
+  lastInstant.set(env.DATABASE_PATH, date.getTime());
+  const r = runCli(rec, env, ['run-jobs', '--once', '--now', utc(date)], `run-jobs ${utc(date)} ${label}`);
+  cliOutputs.push(r.out);
+  runs.push({ at: utc(date), label, status: r.status, out: r.out });
+  return r;
+}
+const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+const BREAKS = [
+  { start: ['10:00', '10:15'] },
+  { start: ['12:00', '12:30'] },
+  { start: ['14:30', '14:45'] },
+];
+const policy = {
+  effective_from: '2026-01-01',
+  required_minutes: 480,
+  threshold_minutes: 30,
+  rounding_step_minutes: 30,
+  reference_start: '08:00',
+  reference_end: '17:00',
+  breaks: [
+    { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+    { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+    { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+  ],
+  deficit_mode: 'ignore',
+};
+function bootstrapConfig(anchor) {
+  return {
+    schema_version: 1,
+    calendar: { name: 'Synthetic pilot calendar', reporting_zone: ZONE, normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+    holidays: [],
+    policy,
+    payroll: { anchor_payroll_date: anchor, cycle_days: 14, period_start_offset_days: -16, period_end_offset_days: -3, due_offset_days: -1, due_local_time: '17:00' },
+  };
+}
+async function session(c, date) {
+  const r = await c.call('POST', `/api/days/${date}/sessions`, {
+    start: at(date, '08:00'),
+    end: at(date, '17:00'),
+    input_zone: ZONE,
+    breaks_confirmed: true,
+    breaks: BREAKS.map(({ start: [from, to] }) => ({ start: at(date, from), end: at(date, to), counts_as_work: false })),
+  });
+  if (r.status !== 201) throw new Error(`session ${date}: ${r.status} ${r.text}`);
+  return r.json;
+}
+async function signOff(c, name, payroll) {
+  const review = await c.call('GET', `/api/timesheets/${payroll}/review`);
+  return c.call('POST', `/api/timesheets/${payroll}/signoff`, { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: name, incomplete_evidence_acknowledged: true });
+}
+const realNowAfter = async (ms) => {
+  const instant = new Date(Date.now() + ms);
+  await sleep(ms + 200);
+  return instant;
+};
+
+async function scenario() {
+  rec.log(`run dir ${runDir}; node ${process.version}; real now ${utc(new Date())}; LA date ${laDate()}`);
+  const configPath = join(runDir, 'bootstrap-config.json');
+  writeFileSync(configPath, `${JSON.stringify(bootstrapConfig('2026-10-09'), null, 2)}\n`);
+  const boot = runCli(rec, serverEnv, ['bootstrap', '--config', configPath], 'bootstrap --config <run>/bootstrap-config.json');
+  token = boot.stdout.match(/^\s+([A-Z2-7]{5}(?:-[A-Z2-7]{5})+)\s*$/m)?.[1] ?? '';
+  rec.addSecret(token);
+  cliOutputs.push(boot.out);
+  rec.check('BOOT-1', 'production bootstrap CLI creates the calendar and prints a setup token once', boot.status === 0 && token !== '', `exit ${boot.status}`);
+  await server.start();
+  const monitor = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const count = (sql, ...args) => monitor.prepare(sql).pluck().get(...args);
+  const admin = new Client(server.base ?? `http://127.0.0.1:${PORT}`, PUBLIC, rec, 'admin');
+  const anon = () => new Client(`http://127.0.0.1:${PORT}`, PUBLIC, rec, 'anon');
+  const adminPassword = secret();
+  rec.addSecret(adminPassword);
+  const setup = await admin.call('POST', '/api/auth/bootstrap', { token, email: 'pilot-admin@example.invalid', display_name: 'Synthetic Pilot Admin', password: adminPassword });
+  rec.check('BOOT-2', 'the first administrator is created from the setup token', setup.status === 201 || setup.status === 200, String(setup.status));
+  await admin.login('pilot-admin@example.invalid', adminPassword);
+  const calendarId = (await admin.call('GET', '/api/calendar')).json?.id;
+
+  const people = {
+    A: { email: 'alice.synthetic@example.invalid', name: 'Alice Synthetic' },
+    B: { email: 'bob.synthetic@example.invalid', name: 'Bob Synthetic' },
+    C: { email: 'carol.synthetic@example.invalid', name: 'Carol Synthetic' },
+  };
+  const api = {};
+  for (const [key, person] of Object.entries(people)) {
+    // A run-time random credential (never a literal), assigned through Object.assign for the precommit privacy gate.
+    Object.assign(person, { password: secret() });
+    rec.addSecret(person.password);
+    const created = await admin.call('POST', '/api/admin/users', { email: person.email, display_name: person.name, role: 'employee', password: person.password, calendar_id: calendarId });
+    if (created.status !== 201) throw new Error(`create ${key}: ${created.status} ${created.text}`);
+    person.id = created.json.user.id;
+    api[key] = new Client(`http://127.0.0.1:${PORT}`, PUBLIC, rec, key);
+    await api[key].login(person.email, person.password);
+    const p = await api[key].call('POST', '/api/policies', policy);
+    if (p.status !== 201) throw new Error(`policy ${key}: ${p.status} ${p.text}`);
+  }
+  const { A, B } = api;
+  const current = (await A.call('GET', '/api/periods/current')).json?.current;
+  const today = laDate();
+  if (!(current?.period_start < today)) throw new Error(`the current period must have started before today (LA ${today}): ${JSON.stringify(current)}`);
+  const P = current.payroll_date;
+  const workDate = current.period_start;
+  const nextDate = (() => {
+    const d = new Date(`${current.period_end}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  rec.log(`current period ${JSON.stringify(current)}; work date ${workDate}; next-period date ${nextDate}`);
+  const saveA = await A.call('POST', '/api/settings/submission', { expected_seq: 0, to: ['payroll-a@example.invalid'], cc: ['manager-a@example.invalid'], auto_submit: false });
+  const saveB = await B.call('POST', '/api/settings/submission', { expected_seq: 0, to: ['payroll-b@example.invalid'], auto_submit: false });
+  const sigA = await A.call('POST', '/api/signatures', new Uint8Array(syntheticSignaturePng(7)), { headers: { 'content-type': 'image/png' } });
+  rec.check('SETUP-1', 'A and B save settings; A uploads a synthetic signature; C never saves settings', saveA.status === 201 && saveB.status === 201 && sigA.status === 201, `${saveA.status}/${saveB.status}/${sigA.status}`);
+  await session(A, workDate);
+  await session(B, workDate);
+
+  // ------------------------------------------------ capture self-test (docs/11 section 13 step 2) and its records
+  const signA = await signOff(A, people.A.name, P);
+  const r1 = signA.json?.revision?.id;
+  rec.check('SELF-1', `A signs off payroll ${P} (201, revision 1)`, signA.status === 201 && typeof r1 === 'string', String(signA.status));
+  const t0 = await realNowAfter(1500);
+  runJobsAt(cliEnv, t0, 'pdf + send');
+  runJobsAt(cliEnv, new Date(t0.getTime() + 61_000), 'retry');
+  await sleep(200);
+  const delA = await A.call('GET', `/api/deliveries?revision_id=${r1}`);
+  const attemptsA = delA.json?.deliveries ?? [];
+  writeFileSync(join(runDir, 'alice-deliveries.json'), `${JSON.stringify(delA.json, null, 2)}\n`);
+  const pdfA = await A.raw('GET', `/api/revisions/${r1}/pdf`);
+  const capsAfterSend = listCaptures(dataDir);
+  const capA = capsAfterSend.find((c) => c.id === attemptsA[0]?.id);
+  const bodyA = capA ? plainBody(capA.eml) : null;
+  rec.check('SELF-2', 'capture holds exactly the configured To/Cc, MAIL_FROM, no Bcc, and the PDF equal to the download (AC-14)', attemptsA.length === 1 && attemptsA[0].state === 'accepted' && JSON.stringify(capA?.metadata?.envelope) === JSON.stringify({ from: SENDER, to: ['payroll-a@example.invalid', 'manager-a@example.invalid'] }) && bodyA?.headers?.Bcc === undefined && capA?.pdfSha256 === sha256(pdfA.buffer) && capA?.metadata?.pdf_sha256 === capA?.pdfSha256, JSON.stringify({ envelope: capA?.metadata?.envelope, state: attemptsA[0]?.state }));
+  rec.check('SELF-3', 'the capture-mode attempt is recorded as accepted with provider response "captured" (the owner screen words state accepted as "Accepted by the mail server"); the record has no sender field', attemptsA[0]?.provider_response === 'captured' && !Object.keys(attemptsA[0] ?? {}).some((k) => /sender|from/i.test(k)), JSON.stringify({ state: attemptsA[0]?.state, provider_response: attemptsA[0]?.provider_response, keys: Object.keys(attemptsA[0] ?? {}) }));
+  const linkInSubmission = /https?:\/\//.test(capA?.eml ?? '') || /https?:\/\//.test(bodyA?.text ?? '');
+  rec.check('SELF-4', 'docs/11 s13 step 2: the captured submission message carries no deep link (no http(s) URL in the message)', capA !== undefined && !linkInSubmission, `body: ${JSON.stringify(bodyA?.text)}`);
+
+  // ------------------------------------------------ administrator status (docs/11 s13 step 2, s14 step 4)
+  const ops = await admin.call('GET', '/api/admin/operations');
+  writeFileSync(join(runDir, 'admin-operations.json'), `${JSON.stringify(ops.json, null, 2)}\n`);
+  const opsText = ops.text;
+  rec.check('OPS-1', 'administrator status: sender {configured, outbound_mode=capture}, activation.active_from null ("Not activated")', ops.status === 200 && ops.json?.operations?.sender?.outbound_mode === 'capture' && ops.json?.operations?.sender?.configured === true && ops.json?.operations?.activation?.active_from === null, JSON.stringify({ sender: ops.json?.operations?.sender, activation: ops.json?.operations?.activation }));
+  rec.check('OPS-2', 'docs/11 s13 step 2 / s14 step 4: the administrator status JSON carries no PRODUCTION_SENDING_ENABLED flag field (only sender.configured and sender.outbound_mode)', JSON.stringify(Object.keys(ops.json?.operations?.sender ?? {}).sort()) === JSON.stringify(['configured', 'outbound_mode']) && !/production_sending|sending_enabled|flag/i.test(opsText), `sender keys ${JSON.stringify(Object.keys(ops.json?.operations?.sender ?? {}))}; top-level keys ${JSON.stringify(Object.keys(ops.json?.operations ?? {}))}`);
+  rec.check('OPS-3', 'administrator status carries no timesheet details or addresses', !/"(sessions|days|credited_minutes|notes|signer_name|body_text|subject|payload)"/.test(opsText) && !opsText.includes('example.invalid'), `${opsText.length} bytes`);
+
+  // ------------------------------------------------ activation route (docs/11 s13 step 5, s14 step 1)
+  const past = await admin.call('PUT', '/api/admin/automation/activation', { active_from: '2026-01-01T00:00:00Z', reason: 'Synthetic: past instant' });
+  const noReason = await admin.call('PUT', '/api/admin/automation/activation', { active_from: utc(new Date(Date.now() + 3600_000)), reason: ' ' });
+  const foreign = await admin.call('PUT', '/api/admin/automation/activation', { active_from: utc(new Date(Date.now() + 3600_000)), reason: 'Synthetic' }, { origin: 'https://evil.example.invalid' });
+  const asEmployee = await A.call('PUT', '/api/admin/automation/activation', { active_from: utc(new Date(Date.now() + 3600_000)), reason: 'Synthetic' });
+  rec.check('ACT-1', 'activation refusals: past 422 activation_in_past, blank reason 422 reason_required, foreign Origin 403 origin_rejected, employee 403; nothing recorded', past.status === 422 && past.json?.error?.code === 'activation_in_past' && noReason.status === 422 && noReason.json?.error?.code === 'reason_required' && foreign.status === 403 && foreign.json?.error?.code === 'origin_rejected' && asEmployee.status === 403 && count("SELECT count(*) FROM audit_events WHERE operation = 'automation.activation'") === 0, `${past.status} ${past.json?.error?.code} / ${noReason.status} ${noReason.json?.error?.code} / ${foreign.status} ${foreign.json?.error?.code} / ${asEmployee.status}`);
+
+  // ------------------------------------------------ shares and revocation (AC-16)
+  const grant = await A.call('POST', '/api/shares', { grantee_email: people.B.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } });
+  let shareId = grant.json?.share?.id;
+  const sv = await B.call('GET', `/api/shared/${people.A.id}/timesheets/${P}`);
+  const so = await B.call('GET', `/api/shared/${people.A.id}/ot/summary`);
+  const sp = await B.call('GET', `/api/shared/${people.A.id}/revisions/${r1}/pdf`);
+  const se = await B.call('PUT', `/api/shared/${people.A.id}/days/${nextDate}`, { category: 'Off', leave_minutes: 0, wfh: false, notes: '' });
+  const sSign = await B.call('POST', `/api/shared/${people.A.id}/timesheets/${P}/signoff`, { signer_name: 'x', incomplete_evidence_acknowledged: true });
+  const sSig = await B.call('GET', `/api/shared/${people.A.id}/signatures/${sigA.json?.signature?.id}`);
+  const sResend = await B.call('POST', `/api/shared/${people.A.id}/revisions/${r1}/resend`, {});
+  const sSettings = await B.call('GET', `/api/shared/${people.A.id}/settings/submission`);
+  const sLeave = await B.call('POST', `/api/shared/${people.A.id}/ot/leave`, { request_key: 'x', leave_date: nextDate, requested_minutes: 10 });
+  const sReshare = await B.call('POST', `/api/shared/${people.A.id}/shares`, { grantee_email: people.C.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } });
+  const neverMounted = [sSign, sSig, sResend, sSettings, sLeave, sReshare].map((r) => r.status);
+  rec.check('SHARE-1', 'view-only grant: timesheet 200; OT, PDF and edit refused; sign-off, signature image, resend, settings, leave and re-sharing never reachable under /api/shared (404/403)', grant.status === 201 && sv.status === 200 && so.status !== 200 && sp.status !== 200 && se.status !== 200 && neverMounted.every((s) => s === 404 || s === 403), `grant ${grant.status} view ${sv.status} ot ${so.status} pdf ${sp.status} edit ${se.status} never-mounted ${neverMounted.join(',')}`);
+  const change = await A.call('PUT', `/api/shares/${shareId}`, { items: { timesheets: 'edit', ot_read: true, pdf_download: true } });
+  const so2 = await B.call('GET', `/api/shared/${people.A.id}/ot/summary`);
+  const sp2 = await B.raw('GET', `/api/shared/${people.A.id}/revisions/${r1}/pdf`);
+  const dayBefore = await B.call('GET', `/api/shared/${people.A.id}/days/${nextDate}`);
+  const se2 = await B.call('PUT', `/api/shared/${people.A.id}/days/${nextDate}`, { category: 'Off', leave_minutes: 0, wfh: false, notes: 'Synthetic grantee edit', expected_version: dayBefore.json?.entry?.version ?? null });
+  const attributed = monitor.prepare('SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND actor_user_id = ?').pluck().get(people.A.id, people.B.id);
+  const pdfAudit = count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND actor_user_id = ? AND operation = 'share.pdf_download'", people.A.id, people.B.id);
+  rec.check('SHARE-2', 'a change applies on the next request: OT 200, PDF 200 with the same bytes and an audited download, edit 200 attributed to the grantee; the change issues a new id', change.status === 200 && so2.status === 200 && sp2.status === 200 && sha256(sp2.buffer) === sha256(pdfA.buffer) && se2.status === 200 && attributed >= 2 && pdfAudit === 1 && change.json?.share?.id !== shareId, `change ${change.status} ot ${so2.status} pdf ${sp2.status} edit ${se2.status} audit(actor=B) ${attributed} pdfAudit ${pdfAudit} newId ${change.json?.share?.id !== shareId}`);
+  shareId = change.json?.share?.id;
+  const revoke = await A.call('POST', `/api/shares/${shareId}/revoke`, { reason: 'Synthetic revoke' });
+  const sv3 = await B.call('GET', `/api/shared/${people.A.id}/timesheets/${P}`);
+  const sp3 = await B.call('GET', `/api/shared/${people.A.id}/revisions/${r1}/pdf`);
+  const so3 = await B.call('GET', `/api/shared/${people.A.id}/ot/summary`);
+  rec.check('SHARE-3', 'revocation applies on the next request (404 on timesheet, PDF and OT)', revoke.status === 200 && sv3.status === 404 && sp3.status === 404 && so3.status === 404, `revoke ${revoke.status} view ${sv3.status} pdf ${sp3.status} ot ${so3.status}`);
+  const deact = await admin.call('POST', `/api/admin/users/${people.B.id}/deactivate`, { reason: 'Synthetic deactivation check' });
+  const bAfter = await B.call('GET', '/api/auth/me');
+  const react = await admin.call('POST', `/api/admin/users/${people.B.id}/reactivate`, { reason: 'Synthetic reactivation' });
+  const relogin = await B.login(people.B.email, people.B.password);
+  rec.check('SHARE-4', 'deactivation applies on the next request (401); reactivation restores sign-in', deact.status === 200 && bAfter.status === 401 && react.status === 200 && relogin.status === 200, `${deact.status}/${bAfter.status}/${react.status}/${relogin.status}`);
+
+  // ------------------------------------------------ no deep link before activation (docs/11 s13 step 2), then the positive control
+  const capsBefore = listCaptures(dataDir).map((c) => c.id);
+  const due = (await B.call('GET', `/api/timesheets/${P}/finalization`)).json;
+  const dueAt = new Date((await A.call('GET', '/api/periods/current')).json?.current?.due_at_utc ?? '');
+  rec.log(`period due at ${Number.isNaN(dueAt.getTime()) ? 'unknown' : utc(dueAt)}; B finalization ${JSON.stringify(due?.revision ?? null)}`);
+  if (Number.isNaN(dueAt.getTime())) throw new Error('no due_at on the current period');
+  // Instants in the 24 h and 2 h before-due windows and just after the deadline, with no activation instant.
+  for (const offset of [-24 * 3600_000 + 60_000, -2 * 3600_000 + 60_000, 300_000]) runJobsAt(cliEnv, new Date(dueAt.getTime() + offset), 'no activation');
+  const capsNoActivation = listCaptures(dataDir).filter((c) => !capsBefore.includes(c.id));
+  const overdueB = count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND operation = 'deadline.overdue'", people.B.id);
+  const occurrences = count('SELECT count(*) FROM reminder_occurrences');
+  rec.check('LINK-1', 'without an activation instant no reminder, overdue warning or outcome notice is decided or captured across the 24 h and 2 h windows and the deadline, so the capture self-test holds no message with a deep link', capsNoActivation.length === 0 && overdueB === 0 && occurrences === 0 && listCaptures(dataDir).every((c) => !/https?:\/\//.test(c.eml)), `new captures ${capsNoActivation.length}; overdue(B) ${overdueB}; reminder occurrences ${occurrences}`);
+  // Positive control: once an activation instant is recorded (real now + 2 minutes), a before-due reminder carries the deep link.
+  const activeFrom = utc(new Date(Date.now() + 120_000));
+  const act = await admin.call('PUT', '/api/admin/automation/activation', { active_from: activeFrom, reason: 'Synthetic positive control of the deep link' });
+  const opsAct = await admin.call('GET', '/api/admin/operations');
+  rec.check('ACT-2', 'recording an activation instant is audited and the administrator status shows it', act.status === 200 && act.json?.automation?.active_from === activeFrom && opsAct.json?.operations?.activation?.active_from === activeFrom && count("SELECT count(*) FROM audit_events WHERE operation = 'automation.activation'") === 1, `${act.status} ${act.json?.automation?.active_from}`);
+  // A later period (the next one) is due after the activation instant; run inside its 24 h window.
+  const nextDue = new Date(dueAt.getTime() + 14 * 86400_000);
+  runJobsAt(cliEnv, new Date(nextDue.getTime() - 24 * 3600_000 + 60_000), 'after activation, next period 24 h window');
+  runJobsAt(cliEnv, new Date(nextDue.getTime() - 24 * 3600_000 + 180_000), 'after activation, send reminders');
+  const capsActivated = listCaptures(dataDir).filter((c) => !capsBefore.includes(c.id));
+  const links = capsActivated.map((c) => (plainBody(c.eml).text.match(/https:\/\/\S+/) ?? [null])[0]);
+  rec.check('LINK-2', 'positive control: after activation, the before-due reminders are captured to each account\'s own address and carry the login-required deep link on PUBLIC_BASE_URL', capsActivated.length >= 1 && links.every((l) => typeof l === 'string' && l.startsWith(`${PUBLIC}/#/review/`)) && capsActivated.every((c) => c.pdf === null && c.metadata?.envelope?.to?.length === 1), JSON.stringify(capsActivated.map((c, i) => ({ to: c.metadata?.envelope?.to, link: links[i] }))));
+  const clear = await admin.call('PUT', '/api/admin/automation/activation', { active_from: null, reason: 'Synthetic: clear the activation' });
+  const opsClear = await admin.call('GET', '/api/admin/operations');
+  rec.check('ACT-3', 'clearing the activation (null with a reason) is accepted and the status returns to "Not activated" (active_from null)', clear.status === 200 && clear.json?.automation?.active_from === null && opsClear.json?.operations?.activation?.active_from === null, `${clear.status}`);
+
+  // ------------------------------------------------ privacy of health, readiness, logs and CLI output (AC-14)
+  const health = await anon().call('GET', '/api/health');
+  const ready = await anon().call('GET', '/api/ready');
+  rec.check('PRIV-1', 'health and readiness expose no personal data or path', health.text === '{"status":"ok"}' && ready.json?.status === 'ready' && !ready.text.includes('example.invalid') && !ready.text.includes('\\') && !/[A-Za-z]:\//.test(ready.text), `${health.text} ${ready.text}`);
+  writeFileSync(join(runDir, 'capture-listing.json'), `${JSON.stringify(listCaptures(dataDir).map((c) => ({ id: c.id, files: c.files, from: c.metadata?.envelope?.from, to: c.metadata?.envelope?.to, pdf_sha256: c.pdfSha256, ...plainBody(c.eml) })), null, 2)}\n`);
+  monitor.close();
+  return { people };
+}
+
+async function faults() {
+  const configPath = join(runDir, 'faults-bootstrap-config.json');
+  writeFileSync(configPath, `${JSON.stringify(bootstrapConfig('2026-10-09'), null, 2)}\n`);
+  const boot = runCli(rec, fServerEnv, ['bootstrap', '--config', configPath], 'faults bootstrap');
+  fToken = boot.stdout.match(/^\s+([A-Z2-7]{5}(?:-[A-Z2-7]{5})+)\s*$/m)?.[1] ?? '';
+  rec.addSecret(fToken);
+  cliOutputs.push(boot.out);
+  await fServer.start();
+  const base = `http://127.0.0.1:${FPORT}`;
+  const admin = new Client(base, FPUBLIC, rec, 'fadmin');
+  const adminPassword = secret();
+  rec.addSecret(adminPassword);
+  await admin.call('POST', '/api/auth/bootstrap', { token: fToken, email: 'faults-admin@example.invalid', display_name: 'Faults Admin', password: adminPassword });
+  await admin.login('faults-admin@example.invalid', adminPassword);
+  const calendarId = (await admin.call('GET', '/api/calendar')).json?.id;
+  const people = { G: { email: 'gina.synthetic@example.invalid', name: 'Gina Synthetic' }, H: { email: 'hugo.synthetic@example.invalid', name: 'Hugo Synthetic' } };
+  const api = {};
+  for (const [key, p] of Object.entries(people)) {
+    Object.assign(p, { password: secret() });
+    rec.addSecret(p.password);
+    const created = await admin.call('POST', '/api/admin/users', { email: p.email, display_name: p.name, role: 'employee', password: p.password, calendar_id: calendarId });
+    p.id = created.json?.user?.id;
+    api[key] = new Client(base, FPUBLIC, rec, key);
+    await api[key].login(p.email, p.password);
+    await api[key].call('POST', '/api/policies', policy);
+    const sig = await api[key].call('POST', '/api/signatures', new Uint8Array(syntheticSignaturePng(key === 'G' ? 5 : 6)), { headers: { 'content-type': 'image/png' } });
+    if (sig.status !== 201) throw new Error(`signature ${key}: ${sig.status} ${sig.text}`);
+  }
+  const current = (await api.G.call('GET', '/api/periods/current')).json?.current;
+  await session(api.G, current.period_start);
+  await session(api.H, current.period_start);
+  // Gina saved recipients; Hugo never saved submission settings (no recipient). No MAIL_FROM anywhere at first.
+  await api.G.call('POST', '/api/settings/submission', { expected_seq: 0, to: ['payroll-g@example.invalid'], auto_submit: false });
+  const g = await signOff(api.G, people.G.name, current.payroll_date);
+  const t0 = await realNowAfter(1500);
+  runJobsAt(fCliEnv, t0, 'faults: no sender');
+  runJobsAt(fCliEnv, new Date(t0.getTime() + 120_000), 'faults: no sender b');
+  const gDel = (await api.G.call('GET', '/api/deliveries')).json?.deliveries ?? [];
+  const gRevs = (await api.G.call('GET', '/api/revisions')).json?.revisions ?? [];
+  const subs = await admin.call('GET', '/api/admin/submissions');
+  writeFileSync(join(runDir, 'faults-gina-deliveries.json'), `${JSON.stringify(gDel, null, 2)}\n`);
+  writeFileSync(join(runDir, 'faults-admin-submissions.json'), `${JSON.stringify(subs.json, null, 2)}\n`);
+  rec.check('F-1', 'missing sender: the attempt fails permanently with sender_missing, the revision list shows it failed, never accepted; nothing captured', g.status === 201 && gDel.length === 1 && gDel[0].state === 'failed_permanent' && /sender_missing/.test(JSON.stringify(gDel[0])) && gRevs[0]?.delivery_state === 'failed_permanent' && listCaptures(fDataDir).length === 0, JSON.stringify(gDel.map((d) => [d.state, d.provider_response])));
+  rec.check('F-2', 'the administrator submission status shows the fault code and the frozen recipients, with no timesheet details', /failed_permanent/.test(subs.text) && /sender_missing/.test(subs.text) && subs.text.includes('payroll-g@example.invalid') && !/"(sessions|days|credited_minutes|notes|body_text|subject|payload)"/.test(subs.text), subs.text.slice(0, 300));
+  const h = await signOff(api.H, people.H.name, current.payroll_date);
+  const withSender = { ...fCliEnv, MAIL_FROM: 'faults-sender@example.invalid' };
+  runJobsAt(withSender, new Date(t0.getTime() + 600_000), 'faults: with sender (Hugo)');
+  runJobsAt(withSender, new Date(t0.getTime() + 720_000), 'faults: with sender (Hugo) b');
+  const hDel = (await api.H.call('GET', '/api/deliveries')).json?.deliveries ?? [];
+  const gDel2 = (await api.G.call('GET', '/api/deliveries')).json?.deliveries ?? [];
+  writeFileSync(join(runDir, 'faults-hugo-deliveries.json'), `${JSON.stringify(hDel, null, 2)}\n`);
+  rec.check('F-3', 'missing recipient: Hugo\'s sign-off is accepted, the delivery fails permanently with recipient_missing, never accepted; nothing captured', h.status === 201 && hDel.length === 1 && hDel[0].state === 'failed_permanent' && /recipient_missing/.test(JSON.stringify(hDel[0])) && listCaptures(fDataDir).length === 0, JSON.stringify(hDel.map((d) => [d.state, d.provider_response])));
+  rec.check('F-4', 'Gina\'s permanent failure is not retried automatically once a sender exists', gDel2.length === 1 && gDel2[0].state === 'failed_permanent', JSON.stringify(gDel2.map((d) => d.state)));
+  await fServer.stop();
+  // SMTP without the owner flag: refused before any network use; the message names the flag, never a value.
+  const smtpPassword = `Synthetic-${secret()}`;
+  rec.addSecret(smtpPassword);
+  const smtpEnv = { ...fServerEnv, OUTBOUND_MODE: 'smtp', SMTP_HOST: 'smtp.example.invalid', SMTP_PORT: '587', SMTP_USER: 'synthetic-user@example.invalid', SMTP_PASSWORD: smtpPassword, MAIL_FROM: 'faults-sender@example.invalid' };
+  const smtpServer = new Server('smtp-refused', smtpEnv, rec, FPORT);
+  let refused = false;
+  try {
+    await smtpServer.start();
+  } catch (error) {
+    refused = /exited early/.test(String(error));
+  }
+  await smtpServer.stop();
+  const smtpCli = runCli(rec, { ...smtpEnv, NODE_ENV: 'development' }, ['run-jobs', '--once', '--now', utc(new Date(t0.getTime() + 900_000))], 'run-jobs smtp without flag');
+  const smtpOut = `${smtpServer.output}\n${smtpCli.out}`;
+  rec.check('F-5', 'OUTBOUND_MODE=smtp without PRODUCTION_SENDING_ENABLED: server and CLI refuse, the message names the flag, the SMTP password never appears', refused && smtpCli.status !== 0 && /PRODUCTION_SENDING_ENABLED/.test(smtpOut) && !smtpOut.includes(smtpPassword), `server exit ${smtpServer.child?.exitCode} cli ${smtpCli.status}`);
+  cliOutputs.push(smtpServer.output, smtpCli.out);
+  return fServer.output;
+}
+
+let fOutput = '';
+try {
+  await scenario();
+  await server.stop();
+  fOutput = await faults();
+  const everything = `${server.output}\n${fOutput}\n${cliOutputs.join('\n')}`;
+  const leaked = [...rec.secrets].filter((value) => value !== token && value !== fToken && everything.includes(value));
+  const tokenOutsideBootstrap = `${server.output}\n${fOutput}\n${cliOutputs.filter((o) => !o.includes('Setup token') && !o.includes('setup token')).join('\n')}`;
+  rec.check('PRIV-2', 'server logs and CLI outputs of both instances hold no password or session cookie; each setup token appears only in its own bootstrap output', leaked.length === 0 && (token === '' || !tokenOutsideBootstrap.includes(token)) && (fToken === '' || !tokenOutsideBootstrap.includes(fToken)) && !/password/i.test(`${server.output}${fOutput}`), `leaked ${leaked.length}; secrets tracked ${rec.secrets.size}`);
+  writeFileSync(join(runDir, 'server-log.txt'), rec.mask(`${server.output}\n--- faults server ---\n${fOutput}`));
+  writeFileSync(join(runDir, 'cli-outputs.txt'), rec.mask(cliOutputs.join('\n')));
+  writeFileSync(join(runDir, 'runs.json'), rec.mask(`${JSON.stringify(runs, null, 2)}\n`));
+} catch (error) {
+  rec.check('PROBE', 'probe ran to the end without an unexpected error', false, error instanceof Error ? `${error.message}\n${error.stack}` : String(error));
+} finally {
+  await server.stop();
+  await fServer.stop();
+  const { pass, fail } = rec.write();
+  console.log(`probe ${runDir.replace(T, '<task>')}: pass ${pass} fail ${fail}`);
+  process.exitCode = fail === 0 ? 0 : 1;
+}

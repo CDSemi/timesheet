@@ -1,0 +1,15 @@
+// WP5-ASSESS-A2 read-only inspection of a probe run database. Run: node <task>/probe/inspect.mjs <run-name>
+import { join } from 'node:path';
+import { Database, T } from './lib.mjs';
+
+const run = process.argv[2] ?? 'probe-2';
+const db = new Database(join(T, 'runs', run, 'db', 'timesheet.db'), { readonly: true, fileMustExist: true });
+const rows = (sql, ...args) => db.prepare(sql).all(...args);
+console.log(`run ${run}`);
+console.log('users:', JSON.stringify(rows("SELECT substr(id,1,8) AS id, email, created_at, status FROM users ORDER BY created_at")));
+console.log('settings:', JSON.stringify(rows('SELECT substr(user_id,1,8) AS user_id, seq, auto_submit, auto_submit_effective_from, created_at FROM submission_settings ORDER BY created_at')));
+console.log('activation audit:', JSON.stringify(rows("SELECT occurred_at, after_json FROM audit_events WHERE operation = 'automation.activation' ORDER BY rowid")));
+console.log('overdue audit:', JSON.stringify(rows("SELECT substr(owner_user_id,1,8) AS owner, entity_id, occurred_at, after_json FROM audit_events WHERE operation = 'deadline.overdue'")));
+console.log('reminder occurrences:', JSON.stringify(rows('SELECT substr(user_id,1,8) AS user_id, kind, occurrence_key, disposition, decided_at FROM reminder_occurrences ORDER BY decided_at')));
+console.log('jobs by kind/state:', JSON.stringify(rows('SELECT kind, state, count(*) AS n FROM jobs GROUP BY kind, state ORDER BY kind, state')));
+db.close();

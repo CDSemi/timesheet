@@ -1,0 +1,36 @@
+// Reads a backup folder read-only: manifest keys and file hashes, the activation audit trail and the operations
+// state of the database copy. Prints no personal field. Usage: node backup-facts.mjs <backup-folder>
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const require = createRequire('file:///<task>/src/package.json');
+const Database = require('better-sqlite3');
+const folder = process.argv[2];
+const manifestText = readFileSync(join(folder, 'manifest.json'), 'utf8');
+const manifest = JSON.parse(manifestText);
+function keys(value, prefix = '') {
+  if (Array.isArray(value)) return value.length ? keys(value[0], `${prefix}[]`) : [`${prefix}[]`];
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([k, v]) => [prefix ? `${prefix}.${k}` : k, ...keys(v, prefix ? `${prefix}.${k}` : k)]);
+}
+console.log(`manifest keys: ${JSON.stringify([...new Set(keys(manifest))])}`);
+console.log(`manifest app_version ${manifest.app_version ?? manifest.app?.version}, schema ${manifest.schema_version}`);
+const secretLike = /(PASSWORD|SMTP_|APP_ORIGINS|PUBLIC_BASE_URL|MAIL_FROM|PRODUCTION_SENDING|TRUSTED_PROXY|OUTBOUND_MODE)/i.test(manifestText);
+console.log(`manifest mentions a configuration key or secret: ${secretLike}`);
+const files = manifest.files ?? [];
+// Run 1 of this probe guessed the stored file names wrongly; hash every stored file and match by SHA-256.
+const stored = new Set(readdirSync(join(folder, 'files')).map((name) => createHash('sha256').update(readFileSync(join(folder, 'files', name))).digest('hex')));
+const ok = files.filter((f) => stored.has(f.sha256)).length;
+console.log(`manifest files: ${files.length} (${JSON.stringify(files.map((f) => f.kind))}); stored files: ${stored.size}; manifest hashes found on disk: ${ok}`);
+const dbHash = createHash('sha256').update(readFileSync(join(folder, 'timesheet.db'))).digest('hex');
+console.log(`database copy sha256 equals the manifest: ${dbHash === manifest.database?.sha256}`);
+const db = new Database(join(folder, 'timesheet.db'), { readonly: true, fileMustExist: true });
+const audits = db.prepare("SELECT operation, reason IS NOT NULL AS has_reason, before_json, after_json, occurred_at FROM audit_events WHERE operation = 'automation.activation' ORDER BY rowid").all();
+console.log(`activation audit events: ${audits.length}`);
+for (const a of audits) console.log(`  ${a.occurred_at} reason=${a.has_reason ? 'yes' : 'no'} before=${a.before_json} after=${a.after_json}`);
+const ops = db.prepare("SELECT * FROM operations_state WHERE id = 1").get();
+console.log(`operations_state in the backup copy: ${JSON.stringify(ops)}`);
+console.log(`integrity_check: ${db.prepare('PRAGMA integrity_check').pluck().get()}`);
+db.close();

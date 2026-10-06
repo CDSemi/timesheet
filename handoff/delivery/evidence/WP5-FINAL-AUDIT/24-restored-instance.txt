@@ -1,0 +1,27 @@
+2026-10-06T22:21:39Z
+### section 6 step 3: <compose-restored> up --detach --no-build  (<compose-restored> = TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml)
+ Network ts-wp5-final-live-restored_default  Creating
+ Network ts-wp5-final-live-restored_default  Created
+ Container ts-wp5-final-live-restored-timesheet-1  Creating
+ Container ts-wp5-final-live-restored-timesheet-1  Created
+ Container ts-wp5-final-live-restored-timesheet-1  Starting
+ Container ts-wp5-final-live-restored-timesheet-1  Started
+exit 0
+health: healthy
+### <compose-restored> ps
+NAME                                     IMAGE                            COMMAND                  SERVICE     CREATED         STATUS                   PORTS
+ts-wp5-final-live-restored-timesheet-1   ts-wp5-final-timesheet:74d5bfe   "docker-entrypoint.s…"   timesheet   7 seconds ago   Up 7 seconds (healthy)   127.0.0.1:47761->3000/tcp
+### docker inspect of the restored container
+Name=/ts-wp5-final-live-restored-timesheet-1 Image=sha256:bbfef4d7861db71e9cf3417ce2cd3d8d8401a480f38a444f568a991a3ffc6ad3 ConfigImage=ts-wp5-final-timesheet:74d5bfe User=10001:10001 Project=ts-wp5-final-live-restored Mounts=<task>/b01/restore->/data 
+### release image id: sha256:bbfef4d7861db71e9cf3417ce2cd3d8d8401a480f38a444f568a991a3ffc6ad3
+### live project containers (must be stopped):
+ts-wp5-final-live-timesheet-1 Exited (0) 23 seconds ago
+### <compose-restored> logs --no-color timesheet
+timesheet-1  | Timesheet listening on http://0.0.0.0:3000 (schema v13)
+timesheet-1  | Outbound delivery PAUSED since 2026-10-06T22:21:27Z (reason: restored); 0 delivery attempt(s) await a decision, 0 send job(s) wait, 0 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+### section 7 step 1 on the restored instance: <compose-restored> exec -T timesheet <cli> outbound release
+{"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit 2
+### section 7 step 3 preview: outbound resume (no --confirm)
+{"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit 2
