@@ -1,0 +1,40 @@
+// Writes masked LF evidence copies for WP4-AUDIT-B (logs and probe sources). Run with Node 24 from the task folder.
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const task = '<task>';
+const out = 'D:\\Dropbox\\Work.CDSemi\\timesheet\\handoff\\delivery\\evidence\\WP4-AUDIT-B';
+mkdirSync(out, { recursive: true });
+
+function mask(text) {
+  let t = text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r\n?/g, '\n');
+  for (const variant of [task, task.replaceAll('\\', '/'), task.replaceAll('\\', '\\\\'), '<task>', '<task>']) {
+    t = t.split(variant).join('<task>');
+  }
+  t = t.replace(/C:(\\\\|\\|\/)Users(\\\\|\\|\/)[^\\/\s"']+/gi, 'C:$1Users$2<user>').replace(/\/c\/Users\/[^/\s"']+/gi, '/c/Users/<user>');
+  t = t.replace(/<user>/gi, '<user>');
+  t = t.replace(/[A-Za-z0-9._%+-]+@(?![A-Za-z0-9.-]*example\.invalid)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>');
+  t = t.split('\n').map((line) => line.replace(/[ \t]+$/, '')).join('\n').replace(/\n+$/, '');
+  return `${t}\n`;
+}
+
+const files = [
+  ['02-npm-ci.txt', 'npm-ci.log', '# Command: node npm-cli.js ci (Node 24.21.0, scratch export of 13a258d, TEMP/TMP under the task folder)\n# Exit: 0\n'],
+  ['03-verify.txt', 'verify.log', '# Command: npm run verify (script shell = Git Bash, TEMP/TMP under the task folder, DATA_DIR/DATABASE_PATH unset: the smoke sets DATABASE_PATH in its own temp work dir)\n# Exit: 0; started 2026-10-06T10:45:28Z, ended 10:47:14Z\n'],
+  ['04-suites.txt', 'suites.log', '# Command: node node_modules/vitest/vitest.mjs run <11 area-B files> --reporter=verbose\n# Exit: 0\n'],
+  ['05-p1-reader.txt', 'p1-reader.log', '# Command: node probes/p1-reader.mjs (in memory, hostile packages built from the tracked template)\n# Exit: 0\n'],
+  ['06-p1b-cost.txt', 'p1b-cost.log', '# Command: node probes/p1b-cost.mjs (one child process per case; maxRSS per case)\n# Exit: 0\n'],
+  ['07-p2-http.txt', 'p2-http.log', '# Command: node ../probes/p2-http.mjs <task>\\http3 (built server dist/, explicit DATA_DIR and DATABASE_PATH under <task>\\http3, capture mode, JOB_RUNNER=off)\n# Exit: 0 (third run; runs 1 and 2 are described in 14-incidents.txt)\n'],
+  ['08-p3-races.txt', 'p3-races.log', '# Command: node ../probes/p3-races.mjs <task>\\races (two worker threads, two connections, shared barrier, 10 fresh databases per scenario)\n# Exit: 0\n'],
+  ['09-p4-ledger-migration.txt', 'p4-ledger-migration.log', '# Command: node ../probes/p4-ledger-migration.mjs <task>\\mig2\n# Exit: 0 (first run <task>\\mig: the mutation control used an UPDATE that a CHECK refused first; corrected, rerun)\n'],
+  ['10-p5-mutations.txt', 'p5-mutations.log', '# Command: node ../probes/p5-mutations.mjs (scratch export only; each file restored and its hash checked; src+tests tree hash 1e117584... before and after)\n# Exit: 0. M9 in this run broke syntax (no tests ran); see 10b for the corrected M9.\n'],
+  ['10b-p5-mutation-m9.txt', 'p5-mutations-m9.log', '# Command: node ../probes/p5-mutations.mjs M9 (corrected mutation)\n# Exit: 0\n'],
+  ['11-p6-blocking.txt', 'p6-blocking.log', '# Command: node ../probes/p6-blocking.mjs <task>\\http4 (built server, explicit DATA_DIR and DATABASE_PATH, separate connection per request)\n# Exit: 0\n'],
+  ['12-p7-report-size.txt', 'p7-report-size.log', '# Command: node ../probes/p7-report-size.mjs (in memory)\n# Exit: 0\n'],
+];
+for (const [name, log, header] of files) {
+  writeFileSync(join(out, name), mask(header + readFileSync(join(task, log), 'utf8')));
+}
+const probes = ['p1-reader.mjs', 'p1b-cost.mjs', 'p2-http.mjs', 'p3-races.mjs', 'p4-ledger-migration.mjs', 'p5-mutations.mjs', 'p6-blocking.mjs', 'p7-report-size.mjs', 'mkevidence.mjs'];
+for (const probe of probes) writeFileSync(join(out, `probe-${probe}.txt`), mask(readFileSync(join(task, 'probes', probe), 'utf8')));
+console.log('written', files.length + probes.length);

@@ -5,7 +5,7 @@ import { addDays, type CivilDate } from '../../domain/dates.ts';
 import { isDomainError } from '../../domain/errors.ts';
 import { type PayPeriod, payPeriodForPayrollDate } from '../../domain/periods.ts';
 import type { SessionUser } from '../auth/sessions.ts';
-import { type Clock, nowUtc } from '../clock.ts';
+import { type Clock, nowEpoch, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
 import type { FileStore } from '../files/fileStore.ts';
 import { ApiError, notFound } from '../http/errors.ts';
@@ -57,6 +57,9 @@ import { findTimesheet, loadScope, todayInReportingZone, type UserScope } from '
  *   overwritten, and nothing is merged into them. Whether a draft app period may ever receive imported days is an
  *   open owner choice (see the task report); until it is made, the safe default stands.
  * - A period that has not ended yet (its last day is today or later in the reporting zone) is not history: skip only.
+ * - A period whose payroll due instant has not passed yet is skip only too (WP4-FIXB, R3): it has ended but is still
+ *   the live period, and an imported period can no longer be signed or submitted, so an import must not make it
+ *   unsignable. This is stricter than the I-3 default ("not ended"); the owner may reverse it.
  * - A sheet whose payroll date is not one of the owner's calendar periods (or whose period has other bounds): skip
  *   only.
  * - A day the mapping cannot place without a guess (unknown label, a label with no single day category such as
@@ -78,6 +81,7 @@ export type DayReason =
   | 'existing_app_rows'
   | 'period_not_in_calendar'
   | 'period_not_ended'
+  | 'period_not_due'
   | 'unknown_label'
   | 'unsupported_label'
   | 'date_cell_missing'
@@ -90,7 +94,7 @@ export type DayReason =
 /** Reasons that still allow an explicit `import`; every other reason allows `skip` only. */
 const IMPORTABLE_ON_DECISION: ReadonlySet<DayReason> = new Set(['floating_holiday', 'label_from_formula_cache']);
 
-export type PeriodState = 'new' | 'existing_app_rows' | 'finalized' | 'imported' | 'not_in_calendar' | 'not_ended';
+export type PeriodState = 'new' | 'existing_app_rows' | 'finalized' | 'imported' | 'not_in_calendar' | 'not_ended' | 'not_due';
 
 const PERIOD_REASON: Record<Exclude<PeriodState, 'new'>, DayReason> = {
   existing_app_rows: 'existing_app_rows',
@@ -98,6 +102,7 @@ const PERIOD_REASON: Record<Exclude<PeriodState, 'new'>, DayReason> = {
   imported: 'imported_period',
   not_in_calendar: 'period_not_in_calendar',
   not_ended: 'period_not_ended',
+  not_due: 'period_not_due',
 };
 
 /** The conflict semantics, stored in every report so a later reader sees the rules the batch was planned under. */
@@ -105,6 +110,7 @@ export const IMPORT_RULES: readonly string[] = [
   'A whole payroll period is imported only when the owner has no timesheet, day entry, work session, OT leave request or ledger entry in it.',
   'Every labelled day of a finalized, imported or draft app period needs an explicit skip decision; such periods are never overwritten or merged.',
   'A period that has not ended in the reporting zone, or whose payroll date is not a period of the owner calendar, is skipped by explicit decision.',
+  'A period whose payroll due instant has not passed yet is skipped by explicit decision, so that an import cannot make a live period unsignable.',
   'Unknown labels, labels without a single day category, missing or unexpected dates, duplicate dates and dates outside the calendar need an explicit skip decision.',
   'Floating holiday labels and labels read from a formula cache need an explicit skip or import decision.',
   'Blank days and clock cells are never imported; clock cells stay in the report and the private source.',
@@ -301,7 +307,7 @@ function countIn(db: Db, sql: string, userId: string, from: CivilDate, to: Civil
   return db.prepare(sql).pluck().get(userId, from, to) as number;
 }
 
-function planPeriod(db: Db, scope: UserScope, today: CivilDate, sheet: string, payrollDate: CivilDate): PlanPeriod {
+function planPeriod(db: Db, scope: UserScope, today: CivilDate, nowSeconds: number, sheet: string, payrollDate: CivilDate): PlanPeriod {
   const none = { timesheet: false, day_entries: 0, work_sessions: 0, leave_requests: 0, ledger_entries: 0 };
   let period: PayPeriod;
   try {
@@ -329,6 +335,7 @@ function planPeriod(db: Db, scope: UserScope, today: CivilDate, sheet: string, p
   else if (existing.timesheet || existing.day_entries + existing.work_sessions + existing.leave_requests + existing.ledger_entries > 0) {
     state = 'existing_app_rows';
   } else if (period.periodEnd >= today) state = 'not_ended';
+  else if (period.dueAtUtc > nowSeconds) state = 'not_due'; // the due instant itself counts as due (like the deadline scan)
   else state = 'new';
   return { ...base, state, existing };
 }
@@ -346,9 +353,10 @@ function insideCalendar(scope: UserScope, workDate: CivilDate): boolean {
 /** The conflict plan of a report against the owner's current rows. Reads only. */
 export function buildPlan(db: Db, clock: Clock, scope: UserScope, days: readonly ReportDay[]): ImportPlan {
   const today = todayInReportingZone(clock, scope);
+  const nowSeconds = nowEpoch(clock);
   const periods = new Map<string, PlanPeriod>();
   for (const day of days) {
-    if (!periods.has(day.sheet)) periods.set(day.sheet, planPeriod(db, scope, today, day.sheet, day.payroll_date));
+    if (!periods.has(day.sheet)) periods.set(day.sheet, planPeriod(db, scope, today, nowSeconds, day.sheet, day.payroll_date));
   }
   const occurrences = new Map<CivilDate, number>();
   for (const day of days) occurrences.set(day.work_date, (occurrences.get(day.work_date) ?? 0) + 1);

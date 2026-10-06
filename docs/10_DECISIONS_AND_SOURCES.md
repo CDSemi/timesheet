@@ -157,3 +157,9 @@ None changes a confirmed requirement.
 
 - Held sends after a restore (WP4-T06): a restore holds every queued or leased `send_email` and `send_reminder` job from the backup. Each is released or dropped only by an explicit, audited operator action; jobs created after the restore are not held. Reason: an uncertain or already-accepted email must not go out again after the resume.
 - Rollback restore mode (WP4-T12A): `--keep-schema --confirm` restores a backup into a newer schema. Residual limit: a restored schema with no outbound pause cannot block jobs created later, so the older build runs with `JOB_RUNNER=off` until reconciliation. Held jobs can be released only by the current build, so a long rollback needs a second upgrade to reconcile. Owner options: clear the automation activation instant on `--confirm` (an audited business-state change, not done), or accept the `JOB_RUNNER=off` rule.
+
+## Coordinator decisions — WP4 workbook import (2026-10-06, reversible; the owner may veto)
+
+None changes a confirmed requirement.
+
+- I-3 safe default (WP4-AUDIT-B R3, WP4-FIXB): the owner's I-3 (a) says a period that has not ended cannot be imported. The coordinator also treats an ended period whose payroll due instant has not passed as skip-only (`not_due`, reason `period_not_due`); the due instant itself counts as due, as in the deadline scan. This is a conservative default: the owner can reverse it, which allows an ended but not yet due period to be imported. Rule in document 07.

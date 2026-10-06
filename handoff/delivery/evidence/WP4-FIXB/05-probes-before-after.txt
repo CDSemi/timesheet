@@ -1,0 +1,51 @@
+# Audit probes P1b, P6, P7 rerun, adapted to take REPO_DIR (probe-*.mjs.txt). BEFORE = unmodified baseline build; AFTER = this change.
+
+## P1b BEFORE (node probes/p1b-cost.mjs, one child process per case)
+one-sheet-15MiB-empty-c | upload=37400 bytes | ms=2850 | maxRSS before=102 MiB after=775 MiB | accepted (errors=0) | exit=0
+three-sheets-15.8MiB-empty-c | upload=65173 bytes | ms=8472 | maxRSS before=167 MiB after=903 MiB | accepted (errors=0) | exit=0
+three-sheets-15.8MiB-valued-c | upload=113353 bytes | ms=2547 | maxRSS before=167 MiB after=1010 MiB | rejected:too_many_cells | exit=0
+holiday-sheet-150k-cells | upload=692224 bytes | ms=873 | maxRSS before=122 MiB after=439 MiB | THROWN RangeError: Maximum call stack size exceeded | exit=0
+holiday-sheet-sparse-far-row | upload=25842 bytes | ms=553 | maxRSS before=73 MiB after=99 MiB | accepted (errors=1) | exit=0
+
+real	0m17.064s
+user	0m0.015s
+sys	0m0.000s
+
+## P1b AFTER
+one-sheet-15MiB-empty-c | upload=37400 bytes | ms=13 | maxRSS before=102 MiB after=114 MiB | rejected:part_too_large | exit=0
+three-sheets-15.8MiB-empty-c | upload=65173 bytes | ms=4 | maxRSS before=167 MiB after=169 MiB | rejected:part_too_large | exit=0
+three-sheets-15.8MiB-valued-c | upload=113353 bytes | ms=4 | maxRSS before=167 MiB after=169 MiB | rejected:part_too_large | exit=0
+holiday-sheet-150k-cells | upload=692224 bytes | ms=12 | maxRSS before=122 MiB after=136 MiB | rejected:part_too_large | exit=0
+at-the-new-limits-valued-cells | upload=340564 bytes | ms=495 | maxRSS before=91 MiB after=284 MiB | accepted (errors=998) | exit=0
+holiday-sheet-sparse-far-row | upload=25842 bytes | ms=18 | maxRSS before=82 MiB after=82 MiB | accepted (errors=1) | exit=0
+
+## P1b AFTER, worst accepted case under the new limits (3 sheets of 49 950 / 49 950 / 30 000 valued cells; a bounded cost, still accepted)
+at-the-new-limits-valued-cells | upload=340564 bytes | ms=503 | maxRSS before=91 MiB after=284 MiB | accepted (errors=998)
+
+## P6 BEFORE (built server over HTTP; health check sent 300 ms after the upload starts)
+one 15 MiB sheet of empty cells: upload 37553 bytes -> 201 in 2789 ms; GET /api/health sent 300 ms later -> 200 after 2488 ms
+three 15.8 MiB sheets of empty cells: upload 65326 bytes -> 201 in 8340 ms; GET /api/health sent 300 ms later -> 200 after 8042 ms
+idle GET /api/health afterwards -> 200 in 1 ms
+server stopped through its handle: SIGTERM
+
+## P6 AFTER
+one 15 MiB sheet of empty cells: upload 37553 bytes -> 422 (part_too_large) in 15 ms; GET /api/health sent 300 ms later -> 200 after 2 ms
+three 15.8 MiB sheets of empty cells: upload 65326 bytes -> 422 (part_too_large) in 5 ms; GET /api/health sent 300 ms later -> 200 after 2 ms
+idle GET /api/health afterwards -> 200 in 1 ms
+server stopped through its handle: SIGTERM
+
+## P7 BEFORE (in memory; findings JSON size)
+1 payroll sheet(s) x 199000 formula cells: upload 914989 bytes, 1304 ms, findings JSON 4.071 MiB, findings=7, listed sources=199023, maxRSS 684 MiB
+3 payroll sheet(s) x 199000 formula cells: upload 2692031 bytes, 3502 ms, findings JSON 12.210 MiB, findings=9, listed sources=597023, maxRSS 752 MiB
+7 payroll sheet(s) x 199000 formula cells: upload 6246103 bytes, 0 ms, WorkbookRejectedError:total_too_large, maxRSS 783 MiB
+1 payroll sheet(s) x 15000 formula cells: upload 93637 bytes, 93 ms, findings JSON 0.292 MiB, findings=7, listed sources=15023, maxRSS 783 MiB
+3 payroll sheet(s) x 15000 formula cells: upload 227975 bytes, 252 ms, findings JSON 0.872 MiB, findings=9, listed sources=45023, maxRSS 783 MiB
+7 payroll sheet(s) x 15000 formula cells: upload 496639 bytes, 564 ms, findings JSON 2.031 MiB, findings=13, listed sources=105023, maxRSS 783 MiB
+
+## P7 AFTER (the 199 000-cell cases are now refused as part_too_large; the 15 000-cell cases are accepted with capped findings)
+1 payroll sheet(s) x 199000 formula cells: upload 914989 bytes, 28 ms, WorkbookRejectedError:part_too_large, maxRSS 165 MiB
+3 payroll sheet(s) x 199000 formula cells: upload 2692031 bytes, 9 ms, WorkbookRejectedError:part_too_large, maxRSS 244 MiB
+7 payroll sheet(s) x 199000 formula cells: upload 6246103 bytes, 0 ms, WorkbookRejectedError:total_too_large, maxRSS 338 MiB
+1 payroll sheet(s) x 15000 formula cells: upload 93637 bytes, 115 ms, findings JSON 0.002 MiB, findings=7, listed sources=43, maxRSS 338 MiB
+3 payroll sheet(s) x 15000 formula cells: upload 227975 bytes, 251 ms, findings JSON 0.003 MiB, findings=9, listed sources=83, maxRSS 338 MiB
+7 payroll sheet(s) x 15000 formula cells: upload 496639 bytes, 560 ms, findings JSON 0.005 MiB, findings=13, listed sources=163, maxRSS 338 MiB

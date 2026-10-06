@@ -1,0 +1,26 @@
+# rerun after replacing a literal wrong-password string in the probe with a random value (no behaviour change); first run 2026-10-06T11:10:59Z also exited 0 with the same results
+2026-10-06T11:16:22Z
+PASS  no trusted proxy: 30 failures with 30 spoofed X-Forwarded-For values, the 31st is 429 (one bucket: the socket peer)  401,401,429
+PASS  /api/health is exactly {"status":"ok"}
+PASS  /api/ready has exactly status, schema {expected, actual} and data_dir_writable  {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+INFO  built client assets: index-B8sNpoCz.css, index-UbxC4j68.js, index-UbxC4j68.js.map; GET /assets/<bundle>.js.map -> 200, 1887573 bytes, sourcesContent true
+INFO  the served bundle references its source map
+PASS  trusted proxy: 40 failures from 40 different forwarded clients are 40 separate buckets (no 429)
+PASS  trusted proxy: one forwarded client is limited after 30 failures  401,401,429
+PASS  trusted proxy: hops a client prepends (left of the proxy-appended address) do not escape the limit  429,429,429
+PASS  trusted proxy: a trusted hop on the right is skipped; the client is the next untrusted hop  429 retry-after 898
+PASS  trusted proxy: an IPv4-mapped IPv6 spelling of the same client hits the same bucket
+PASS  trusted proxy: a malformed header falls back to the peer (merges into the proxy bucket, never splits)  401,401,429
+PASS  trusted proxy: the per-account bucket keys on the real client (6th failure for one account is 429)  401,401,401,401,401,429
+PASS  server log never shows an email address or a forwarded address
+PASS  trusted proxy that is not the peer: X-Forwarded-For ignored, the 31st failure is 429  401,401,429
+PASS  fails fast: TRUSTED_PROXY_ADDRESSES with a CIDR and a non-address (non-zero exit, names the variable, echoes no value)  exit 1;             throw new Error('TRUSTED_PROXY_ADDRESSES must be a comma-separated list of exact IP addresses');
+PASS  fails fast: production without DATA_DIR (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('DATA_DIR is required in production as an absolute path (the private data directory)');
+PASS  fails fast: production without PUBLIC_BASE_URL (non-zero exit, names the variable, echoes no value)  exit 1;             throw new Error('PUBLIC_BASE_URL is required in production (the public HTTPS URL for deep links)');
+PASS  fails fast: production with an http PUBLIC_BASE_URL (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('PUBLIC_BASE_URL must use https in production');
+PASS  fails fast: production with a relative DATABASE_PATH (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('DATABASE_PATH is required in production as an absolute path (the host-local SQLite file)');
+PASS  fails fast: MAIL_FROM holding a non-address (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('MAIL_FROM must be a single email address');
+PASS  fails fast: OUTBOUND_MODE=smtp without the owner flag (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag');
+PASS  fails fast: DATA_DIR inside a Dropbox folder (non-zero exit, names the variable, echoes no value)  exit 1;         throw new Error('The private data directory must be outside a Dropbox folder; set DATA_DIR to local storage');
+P6 PASSED
+exit=0

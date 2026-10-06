@@ -1,0 +1,18 @@
+# WP4-FIXB baseline and chosen limits (2026-10-06, Git Bash, portable Node 24 by PATH)
+# Command: node --version
+v24.21.0
+# Command: git rev-parse HEAD
+13a258db86b2f0b6388830e584e2cca5303f1f6c
+# Command: git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum  (the baseline digest, HEAD unchanged)
+1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe *-
+# Command: sha256sum reference/inputs/Timesheet_Rev8_2026.xlsx (before any change)
+47ef42d5e4a9b7aea0be545ed563d3d22987609b59bd846c1c08dec2d29c6331 *-
+# Command: node probes/measure-template.mjs  (XML parts of the template and of synthetic workbooks of 3, 26 and 60 dated sheets)
+  template xl/worksheets/sheet1.xml: bytes=29454 elements=1378 c=506 row=353 si=0
+  template xl/worksheets/sheet3.xml: bytes=22486 elements=843 c=529 row=32 si=0
+template: totalXmlBytes=100735 maxPartBytes=29454 maxElements=1378 maxC=529 maxRow=353 maxSi=66 sumElements=3203
+synthetic-3-sheets: totalXmlBytes=167389 maxPartBytes=29454 maxElements=1378 maxC=529 maxRow=353 maxSi=66 sumElements=5711
+synthetic-26-sheets: totalXmlBytes=678435 maxPartBytes=29454 maxElements=1378 maxC=529 maxRow=353 maxSi=66 sumElements=24939
+synthetic-60-sheets: totalXmlBytes=1433915 maxPartBytes=29454 maxElements=1378 maxC=529 maxRow=353 maxSi=66 sumElements=53363
+# Chosen limits (src/server/import/xlsxReader.ts DEFAULT_READER_LIMITS): maxPartXmlBytes 4 MiB (142x the largest part, 29 454 B), maxTotalXmlBytes 16 MiB (11x the 60-sheet workbook, 1.43 MB), maxPartElements 200 000 (145x 1 378), maxTotalElements 400 000 (7.5x 53 363), maxCellsPerSheet 50 000 (was 200 000; 94x 529), maxRowsPerSheet 20 000 (new; 57x 353), maxSharedStrings 50 000 (was 100 000; template 66).
+# Report caps (templateMapping.ts): MAX_FINDING_SOURCES 20, MAX_FINDINGS_PER_CODE 25, MAX_HOLIDAY_ROWS 2000 (template 9 rows).

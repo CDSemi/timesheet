@@ -1,0 +1,83 @@
+// WP4-FIXB mutation checks. Runs ONLY in the scratch clone (argv[2]); each mutation edits one source file there,
+// runs the owning test file with vitest, prints the failing tests, then restores the file from the saved text.
+// Usage: node mutate.mjs <scratch dir> [mutation id ...]
+import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const scratch = process.argv[2];
+const only = process.argv.slice(3);
+if (!scratch || !scratch.includes('WP4-FIXB') || !scratch.includes('scratch')) throw new Error('refusing to mutate outside the scratch clone');
+
+const READER = 'src/server/import/xlsxReader.ts';
+const MAPPING = 'src/server/import/templateMapping.ts';
+const IMPORT = 'src/server/services/workbookImport.ts';
+const OTLEAVE = 'src/server/services/otLeave.ts';
+const T_READER = 'tests/integration/workbook-reader.test.ts';
+const T_IMPORT = 'tests/integration/workbook-import.test.ts';
+const T_LEAVE = 'tests/integration/ot-leave.test.ts';
+
+const MUTATIONS = [
+  { id: 'M1-no-element-prescan', file: READER, test: T_READER, edits: [['  scanElements(text, kind, limits, budget);\n', '']] },
+  {
+    id: 'M2-no-per-part-limit',
+    file: READER,
+    test: T_READER,
+    edits: [
+      ['  if (entry.uncompressedSize > limits.maxPartXmlBytes) {', '  if (false) {'],
+      ['Math.min(limits.maxEntryInflatedBytes, limits.maxPartXmlBytes, budget.left, budget.xmlLeft)', 'Math.min(limits.maxEntryInflatedBytes, budget.left, budget.xmlLeft)'],
+    ],
+  },
+  {
+    id: 'M3-spread-in-readHolidays',
+    file: MAPPING,
+    test: T_READER,
+    edits: [
+      [
+        /  const rowSet = new Set<number>\(\);[\s\S]*?const rows = \[\.\.\.rowSet\]\.sort\(\(a, b\) => a - b\);\n  for \(const row of rows\) \{/.source,
+        '  const last = Math.max(1, ...[...sheet.cells.values()].map((cell) => Number(/\\d+$/.exec(cell.address)?.[0] ?? 0)));\n  for (let row = 2; row <= last; row += 1) {',
+        'regex',
+      ],
+    ],
+  },
+  { id: 'M4-no-source-cap', file: MAPPING, test: T_READER, edits: [['sources: finding.sources.slice(0, MAX_FINDING_SOURCES), sourceCount', 'sources: finding.sources, sourceCount']] },
+  { id: 'M5-no-total-xml-budget', file: READER, test: T_READER, edits: [['budget.left, budget.xmlLeft)', 'budget.left)']] },
+  { id: 'M6-no-finding-fold', file: MAPPING, test: T_READER, edits: [['if (listed < MAX_FINDINGS_PER_CODE) {', 'if (true) {']] },
+  { id: 'M7-no-holiday-row-cap', file: MAPPING, test: T_READER, edits: [['if (rowSet.size > MAX_HOLIDAY_ROWS) {', 'if (false) {']] },
+  { id: 'M8-no-not-due-rule', file: IMPORT, test: T_IMPORT, edits: [["  else if (period.dueAtUtc > nowSeconds) state = 'not_due';", '']] },
+  { id: 'M9-no-reserve-guard', file: OTLEAVE, test: T_LEAVE, edits: [['    if (insideImportedPeriod(ctx.db, input.userId, leaveDate)) throw importedPeriodError();\n', '']] },
+];
+
+function applyEdit(text, edit) {
+  const [from, to, mode] = edit;
+  if (mode === 'regex') {
+    const pattern = new RegExp(from);
+    if (!pattern.test(text)) throw new Error(`regex not found: ${from.slice(0, 50)}`);
+    return text.replace(pattern, () => to);
+  }
+  const parts = text.split(from);
+  if (parts.length !== 2) throw new Error(`pattern count ${parts.length - 1}: ${from.slice(0, 60)}`);
+  return parts.join(to);
+}
+
+for (const mutation of MUTATIONS) {
+  if (only.length > 0 && !only.includes(mutation.id)) continue;
+  const path = join(scratch, mutation.file);
+  const original = readFileSync(path, 'utf8');
+  try {
+    let mutated = original;
+    for (const edit of mutation.edits) mutated = applyEdit(mutated, edit);
+    writeFileSync(path, mutated);
+    const run = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', mutation.test], { cwd: scratch, encoding: 'utf8', env: process.env, timeout: 540_000 });
+    const out = `${run.stdout}\n${run.stderr}`;
+    const failed = out.split('\n').filter((line) => /^\s+×/.test(line)).map((line) => line.trim().replace(/\s+\d+ms$/, ''));
+    const summary = out.split('\n').find((line) => /^\s+Tests\s/.test(line))?.trim() ?? 'no summary';
+    console.log(`${mutation.id}: exit=${run.status} ${summary}`);
+    for (const line of failed) console.log(`    KILLED BY ${line}`);
+    console.log(`  => ${run.status !== 0 ? 'KILLED' : 'SURVIVED'}`);
+  } finally {
+    writeFileSync(path, original);
+  }
+  const check = readFileSync(path, 'utf8') === original;
+  console.log(`  restored ${mutation.file}: ${check ? 'identical' : 'DIFFERENT'}`);
+}

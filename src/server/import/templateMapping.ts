@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { addDays, fromDayNumber, isCivilDate, type CivilDate } from '../../domain/dates.ts';
-import { readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook } from './xlsxReader.ts';
+import { readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
 
 /*
  * Template mapping, version 1 (WP4-T08). Turns a read workbook into a structured preview model: the dated payroll
@@ -21,6 +21,13 @@ import { readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type Re
 export const MAPPING_VERSION = 1;
 
 export type FindingSeverity = 'error' | 'warning' | 'info';
+
+/** At most this many sources are kept per finding; the rest are only counted. */
+export const MAX_FINDING_SOURCES = 20;
+/** At most this many findings of one code are listed; further ones are folded into one summary finding. */
+export const MAX_FINDINGS_PER_CODE = 25;
+/** A holiday table has about ten rows a year; more than this is not a holiday table and is refused. */
+export const MAX_HOLIDAY_ROWS = 2000;
 
 export type FindingCode =
   | 'formula_hours_8_5'
@@ -46,11 +53,56 @@ export type Finding = {
   code: FindingCode;
   severity: FindingSeverity;
   message: string;
-  /** Cell-level provenance, `sheet!A1`; sheet-level findings name the sheet only. */
+  /**
+   * Cell-level provenance, `sheet!A1`; sheet-level findings name the sheet only. At most `MAX_FINDING_SOURCES` are
+   * listed (the first ones in document order); `sourceCount` is the true number, so the report stays small whatever
+   * the cell count (WP4-B-01).
+   */
   sources: string[];
+  /** How many sources the finding has in all (>= `sources.length`). */
+  sourceCount: number;
   /** Small structured facts for the preview; never free-form workbook content beyond the cell text itself. */
   details?: Record<string, string | number | boolean>;
 };
+
+/** A finding as the mapping produces it; `finalizeFindings` caps it and adds `sourceCount`. */
+type RawFinding = Omit<Finding, 'sourceCount'>;
+
+/**
+ * Bounds the report (WP4-B-01): every finding lists at most `MAX_FINDING_SOURCES` sources plus the true count, and
+ * more than `MAX_FINDINGS_PER_CODE` findings of one code (one per holiday row, for instance) are folded into one
+ * summary finding of that code, whose count is the sum. Counting (`summary`) is done by the caller on the
+ * uncapped list, so the totals stay true. Order and severity are kept.
+ */
+function finalizeFindings(raw: readonly RawFinding[]): Finding[] {
+  const kept = new Map<FindingCode, number>();
+  const folded = new Map<FindingCode, { first: RawFinding; findings: number; sources: string[]; sourceCount: number }>();
+  const result: Finding[] = [];
+  for (const finding of raw) {
+    const listed = kept.get(finding.code) ?? 0;
+    if (listed < MAX_FINDINGS_PER_CODE) {
+      kept.set(finding.code, listed + 1);
+      result.push({ ...finding, sources: finding.sources.slice(0, MAX_FINDING_SOURCES), sourceCount: finding.sources.length });
+      continue;
+    }
+    const summary = folded.get(finding.code) ?? { first: finding, findings: 0, sources: [], sourceCount: 0 };
+    summary.findings += 1;
+    summary.sourceCount += finding.sources.length;
+    for (const source of finding.sources) if (summary.sources.length < MAX_FINDING_SOURCES) summary.sources.push(source);
+    folded.set(finding.code, summary);
+  }
+  for (const [code, summary] of folded) {
+    result.push({
+      code,
+      severity: summary.first.severity,
+      message: `${summary.findings} more findings of this kind are not listed one by one. ${summary.first.message}`,
+      sources: summary.sources,
+      sourceCount: summary.sourceCount,
+      details: { omitted_findings: summary.findings },
+    });
+  }
+  return result;
+}
 
 export type DayCategory = 'worked' | 'holiday' | 'shutdown' | 'leave';
 export type LeaveKind = 'vacation' | 'sick' | 'ot';
@@ -130,6 +182,8 @@ const WEEKS = [
   { dateRow: 20, labelRow: 21, clockRow: 22 },
 ] as const;
 const MAX_CLOCK_MINUTES = 48 * 60;
+/** A date (column A) or name (column B) cell of the holiday table. */
+const HOLIDAY_TABLE_CELL = /^[AB]([1-9]\d*)$/;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Cell helpers
@@ -236,8 +290,8 @@ function sundayCoverage(formula: string, row: number): boolean {
   return false;
 }
 
-function detectFormulaDefects(sheet: ReadSheet): Finding[] {
-  const findings: Finding[] = [];
+function detectFormulaDefects(sheet: ReadSheet): RawFinding[] {
+  const findings: RawFinding[] = [];
   const hours: string[] = [];
   const volatile: string[] = [];
   for (const cell of sheet.cells.values()) {
@@ -291,11 +345,23 @@ function detectFormulaDefects(sheet: ReadSheet): Finding[] {
 // ---------------------------------------------------------------------------------------------------------------------
 // Support sheets
 
-function readHolidays(sheet: ReadSheet, date1904: boolean, findings: Finding[]): HolidayPreview[] {
+function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[]): HolidayPreview[] {
   const holidays: HolidayPreview[] = [];
   const seen = new Map<CivilDate, string>();
-  const last = Math.max(1, ...[...sheet.cells.values()].map((cell) => Number(/\d+$/.exec(cell.address)?.[0] ?? 0)));
-  for (let row = 2; row <= last; row += 1) {
+  // Visit only the rows that have a date or name cell, in row order. The row numbers come from the cells that exist,
+  // never from a spread over the cell list (a stack overflow at about 100 000 cells) and never from a loop up to
+  // the largest row number (one cell at A9999999 made it run ten million times); WP4-B-02.
+  const rowSet = new Set<number>();
+  for (const address of sheet.cells.keys()) {
+    const match = HOLIDAY_TABLE_CELL.exec(address);
+    const row = match === null ? 0 : Number(match[1]);
+    if (row >= 2) rowSet.add(row);
+  }
+  if (rowSet.size > MAX_HOLIDAY_ROWS) {
+    throw new WorkbookRejectedError('too_many_holidays', `The holiday table has more than ${MAX_HOLIDAY_ROWS} rows`);
+  }
+  const rows = [...rowSet].sort((a, b) => a - b);
+  for (const row of rows) {
     const dateCell = pick(sheet, `A${row}`);
     const nameCell = pick(sheet, `B${row}`);
     if (dateCell === null && nameCell === null) continue;
@@ -358,7 +424,7 @@ type PeriodContext = {
   date1904: boolean;
   holidayNames: ReadonlyMap<string, HolidayPreview>;
   payrollCalendar: ReadonlySet<CivilDate>;
-  findings: Finding[];
+  findings: RawFinding[];
 };
 
 function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodContext): PeriodPreview {
@@ -514,7 +580,7 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
 
 /** Build the preview model from an already read workbook. Pure: no I/O, no clock, no database. */
 export function mapWorkbook(workbook: ReadWorkbook, source: { sha256: string; bytes: number }): WorkbookPreview {
-  const findings: Finding[] = [];
+  const findings: RawFinding[] = [];
   const sheets: SheetSummary[] = [];
   const periods: PeriodPreview[] = [];
 
@@ -607,6 +673,7 @@ export function mapWorkbook(workbook: ReadWorkbook, source: { sha256: string; by
     }
   }
 
+  // The totals are counted before the report is capped, so they stay true however many findings are folded.
   const summary = {
     errors: findings.filter((finding) => finding.severity === 'error').length,
     warnings: findings.filter((finding) => finding.severity === 'warning').length,
@@ -621,7 +688,7 @@ export function mapWorkbook(workbook: ReadWorkbook, source: { sha256: string; by
     periods,
     holidays,
     payrollCalendar: { count: calendarDates.length, first: sortedCalendar[0] ?? null, last: sortedCalendar.at(-1) ?? null },
-    findings,
+    findings: finalizeFindings(findings),
     summary,
     clean: summary.errors === 0,
   };

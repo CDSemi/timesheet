@@ -1,0 +1,356 @@
+# Red-first run BEFORE any source change (tests added first). Command: node node_modules/vitest/vitest.mjs run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts tests/integration/ot-leave.test.ts ; exit 1 (18 failed | 86 passed)
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/ot-leave.test.ts (36 tests | 1 failed) 5714ms
+   ❯ R1 (WP4-FIXB): an imported period is read-only history for OT leave (F-2) (2)
+     × red-first: reserving OT leave dated inside an imported period is 409 imported_period and creates nothing 150ms
+ ❯ tests/integration/workbook-import.test.ts (24 tests | 2 failed) 16548ms
+   ❯ commit (8)
+     × red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable 314ms
+   ❯ upload validation (4)
+     × red-first (WP4-B-01, B-02): a small upload that would cost seconds or crash the mapping is a typed 422 and stores nothing 9854ms
+ ❯ tests/integration/workbook-reader.test.ts (44 tests | 15 failed) 23169ms
+   ❯ parse cost and report size are bounded (WP4-B-01) (12)
+     × refuses the 65 KB package of three 15.8 MiB empty-cell sheets as an oversized part, quickly (P1b, P6) 8991ms
+     × refuses sheets of <c><v>1</v></c> cells before it allocates for them (P1b) 2844ms
+     × counts element openings before parsing, so a part under the size limit cannot hide a huge tree 2031ms
+     × also sees namespace-prefixed cells and rows 59ms
+     × applies each new limit when it is lowered (part size, elements, rows, total XML, total elements) 7ms
+     × bounds the total XML parsed per package, not only each part 230ms
+     × keeps the template and a realistic workbook of 60 dated sheets far inside every limit 271ms
+     × refuses the 2.7 MB formula-heavy package of the audit (3 x 199 000 formula cells) 3886ms
+     × caps the stored findings: the first sources of a finding plus a total count, whatever the cell count 761ms
+     × keeps small findings whole: the count equals the listed sources 7ms
+     × collapses a flood of one kind of finding into a bounded list with a truthful summary 24ms
+     × refuses a holiday table with more rows than any calendar has 40ms
+   ❯ Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) (4)
+     × previews a sheet of 150 000 cells in column C instead of overflowing the stack (the audit gave a 500) 952ms
+     × refuses the same sheet with a typed 422 reason under the default limits 255ms
+     × maps 150 000 cells without a spread over the cell list and without a loop up to the largest row 55ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/ot-leave.test.ts > R1 (WP4-FIXB): an imported period is read-only history for OT leave (F-2) > red-first: reserving OT leave dated inside an imported period is 409 imported_period and creates nothing
+AssertionError: expected ApiError imported_period: expected undefined to be an instance of ApiError
+ ❯ expectApiError tests/integration/ot-leave.test.ts:51:47
+     49|     thrown = error;
+     50|   }
+     51|   expect(thrown, `expected ApiError ${code}`).toBeInstanceOf(ApiError);
+       |                                               ^
+     52|   if (!(thrown instanceof ApiError)) return undefined;
+     53|   expect({ status: thrown.status, code: thrown.code }).toEqual({ statu…
+ ❯ tests/integration/ot-leave.test.ts:636:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable
+AssertionError: expected [ { sheet: '2026.12.25', …(5) } ] to match object [ Array(1) ]
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  [
+    {
+      "payroll_date": "2026-12-25",
+      "period_end": "2026-12-20",
+      "period_start": "2026-12-07",
+-     "state": "not_due",
++     "state": "new",
+    },
+  ]
+
+ ❯ tests/integration/workbook-import.test.ts:489:26
+    487|     const id = preview.body.import.id;
+    488|     const plan = preview.body.import.plan;
+    489|     expect(plan.periods).toMatchObject([{ payroll_date: PD, period_sta…
+       |                          ^
+    490|     expect(plan.importable_days).toBe(0);
+    491|     expect(plan.decisions_required.length).toBeGreaterThan(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > upload validation > red-first (WP4-B-01, B-02): a small upload that would cost seconds or crash the mapping is a typed 422 and stores nothing
+AssertionError: expected 201 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 201
+
+ ❯ tests/integration/workbook-import.test.ts:735:30
+    733|     const started = performance.now();
+    734|     const oversized = await upload(hostile);
+    735|     expect(oversized.status).toBe(422);
+       |                              ^
+    736|     expect(oversized.body.error).toMatchObject({ code: 'workbook_rejec…
+    737|     expect(performance.now() - started).toBeLessThan(5000); // 8.8 s a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses the 65 KB package of three 15.8 MiB empty-cell sheets as an oversized part, quickly (P1b, P6)
+AssertionError: expected null to be 'part_too_large' // Object.is equality
+
+- Expected:
+"part_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:449:26
+    447|     expect(bytes.length).toBeLessThan(100 * 1024);
+    448|     const outcome = timed(() => previewWorkbook(bytes));
+    449|     expect(outcome.code).toBe('part_too_large');
+       |                          ^
+    450|     expect(outcome.ms).toBeLessThan(3000); // 8.5 s and +900 MiB befor…
+    451|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses sheets of <c><v>1</v></c> cells before it allocates for them (P1b)
+AssertionError: expected 'too_many_cells' to be 'part_too_large' // Object.is equality
+
+Expected: "part_too_large"
+Received: "too_many_cells"
+
+ ❯ tests/integration/workbook-reader.test.ts:457:26
+    455|     expect(bytes.length).toBeLessThan(150 * 1024);
+    456|     const outcome = timed(() => previewWorkbook(bytes));
+    457|     expect(outcome.code).toBe('part_too_large');
+       |                          ^
+    458|     expect(outcome.ms).toBeLessThan(3000);
+    459|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > counts element openings before parsing, so a part under the size limit cannot hide a huge tree
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+
+- Expected:
+"too_many_elements"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:464:49
+    462|     // Each part is about 3.5 MiB: under the 4 MiB part limit, far ove…
+    463|     const junk = withSheets(SHEET_PARTS, repeatedSheet('<a/>', 3.5 * M…
+    464|     expect(rejection(() => readWorkbook(junk))).toBe('too_many_element…
+       |                                                 ^
+    465|     const cells = withSheets(SHEET_PARTS, repeatedSheet('<c/>', 3.5 * …
+    466|     expect(rejection(() => readWorkbook(cells))).toBe('too_many_cells'…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > also sees namespace-prefixed cells and rows
+AssertionError: expected null to be 'too_many_cells' // Object.is equality
+
+- Expected:
+"too_many_cells"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:475:111
+    473|   it('also sees namespace-prefixed cells and rows', () => {
+    474|     const prefixed = `<?xml version="1.0"?><x:worksheet xmlns:x="${NS}…
+    475|     expect(rejection(() => readWorkbook(withEntry(template, 'xl/worksh…
+       |                                                                                                               ^
+    476|   });
+    477|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > applies each new limit when it is lowered (part size, elements, rows, total XML, total elements)
+AssertionError: expected null to be 'part_too_large' // Object.is equality
+
+- Expected:
+"part_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:479:59
+    477|
+    478|   it('applies each new limit when it is lowered (part size, elements, …
+    479|     expect(reject(template, { maxPartXmlBytes: 10_000 })).toBe('part_t…
+       |                                                           ^
+    480|     expect(reject(template, { maxPartElements: 100 })).toBe('too_many_…
+    481|     expect(reject(template, { maxRowsPerSheet: 10 })).toBe('too_many_r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > bounds the total XML parsed per package, not only each part
+AssertionError: expected null to be 'total_xml_too_large' // Object.is equality
+
+- Expected:
+"total_xml_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:493:35
+    491|     const entries = unpack(buildSyntheticWorkbook({ periods: [...perio…
+    492|     for (const part of parts) entries[part] = strToU8(paddedSheetXml(3…
+    493|     expect(reject(pack(entries))).toBe('total_xml_too_large');
+       |                                   ^
+    494|   });
+    495|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > keeps the template and a realistic workbook of 60 dated sheets far inside every limit
+AssertionError: expected 1375781 to be less than NaN
+ ❯ tests/integration/workbook-reader.test.ts:504:36
+    502|     // Measured on this package: the largest part is about 29 KB and 1…
+    503|     const workbook = readWorkbook(bytes);
+    504|     expect(workbook.inflatedBytes).toBeLessThan(DEFAULT_READER_LIMITS.…
+       |                                    ^
+    505|   });
+    506|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses the 2.7 MB formula-heavy package of the audit (3 x 199 000 formula cells)
+AssertionError: expected null to be 'part_too_large' // Object.is equality
+
+- Expected:
+"part_too_large"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:515:26
+    513|     expect(bytes.length).toBeLessThan(3 * MIB);
+    514|     const outcome = timed(() => previewWorkbook(bytes));
+    515|     expect(outcome.code).toBe('part_too_large');
+       |                          ^
+    516|     expect(outcome.ms).toBeLessThan(3000);
+    517|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > caps the stored findings: the first sources of a finding plus a total count, whatever the cell count
+AssertionError: expected [ { …(4) }, { …(4) }, { …(4) }, …(1) ] to have a length of 3 but got 4
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ tests/integration/workbook-reader.test.ts:527:19
+    525|     const preview = previewWorkbook(pack(entries));
+    526|     const hours = findings(preview, 'formula_hours_8_5');
+    527|     expect(hours).toHaveLength(3);
+       |                   ^
+    528|     for (const finding of hours) {
+    529|       expect(finding.sources).toHaveLength(MAX_FINDING_SOURCES);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > keeps small findings whole: the count equals the listed sources
+AssertionError: expected undefined to be 2 // Object.is equality
+
+- Expected:
+2
+
++ Received:
+undefined
+
+ ❯ tests/integration/workbook-reader.test.ts:538:73
+    536|   it('keeps small findings whole: the count equals the listed sources'…
+    537|     const preview = previewWorkbook(readTemplateBytes());
+    538|     for (const finding of preview.findings) expect(finding.sourceCount…
+       |                                                                         ^
+    539|   });
+    540|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > collapses a flood of one kind of finding into a bounded list with a truthful summary
+AssertionError: expected 1500 to be less than or equal to NaN
+ ❯ tests/integration/workbook-reader.test.ts:546:28
+    544|     const preview = previewWorkbook(withEntry(template, 'xl/worksheets…
+    545|     const invalid = findings(preview, 'invalid_date_cell');
+    546|     expect(invalid.length).toBeLessThanOrEqual(MAX_FINDINGS_PER_CODE +…
+       |                            ^
+    547|     expect(invalid.reduce((sum, finding) => sum + finding.sourceCount,…
+    548|     expect(preview.summary.errors).toBe(1500);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > refuses a holiday table with more rows than any calendar has
+AssertionError: expected null to be 'too_many_holidays' // Object.is equality
+
+- Expected:
+"too_many_holidays"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:555:109
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > previews a sheet of 150 000 cells in column C instead of overflowing the stack (the audit gave a 500)
+RangeError: Maximum call stack size exceeded
+ ❯ readHolidays src/server/import/templateMapping.ts:297:21
+    295|   const holidays: HolidayPreview[] = [];
+    296|   const seen = new Map<CivilDate, string>();
+    297|   const last = Math.max(1, ...[...sheet.cells.values()].map((cell) => …
+       |                     ^
+    298|   for (let row = 2; row <= last; row += 1) {
+    299|     const dateCell = pick(sheet, `A${row}`);
+ ❯ mapWorkbook src/server/import/templateMapping.ts:538:54
+ ❯ previewWorkbook src/server/import/templateMapping.ts:634:10
+ ❯ tests/integration/workbook-reader.test.ts:573:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > refuses the same sheet with a typed 422 reason under the default limits
+AssertionError: expected null to be 'too_many_cells' // Object.is equality
+
+- Expected:
+"too_many_cells"
+
++ Received:
+null
+
+ ❯ tests/integration/workbook-reader.test.ts:580:89
+    578|   it('refuses the same sheet with a typed 422 reason under the default…
+    579|     const cells = Array.from({ length: 150_000 }, () => '<c r="C1"/>')…
+    580|     expect(rejection(() => previewWorkbook(holidaySheet(`<row r="1">${…
+       |                                                                                         ^
+    581|   });
+    582|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > Holiday Dates sheet inside the cell limit never crashes the mapping (WP4-B-02) > maps 150 000 cells without a spread over the cell list and without a loop up to the largest row
+RangeError: Maximum call stack size exceeded
+ ❯ readHolidays src/server/import/templateMapping.ts:297:21
+    295|   const holidays: HolidayPreview[] = [];
+    296|   const seen = new Map<CivilDate, string>();
+    297|   const last = Math.max(1, ...[...sheet.cells.values()].map((cell) => …
+       |                     ^
+    298|   for (let row = 2; row <= last; row += 1) {
+    299|     const dateCell = pick(sheet, `A${row}`);
+ ❯ mapWorkbook src/server/import/templateMapping.ts:538:54
+ ❯ tests/integration/workbook-reader.test.ts:621:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  18 failed | 86 passed (104)
+   Start at  04:34:18
+   Duration  23.43s (tests 95%, import 4%, transform 2%)
+
+
+real	0m23.773s
+user	0m0.000s
+sys	0m0.015s

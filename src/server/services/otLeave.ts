@@ -31,8 +31,8 @@ import { importedPeriodError } from './workbookImport.ts';
  * - Record use is the only way to consume (E-3): explicit, on or after the leave date in
  *   the owner's saved reporting zone, X <= reserved, partial allowed, idempotent by key.
  *   The unused remainder stays reserved until it is used or cancelled. A leave date inside
- *   an imported period is refused with 409 `imported_period` (F-2: imported history posts
- *   no ledger event).
+ *   an imported period is refused with 409 `imported_period`, both when reserving and when
+ *   recording use (F-2: imported history posts no ledger event and reserves nothing).
  * - Cancel releases the unused reserved minutes; it posts nothing.
  * - Reverse gives already used minutes back with a compensating positive ledger delta
  *   linked to the request.
@@ -524,6 +524,9 @@ export function reserveOtLeave(ctx: OtLeaveContext, input: ReserveOtLeaveInput):
       if (!same) throw new ApiError(409, 'request_key_conflict', 'This leave request was already recorded with different values');
       return { status: 'duplicate', request: existing, balance: getBalance(ctx.db, input.userId) };
     }
+    // R1 (WP4-FIXB): an imported period is read-only history, so nothing is reserved against it either; the use of
+    // such a reservation is refused below (recordOtLeaveUse), and a reservation that could never be used is not made.
+    if (insideImportedPeriod(ctx.db, input.userId, leaveDate)) throw importedPeriodError();
     const balance = getBalance(ctx.db, input.userId);
     if (!canReserve(balance.availableMinutes, counters.reservedMinutes)) {
       throw new ApiError(409, 'insufficient_balance', 'The available OT balance does not cover this leave', {

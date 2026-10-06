@@ -46,7 +46,7 @@ Canonical serialization uses stable object keys/array order, integer minutes, IS
 - Who imports (F-1): each person previews and commits only their own workbook, so the actor is the owner. An administrator cannot import, preview or read an import for another person; another user's batch answers 404.
 - Imported periods (F-2): an imported period (`imported_unverified`) posts no ledger events, cannot be signed or submitted (409 `imported_period`) and is read-only history. The explicit opening balance is the only OT carry-in, so nothing is counted twice.
 - Opening balance (F-3): signed, non-zero minutes with an as-of date, reason and evidence; one per user; changed only by a reasoned correction; stored as a new ledger entry type.
-- Never-configured accounts (F-3): an account that never saved its submission settings shows an administrator a "not set up" flag in the operational status, and the employee gets no overdue warning. This matches the H-Q1 (a) rule in document 05 (no automation before setup).
+- Never-configured accounts (F-3): an account that never saved its submission settings shows an administrator a "not set up" flag in the administrator's account list, and the employee gets no overdue warning. This matches the H-Q1 (a) rule in document 05 (no automation before setup).
 - Job-row retention (F-4): only succeeded `deadline_scan` and `reminder_scan` job rows older than 30 days may be deleted, through a migration-scoped exception to the job-delete trigger. Delivery, PDF and send rows are never deleted.
 
 ## API and hosting boundary

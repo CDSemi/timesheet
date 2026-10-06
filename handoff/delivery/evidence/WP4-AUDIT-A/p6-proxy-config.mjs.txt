@@ -1,0 +1,137 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// WP4-AUDIT-A probe P6: TRUSTED_PROXY_ADDRESSES and the sign-in limiter (WP4-T01), configuration fail-fast, the health
+// and readiness bodies, and whether the built client source map is served. Built server from the clean export, explicit
+// DATABASE_PATH and DATA_DIR per run, synthetic example.invalid identities, loopback only.
+// Usage: node p6-proxy-config.mjs <export dir> <work dir>
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readdirSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+
+const [exportDir, work] = process.argv.slice(2);
+const SERVER = join(exportDir, 'dist', 'server', 'index.js');
+mkdirSync(work, { recursive: true });
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const freePort = () => new Promise((resolvePort) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolvePort(port)); }); });
+
+async function start(name, extra) {
+  const port = await freePort();
+  const env = {
+    ...process.env,
+    NODE_ENV: 'development',
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    DATABASE_PATH: join(work, `${name}.db`),
+    DATA_DIR: join(work, `${name}-private-data`),
+    APP_ORIGINS: `http://localhost:${port}`,
+    OUTBOUND_MODE: 'capture',
+    JOB_RUNNER: 'off',
+    ...extra,
+  };
+  for (const key of Object.keys(env)) if (env[key] === undefined) delete env[key];
+  const child = spawn(process.execPath, [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  child.stdout.on('data', (chunk) => { log += chunk; });
+  child.stderr.on('data', (chunk) => { log += chunk; });
+  const exited = new Promise((done) => child.on('close', (code) => done(code)));
+  let state = 'starting';
+  exited.then(() => { state = 'exited'; });
+  for (let i = 0; i < 200 && state === 'starting' && !log.includes('Timesheet listening'); i += 1) await sleep(50);
+  return { port, child, exited, log: () => log, origin: `http://localhost:${port}`, base: `http://127.0.0.1:${port}` };
+}
+async function stop(server) {
+  server.child.kill('SIGTERM');
+  await server.exited;
+}
+let counter = 0;
+async function failedLogin(server, xff, email) {
+  counter += 1;
+  const headers = { origin: server.origin, 'content-type': 'application/json' };
+  if (xff !== null) headers['x-forwarded-for'] = xff;
+  const response = await fetch(`${server.base}/api/auth/login`, {
+    method: 'POST',
+    headers,
+    // A random wrong password per attempt (no credential-like literal in this source).
+    body: JSON.stringify({ email: email ?? `nobody-${counter}@example.invalid`, password: randomBytes(12).toString('base64url') }),
+  });
+  await response.text();
+  return { status: response.status, retryAfter: response.headers.get('retry-after') };
+}
+async function burst(server, count, xffOf) {
+  const statuses = [];
+  for (let i = 0; i < count; i += 1) statuses.push((await failedLogin(server, xffOf(i))).status);
+  return statuses;
+}
+
+// S1: no trusted proxy. A client rotating X-Forwarded-For still shares its socket address bucket (30 failures).
+const s1 = await start('s1', { TRUSTED_PROXY_ADDRESSES: undefined });
+const s1Statuses = await burst(s1, 31, (i) => `198.51.100.${i + 1}`);
+check('no trusted proxy: 30 failures with 30 spoofed X-Forwarded-For values, the 31st is 429 (one bucket: the socket peer)', s1Statuses.slice(0, 30).every((s) => s === 401) && s1Statuses[30] === 429, s1Statuses.slice(28).join(','));
+const health = await (await fetch(`${s1.base}/api/health`)).json();
+const readyResponse = await fetch(`${s1.base}/api/ready`);
+const ready = await readyResponse.json();
+check('/api/health is exactly {"status":"ok"}', JSON.stringify(health) === '{"status":"ok"}');
+check('/api/ready has exactly status, schema {expected, actual} and data_dir_writable', readyResponse.status === 200 && JSON.stringify(Object.keys(ready).sort()) === '["data_dir_writable","schema","status"]' && JSON.stringify(Object.keys(ready.schema).sort()) === '["actual","expected"]', JSON.stringify(ready));
+const assets = readdirSync(join(exportDir, 'dist', 'client', 'assets'));
+const mapName = assets.find((name) => name.endsWith('.js.map'));
+const mapResponse = await fetch(`${s1.base}/assets/${mapName}`);
+const mapText = await mapResponse.text();
+console.log(`INFO  built client assets: ${assets.join(', ')}; GET /assets/<bundle>.js.map -> ${mapResponse.status}, ${mapText.length} bytes, sourcesContent ${mapText.includes('"sourcesContent"')}`);
+const jsName = assets.find((name) => name.endsWith('.js'));
+const jsText = await (await fetch(`${s1.base}/assets/${jsName}`)).text();
+console.log(`INFO  the served bundle ${/sourceMappingURL=/.test(jsText) ? 'references' : 'does not reference'} its source map`);
+await stop(s1);
+
+// S2: the socket peer (127.0.0.1) is the trusted proxy: the right-most untrusted hop is the client.
+const s2 = await start('s2', { TRUSTED_PROXY_ADDRESSES: '127.0.0.1' });
+const s2Distinct = await burst(s2, 40, (i) => `198.51.100.${i + 1}`);
+check('trusted proxy: 40 failures from 40 different forwarded clients are 40 separate buckets (no 429)', s2Distinct.every((s) => s === 401));
+const s2Same = await burst(s2, 31, () => '203.0.113.7');
+check('trusted proxy: one forwarded client is limited after 30 failures', s2Same.slice(0, 30).every((s) => s === 401) && s2Same[30] === 429, s2Same.slice(28).join(','));
+const spoofLeft = await burst(s2, 3, (i) => `192.0.2.${i + 1}, 203.0.113.7`);
+check('trusted proxy: hops a client prepends (left of the proxy-appended address) do not escape the limit', spoofLeft.every((s) => s === 429), spoofLeft.join(','));
+const trustedRight = await failedLogin(s2, '203.0.113.7, 127.0.0.1');
+check('trusted proxy: a trusted hop on the right is skipped; the client is the next untrusted hop', trustedRight.status === 429 && trustedRight.retryAfter !== null, `${trustedRight.status} retry-after ${trustedRight.retryAfter}`);
+const ipv6Mapped = await burst(s2, 1, () => '::ffff:203.0.113.7');
+check('trusted proxy: an IPv4-mapped IPv6 spelling of the same client hits the same bucket', ipv6Mapped[0] === 429);
+const malformed = await burst(s2, 31, () => 'not-an-address');
+check('trusted proxy: a malformed header falls back to the peer (merges into the proxy bucket, never splits)', malformed.slice(0, 30).every((s) => s === 401) && malformed[30] === 429, malformed.slice(28).join(','));
+const accountBucket = [];
+for (let i = 0; i < 6; i += 1) accountBucket.push((await failedLogin(s2, '198.51.100.200', '<email>')).status);
+check('trusted proxy: the per-account bucket keys on the real client (6th failure for one account is 429)', accountBucket.slice(0, 5).every((s) => s === 401) && accountBucket[5] === 429, accountBucket.join(','));
+check('server log never shows an email address or a forwarded address', !/@example\.invalid|198\.51\.100|203\.0\.113/.test(s2.log()));
+await stop(s2);
+
+// S3: a trusted proxy that is not the socket peer: every forwarded header is ignored.
+const s3 = await start('s3', { TRUSTED_PROXY_ADDRESSES: '10.255.255.1' });
+const s3Statuses = await burst(s3, 31, (i) => `198.51.100.${i + 1}`);
+check('trusted proxy that is not the peer: X-Forwarded-For ignored, the 31st failure is 429', s3Statuses.slice(0, 30).every((s) => s === 401) && s3Statuses[30] === 429, s3Statuses.slice(28).join(','));
+await stop(s3);
+
+// S4: configuration fails fast without echoing values.
+const secretLike = 'S3cretLikeValue-4711';
+const failCases = [
+  ['TRUSTED_PROXY_ADDRESSES with a CIDR and a non-address', { TRUSTED_PROXY_ADDRESSES: `10.0.0.0/8,${secretLike}` }, /TRUSTED_PROXY_ADDRESSES/],
+  ['production without DATA_DIR', { NODE_ENV: 'production', DATA_DIR: undefined, PUBLIC_BASE_URL: 'https://timesheet.example.invalid' }, /DATA_DIR/],
+  ['production without PUBLIC_BASE_URL', { NODE_ENV: 'production', PUBLIC_BASE_URL: undefined }, /PUBLIC_BASE_URL/],
+  ['production with an http PUBLIC_BASE_URL', { NODE_ENV: 'production', PUBLIC_BASE_URL: 'http://timesheet.example.invalid' }, /https/],
+  ['production with a relative DATABASE_PATH', { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://timesheet.example.invalid', DATABASE_PATH: 'timesheet.db' }, /DATABASE_PATH/],
+  ['MAIL_FROM holding a non-address', { MAIL_FROM: `${secretLike} <x>` }, /MAIL_FROM/],
+  ['OUTBOUND_MODE=smtp without the owner flag', { OUTBOUND_MODE: 'smtp', SMTP_PASSWORD: secretLike }, /PRODUCTION_SENDING_ENABLED/],
+  ['DATA_DIR inside a Dropbox folder', { DATA_DIR: join(work, 'Dropbox', 'private-data') }, /Dropbox/],
+];
+for (const [label, extra, pattern] of failCases) {
+  const server = await start(`fail-${counter += 1}`, extra);
+  const code = await Promise.race([server.exited, sleep(8000).then(() => 'running')]);
+  if (code === 'running') await stop(server);
+  check(`fails fast: ${label} (non-zero exit, names the variable, echoes no value)`, code !== 'running' && code !== 0 && pattern.test(server.log()) && !server.log().includes(secretLike) && !server.log().includes('Timesheet listening'), `exit ${code}; ${server.log().split('\n').find((line) => /Error|error/.test(line))?.slice(0, 120) ?? ''}`);
+}
+
+console.log(fails === 0 ? 'P6 PASSED' : `P6 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

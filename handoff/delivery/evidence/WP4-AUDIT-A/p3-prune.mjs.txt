@@ -1,0 +1,141 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// WP4-AUDIT-A probe P3: backup pruning (WP4-T05B, F-5) on Windows, with NTFS junctions as the link escape.
+// Checks: only tool folders with a matching manifest are candidates; a junction named like a backup is ignored; a
+// junction INSIDE a removed backup folder (files/ itself, or an entry of files/) is unlinked, never followed; the dry
+// run removes nothing; a run whose new backup is missing removes nothing; an escape found at removal time refuses the
+// whole run; the newest backup always survives. Also measures what a clock that went backwards would remove.
+// Usage: node p3-prune.mjs <export dir> <work dir>
+import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work] = process.argv.slice(2);
+const { pruneBackups, findBackups } = await import(pathToFileURL(join(exportDir, 'dist', 'server', 'ops', 'prune.js')).href);
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+const clockAt = (iso) => ({ now: () => new Date(iso) });
+const compact = (iso) => iso.replace(/[-:]/g, '');
+const nameOf = (iso, hex) => `timesheet-backup-${compact(iso)}-${hex}`;
+function manifest(createdAt) {
+  return JSON.stringify({
+    format: 'timesheet-backup', format_version: 1, app_version: '0.1.0', schema_version: 13, created_at: createdAt,
+    integrity: { integrity_check: 'ok', foreign_key_violations: 0, files_verified: 0 },
+    database: { name: 'timesheet.db', sha256: '0'.repeat(64), size_bytes: 1 },
+    files: [],
+  });
+}
+function backupFolder(root, iso, hex, { manifestInstant = iso } = {}) {
+  const dir = join(root, nameOf(iso, hex));
+  mkdirSync(join(dir, 'files'), { recursive: true });
+  writeFileSync(join(dir, 'timesheet.db'), 'x');
+  writeFileSync(join(dir, 'manifest.json'), manifest(manifestInstant));
+  return dir;
+}
+function tree(dir) {
+  const out = [];
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink()) out.push(`${path.slice(dir.length)} -> link`);
+      else if (stat.isDirectory()) { out.push(`${path.slice(dir.length)}/`); walk(path); }
+      else out.push(`${path.slice(dir.length)} ${sha(path)}`);
+    }
+  };
+  walk(dir);
+  return out.sort().join('\n');
+}
+
+// ---- Scenario A: link escapes and folder selection.
+const root = join(work, 'a');
+const target = join(root, 'backups');
+const victims = { v1: join(root, 'victim-files-dir'), v2: join(root, 'victim-entry'), v3: join(root, 'victim-backup-lookalike') };
+for (const dir of Object.values(victims)) mkdirSync(dir, { recursive: true });
+writeFileSync(join(victims.v1, 'precious-1.txt'), 'synthetic precious data 1');
+writeFileSync(join(victims.v2, 'precious-2.txt'), 'synthetic precious data 2');
+mkdirSync(join(victims.v3, 'files'), { recursive: true });
+writeFileSync(join(victims.v3, 'manifest.json'), manifest('2026-01-01T00:00:00Z'));
+writeFileSync(join(victims.v3, 'timesheet.db'), 'victim database');
+const victimsBefore = Object.fromEntries(Object.entries(victims).map(([key, dir]) => [key, tree(dir)]));
+
+const newest = backupFolder(target, '2026-10-06T10:00:00Z', 'aaaaaaaa');
+// Older backup of the same day (selected for removal): its files/ folder is replaced by a junction to a victim folder.
+const sameDay = join(target, nameOf('2026-10-06T08:00:00Z', 'bbbbbbbb'));
+mkdirSync(sameDay, { recursive: true });
+writeFileSync(join(sameDay, 'timesheet.db'), 'x');
+writeFileSync(join(sameDay, 'manifest.json'), manifest('2026-10-06T08:00:00Z'));
+let junctionsOk = true;
+try {
+  symlinkSync(victims.v1, join(sameDay, 'files'), 'junction');
+} catch (error) {
+  junctionsOk = false;
+  console.log(`INFO  cannot create a junction: ${error.code}`);
+}
+// Another removed backup whose files/ holds a junction entry and a normal file.
+const sameDay2 = backupFolder(target, '2026-10-06T07:00:00Z', 'cccccccc');
+writeFileSync(join(sameDay2, 'files', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'), 'copy');
+if (junctionsOk) symlinkSync(victims.v2, join(sameDay2, 'files', 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'), 'junction');
+// A junction named exactly like an old backup, pointing to a folder that looks like a backup.
+if (junctionsOk) symlinkSync(victims.v3, join(target, nameOf('2026-01-01T00:00:00Z', 'dddddddd')), 'junction');
+// Not the tool's: manifest instant differs from the name, a staging folder, a plain file with a backup name, another folder.
+backupFolder(target, '2026-02-01T00:00:00Z', 'eeeeeeee', { manifestInstant: '2026-02-02T00:00:00Z' });
+mkdirSync(join(target, `.partial-${nameOf('2026-03-01T00:00:00Z', 'ffffffff')}`));
+writeFileSync(join(target, nameOf('2026-03-02T00:00:00Z', '11111111')), 'a file, not a folder');
+mkdirSync(join(target, 'owner-notes'));
+// An old daily backup outside every window (removed) and one in the monthly window (kept).
+backupFolder(target, '2026-03-15T00:00:00Z', '22222222');
+backupFolder(target, '2026-06-15T00:00:00Z', '33333333');
+backupFolder(target, '2026-06-20T00:00:00Z', '44444444');
+
+const found = findBackups(target);
+console.log(`INFO  candidates ${found.candidates.length}: ${found.candidates.map((c) => c.name.slice(17, 33)).sort().join(', ')}; ignored ${found.ignored}`);
+check('junction named like a backup is not a candidate (and is only counted)', !found.candidates.some((c) => c.name.endsWith('dddddddd')));
+check('a manifest whose instant differs from the name, a staging folder, a plain file and another folder are not candidates', !found.candidates.some((c) => /eeeeeeee|ffffffff|11111111/.test(c.name)) && found.ignored === 5, `ignored ${found.ignored}`);
+
+const now = clockAt('2026-10-06T12:00:00Z');
+const before = tree(target);
+const dry = pruneBackups({ targetDir: target, clock: now, dryRun: true });
+check('dry run reports counts and removes nothing', tree(target) === before, JSON.stringify(dry));
+let missing = null;
+try { pruneBackups({ targetDir: target, clock: now, dryRun: false, requiredName: nameOf('2026-10-06T11:00:00Z', '99999999') }); } catch (error) { missing = error; }
+check('a run whose new backup is not among the candidates is refused and removes nothing', missing?.code === 'new_backup_missing' && tree(target) === before);
+let escape = null;
+try {
+  pruneBackups({
+    targetDir: target, clock: now, dryRun: false, requiredName: nameOf('2026-10-06T10:00:00Z', 'aaaaaaaa'),
+    realpath: (path) => (path.endsWith('22222222') ? join(root, 'elsewhere', 'x') : path),
+  });
+} catch (error) { escape = error; }
+check('a candidate that resolves outside the target at removal time refuses the whole run before any removal', escape?.code === 'candidate_outside_target' && tree(target) === before);
+
+const real = pruneBackups({ targetDir: target, clock: now, dryRun: false, requiredName: nameOf('2026-10-06T10:00:00Z', 'aaaaaaaa') });
+console.log(`INFO  real run: ${JSON.stringify(real)}`);
+const left = readdirSync(target).sort();
+console.log(`INFO  left in the target: ${left.map((n) => n.replace(/^timesheet-backup-/, 'tb-')).join(', ')}`);
+check('the newest backup survives', existsSync(newest) && existsSync(join(newest, 'manifest.json')));
+check('removed: the two older same-day backups and the March backup; kept: newest, June monthly', !existsSync(sameDay) && !existsSync(sameDay2) && !left.some((n) => n.endsWith('22222222')) && left.some((n) => n.endsWith('44444444')));
+check('junction escape: every victim folder is unchanged (files/ junction and junction entry were unlinked, not followed)', junctionsOk && Object.entries(victims).every(([key, dir]) => tree(dir) === victimsBefore[key]));
+check('the backup-named junction and every non-tool entry are untouched', left.some((n) => n.endsWith('dddddddd')) && left.some((n) => n.endsWith('eeeeeeee')) && left.some((n) => n.startsWith('.partial-')) && left.includes('owner-notes') && left.some((n) => n.endsWith('11111111')));
+
+// ---- Scenario B: the clock went backwards (NTP lost) — what a prune after the next backup would remove.
+const rootB = join(work, 'b');
+const targetB = join(rootB, 'backups');
+const day = new Date('2026-04-10T02:00:00Z');
+let created = 0;
+while (day <= new Date('2026-10-06T02:00:00Z')) {
+  backupFolder(targetB, day.toISOString().replace('.000Z', 'Z'), created.toString(16).padStart(8, '0'));
+  day.setUTCDate(day.getUTCDate() + 1);
+  created += 1;
+}
+const backwards = pruneBackups({ targetDir: targetB, clock: clockAt('2025-01-01T02:00:00Z'), dryRun: true });
+const correct = pruneBackups({ targetDir: targetB, clock: clockAt('2026-10-06T03:00:00Z'), dryRun: true });
+console.log(`INFO  ${created} nightly backups; prune with the correct clock keeps ${correct.kept} and removes ${correct.removed}; with the clock set back to 2025-01-01 it keeps ${backwards.kept} and removes ${backwards.removed}`);
+check('RISK (recorded, not a pass condition): a backward clock keeps fewer than the 7/4/6 policy', true, `kept ${backwards.kept} vs ${correct.kept}`);
+
+console.log(fails === 0 ? 'P3 PASSED' : `P3 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

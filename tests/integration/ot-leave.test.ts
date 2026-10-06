@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { payPeriodForPayrollDate } from '../../src/domain/periods.ts';
 import { writeTransaction } from '../../src/server/db/database.ts';
 import { ApiError } from '../../src/server/http/errors.ts';
+import { getCalendar } from '../../src/server/services/calendars.ts';
 import { getBalance, listLedgerEntries, postCorrection, postCredit } from '../../src/server/services/ledger.ts';
 import {
   cancelOtLeave,
@@ -12,6 +14,7 @@ import {
   reserveOtLeave,
   reverseOtLeaveUse,
 } from '../../src/server/services/otLeave.ts';
+import { ensurePayPeriodRow } from '../../src/server/services/periods.ts';
 import { expectDomainError, type LedgerFixtureFile, ledgerScenario, loadFixture } from '../support/fixtures.ts';
 import { createTestContext, type TestContext } from '../support/testApp.ts';
 
@@ -606,5 +609,46 @@ describe('LG-10: a day label or leave change never reserves or spends OT (owner 
     expect(newDeltas(employee)).toEqual([]);
     expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 600, reservedMinutes: 480 });
     expect(request.approvalOrigin).toBe('self_recorded');
+  });
+});
+
+describe('R1 (WP4-FIXB): an imported period is read-only history for OT leave (F-2)', () => {
+  const PAYROLL = '2026-10-02'; // 2026-09-14 .. 2026-09-27
+  const INSIDE = '2026-09-21';
+  const OUTSIDE = '2026-09-28';
+
+  /** What a committed workbook import leaves for the period: a timesheet row flagged imported_unverified. */
+  function markImported(payrollDate: string): void {
+    const period = payPeriodForPayrollDate(getCalendar(t.db, t.calendarId).schedule, payrollDate, []);
+    const periodId = ensurePayPeriodRow(t.db, t.clock, t.calendarId, period);
+    t.db
+      .prepare(
+        `INSERT INTO timesheets (id, user_id, pay_period_id, version, imported_unverified, created_at, updated_at)
+         VALUES ('synthetic-imported-timesheet', ?, ?, 1, 1, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z')`,
+      )
+      .run(employee, periodId);
+  }
+
+  it('red-first: reserving OT leave dated inside an imported period is 409 imported_period and creates nothing', () => {
+    openBalance(employee, 600);
+    markImported(PAYROLL);
+    const before = { requests: count('SELECT count(*) FROM ot_leave_requests'), audits: count('SELECT count(*) FROM audit_events') };
+    expectApiError(() => reserve(employee, 'leave-inside-imported', 120, INSIDE), 409, 'imported_period');
+    expect({ requests: count('SELECT count(*) FROM ot_leave_requests'), audits: count('SELECT count(*) FROM audit_events') }).toEqual(before);
+    expect(getBalance(t.db, employee)).toMatchObject({ postedMinutes: 600, reservedMinutes: 0 });
+    // The refusal is for the imported period only: a date outside it, and another owner's date, are reserved as before.
+    expect(reserve(employee, 'leave-outside-imported', 120, OUTSIDE).status).toBe('reserved');
+    openBalance(admin, 600);
+    expect(reserve(admin, 'leave-admin-same-date', 120, INSIDE).status).toBe('reserved');
+  });
+
+  it('keeps refusing the use of a reservation that predates an imported period (defence in depth)', () => {
+    openBalance(employee, 600);
+    const { request } = reserve(employee, 'leave-before-import', 120, INSIDE);
+    markImported(PAYROLL);
+    expectApiError(() => use(employee, request.id, 'use-1', 60), 409, 'imported_period');
+    expect(newDeltas(employee)).toEqual([]);
+    // Cancelling the reservation stays possible: it posts nothing.
+    expect(cancelOtLeave(ctx, { userId: employee, actorUserId: employee, requestId: request.id }).status).toBe('cancelled');
   });
 });

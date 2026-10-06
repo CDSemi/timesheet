@@ -1,0 +1,148 @@
+// WP4-AUDIT-B probe P4: migration 0013 (the ot_ledger 12-step rebuild) on an independently populated schema-12
+// database, the immutability of the rebuilt table, the opening-balance constraints at the SQL level, the
+// foreign-key rollback of migrate(), and a mutation control (0013 without its no-update trigger) proving the
+// immutability probe detects a dropped trigger. Databases live under the task folder only.
+// Usage (from the scratch export): node ../probes/p4-ledger-migration.mjs <work folder>
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { MIGRATIONS, migrate, MigrationError } from '../export/src/server/db/migrations.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { seedSynthetic } from '../export/src/server/seed.ts';
+import { signOffTimesheet } from '../export/src/server/services/finalization.ts';
+import { getBalance, postCorrection, postCredit, postDeficitDebit, postOpeningBalance } from '../export/src/server/services/ledger.ts';
+import { recordOtLeaveUse, reserveOtLeave, reverseOtLeaveUse } from '../export/src/server/services/otLeave.ts';
+import { buildReviewPayload } from '../export/src/server/services/reviewPayload.ts';
+import { createSession } from '../export/src/server/services/timesheetCommands.ts';
+
+const work = process.argv[2];
+if (!work) throw new Error('work folder required');
+mkdirSync(work, { recursive: true });
+const LA = 'America/Los_Angeles';
+const lines = [];
+let failures = 0;
+const check = (label, ok, detail = '') => {
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + detail : ''}`);
+  if (!ok) failures += 1;
+};
+const sqliteFails = (fn, pattern) => {
+  try {
+    fn();
+    return 'no error';
+  } catch (error) {
+    return pattern.test(String(error.message)) ? 'ok' : String(error.message);
+  }
+};
+
+async function populatedV12(name) {
+  const dir = join(work, name);
+  mkdirSync(dir, { recursive: true });
+  const db = openDatabase(join(dir, 'v12.db'));
+  migrate(db, MIGRATIONS.filter((m) => m.version <= 12), new Date('2026-09-29T20:00:00Z'));
+  const clock = { now: () => new Date('2026-09-29T20:00:00Z') };
+  await seedSynthetic(db, clock, {
+    files: new FileStore(join(dir, 'data')),
+    passwords: { admin: 'probe-admin-pass-1', employee: 'probe-employee-pass-1', employee2: 'probe-employee2-pass-1' },
+    sampleData: true,
+  });
+  const row = db.prepare("SELECT * FROM users WHERE email = 'employee2@example.invalid'").get();
+  const owner = { id: row.id, email: row.email, displayName: row.display_name, role: 'employee', calendarId: row.calendar_id, sessionId: 'probe' };
+  createSession({ db, clock, user: owner }, '2026-09-01', {
+    start: { local: '2026-09-01T08:00', zone: LA },
+    end: { local: '2026-09-01T18:30', zone: LA },
+    input_zone: LA,
+    breaks_confirmed: true,
+    breaks: [],
+    reason: 'Probe late entry',
+  });
+  const review = buildReviewPayload(db, clock, owner, '2026-09-18');
+  signOffTimesheet({ db, clock, user: owner }, '2026-09-18', { expectedVersion: review.expectedVersion, reviewedHash: review.payloadHash, signerName: 'Example Employee Two', deficitChoices: [], incompleteEvidenceAcknowledged: true });
+  const ctx = { db, clock };
+  const manual = { actorUserId: owner.id, origin: 'manual' };
+  const credit = postCredit(ctx, { userId: owner.id, sourceKey: 'p4-credit', minutes: 300, workDate: '2026-09-05', ...manual });
+  postCorrection(ctx, { userId: owner.id, sourceKey: 'p4-correction', originalEntryId: credit.entry.id, correctedMinutes: 330, reason: 'Probe recount', ...manual });
+  postDeficitDebit(ctx, { userId: owner.id, sourceKey: 'p4-debit', debitMinutes: 15, workDate: '2026-09-06', ...manual });
+  const leave = reserveOtLeave(ctx, { userId: owner.id, actorUserId: owner.id, requestKey: 'p4-leave', leaveDate: '2026-09-24', requestedMinutes: 90, permission: { approverName: 'Probe Manager', approvalDate: '2026-09-20', evidenceRef: 'probe' } });
+  const used = recordOtLeaveUse(ctx, { userId: owner.id, actorUserId: owner.id, requestId: leave.request.id, useKey: 'p4-use', minutes: 90 });
+  reverseOtLeaveUse(ctx, { userId: owner.id, actorUserId: owner.id, requestId: leave.request.id, reversalKey: 'p4-rev', minutes: 30, reason: 'Probe reversal', expectedVersion: used.request.version });
+  return { db, owner, dir };
+}
+
+const snapshot = (db) => ({
+  rows: JSON.stringify(db.prepare('SELECT rowid AS r, id, user_id, entry_type, delta_minutes, source_key, source_ref, corrects_entry_id, leave_request_id, work_date, actor_user_id, origin, reason, reconciliation_required, posted_at FROM ot_ledger ORDER BY rowid').all()),
+  types: db.prepare('SELECT DISTINCT entry_type FROM ot_ledger ORDER BY 1').pluck().all().join(','),
+  fks: JSON.stringify(db.pragma('foreign_key_list(ot_ledger)')),
+  lineFks: JSON.stringify(db.pragma('foreign_key_list(revision_ledger_lines)')),
+  objects: db.prepare("SELECT type || ' ' || name || ' ' || coalesce(sql, '') FROM sqlite_master WHERE tbl_name = 'ot_ledger' AND type IN ('index', 'trigger') ORDER BY type, name").pluck().all(),
+  lines: db.prepare('SELECT count(*) FROM revision_ledger_lines WHERE ledger_entry_id IS NOT NULL').pluck().get(),
+  balances: JSON.stringify(db.prepare('SELECT id FROM users ORDER BY id').pluck().all().map((id) => getBalance(db, id))),
+});
+
+// 1. The real migration on a populated schema-12 database.
+{
+  const { db, owner } = await populatedV12('real');
+  const before = snapshot(db);
+  check('schema 12 fixture holds every pre-0013 entry type, referenced by revision lines', before.types === 'correction,credit,deficit_debit,leave_consumption,leave_reversal' && before.lines > 0, `${before.types}; lines=${before.lines}`);
+  const result = migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'));
+  const after = snapshot(db);
+  check('migrate applies 13 only', JSON.stringify(result) === JSON.stringify({ applied: [13], version: 13 }), JSON.stringify(result));
+  check('every row and rowid kept (old columns byte-equal), balances equal', after.rows === before.rows && after.balances === before.balances);
+  check('the two new columns are NULL on every old row', db.prepare('SELECT count(*) FROM ot_ledger WHERE as_of_date IS NOT NULL OR evidence_ref IS NOT NULL').pluck().get() === 0);
+  check('foreign keys of ot_ledger and revision_ledger_lines unchanged', after.fks === before.fks && after.lineFks === before.lineFks);
+  const kept = before.objects.filter((o) => !o.startsWith('trigger ot_ledger_correction_target'));
+  check('every old index and trigger is back byte for byte (the correction-target trigger widened only)', kept.every((o) => after.objects.includes(o)) && after.objects.some((o) => o.startsWith('index ot_ledger_one_opening_balance')), `before=${before.objects.length} after=${after.objects.length}`);
+  check('integrity_check ok, foreign_key_check empty, foreign_keys back ON', db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0 && db.pragma('foreign_keys', { simple: true }) === 1);
+  const probes = {
+    'UPDATE delta': sqliteFails(() => db.prepare('UPDATE ot_ledger SET delta_minutes = 7').run(), /immutable_ledger_entry/),
+    'UPDATE reason of one row': sqliteFails(() => db.prepare("UPDATE ot_ledger SET reason = 'x' WHERE entry_type = 'leave_reversal'").run(), /immutable_ledger_entry/),
+    'DELETE all': sqliteFails(() => db.prepare('DELETE FROM ot_ledger').run(), /immutable_ledger_entry/),
+    'correction of a correction': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, corrects_entry_id, work_date, actor_user_id, origin, reason, posted_at) VALUES ('p4x', ?, 'correction', 5, 'p4x', (SELECT id FROM ot_ledger WHERE entry_type = 'correction' LIMIT 1), '2026-09-05', ?, 'manual', 'x', '2026-10-06T12:00:00Z')`).run(owner.id, owner.id), /invalid_correction_target/),
+    'orphan leave link (FK)': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, leave_request_id, work_date, origin, posted_at) VALUES ('p4o', ?, 'leave_consumption', -5, 'p4o', 'nope', '2026-09-24', 'system', '2026-10-06T12:00:00Z')`).run(owner.id), /FOREIGN KEY/),
+    'opening balance with a work date': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, work_date, actor_user_id, origin, reason, posted_at, as_of_date, evidence_ref) VALUES ('p4w', ?, 'opening_balance', 60, 'p4w', '2026-09-01', ?, 'manual', 'r', '2026-10-06T12:00:00Z', '2026-08-01', 'e')`).run(owner.id, owner.id), /CHECK/),
+    'opening balance of zero': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, actor_user_id, origin, reason, posted_at, as_of_date, evidence_ref) VALUES ('p4z', ?, 'opening_balance', 0, 'p4z', ?, 'manual', 'r', '2026-10-06T12:00:00Z', '2026-08-01', 'e')`).run(owner.id, owner.id), /CHECK/),
+    'opening balance without evidence': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, actor_user_id, origin, reason, posted_at, as_of_date) VALUES ('p4e', ?, 'opening_balance', 60, 'p4e', ?, 'manual', 'r', '2026-10-06T12:00:00Z', '2026-08-01')`).run(owner.id, owner.id), /CHECK/),
+    'opening balance by the system origin': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, origin, reason, posted_at, as_of_date, evidence_ref) VALUES ('p4s', ?, 'opening_balance', 60, 'p4s', 'system', 'r', '2026-10-06T12:00:00Z', '2026-08-01', 'e')`).run(owner.id), /CHECK/),
+    'as_of_date on a credit': sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, work_date, origin, posted_at, as_of_date) VALUES ('p4c', ?, 'credit', 5, 'p4c', '2026-09-01', 'system', '2026-10-06T12:00:00Z', '2026-08-01')`).run(owner.id), /CHECK/),
+  };
+  for (const [label, outcome] of Object.entries(probes)) check(`rebuilt table refuses: ${label}`, outcome === 'ok', outcome);
+  const clock = { now: () => new Date('2026-10-06T12:00:00Z') };
+  const opening = postOpeningBalance({ db, clock }, { userId: owner.id, actorUserId: owner.id, minutes: -45, asOfDate: '2026-08-16', reason: 'Probe negative carry-in', evidenceRef: 'probe letter', expectedVersion: 0 });
+  const second = sqliteFails(() => db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, actor_user_id, origin, reason, posted_at, as_of_date, evidence_ref) VALUES ('p4d', ?, 'opening_balance', 60, 'other-key', ?, 'manual', 'r', '2026-10-06T12:00:00Z', '2026-08-01', 'e')`).run(owner.id, owner.id), /UNIQUE/);
+  const sum = db.prepare('SELECT sum(delta_minutes) FROM ot_ledger WHERE user_id = ?').pluck().get(owner.id);
+  check('a negative opening balance posts once; a second one under another key is refused (unique index); balance = sum of deltas', opening.status === 'posted' && second === 'ok' && getBalance(db, owner.id).postedMinutes === sum, `posted=${getBalance(db, owner.id).postedMinutes} sum=${sum} second=${second}`);
+  const correction = sqliteFails(() => postCorrection({ db, clock }, { userId: owner.id, sourceKey: 'p4-generic', originalEntryId: opening.entry.id, correctedMinutes: 10, reason: 'via the generic path', actorUserId: owner.id, origin: 'manual' }), /Only an original credit or deficit debit/);
+  check('the generic credit/debit correction path refuses an opening balance', correction === 'ok', correction);
+  check('a rerun applies nothing', JSON.stringify(migrate(db)) === JSON.stringify({ applied: [], version: 13 }));
+  db.close();
+}
+
+// 2. Foreign-key rollback: a dangling row written behind the application's back blocks the upgrade, all rolled back.
+{
+  const { db } = await populatedV12('fk-rollback');
+  db.pragma('foreign_keys = OFF');
+  db.prepare(`INSERT INTO ot_ledger (id, user_id, entry_type, delta_minutes, source_key, leave_request_id, work_date, origin, posted_at) VALUES ('dangling', (SELECT id FROM users WHERE email = 'employee@example.invalid'), 'leave_consumption', -5, 'dangling', 'missing', '2026-09-24', 'system', '2026-10-06T12:00:00Z')`).run();
+  db.pragma('foreign_keys = ON');
+  const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'ot_ledger'").pluck().get();
+  let error = null;
+  try {
+    migrate(db, MIGRATIONS, new Date('2026-10-06T12:00:00Z'));
+  } catch (e) {
+    error = e;
+  }
+  check('a foreign-key violation stops migrate with MigrationError and rolls 0013 back', error instanceof MigrationError && db.prepare('SELECT max(version) FROM schema_migrations').pluck().get() === 12 && db.prepare("SELECT sql FROM sqlite_master WHERE name = 'ot_ledger'").pluck().get() === tableSql && db.pragma('foreign_keys', { simple: true }) === 1 && !db.inTransaction, String(error?.message));
+  db.close();
+}
+
+// 3. Mutation control: 0013 without its no-update trigger; the same immutability probe must now FAIL to refuse.
+{
+  const { db } = await populatedV12('mutation');
+  const mutated = MIGRATIONS.map((m) => (m.version === 13 ? { ...m, sql: m.sql.replace(/CREATE TRIGGER ot_ledger_no_update[\s\S]*?END;/, '') } : m));
+  migrate(db, mutated, new Date('2026-10-06T12:00:00Z'));
+  const outcome = sqliteFails(() => db.prepare("UPDATE ot_ledger SET reason = 'x' WHERE entry_type = 'leave_reversal'").run(), /immutable_ledger_entry/);
+  check('mutation control: without the trigger the UPDATE probe is no longer refused (probe is meaningful)', outcome === 'no error', outcome);
+  db.close();
+}
+
+console.log(lines.join('\n'));
+console.log(failures === 0 ? 'PROBE P4 PASSED' : `PROBE P4 FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

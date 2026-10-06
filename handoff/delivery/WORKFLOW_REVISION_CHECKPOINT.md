@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 0f6abdf77c313f2dcb45bf624ee56294e5976c78 (WP4-T12-FREEZE).
+  - HEAD = origin/main = 13a258db86b2f0b6388830e584e2cca5303f1f6c (WP4-T13-FREEZE, the WP4 package freeze).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -717,7 +717,52 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - Command map: 13 rows map to drill stages; 5 are owner NAS steps, unverified.
        - Parity holds; preflight 0. Digest: 1ed67f55….
      - The WP4-GATE, WP4-AUDIT-A and WP4-AUDIT-B briefs are ready.
-     - Running: WP4-T13-FREEZE (the package freeze).
+     - WP4-T13-FREEZE committed and pushed 13a258d (26 paths; all checks 0). This is the
+       WP4 package freeze; the board's current source digest is 1ed67f55….
+     - WP4-GATE: PASS (13/13, verifier-reported).
+       - The digest of record is 1ed67f55… (774 files).
+       - Verify: 1710 tests. e2e: 145 passed.
+       - Drill stages 1–6: 205 PASS.
+       - Migrations pass, and races ran 60 of 60.
+       - NAS: NOT VERIFIED.
+       - Incident: one migrate probe without `DATABASE_PATH` migrated the owner's local
+         development database from schema 1 to 13. It holds dev data only and is outside
+         the repository. The owner was told.
+     - WP4-AUDIT-B (data): **FIX REQUIRED.**
+       - WP4-B-01 (Medium): an XML parse-cost bomb inside the limits blocks the server
+         for about 9 s and adds about 730 MiB, and the stored report grows without bound.
+       - WP4-B-02 (Low): 150,000 Holiday Dates cells cause a stack overflow and HTTP 500.
+       - Everything else in area B held.
+       - Risk notes R1–R4: R3 says an ended but not-yet-due period is importable, which
+         is relevant to I-3. R4 says previews are kept forever with no quota.
+       - Incident: the auditor's runaway python REPL (background task b9vel2ldq) wrote a
+         multi-GB output file. The coordinator stopped it; the owner deletes the file.
+     - WP4-AUDIT-A (operations): **FIX REQUIRED.**
+       - WP4-A-01 (Low, must fix): the image ships 114 source maps, and production
+         serves the client map.
+       - WP4-A-02 (Low): `.env.example` contradicts the `JOB_RUNNER=off` rollback rule.
+       - WP4-A-03 (Low): two runbook statements are inaccurate.
+       - WP4-A-04 (Info): the smoke test inherits `DATA_DIR`.
+       - Risks R-A1 to R-A9. The rest of area A held: backup under writes and restore,
+         the migration runner, prune junction escapes, bootstrap, proxy, retention,
+         privacy and the outbound CLI.
+     - Fix round:
+       - WP4-FIXB is done (author-reported).
+         - XML limits refuse with 422 before parsing; findings are capped.
+         - The 65 KB bomb now takes 4 ms (422) instead of 8.4 s and +740 MiB.
+         - B-02 is fixed; R3 adds `not_due` as skip-only; R1 answers 409.
+         - Verify: 1730 tests. Digest: b119e1b5….
+       - WP4-FIXA is done (author-reported).
+         - The image has no maps, and `/assets/*.map` answers 404; `app.ts` now
+           returns 404 for a missing asset.
+         - `.env.example`, the runbook and the smoke test are fixed.
+         - Prune refuses when the clock is backward, and the drill releases two jobs.
+         - The docs sync is done.
+         - Drill: 208 PASS. Verify: 1734 tests. Digest: dfe4541d….
+       - Running: WP4-FIX-FREEZE.
+       - Then one freeze, WP4-REGATE, and fresh rechecks of A and B.
+     - Backlog: R-A2, R-A6, R-A8, B-R2.
+     - Owner questions: I-5 (preview quota), and R-A3 before WP5.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -731,10 +776,9 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-T13-FREEZE, then dispatch WP4-GATE on that commit.
-  2. Then, in this order:
-     - WP4-GATE;
-     - two fresh audits;
+  1. Record WP4-FIX-FREEZE. Then WP4-REGATE,
+     WP4-RECHECK-A and WP4-RECHECK-B (fresh opus auditors), WP4-ACCREC and WP4-ACCEPT.
+  2. Then:
      - acceptance.
   3. Then WP5 (it starts with an independent acceptance) and a concrete pilot packet.
      The real pilot stays owner-controlled.
@@ -752,7 +796,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T13-FREEZE (attempt 1) only.
+- Live processes: WP4-FIX-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

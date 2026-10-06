@@ -1,0 +1,39 @@
+// WP4-FIXB: measure the decoded size and element counts of every XML part of the tracked template and of a
+// synthetic workbook with 3, 26 and 60 dated sheets. Read only; nothing is written.
+import { pathToFileURL } from 'node:url';
+const REPO = process.env.REPO_DIR;
+const load = (p) => import(pathToFileURL(`${REPO}/${p}`).href);
+const { buildSyntheticWorkbook, readTemplateBytes, unpack } = await load('tests/support/syntheticWorkbook.ts');
+
+function stats(entries, label) {
+  let total = 0;
+  let maxBytes = 0;
+  let maxElements = 0;
+  let maxC = 0;
+  let maxRow = 0;
+  let maxSi = 0;
+  let sumElements = 0;
+  for (const [name, data] of Object.entries(entries)) {
+    if (!/\.xml$|\.rels$/.test(name)) continue;
+    const text = new TextDecoder().decode(data);
+    const elements = (text.match(/<[A-Za-z_]/g) ?? []).length;
+    const c = (text.match(/<c[\s/>]/g) ?? []).length;
+    const row = (text.match(/<row[\s/>]/g) ?? []).length;
+    const si = (text.match(/<si[\s/>]/g) ?? []).length;
+    total += data.length;
+    sumElements += elements;
+    if (data.length > maxBytes) maxBytes = data.length;
+    if (elements > maxElements) maxElements = elements;
+    if (c > maxC) maxC = c;
+    if (row > maxRow) maxRow = row;
+    if (si > maxSi) maxSi = si;
+    if (label === 'template' && (data.length > 20_000 || elements > 1000)) console.log(`  ${label} ${name}: bytes=${data.length} elements=${elements} c=${c} row=${row} si=${si}`);
+  }
+  console.log(`${label}: totalXmlBytes=${total} maxPartBytes=${maxBytes} maxElements=${maxElements} maxC=${maxC} maxRow=${maxRow} maxSi=${maxSi} sumElements=${sumElements}`);
+}
+
+stats(unpack(readTemplateBytes()), 'template');
+for (const n of [3, 26, 60]) {
+  const periods = Array.from({ length: n }, (_, i) => ({ payrollDate: new Date(Date.UTC(2026, 0, 9) + i * 14 * 86400000).toISOString().slice(0, 10) }));
+  stats(unpack(buildSyntheticWorkbook({ periods })), `synthetic-${n}-sheets`);
+}

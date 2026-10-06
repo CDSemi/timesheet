@@ -70,7 +70,7 @@ Drill là `npm run drill:container -- --work <thư mục rỗng> --project <tên
 
 Bản cài mới chưa có lịch và chưa có quản trị viên. Bootstrap tạo lịch công ty và chính sách mặc định một lần, rồi cấp một token thiết lập dùng một lần. Trong file không có dữ liệu cá nhân.
 
-1. Chuẩn bị `<data-dir>/bootstrap.json` gồm lịch công ty, ngày lễ, quy tắc kỳ lương và chính sách mặc định, theo dạng của `reference/examples/*.json`. File được kiểm tra trước khi mở bất kỳ CSDL nào và một lần từ chối không trích giá trị nào trong file.
+1. Chuẩn bị `<data-dir>/bootstrap.json` gồm lịch công ty, ngày lễ, quy tắc kỳ lương và chính sách mặc định, theo dạng của `reference/examples/*.json`. File được kiểm tra trước khi mở bất kỳ CSDL nào. Một lần từ chối nêu trường và quy tắc bị lỗi và có thể trích một ngày hoặc một số trong chính sách từ file (ví dụ ngày lễ không hợp lệ hoặc số phút không khớp); không bao giờ trích tên, múi giờ báo cáo hay bí mật.
 2. Chạy bootstrap trong container đang chạy. Lệnh in số lượng và token thiết lập một lần; token chỉ hiện trên terminal này và chỉ lưu hash của nó. **[Drill stage 1]**
 
    ~~~bash
@@ -107,13 +107,13 @@ Mục tiêu (cần kiểm tra, không phải cam kết): backup hằng đêm, đ
 
 ## 5. Chính sách giữ lại
 
-- **Backup (F-5).** `--prune` giữ backup mới nhất của mỗi ngày UTC trong 7 ngày gần nhất, của mỗi tuần ISO trong 4 tuần gần nhất và của mỗi tháng UTC trong 6 tháng gần nhất, và luôn giữ backup mới nhất. Chỉ tác động lên thư mục do công cụ backup tạo (đúng tên thư mục và manifest hợp lệ); mọi mục khác chỉ được đếm. Các cửa sổ là cửa sổ lịch tính từ đồng hồ, nên sau một khoảng dài không có backup chỉ backup mới nhất còn lại. Kết quả của lần prune gần nhất không được ghi vào trạng thái quản trị. Xem trước một lần prune; lệnh không xóa gì: **[Drill stage 2]**
+- **Backup (F-5).** `--prune` giữ backup mới nhất của mỗi ngày UTC trong 7 ngày gần nhất, của mỗi tuần ISO trong 4 tuần gần nhất và của mỗi tháng UTC trong 6 tháng gần nhất, và luôn giữ backup mới nhất. Chỉ tác động lên thư mục do công cụ backup tạo (đúng tên thư mục và manifest hợp lệ); mọi mục khác chỉ được đếm. Các cửa sổ là cửa sổ lịch tính từ đồng hồ, nên sau một khoảng dài không có backup chỉ backup mới nhất còn lại. Nếu có backup mang ngày muộn hơn đồng hồ máy chủ (đồng hồ bị đặt lùi), `--prune` và lần chạy thử từ chối cả lượt với exit 2 (`clock_behind_backups`) và không xóa gì: hãy sửa giờ máy chủ trước. Kết quả của lần prune gần nhất không được ghi vào trạng thái quản trị. Xem trước một lần prune; lệnh không xóa gì: **[Drill stage 2]**
 
   ~~~bash
   <compose> exec -T timesheet <cli> backup prune --in /data/backups --dry-run
   ~~~
 
-- **Dòng job (F-4).** Một job hằng ngày chỉ xóa các dòng `deadline_scan` và `reminder_scan` đã thành công và cũ hơn 30 ngày. Không bao giờ xóa dòng gửi, PDF hay delivery. Không cần lên lịch gì: bộ chạy của server tự làm. Trạng thái quản trị hiển thị lần chạy gần nhất và số dòng đã xóa. Được `tests/integration/job-retention.test.ts` bao phủ, không phải drill.
+- **Dòng job (F-4).** Một job hằng ngày chỉ xóa các dòng `deadline_scan` và `reminder_scan` đã thành công và cũ hơn 30 ngày. Không bao giờ xóa dòng gửi, PDF hay delivery. Không cần lên lịch gì: bộ chạy của server tự làm. Lần chạy gần nhất và số dòng đã xóa nằm trong JSON của `GET /api/admin/operations` (`operations.retention`); màn hình quản trị không hiển thị chúng. Được `tests/integration/job-retention.test.ts` bao phủ, không phải drill.
 - **File mồ côi.** Một lượt quét hằng ngày xóa file riêng tư không có dòng nào tham chiếu và cũ hơn 24 giờ; không bao giờ xóa file đang được tham chiếu, kể cả nguồn nhập. Được `tests/integration/jobs-sweep.test.ts` bao phủ, không phải drill.
 - Timesheet, sổ OT, revision và nhật ký kiểm toán không bao giờ bị xóa. Theo dõi dung lượng đĩa trống (mục 12).
 
@@ -222,7 +222,7 @@ Dành cho những người của chủ sở hữu. Mỗi người chỉ nhập w
 2. Quyết định cho từng ngày được liệt kê. Mặc định là bỏ qua; chỉ có các lựa chọn mà bản xem trước cho phép. Sau đó xem lại và commit. **[Drill stage 6]**
 3. Kỳ đã nhập hiển thị "Imported, unverified". Đó là lịch sử chỉ đọc: không sự kiện sổ cái, không sign-off hay nộp (409 `imported_period`), không nhắc hạn và không tự động gửi. Tải cùng file lần nữa, hoặc commit hai lần, không thay đổi gì ("Already imported"). **[Drill stage 6]**
 4. Số dư OT mở đầu là khoản OT mang sang duy nhất. Nhập số phút có dấu khác không, ngày hiệu lực, lý do và tham chiếu bằng chứng, rồi xác nhận. Khoản này được ghi một lần; lặp lại là không làm gì, còn giá trị khác bị từ chối. Chỉ thay đổi bằng một điều chỉnh có lý do (điều chỉnh làm số dư ròng về không bị từ chối, câu hỏi mở I-4). **[Drill stage 6]**
-5. Việc nhập không làm gì: không bao giờ tạo phiên làm việc hay giờ chấm công, OT, sign-off hay lần gửi; "Off day (overtime used)" bị bỏ qua (I-2); kỳ nháp của ứng dụng không bao giờ nhận ngày nhập (I-1); kỳ chưa kết thúc không nhập được (I-3).
+5. Việc nhập không làm gì: không bao giờ tạo phiên làm việc hay giờ chấm công, OT, sign-off hay lần gửi; "Off day (overtime used)" bị bỏ qua (I-2); kỳ nháp của ứng dụng không bao giờ nhận ngày nhập (I-1); kỳ chưa kết thúc, hoặc đã kết thúc nhưng chưa đến hạn lương, chỉ được bỏ qua (I-3 và mặc định an toàn của nó, tài liệu 10).
 6. Giữ workbook cá nhân ngoài git, chat và image. Template được theo dõi là mẫu đã làm sạch và không bao giờ được lưu lại.
 
 Các route API đứng sau những màn hình này, đều chỉ dành cho chủ sở hữu: `POST /api/imports`, `GET /api/imports`, `GET /api/imports/{id}`, `POST /api/imports/{id}/commit`, và `GET`, `POST` và `PUT /api/ot/opening-balance`.
@@ -244,13 +244,13 @@ Các route API đứng sau những màn hình này, đều chỉ dành cho chủ
 
 ## 12. Trạng thái quản trị hiển thị gì
 
-Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy chi tiết timesheet (docs/03). Màn hình đọc `GET /api/admin/operations`; danh sách tài khoản có cờ "Not set up" cho tài khoản chưa từng lưu cài đặt nộp.
+Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy chi tiết timesheet (docs/03). Màn hình đọc `GET /api/admin/operations`, và danh sách tài khoản có cờ "Not set up" cho tài khoản chưa từng lưu cài đặt nộp. Route trả về nhiều hơn một chút so với màn hình hiển thị: lần chạy giữ lại (bên dưới) chỉ có trong JSON.
 
 - Nhịp của bộ chạy, thời điểm kích hoạt tự động, chế độ và cờ của bộ gửi, và tổng số job và lần gửi.
 - Backup: kết quả gần nhất, thời điểm lần thử và lần thành công gần nhất, mã lỗi và tuổi tính từ lần thành công gần nhất (cảnh báo sau 26 giờ, báo lỗi khi lần thử mới nhất thất bại).
 - Đĩa: số byte trống và tổng của volume dữ liệu (không bao giờ là đường dẫn).
 - Gửi ra ngoài: có đang tạm dừng không, từ khi nào và vì sao (`restored`), số lần gửi đang chờ quyết định, và số job gửi đang xếp hàng và đang bị giữ.
-- Giữ lại: lần dọn dòng job gần nhất khi nào và đã xóa bao nhiêu dòng.
+- Giữ lại (chỉ có trong JSON của `GET /api/admin/operations`, không có trên màn hình): lần dọn dòng job gần nhất khi nào và đã xóa bao nhiêu dòng.
 - Theo từng người: các kỳ có revision kèm người nhận, với mã lỗi đã che.
 
 **[Drill stage 3]** đọc trạng thái tạm dừng gửi từ route này sau restore; **[Drill stage 2]** tạo ra một backup mà trạng thái báo cáo. Không hiển thị: kết quả của lần `--prune` gần nhất, và mọi thứ về máy chủ. Vì vậy cần mục 11.

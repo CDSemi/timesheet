@@ -158,3 +158,9 @@ Không quyết định nào đổi yêu cầu đã chốt.
 
 - Giữ job gửi sau restore (WP4-T06): restore giữ mọi job `send_email` và `send_reminder` đang xếp hàng hoặc giữ lease từ backup. Mỗi job chỉ được thả hoặc bỏ bằng thao tác rõ ràng của người vận hành, có ghi audit; job tạo sau restore không bị giữ. Lý do: thư chưa rõ kết quả hoặc đã được chấp nhận không được gửi lại sau khi tiếp tục.
 - Chế độ rollback restore (WP4-T12A): `--keep-schema --confirm` restore backup vào schema mới hơn. Giới hạn còn lại: schema đã restore không có tạm dừng gửi nên không chặn được job tạo sau đó, vì vậy bản build cũ chạy với `JOB_RUNNER=off` cho đến khi đối chiếu. Chỉ bản build hiện tại mới thả được job bị giữ, nên rollback dài cần nâng cấp lần hai để đối chiếu. Lựa chọn của chủ: xóa giờ kích hoạt tự động khi `--confirm` (thay đổi trạng thái nghiệp vụ có audit, chưa làm) hoặc chấp nhận quy tắc `JOB_RUNNER=off`.
+
+## Quyết định của coordinator — nhập workbook của WP4 (2026-10-06, đảo ngược được; chủ có thể phủ quyết)
+
+Không quyết định nào đổi yêu cầu đã chốt.
+
+- Mặc định an toàn cho I-3 (R3 của WP4-AUDIT-B, WP4-FIXB): I-3 (a) của chủ nói kỳ chưa kết thúc không nhập được. Coordinator cũng coi kỳ đã kết thúc nhưng chưa qua thời điểm đến hạn lương là chỉ-bỏ-qua (`not_due`, lý do `period_not_due`); chính thời điểm đến hạn được tính là đã đến hạn, như lần quét hạn chót. Đây là mặc định thận trọng: chủ có thể đảo ngược, khi đó kỳ đã kết thúc nhưng chưa đến hạn được phép nhập. Quy tắc nằm ở tài liệu 07.

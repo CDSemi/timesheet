@@ -1,0 +1,230 @@
+node v24.21.0; docker Docker version 28.5.1, build e180ab8; project ts-wp4-gate
+PASS  docker build --platform linux/amd64  2 s, log in the work directory
+PASS  build output (including npm ci) has no deprecation line
+INFO  image id sha256:460bc86f889df547526ba6f353ae4a294486792905471a510f89be8197c9ee8a, linux/amd64, size 111297763 bytes (106.1 MiB)
+PASS  image architecture is amd64
+PASS  image runtime user is numeric and not root  User=10001:10001
+PASS  image sets NODE_ENV=production and OUTBOUND_MODE=capture
+PASS  image declares a HEALTHCHECK and the /data volume
+PASS  image file list was read  10612 paths
+PASS  forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+PASS  production dependencies only (no devDependency in the image)
+PASS  data directory is fresh  no timesheet.db before the first start
+PASS  container becomes healthy  5.4 s (running healthy)
+PASS  /api/ready reports ready with the schema version  schema 13 of 13
+PASS  running process UID is not 0  uid:gid 10001:10001
+PASS  root filesystem is read-only (cannot write under /app)
+PASS  /tmp tmpfs is writable
+PASS  bootstrap CLI prints a single-use setup token
+PASS  first administrator created with the token  status 201
+PASS  setup token cannot be replayed  status 403
+PASS  administrator sign-in
+PASS  administrator lists accounts (calendar id present)
+PASS  administrator creates a synthetic employee  status 201
+PASS  employee records a synthetic work session  status 201
+PASS  session reads back before the restart
+PASS  administrator cannot read the employee session  status 404
+PASS  database and private directory exist on the host data directory
+PASS  container is healthy again after the restart  5.3 s after the restart (6.4 s in all)
+PASS  schema version unchanged after the restart  schema 13
+PASS  stored sign-in session survives the restart
+PASS  synthetic work session persisted byte for byte after the restart
+PASS  container log has no deprecation warning
+PASS  container log never contains the setup token or a password
+STAGE 1 (build, image, start, persistence): 31 PASS, 0 FAIL
+PASS  employee uploads a synthetic signature image
+PASS  employee signs off a past synthetic period (finalization)  status 201
+PASS  the container job runner renders the PDF of the finalized period  10.1 s
+PASS  employee previews a synthetic workbook through /api/imports (201, new batch)  status 201
+PASS  the batch commits with a decision for every listed day  status 200
+PASS  a second workbook stays a preview batch (not committed)
+PASS  cli.js backup inside the running container exits 0
+PASS  every synthetic write succeeded  98 writes, 0 not 201
+PASS  writes continued while the backup ran  63 writes completed inside the 1066 ms backup window
+PASS  the backup recorded its success in operations_state
+INFO  backup duration 347 ms inside the CLI, 1066 ms for docker compose exec; writes before/during/after: 5/63/30
+PASS  backup folder name is timesheet-backup-<UTC>-<random>
+PASS  only the finished backup folder exists (no partial folder)  1 entries
+PASS  backup folder holds the database copy, files and manifest only
+PASS  manifest has exactly the allowed keys
+PASS  manifest has no email address, name or host path
+PASS  database copy matches the manifest SHA-256 and size
+PASS  copied file set equals the manifest file list
+PASS  every copied file matches its manifest SHA-256 and size  11 files, 0 mismatched
+PASS  the backup holds signature images and the PDF
+PASS  the backup holds both import sources (committed and preview), with the SHA-256 and size of the uploaded workbooks  2 import sources
+PASS  every import source file in the backup hashes to its manifest entry
+PASS  database copy passes integrity_check outside the container
+PASS  database copy has no foreign key violation
+PASS  schema version of the copy equals the manifest and the running instance  schema 13
+PASS  manifest files equal the attachment and import-source rows of the copy
+PASS  the copy is a point-in-time image: every session written before the backup, none beyond the end state  sessions before 5, in the copy 31, at the end 80
+INFO  manifest summary: schema 13, app 0.1.0, 11 files (8 signatures, 1 PDFs), database 655360 bytes, integrity ok, foreign key violations 0
+PASS  a target inside DATA_DIR is refused (exit 2)
+PASS  backup prune --dry-run inside the container exits 0 and prints counts only (candidates, keep, remove, ignored)  {"outcome":"dry_run","candidates":3,"keep":1,"remove":2,"ignored":0}
+PASS  the dry run counts the two expired same-day folders and keeps the real backup
+PASS  the dry run removed nothing: every folder, manifest and the real backup files are still there  3 folders
+PASS  container log after the backup has no deprecation warning
+STAGE 2 (backup, import sources, prune dry run): 31 PASS, 0 FAIL
+PASS  source ledger and revisions read through the API
+PASS  restore into a non-empty target is refused (exit 2, target_not_empty)
+PASS  restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)
+PASS  a refused restore created nothing in the live data directory
+PASS  source instance stopped before the restore  exited
+PASS  restore target is a fresh empty host directory
+PASS  cli.js restore in a one-off container exits 0  1051 ms
+PASS  restore output has exactly the allowed keys and no address, name or path
+PASS  restore verified the manifest and paused outbound delivery (reason restored)
+INFO  restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":11,"signatures":8,"pdfs":1,"database_bytes":655360},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":1,"ledger_entries":0,"attachments":9}}
+PASS  the one-off restore container is gone
+PASS  restored directory holds the database and the private data directory only
+PASS  every restored file matches its manifest SHA-256 and size  11 files, 0 mismatched
+PASS  restored database passes integrity_check and has no foreign key violation
+PASS  restored schema version equals the backup  schema 13
+PASS  restored copy is paused with reason restored
+PASS  no outbound job is leased and no attempt is sending or preparing in the restored copy
+PASS  restored balances (ledger entries and sums per user), revisions, sign-offs, files and sessions equal the backup
+PASS  restored import batches (ids, states, source hashes and sizes) equal the backup and the uploaded workbooks  2 batches
+PASS  every import source file is restored and hashes to its batch  2 of 2 sources
+INFO  restored counts (equal to the backup): {"users":2,"import_batches":2,"revisions":1,"ledger_entries":0,"ledger_minutes":0,"signoffs":1,"attachments":9,"work_sessions":31,"outbound_jobs":1,"delivery_attempts":0}
+PASS  restored instance becomes healthy  5.3 s (running healthy)
+PASS  restored instance logs the outbound pause at startup
+PASS  stored sign-in session works on the restored instance
+PASS  OT balance and ledger entries through the API equal the source  0 entries
+PASS  revisions through the API equal the source  1 revisions
+PASS  the employee lists the same import batches through the API of the restored instance  2 batches
+PASS  the committed batch reads back as committed with its report on the restored instance
+PASS  a sign-off on the paused restored instance creates a send job (not held: created after the restore)  status 201
+PASS  its PDF renders while outbound delivery is paused
+PASS  outbound resume without --confirm only previews (exit 2) and shows the paused queue  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":1}
+PASS  the restored runner keeps running (heartbeat) while paused  waited 40 s
+PASS  /api/admin/operations reports outbound delivery paused with reason restored  {"paused":true,"reason":"restored","queued":1,"held":1}
+PASS  no job is leased and nothing more was accepted while paused  jobs {"queued":1,"leased":0,"succeeded":4,"intervention":1,"cancelled":0}
+PASS  nothing was captured while paused
+PASS  nothing was sent while paused: no delivery attempt beyond the restored ones  {"preparing":0,"sending":0,"accepted":0,"failed_temporary":0,"failed_permanent":0,"uncertain":0}
+PASS  paused run: no restored outbound job changed state or attempts  1 restored outbound jobs, 0 changed
+PASS  paused run: the new send job is queued with no attempt spent  1 new
+PASS  paused run: still paused, no attempt sending and none accepted beyond the restored ones
+PASS  a backup of the paused restored instance (with its queued send job) exits 0
+PASS  the second restore exits 0 and holds the backed-up queued send job (queued 0)  {"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0}
+INFO  second restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":12,"signatures":8,"pdfs":2,"database_bytes":679936},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":2,"ledger_entries":0,"attachments":10}}
+PASS  the second restore holds the queued send job of the paused instance  2 held send jobs
+PASS  the second restore (a backup of a restored instance) also holds every import source  2 of 2 sources
+PASS  second restored instance becomes healthy and logs the pause  5.4 s
+PASS  a sign-off after the second restore creates a send job  status 201
+PASS  outbound release (preview, exit 2) lists the held send job as releasable  {"held":2,"releasable":2,"blocked":{}}
+PASS  cli.js outbound resume --confirm clears the pause (exit 0)  {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":2}
+PASS  after the resume the runner claims the send job created after the restore  13.1 s
+PASS  after the resume nothing from the backups went out: no new attempt on any held send  [0,0] -> [0,0]
+PASS  no outbound job is leased after the resume  jobs {"queued":0,"leased":0,"succeeded":5,"intervention":3,"cancelled":0}
+PASS  cli.js outbound release --job <id> --confirm releases one held job (exit 0)  {"outcome":"released"}
+PASS  cli.js outbound release --all --confirm releases the remaining held send job (exit 0)  {"outcome":"released","released":1,"refused":{}}
+PASS  the released jobs are claimed  9.1 s
+PASS  each released job made exactly one delivery attempt  [0,0] -> [1,1]
+PASS  releasing it again is refused (exit 1, not_held)
+INFO  delivery attempt states at the end (capture mode, synthetic data without recipients): {"failed_permanent":3}
+PASS  restored instance log has no deprecation warning
+PASS  restored instance log never contains a password
+PASS  only the compose service container of the project runs (one-off containers are gone)
+STAGE 3 (restore, pause, release): 56 PASS, 0 FAIL
+PASS  upgrade data directory is fresh
+PASS  previous build: cli.js migrate creates the database  schema 6
+PASS  previous build: cli.js seed creates synthetic example.invalid data
+PASS  previous build: synthetic employee signs in  status 200
+PASS  previous build: three synthetic work sessions recorded
+PASS  previous build: a second synthetic signature file is stored
+PASS  previous build: two synthetic periods signed off (revisions, OT ledger, queued PDF and send jobs)  status 201/201
+PASS  pre-upgrade API facts read (ledger and two revisions)  1 ledger entries, 2 revisions
+PASS  previous build: migrate at its own schema applies nothing
+PASS  pre-upgrade state: schema of the previous build, queued send jobs, signatures, revisions and OT credits  schema 6, 2 queued send jobs, 2 files
+PASS  pre-upgrade database is consistent
+PASS  cli.js backup (current build) of the older schema exits 0 and records no status (the schema has none)
+PASS  paired backup: manifest has exactly the allowed keys and the old schema version  schema 6
+PASS  paired backup: database copy matches the manifest SHA-256 and size
+PASS  paired backup: every file matches its manifest SHA-256 and size  2 files, 0 mismatched
+PASS  paired backup: copy passes integrity_check, has no foreign key violation and carries the old schema
+PASS  the source database was not migrated or changed by its backup (every table equal, schema unchanged)
+INFO  paired backup: schema 6, 2 files, database 532480 bytes; source: 2 outbound jobs (2 queued send_email), 2 revisions, 1 ledger entries
+PASS  current image becomes healthy on the older data  5.3 s (running healthy)
+PASS  /api/ready: schema is the image latest (derived from the image, not pinned) and newer than the old one  schema 6 -> 13 of 13
+PASS  stored sign-in session works on the upgraded instance
+PASS  OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values  1 ledger entries, 2 revisions
+PASS  the upgraded runner renders both queued PDFs and captures both queued sends  0.0 s
+PASS  upgraded instance log has no deprecation warning
+PASS  upgraded database passes integrity_check and has no foreign key violation
+PASS  schema_migrations: contiguous 1..latest, and the old rows are unchanged
+PASS  migrations 0011 (job retention), 0012 (imports) and 0013 (opening balance) are among the applied ones  versions 7,8,9,10,11,12,13
+PASS  the upgraded database has the imports table (empty) and the retention window row
+PASS  the new migrations ran exactly once, in one transaction (one application instant, one row each)  7 applied (versions 7,8,9,10,11,12,13)
+PASS  every pre-upgrade row of every table is unchanged (jobs, sessions and heartbeat aside; PDFs, attempts and audit rows may be appended)  26 tables compared
+PASS  representative balances (ledger entries and sums per user), revision counts, sign-offs and sessions equal the pre-upgrade values  1 ledger entries, 600 minutes
+PASS  the upgraded instance finished the queued send jobs (so the paired backup still holds mail that already went out)  succeeded,succeeded
+PASS  restart of the upgraded instance: healthy, same schema  5.4 s
+PASS  restart applied no migration (schema_migrations identical, application instants included)
+PASS  cli.js migrate (current build) on the upgraded database applies nothing
+PASS  instance log after the restart has no deprecation warning
+STAGE 4 (upgrade from the WP3 schema): 35 PASS, 0 FAIL
+PASS  previous build: cli.js migrate on the upgraded database refuses (non-zero exit, newer than this application)  exit code 1
+INFO  refusal recorded: previous build cli.js migrate exit code 1, upgraded database at schema 13, previous build at schema 6
+PASS  the refusal changed nothing (every table equal, schema unchanged)
+PASS  rollback restore of the older schema is refused without --confirm (exit 2, unpaused_schema_unconfirmed), writing nothing
+PASS  cli.js restore --keep-schema --confirm exits 0  1165 ms
+PASS  restore output has exactly the allowed keys and no address, name or path
+PASS  the schema is kept as in the backup (no migration) and the manifest is verified
+PASS  the restore states that nothing could be paused, held every queued send job and left none queued  {"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0}
+PASS  the restore warns on stderr that the copy is not paused and names JOB_RUNNER=off
+INFO  rollback restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":6,"files":2,"signatures":2,"pdfs":0,"database_bytes":532480},"schema":{"backup":6,"restored":6,"applied":[]},"outbound":{"paused":false,"reason":null},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":2,"ledger_entries":1,"attachments":2}}
+PASS  the live (upgraded) data directory was not written by the restore
+PASS  restored directory holds the database and the private data directory only
+PASS  every restored file matches its manifest SHA-256  2 files, 0 mismatched
+PASS  restored database: schema of the previous build (not upgraded), no pause columns, consistent  schema 6
+PASS  restored database: no outbound job is queued or leased; every backed-up send job is held; no attempt exists  2 outbound jobs held
+PASS  restored rows equal the pre-upgrade rows of every table (jobs, sessions and heartbeat aside)  26 tables compared
+PASS  restored balances (ledger entries and sums), revision counts, sign-offs, files and sessions equal the pre-upgrade values
+INFO  restored counts (equal to the pre-upgrade values): {"users":3,"revisions":2,"ledger_entries":1,"ledger_minutes":600,"signoffs":2,"attachments":2,"work_sessions":6}
+PASS  control: the previous build on a plain file copy of the backup (no hold) sends the queued mail by itself  2 delivery attempts after 0.0 s (capture mode)
+PASS  health endpoint reports ok
+PASS  the employee signs in on the previous build (users and password hashes restored)  status 200
+PASS  the employee session stored before the upgrade works on the rolled-back instance
+PASS  OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values  1 ledger entries, 2 revisions
+PASS  non-outbound work resumes: the previous runner renders both pending PDFs  0.0 s
+PASS  no send attempt appears after the previous build started (runner on, capture mode)  0 delivery attempts
+PASS  no revision shows a delivery
+PASS  nothing was captured on the rolled-back instance
+PASS  previous build log has no deprecation warning and no error
+PASS  the held send jobs are untouched (state, attempts), still not queued, no delivery attempt in the database
+PASS  rolled-back database is still consistent at the previous schema
+STAGE 5 (rollback to the WP3 build): 27 PASS, 0 FAIL
+PASS  the stage 1 instance starts again for stage 6 (healthy)  5.3 s (running healthy)
+PASS  the job runner is off in the container (counts cannot move in the background)
+PASS  the synthetic owner and the administrator sign in
+PASS  another synthetic user exists and signs in  status 201/200
+INFO  counts before the first import: timesheets 11, day_entries 90, work_sessions 80, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 0, imports 2, opening_balance 0
+PASS  the owner previews the workbook through /api/imports (201, new batch, plan with decisions to make)  status 201, 3 days need a decision, 17 importable
+PASS  the preview stored only the batch: no timesheet, day entry, session, ledger entry, revision, sign-off, job or delivery attempt
+PASS  every listed day gets a decision (skip, or import where the plan allows it)  1 skip, 2 import
+PASS  the commit answers 200 committed  status 200 
+INFO  counts after the first commit: timesheets 13, day_entries 109, work_sessions 80, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 0, imports 3, opening_balance 0
+PASS  the commit wrote only timesheets (two imported periods) and day entries: no session, ledger entry, revision, sign-off, job or delivery attempt
+PASS  the identical workbook returns the same batch (200, not created)
+PASS  committing the identical workbook again answers 200 replayed
+PASS  committing the batch with other decisions is refused (409 import_already_committed)
+INFO  counts after the second commit: timesheets 13, day_entries 109, work_sessions 80, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 0, imports 3, opening_balance 0
+PASS  the eight table counts (timesheets, day_entries, work_sessions, ot_ledger, timesheet_revisions, signoffs, jobs, delivery_attempts) and the import batches are unchanged by the second commit
+PASS  the opening balance posts once (201 posted) and a repeat is a no-op (200 duplicate)  status 201/200
+PASS  a different opening balance is refused (409 opening_balance_exists)
+INFO  counts after the opening balance: timesheets 13, day_entries 109, work_sessions 80, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 0, imports 3, opening_balance 1
+PASS  exactly one opening_balance entry exists, and it is the only new ledger row
+PASS  the owner reads the opening balance back (150 minutes, as of 2026-01-01)
+PASS  a sign-off of an imported period answers 409 imported_period  status 200/409 imported_period
+PASS  the refused sign-off wrote nothing
+PASS  another synthetic user gets 404 for the batch (read and commit) and lists none  status 404/404/200
+PASS  an administrator gets 404 for the batch as well
+INFO  counts at the end of stage 6: timesheets 13, day_entries 109, work_sessions 80, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 0, imports 3, opening_balance 1
+PASS  the ownership attempts wrote nothing
+PASS  the stage 6 instance log has no deprecation warning and never contains a password
+STAGE 6 (import and opening balance): 23 PASS, 0 FAIL
+PASS  cleanup by project name (docker compose down -v)
+PASS  no container of the project remains
+SUMMARY stage 1: 31 PASS; stage 2: 31 PASS; stage 3: 56 PASS; stage 4: 35 PASS; stage 5: 27 PASS; stage 6: 23 PASS; total 205 PASS, 0 FAIL
+DRILL STAGES 1-6 PASSED

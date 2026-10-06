@@ -148,6 +148,10 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   if (deps.staticDir !== null) {
     const root = deps.staticDir;
     app.use('*', serveStatic({ root }));
+    // A missing asset (a source map above all) is a 404, never the single-page fallback below (WP4-A-01).
+    app.all('/assets/*', () => {
+      throw notFound('Asset');
+    });
     app.get('*', serveStatic({ path: join(root, 'index.html') }));
   }
   app.notFound((c) => c.json(errorBody('not_found', 'Not found'), 404));

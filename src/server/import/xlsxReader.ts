@@ -17,7 +17,12 @@ import { XMLParser } from 'fast-xml-parser';
  *  - DOCTYPE and ENTITY declarations are rejected, and the XML parser has entity processing switched off; the five
  *    predefined entities and numeric character references are decoded once, by this module;
  *  - external links are listed and ignored; only the workbook, its relationships, the shared strings and the
- *    worksheets are parsed.
+ *    worksheets are parsed;
+ *  - the cost of parsing is bounded before a DOM exists (WP4-FIXB, audit finding WP4-B-01): a part whose decoded
+ *    XML is over the per-part size limit is refused before it is inflated or decoded, a cheap scan of the decoded
+ *    text counts element, cell, row and shared-string openings and refuses a part (or a package) over the limits
+ *    before the XML parser runs, and the total XML parsed per package is capped. The inflate limits above stop
+ *    memory; these stop CPU time and the size of the parsed tree.
  */
 
 export const FORMULA_CACHE_NOTE = 'formula cache, not authoritative';
@@ -30,19 +35,44 @@ export type ReaderLimits = {
   maxEntryInflatedBytes: number;
   /** Sum of the declared inflated sizes, and of the sizes actually inflated. */
   maxTotalInflatedBytes: number;
+  /** Decoded XML bytes of one parsed part (workbook, relationships, shared strings, one worksheet). */
+  maxPartXmlBytes: number;
+  /** Decoded XML bytes of all parsed parts of one package together. */
+  maxTotalXmlBytes: number;
+  /** Element openings (`<name`, any prefix) in one parsed part. */
+  maxPartElements: number;
+  /** Element openings in all parsed parts of one package together. */
+  maxTotalElements: number;
   maxSheets: number;
+  /** `<c>` openings in one worksheet. */
   maxCellsPerSheet: number;
+  /** `<row>` openings in one worksheet. */
+  maxRowsPerSheet: number;
+  /** `<si>` openings in the shared strings. */
   maxSharedStrings: number;
 };
 
+/*
+ * Why these numbers (measured on the tracked template and on synthetic workbooks of 3, 26 and 60 dated sheets):
+ * the template's largest part is 29 KB with 1 378 elements, 529 cells and 353 rows; 60 dated sheets are 1.4 MB of
+ * XML and 53 000 elements in all. So the per-part and total byte limits are 140x and 11x those sizes, the element
+ * limits 145x and 7.5x, the cell limit 94x and the row limit 57x: no realistic workbook is near one, while one
+ * hostile part can cost at most about 200 000 parsed elements (tens of milliseconds to a few hundred) instead of
+ * the 4 million `<c/>` the audit's 65 KB upload packed into 15.8 MiB (8.5 s, +900 MiB).
+ */
 export const DEFAULT_READER_LIMITS: Readonly<ReaderLimits> = {
   maxCompressedBytes: 8 * 1024 * 1024,
   maxEntries: 256,
   maxEntryInflatedBytes: 16 * 1024 * 1024,
   maxTotalInflatedBytes: 48 * 1024 * 1024,
+  maxPartXmlBytes: 4 * 1024 * 1024,
+  maxTotalXmlBytes: 16 * 1024 * 1024,
+  maxPartElements: 200_000,
+  maxTotalElements: 400_000,
   maxSheets: 64,
-  maxCellsPerSheet: 200_000,
-  maxSharedStrings: 100_000,
+  maxCellsPerSheet: 50_000,
+  maxRowsPerSheet: 20_000,
+  maxSharedStrings: 50_000,
 };
 
 export type WorkbookRejectionCode =
@@ -50,6 +80,8 @@ export type WorkbookRejectionCode =
   | 'too_many_entries'
   | 'entry_too_large'
   | 'total_too_large'
+  | 'part_too_large'
+  | 'total_xml_too_large'
   | 'not_a_zip'
   | 'unsupported_zip'
   | 'malformed_zip'
@@ -60,6 +92,9 @@ export type WorkbookRejectionCode =
   | 'not_a_workbook'
   | 'too_many_sheets'
   | 'too_many_cells'
+  | 'too_many_rows'
+  | 'too_many_elements'
+  | 'too_many_holidays'
   | 'too_many_shared_strings';
 
 /** The package is refused as a whole; nothing from it is returned. The message never echoes package content. */
@@ -218,7 +253,20 @@ function listEntries(bytes: Uint8Array, limits: ReaderLimits): ZipEntry[] {
   return entries;
 }
 
-function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, budget: { left: number }): Uint8Array {
+type Budget = {
+  /** Real inflated bytes still allowed for the package (`maxTotalInflatedBytes`). */
+  left: number;
+  /** Decoded XML bytes still allowed for the parsed parts (`maxTotalXmlBytes`). */
+  xmlLeft: number;
+  /** Element openings still allowed over the whole package (`maxTotalElements`). */
+  elementsLeft: number;
+};
+
+/** Every part this module inflates is parsed as XML, so a part limit applies to every call. */
+function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, budget: Budget): Uint8Array {
+  if (entry.uncompressedSize > limits.maxPartXmlBytes) {
+    reject('part_too_large', `A package part declares more than ${limits.maxPartXmlBytes} bytes of XML`);
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const at = entry.localOffset;
   if (at + 30 > bytes.length || view.getUint32(at, true) !== LOCAL_SIGNATURE) {
@@ -235,7 +283,7 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
   const compressed = bytes.subarray(start, end);
 
   // The declared size is only a claim; the cap that counts is the real output, stopped as soon as it is exceeded.
-  const cap = Math.min(limits.maxEntryInflatedBytes, budget.left);
+  const cap = Math.min(limits.maxEntryInflatedBytes, limits.maxPartXmlBytes, budget.left, budget.xmlLeft);
   const chunks: Uint8Array[] = [];
   let total = 0;
   let overflow = false;
@@ -263,7 +311,11 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
     if (total > limits.maxEntryInflatedBytes) {
       reject('entry_too_large', `An entry inflates beyond ${limits.maxEntryInflatedBytes} bytes`);
     }
-    reject('total_too_large', `Entries inflate beyond ${limits.maxTotalInflatedBytes} bytes`);
+    if (total > limits.maxPartXmlBytes) {
+      reject('part_too_large', `A package part inflates beyond ${limits.maxPartXmlBytes} bytes of XML`);
+    }
+    if (total > budget.left) reject('total_too_large', `Entries inflate beyond ${limits.maxTotalInflatedBytes} bytes`);
+    reject('total_xml_too_large', `The package holds more than ${limits.maxTotalXmlBytes} bytes of XML`);
   }
   const data = new Uint8Array(total);
   let position = 0;
@@ -275,6 +327,7 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
     reject('entry_integrity', 'ZIP entry size or checksum does not match its header');
   }
   budget.left -= data.length;
+  budget.xmlLeft -= data.length;
   return data;
 }
 
@@ -307,9 +360,48 @@ function decodeXmlBytes(data: Uint8Array): string {
   return utf8.decode(data);
 }
 
-function parseXml(data: Uint8Array): XmlNode {
+/** What a part is, so the scan applies the matching limit: cells and rows count in worksheets, strings in the table. */
+type PartKind = 'worksheet' | 'sharedStrings' | 'other';
+
+/** Element opening with an optional namespace prefix: `<c`, `<x:c`; comments, PIs, CDATA and closings never match. */
+const ELEMENT_OPENING = /<(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/g;
+
+/**
+ * Cheap scan of the decoded text, before any DOM exists (WP4-B-01): counts element openings and refuses the part
+ * as soon as a limit is passed, so the scan itself never runs past a limit's worth of elements. It over-counts
+ * markup inside comments or CDATA, which only makes it stricter; no real workbook has such markup in a part.
+ */
+function scanElements(text: string, kind: PartKind, limits: ReaderLimits, budget: Budget): void {
+  const pattern = new RegExp(ELEMENT_OPENING);
+  let elements = 0;
+  let cells = 0;
+  let rows = 0;
+  let strings = 0;
+  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    elements += 1;
+    if (elements > limits.maxPartElements) reject('too_many_elements', `A package part has more than ${limits.maxPartElements} elements`);
+    if (kind === 'worksheet') {
+      const name = match[1];
+      if (name === 'c') {
+        cells += 1;
+        if (cells > limits.maxCellsPerSheet) reject('too_many_cells', `A sheet has more than ${limits.maxCellsPerSheet} cells`);
+      } else if (name === 'row') {
+        rows += 1;
+        if (rows > limits.maxRowsPerSheet) reject('too_many_rows', `A sheet has more than ${limits.maxRowsPerSheet} rows`);
+      }
+    } else if (kind === 'sharedStrings' && match[1] === 'si') {
+      strings += 1;
+      if (strings > limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
+    }
+  }
+  budget.elementsLeft -= elements;
+  if (budget.elementsLeft < 0) reject('too_many_elements', `The package has more than ${limits.maxTotalElements} elements in its parsed parts`);
+}
+
+function parseXml(data: Uint8Array, kind: PartKind, limits: ReaderLimits, budget: Budget): XmlNode {
   const text = decodeXmlBytes(data);
   if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(text)) reject('doctype_forbidden', 'XML DOCTYPE and ENTITY declarations are not accepted');
+  scanElements(text, kind, limits, budget);
   try {
     const parsed: unknown = xmlParser.parse(text);
     return isNode(parsed) ? parsed : {};
@@ -471,7 +563,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const limits: ReaderLimits = { ...DEFAULT_READER_LIMITS, ...overrides };
   const entries = listEntries(input, limits);
   const byName = new Map(entries.map((entry) => [entry.name, entry]));
-  const budget = { left: limits.maxTotalInflatedBytes };
+  const budget: Budget = { left: limits.maxTotalInflatedBytes, xmlLeft: limits.maxTotalXmlBytes, elementsLeft: limits.maxTotalElements };
   const read = (name: string): Uint8Array | null => {
     const entry = byName.get(name);
     return entry === undefined ? null : inflateEntry(input, entry, limits, budget);
@@ -480,7 +572,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const contentTypes = read('[Content_Types].xml');
   const workbookPart = read('xl/workbook.xml');
   if (contentTypes === null || workbookPart === null) reject('not_a_workbook', 'Package is not an Excel workbook');
-  const typesRoot = parseXml(contentTypes);
+  const typesRoot = parseXml(contentTypes, 'other', limits, budget);
   const types = isNode(typesRoot.Types) ? typesRoot.Types : {};
   for (const item of [...nodes(types.Default), ...nodes(types.Override)]) {
     if (MACRO_CONTENT_TYPE.test(attr(item, 'ContentType') ?? '')) reject('macro_content', 'Macro-enabled packages are not accepted');
@@ -493,7 +585,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
     }
   }
 
-  const workbookRoot = parseXml(workbookPart);
+  const workbookRoot = parseXml(workbookPart, 'other', limits, budget);
   const workbook = isNode(workbookRoot.workbook) ? workbookRoot.workbook : {};
   if (workbook.externalReferences !== undefined) notes.push({ code: 'external_link_ignored', part: 'xl/workbook.xml#externalReferences' });
   const date1904 = isNode(workbook.workbookPr) && ['1', 'true'].includes(attr(workbook.workbookPr, 'date1904') ?? '');
@@ -501,7 +593,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const relsPart = read('xl/_rels/workbook.xml.rels');
   const relationships = new Map<string, { target: string; type: string; external: boolean }>();
   if (relsPart !== null) {
-    const relsRoot = parseXml(relsPart);
+    const relsRoot = parseXml(relsPart, 'other', limits, budget);
     const container = isNode(relsRoot.Relationships) ? relsRoot.Relationships : {};
     for (const rel of nodes(container.Relationship)) {
       const id = attr(rel, 'Id');
@@ -516,7 +608,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const sharedPart = read(SHARED_STRINGS_PART);
   const shared: string[] = [];
   if (sharedPart !== null) {
-    const sstRoot = parseXml(sharedPart);
+    const sstRoot = parseXml(sharedPart, 'sharedStrings', limits, budget);
     const sst = isNode(sstRoot.sst) ? sstRoot.sst : {};
     for (const item of asArray(sst.si)) {
       if (shared.length >= limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
@@ -546,7 +638,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
       sheets.push({ name, part, kind: 'worksheet', hidden, cells: new Map() });
       continue;
     }
-    sheets.push({ name, part, kind: 'worksheet', hidden, cells: readWorksheet(name, parseXml(data), shared, limits) });
+    sheets.push({ name, part, kind: 'worksheet', hidden, cells: readWorksheet(name, parseXml(data, 'worksheet', limits, budget), shared, limits) });
   }
   return { sheets, notes, date1904, entryCount: entries.length, inflatedBytes: limits.maxTotalInflatedBytes - budget.left };
 }

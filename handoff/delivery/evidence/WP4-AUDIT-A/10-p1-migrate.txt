@@ -1,0 +1,31 @@
+# attempt 1 (2026-10-06T11:02:38Z) failed only on the probe's own assumption that a raw better-sqlite3 connection starts with foreign_keys OFF (it is built ON); corrected and rerun
+2026-10-06T11:02:48Z
+PASS  fresh database: applies 1..13 in one run  {"applied":[1,2,3,4,5,6,7,8,9,10,11,12,13],"version":13}
+PASS  fresh database: foreign_keys is ON again after migrate
+PASS  fresh database: integrity_check ok, foreign_key_check empty
+PASS  rerun applies nothing  {"applied":[],"version":13}
+PASS  one application instant for all 13 rows
+PASS  failing migration throws  no such table: probe_missing_table
+PASS  failing migration: no table, no row, schema still 13, user_version 13
+PASS  failing migration: foreign_keys restored to ON
+PASS  failing migration: no open transaction left
+PASS  FK-violating migration throws a MigrationError  Migration left 1 foreign key violation(s) in probe_child
+PASS  FK-violating migration: nothing committed (no table, schema 13)
+PASS  FK-violating migration: foreign_keys restored to ON
+PASS  a migration referencing a missing users row is refused and rolled back  Migration left 1 foreign key violation(s) in probe_ref
+PASS  raw connection set to foreign_keys OFF
+PASS  migrate leaves a foreign_keys=OFF connection OFF (restores the previous value)
+PASS  migrate while another connection holds the write lock throws SQLITE_BUSY  SQLITE_BUSY
+PASS  busy path: foreign_keys restored to ON, no open transaction
+PASS  after the lock is released the pending migration applies once
+PASS  migrate inside an open transaction is refused  cannot start a transaction within a transaction
+PASS  nested call: foreign_keys still ON, schema unchanged
+PASS  older binary (schema 6) refuses the schema-13 database  Database schema version 7 is newer than this application
+PASS  older-binary refusal: nothing changed, foreign_keys ON
+PASS  an edited applied migration (checksum) is refused
+INFO  concurrent results: [{"ok":true,"applied":13,"version":13,"fk":1},{"ok":false,"code":"SQLITE_BUSY","message":"database is locked"},{"ok":true,"applied":0,"version":13,"fk":1},{"ok":true,"applied":0,"version":13,"fk":1},{"ok":true,"applied":0,"version":13,"fk":1},{"ok":true,"applied":0,"version":13,"fk":1}]
+FAIL  concurrent openers (6 processes): exactly one applies 13, every other applies nothing  winners 1, no-ops 4, errors 1
+PASS  concurrent openers: every process ends with foreign_keys ON
+PASS  concurrent openers: schema_migrations has 13 rows, one per version, integrity ok, no FK violation
+P1 FAILED (1)
+exit=1

@@ -1,0 +1,47 @@
+# Mutation checks in the scratch clone <task>/scratch (copy of the working tree plus node_modules); each file restored from its saved text. Command: node probes/mutate.mjs <scratch>; exit 0
+M1-no-element-prescan: exit=1 Tests  4 failed | 40 passed (44)
+    KILLED BY × counts element openings before parsing, so a part under the size limit cannot hide a huge tree
+    KILLED BY × also sees namespace-prefixed cells and rows
+    KILLED BY × applies each new limit when it is lowered (part size, elements, rows, total XML, total elements)
+    KILLED BY × refuses the same sheet with a typed 422 reason under the default limits
+  => KILLED
+  restored src/server/import/xlsxReader.ts: identical
+M2-no-per-part-limit: exit=1 Tests  5 failed | 39 passed (44)
+    KILLED BY × rejects an oversized entry whose header lies about its inflated size, before it is fully inflated
+    KILLED BY × refuses the 65 KB package of three 15.8 MiB empty-cell sheets as an oversized part, quickly (P1b, P6)
+    KILLED BY × refuses sheets of <c><v>1</v></c> cells before it allocates for them (P1b)
+    KILLED BY × applies each new limit when it is lowered (part size, elements, rows, total XML, total elements)
+    KILLED BY × refuses the 2.7 MB formula-heavy package of the audit (3 x 199 000 formula cells)
+  => KILLED
+  restored src/server/import/xlsxReader.ts: identical
+M3-spread-in-readHolidays: exit=1 Tests  3 failed | 41 passed (44)
+    KILLED BY × refuses a holiday table with more rows than any calendar has
+    KILLED BY × previews a sheet of 150 000 cells in column C instead of overflowing the stack (the audit gave a 500)
+    KILLED BY × maps 150 000 cells without a spread over the cell list and without a loop up to the largest row
+  => KILLED
+  restored src/server/import/templateMapping.ts: identical
+M4-no-source-cap: exit=1 Tests  1 failed | 43 passed (44)
+    KILLED BY × caps the stored findings: the first sources of a finding plus a total count, whatever the cell count
+  => KILLED
+  restored src/server/import/templateMapping.ts: identical
+M5-no-total-xml-budget: exit=1 Tests  2 failed | 42 passed (44)
+    KILLED BY × applies each new limit when it is lowered (part size, elements, rows, total XML, total elements)
+    KILLED BY × bounds the total XML parsed per package, not only each part
+  => KILLED
+  restored src/server/import/xlsxReader.ts: identical
+M6-no-finding-fold: exit=1 Tests  1 failed | 43 passed (44)
+    KILLED BY × collapses a flood of one kind of finding into a bounded list with a truthful summary
+  => KILLED
+  restored src/server/import/templateMapping.ts: identical
+M7-no-holiday-row-cap: exit=1 Tests  1 failed | 43 passed (44)
+    KILLED BY × refuses a holiday table with more rows than any calendar has
+  => KILLED
+  restored src/server/import/templateMapping.ts: identical
+M8-no-not-due-rule: exit=1 Tests  1 failed | 23 passed (24)
+    KILLED BY × red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable
+  => KILLED
+  restored src/server/services/workbookImport.ts: identical
+M9-no-reserve-guard: exit=1 Tests  1 failed | 35 passed (36)
+    KILLED BY × red-first: reserving OT leave dated inside an imported period is 409 imported_period and creates nothing
+  => KILLED
+  restored src/server/services/otLeave.ts: identical

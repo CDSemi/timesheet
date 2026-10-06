@@ -1,0 +1,34 @@
+// WP4-FIXB probe P7 (adapted from WP4-AUDIT-B P7): size of the preview findings for a small upload full of
+// formula cells. In memory only. Env: REPO_DIR = the source tree to test.
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { performance } from 'node:perf_hooks';
+
+const REPO = process.env.REPO_DIR;
+const load = (p) => import(pathToFileURL(`${REPO}/${p}`).href);
+const { previewWorkbook } = await load('src/server/import/templateMapping.ts');
+const { buildSyntheticWorkbook, pack, unpack } = await load('tests/support/syntheticWorkbook.ts');
+const require = createRequire(`${REPO}/package.json`);
+const { strToU8 } = require('fflate');
+const dates = ['2026-01-09', '2026-01-23', '2026-02-06', '2026-02-20', '2026-03-06', '2026-03-20', '2026-04-03'];
+for (const cells of [199_000, 15_000]) {
+  for (const sheets of [1, 3, 7]) {
+    const periods = Array.from({ length: sheets }, (_, i) => ({ payrollDate: dates[i] }));
+    const e = unpack(buildSyntheticWorkbook({ periods }));
+    const rows = [];
+    for (let r = 1; r <= cells; r += 1) rows.push(`<row r="${r}"><c r="AA${r}"><f>8.5</f></c></row>`);
+    const xml = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+    for (let i = 0; i < sheets; i += 1) e[`xl/worksheets/sheet${100 + i}.xml`] = strToU8(xml);
+    const bytes = pack(e);
+    const t0 = performance.now();
+    let out;
+    try {
+      const preview = previewWorkbook(bytes);
+      const json = JSON.stringify(preview.findings);
+      out = `findings JSON ${(json.length / 1024 / 1024).toFixed(3)} MiB, findings=${preview.findings.length}, listed sources=${preview.findings.reduce((n, f) => n + f.sources.length, 0)}`;
+    } catch (error) {
+      out = `${error.name}:${error.code ?? error.message}`;
+    }
+    console.log(`${sheets} payroll sheet(s) x ${cells} formula cells: upload ${bytes.length} bytes, ${Math.round(performance.now() - t0)} ms, ${out}, maxRSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`);
+  }
+}

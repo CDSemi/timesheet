@@ -1,0 +1,39 @@
+# Command: node probes/p1-reader.mjs (in memory, hostile packages built from the tracked template)
+# Exit: 0
+zip bomb, lying declared size (40 MiB real, 1000 declared) | bytes=62563 | ms=78 | rejected:entry_too_large [as expected]
+declared size above 16 MiB | bytes=39020 | ms=0 | rejected:entry_too_large [as expected]
+total real inflated output above 48 MiB (headers lie) | bytes=77453 | ms=35 | rejected:entry_integrity [EXPECTED rejected:total_too_large]
+declared total above 48 MiB | bytes=78253 | ms=0 | rejected:total_too_large [as expected]
+entry count 300 (> 256) | bytes=61036 | ms=0 | rejected:too_many_entries [as expected]
+CRC mismatch on a referenced part | bytes=25878 | ms=2 | rejected:entry_integrity [as expected]
+declared size one byte short (under the cap) | bytes=25878 | ms=2 | rejected:entry_integrity [as expected]
+declared size one byte long (under the cap) | bytes=25878 | ms=1 | rejected:entry_integrity [as expected]
+encrypted flag | bytes=25878 | ms=0 | rejected:unsupported_zip [as expected]
+billion laughs in workbook.xml | bytes=26482 | ms=0 | rejected:doctype_forbidden [as expected]
+XXE SYSTEM entity in sharedStrings.xml | bytes=26487 | ms=1 | rejected:doctype_forbidden [as expected]
+lower-case doctype in a worksheet | bytes=26454 | ms=6 | rejected:doctype_forbidden [as expected]
+UTF-16LE (BOM) DOCTYPE in [Content_Types].xml | bytes=26647 | ms=0 | rejected:doctype_forbidden [as expected]
+UTF-16LE without BOM DOCTYPE in workbook.xml (no expansion possible) | bytes=25880 | ms=1 | accepted | findings=
+undeclared entity reference in a cell stays literal | bytes=26463 | ms=14 | accepted [as expected] | sheets=3 notes=
+DOCTYPE in an unparsed part (docProps/core.xml) | bytes=26487 | ms=9 | accepted [as expected] | findings=floating_holiday,formula_hours_8_5,today_signature_date,volatile_today_formula,weekly_total_omits_sunday
+vbaProject.bin entry | bytes=26572 | ms=0 | rejected:macro_content [as expected]
+macro-enabled main content type | bytes=26471 | ms=0 | rejected:macro_content [as expected]
+macrosheet part | bytes=26600 | ms=0 | rejected:macro_content [as expected]
+vbaProject content type Default | bytes=26470 | ms=1 | rejected:macro_content [as expected]
+external link part, external relationship and externalReferences | bytes=27105 | ms=8 | accepted [as expected] | findings=external_link_ignored,floating_holiday,formula_hours_8_5,today_signature_date,volatile_today_formula,weekly_total_omits_sunday
+entry name "../evil.xml" | bytes=26560 | ms=0 | rejected:malformed_zip [as expected]
+entry name "/abs.xml" | bytes=26554 | ms=0 | rejected:malformed_zip [as expected]
+entry name "xl\\back.xml" | bytes=26560 | ms=0 | rejected:malformed_zip [as expected]
+entry name "xl/../../up.xml" | bytes=26568 | ms=0 | rejected:malformed_zip [as expected]
+relationship target escaping the package root | bytes=26471 | ms=6 | accepted [as expected] | sheets=3 notes=
+65 sheets (> 64) | bytes=26812 | ms=1 | rejected:too_many_sheets [as expected]
+200 001 cells in one sheet (> 200 000) | bytes=909974 | ms=1171 | rejected:too_many_cells [as expected]
+100 001 shared strings (> 100 000) | bytes=30042 | ms=235 | rejected:too_many_shared_strings [as expected]
+Holiday Dates with one cell at A9999999 (sparse row loop) | bytes=25842 | ms=544 | accepted | findings=formula_hours_8_5,invalid_date_cell,today_signature_date,volatile_today_formula,weekly_total_omits_sunday
+Holiday Dates with 150 000 cells (Math.max spread) | bytes=692224 | ms=864 | THROWN RangeError: Maximum call stack size exceeded
+Holiday Dates with 199 999 cells (Math.max spread) | bytes=913767 | ms=1165 | THROWN RangeError: Maximum call stack size exceeded
+three sheets of 199 999 cells each | bytes=2237231 | ms=2883 | accepted | findings=
+15 MiB worksheet of 1.3 M empty cells (parse before the cell cap) | bytes=37400 | ms=2823 | accepted [EXPECTED rejected:too_many_cells] | findings=floating_holiday
+formula cells: value null, cache labelled; label from formula cache flagged; TODAY in W26 flagged | bytes=- | ms=- | formula cells=25 allValueNullAndLabelled=true day0.label.fromFormulaCache=true W26.formula=TODAY() W26.value=null findings=floating_holiday,formula_cache_not_authoritative,formula_hours_8_5,today_signature_date,volatile_today_formula,weekly_total_omits_sunday
+maxRSS after the lying-header bomb: 179 MiB; maxRSS at end: 707 MiB
+template sha256 before=47ef42d5e4a9b7aea0be545ed563d3d22987609b59bd846c1c08dec2d29c6331 after=47ef42d5e4a9b7aea0be545ed563d3d22987609b59bd846c1c08dec2d29c6331 unchanged=true

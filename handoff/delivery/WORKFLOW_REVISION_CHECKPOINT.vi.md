@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 0f6abdf77c313f2dcb45bf624ee56294e5976c78 (WP4-T12-FREEZE).
+  - HEAD = origin/main = 13a258db86b2f0b6388830e584e2cca5303f1f6c (WP4-T13-FREEZE, commit đóng băng cả package WP4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -763,7 +763,60 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          làm trên NAS, chưa kiểm.
        - Các cặp dịch khớp; preflight trả về 0. Digest: 1ed67f55….
      - Brief WP4-GATE, WP4-AUDIT-A và WP4-AUDIT-B đã sẵn.
-     - Đang chạy: WP4-T13-FREEZE (commit đóng băng cả package).
+     - WP4-T13-FREEZE đã commit và push thành 13a258d (26 đường dẫn; mọi kiểm tra trả về
+       0). Đây là commit đóng băng cả package WP4; digest mã nguồn hiện tại trên board là
+       1ed67f55….
+     - WP4-GATE: PASS (13/13, theo verifier báo).
+       - Digest chính thức là 1ed67f55… (774 tệp).
+       - Verify: 1710 test. e2e: 145 đạt.
+       - Diễn tập bước 1–6: 205 PASS.
+       - Migration đạt; các test tranh chấp chạy đạt 60/60.
+       - NAS: NOT VERIFIED.
+       - Sự cố: một lần thử migrate thiếu `DATABASE_PATH` đã nâng cơ sở dữ liệu phát triển
+         trên máy của chủ dự án từ schema 1 lên 13. Đó chỉ là dữ liệu dev, nằm ngoài
+         repo. Đã báo chủ dự án.
+     - WP4-AUDIT-B (dữ liệu): **FIX REQUIRED.**
+       - WP4-B-01 (Medium): một tệp XML gây tốn công phân tích, dù vẫn trong giới hạn,
+         làm server đứng khoảng 9 giây và ăn thêm khoảng 730 MiB bộ nhớ; báo cáo lưu lại
+         thì phình không giới hạn.
+       - WP4-B-02 (Low): 150.000 ô Holiday Dates gây tràn stack và lỗi HTTP 500.
+       - Mọi phần khác của mảng B đều đạt.
+       - Ghi chú rủi ro R1–R4: R3 cho biết một kỳ đã kết thúc nhưng chưa tới hạn vẫn nhập
+         được, liên quan tới I-3. R4 cho biết bản xem trước được giữ mãi, không có hạn
+         mức.
+       - Sự cố: một REPL python của auditor chạy mãi (task nền b9vel2ldq) và ghi ra một
+         tệp output nhiều GB. Coordinator đã dừng nó; chủ dự án xóa tệp đó.
+     - WP4-AUDIT-A (vận hành): **FIX REQUIRED.**
+       - WP4-A-01 (Low, phải sửa): image chứa 114 tệp source map, và bản production
+         phục vụ source map của client.
+       - WP4-A-02 (Low): `.env.example` mâu thuẫn với quy tắc `JOB_RUNNER=off` khi
+         rollback.
+       - WP4-A-03 (Low): hai câu trong runbook không chính xác.
+       - WP4-A-04 (Info): smoke test dùng lại `DATA_DIR` của người gọi.
+       - Rủi ro R-A1 đến R-A9. Phần còn lại của mảng A đều đạt: backup khi đang ghi và
+         restore, bộ chạy migration, chặn junction thoát ra ngoài khi xóa bớt bản sao
+         lưu, khởi tạo, proxy, xóa job cũ, quyền riêng tư và CLI gửi mail.
+     - Vòng sửa:
+       - WP4-FIXB đã xong (tác giả tự báo).
+         - Giới hạn XML trả 422 ngay trước khi phân tích; danh sách cảnh báo được giới
+           hạn.
+         - Tệp bom 65 KB giờ bị từ chối sau 4 ms (422), thay vì làm server đứng 8,4
+           giây và tốn thêm 740 MiB.
+         - B-02 đã sửa; R3 thêm trạng thái `not_due` chỉ cho bỏ qua; R1 trả 409.
+         - Verify: 1730 test. Digest: b119e1b5….
+       - WP4-FIXA đã xong (tác giả tự báo).
+         - Image không còn source map, và `/assets/*.map` trả 404; `app.ts` giờ trả
+           404 khi thiếu tệp asset.
+         - Đã sửa `.env.example`, runbook và smoke test.
+         - Lệnh xóa bớt bản sao lưu từ chối khi đồng hồ bị lùi; diễn tập giải phóng
+           hai job.
+         - Đã đồng bộ docs.
+         - Diễn tập: 208 PASS. Verify: 1734 test. Digest: dfe4541d….
+       - Đang chạy: WP4-FIX-FREEZE.
+       - Sau đó một commit đóng băng, WP4-REGATE, và kiểm tra lại A và B bằng auditor
+         mới.
+     - Backlog: R-A2, R-A6, R-A8, B-R2.
+     - Câu hỏi cho chủ dự án: I-5 (hạn mức bản xem trước), và R-A3 trước WP5.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -777,10 +830,9 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-T13-FREEZE, rồi giao WP4-GATE trên commit đó.
-  2. Sau đó làm theo thứ tự:
-     - WP4-GATE;
-     - hai audit mới;
+  1. Ghi kết quả WP4-FIX-FREEZE. Sau đó WP4-REGATE,
+     WP4-RECHECK-A và WP4-RECHECK-B (auditor opus mới), WP4-ACCREC và WP4-ACCEPT.
+  2. Sau đó:
      - nghiệm thu.
   3. Sau đó WP5 (bắt đầu bằng nghiệm thu độc lập) và pilot packet cụ thể. Pilot thật do
      chủ dự án quyết.
@@ -799,7 +851,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T13-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-FIX-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

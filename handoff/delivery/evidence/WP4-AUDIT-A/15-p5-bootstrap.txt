@@ -1,0 +1,26 @@
+# attempt 1 at 2026-10-06T11:09:38Z (work p5) used an invalid synthetic policy (breaks did not add up; the CLI refused it with exit 1); corrected and rerun in a fresh folder
+2026-10-06T11:10:10Z
+PASS  bootstrap with an unreadable file exits 1 and opens no database  The configuration file cannot be read
+PASS  bootstrap --config in production exits 0 and prints one token  exit 0
+PASS  only the SHA-256 of the normalized token is stored
+PASS  the token expires exactly 60 minutes after it was issued  2026-10-06T11:10:11Z -> 2026-10-06T12:10:11Z
+PASS  no table holds the token text
+PASS  no audit row or other table holds the token hash outside bootstrap_state
+PASS  a second bootstrap --config is refused (exit 1) and prints no token  This database is already bootstrapped; the company calendar is created only once
+PASS  --new-token prints a different token and replaces the stored hash
+PASS  the production server starts  Timesheet listening on http://127.0.0.1:50654 (schema v13)
+PASS  GET /api/auth/setup says only whether setup is available
+PASS  the superseded first token and a wrong token get the same 403  {"error":{"code":"setup_unavailable","message":"Setup is not available"}}
+PASS  an expired token gets the same 403
+PASS  a valid token, typed in lower case with spaces, creates the first administrator (201)  201
+PASS  a replay of the used token gets the same 403
+PASS  --new-token after an administrator exists is refused (exit 1) and prints no token  An administrator already exists; the setup is closed
+PASS  after the setup the stored hash is cleared and the use is recorded
+PASS  GET /api/auth/setup now says unavailable
+PASS  no response body contains a token or a token hash
+PASS  the server log contains no token, no hash and no email address
+PASS  the audit trail names no token or hash (expiry and counts only)
+INFO  bootstrap audit rows: [["bootstrap.configure","system","calendar_id|default_policy|holidays"],["bootstrap.token_issued","system","expires_at"],["bootstrap.token_issued","system","expires_at"],["bootstrap.token_issued","system","expires_at"],["bootstrap.admin_created","system","calendar_id|display_name|email|role"]]
+PASS  bootstrap audit rows are system events (no actor)
+P5 PASSED
+exit=0

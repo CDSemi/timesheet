@@ -1,0 +1,37 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// Masks raw WP4-AUDIT-A logs and probe sources into LF evidence copies (scratch output folder).
+// Usage: node mask.mjs <work dir> <out dir> <src=dest>...
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [work, out, ...pairs] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const workVariants = [
+  work,
+  work.replaceAll('\\', '\\\\'),
+  work.replaceAll('\\', '/'),
+  `file:///${work.replaceAll('\\', '/')}`,
+  `/d/${work.slice(3).replaceAll('\\', '/')}`,
+];
+const project = '<project>';
+const projectVariants = [project, project.replaceAll('\\', '\\\\'), project.replaceAll('\\', '/'), '<project>'];
+const user = process.env.USERNAME ?? '';
+function mask(text) {
+  let result = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  for (const variant of workVariants.sort((a, b) => b.length - a.length)) result = result.split(variant).join('<work>');
+  result = result.replace(/<work>/gi, '<work>');
+  for (const variant of projectVariants) result = result.split(variant).join('<project>');
+  if (user.length >= 3) result = result.split(user).join('<user>');
+  // An address needs an alphabetic top-level domain, so package@version strings (npm output) stay readable.
+  result = result.replace(/[\w.%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b/g, '<email>');
+  result = result.replace(/\r\n?/g, '\n').split('\n').map((line) => line.replace(/[ \t]+$/, '')).join('\n');
+  return result.endsWith('\n') ? result : `${result}\n`;
+}
+for (const pair of pairs) {
+  const [source, dest] = pair.split('=');
+  const header = dest.endsWith('.mjs.txt')
+    ? `// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).\n`
+    : '';
+  writeFileSync(join(out, dest), header + mask(readFileSync(source, 'utf8')));
+}
+console.log(`masked ${pairs.length} files`);

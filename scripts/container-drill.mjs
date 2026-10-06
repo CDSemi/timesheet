@@ -217,6 +217,7 @@ function forbiddenPaths(paths) {
     const name = parts.at(-1) ?? '';
     const topLevelUnderApp = parts[0] === 'app' ? parts[1] : undefined;
     if (/\.xlsx$/i.test(name)) offenders.push(path);
+    else if (/\.map$/i.test(name) && topLevelUnderApp === 'dist') offenders.push(path); // the app's own build; dependencies may ship maps
     else if (name === '.env' || name.startsWith('.env.')) offenders.push(path);
     else if (parts.some((part) => part === 'handoff' || part === '.claude' || part === '.agents')) offenders.push(path);
     else if (topLevelUnderApp !== undefined && ['tests', 'docs', 'reference', '.git'].includes(topLevelUnderApp)) offenders.push(path);
@@ -759,6 +760,9 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
   const later = await signOffPeriod(cookie, '2026-04-17');
   check('a sign-off on the paused restored instance creates a send job (not held: created after the restore)', later.status === 201, `status ${later.status}`);
   check('its PDF renders while outbound delivery is paused', await waitPdfReady(cookie, later.revisionId));
+  // A second send job, so the bulk release after the second restore has more than the one released by id (R-A5).
+  const laterToo = await signOffPeriod(cookie, '2026-05-15');
+  check('a second sign-off on the paused restored instance creates a second send job', laterToo.status === 201 && (await waitPdfReady(cookie, laterToo.revisionId)), `status ${laterToo.status}`);
   const previewBefore = cliIn(['outbound', 'resume']);
   const before = parseJson(previewBefore.stdout);
   check('outbound resume without --confirm only previews (exit 2) and shows the paused queue', previewBefore.status === 2 && before?.paused === true && before?.queued_send_jobs >= 1, previewBefore.stdout.trim());
@@ -781,7 +785,7 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
   const changed = paused.jobs.filter((job) => known.has(job.id) && JSON.stringify(job) !== JSON.stringify(known.get(job.id)));
   const added = paused.jobs.filter((job) => !known.has(job.id));
   check('paused run: no restored outbound job changed state or attempts', changed.length === 0, `${restoredOutbound.jobs.length} restored outbound jobs, ${changed.length} changed`);
-  check('paused run: the new send job is queued with no attempt spent', added.length === 1 && added.every((job) => job.state === 'queued' && job.attempts === 0), `${added.length} new`);
+  check('paused run: the two new send jobs are queued with no attempt spent', added.length === 2 && added.every((job) => job.state === 'queued' && job.attempts === 0), `${added.length} new`);
   check(
     'paused run: still paused, no attempt sending and none accepted beyond the restored ones',
     paused.pause?.outbound_paused_reason === 'restored' &&
@@ -818,7 +822,7 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
   } finally {
     heldDb.close();
   }
-  check('the second restore holds the queued send job of the paused instance', heldRevisions.includes(later.revisionId), `${heldRevisions.length} held send jobs`);
+  check('the second restore holds both queued send jobs of the paused instance', heldRevisions.includes(later.revisionId) && heldRevisions.includes(laterToo.revisionId), `${heldRevisions.length} held send jobs`);
   const importsSecond = importFacts(join(work, 'restored-2-at-restore.db'));
   const sourcesSecond = importsSecond.filter((row) => existsSync(join(restoredDir2, 'private-data', 'files', row.storage_key)) && sha256Of(readFileSync(join(restoredDir2, 'private-data', 'files', row.storage_key))) === row.source_sha256);
   check('the second restore (a backup of a restored instance) also holds every import source', importsSecond.length === importSources.length && sourcesSecond.length === importSources.length, `${sourcesSecond.length} of ${importsSecond.length} sources`);
@@ -852,7 +856,11 @@ async function stageThree({ backupName, cookie, adminPassword, importSources }) 
   check('cli.js outbound release --job <id> --confirm releases one held job (exit 0)', release.status === 0 && parseJson(release.stdout)?.outcome === 'released', release.stdout.trim());
   const bulk = cliIn(['outbound', 'release', '--all', '--confirm']);
   const bulkResult = parseJson(bulk.stdout);
-  check('cli.js outbound release --all --confirm releases the remaining held send job (exit 0)', bulk.status === 0 && bulkResult?.released === (held?.releasable ?? 0) - 1, bulk.stdout.trim());
+  check(
+    'cli.js outbound release --all --confirm releases the remaining held send jobs (exit 0, released >= 1)',
+    bulk.status === 0 && bulkResult?.released >= 1 && bulkResult?.released === (held?.releasable ?? 0) - 1,
+    bulk.stdout.trim(),
+  );
   const releasedClaimed = await waitUntil(async () => (await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)))).every((value, index) => value > (atRestore2[index] ?? 0)), 60_000);
   check('the released jobs are claimed', releasedClaimed.ok, `${releasedClaimed.seconds.toFixed(1)} s`);
   await sleep(35_000);
@@ -1454,7 +1462,7 @@ try {
   // find exits 1 on the unreadable root-owned directories a non-root user meets; the list itself is what matters.
   check('image file list was read', paths.length > 1000 && paths.includes('/app/dist/server/index.js'), `${paths.length} paths`);
   const offenders = forbiddenPaths(paths);
-  check('forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)', offenders.length === 0, offenders.slice(0, 5).join(' | '));
+  check('forbidden-file scan (*.xlsx, source maps under /app/dist, .env*, handoff, tests, docs, reference, .claude, .agents, databases)', offenders.length === 0, offenders.slice(0, 5).join(' | '));
   check('production dependencies only (no devDependency in the image)', !paths.some((path) => /^\/app\/node_modules\/(?:vitest|typescript|vite|eslint|@playwright)(?:\/|$)/.test(path)));
 
   // 4. Fresh data directory, synthetic env file and bootstrap file; start through compose.example.yaml.
@@ -1499,6 +1507,13 @@ try {
   const ready = await call('GET', '/api/ready');
   const schema = ready.json?.schema;
   check('/api/ready reports ready with the schema version', ready.status === 200 && ready.json?.status === 'ready' && ready.json?.data_dir_writable === true && schema?.actual === schema?.expected && schema?.actual > 0, `schema ${schema?.actual} of ${schema?.expected}`);
+  // No source maps are served (WP4-A-01): the bundle has no sourceMappingURL and /assets/<bundle>.map answers 404.
+  const indexPage = await call('GET', '/');
+  const bundlePath = /src="(\/assets\/[^"]+\.js)"/.exec(indexPage.text)?.[1];
+  const bundle = bundlePath === undefined ? null : await call('GET', bundlePath);
+  check('the client bundle is served and carries no sourceMappingURL', bundle?.status === 200 && bundle.text.length > 1000 && !/sourceMappingURL/.test(bundle.text), `${bundlePath ?? 'no bundle in index.html'} ${bundle?.text.length ?? 0} bytes`);
+  const mapAnswer = await call('GET', `${bundlePath ?? '/assets/none.js'}.map`);
+  check('/assets/<bundle>.map answers 404', mapAnswer.status === 404, `status ${mapAnswer.status}`);
   const idUser = compose(['exec', '-T', 'timesheet', 'node', '-e', 'console.log(process.getuid() + ":" + process.getgid())']).stdout.trim();
   check('running process UID is not 0', /^\d+:\d+$/.test(idUser) && !idUser.startsWith('0:'), `uid:gid ${idUser}`);
   const rootWrite = compose(['exec', '-T', 'timesheet', 'node', '-e', "try { process.getBuiltinModule('node:fs').writeFileSync('/app/probe', '1'); process.exit(1); } catch { process.exit(0); }"], { allowFailure: true });

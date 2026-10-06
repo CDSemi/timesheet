@@ -1,0 +1,172 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// WP4-AUDIT-A probe P1: the migration runner (WP4-T10 change to migrate()).
+// Checks: fresh 1..13 + rerun no-op; a failing migration rolls back cleanly; foreign_keys is restored on every path
+// (success, SQL error, FK violation, busy lock, nested transaction, older-binary refusal); no FK violation can be
+// committed; concurrent openers in separate processes apply each migration exactly once.
+// Usage: node p1-migrate.mjs <export dir> <work dir>
+import { spawn } from 'node:child_process';
+import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work] = process.argv.slice(2);
+const dist = (rel) => pathToFileURL(join(exportDir, 'dist', 'server', rel)).href;
+const { MIGRATIONS, migrate } = await import(dist('db/migrations.js'));
+const { openDatabase } = await import(dist('db/database.js'));
+const Database = (await import(pathToFileURL(join(exportDir, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href)).default;
+mkdirSync(work, { recursive: true });
+
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const fk = (db) => db.pragma('foreign_keys', { simple: true });
+const version = (db) => db.prepare('SELECT coalesce(max(version),0) FROM schema_migrations').pluck().get();
+const tableExists = (db, name) => db.prepare("SELECT count(*) FROM sqlite_master WHERE name = ?").pluck().get(name) === 1;
+const fresh = (name) => {
+  const path = join(work, `${name}.db`);
+  for (const suffix of ['', '-wal', '-shm']) if (existsSync(path + suffix)) rmSync(path + suffix);
+  return path;
+};
+
+// (a) fresh database
+const pathA = fresh('a-fresh');
+const a = openDatabase(pathA);
+const first = migrate(a);
+check('fresh database: applies 1..13 in one run', JSON.stringify(first.applied) === JSON.stringify(MIGRATIONS.map((m) => m.version)), JSON.stringify(first));
+check('fresh database: foreign_keys is ON again after migrate', fk(a) === 1);
+check('fresh database: integrity_check ok, foreign_key_check empty', a.pragma('integrity_check', { simple: true }) === 'ok' && a.pragma('foreign_key_check').length === 0);
+const again = migrate(a);
+check('rerun applies nothing', again.applied.length === 0 && again.version === MIGRATIONS.length, JSON.stringify(again));
+check('one application instant for all 13 rows', a.prepare('SELECT count(DISTINCT applied_at) FROM schema_migrations').pluck().get() === 1);
+
+// (b) a failing migration (SQL error after DDL and a row) rolls back cleanly
+const failing = { version: MIGRATIONS.length + 1, name: 'probe_failing', sql: 'CREATE TABLE probe_t (x INTEGER); INSERT INTO probe_t VALUES (1); INSERT INTO probe_missing_table VALUES (1);' };
+let errorB = null;
+try { migrate(a, [...MIGRATIONS, failing]); } catch (error) { errorB = error; }
+check('failing migration throws', errorB !== null, String(errorB?.message ?? '').slice(0, 80));
+check('failing migration: no table, no row, schema still 13, user_version 13', !tableExists(a, 'probe_t') && version(a) === 13 && a.pragma('user_version', { simple: true }) === 13);
+check('failing migration: foreign_keys restored to ON', fk(a) === 1);
+check('failing migration: no open transaction left', a.inTransaction === false);
+
+// (c) a migration that would commit a foreign key violation is rolled back
+const violating = {
+  version: MIGRATIONS.length + 1,
+  name: 'probe_fk_violation',
+  sql: 'CREATE TABLE probe_parent (id INTEGER PRIMARY KEY); CREATE TABLE probe_child (pid INTEGER REFERENCES probe_parent(id)); INSERT INTO probe_child VALUES (42);',
+};
+let errorC = null;
+try { migrate(a, [...MIGRATIONS, violating]); } catch (error) { errorC = error; }
+check('FK-violating migration throws a MigrationError', errorC?.name === 'MigrationError', String(errorC?.message ?? ''));
+check('FK-violating migration: nothing committed (no table, schema 13)', !tableExists(a, 'probe_child') && version(a) === 13);
+check('FK-violating migration: foreign_keys restored to ON', fk(a) === 1);
+// A violation against an EXISTING table (users) during a migration (FK enforcement is off inside the run).
+const userId = 'probe-user';
+const sessionViolation = {
+  version: MIGRATIONS.length + 1,
+  name: 'probe_fk_existing_table',
+  sql: "CREATE TABLE probe_ref (user_id TEXT NOT NULL REFERENCES users(id)); INSERT INTO probe_ref VALUES ('" + userId + "');",
+};
+let errorC2 = null;
+try { migrate(a, [...MIGRATIONS, sessionViolation]); } catch (error) { errorC2 = error; }
+check('a migration referencing a missing users row is refused and rolled back', errorC2?.name === 'MigrationError' && !tableExists(a, 'probe_ref') && fk(a) === 1, String(errorC2?.message ?? ''));
+
+// (d) a connection whose foreign_keys was OFF stays OFF (restored to its previous value)
+const pathD = fresh('d-fk-off');
+const d = new Database(pathD);
+d.pragma('journal_mode = WAL');
+// better-sqlite3 builds SQLite with foreign keys ON by default, so the connection turns them off explicitly.
+d.pragma('foreign_keys = OFF');
+check('raw connection set to foreign_keys OFF', fk(d) === 0);
+migrate(d);
+check('migrate leaves a foreign_keys=OFF connection OFF (restores the previous value)', fk(d) === 0);
+d.close();
+
+// (e) busy: another connection holds the write lock; the run fails fast and restores foreign_keys
+const pathE = fresh('e-busy');
+const e1 = openDatabase(pathE);
+migrate(e1);
+const e2 = openDatabase(pathE);
+e2.pragma('busy_timeout = 300');
+e1.exec('BEGIN IMMEDIATE');
+const pending = { version: MIGRATIONS.length + 1, name: 'probe_ok', sql: 'CREATE TABLE probe_ok (x INTEGER);' };
+let errorE = null;
+try { migrate(e2, [...MIGRATIONS, pending]); } catch (error) { errorE = error; }
+check('migrate while another connection holds the write lock throws SQLITE_BUSY', errorE?.code === 'SQLITE_BUSY', String(errorE?.code));
+check('busy path: foreign_keys restored to ON, no open transaction', fk(e2) === 1 && e2.inTransaction === false);
+e1.exec('ROLLBACK');
+const later = migrate(e2, [...MIGRATIONS, pending]);
+check('after the lock is released the pending migration applies once', JSON.stringify(later.applied) === '[14]' && fk(e2) === 1);
+e1.close();
+e2.close();
+
+// (f) called inside an open transaction: refused, nothing changed, foreign_keys unchanged
+const pathF = fresh('f-nested');
+const f = openDatabase(pathF);
+migrate(f);
+f.exec('BEGIN');
+let errorF = null;
+try { migrate(f, [...MIGRATIONS, pending]); } catch (error) { errorF = error; }
+f.exec('ROLLBACK');
+check('migrate inside an open transaction is refused', errorF !== null, String(errorF?.message ?? '').slice(0, 70));
+check('nested call: foreign_keys still ON, schema unchanged', fk(f) === 1 && version(f) === 13 && !tableExists(f, 'probe_ok'));
+f.close();
+
+// (g) an older binary (6 migrations) refuses the upgraded database and changes nothing
+const g = openDatabase(pathA);
+const before = g.prepare('SELECT group_concat(version || applied_at) FROM schema_migrations').pluck().get();
+let errorG = null;
+try { migrate(g, MIGRATIONS.slice(0, 6)); } catch (error) { errorG = error; }
+check('older binary (schema 6) refuses the schema-13 database', /newer than this application/.test(String(errorG?.message)), String(errorG?.message));
+check('older-binary refusal: nothing changed, foreign_keys ON', g.prepare('SELECT group_concat(version || applied_at) FROM schema_migrations').pluck().get() === before && fk(g) === 1);
+// a changed checksum is refused as well
+const edited = MIGRATIONS.map((m) => (m.version === 3 ? { ...m, sql: `${m.sql}\n-- edited` } : m));
+let errorG2 = null;
+try { migrate(g, edited); } catch (error) { errorG2 = error; }
+check('an edited applied migration (checksum) is refused', /different checksum/.test(String(errorG2?.message)) && fk(g) === 1);
+g.close();
+a.close();
+
+// (h) concurrent openers: N processes migrate the same fresh database at the same instant
+const pathH = fresh('h-concurrent');
+const N = 6;
+const startAt = Date.now() + 1500;
+const childSource = `
+const { pathToFileURL } = require('node:url');
+(async () => {
+  const { migrate } = await import(${JSON.stringify(dist('db/migrations.js'))});
+  const { openDatabase } = await import(${JSON.stringify(dist('db/database.js'))});
+  while (Date.now() < ${startAt}) {}
+  try {
+    const db = openDatabase(${JSON.stringify(pathH)});
+    const result = migrate(db);
+    const fkOn = db.pragma('foreign_keys', { simple: true });
+    db.close();
+    console.log(JSON.stringify({ ok: true, applied: result.applied.length, version: result.version, fk: fkOn }));
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, code: error.code ?? null, message: String(error.message).slice(0, 80) }));
+  }
+})();`;
+const runs = await Promise.all(
+  Array.from({ length: N }, () => new Promise((resolveRun) => {
+    const child = spawn(process.execPath, ['-e', childSource], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (chunk) => { out += chunk; });
+    child.stderr.on('data', (chunk) => { out += chunk; });
+    child.on('close', () => resolveRun(out.trim()));
+  })),
+);
+const parsed = runs.map((line) => { try { return JSON.parse(line.split('\n').at(-1)); } catch { return { ok: false, message: line.slice(0, 120) }; } });
+console.log(`INFO  concurrent results: ${JSON.stringify(parsed)}`);
+const winners = parsed.filter((r) => r.ok && r.applied === 13);
+const noops = parsed.filter((r) => r.ok && r.applied === 0);
+check(`concurrent openers (${N} processes): exactly one applies 13, every other applies nothing`, winners.length === 1 && noops.length === N - 1, `winners ${winners.length}, no-ops ${noops.length}, errors ${parsed.filter((r) => !r.ok).length}`);
+check('concurrent openers: every process ends with foreign_keys ON', parsed.every((r) => !r.ok || r.fk === 1));
+const h = openDatabase(pathH);
+check('concurrent openers: schema_migrations has 13 rows, one per version, integrity ok, no FK violation',
+  h.prepare('SELECT count(*) FROM schema_migrations').pluck().get() === 13 && h.prepare('SELECT count(DISTINCT version) FROM schema_migrations').pluck().get() === 13 && h.pragma('integrity_check', { simple: true }) === 'ok' && h.pragma('foreign_key_check').length === 0);
+h.close();
+
+console.log(fails === 0 ? 'P1 PASSED' : `P1 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

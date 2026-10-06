@@ -249,6 +249,28 @@ describe('pruneBackups on disk', () => {
     expect(existsSync(join(target, old))).toBe(true);
   });
 
+  it('refuses the whole run, dry run included, when a backup is dated after the clock (R-A1), and removes nothing', () => {
+    const target = freshTarget();
+    const old = [writeBackup(target, '2024-01-01T00:00:00Z'), writeBackup(target, '2025-06-01T00:00:00Z')];
+    const recent = writeBackup(target, '2026-10-05T03:00:00Z');
+    // The clock was set back to 2025-01-01: the recent backups would fall outside every window and the older ones would go.
+    const misSet = clockAt('2025-01-01T00:00:00Z');
+    for (const dryRun of [true, false]) {
+      let error: unknown;
+      try {
+        pruneBackups({ targetDir: target, clock: misSet, dryRun });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error, `dryRun ${String(dryRun)}`).toBeInstanceOf(PruneError);
+      expect(error).toMatchObject({ code: 'clock_behind_backups', refusal: true });
+    }
+    expect(readdirSync(target).sort()).toEqual([...old, recent].sort());
+    // A backup dated exactly at the clock is not later than the clock, and the run goes ahead.
+    const sameSecond = writeBackup(target, NOW);
+    expect(pruneBackups({ targetDir: target, clock: clockAt(NOW), dryRun: true, requiredName: sameSecond }).candidates).toBe(4);
+  });
+
   it('refuses a target that is missing or not a folder, without creating it', () => {
     const missing = join(root, 'does-not-exist');
     expect(() => pruneBackups({ targetDir: missing, clock: clockAt(NOW), dryRun: true })).toThrow(PruneError);
@@ -314,6 +336,26 @@ describe('cli.js backup --prune and backup prune --dry-run', () => {
     expect(readdirSync(target)).toEqual([backup.backup]);
     for (const name of old) expect(existsSync(join(target, name))).toBe(false);
     for (const value of [target, ...old]) expect(result.stdout.includes(value)).toBe(false);
+  });
+
+  it('refuses with exit 2 and counts only when a backup is dated after the clock, and removes nothing (R-A1)', () => {
+    const target = join(root, 'future');
+    mkdirSync(target);
+    const old = writeBackup(target, '2024-01-01T00:00:00Z');
+    const future = writeBackup(target, '2099-01-01T00:00:00Z');
+    const before = readdirSync(target).sort();
+    const dry = cli(['prune', '--in', target, '--dry-run']);
+    expect(dry.status).toBe(2);
+    expect(dry.stdout).toBe('');
+    expect(dry.stderr).toContain('clock_behind_backups');
+    for (const value of [target, old, future]) expect(dry.stderr.includes(value)).toBe(false);
+    const real = cli(['--to', target, '--prune']);
+    expect(real.status).toBe(2);
+    expect(real.stderr).toContain('clock_behind_backups');
+    // The new backup was taken (it is verified and kept); nothing was pruned.
+    expect(existsSync(join(target, old))).toBe(true);
+    expect(existsSync(join(target, future))).toBe(true);
+    expect(readdirSync(target).length).toBe(before.length + 1);
   });
 
   it('prunes nothing when the new backup fails', () => {

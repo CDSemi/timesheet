@@ -1,0 +1,98 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// WP4-AUDIT-A probe P1b: concurrent openers of one database (server start + CLI commands at the same moment).
+// Each round starts N processes that call openDatabase() then migrate() on the same file at the same instant, for three
+// starting states: no file yet, an existing schema-12 database (an upgrade), and a schema-13 database (a restart).
+// Every child reports the step that failed (open = openDatabase pragmas, migrate) with the SQLite code and its duration.
+// Usage: node p1b-concurrent.mjs <export dir> <work dir> [rounds] [processes]
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work, roundsText = '10', processesText = '6'] = process.argv.slice(2);
+const rounds = Number(roundsText);
+const N = Number(processesText);
+const dist = (rel) => pathToFileURL(join(exportDir, 'dist', 'server', rel)).href;
+const { MIGRATIONS, migrate } = await import(dist('db/migrations.js'));
+const { openDatabase } = await import(dist('db/database.js'));
+mkdirSync(work, { recursive: true });
+
+function remove(path) {
+  for (const suffix of ['', '-wal', '-shm', '-journal']) if (existsSync(path + suffix)) rmSync(path + suffix);
+}
+
+function child(path, startAt) {
+  const source = `
+(async () => {
+  const { migrate } = await import(${JSON.stringify(dist('db/migrations.js'))});
+  const { openDatabase } = await import(${JSON.stringify(dist('db/database.js'))});
+  while (Date.now() < ${startAt}) {}
+  let step = 'open';
+  const t0 = Date.now();
+  try {
+    const db = openDatabase(${JSON.stringify(path)});
+    step = 'migrate';
+    const result = migrate(db);
+    const fk = db.pragma('foreign_keys', { simple: true });
+    db.close();
+    console.log(JSON.stringify({ ok: true, applied: result.applied.length, fk, ms: Date.now() - t0 }));
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, step, code: error.code ?? null, message: String(error.message).slice(0, 60), ms: Date.now() - t0 }));
+  }
+})();`;
+  return new Promise((resolveRun) => {
+    const proc = spawn(process.execPath, ['-e', source], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    proc.stdout.on('data', (chunk) => { out += chunk; });
+    proc.stderr.on('data', (chunk) => { out += chunk; });
+    proc.on('close', () => {
+      try { resolveRun(JSON.parse(out.trim().split('\n').at(-1))); } catch { resolveRun({ ok: false, step: 'crash', message: out.slice(0, 120) }); }
+    });
+  });
+}
+
+const totals = {};
+for (const scenario of ['fresh-file', 'upgrade-12-to-13', 'restart-13']) {
+  const tally = { rounds: 0, cleanRounds: 0, errorsByStep: {}, maxMs: 0, badEndState: 0, applyCounts: {} };
+  for (let round = 0; round < rounds; round += 1) {
+    const path = join(work, `${scenario}-${round}.db`);
+    remove(path);
+    if (scenario !== 'fresh-file') {
+      const db = openDatabase(path);
+      migrate(db, scenario === 'restart-13' ? MIGRATIONS : MIGRATIONS.slice(0, 12));
+      db.close();
+    }
+    const startAt = Date.now() + 1200;
+    const results = await Promise.all(Array.from({ length: N }, () => child(path, startAt)));
+    const db = openDatabase(path);
+    const rows = db.prepare('SELECT count(*) AS n, count(DISTINCT version) AS d, max(version) AS v FROM schema_migrations').get();
+    const ok = rows.n === 13 && rows.d === 13 && rows.v === 13 && db.pragma('integrity_check', { simple: true }) === 'ok' && db.pragma('foreign_key_check').length === 0;
+    db.close();
+    tally.rounds += 1;
+    if (!ok) tally.badEndState += 1;
+    const errors = results.filter((r) => !r.ok);
+    if (errors.length === 0) tally.cleanRounds += 1;
+    for (const error of errors) {
+      const key = `${error.step}:${error.code}`;
+      tally.errorsByStep[key] = (tally.errorsByStep[key] ?? 0) + 1;
+    }
+    const applied = results.filter((r) => r.ok).map((r) => r.applied).sort((a, b) => b - a).join(',');
+    tally.applyCounts[applied] = (tally.applyCounts[applied] ?? 0) + 1;
+    tally.maxMs = Math.max(tally.maxMs, ...results.map((r) => r.ms ?? 0));
+    if (results.some((r) => r.ok && r.fk !== 1)) tally.badEndState += 1;
+    remove(path);
+  }
+  totals[scenario] = tally;
+  console.log(`INFO  ${scenario}: ${JSON.stringify(tally)}`);
+}
+
+const fresh = totals['fresh-file'];
+const upgrade = totals['upgrade-12-to-13'];
+const restart = totals['restart-13'];
+const line = (label, ok, detail) => console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  ${detail}`);
+line('end state is always schema 1..13 once each, integrity ok, no FK violation, foreign_keys ON in every survivor', fresh.badEndState + upgrade.badEndState + restart.badEndState === 0, `bad rounds ${fresh.badEndState + upgrade.badEndState + restart.badEndState}`);
+line('no round applies a migration twice (applied counts per round never show two non-zero runs)',
+  Object.keys({ ...fresh.applyCounts, ...upgrade.applyCounts }).every((key) => key.split(',').filter((n) => n !== '' && n !== '0').length <= 1), JSON.stringify({ fresh: fresh.applyCounts, upgrade: upgrade.applyCounts }));
+line('restart of a current database: every concurrent opener succeeds', restart.cleanRounds === restart.rounds, `${restart.cleanRounds}/${restart.rounds} clean`);
+line('upgrade with concurrent openers: every opener succeeds', upgrade.cleanRounds === upgrade.rounds, `${upgrade.cleanRounds}/${upgrade.rounds} clean, errors ${JSON.stringify(upgrade.errorsByStep)}`);
+line('fresh file with concurrent openers: every opener succeeds', fresh.cleanRounds === fresh.rounds, `${fresh.cleanRounds}/${fresh.rounds} clean, errors ${JSON.stringify(fresh.errorsByStep)}`);

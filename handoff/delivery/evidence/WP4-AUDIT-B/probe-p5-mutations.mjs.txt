@@ -1,0 +1,108 @@
+// WP4-AUDIT-B probe P5: mutation controls in the SCRATCH export only (never the repository). Each mutation replaces
+// one exact guard, runs the named test file(s), then restores the file byte for byte and checks its SHA-256.
+// Usage (from the scratch export): node ../probes/p5-mutations.mjs
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const sha = (b) => createHash('sha256').update(b).digest('hex');
+const MUTATIONS = [
+  {
+    id: 'M1a',
+    what: 'deadline scan: drop the imported skip in assessPeriod only (the in-transaction guard stays)',
+    edits: [['src/server/services/automation.ts', "  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };\n", '']],
+    tests: ['tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M1b',
+    what: 'deadline scan and automatic finalization: drop both imported guards',
+    edits: [
+      ['src/server/services/automation.ts', "  if (timesheet !== undefined && timesheet.imported_unverified === 1) return { kind: 'skip', reason: 'imported' };\n", ''],
+      ['src/server/services/finalization.ts', "    if (existing !== undefined && isImportedTimesheet(db, owner.id, existing.id)) return { status: 'skipped', reason: 'imported' };\n", ''],
+    ],
+    tests: ['tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M2',
+    what: 'day and session edits: drop the F-2 guard in prepareEdit',
+    edits: [['src/server/services/timesheetCommands.ts', '  if (timesheet !== undefined && isImportedTimesheet(ctx.db, ctx.user.id, timesheet.id)) throw importedPeriodError();\n', '']],
+    tests: ['tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M3',
+    what: 'manual sign-off: drop the F-2 guard',
+    edits: [['src/server/services/finalization.ts', '    if (existing !== undefined && isImportedTimesheet(db, user.id, existing.id)) throw importedPeriodError();\n', '', 1]],
+    tests: ['tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M4',
+    what: 'OT leave record use: drop the imported-period refusal',
+    edits: [['src/server/services/otLeave.ts', '    if (insideImportedPeriod(ctx.db, input.userId, request.leaveDate)) throw importedPeriodError();\n', '']],
+    tests: ['tests/integration/opening-balance.test.ts', 'tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M5',
+    what: 'import commit: a repeated identical commit is no longer a replay',
+    edits: [['src/server/services/workbookImport.ts', "      if (row.decisions_json === decisionsJson) return { status: 'replayed' as const, row };\n", '']],
+    tests: ['tests/integration/workbook-import.test.ts'],
+  },
+  {
+    id: 'M6',
+    what: 'shared PDF: a HEAD is audited like a GET',
+    edits: [['src/server/routes/shares.ts', "          if (c.req.method === 'HEAD') return;\n", '']],
+    tests: ['tests/integration/pdf-download.test.ts'],
+  },
+  {
+    id: 'M7',
+    what: 'share marker: the recorded via_share_id no longer counts (inference only)',
+    edits: [['src/server/services/sharedActs.ts', '`(${row}.via_share_id IS NOT NULL OR (', '`(0 OR (']],
+    tests: ['tests/integration/audit-access.test.ts', 'tests/integration/sharing-matrix.test.ts', 'tests/integration/review-grantee-changes.test.ts', 'tests/integration/history.test.ts'],
+  },
+  {
+    id: 'M8',
+    what: 'reader: no DOCTYPE/ENTITY refusal (parser entity processing still off)',
+    edits: [['src/server/import/xlsxReader.ts', "  if (/<!\\s*(?:DOCTYPE|ENTITY)/i.test(text)) reject('doctype_forbidden', 'XML DOCTYPE and ENTITY declarations are not accepted');\n", '']],
+    tests: ['tests/integration/workbook-reader.test.ts'],
+  },
+  {
+    id: 'M9',
+    what: 'reader: the real-output cap never trips (declared sizes still checked)',
+    edits: [['src/server/import/xlsxReader.ts', '      if (total > cap) overflow = true;\n      else chunks.push(chunk);\n', '      chunks.push(chunk);\n']],
+    tests: ['tests/integration/workbook-reader.test.ts'],
+  },
+  {
+    id: 'M10',
+    what: 'opening balance: a different second post is accepted as a duplicate',
+    edits: [['src/server/services/ledger.ts', '      if (!same) {\n        throw new ApiError(409, \'opening_balance_exists\'', "      if (false) {\n        throw new ApiError(409, 'opening_balance_exists'"]],
+    tests: ['tests/integration/opening-balance.test.ts'],
+  },
+];
+
+const results = [];
+for (const mutation of MUTATIONS.filter((m) => process.argv[2] === undefined || m.id === process.argv[2])) {
+  const originals = new Map();
+  let applied = true;
+  for (const [file, from, to] of mutation.edits) {
+    const text = originals.get(file) ?? readFileSync(file, 'utf8');
+    if (!originals.has(file)) originals.set(file, text);
+    const current = readFileSync(file, 'utf8');
+    const occurrences = current.split(from).length - 1;
+    if (occurrences < 1) {
+      applied = false;
+      break;
+    }
+    writeFileSync(file, current.replace(from, to));
+  }
+  let outcome = 'NOT APPLIED (pattern missing)';
+  if (applied) {
+    const run = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', ...mutation.tests], { encoding: 'utf8', env: process.env });
+    const output = `${run.stdout}${run.stderr}`.replace(/\x1b\[[0-9;]*m/g, '');
+    const summary = (output.match(/Tests\s+[^\n]+/) ?? ['?'])[0].trim();
+    const failed = [...output.matchAll(/^\s*(?:×|✗|FAIL)\s+(.+)$/gm)].map((m) => m[1].trim()).filter((t) => !t.startsWith('tests/')).slice(0, 3);
+    outcome = `${run.status === 0 ? 'SURVIVED (tests pass)' : 'KILLED (tests fail)'} | ${summary}${failed.length ? ' | e.g. ' + failed.join(' ; ').slice(0, 300) : ''}`;
+  }
+  for (const [file, text] of originals) writeFileSync(file, text);
+  const restored = [...originals].every(([file, text]) => sha(readFileSync(file, 'utf8')) === sha(text));
+  results.push(`${mutation.id} ${mutation.what}: ${outcome} | restored=${restored}`);
+}
+console.log(results.join('\n'));

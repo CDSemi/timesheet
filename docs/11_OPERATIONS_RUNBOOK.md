@@ -70,7 +70,7 @@ Tick each item on the NAS and record the date; until then the NAS is NOT VERIFIE
 
 A new installation has no calendar and no administrator. The bootstrap creates the company calendar and the default policy once, then issues a one-time setup token. Nothing personal is in the file.
 
-1. Prepare `<data-dir>/bootstrap.json` with the company calendar, holidays, payroll rules and default policy, in the shape of `reference/examples/*.json`. The file is validated before any database is opened and a refusal quotes no value from it.
+1. Prepare `<data-dir>/bootstrap.json` with the company calendar, holidays, payroll rules and default policy, in the shape of `reference/examples/*.json`. The file is validated before any database is opened. A refusal names the failing field and rule and may quote a date or a policy number from the file (for example an invalid holiday date or a minutes mismatch); it never quotes a name, the reporting zone or a secret.
 2. Run the bootstrap in the running container. It prints counts and the setup token once; the token is shown only on this terminal and only its hash is stored. **[Drill stage 1]**
 
    ~~~bash
@@ -107,13 +107,13 @@ Targets (to be tested, not guarantees): a nightly backup, a 24-hour recovery poi
 
 ## 5. Retention
 
-- **Backups (F-5).** `--prune` keeps the newest backup of each of the last 7 UTC days, of the last 4 ISO weeks and of the last 6 UTC months, and always the newest one. It acts only on folders the backup tool created (the exact folder name and a valid manifest); every other entry is only counted. The windows are calendar windows from the clock, so after a long gap in backups only the newest survives. The last prune result is not recorded in the administrator status. Preview a prune; it removes nothing: **[Drill stage 2]**
+- **Backups (F-5).** `--prune` keeps the newest backup of each of the last 7 UTC days, of the last 4 ISO weeks and of the last 6 UTC months, and always the newest one. It acts only on folders the backup tool created (the exact folder name and a valid manifest); every other entry is only counted. The windows are calendar windows from the clock, so after a long gap in backups only the newest survives. If any backup is dated after the host clock (a clock set back), `--prune` and the dry run refuse the whole run with exit 2 (`clock_behind_backups`) and remove nothing: fix the host time first. The last prune result is not recorded in the administrator status. Preview a prune; it removes nothing: **[Drill stage 2]**
 
   ~~~bash
   <compose> exec -T timesheet <cli> backup prune --in /data/backups --dry-run
   ~~~
 
-- **Job rows (F-4).** A daily job deletes only succeeded `deadline_scan` and `reminder_scan` rows older than 30 days. It never deletes delivery, PDF or send rows. Nothing needs scheduling: the server's runner does it. The administrator status shows when it last ran and how many rows it deleted. Covered by `tests/integration/job-retention.test.ts`, not by the drill.
+- **Job rows (F-4).** A daily job deletes only succeeded `deadline_scan` and `reminder_scan` rows older than 30 days. It never deletes delivery, PDF or send rows. Nothing needs scheduling: the server's runner does it. The last run and the number of rows it deleted are in the `GET /api/admin/operations` JSON (`operations.retention`); the administrator screen does not show them. Covered by `tests/integration/job-retention.test.ts`, not by the drill.
 - **Orphan files.** A daily sweep removes private files that no row refers to and that are older than 24 hours; it never removes a referenced file, including an import source. Covered by `tests/integration/jobs-sweep.test.ts`, not by the drill.
 - Timesheets, the ledger, revisions and the audit trail are never deleted. Watch the free disk space (section 12).
 
@@ -222,7 +222,7 @@ For the owner's people. Each person imports only their own workbook; an administ
 2. Decide each listed day. The default is skip; only the choices the preview allows are offered. Then review and commit. **[Drill stage 6]**
 3. The imported period shows "Imported, unverified". It is read-only history: no ledger events, no sign-off or submission (409 `imported_period`), no reminders and no automatic sends. Uploading the same file again, or committing twice, changes nothing ("Already imported"). **[Drill stage 6]**
 4. The opening OT balance is the only OT carry-in. Enter signed non-zero minutes, an as-of date, a reason and an evidence reference, then confirm. It posts once; a repeat is a no-op, and a different value is refused. Change it only by a reasoned correction (a correction that would leave a net zero is refused, open question I-4). **[Drill stage 6]**
-5. What the import does not do: it never creates work sessions or clock times, OT, sign-offs or sends; "Off day (overtime used)" is skipped (I-2); a draft period of the application never receives imported days (I-1); a period that has not ended cannot be imported (I-3).
+5. What the import does not do: it never creates work sessions or clock times, OT, sign-offs or sends; "Off day (overtime used)" is skipped (I-2); a draft period of the application never receives imported days (I-1); a period that has not ended, or has ended but is not yet due for payroll, is skip-only (I-3 and its safe default, document 10).
 6. Keep the personal workbook out of git, chat and the image. The tracked template is a sanitized sample and is never re-saved.
 
 The API routes behind these screens, all owner only: `POST /api/imports`, `GET /api/imports`, `GET /api/imports/{id}`, `POST /api/imports/{id}/commit`, and `GET`, `POST` and `PUT /api/ot/opening-balance`.
@@ -244,13 +244,13 @@ The application cannot report its own failure over its own mail: broken SMTP can
 
 ## 12. What the administrator status shows
 
-An administrator sees operations and delivery, never timesheet details (docs/03). The screen reads `GET /api/admin/operations`; the account list shows a "Not set up" flag for an account that never saved its submission settings.
+An administrator sees operations and delivery, never timesheet details (docs/03). The screen reads `GET /api/admin/operations`, and the account list shows a "Not set up" flag for an account that never saved its submission settings. The route returns a little more than the screen shows: the retention run (below) is in the JSON only.
 
 - Runner heartbeat, the automation activation instant, the sender mode and flag, and job and delivery totals.
 - Backup: the last outcome, the last attempt and last success instants, the fault code and the age since the last success (a warning after 26 hours, an error when the latest attempt failed).
 - Disk: free and total bytes of the data volume (never a path).
 - Outbound: whether sending is paused, since when and why (`restored`), the number of deliveries that await a decision, and the queued and held send jobs.
-- Retention: when the job-row cleanup last ran and how many rows it deleted.
+- Retention (in the `GET /api/admin/operations` JSON only, not on the screen): when the job-row cleanup last ran and how many rows it deleted.
 - Per person: periods that have a revision with recipients, with redacted fault codes.
 
 **[Drill stage 3]** reads the outbound pause from this route after a restore; **[Drill stage 2]** produces a backup that the status reports. Not shown: the result of the last `--prune`, and anything about the host. That is why section 11 is needed.

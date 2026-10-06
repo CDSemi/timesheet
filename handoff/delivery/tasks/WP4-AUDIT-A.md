@@ -35,6 +35,9 @@
 - Docker, if you run any container probe:
   - use the Compose project name `ts-wp4-aud-a`, and remove only it, by name;
   - never push, log in or prune.
+- Whenever you run the CLI or the server, set both `DATA_DIR` and `DATABASE_PATH`
+  explicitly under your task folder. Never rely on their defaults: the WP4-GATE
+  verifier once migrated the owner's local development database that way.
 - Do not edit source. Use capture mode only; never send real mail.
 - Never kill processes by PID. Never write into the repository root. Never redirect to
   /dev/null or nul.
@@ -135,3 +138,66 @@ Return at most 200 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1) - decision: FIX REQUIRED
+
+Self-reported model: claude-opus-5-5 (equal to the strongest WP4 author model; fresh context; authored nothing in WP4).
+Report: [WP4_REVIEW_A](../WP4_REVIEW_A.md) and its `.vi.md`. Evidence: `handoff/delivery/evidence/WP4-AUDIT-A/` (masked,
+LF; index `00-README.txt`; probes as `*.mjs.txt`). Raw output stays in `D:\.claude-tmp\timesheet\WP4-AUDIT-A`.
+
+**Target and digest.** Reviewed commit `13a258db86b2f0b6388830e584e2cca5303f1f6c`. The digest
+`1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe` (774 files) was the same at every point:
+
+- in the repository, before (10:44 UTC) and after (11:18 UTC);
+- in the `git ls-tree` form;
+- on the export after npm ci, verify, the drill and every probe.
+
+It equals the gate digest. HEAD did not move; `main` was level with `origin/main`. No source was edited.
+
+**Checks rerun.** Node 24.21.0 portable, Git Bash, Docker 28.5.1. Compose project `ts-wp4-aud-a`. Capture mode and
+synthetic data only. DATABASE_PATH and DATA_DIR were set explicitly under the task folder for every CLI and server run.
+
+| Item | Command / exit | Result |
+|---|---|---|
+| Install | `npm ci` on a `git archive` export: exit 0 | 169 packages, no deprecation line |
+| Verify | `npm run verify`: exit 1 with DATA_DIR exported; exit 0 without it | 75 files / 1710 tests both times. The smoke fails only when DATA_DIR is inherited (WP4-A-04). Clean run: SMOKE PASSED. |
+| Drill | `container-drill.mjs --project ts-wp4-aud-a --wp3 <wp3 build>`: exit 0 | stages 1-6, 31/31/56/35/27/23 PASS, 0 FAIL (205) |
+| Migration runner | P1, P1b | Rollback, FK violation refused, `foreign_keys` restored on every path, older binary refused. Concurrent upgrades and restarts are clean. A brand-new file opened by several processes at once can give SQLITE_BUSY in `openDatabase` (R-A2, fail-safe). |
+| Backup under writes and restore | P2: exit 0 | Point in time, ledger plus audit atomic, hashes equal, live tree untouched by the restore, balances equal through SQL and API |
+| Prune | P3: exit 0 | Junction escapes not followed; dry run and refusals remove nothing. Backward clock keeps 1 of 180 (R-A1). |
+| Target boundaries | P4: exit 0 | Junctions into DATA_DIR, the live folder and a folder in the backup are refused (2); tampered backups fail (1) and leave nothing |
+| Bootstrap | P5: exit 0 | Hash only, 60 minutes, single use, `--new-token` rules, no leak |
+| Proxy and configuration | P6: exit 0 | No XFF spoofing without a trusted peer; right-most untrusted hop; fail-fast without values; client source map served (WP4-A-01) |
+| Retention and sweep | P7: exit 0 | Window abuse refused; only eligible scan rows deleted; both jobs run while paused; referenced files kept |
+| Admin privacy | P8: exit 0 | Exact allowlists incl. `not_set_up` and `retention` |
+| Outbound CLI | P9 | `--confirm` rules, exit codes, audited resume |
+
+**Findings.**
+
+- WP4-A-01 (Low, required). The image ships 114 `*.map` files, and production serves the client map with its full
+  source text. Locations: `Dockerfile:42`, `tsconfig.server.json:9`, `vite.config.ts:12`; the drill scan has no
+  `*.map` rule. Rule: docs/07:9; scope item 3.
+- WP4-A-02 (Low, same round). `.env.example:60` limits `JOB_RUNNER=off` to tests and drills, which contradicts the
+  rollback rule in docs/07:32 and docs/11:194.
+- WP4-A-03 (Low, same round). docs/11 says the screen shows the retention result, but it is JSON only. docs/11 and a
+  `bootstrap.ts` comment say refusals quote no file value, but dates and policy numbers are quoted.
+- WP4-A-04 (Info, optional). The smoke inherits the caller's DATA_DIR.
+
+Risks R-A1 to R-A9 are in the report.
+
+**Scope 1-12.** All behaviour checks hold; scope item 3 fails only on WP4-A-01. Item 9: the relaxed pins in
+`delivery.test.ts` and `jobs-restart.test.ts` stay exact and are legitimate. The `automation.spec.ts` bounds are weaker
+but acceptable, because integration tests pin "no scan job without activation" exactly. Item 8: `not_set_up` in the
+account list is consistent with docs/03:34. Item 12: the HANDOFF carry items of area A are acceptable backlog or owner
+steps; the decisions are in the report.
+
+**Not run.** NAS and native arm64: NOT VERIFIED. `npm run test:e2e`: not rerun; it is not required for area A.
+
+**Notes.**
+
+- `handoff/delivery/translation-map.json` and the board were not edited. If the package validator needs the new
+  EN/VI pair, the coordinator or committer adds `WP4_REVIEW_A` there.
+- Probe reruns caused by probe defects are disclosed at the top of each log.
+
+**Next action.** A bounded fix task (FIX_FINDINGS) for WP4-A-01, with WP4-A-02 and WP4-A-03, and optionally WP4-A-04.
+Then a freeze, the gate and a fresh area-A recheck.

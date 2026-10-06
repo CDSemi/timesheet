@@ -1,0 +1,127 @@
+// WP4-AUDIT-B probe P3: races between two SEPARATE SQLite connections in two worker threads, released together by
+// a shared barrier, 10 rounds per scenario, each round on a fresh database under the task folder.
+// Scenarios: identical commit of one batch; identical preview of one upload; two different batches over the same
+// period; opening balance posted twice with the same content and twice with different content.
+// Usage (from the scratch export): node ../probes/p3-races.mjs <work folder>
+import { mkdirSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import { fileURLToPath } from 'node:url';
+import { openDatabase } from '../export/src/server/db/database.ts';
+import { migrate } from '../export/src/server/db/migrations.ts';
+import { FileStore } from '../export/src/server/files/fileStore.ts';
+import { seedSynthetic } from '../export/src/server/seed.ts';
+import { commitImport, previewImport } from '../export/src/server/services/workbookImport.ts';
+import { postOpeningBalance } from '../export/src/server/services/ledger.ts';
+import { buildSyntheticWorkbook } from '../export/tests/support/syntheticWorkbook.ts';
+
+const NOW = '2026-10-06T18:00:00Z';
+const clock = { now: () => new Date(NOW) };
+const sessionUser = (row) => ({ id: row.id, email: row.email, displayName: row.display_name, role: row.role, calendarId: row.calendar_id, sessionId: 'probe' });
+
+if (!isMainThread) {
+  const { dbPath, dataDir, scenario, which, barrier, bytes, importId } = workerData;
+  const db = openDatabase(dbPath);
+  const row = db.prepare("SELECT * FROM users WHERE email = 'employee@example.invalid'").get();
+  const user = sessionUser(row);
+  const files = new FileStore(dataDir);
+  const flag = new Int32Array(barrier);
+  Atomics.add(flag, 1, 1);
+  Atomics.wait(flag, 0, 0);
+  let result;
+  try {
+    if (scenario === 'commit-identical') {
+      const out = commitImport({ db, clock, user }, importId, workerData.decisions);
+      result = out.status;
+    } else if (scenario === 'preview-identical') {
+      const out = previewImport({ db, clock, files, user }, new Uint8Array(bytes));
+      result = out.created ? 'created' : 'existing';
+    } else if (scenario === 'commit-two-batches') {
+      const out = commitImport({ db, clock, user }, importId, []);
+      result = out.status;
+    } else if (scenario.startsWith('opening')) {
+      const minutes = scenario === 'opening-different' ? 600 + which : 600;
+      const out = postOpeningBalance({ db, clock }, { userId: user.id, actorUserId: user.id, minutes, asOfDate: '2026-08-16', reason: 'Probe race', evidenceRef: 'probe-race', expectedVersion: 0 });
+      result = out.status;
+    }
+  } catch (error) {
+    result = `${error.status ?? ''}:${error.code ?? error.message}`;
+  }
+  db.close();
+  parentPort.postMessage(result);
+} else {
+  const work = process.argv[2];
+  if (!work) throw new Error('work folder required');
+  const self = fileURLToPath(import.meta.url);
+  const wbA = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-09-04' }] });
+  const wbB = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-09-04', days: { 3: { label: 'Holiday' } } }] });
+
+  async function round(scenario, index) {
+    const dir = join(work, `${scenario}-${index}`);
+    mkdirSync(dir, { recursive: true });
+    const dbPath = join(dir, 'probe.db');
+    const dataDir = join(dir, 'data');
+    const db = openDatabase(dbPath);
+    migrate(db);
+    await seedSynthetic(db, clock, { passwords: { admin: 'probe-admin-pass-1', employee: 'probe-employee-pass-1' } });
+    const user = sessionUser(db.prepare("SELECT * FROM users WHERE email = 'employee@example.invalid'").get());
+    const files = new FileStore(dataDir);
+    const ids = [];
+    let decisions = [];
+    if (scenario === 'commit-identical') {
+      const p = previewImport({ db, clock, files, user }, wbA).batch;
+      ids.push(p.id, p.id);
+      decisions = p.plan.decisions_required.map((d) => ({ work_date: d.work_date, action: 'skip' }));
+    } else if (scenario === 'commit-two-batches') {
+      ids.push(previewImport({ db, clock, files, user }, wbA).batch.id, previewImport({ db, clock, files, user }, wbB).batch.id);
+    }
+    db.close();
+    const barrier = new SharedArrayBuffer(8);
+    const flag = new Int32Array(barrier);
+    const bytes = scenario === 'preview-identical' ? wbA.buffer.slice(wbA.byteOffset, wbA.byteOffset + wbA.byteLength) : undefined;
+    const workers = [0, 1].map(
+      (which) => new Worker(self, { workerData: { dbPath, dataDir, scenario, which, barrier, bytes, importId: ids[which], decisions } }),
+    );
+    const results = workers.map((w) => new Promise((resolve, reject) => { w.once('message', resolve); w.once('error', reject); }));
+    while (Atomics.load(flag, 1) < 2) await new Promise((r) => setTimeout(r, 5));
+    Atomics.store(flag, 0, 1);
+    Atomics.notify(flag, 0);
+    const outcome = (await Promise.all(results)).sort();
+    const check = openDatabase(dbPath);
+    const facts = {
+      imports: check.prepare('SELECT count(*) FROM imports').pluck().get(),
+      committed: check.prepare("SELECT count(*) FROM imports WHERE state = 'committed'").pluck().get(),
+      importedTimesheets: check.prepare('SELECT count(*) FROM timesheets WHERE imported_unverified = 1').pluck().get(),
+      dayEntries: check.prepare('SELECT count(*) FROM day_entries WHERE user_id = ?').pluck().get(user.id),
+      openings: check.prepare("SELECT count(*) FROM ot_ledger WHERE entry_type = 'opening_balance'").pluck().get(),
+      ledger: check.prepare('SELECT count(*) FROM ot_ledger WHERE user_id = ?').pluck().get(user.id),
+      files: (() => { try { return readdirSync(join(dataDir, 'files')).length; } catch { return 0; } })(),
+      integrity: check.pragma('integrity_check', { simple: true }),
+    };
+    check.close();
+    return { outcome, facts };
+  }
+
+  const expectations = {
+    'commit-identical': (r) => r.outcome.join() === 'committed,replayed' && r.facts.committed === 1 && r.facts.importedTimesheets === 1,
+    'preview-identical': (r) => r.outcome.join() === 'created,existing' && r.facts.imports === 1 && r.facts.files === 1,
+    'commit-two-batches': (r) => r.outcome.includes('committed') && r.outcome.some((o) => o === '409:decisions_required') && r.facts.committed === 1 && r.facts.importedTimesheets === 1,
+    'opening-same': (r) => r.outcome.join() === 'duplicate,posted' && r.facts.openings === 1 && r.facts.ledger === 1,
+    'opening-different': (r) => r.outcome.join() === '409:opening_balance_exists,posted' && r.facts.openings === 1 && r.facts.ledger === 1,
+  };
+  let failures = 0;
+  for (const scenario of Object.keys(expectations)) {
+    const seen = [];
+    for (let index = 1; index <= 10; index += 1) {
+      const r = await round(scenario, index);
+      const ok = expectations[scenario](r) && r.facts.integrity === 'ok';
+      if (!ok) failures += 1;
+      seen.push(`${ok ? 'ok' : 'FAIL'}[${r.outcome.join('|')}; ${JSON.stringify(r.facts)}]`);
+    }
+    console.log(`${scenario}: ${seen.filter((s) => s.startsWith('ok')).length}/10 rounds as expected`);
+    console.log(`  first: ${seen[0]}`);
+    for (const s of seen.filter((s) => s.startsWith('FAIL'))) console.log(`  ${s}`);
+  }
+  console.log(failures === 0 ? 'PROBE P3 PASSED' : `PROBE P3 FAILED (${failures})`);
+  process.exitCode = failures === 0 ? 0 : 1;
+}

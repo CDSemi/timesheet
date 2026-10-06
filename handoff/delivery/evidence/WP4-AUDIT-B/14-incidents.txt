@@ -1,0 +1,27 @@
+# WP4-AUDIT-B procedural incidents, reported as they happened (nothing here touches the repository source).
+#
+# 1. Runaway interactive Python REPL (my error), started 2026-10-06 03:58:26 local time.
+#    I meant to edit a probe file and ran a Git Bash command that began with `python - <<'EOF' ... EOF` (an empty
+#    heredoc) followed by a node edit. The `python` on PATH ignored the heredoc and opened its interactive REPL with no
+#    console; pyrepl fails in getheightwidth (OSError WinError 123) and loops, printing tracebacks without end. The tool
+#    moved the command to the background (harness task b9vel2ldq). Its output file under the session's task folder
+#    (outside Dropbox and outside the repository) grew by about 2.4 to 2.8 MiB per second: 0.37 GB at 04:00, 1.1 GB at
+#    04:05, 2.5 GB at 04:13. Process: python.exe started 03:58:26, parent = the background bash of that task.
+#    The brief forbids killing processes by PID, and I have no tool that stops a background task, so I did not stop
+#    it. It must be stopped by the coordinator or the owner (stop harness task b9vel2ldq, or end that python.exe), and
+#    the output file can then be deleted. The node edit queued after it in the same command line never ran; I made the
+#    same probe edits with the Edit tool instead. Free space on D: stayed at 1.4 TB throughout.
+#
+# 2. HTTP probe runs 1 and 2 (<task>\http1, <task>\http2):
+#    run 1 stopped at the oversized-upload check: fetch threw "other side closed" (the server answers 413 and closes
+#    while the client is still sending) and the probe had no handler; the server child ended with the probe (a later
+#    connection to its port was refused). Run 2 added the handler and showed the server stays alive; 9 checks failed
+#    for probe reasons (a seeded signature file counted as an import file; a batch entry without its expected_version
+#    gave 409 stale_version before the import guard; a 415 for a raw upload under /api/shared; a revision id taken
+#    from the second sign-off; R4 expected on a review without deficit proposals). Run 3 (<task>\http3,
+#    07-p2-http.txt) corrected the probe, not the product.
+#
+# 3. One stray `curl ... >/dev/null 2>&1` (to 127.0.0.1:1, nothing listening) was appended to the p6 command line by
+#    mistake; the brief says never redirect to /dev/null. It wrote nothing and changed nothing. Recorded for honesty.
+#
+# 4. `node -e ""` once resolved to the system Node (not 24) in a read-only grep command line; it ran an empty script.

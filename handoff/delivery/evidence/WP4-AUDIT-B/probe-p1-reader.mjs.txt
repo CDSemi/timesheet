@@ -1,0 +1,215 @@
+// WP4-AUDIT-B probe P1: hostile synthetic packages against the production reader and mapping (WP4-T08).
+// Every package is built in memory from the tracked template (ZIP-level clone); nothing is written to disk.
+// Run from the scratch export: node probes/p1-reader.mjs
+import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import { readWorkbook } from '../export/src/server/import/xlsxReader.ts';
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import {
+  buildSyntheticWorkbook,
+  pack,
+  paddedSheetXml,
+  patchEntry,
+  readTemplateBytes,
+  TEMPLATE_PATH,
+  unpack,
+  withEntry,
+  withText,
+} from '../export/tests/support/syntheticWorkbook.ts';
+
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const { strToU8, strFromU8, zipSync, crc32: _unused } = require('fflate');
+
+const sha = (b) => createHash('sha256').update(b).digest('hex');
+const templateBefore = sha(readFileSync(TEMPLATE_PATH));
+const template = readTemplateBytes();
+const MiB = 1024 * 1024;
+const results = [];
+
+function run(label, build, { preview = true, expect } = {}) {
+  let bytes;
+  try {
+    bytes = build();
+  } catch (error) {
+    results.push({ label, outcome: `BUILD ERROR ${error.message}` });
+    return;
+  }
+  const t0 = performance.now();
+  let outcome;
+  let extra = '';
+  try {
+    const out = preview ? previewWorkbook(bytes) : readWorkbook(bytes);
+    outcome = 'accepted';
+    if (preview) {
+      const codes = [...new Set(out.findings.map((f) => f.code))].sort();
+      extra = `findings=${codes.join(',')}`;
+    } else {
+      extra = `sheets=${out.sheets.length} notes=${out.notes.map((n) => n.code).join(',')}`;
+    }
+  } catch (error) {
+    outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${String(error.message).slice(0, 80)}`;
+  }
+  const ms = Math.round(performance.now() - t0);
+  const verdict = expect === undefined ? '' : outcome.startsWith(expect) ? ' [as expected]' : ` [EXPECTED ${expect}]`;
+  results.push({ label, bytes: bytes.length, ms, outcome: outcome + verdict, extra });
+}
+
+// 1. Zip bomb whose header lies: 40 MiB of real output declared as 1000 bytes.
+run('zip bomb, lying declared size (40 MiB real, 1000 declared)', () => {
+  const b = withEntry(template, 'xl/worksheets/sheet1.xml', strToU8(paddedSheetXml(40 * MiB)));
+  return patchEntry(b, 'xl/worksheets/sheet1.xml', { uncompressedSize: 1000 });
+}, { expect: 'rejected:entry_too_large' });
+const rssAfterBomb = process.resourceUsage().maxRSS;
+
+// 2. Declared size above the per-entry cap.
+run('declared size above 16 MiB', () => withEntry(template, 'xl/worksheets/sheet1.xml', strToU8(paddedSheetXml(17 * MiB))), { expect: 'rejected:entry_too_large' });
+
+// 3. Total budget on real output: four referenced parts of 15 MiB each, all declared as 1000 bytes.
+run('total real inflated output above 48 MiB (headers lie)', () => {
+  let b = template;
+  for (const part of ['xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) {
+    const xml = part.endsWith('sharedStrings.xml')
+      ? '<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></sst><!--' + 'A'.repeat(15 * MiB) + '-->'
+      : paddedSheetXml(15 * MiB);
+    b = withEntry(b, part, strToU8(xml));
+  }
+  for (const part of ['xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) {
+    b = patchEntry(b, part, { uncompressedSize: 1000 });
+  }
+  return b;
+}, { expect: 'rejected:total_too_large' });
+
+// 4. Declared total above 48 MiB (four honest 15 MiB parts, one unreferenced).
+run('declared total above 48 MiB', () => {
+  let b = template;
+  for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/unreferenced.xml']) {
+    b = withEntry(b, part, strToU8(paddedSheetXml(15 * MiB)));
+  }
+  return b;
+}, { expect: 'rejected:total_too_large' });
+
+// 5. Entry count overflow.
+run('entry count 300 (> 256)', () => {
+  const entries = unpack(template);
+  for (let i = 0; i < 300; i += 1) entries[`xl/extra/e${i}.xml`] = strToU8('<x/>');
+  return pack(entries);
+}, { expect: 'rejected:too_many_entries' });
+
+// 6. CRC mismatch and declared size mismatch (under the cap).
+run('CRC mismatch on a referenced part', () => patchEntry(template, 'xl/worksheets/sheet1.xml', { crc: 0x12345678 }), { expect: 'rejected:entry_integrity' });
+run('declared size one byte short (under the cap)', () => {
+  const real = unpack(template)['xl/worksheets/sheet1.xml'].length;
+  return patchEntry(template, 'xl/worksheets/sheet1.xml', { uncompressedSize: real - 1 });
+}, { expect: 'rejected:entry_integrity' });
+run('declared size one byte long (under the cap)', () => {
+  const real = unpack(template)['xl/worksheets/sheet1.xml'].length;
+  return patchEntry(template, 'xl/worksheets/sheet1.xml', { uncompressedSize: real + 1 });
+}, { expect: 'rejected:entry_integrity' });
+run('encrypted flag', () => patchEntry(template, 'xl/workbook.xml', { flags: 1 }), { expect: 'rejected:unsupported_zip' });
+
+// 7. DOCTYPE / ENTITY: XXE and billion laughs, in several parts and encodings.
+const laughs = '<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;"><!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">]>';
+const xxe = '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]>';
+run('billion laughs in workbook.xml', () => withText(template, 'xl/workbook.xml', (t) => t.replace(/^<\?xml[^>]*\?>/, laughs)), { expect: 'rejected:doctype_forbidden' });
+run('XXE SYSTEM entity in sharedStrings.xml', () =>
+  withText(template, 'xl/sharedStrings.xml', (t) => t.replace(/^<\?xml[^>]*\?>/, xxe).replace('<t>', '<t>&xxe;')), { expect: 'rejected:doctype_forbidden' });
+run('lower-case doctype in a worksheet', () => withText(template, 'xl/worksheets/sheet2.xml', (t) => t.replace(/^<\?xml[^>]*\?>/, '<?xml version="1.0"?><!doctype x [<!entity a "b">]>')), { expect: 'rejected:doctype_forbidden' });
+run('UTF-16LE (BOM) DOCTYPE in [Content_Types].xml', () => {
+  const entries = unpack(template);
+  const text = strFromU8(entries['[Content_Types].xml']).replace(/^<\?xml[^>]*\?>/, '<?xml version="1.0" encoding="UTF-16"?>' + laughs.replace(/^<\?xml[^>]*\?>/, ''));
+  const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  entries['[Content_Types].xml'] = new Uint8Array(buf);
+  return pack(entries);
+}, { expect: 'rejected:doctype_forbidden' });
+run('UTF-16LE without BOM DOCTYPE in workbook.xml (no expansion possible)', () => {
+  const entries = unpack(template);
+  const text = laughs + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>';
+  entries['xl/workbook.xml'] = new Uint8Array(Buffer.from(text, 'utf16le'));
+  return pack(entries);
+});
+run('undeclared entity reference in a cell stays literal', () =>
+  withText(template, 'xl/sharedStrings.xml', (t) => t.replace('<t>', '<t>&xxe;&amp;')), { preview: false, expect: 'accepted' });
+run('DOCTYPE in an unparsed part (docProps/core.xml)', () => withText(template, 'docProps/core.xml', (t) => t.replace(/^<\?xml[^>]*\?>/, laughs)), { expect: 'accepted' });
+
+// 8. Macros.
+run('vbaProject.bin entry', () => withEntry(template, 'xl/vbaProject.bin', new Uint8Array([0xd0, 0xcf, 0x11, 0xe0])), { expect: 'rejected:macro_content' });
+run('macro-enabled main content type', () =>
+  withText(template, '[Content_Types].xml', (t) =>
+    t.replace('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml', 'application/vnd.ms-excel.sheet.macroEnabled.main+xml')), { expect: 'rejected:macro_content' });
+run('macrosheet part', () => withEntry(template, 'xl/macrosheets/sheet1.xml', strToU8('<xm:macrosheet/>')), { expect: 'rejected:macro_content' });
+run('vbaProject content type Default', () =>
+  withText(template, '[Content_Types].xml', (t) => t.replace('</Types>', '<Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/></Types>')), { expect: 'rejected:macro_content' });
+
+// 9. External links: listed and ignored.
+run('external link part, external relationship and externalReferences', () => {
+  let b = withEntry(template, 'xl/externalLinks/externalLink1.xml', strToU8('<?xml version="1.0"?><externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>'));
+  b = withEntry(b, 'xl/externalLinks/_rels/externalLink1.xml.rels', strToU8('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" Target="file:///C:/secret/other.xlsx" TargetMode="External"/></Relationships>'));
+  b = withText(b, 'xl/_rels/workbook.xml.rels', (t) => t.replace('</Relationships>', '<Relationship Id="rIdX" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink" Target="https://attacker.invalid/x.xlsx" TargetMode="External"/></Relationships>'));
+  b = withText(b, 'xl/workbook.xml', (t) => t.replace('<calcPr', '<externalReferences><externalReference r:id="rIdX"/></externalReferences><calcPr'));
+  return b;
+}, { expect: 'accepted' });
+
+// 10. Path traversal in entry names and in relationship targets.
+for (const name of ['../evil.xml', '/abs.xml', 'xl\\back.xml', 'xl/../../up.xml']) {
+  run(`entry name ${JSON.stringify(name)}`, () => {
+    // fflate refuses nothing; build the entry list by hand.
+    const entries = unpack(template);
+    entries[name] = strToU8('<x/>');
+    return zipSync(Object.fromEntries(Object.entries(entries).map(([k, v]) => [k, [v, { level: 6 }]])));
+  }, { expect: 'rejected:malformed_zip' });
+}
+run('relationship target escaping the package root', () =>
+  withText(template, 'xl/_rels/workbook.xml.rels', (t) => t.replace('Target="worksheets/sheet2.xml"', 'Target="../../../../../../Windows/win.ini"')), { preview: false, expect: 'accepted' });
+
+// 11. Sheet, cell and shared-string limits.
+run('65 sheets (> 64)', () =>
+  withText(template, 'xl/workbook.xml', (t) => t.replace('</sheets>', Array.from({ length: 62 }, (_, i) => `<sheet name="S${i}" sheetId="${500 + i}" r:id="rId2"/>`).join('') + '</sheets>')), { expect: 'rejected:too_many_sheets' });
+const cellsXml = (n, col = 'A') => {
+  const rows = [];
+  for (let i = 1; i <= n; i += 1) rows.push(`<row r="${i}"><c r="${col}${i}"><v>1</v></c></row>`);
+  return `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join('')}</sheetData></worksheet>`;
+};
+run('200 001 cells in one sheet (> 200 000)', () => withEntry(template, 'xl/worksheets/sheet3.xml', strToU8(cellsXml(200_001))), { expect: 'rejected:too_many_cells' });
+run('100 001 shared strings (> 100 000)', () =>
+  withEntry(template, 'xl/sharedStrings.xml', strToU8(`<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${'<si><t>x</t></si>'.repeat(100_001)}</sst>`)), { expect: 'rejected:too_many_shared_strings' });
+
+// 12. Cost probes inside the limits (event-loop time of one synchronous preview).
+run('Holiday Dates with one cell at A9999999 (sparse row loop)', () =>
+  withEntry(template, 'xl/worksheets/sheet2.xml', strToU8('<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="9999999"><c r="A9999999"><v>1</v></c></row></sheetData></worksheet>')));
+run('Holiday Dates with 150 000 cells (Math.max spread)', () => withEntry(template, 'xl/worksheets/sheet2.xml', strToU8(cellsXml(150_000, 'C'))));
+run('Holiday Dates with 199 999 cells (Math.max spread)', () => withEntry(template, 'xl/worksheets/sheet2.xml', strToU8(cellsXml(199_999, 'C'))));
+run('three sheets of 199 999 cells each', () => {
+  let b = template;
+  for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet3.xml']) b = withEntry(b, part, strToU8(cellsXml(199_999, 'C')));
+  return withEntry(b, 'xl/worksheets/sheet2.xml', strToU8(cellsXml(100_000, 'C')));
+});
+run('15 MiB worksheet of 1.3 M empty cells (parse before the cell cap)', () => {
+  const cell = '<c/>';
+  const body = cell.repeat(Math.floor((15 * MiB) / cell.length) - 64);
+  return withEntry(template, 'xl/worksheets/sheet3.xml', strToU8(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">${body}</row></sheetData></worksheet>`));
+}, { expect: 'rejected:too_many_cells' });
+
+// 13. Formulas are never evaluated; caches are labelled.
+{
+  const bytes = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09', days: { 0: { labelFormulaCache: 'Worked' } } }] });
+  const out = previewWorkbook(bytes);
+  const period = out.periods[0];
+  const day0 = period.days[0];
+  const wb = readWorkbook(bytes);
+  const sheet = wb.sheets.find((s) => s.name === '2026.01.09');
+  const formulaCells = [...sheet.cells.values()].filter((c) => c.formula !== null);
+  const allNull = formulaCells.every((c) => c.value === null && c.cacheNote === 'formula cache, not authoritative');
+  const w26 = sheet.cells.get('W26');
+  results.push({
+    label: 'formula cells: value null, cache labelled; label from formula cache flagged; TODAY in W26 flagged',
+    outcome: `formula cells=${formulaCells.length} allValueNullAndLabelled=${allNull} day0.label.fromFormulaCache=${day0.label?.fromFormulaCache} W26.formula=${w26?.formula} W26.value=${w26?.value} findings=${[...new Set(out.findings.map((f) => f.code))].sort().join(',')}`,
+  });
+}
+
+const rows = results.map((r) => `${r.label} | bytes=${r.bytes ?? '-'} | ms=${r.ms ?? '-'} | ${r.outcome}${r.extra ? ' | ' + r.extra : ''}`);
+console.log(rows.join('\n'));
+console.log(`maxRSS after the lying-header bomb: ${Math.round(rssAfterBomb / 1024)} MiB; maxRSS at end: ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`);
+const templateAfter = sha(readFileSync(TEMPLATE_PATH));
+console.log(`template sha256 before=${templateBefore} after=${templateAfter} unchanged=${templateBefore === templateAfter}`);

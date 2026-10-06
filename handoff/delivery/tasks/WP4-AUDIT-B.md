@@ -36,6 +36,9 @@
   on ENOSPC.
 - Run no docker command unless a finding needs one. If you do, use the Compose project
   name `ts-wp4-aud-b` and remove it by name.
+- Whenever you run the CLI or the server, set both `DATA_DIR` and `DATABASE_PATH`
+  explicitly under your task folder. Never rely on their defaults: the WP4-GATE
+  verifier once migrated the owner's local development database that way.
 - Do not edit source. Use capture mode only.
 - Never kill processes by PID. Never write into the repository root. Never redirect to
   /dev/null or nul.
@@ -137,3 +140,52 @@ Return at most 200 words, beginning with your self-reported model.
 ## Results
 
 (Auditor appends here.)
+
+### Auditor result (attempt 1) - decision: FIX REQUIRED
+
+Self-reported model: claude-opus-5-5 (fresh context; authored nothing in WP4). Report pair:
+`handoff/delivery/WP4_REVIEW_B.md` and `.vi.md`. Evidence: `handoff/delivery/evidence/WP4-AUDIT-B/` (masked, LF; probes as
+`probe-*.mjs.txt`; no workbook or binary). Raw output: `D:\.claude-tmp\timesheet\WP4-AUDIT-B`.
+
+**Target and digest.** reviewed_commit `13a258db86b2f0b6388830e584e2cca5303f1f6c`. HEAD unchanged. Source digest
+`1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe` (774 files) before and after, by
+`scripts/source-digest.mjs` and the `git ls-tree` form; equal to the gate digest. Template SHA-256 unchanged (`47ef42d5...`).
+
+**Runtime.** Git Bash; Node 24.21.0 by full path; npm script shell set to Git Bash (no cmd.exe); TEMP/TMP and every
+database, data folder and generated workbook under the task folder; `DATA_DIR` and `DATABASE_PATH` explicit for every CLI
+and server run (`npm run verify`'s smoke sets its own `DATABASE_PATH` in its temp work dir under TMP); capture mode; no
+docker command; the probe servers were stopped through their child handles.
+
+| # | Scope item | Commands / evidence | Result |
+|---|---|---|---|
+| 1 | Share marker (T02) | P2 (built server), audit-access, pdf-download, sharing-matrix suites; mutations M6, M7 | PASS: shared edit records `via_share_id`, owner edit NULL; HEAD 200 with no audit, GET one marked audit; legacy inference only for NULL rows before migration 7 |
+| 2 | Untrusted parsing (T08) | P1 (35 cases), P1b, P2 HTTP, P6, P7; workbook-reader suite; mutations M8, M9 | Every hostile package refused (zip bomb on real output, entries, CRC/size, DOCTYPE/XXE/laughs incl. UTF-16, macros, external links ignored, traversal, sheet/cell/string limits); formulas never evaluated, caches labelled; template unchanged. FINDINGS WP4-B-01 (Medium, unbounded parse cost and report size inside the limits) and WP4-B-02 (Low, 500 from a stack overflow in `readHolidays`) |
+| 3 | Import service and API (T09) | P2, P3 (2 connections, 10 rounds x 3 import scenarios), workbook-import suite; mutations M1b, M2, M3, M5 | PASS: 404 for other users, admin and grantees; 401/403/415/413 gates; idempotent preview and commit under races; decisions skip-only except the two importable reasons; rules stored; commit writes only timesheets, day entries and audit; 409 `imported_period` on every write path incl. shared edits and OT leave use; no automation across deadlines; source never served |
+| 4 | Opening balance (T10) | P4 (own populated v12, mutation control), P2, P3 (2 x 10 rounds), opening-balance, ledger, migrations, evidence-export, ot-api suites; mutation M10 | PASS: rebuild keeps rows, rowids, FKs, indexes, triggers; immutability; FK violation rolls back; one per user; duplicate / 409 / reasoned correction with evidence and version; balance = sum of deltas; owner only; export label. R4 holds as defined (deficit proposals/reservations) |
+| 5 | Client screens (T11) | source reading, CSS literal grep (`13-client-review.txt`), importModel suite | PASS: allowed actions only, skip default, confirmation steps, imported periods read-only in own and shared views, nothing in admin views; tokens only plus the acceptable 767px media-query literal |
+| 6 | Formula/TODAY/blank safety | P1, P2, code paths | PASS: none can become an authoritative balance, sign-off or sent state |
+| 7 | Gate re-execution | `npm ci` (exit 0), `npm run verify` (exit 0: 75 files / 1710 tests, SMOKE PASSED), 11 suites (276 tests, exit 0), HTTP hostile probe | PASS; `validate_package.py --preflight` (workflow Python): PASS |
+| 8 | Carry items, I-1..I-4 | review "Disposition of previous findings" | All acceptable backlog; the I-1..I-4 safe defaults satisfy the canonical rules; `migrate()` FK change judged safe |
+
+**Findings (details, reproduction and bounded fixes in the report).**
+- WP4-B-01, Medium, `xlsxReader.ts` (`parseXml`/`readWorksheet`/shared strings), `templateMapping.ts`
+  (`detectFormulaDefects`), `workbookImport.ts` (`previewImport`): a 65 KB upload inside every limit blocks the server
+  for 8.8 s (a concurrent health check waits 8.5 s) and grows RSS by ~730 MiB; a 2.7 MB upload stores 12.2 MiB of findings.
+- WP4-B-02, Low, `templateMapping.ts` `readHolidays`: 150 000 Holiday Dates cells (under the 200 000 limit) -> HTTP 500
+  `RangeError: Maximum call stack size exceeded` instead of 422.
+
+**Risks (not defects):** R1 OT leave reservation accepted inside an imported period; R2 batch preview says
+`can_commit: true` there; R3 an ended-but-not-yet-due period is importable (relevant to I-3); R4 previews kept forever
+without quota; R5 R4 staleness only with deficit proposals; R6 BOM-less UTF-16 part harmless; R7 dev-only npm advisory.
+
+**Not rerun:** full e2e and the container drill (gate ran them; outside this brief's minimum). NAS NOT VERIFIED.
+
+**Incidents (see `evidence/WP4-AUDIT-B/14-incidents.txt`).** A command I started with `python - <<'EOF'` opened an
+interactive Python REPL with no console, which now loops and writes tracebacks into the harness output file of
+background task `b9vel2ldq` (python.exe started 03:58:26 local, about 2.5 MiB/s, 2.5 GB at 04:13, outside Dropbox). I may
+not kill by PID and have no tool to stop a background task, so it is STILL RUNNING: the coordinator or owner must stop
+task `b9vel2ldq` and may delete its output file. One stray `>/dev/null` redirect on a no-op curl. HTTP probe runs 1-2
+failed on probe defects; run 3 is the evidence.
+
+**Next action:** coordinator dispatches one bounded fix for WP4-B-01 and WP4-B-02 (FIX_FINDINGS), then freeze, regate and
+a fresh area-B recheck on the new digest.

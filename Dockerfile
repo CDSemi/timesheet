@@ -12,13 +12,16 @@ FROM node:24.21.0-trixie-slim@${NODE_IMAGE_DIGEST} AS base
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
-# Build stage: development dependencies, then the server (tsc) and the client (Vite) into dist/.
+# Build stage: development dependencies, then the server (tsc) and the client (Vite) into dist/. The image ships no source
+# maps and no sourceMappingURL comments (WP4-A-01): tsc gets --sourceMap false, and vite.config.ts turns build.sourcemap
+# off when BUILD_SOURCEMAPS=off. Local development keeps its maps.
 FROM base AS build
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 COPY tsconfig*.json vite.config.ts ./
 COPY src ./src
-RUN npm run build
+RUN npm run build:server -- --sourceMap false \
+    && BUILD_SOURCEMAPS=off npm run build:client
 
 # Production dependencies only. Install scripts stay off: better-sqlite3 needs none (prebuilds ship in the package).
 FROM base AS prod-deps

@@ -1,0 +1,37 @@
+# WP4-AUDIT-B scope item 5: client screens (WP4-T11), read at 13a258d. Source reading plus the commands below.
+# Command: git diff aff904a 61bf524 -- src/client/styles.css | grep '^+' | grep -nE '#[0-9a-fA-F]{3,8}\b|[0-9]+(px|rem|em|ms|s)\b|rgba?\(' ; exit 0
+41:+@media (max-width: 767px) {
+# The only literal added by WP4-T11 is the 767px media-query bound; every other added value is a custom property
+# (--space-*, --radius, --off, --line, --muted, --hairline, --clip-hidden, --font-size-xs).
+# Command: git show 61bf524:src/client/styles.css | grep -n "@media"
+105:@media (prefers-color-scheme: dark) {
+127:@media (prefers-reduced-motion: reduce) {
+313:@media (max-width: 767px), (pointer: coarse) {
+694:@media (max-width: 767px) {
+851:@media (min-width: 768px) {
+1007:@media (min-width: 768px) {
+1188:@media (max-width: 767px) {
+1275:@media (max-width: 767px) {
+1473:@media (min-width: 768px) {
+1542:@media (max-width: 767px) {
+# A custom property cannot be used inside a media-query condition in plain CSS (E-8 keeps plain CSS), so the
+# literal is the only plain-CSS form and matches the six existing breakpoint queries. Judged acceptable.
+#
+# Decisions (src/client/components/ImportDecisions.tsx, src/client/importModel.ts):
+#  - allowedActions(): ['skip','import'] only when the server plan allows both, else ['skip'];
+#  - defaultDecisions(): every listed day starts at 'skip'; decisionList() turns a missing or disallowed choice into 'skip';
+#  - a skip-only day renders one disabled radio "Skip this day (import nothing), the only option".
+# Confirmation steps:
+#  - ImportCommit.tsx: "Review and commit" opens an inline confirm panel naming imported and skipped day counts and the
+#    read-only consequence; nothing is posted before "Confirm import";
+#  - OpeningBalanceForm.tsx: step 'edit' -> 'confirm' panel with the value or change and the resulting posted balance;
+#    "Confirm and post" / "Confirm correction" posts.
+# Imported periods read-only in every view (imported_unverified from the timesheet read model):
+#  - TimesheetScreen.tsx (also used by SharedTimesheetScreen.tsx): BatchBar/TimesheetGrid/DayList locked, DayEditor
+#    readOnly={!canEdit || imported}; no status line;
+#  - PeriodHeader.tsx: Imported badge, review link disabled with the reason; ReviewScreen.tsx: sign-off disabled;
+#  - otModel.ts: History labels for timesheet.import and day_entry.import.
+# No other user's data and nothing in the admin views: AdminScreen/OperationsStatus/AdminUsers/adminModel contain no
+# import or opening-balance call; api.ts calls /api/imports and /api/ot/opening-balance only for the session user;
+# the AppShell "Import" entry is the user's own screen (adminOnly false, same self-only routes).
+# Server-side confirmation of the same boundaries over HTTP: 07-p2-http.txt.

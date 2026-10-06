@@ -120,7 +120,8 @@ function rulesOf(policy: StoredDefaultPolicy): WorkPolicyRules {
 
 /**
  * Validates the owner file in full (shape, then the same calendar, payroll and policy rules the services apply)
- * before anything is written. A refusal names the failing field and rule, never a value from the file.
+ * before anything is written. A refusal names the failing field and rule and may quote a date or a policy number from
+ * the file (for example an invalid holiday date or a minutes mismatch); it never quotes a name, the zone or a secret.
  */
 export function parseBootstrapConfig(input: unknown): BootstrapConfig {
   const parsed = configSchema.safeParse(input);

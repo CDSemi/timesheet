@@ -22,7 +22,8 @@ import { MANIFEST_FILE_NAME, MANIFEST_FORMAT, MANIFEST_FORMAT_VERSION, MANIFEST_
  * real path (otherwise the whole run is refused before the first removal); a folder is emptied with its manifest last,
  * so an interrupted removal leaves a folder that is still recognised and is retried. Prune after a backup is taken only
  * through `requiredName`: the caller names the backup that was just created and verified, and the run is refused when it
- * is not among the candidates. Nothing here prints or stores a path or a name; the result carries counts only.
+ * is not among the candidates. A backup dated after the clock means the clock is probably set back: it would push every
+ * newer backup out of every window, so the whole run (a dry run too) is refused and nothing is removed (R-A1). Nothing here prints or stores a path or a name; the result carries counts only.
  */
 
 export const RETAIN_DAYS = 7;
@@ -35,12 +36,13 @@ const BACKUP_NAME = /^timesheet-backup-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2
 const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
 const MANIFEST_TOP_LEVEL = ['app_version', 'created_at', 'database', 'files', 'format', 'format_version', 'integrity', 'schema_version'] as const;
 
-export type PruneFaultCode = 'target_unusable' | 'candidate_outside_target' | 'new_backup_missing' | 'remove_failed';
+export type PruneFaultCode = 'target_unusable' | 'candidate_outside_target' | 'new_backup_missing' | 'clock_behind_backups' | 'remove_failed';
 
 const MESSAGES: Record<PruneFaultCode, string> = {
   target_unusable: 'The backup folder does not exist or is not a directory',
   candidate_outside_target: 'A backup folder selected for removal does not resolve to a direct child of the backup folder; nothing was removed',
   new_backup_missing: 'The backup that was just taken is not among the folders found; nothing was removed',
+  clock_behind_backups: 'A backup is dated after the system clock, so the clock may be wrong; check the host time. Nothing was removed',
   remove_failed: 'A backup folder could not be removed',
 };
 
@@ -232,7 +234,9 @@ export function pruneBackups(request: PruneRequest): PruneResult {
   if (request.requiredName !== undefined && !candidates.some((candidate) => candidate.name === request.requiredName)) {
     throw new PruneError('new_backup_missing');
   }
-  const selection = selectRetention(candidates, nowEpoch(request.clock));
+  const now = nowEpoch(request.clock);
+  if (candidates.some((candidate) => candidate.instant > now)) throw new PruneError('clock_behind_backups');
+  const selection = selectRetention(candidates, now);
   const result: PruneResult = { candidates: candidates.length, kept: selection.keep.length, removed: selection.remove.length, ignored, dryRun: request.dryRun };
   if (request.dryRun || selection.remove.length === 0) return result;
 

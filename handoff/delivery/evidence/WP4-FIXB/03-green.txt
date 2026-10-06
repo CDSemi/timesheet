@@ -1,0 +1,54 @@
+# Green runs after the change. Run A (5 files, after the source change): exit 1, one test of mine had a wrong expectation (the template's own sheet also has a formula_hours_8_5 finding); fixed in the test, then run B.
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/workbook-reader.test.ts (44 tests | 1 failed) 6027ms
+   ❯ parse cost and report size are bounded (WP4-B-01) (12)
+     × caps the stored findings: the first sources of a finding plus a total count, whatever the cell count 545ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/workbook-reader.test.ts > parse cost and report size are bounded (WP4-B-01) > caps the stored findings: the first sources of a finding plus a total count, whatever the cell count
+AssertionError: expected [ { …(5) }, { …(5) }, { …(5) }, …(1) ] to have a length of 3 but got 4
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ tests/integration/workbook-reader.test.ts:528:19
+    526|     const preview = previewWorkbook(pack(entries));
+    527|     const hours = findings(preview, 'formula_hours_8_5');
+    528|     expect(hours).toHaveLength(3);
+       |                   ^
+    529|     for (const finding of hours) {
+    530|       expect(finding.sources).toHaveLength(MAX_FINDING_SOURCES);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 149 passed (150)
+   Start at  04:38:00
+   Duration  9.24s (tests 86%, import 9%, transform 5%)
+
+
+real	0m9.527s
+user	0m0.000s
+sys	0m0.030s
+
+# Run B: node node_modules/vitest/vitest.mjs run tests/integration/workbook-reader.test.ts ; exit 0
+
+ RUN  v5.0.2 <repo>
+
+
+ Test Files  1 passed (1)
+      Tests  44 passed (44)
+   Start at  04:38:15
+   Duration  6.06s (tests 97%, import 1%, transform 1%)
+
+
+real	0m6.351s
+user	0m0.015s
+sys	0m0.000s

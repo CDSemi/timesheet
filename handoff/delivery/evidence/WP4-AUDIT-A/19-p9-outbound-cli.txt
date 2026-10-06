@@ -1,0 +1,34 @@
+2026-10-06T11:14:38Z
+env: DATABASE_PATH=<work>/p2b/restored/timesheet.db DATA_DIR=<work>/p2b/restored/private-data (the restored copy of probe P2)
+$ cli.js outbound release
+{"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit=2
+$ cli.js outbound release --confirm
+Usage: cli.js outbound resume [--confirm] | outbound release [--all | --job <id>] [--confirm] | outbound drop --job <id> [--confirm]
+exit=2
+$ cli.js outbound drop --job no-such-job
+{"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit=2
+$ cli.js outbound drop --job no-such-job --confirm
+{"outcome":"refused","code":"not_held"}
+exit=1
+$ cli.js outbound release --job no-such-job --confirm
+{"outcome":"refused","code":"not_held"}
+exit=1
+$ cli.js outbound release --all
+{"outcome":"confirmation_required","held":0,"releasable":0,"blocked":{},"jobs":[]}
+exit=2
+$ cli.js outbound resume
+{"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit=2
+$ cli.js outbound resume --confirm
+{"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit=0
+$ cli.js outbound resume --confirm
+{"outcome":"not_paused","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0}
+exit=0
+$ cli.js outbound bogus
+Usage: cli.js outbound resume [--confirm] | outbound release [--all | --job <id>] [--confirm] | outbound drop --job <id> [--confirm]
+exit=2
+audit rows: [{"operation":"operations.restore","actor_user_id":null,"after_json":"{\"outbound_paused_at\":\"2026-10-06T11:07:12Z\",\"outbound_paused_reason\":\"restored\",\"outbound_pause_supported\":true,\"backup_created_at\":\"2026-10-06T11:07:11Z\",\"backup_schema_version\":13,\"attempts_marked_uncertain\":0,\"send_jobs_held\":0}"},{"operation":"operations.outbound_resume","actor_user_id":null,"after_json":"{\"outbound_paused_at\":null,\"outbound_paused_reason\":null,\"queued_send_jobs\":0,\"held_send_jobs\":0}"}]
+pause: {"outbound_paused_at":null,"outbound_paused_reason":null}

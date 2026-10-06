@@ -1,0 +1,31 @@
+Files the smoke wrote into the caller's DATA_DIR (<work>/data-default) during the first verify run (DATA_DIR exported, as the WP4 runtime rules require for CLI and server runs):
+<work>/data-default/files/rA_KPBI7_TOWgPwV_VEh6ESoDNVR_fsf
+<work>/data-default/files/UfwRd3hUN-lTfU6GjtGs37klg_fIDngM3eAu-8JcfrY
+<work>/data-default/mail-capture/b833bbcd-cc2e-42bb-a10d-4702bb679c3a/attachment.pdf
+<work>/data-default/mail-capture/b833bbcd-cc2e-42bb-a10d-4702bb679c3a/message.eml
+<work>/data-default/mail-capture/b833bbcd-cc2e-42bb-a10d-4702bb679c3a/metadata.json
+
+scripts/smoke-built-server.mjs env (DATABASE_PATH is overridden; DATA_DIR is inherited from the caller):
+};
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH: join(work, 'timesheet.db'),
+  APP_ORIGINS: origin,
+  // Capture mode with a synthetic sender; the server's own runner is off, the CLI runs the jobs.
+  MAIL_FROM: '<email>',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+};
+
+capture check path used by the smoke:
+  // Capture check: one accepted attempt whose captured message and PDF match the stored revision PDF.
+  const deliveries = await call('GET', `/api/deliveries?revision_id=${revisionId}`, { cookie: cookie2 });
+  const attempt = deliveries.json?.deliveries?.[0];
+  const captureDir = join(work, 'private-data', 'mail-capture', String(attempt?.id));
+  const captured = attempt?.state === 'accepted' && existsSync(captureDir) ? readdirSync(captureDir).sort() : [];

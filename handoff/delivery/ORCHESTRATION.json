@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "de0e215be7594852bf0c26b22438ead5afcacb529187100549047b1ab408f41b",
+  "current_source_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T13-FREEZE",
+  "next_task_id": "WP4-FIX-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -103,16 +103,24 @@
       "observation": "WP3-FIX2: the permission check denied a Bash loop that masked evidence and then ran a variable-expanded rm of raw logs inside the repository. Future briefs must require raw command output to be written only under D:\\timesheet-tmp\\<task> and masked into the evidence directory, so that no unmasked file ever lands in the repository and no deletion inside the repository is needed."
     },
     {
+      "date": "2026-10-06",
+      "observation": "WP4-AUDIT-B: a 'python - <<EOF' heredoc probe opened an interactive Python REPL that looped forever in a background harness task (b9vel2ldq), writing about 2.5 MiB/s to its output file (3.6 GB after 22 minutes). The coordinator stopped it with TaskStop; the file outside Dropbox is left for the owner to delete. Briefs must forbid feeding scripts to python or node through stdin ('-' or heredocs); write the probe to a file in the task folder and run that file. WP4-T12 had a similar stray python heredoc probe."
+    },
+    {
+      "date": "2026-10-06",
+      "observation": "WP4-GATE: the verifier's first fresh-migration probe ran 'cli.js migrate' with DATA_DIR set but not DATABASE_PATH, so it migrated the owner's default local development database (AppData timesheet-dev, outside the repository; dev data only) from schema 1 to 13. Briefs that run the CLI must now require both DATA_DIR and DATABASE_PATH set explicitly under the task folder, and forbid relying on defaults."
+    },
+    {
       "date": "2026-10-05",
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
   "pending_owner_question_2": null,
   "pending_owner_question": {
-    "id": "WP4-I-1..I-4",
+    "id": "WP4-I-1..I-5",
     "asked": "2026-10-06",
     "source": "WP4-T09 result, 'Open owner choices' (handoff/delivery/tasks/WP4-T09.md)",
-    "question": "I-1 may a draft app period receive imported days: (a, recommended, current) never; (b) merge only into days without app rows, period stays signable and unflagged; (c) flag the whole draft period imported_unverified and read-only. I-2 'Off day (overtime used)': (a) skip only (current); (b, recommended) import as Off, label kept in the private source and the audit, no ledger effect; (c) Worked with OT-kind leave minutes. I-3 may an unended (current) period be imported: (a, recommended, current) no. I-4 (added 2026-10-06 from WP4-T10) may a mistaken opening balance be corrected to a net 0: (a, recommended) yes, by a reasoned correction with evidence that offsets it (the original entry stays); (b, current) no, a correction must leave a non-zero balance.",
+    "question": "I-1 may a draft app period receive imported days: (a, recommended, current) never; (b) merge only into days without app rows, period stays signable and unflagged; (c) flag the whole draft period imported_unverified and read-only. I-2 'Off day (overtime used)': (a) skip only (current); (b, recommended) import as Off, label kept in the private source and the audit, no ledger effect; (c) Worked with OT-kind leave minutes. I-3 may an unended (current) period be imported: (a, recommended, current) no. I-4 (added 2026-10-06 from WP4-T10) may a mistaken opening balance be corrected to a net 0: (a, recommended) yes, by a reasoned correction with evidence that offsets it (the original entry stays); (b, current) no, a correction must leave a non-zero balance. I-5 (added 2026-10-06 from WP4-AUDIT-B R4) uncommitted import previews are kept forever with no quota: (a, recommended) at most 20 uncommitted previews per person, further uploads refused until one is committed; (b) keep all, no limit. Note for I-3: the WP4 fix round makes the safe default stricter (an ended period whose payroll due instant has not passed is also skip-only, WP4-AUDIT-B R3).",
     "blocking": "nothing now; safe defaults stand (reversible). An answer other than the current default becomes a small follow-up before WP4-GATE."
   },
   "governance_backlog": [
@@ -122,7 +130,8 @@
     "WF-AUDIT3 optional: precommit misses a bare 'pass' key and quoted compose list items.",
     "WP2-ADV-REVIEW ADV-A-05 (Info, not governance): otLeave duplicates the ledger append path; optional consolidation in a later WP2 task.",
     "GOV-WP3P-AUDIT optional R1: AGENTS rule 4 could mention owner-granted share items (ownership enforcement with grants).",
-    "GOV-WP3P-AUDIT optional R2/R3: WP3 gate wording could name F-2, F-4 and the G-Q2 rendering; VI 'tình trạng admin' polish."
+    "GOV-WP3P-AUDIT optional R2/R3: WP3 gate wording could name F-2, F-4 and the G-Q2 rendering; VI 'tình trạng admin' polish.",
+    "WP4 backlog (not governance; WP5 candidates): WP4_REVIEW_A R-A2 (retry the WAL switch for concurrent openers of a new DB file), R-A6 (assert automation.spec job counts by kind), R-A8 (CLI maintenance commands should not fall back to the dev default database when DATA_DIR is set without DATABASE_PATH); WP4_REVIEW_B R2 (mark imported dates in planBatch)."
   ],
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
   "wp3_plan": "handoff/delivery/tasks/WP3-PLAN.md",
@@ -131,7 +140,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "0f6abdf77c313f2dcb45bf624ee56294e5976c78",
+    "last_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
     "unpushed": []
   },
   "owner_decisions": [
@@ -10497,7 +10506,7 @@
       "id": "WP4-T13-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T13"
       ],
@@ -10510,10 +10519,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ad431c54e23de1297",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -10522,16 +10531,386 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-T13-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-T13-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T13-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP4-T13-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "0f6abdf77c313f2dcb45bf624ee56294e5976c78",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "pushed": true,
       "source_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1), the WP4 package freeze: parent 0f6abdf, remote SHA identical; 26 paths; digest 1ed67f55 (774 files) matched; Node v24.21.0; nothing under src/, tests/, scripts/, .claude/, reference/, AGENTS.md, CLAUDE.md or package.json; all checks 0; no fixes.",
+      "next_action": "None; WP4-GATE on 13a258d."
+    },
+    {
+      "id": "WP4-GATE",
+      "package": "WP4",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "depends_on": [
+        "WP4-T13-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a6502407fdcc5f056",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-GATE.md",
+        "handoff/delivery/evidence/WP4-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-GATE.md",
+      "report": "handoff/delivery/tasks/WP4-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-GATE/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP4-GATE/01-npm-audit.txt",
+        "handoff/delivery/evidence/WP4-GATE/02-verify.txt",
+        "handoff/delivery/evidence/WP4-GATE/03-e2e.txt",
+        "handoff/delivery/evidence/WP4-GATE/04-drill.txt",
+        "handoff/delivery/evidence/WP4-GATE/07-migrations-tests.txt",
+        "handoff/delivery/evidence/WP4-GATE/08-races-summary.txt",
+        "handoff/delivery/evidence/WP4-GATE/11-precommit-delta.txt",
+        "handoff/delivery/evidence/WP4-GATE/11-precommit-full-tree-info.txt",
+        "handoff/delivery/evidence/WP4-GATE/11-validate_package.txt",
+        "handoff/delivery/evidence/WP4-GATE/11-validate_orchestration.txt",
+        "handoff/delivery/evidence/WP4-GATE/11-check_recovery.txt",
+        "handoff/delivery/evidence/WP4-GATE/12-diff-name-status.txt"
+      ],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "source_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Verifier-reported, 13/13 items. HEAD 13a258d before and after; digest of record on the clean export 1ed67f55 (774 files) equals the committer claim, npm run digest and the git ls-tree form. npm ci no deprecation line (npm audit: 1 high, source-map-js, information). verify 0: 75 files, 1710 tests, smoke 41 PASS. test:e2e 145 passed, 5 skipped. Drill with --wp3: DRILL STAGES 1-6 PASSED, 31/31/56/35/27/23 PASS, 0 FAIL. Migrations: fresh 1->13, WP3-created schema 6 and the v12 tests pass, integrity ok, FK empty, reruns apply nothing. Races: 6 suites x 10 fresh processes, 60/60 exit 0. Privacy, workbook and runbook-map items pass. NAS target NOT VERIFIED (owner steps listed). Precommit on the 518-file WP4 delta passes (24 old full-tree findings outside the delta, information); three Python validators 0. Diff since 49651c8: no net governance change (readme-md added and removed inside the range). Mapping: every WP4 gate line has a test, drill step or label. No flake. Incident: a first migrate probe without DATABASE_PATH migrated the owner's local dev database (AppData timesheet-dev, outside the repository) from schema 1 to 13; later checks used task-local paths.",
+      "next_action": "None; WP4-AUDIT-A and WP4-AUDIT-B on 13a258d."
+    },
+    {
+      "id": "WP4-AUDIT-A",
+      "package": "WP4",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "depends_on": [
+        "WP4-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af8b9184c8adf6eb0",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP4_REVIEW_A.md",
+        "handoff/delivery/WP4_REVIEW_A.vi.md",
+        "handoff/delivery/tasks/WP4-AUDIT-A.md",
+        "handoff/delivery/evidence/WP4-AUDIT-A"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-AUDIT-A.md",
+      "report": "handoff/delivery/tasks/WP4-AUDIT-A.md",
+      "evidence": [
+        "handoff/delivery/WP4_REVIEW_A.md",
+        "handoff/delivery/evidence/WP4-AUDIT-A/00-README.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/00-digest-before.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/03-verify.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/05-drill.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/10-p1-migrate.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/11-p1b-concurrent.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/12-p2-backup-restore.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/13-p3-prune.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/18-p8-admin-privacy.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/20-image-sourcemaps.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/21-bootstrap-refusal-values.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-A/99-digest-after.txt"
+      ],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "source_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
+      "reviewed_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP4-A-01 (Low, must fix): the image contains 114 source maps and production serves the client map with full source text (docs/07:9, image boundary). Fix: build without maps (tsc --sourceMap false, vite --sourcemap false) or strip dist/**/*.map and sourceMappingURL before the runtime copy; add *.map to the drill forbidden-file scan; /assets/*.map answers 404; local development may keep maps.",
+        "WP4-A-02 (Low): .env.example:60 says JOB_RUNNER=off is for tests and drills only, contradicting the rollback rule (docs/07:32, docs/11:194, docs/10:159). Fix: reword.",
+        "WP4-A-03 (Low, documentation accuracy): docs/11:73,116,247-253 (+ vi) claim the admin screen shows the retention run (only the JSON has it), and docs/11 plus the bootstrap.ts:123 comment claim refusals quote no file values (they quote dates and policy numbers, never names, the zone or secrets). Fix: correct the wording EN/VI or add the retention line to the screen.",
+        "WP4-A-04 (Info, optional): scripts/smoke-built-server.mjs inherits the caller's DATA_DIR; with DATA_DIR exported, verify fails the smoke capture check and the smoke writes into the caller's folder. Fix: set DATA_DIR to its own temp folder."
+      ],
+      "notes": [
+        "R-A1: a backward clock makes pruning keep only the newest; improvement: refuse the prune (exit 2) when a candidate is dated after the clock.",
+        "R-A2: concurrent openers of a brand-new database file can hit SQLITE_BUSY on the WAL switch (pre-existing, visible failure, no damage); improvement: retry.",
+        "R-A3: rollback residual limit acceptable for WP4; owner choice before the WP5 pilot (JOB_RUNNER=off rule or clearing the activation instant).",
+        "R-A4: the retention window instant comes from the caller; only retentionJob writes it; acceptable.",
+        "R-A5: a drill check passes with released 0; improvement: hold two jobs.",
+        "R-A6: relaxed pins: delivery and jobs-restart exact and legitimate; automation.spec upper bounds weaker but acceptable; improvement: assert by job kind.",
+        "R-A7: not_set_up in the account list vs docs/03:49 'operational status': consistent; optional wording.",
+        "R-A8: CLI maintenance commands default to the dev database without DATABASE_PATH (the WP4-GATE incident); improvement: require an explicit path.",
+        "R-A9: npm audit high is dev-only; npm audit --omit=dev finds 0; backlog.",
+        "Reran: npm ci, verify (1710), the full drill (205 PASS), nine probes (backup under writes and restore, migration runner, NTFS junction prune escapes, bootstrap, proxy limiter, retention, admin privacy, outbound CLI). Nothing left running."
+      ],
+      "next_action": "Fix round: WP4-FIXB (B-01, B-02, R1, R3) and WP4-FIXA (A-01..A-04, R-A1, R-A5, R-A7), one freeze, WP4-REGATE, then fresh rechecks of areas A and B. R-A2, R-A6 and R-A8 go to the backlog; R-A3 and I-5 (preview quota) are owner choices."
+    },
+    {
+      "id": "WP4-FIXB",
+      "package": "WP4",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP4-AUDIT-B",
+      "depends_on": [
+        "WP4-GATE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "afacb78fd37c3d657",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/import/xlsxReader.ts",
+        "src/server/import/templateMapping.ts",
+        "src/server/services/workbookImport.ts",
+        "src/server/services/otLeave.ts",
+        "tests/integration/workbook-reader.test.ts",
+        "tests/integration/workbook-import.test.ts",
+        "tests/integration/ot-leave.test.ts",
+        "tests/support/syntheticWorkbook.ts",
+        "handoff/delivery/tasks/WP4-FIXB.md",
+        "handoff/delivery/evidence/WP4-FIXB"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-FIXB.md",
+      "report": "handoff/delivery/tasks/WP4-FIXB.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-FIXB/01-baseline.txt",
+        "handoff/delivery/evidence/WP4-FIXB/02-red-first.txt",
+        "handoff/delivery/evidence/WP4-FIXB/03-green.txt",
+        "handoff/delivery/evidence/WP4-FIXB/04-mutations.txt",
+        "handoff/delivery/evidence/WP4-FIXB/05-probes-before-after.txt",
+        "handoff/delivery/evidence/WP4-FIXB/06-e2e.txt",
+        "handoff/delivery/evidence/WP4-FIXB/07-verify.txt",
+        "handoff/delivery/evidence/WP4-FIXB/07b-verify-run1-datadir-set.txt",
+        "handoff/delivery/evidence/WP4-FIXB/08-digest-and-changes.txt",
+        "handoff/delivery/evidence/WP4-FIXB/09-incidents.txt",
+        "handoff/delivery/evidence/WP4-FIXB/10-precommit.txt"
+      ],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "source_digest": "b119e1b58aaeefa57784e01f4158f27d6decc83907ae4a6b817bfc613dc144ce",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: B-01 limits, all 422 workbook_rejected before large allocations: decoded XML 4 MiB per part and 16 MiB per package; element openings 200k per part and 400k per package (cheap pre-scan); cells 50k per sheet (was 200k), rows 20k, shared strings 50k (was 100k); margins over the template and a 60-sheet workbook 7.5x to 145x; findings keep 20 sources plus sourceCount, per-code fold at 25, holiday rows capped at 2000. Probes before -> after: P1b/P6 65 KB upload 8.4 s and +740 MiB, 201 -> 4 ms, 422; health wait 8 s -> 2 ms; P7 12.2 MiB findings -> refused; worst accepted package 0.5 s. B-02: readHolidays visits existing rows only; 150k cells -> 422 (or a bounded preview with raised limits). R3: not_due state skip-only, rule stored in the report. R1: OT leave reservation inside an imported period 409 imported_period. Tests 18 red -> green; 9 mutations killed; e2e 0 (145 passed, 5 skipped); verify 0 (1730 tests; a first run failed smoke because DATA_DIR was exported, the WP4-A-04 issue; rerun passed); digest b119e1b5 (774 files); template hash unchanged; precommit PASS. Deviations: src/client/api.ts and src/client/importModel.ts (labels for not_due and period_not_due), tests/client/importModel.test.ts and tests/integration/opening-balance.test.ts pins. Not done: docs/07 and docs/10 (+ vi) still say 'not ended' and lack the new limits (moved to WP4-FIXA).",
+      "next_action": "None; WP4-FIXA next (working tree keeps the WP4-FIXB changes)."
+    },
+    {
+      "id": "WP4-FIXA",
+      "package": "WP4",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP4-AUDIT-A",
+      "depends_on": [
+        "WP4-FIXB"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7b344b3ceca312e4",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "Dockerfile",
+        ".env.example",
+        "scripts/container-drill.mjs",
+        "scripts/smoke-built-server.mjs",
+        "src/server/ops/prune.ts",
+        "src/server/services/bootstrap.ts",
+        "src/client/components/OperationsStatus.tsx",
+        "src/client/components/adminModel.ts",
+        "tests/client/adminModel.test.ts",
+        "tests/integration/backup-prune.test.ts",
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "handoff/delivery/tasks/WP4-FIXA.md",
+        "handoff/delivery/evidence/WP4-FIXA"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-FIXA.md",
+      "report": "handoff/delivery/tasks/WP4-FIXA.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-FIXA/00-README.txt",
+        "handoff/delivery/evidence/WP4-FIXA/01-red-r-a1-prune-clock.txt",
+        "handoff/delivery/evidence/WP4-FIXA/02-green-r-a1-prune-clock.txt",
+        "handoff/delivery/evidence/WP4-FIXA/03-red-a04-smoke-datadir-exported.txt",
+        "handoff/delivery/evidence/WP4-FIXA/04-green-a04-smoke-datadir-exported.txt",
+        "handoff/delivery/evidence/WP4-FIXA/05-red-a01-drill-old-image.txt",
+        "handoff/delivery/evidence/WP4-FIXA/06-red-static-assets-map-200.txt",
+        "handoff/delivery/evidence/WP4-FIXA/07-green-static-assets-map-404.txt",
+        "handoff/delivery/evidence/WP4-FIXA/08-drill-attempt1-fail-dependency-maps.txt",
+        "handoff/delivery/evidence/WP4-FIXA/09-drill-full-pass.txt",
+        "handoff/delivery/evidence/WP4-FIXA/10-preflight.txt",
+        "handoff/delivery/evidence/WP4-FIXA/11-e2e.txt",
+        "handoff/delivery/evidence/WP4-FIXA/12-verify.txt",
+        "handoff/delivery/evidence/WP4-FIXA/13-digest.txt",
+        "handoff/delivery/evidence/WP4-FIXA/14-precommit.txt"
+      ],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "source_digest": "dfe4541d2c6c908a00782ed9fbe2fb7a3be48ea18aa9fc23ae1ced9085b86742",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: A-01 image built without maps (tsc and vite settings for the image build), the drill flags *.map under /app/dist (dependency maps such as pdf-lib excluded from the rule) and asserts 404 for /assets/*.map; deviation: src/server/app.ts now answers 404 for a missing /assets/* (the SPA fallback returned 200), new tests/integration/static-assets.test.ts. A-02 .env.example JOB_RUNNER wording. A-03 runbook wording (retention only in the JSON; bootstrap refusals quote dates and policy numbers, never names, the zone or secrets) EN/VI and the bootstrap.ts comment. A-04 smoke uses its own DATA_DIR. R-A1 prune refuses (exit 2) when a candidate is dated after the clock. R-A5 drill holds two send jobs. R-A7 docs/03:49 wording. Item 8: docs/07 limits and not_due, docs/10 coordinator decision (EN/VI). Red -> green: backup-prune 2 failed -> 15 passed; smoke with DATA_DIR exported 1 -> 0; old-image drill 3 FAIL in stage 1; static-assets 1 failed -> 2 passed. Full drill --wp3: 208 PASS (33/31/57/35/27/23), 0 FAIL. e2e 0 (145 passed, 5 skipped); verify 0 (76 files, 1734 tests, DATA_DIR exported); preflight 0; precommit PASS; digest dfe4541d (775 files). Deviation: one /dev/null redirect of a wrapper subshell against the rules. Changed: Dockerfile, .env.example, vite.config.ts, scripts/container-drill.mjs, scripts/smoke-built-server.mjs, src/server/ops/prune.ts, src/server/services/bootstrap.ts, src/server/app.ts, tests/integration/backup-prune.test.ts, tests/integration/static-assets.test.ts, docs 03/07/10/11 (EN+VI).",
+      "next_action": "None; WP4-FIX-FREEZE commits FIXB and FIXA together."
+    },
+    {
+      "id": "WP4-FIX-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-FIXA"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-FIX-FREEZE.md",
+        "handoff/delivery/evidence/WP4-FIX-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-FIX-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-FIX-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "dfe4541d2c6c908a00782ed9fbe2fb7a3be48ea18aa9fc23ae1ced9085b86742",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T13 (package freeze) with pending handoff records."
+      "next_action": "Commit and push the WP4 fix round (FIXB + FIXA) with the gate, audit and fix records."
+    },
+    {
+      "id": "WP4-AUDIT-B",
+      "package": "WP4",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "depends_on": [
+        "WP4-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "acccb5619938f54a7",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP4_REVIEW_B.md",
+        "handoff/delivery/WP4_REVIEW_B.vi.md",
+        "handoff/delivery/tasks/WP4-AUDIT-B.md",
+        "handoff/delivery/evidence/WP4-AUDIT-B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-AUDIT-B.md",
+      "report": "handoff/delivery/tasks/WP4-AUDIT-B.md",
+      "evidence": [
+        "handoff/delivery/WP4_REVIEW_B.md",
+        "handoff/delivery/evidence/WP4-AUDIT-B/01-baseline.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/02-npm-ci.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/03-verify.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/04-suites.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/05-p1-reader.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/06-p1b-cost.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/07-p2-http.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/08-p3-races.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/09-p4-ledger-migration.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/10-p5-mutations.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/10b-p5-mutation-m9.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/11-p6-blocking.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/12-p7-report-size.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/13-client-review.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/14-incidents.txt",
+        "handoff/delivery/evidence/WP4-AUDIT-B/15-digest-after.txt"
+      ],
+      "baseline_commit": "13a258db86b2f0b6388830e584e2cca5303f1f6c",
+      "source_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
+      "reviewed_digest": "1ed67f55fb20c5bed64926c54ce635211f09c44ce33d50a2f88c8354577addfe",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP4-B-01 (Medium): xlsxReader parseXml/readWorksheet and the shared-strings loop, templateMapping.detectFormulaDefects, workbookImport.previewImport. A 65 KB upload inside every limit (sheets of 15.8 MiB of <c/>) blocks the event loop 8.8 s and grows RSS by ~730 MiB; a 2.7 MB upload stores 12.2 MiB of findings in the undeletable report_json. Bounded fix: count element openings before parsing a part and refuse above limits; cap the XML size of one parsed part (for example 4 MiB) or the total; cap sources per finding (for example 20 plus a count); red-first tests for the 65 KB package and the report size.",
+        "WP4-B-02 (Low): templateMapping.readHolidays Math.max spread. 150,000 Holiday Dates cells (under the cell limit) give HTTP 500 (stack overflow) instead of 422; one sparse far row loops 10 million times. Bounded fix: compute the last row with a loop or iterate existing cells; tests with 150,000 cells and one sparse far row."
+      ],
+      "notes": [
+        "R1: an OT leave reservation inside an imported period is accepted (201) while record use is 409; optional same 409.",
+        "R2: batch preview of an imported date reports can_commit true; the commit answers 409; optional plan marking.",
+        "R3: an ended period whose payroll due date has not passed is importable and then cannot be signed (relevant to I-3); optional: also require the due instant to have passed.",
+        "R4: previews are kept forever with no per-user quota; needs an owner decision.",
+        "R5-R7: consistent R4 semantics; UTF-16 without BOM harmless; npm advisory dev-only.",
+        "Area B otherwise held: ownership 404s, idempotency races 10/10, every imported-period write path 409, no automation, opening-balance rebuild and invariants, client lock and confirmations, formula/TODAY/blank safety. I-1..I-4 safe defaults fit the rules.",
+        "Incidents: a runaway python REPL in background task b9vel2ldq (stopped by the coordinator with TaskStop; its large output file remains for the owner to delete); one stray /dev/null redirect."
+      ],
+      "next_action": "Fix task for WP4-B-01 and WP4-B-02 after WP4-AUDIT-A finishes (no writer beside a running audit); then freeze, regate and a fresh area-B recheck."
     },
     {
       "id": "WP3-RECFIX",

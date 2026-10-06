@@ -47,6 +47,8 @@ const env = {
   PORT: String(port),
   HOST: '127.0.0.1',
   DATABASE_PATH: join(work, 'timesheet.db'),
+  // Its own private-data folder: an exported DATA_DIR must not leak in (the capture check reads this folder).
+  DATA_DIR: join(work, 'private-data'),
   APP_ORIGINS: origin,
   // Capture mode with a synthetic sender; the server's own runner is off, the CLI runs the jobs.
   MAIL_FROM: 'smoke-sender@example.invalid',

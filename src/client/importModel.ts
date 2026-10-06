@@ -60,6 +60,7 @@ const REASON_TEXT: Record<ImportDayReason, string> = {
   existing_app_rows: 'The period already has timesheet rows in the app and is never merged.',
   period_not_in_calendar: 'The period is not one of your calendar periods.',
   period_not_ended: 'The period has not ended yet, so it is not history.',
+  period_not_due: 'The period has ended but its payroll deadline has not passed, so it is still open for you to sign.',
   unknown_label: 'The day label is not one the template uses.',
   unsupported_label: 'The label has no single day category, so it cannot be imported.',
   date_cell_missing: 'The date cell is blank, so the date cannot be confirmed.',
@@ -81,6 +82,7 @@ const PERIOD_STATE_TEXT: Record<ImportPeriodState, string> = {
   imported: 'Already imported',
   not_in_calendar: 'Not a calendar period, skipped',
   not_ended: 'Not ended yet, skipped',
+  not_due: 'Deadline not passed, skipped',
 };
 
 export function periodStateText(state: ImportPeriodState): string {

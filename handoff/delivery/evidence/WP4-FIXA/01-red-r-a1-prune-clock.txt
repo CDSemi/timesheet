@@ -1,0 +1,48 @@
+
+ RUN  v5.0.2 <repo>
+
+ ❯ tests/integration/backup-prune.test.ts (15 tests | 2 failed) 4356ms
+   ❯ pruneBackups on disk (6)
+     × refuses the whole run, dry run included, when a backup is dated after the clock (R-A1), and removes nothing 7ms
+   ❯ cli.js backup --prune and backup prune --dry-run (4)
+     × refuses with exit 2 and counts only when a backup is dated after the clock, and removes nothing (R-A1) 347ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup-prune.test.ts > pruneBackups on disk > refuses the whole run, dry run included, when a backup is dated after the clock (R-A1), and removes nothing
+AssertionError: dryRun true: expected undefined to be an instance of PruneError
+ ❯ tests/integration/backup-prune.test.ts:265:49
+    263|         error = caught;
+    264|       }
+    265|       expect(error, `dryRun ${String(dryRun)}`).toBeInstanceOf(PruneEr…
+       |                                                 ^
+    266|       expect(error).toMatchObject({ code: 'clock_behind_backups', refu…
+    267|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/backup-prune.test.ts > cli.js backup --prune and backup prune --dry-run > refuses with exit 2 and counts only when a backup is dated after the clock, and removes nothing (R-A1)
+AssertionError: expected +0 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/integration/backup-prune.test.ts:348:24
+    346|     const before = readdirSync(target).sort();
+    347|     const dry = cli(['prune', '--in', target, '--dry-run']);
+    348|     expect(dry.status).toBe(2);
+       |                        ^
+    349|     expect(dry.stdout).toBe('');
+    350|     expect(dry.stderr).toContain('clock_behind_backups');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 13 passed (15)
+   Start at  04:52:27
+   Duration  5.75s (tests 77%, import 15%, transform 8%)
+

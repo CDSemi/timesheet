@@ -1,0 +1,390 @@
+// WP4-AUDIT-B probe P2: the BUILT server (dist/) over real HTTP, synthetic example.invalid users, capture mode.
+// DATA_DIR and DATABASE_PATH are set explicitly under the task folder; nothing uses a default path.
+// The server child is stopped through its own handle at the end (never by PID).
+// Usage (from the scratch export): node ../probes/p2-http.mjs <work folder>
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { buildSyntheticWorkbook, pack, paddedSheetXml, patchEntry, readTemplateBytes, TEMPLATE_PATH, unpack, withEntry, withText } from '../export/tests/support/syntheticWorkbook.ts';
+
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const Database = require('better-sqlite3');
+const { strToU8 } = require('fflate');
+
+const work = process.argv[2];
+if (!work) throw new Error('work folder required');
+mkdirSync(work, { recursive: true });
+const sha = (b) => createHash('sha256').update(b).digest('hex');
+const templateBefore = sha(readFileSync(TEMPLATE_PATH));
+const port = await new Promise((resolve, reject) => {
+  const s = createServer();
+  s.once('error', reject);
+  s.listen(0, '127.0.0.1', () => {
+    const a = s.address();
+    s.close(() => resolve(a.port));
+  });
+});
+const base = `http://127.0.0.1:${port}`;
+const origin = `http://localhost:${port}`;
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const DATABASE_PATH = join(work, 'timesheet.db');
+const DATA_DIR = join(work, 'data');
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH,
+  DATA_DIR,
+  APP_ORIGINS: origin,
+  MAIL_FROM: 'probe-sender@example.invalid',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+};
+const mask = (text) => String(text).replaceAll(work, '<work>').replaceAll(JSON.stringify(work).slice(1, -1), '<work>');
+let failures = 0;
+const lines = [];
+function check(label, ok, detail = '') {
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + mask(detail) : ''}`);
+  if (!ok) failures += 1;
+}
+function note(label, detail) {
+  lines.push(`INFO  ${label}  ${mask(detail)}`);
+}
+const cli = (args) => {
+  const r = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { env, encoding: 'utf8' });
+  return { status: r.status, out: mask(`${r.stdout}${r.stderr}`).trim() };
+};
+
+const migrated = cli(['migrate']);
+check('cli migrate (explicit DATABASE_PATH and DATA_DIR)', migrated.status === 0, migrated.out);
+const seeded = cli(['seed']);
+check('cli seed (synthetic example.invalid users)', seeded.status === 0, seeded.out.split('\n')[0]);
+
+const server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverLog = '';
+server.stdout.on('data', (d) => (serverLog += d));
+server.stderr.on('data', (d) => (serverLog += d));
+server.once('exit', (code, signal) => {
+  serverLog += `\n[server exited code=${code} signal=${signal}]\n`;
+});
+const fatal = (error) => {
+  console.log(lines.join('\n'));
+  console.log('FATAL', mask(error?.stack ?? String(error)));
+  console.log('SERVER LOG TAIL', mask(serverLog.slice(-3000)));
+  try {
+    server.kill('SIGTERM');
+  } catch {}
+  process.exitCode = 2;
+};
+process.on('uncaughtException', fatal);
+process.on('unhandledRejection', fatal);
+for (let i = 0; i < 100; i += 1) {
+  try {
+    if ((await fetch(`${base}/api/ready`)).status === 200) break;
+  } catch {}
+  await new Promise((r) => setTimeout(r, 100));
+}
+
+const monitor = new Database(DATABASE_PATH, { readonly: true });
+const count = (sql, ...args) => monitor.prepare(sql).pluck().get(...args);
+const tables = ['imports', 'timesheets', 'day_entries', 'work_sessions', 'ot_ledger', 'timesheet_revisions', 'signoffs', 'jobs', 'delivery_attempts', 'audit_events', 'ot_leave_requests'];
+const counts = () => Object.fromEntries(tables.map((t) => [t, count(`SELECT count(*) FROM ${t}`)]));
+const filesIn = () => (existsSync(join(DATA_DIR, 'files')) ? readdirSync(join(DATA_DIR, 'files')).length : 0);
+
+async function call(method, path, { cookie, body, raw, type, withOrigin = true, headers = {} } = {}) {
+  const h = { ...headers };
+  if (withOrigin) h.origin = origin;
+  if (cookie) h.cookie = cookie;
+  let payload;
+  if (raw !== undefined) {
+    payload = raw;
+    if (type !== undefined) h['content-type'] = type;
+  } else if (body !== undefined) {
+    h['content-type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+  const t0 = performance.now();
+  const init = { method, headers: h, body: payload };
+  if (payload instanceof ReadableStream) init.duplex = 'half';
+  let res;
+  try {
+    res = await fetch(`${base}${path}`, init);
+  } catch (error) {
+    // The server may answer 413 and close the connection while the client is still sending.
+    return { status: 0, json: null, text: String(error.cause?.message ?? error.message), bytes: Buffer.alloc(0), headers: new Headers(), ms: Math.round(performance.now() - t0) };
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  const ms = Math.round(performance.now() - t0);
+  let json = null;
+  try {
+    json = JSON.parse(buf.toString('utf8'));
+  } catch {}
+  return { status: res.status, json, text: buf.toString('utf8'), bytes: buf, headers: res.headers, ms };
+}
+async function login(email, password) {
+  const r = await call('POST', '/api/auth/login', { body: { email, password } });
+  return r.headers.get('set-cookie')?.split(';')[0];
+}
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const cookie = await login('employee@example.invalid', passwords.employee);
+const cookie2 = await login('employee2@example.invalid', passwords.employee2);
+const adminCookie = await login('admin@example.invalid', passwords.admin);
+const me = (await call('GET', '/api/auth/me', { cookie })).json.user;
+const me2 = (await call('GET', '/api/auth/me', { cookie: cookie2 })).json.user;
+check('three synthetic accounts signed in', Boolean(cookie && cookie2 && adminCookie && me?.id && me2?.id));
+
+// ---- A. Route gate: auth, origin, content type, size --------------------------------------------------------
+const template = readTemplateBytes();
+check('unauthenticated upload is 401', (await call('POST', '/api/imports', { raw: template, type: XLSX })).status === 401);
+check('upload without Origin is 403', (await call('POST', '/api/imports', { cookie, raw: template, type: XLSX, withOrigin: false })).status === 403);
+for (const type of ['application/vnd.ms-excel.sheet.macroEnabled.12', 'application/octet-stream', 'application/json', undefined]) {
+  const r = await call('POST', '/api/imports', { cookie, raw: template, type });
+  check(`content type ${type ?? '(none)'} is 415`, r.status === 415, `${r.status} ${r.json?.error?.code ?? ''}`);
+}
+const before0 = counts();
+const files0 = filesIn();
+const big = new Uint8Array(8 * 1024 * 1024 + 1);
+const tooBig = await call('POST', '/api/imports', { cookie, raw: big, type: XLSX });
+check('8 MiB + 1 byte with Content-Length is 413 (or the server closes early)', tooBig.status === 413 || tooBig.status === 0, `${tooBig.status} ${tooBig.json?.error?.code ?? tooBig.text}`);
+check('server alive after the oversized upload', (await call('GET', '/api/health')).status === 200);
+const chunks = [new Uint8Array(4 * 1024 * 1024), new Uint8Array(4 * 1024 * 1024), new Uint8Array(1024 * 1024)];
+const stream = new ReadableStream({ pull(controller) { const next = chunks.shift(); if (next) controller.enqueue(next); else controller.close(); } });
+const chunked = await call('POST', '/api/imports', { cookie, raw: stream, type: XLSX });
+check('9 MiB chunked (no Content-Length) is 413 (or the server closes early)', chunked.status === 413 || chunked.status === 0, `${chunked.status} ${chunked.json?.error?.code ?? chunked.text}`);
+check('server alive after the chunked upload', (await call('GET', '/api/health')).status === 200);
+const sixtyFiveK = await call('POST', '/api/ot/opening-balance', { cookie, raw: 'x'.repeat(70 * 1024), type: 'application/json' });
+check('another /api route keeps the 64 KiB JSON limit (413)', sixtyFiveK.status === 413, String(sixtyFiveK.status));
+check('refused uploads stored nothing (rows and files)', JSON.stringify(counts()) === JSON.stringify(before0) && filesIn() === files0);
+
+// ---- B. Hostile packages through the HTTP route --------------------------------------------------------------
+const MiB = 1024 * 1024;
+const hostile = {
+  'zip bomb (40 MiB real, 1000 declared)': [patchEntry(withEntry(template, 'xl/worksheets/sheet1.xml', strToU8(paddedSheetXml(40 * MiB))), 'xl/worksheets/sheet1.xml', { uncompressedSize: 1000 }), 'entry_too_large'],
+  'billion laughs': [withText(template, 'xl/workbook.xml', (t) => t.replace(/^<\?xml[^>]*\?>/, '<?xml version="1.0"?><!DOCTYPE l [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;&a;">]>')), 'doctype_forbidden'],
+  'vbaProject.bin': [withEntry(template, 'xl/vbaProject.bin', new Uint8Array([1, 2, 3])), 'macro_content'],
+  'CRC mismatch': [patchEntry(template, 'xl/worksheets/sheet1.xml', { crc: 0xdeadbeef }), 'entry_integrity'],
+  'entry name ../evil.xml': [(() => {
+    const { zipSync } = require('fflate');
+    const e = unpack(template);
+    e['../evil.xml'] = strToU8('<x/>');
+    return zipSync(Object.fromEntries(Object.entries(e).map(([k, v]) => [k, [v, { level: 6 }]])));
+  })(), 'malformed_zip'],
+};
+for (const [label, [bytes, reason]] of Object.entries(hostile)) {
+  const b = counts();
+  const f = filesIn();
+  const r = await call('POST', '/api/imports', { cookie, raw: bytes, type: XLSX });
+  check(`HTTP ${label}: 422 workbook_rejected/${reason}, nothing stored`, r.status === 422 && r.json?.error?.code === 'workbook_rejected' && r.json?.error?.details?.reason === reason && JSON.stringify(counts()) === JSON.stringify(b) && filesIn() === f, `${r.status} ${r.json?.error?.code}/${r.json?.error?.details?.reason} ${r.ms} ms`);
+}
+// Inside every limit: a Holiday Dates sheet with 150 000 cells (finding candidate).
+{
+  const rows = [];
+  for (let i = 1; i <= 150_000; i += 1) rows.push(`<row r="${i}"><c r="C${i}"><v>1</v></c></row>`);
+  const bytes = withEntry(template, 'xl/worksheets/sheet2.xml', strToU8(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join('')}</sheetData></worksheet>`));
+  const b = counts();
+  const f = filesIn();
+  const r = await call('POST', '/api/imports', { cookie, raw: bytes, type: XLSX });
+  note('HTTP Holiday Dates with 150 000 cells (upload inside the limits)', `status ${r.status} ${r.json?.error?.code ?? ''} upload ${bytes.length} bytes, ${r.ms} ms, rows/files unchanged=${JSON.stringify(counts()) === JSON.stringify(b) && filesIn() === f}`);
+  check('server still answers after it', (await call('GET', '/api/health')).status === 200);
+}
+// Inside every limit: three 15.8 MiB worksheets of empty cells; a health check sent meanwhile waits for it.
+{
+  const sheet = (bytes) => {
+    const head = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1">';
+    const tail = '</row></sheetData></worksheet>';
+    return head + '<c/>'.repeat(Math.floor((bytes - head.length - tail.length) / 4)) + tail;
+  };
+  const e = unpack(template);
+  for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) e[part] = strToU8(sheet(15.8 * MiB));
+  const bytes = pack(e);
+  const upload = call('POST', '/api/imports', { cookie, raw: bytes, type: XLSX });
+  await new Promise((r) => setTimeout(r, 300));
+  const health = await call('GET', '/api/health');
+  const r = await upload;
+  note('HTTP three 15.8 MiB sheets of empty cells (upload inside the limits)', `status ${r.status} upload ${bytes.length} bytes, ${r.ms} ms; /api/health sent 300 ms later answered ${health.status} after ${health.ms} ms`);
+}
+
+// ---- C. A synthetic workbook: preview, decisions, commit, replay ----------------------------------------------
+const wb = buildSyntheticWorkbook({
+  periods: [
+    { payrollDate: '2026-09-04', days: { 0: { label: 'Worked', start: 540, end: 1080 }, 1: { labelFormulaCache: 'Worked' }, 2: { label: 'Off day (overtime used)' }, 3: { label: 'Mystery label' } } },
+    { payrollDate: '2026-09-18', days: { 0: { label: 'Vacation' }, 1: { label: 'Sick day' } } },
+  ],
+});
+const preview = await call('POST', '/api/imports', { cookie, raw: wb, type: XLSX });
+const batch = preview.json?.import;
+check('preview 201 with source_sha256 = sha256(upload) and mapping_version 1', preview.status === 201 && batch?.source_sha256 === sha(wb) && batch?.mapping_version === 1, `${preview.status}`);
+const findingCodes = new Set((batch?.report?.findings ?? []).map((f) => f.code));
+check('preview flags the three README defects, the unknown label and the formula cache', ['formula_hours_8_5', 'weekly_total_omits_sunday', 'today_signature_date', 'unknown_label', 'formula_cache_not_authoritative'].every((c) => findingCodes.has(c)), [...findingCodes].sort().join(','));
+check('the report stores the conflict rules', Array.isArray(batch?.report?.rules) && batch.report.rules.length >= 5);
+const storageKey = monitor.prepare('SELECT storage_key FROM imports WHERE id = ?').pluck().get(batch?.id);
+check('no response carries the storage key or the employee cell text', !preview.text.includes(storageKey) && !preview.text.includes('Test Person Alpha'));
+const decisions = batch?.plan?.decisions_required ?? [];
+note('decisions required', decisions.map((d) => `${d.work_date}:${d.reasons.join('+')}:${d.allowed_actions.join('/')}`).join(' '));
+const filesBeforeAgain = filesIn();
+const again = await call('POST', '/api/imports', { cookie, raw: wb, type: XLSX });
+check('identical upload answers 200 with the same batch, no new file', again.status === 200 && again.json?.created === false && again.json?.import?.id === batch?.id && filesIn() === filesBeforeAgain, `${again.status} files ${filesBeforeAgain}->${filesIn()}`);
+const beforeCommit = counts();
+const noDecision = await call('POST', `/api/imports/${batch.id}/commit`, { cookie, body: { decisions: [] } });
+check('commit without decisions is 409 decisions_required and writes nothing', noDecision.status === 409 && noDecision.json?.error?.code === 'decisions_required' && JSON.stringify(counts()) === JSON.stringify(beforeCommit));
+const skipOnly = decisions.find((d) => !d.allowed_actions.includes('import'));
+const forced = await call('POST', `/api/imports/${batch.id}/commit`, { cookie, body: { decisions: decisions.map((d) => ({ work_date: d.work_date, action: d === skipOnly ? 'import' : 'skip' })) } });
+check('import on a skip-only day is 422 decision_not_allowed', forced.status === 422 && forced.json?.error?.code === 'decision_not_allowed', `${forced.status} ${forced.json?.error?.code}`);
+// Ownership before commit: another employee, the administrator and a grantee get 404.
+const grant = await call('POST', '/api/shares', { cookie, body: { grantee_email: 'employee2@example.invalid', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+const foreign = [
+  await call('GET', `/api/imports/${batch.id}`, { cookie: cookie2 }),
+  await call('POST', `/api/imports/${batch.id}/commit`, { cookie: cookie2, body: { decisions: [] } }),
+  await call('GET', `/api/imports/${batch.id}`, { cookie: adminCookie }),
+  await call('POST', `/api/imports/${batch.id}/commit`, { cookie: adminCookie, body: { decisions: [] } }),
+  await call('GET', `/api/shared/${me.id}/imports/${batch.id}`, { cookie: cookie2 }),
+  await call('GET', `/api/shared/${me.id}/imports`, { cookie: cookie2 }),
+  await call('POST', `/api/shared/${me.id}/imports`, { cookie: cookie2, raw: wb, type: XLSX }),
+];
+check('another employee, the administrator and a grantee (edit+OT+PDF share) are refused on the owner\'s batch (404; a raw upload under /api/shared is 415 before routing)', grant.status === 201 && foreign.slice(0, 6).every((r) => r.status === 404) && [404, 415].includes(foreign[6].status), foreign.map((r) => r.status).join(','));
+const lists = [(await call('GET', '/api/imports', { cookie: cookie2 })).json?.imports?.length, (await call('GET', '/api/imports', { cookie: adminCookie })).json?.imports?.length];
+check('the other users list no batch of the owner', lists.every((n) => n === 0), lists.join(','));
+const commitBody = { decisions: decisions.map((d) => ({ work_date: d.work_date, action: d.allowed_actions.includes('import') ? 'import' : 'skip' })) };
+const committed = await call('POST', `/api/imports/${batch.id}/commit`, { cookie, body: commitBody });
+const afterCommit = counts();
+const delta = Object.fromEntries(tables.map((t) => [t, afterCommit[t] - beforeCommit[t]]));
+check('commit 200 committed', committed.status === 200 && committed.json?.status === 'committed', `${committed.status}`);
+check('commit wrote timesheets and day entries only (plus audit and its own row): no session, ledger, revision, sign-off, job, attempt or leave', delta.work_sessions === 0 && delta.ot_ledger === 0 && delta.timesheet_revisions === 0 && delta.signoffs === 0 && delta.jobs === 0 && delta.delivery_attempts === 0 && delta.ot_leave_requests === 0 && delta.timesheets === 2, JSON.stringify(delta));
+check('imported timesheets carry imported_unverified = 1', count('SELECT count(*) FROM timesheets WHERE user_id = ? AND imported_unverified = 1', me.id) === 2);
+const replay = await call('POST', `/api/imports/${batch.id}/commit`, { cookie, body: { decisions: [...commitBody.decisions].reverse() } });
+check('identical re-commit (any order) is 200 replayed and adds nothing', replay.status === 200 && replay.json?.status === 'replayed' && JSON.stringify(counts()) === JSON.stringify(afterCommit));
+const other = await call('POST', `/api/imports/${batch.id}/commit`, { cookie, body: { decisions: commitBody.decisions.map((d) => ({ ...d, action: 'skip' })) } });
+check('a different re-commit is 409 import_already_committed', other.status === 409 && other.json?.error?.code === 'import_already_committed');
+const reupload = await call('POST', '/api/imports', { cookie, raw: wb, type: XLSX });
+check('re-upload of the committed source returns the committed batch (200) and adds nothing', reupload.status === 200 && reupload.json?.import?.state === 'committed' && JSON.stringify(counts()) === JSON.stringify(afterCommit));
+// A different workbook over the same periods: every labelled day is skip-only (imported period).
+const wb2 = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-09-18', days: { 2: { label: 'Holiday' } } }] });
+const p2 = await call('POST', '/api/imports', { cookie, raw: wb2, type: XLSX });
+const d2 = p2.json?.import?.plan?.decisions_required ?? [];
+check('a second workbook over an imported period: every labelled day is skip-only with reason imported_period', p2.status === 201 && d2.length > 0 && d2.every((d) => d.allowed_actions.join() === 'skip' && d.reasons.includes('imported_period')), d2.map((d) => d.reasons.join('+')).slice(0, 3).join(' '));
+
+// ---- D. Every write path on the imported period answers 409 imported_period ---------------------------------
+const day = '2026-08-18';
+const writes = {
+  'PUT day': await call('PUT', `/api/days/${day}`, { cookie, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '', reason: 'probe' } }),
+  'POST session': await call('POST', `/api/days/${day}/sessions`, { cookie, body: { start: { local: `${day}T09:00`, zone: 'America/Los_Angeles' }, end: { local: `${day}T17:00`, zone: 'America/Los_Angeles' }, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true, reason: 'probe' } }),
+  'batch commit': await call('POST', '/api/days/batch', { cookie, body: { mode: 'commit', entries: [{ work_date: day, category: 'Holiday', expected_version: 1 }], reason: 'probe' } }),
+  'sign-off': await call('POST', '/api/timesheets/2026-09-04/signoff', { cookie, body: { expected_version: 1, reviewed_hash: '0'.repeat(64), signer_name: 'Probe Person' } }),
+  'shared PUT day (grantee with edit)': await call('PUT', `/api/shared/${me.id}/days/${day}`, { cookie: cookie2, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '', reason: 'probe' } }),
+  'shared POST session (grantee with edit)': await call('POST', `/api/shared/${me.id}/days/${day}/sessions`, { cookie: cookie2, body: { start: { local: `${day}T09:00`, zone: 'America/Los_Angeles' }, end: { local: `${day}T17:00`, zone: 'America/Los_Angeles' }, input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true, reason: 'probe' } }),
+  'shared batch commit (grantee with edit)': await call('POST', `/api/shared/${me.id}/days/batch`, { cookie: cookie2, body: { mode: 'commit', entries: [{ work_date: day, category: 'Holiday', expected_version: 1 }], reason: 'probe' } }),
+};
+const batchPreview = await call('POST', '/api/days/batch', { cookie, body: { mode: 'preview', entries: [{ work_date: day, category: 'Holiday', expected_version: 1 }], reason: 'probe' } });
+note('batch PREVIEW (read-only) of a date in the imported period', `${batchPreview.status} can_commit=${batchPreview.json?.can_commit} status=${batchPreview.json?.entries?.[0]?.status}`);
+for (const [label, r] of Object.entries(writes)) check(`${label} on the imported period is 409 imported_period`, r.status === 409 && r.json?.error?.code === 'imported_period', `${r.status} ${r.json?.error?.code}`);
+const review = await call('GET', '/api/timesheets/2026-09-04/review', { cookie });
+note('GET review of the imported period', `${review.status} ${review.json?.error?.code ?? ''} imported_unverified=${JSON.stringify(review.json?.imported_unverified ?? review.json?.status ?? null)}`);
+const view = await call('GET', '/api/timesheets/2026-09-04', { cookie });
+check('timesheet read model marks the period imported_unverified', view.status === 200 && JSON.stringify(view.json).includes('"imported_unverified":true'), String(view.status));
+
+// ---- E. Opening balance (owner only) -----------------------------------------------------------------------
+const ob = (body, who = cookie, method = 'POST') => call(method, '/api/ot/opening-balance', { cookie: who, body });
+const valid = { minutes: 600, as_of_date: '2026-08-16', reason: 'Probe carry-in from the synthetic workbook', evidence_ref: 'probe-evidence-1', expected_version: 0 };
+const invalid = [
+  await ob({ ...valid, minutes: 0 }),
+  await ob({ ...valid, reason: ' ' }),
+  await ob({ ...valid, evidence_ref: '' }),
+  await ob({ ...valid, as_of_date: '' }),
+  await ob({ ...valid, minutes: 1.5 }),
+];
+check('opening balance refuses zero, blank reason, blank evidence, missing date and fractions (422)', invalid.every((r) => r.status === 422), invalid.map((r) => `${r.status}:${r.json?.error?.code}`).join(','));
+const ledgerBefore = count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', me.id);
+const posted = await ob(valid);
+const dup = await ob(valid);
+const diff = await ob({ ...valid, minutes: 601 });
+check('first post 201, same-content repeat 200 duplicate, different value 409 opening_balance_exists; one entry', posted.status === 201 && dup.status === 200 && dup.json?.status === 'duplicate' && diff.status === 409 && diff.json?.error?.code === 'opening_balance_exists' && count("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND entry_type = 'opening_balance'", me.id) === 1 && count('SELECT count(*) FROM ot_ledger WHERE user_id = ?', me.id) === ledgerBefore + 1, `${posted.status}/${dup.status}/${diff.status}`);
+const corr = (body) => ob(body, cookie, 'PUT');
+const noReason = await corr({ minutes: 300, reason: '', evidence_ref: 'e2', expected_version: 1 });
+const noEvidence = await corr({ minutes: 300, reason: 'Probe correction', evidence_ref: ' ', expected_version: 1 });
+const stale = await corr({ minutes: 300, reason: 'Probe correction', evidence_ref: 'e2', expected_version: 2 });
+const toZero = await corr({ minutes: 0, reason: 'Entered by mistake', evidence_ref: 'e2', expected_version: 1 });
+check('correction needs a reason (422), evidence (422) and the current version (409 stale_version); 0 is refused (422, I-4 default b)', noReason.status === 422 && noEvidence.status === 422 && stale.status === 409 && toZero.status === 422, `${noReason.status}/${noEvidence.status}/${stale.status} ${stale.json?.error?.code}/${toZero.status} ${toZero.json?.error?.code}`);
+const corrected = await corr({ minutes: 300, reason: 'Probe correction', evidence_ref: 'e2', expected_version: 1 });
+const corrRetry = await corr({ minutes: 300, reason: 'Probe correction', evidence_ref: 'e2', expected_version: 1 });
+const sum = count('SELECT coalesce(sum(delta_minutes), 0) FROM ot_ledger WHERE user_id = ?', me.id);
+check('correction 201 posted (-300), its retry 200 duplicate; balance = sum of deltas (R-06)', corrected.status === 201 && corrected.json?.entry?.delta_minutes === -300 && corrRetry.status === 200 && corrRetry.json?.status === 'duplicate' && corrected.json?.balance?.posted_minutes === sum && sum === 300, `${corrected.status}/${corrRetry.status} posted=${corrected.json?.balance?.posted_minutes} sum=${sum}`);
+const adminOb = await call('GET', '/api/ot/opening-balance', { cookie: adminCookie });
+const sharedOb = [await call('GET', `/api/shared/${me.id}/ot/opening-balance`, { cookie: cookie2 }), await call('POST', `/api/shared/${me.id}/ot/opening-balance`, { cookie: cookie2, body: valid }), await call('PUT', `/api/shared/${me.id}/ot/opening-balance`, { cookie: cookie2, body: { minutes: 5, reason: 'x', evidence_ref: 'y', expected_version: 2 } })];
+check('the administrator reads only their own (none); a grantee with OT read gets 404 on every opening-balance route', adminOb.status === 200 && adminOb.json?.opening_balance === null && sharedOb.every((r) => r.status === 404), `${adminOb.status}/${sharedOb.map((r) => r.status).join(',')}`);
+const sharedLedger = await call('GET', `/api/shared/${me.id}/ot/ledger`, { cookie: cookie2 });
+check('the shared ledger (OT read item) lists the entry type but no evidence reference', sharedLedger.status === 200 && sharedLedger.text.includes('opening_balance') && !sharedLedger.text.includes('probe-evidence-1') && !sharedLedger.text.includes('evidence_ref'), String(sharedLedger.status));
+const csv = await call('GET', '/api/ot/evidence.csv?from=2026-08-01&to=2026-10-31', { cookie });
+check('evidence export labels the opening balance and its correction', csv.status === 200 && csv.text.includes('Opening balance'), csv.text.split('\n').filter((l) => /Opening balance/.test(l)).map((l) => l.slice(0, 120)).join(' || '));
+
+// OT leave in the imported period: reservation outcome recorded; record use must be 409 imported_period.
+const reserve = await call('POST', '/api/ot/leave', { cookie, body: { request_key: 'probe-leave-1', leave_date: '2026-08-19', requested_minutes: 60, permission: { approver_name: 'Example Manager', approval_date: '2026-08-10', evidence_ref: 'probe' } } });
+note('OT leave reservation dated inside the imported period', `${reserve.status} ${reserve.json?.status ?? reserve.json?.error?.code}`);
+if (reserve.status === 201) {
+  const use = await call('POST', `/api/ot/leave/${reserve.json.request.id}/consume`, { cookie, body: { use_key: 'probe-use-1', minutes: 60, expected_version: reserve.json.request.version } });
+  check('record use of OT leave in the imported period is 409 imported_period', use.status === 409 && use.json?.error?.code === 'imported_period', `${use.status} ${use.json?.error?.code}`);
+}
+
+// ---- F. R4: an opening balance makes an open review stale; then the share marker and HEAD ------------------
+const current2 = (await call('GET', '/api/periods/current', { cookie: cookie2 })).json?.current?.payroll_date;
+const reviewPath = `/api/timesheets/${current2}/review`;
+const r1 = await call('GET', reviewPath, { cookie: cookie2 });
+const ob2 = await ob({ ...valid, minutes: 120, evidence_ref: 'probe-evidence-2' }, cookie2);
+const staleSign = await call('POST', `/api/timesheets/${current2}/signoff`, { cookie: cookie2, body: { expected_version: r1.json?.expected_version, reviewed_hash: r1.json?.payload_hash, signer_name: 'Example Employee Two', incomplete_evidence_acknowledged: true } });
+note('R4 on a review WITHOUT deficit proposals: sign-off from the review read before the opening balance', `opening ${ob2.status}, sign-off ${staleSign.status} ${staleSign.json?.error?.code ?? ''}, deficit proposals in that review=${r1.json?.payload?.deficit_proposals?.length}`);
+const r2 = await call('GET', reviewPath, { cookie: cookie2 });
+const signed = staleSign.status === 201 ? staleSign : await call('POST', `/api/timesheets/${current2}/signoff`, { cookie: cookie2, body: { expected_version: r2.json?.expected_version, reviewed_hash: r2.json?.payload_hash, signer_name: 'Example Employee Two', incomplete_evidence_acknowledged: true } });
+const revisionId = signed.json?.revision?.id;
+check('employee2 has a signed revision (201)', signed.status === 201 && typeof revisionId === 'string', String(signed.status));
+const runAt = (s) => cli(['run-jobs', '--once', '--now', new Date(Date.now() + s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')]);
+const passes = [runAt(1), runAt(150), runAt(300)];
+check('cli run-jobs (explicit paths, capture) renders the PDF', passes.every((p) => p.status === 0), passes.map((p) => p.out).join(' '));
+const share2 = await call('POST', '/api/shares', { cookie: cookie2, body: { grantee_email: 'employee@example.invalid', items: { timesheets: 'edit', ot_read: true, pdf_download: true } } });
+const shareId2 = share2.json?.share?.id;
+const auditBefore = count('SELECT count(*) FROM audit_events');
+const head = await call('HEAD', `/api/shared/${me2.id}/revisions/${revisionId}/pdf`, { cookie });
+check('HEAD on the shared PDF: 200 headers, no body, no audit event', head.status === 200 && head.headers.get('content-type') === 'application/pdf' && head.bytes.length === 0 && count('SELECT count(*) FROM audit_events') === auditBefore, `${head.status} ${head.headers.get('content-type')}`);
+const get = await call('GET', `/api/shared/${me2.id}/revisions/${revisionId}/pdf`, { cookie });
+const dl = monitor.prepare("SELECT actor_user_id, owner_user_id, via_share_id FROM audit_events WHERE operation = 'share.pdf_download'").all();
+check('GET on the shared PDF writes one download audit with via_share_id = the share', get.status === 200 && get.bytes.subarray(0, 5).toString('latin1') === '%PDF-' && dl.length === 1 && dl[0].via_share_id === shareId2 && dl[0].actor_user_id === me.id && dl[0].owner_user_id === me2.id, `${get.status} rows=${dl.length}`);
+const sharedDay = '2026-09-16';
+const sharedEdit = await call('PUT', `/api/shared/${me2.id}/days/${sharedDay}`, { cookie, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '', reason: 'probe shared edit' } });
+const ownEdit = await call('PUT', '/api/days/2026-09-17', { cookie: cookie2, body: { category: 'Sick', leave_minutes: 0, wfh: false, notes: '', reason: 'probe own edit' } });
+const marks = monitor.prepare("SELECT actor_user_id AS actor, via_share_id AS via, operation FROM audit_events WHERE owner_user_id = ? AND entity_type = 'day_entry' ORDER BY rowid DESC LIMIT 2").all(me2.id);
+check('a shared edit records via_share_id; the owner\'s own edit records NULL', sharedEdit.status === 200 && ownEdit.status === 200 && marks.some((m) => m.actor === me.id && m.via === shareId2) && marks.some((m) => m.actor === me2.id && m.via === null), `${sharedEdit.status}/${ownEdit.status} ${JSON.stringify(marks.map((m) => ({ actor: m.actor === me.id ? 'grantee' : 'owner', via: m.via === null ? null : m.via === shareId2 ? 'share' : 'other', op: m.operation })))}`);
+const importAudit = monitor.prepare("SELECT count(*) FROM audit_events WHERE operation IN ('timesheet.import', 'day_entry.import') AND via_share_id IS NOT NULL").pluck().get();
+check('import audit rows carry no share marker and actor = owner', importAudit === 0 && count("SELECT count(*) FROM audit_events WHERE operation = 'day_entry.import' AND actor_user_id <> owner_user_id") === 0);
+
+// ---- G. The private source is never served -------------------------------------------------------------------
+const tries = [
+  `/api/imports/${batch.id}/source`,
+  `/api/imports/${batch.id}/file`,
+  `/${storageKey}`,
+  `/files/${storageKey}`,
+  `/data/files/${storageKey}`,
+  `/private-data/files/${storageKey}`,
+  `/api/files/${storageKey}`,
+];
+const served = [];
+for (const path of tries) {
+  const r = await call('GET', path, { cookie });
+  served.push(`${r.status}${r.bytes.subarray(0, 2).toString('latin1') === 'PK' ? ':ZIP!' : ''}`);
+}
+check('no path serves the stored workbook (no ZIP bytes)', served.every((s) => !s.includes('ZIP!')), served.join(','));
+
+check('the tracked template is unchanged', sha(readFileSync(TEMPLATE_PATH)) === templateBefore, templateBefore);
+monitor.close();
+server.kill('SIGTERM');
+await new Promise((r) => server.once('exit', r));
+check('server stopped through its handle', server.exitCode !== null || server.signalCode !== null, `${server.exitCode}/${server.signalCode}`);
+note('server log lines mentioning errors', serverLog.split('\n').filter((l) => /error|Error/.test(l)).map((l) => l.slice(0, 160)).join(' || ') || 'none');
+console.log(lines.join('\n'));
+console.log(failures === 0 ? 'PROBE P2 PASSED' : `PROBE P2 FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

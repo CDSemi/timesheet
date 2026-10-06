@@ -1,0 +1,73 @@
+# Command: node ../probes/p2-http.mjs <task>\http3 (built server dist/, explicit DATA_DIR and DATABASE_PATH under <task>\http3, capture mode, JOB_RUNNER=off)
+# Exit: 0 (third run; runs 1 and 2 are described in 14-incidents.txt)
+PASS  cli migrate (explicit DATABASE_PATH and DATA_DIR)  {"database":"<work>\\timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13],"version":13}
+PASS  cli seed (synthetic example.invalid users)  Created synthetic seed data:
+PASS  three synthetic accounts signed in
+PASS  unauthenticated upload is 401
+PASS  upload without Origin is 403
+PASS  content type application/vnd.ms-excel.sheet.macroEnabled.12 is 415  415 unsupported_media_type
+PASS  content type application/octet-stream is 415  415 unsupported_media_type
+PASS  content type application/json is 415  415 unsupported_media_type
+PASS  content type (none) is 415  415 unsupported_media_type
+PASS  8 MiB + 1 byte with Content-Length is 413 (or the server closes early)  413 payload_too_large
+PASS  server alive after the oversized upload
+PASS  9 MiB chunked (no Content-Length) is 413 (or the server closes early)  0 other side closed
+PASS  server alive after the chunked upload
+PASS  another /api route keeps the 64 KiB JSON limit (413)  413
+PASS  refused uploads stored nothing (rows and files)
+PASS  HTTP zip bomb (40 MiB real, 1000 declared): 422 workbook_rejected/entry_too_large, nothing stored  422 workbook_rejected/entry_too_large 90 ms
+PASS  HTTP billion laughs: 422 workbook_rejected/doctype_forbidden, nothing stored  422 workbook_rejected/doctype_forbidden 4 ms
+PASS  HTTP vbaProject.bin: 422 workbook_rejected/macro_content, nothing stored  422 workbook_rejected/macro_content 2 ms
+PASS  HTTP CRC mismatch: 422 workbook_rejected/entry_integrity, nothing stored  422 workbook_rejected/entry_integrity 3 ms
+PASS  HTTP entry name ../evil.xml: 422 workbook_rejected/malformed_zip, nothing stored  422 workbook_rejected/malformed_zip 1 ms
+INFO  HTTP Holiday Dates with 150 000 cells (upload inside the limits)  status 500 internal_error upload 692224 bytes, 908 ms, rows/files unchanged=true
+PASS  server still answers after it
+INFO  HTTP three 15.8 MiB sheets of empty cells (upload inside the limits)  status 201 upload 65173 bytes, 9366 ms; /api/health sent 300 ms later answered 0 after 9067 ms
+PASS  preview 201 with source_sha256 = sha256(upload) and mapping_version 1  201
+PASS  preview flags the three README defects, the unknown label and the formula cache  floating_holiday,formula_cache_not_authoritative,formula_hours_8_5,today_signature_date,unknown_label,volatile_today_formula,weekly_total_omits_sunday
+PASS  the report stores the conflict rules
+PASS  no response carries the storage key or the employee cell text
+INFO  decisions required  2026-08-18:label_from_formula_cache:skip/import 2026-08-19:unsupported_label:skip 2026-08-20:unknown_label:skip
+PASS  identical upload answers 200 with the same batch, no new file  200 files 3->3
+PASS  commit without decisions is 409 decisions_required and writes nothing
+PASS  import on a skip-only day is 422 decision_not_allowed  422 decision_not_allowed
+PASS  another employee, the administrator and a grantee (edit+OT+PDF share) are refused on the owner's batch (404; a raw upload under /api/shared is 415 before routing)  404,404,404,404,404,404,415
+PASS  the other users list no batch of the owner  0,0
+PASS  commit 200 committed  200
+PASS  commit wrote timesheets and day entries only (plus audit and its own row): no session, ledger, revision, sign-off, job, attempt or leave  {"imports":0,"timesheets":2,"day_entries":18,"work_sessions":0,"ot_ledger":0,"timesheet_revisions":0,"signoffs":0,"jobs":0,"delivery_attempts":0,"audit_events":22,"ot_leave_requests":0}
+PASS  imported timesheets carry imported_unverified = 1
+PASS  identical re-commit (any order) is 200 replayed and adds nothing
+PASS  a different re-commit is 409 import_already_committed
+PASS  re-upload of the committed source returns the committed batch (200) and adds nothing
+PASS  a second workbook over an imported period: every labelled day is skip-only with reason imported_period  imported_period imported_period imported_period
+INFO  batch PREVIEW (read-only) of a date in the imported period  200 can_commit=true status=update
+PASS  PUT day on the imported period is 409 imported_period  409 imported_period
+PASS  POST session on the imported period is 409 imported_period  409 imported_period
+PASS  batch commit on the imported period is 409 imported_period  409 imported_period
+PASS  sign-off on the imported period is 409 imported_period  409 imported_period
+PASS  shared PUT day (grantee with edit) on the imported period is 409 imported_period  409 imported_period
+PASS  shared POST session (grantee with edit) on the imported period is 409 imported_period  409 imported_period
+PASS  shared batch commit (grantee with edit) on the imported period is 409 imported_period  409 imported_period
+INFO  GET review of the imported period  200  imported_unverified=null
+PASS  timesheet read model marks the period imported_unverified  200
+PASS  opening balance refuses zero, blank reason, blank evidence, missing date and fractions (422)  422:invalid_minutes,422:reason_required,422:evidence_required,422:invalid_date,422:invalid_minutes
+PASS  first post 201, same-content repeat 200 duplicate, different value 409 opening_balance_exists; one entry  201/200/409
+PASS  correction needs a reason (422), evidence (422) and the current version (409 stale_version); 0 is refused (422, I-4 default b)  422/422/409 stale_version/422 invalid_minutes
+PASS  correction 201 posted (-300), its retry 200 duplicate; balance = sum of deltas (R-06)  201/200 posted=300 sum=300
+PASS  the administrator reads only their own (none); a grantee with OT read gets 404 on every opening-balance route  200/404,404,404
+PASS  the shared ledger (OT read item) lists the entry type but no evidence reference  200
+PASS  evidence export labels the opening balance and its correction  8fafc835-0765-43a8-ae5c-a8f8e953b018,opening_balance,Opening balance,600,,2026-10-06T11:03:34Z,opening_balance,,,,manual || 948b9ff9-61bf-4a0f-a643-425b37f4f0d4,correction,Opening balance correction,-300,,2026-10-06T11:03:34Z,opening_balance:co
+INFO  OT leave reservation dated inside the imported period  201 reserved
+PASS  record use of OT leave in the imported period is 409 imported_period  409 imported_period
+INFO  R4 on a review WITHOUT deficit proposals: sign-off from the review read before the opening balance  opening 201, sign-off 201 , deficit proposals in that review=0
+PASS  employee2 has a signed revision (201)  201
+PASS  cli run-jobs (explicit paths, capture) renders the PDF  {"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0} {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0} {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  HEAD on the shared PDF: 200 headers, no body, no audit event  200 application/pdf
+PASS  GET on the shared PDF writes one download audit with via_share_id = the share  200 rows=1
+PASS  a shared edit records via_share_id; the owner's own edit records NULL  200/200 [{"actor":"owner","via":null,"op":"day_entry.create"},{"actor":"grantee","via":"share","op":"day_entry.create"}]
+PASS  import audit rows carry no share marker and actor = owner
+PASS  no path serves the stored workbook (no ZIP bytes)  404,404,200,200,200,200,404
+PASS  the tracked template is unchanged  47ef42d5e4a9b7aea0be545ed563d3d22987609b59bd846c1c08dec2d29c6331
+PASS  server stopped through its handle  null/SIGTERM
+INFO  server log lines mentioning errors  Unhandled request error RangeError: Maximum call stack size exceeded
+PROBE P2 PASSED

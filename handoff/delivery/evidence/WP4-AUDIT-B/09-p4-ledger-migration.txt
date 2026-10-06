@@ -1,0 +1,25 @@
+# Command: node ../probes/p4-ledger-migration.mjs <task>\mig2
+# Exit: 0 (first run <task>\mig: the mutation control used an UPDATE that a CHECK refused first; corrected, rerun)
+PASS  schema 12 fixture holds every pre-0013 entry type, referenced by revision lines  correction,credit,deficit_debit,leave_consumption,leave_reversal; lines=1
+PASS  migrate applies 13 only  {"applied":[13],"version":13}
+PASS  every row and rowid kept (old columns byte-equal), balances equal
+PASS  the two new columns are NULL on every old row
+PASS  foreign keys of ot_ledger and revision_ledger_lines unchanged
+PASS  every old index and trigger is back byte for byte (the correction-target trigger widened only)  before=9 after=10
+PASS  integrity_check ok, foreign_key_check empty, foreign_keys back ON
+PASS  rebuilt table refuses: UPDATE delta  ok
+PASS  rebuilt table refuses: UPDATE reason of one row  ok
+PASS  rebuilt table refuses: DELETE all  ok
+PASS  rebuilt table refuses: correction of a correction  ok
+PASS  rebuilt table refuses: orphan leave link (FK)  ok
+PASS  rebuilt table refuses: opening balance with a work date  ok
+PASS  rebuilt table refuses: opening balance of zero  ok
+PASS  rebuilt table refuses: opening balance without evidence  ok
+PASS  rebuilt table refuses: opening balance by the system origin  ok
+PASS  rebuilt table refuses: as_of_date on a credit  ok
+PASS  a negative opening balance posts once; a second one under another key is refused (unique index); balance = sum of deltas  posted=960 sum=960 second=ok
+PASS  the generic credit/debit correction path refuses an opening balance  ok
+PASS  a rerun applies nothing
+PASS  a foreign-key violation stops migrate with MigrationError and rolls 0013 back  Migration left 1 foreign key violation(s) in ot_ledger
+PASS  mutation control: without the trigger the UPDATE probe is no longer refused (probe is meaningful)  no error
+PROBE P4 PASSED

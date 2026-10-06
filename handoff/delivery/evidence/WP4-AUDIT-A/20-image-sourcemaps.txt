@@ -1,0 +1,37 @@
+2026-10-06T11:17:03Z
+Image ts-wp4-aud-a-timesheet:drill file list written by the drill (stage 1) to <work>/drill/image-files.txt
+total paths: 10612
+*.map paths under /app/dist: 114
+*.map under /app/dist/client: 1
+/app/dist/client/assets
+/app/dist/client/assets/index-UbxC4j68.js
+/app/dist/client/assets/index-B8sNpoCz.css
+/app/dist/client/assets/index-UbxC4j68.js.map
+/app/dist/client/index.html
+first server maps:
+/app/dist/server/pdf/fonts.js.map
+/app/dist/server/pdf/layout.js.map
+/app/dist/server/pdf/timesheetPdf.js.map
+/app/dist/server/seed.js.map
+/app/dist/server/config.js.map
+drill forbidden-file rule (scripts/container-drill.mjs forbiddenPaths): no *.map pattern
+213:function forbiddenPaths(paths) {
+214-  const offenders = [];
+215-  for (const path of paths) {
+216-    const parts = path.split('/').filter((part) => part !== '');
+217-    const name = parts.at(-1) ?? '';
+218-    const topLevelUnderApp = parts[0] === 'app' ? parts[1] : undefined;
+219-    if (/\.xlsx$/i.test(name)) offenders.push(path);
+220-    else if (name === '.env' || name.startsWith('.env.')) offenders.push(path);
+221-    else if (parts.some((part) => part === 'handoff' || part === '.claude' || part === '.agents')) offenders.push(path);
+222-    else if (topLevelUnderApp !== undefined && ['tests', 'docs', 'reference', '.git'].includes(topLevelUnderApp)) offenders.push(path);
+223-    else if (/\.(?:db|sqlite)(?:-wal|-shm)?$/i.test(name) && parts[0] !== 'data') offenders.push(path);
+224-  }
+225-  return offenders;
+vite.config.ts build.sourcemap:
+12:    sourcemap: true,
+tsconfig.server.json:
+9:    "sourceMap": true,
+Dockerfile runtime copy:
+42:COPY --from=build /app/dist ./dist
+served (probe P6): see 16-p6-proxy-config.txt INFO lines

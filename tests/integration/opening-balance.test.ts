@@ -437,7 +437,7 @@ describe('imported periods (F-2)', () => {
     expect((await summary()).posted_minutes).toBe(150);
   });
 
-  it('red-first: recording OT leave use on a date inside an imported period answers 409 imported_period and posts nothing', async () => {
+  it('red-first: reserving OT leave on a date inside an imported period answers 409 imported_period and posts nothing (R1; its use was already refused)', async () => {
     await importPeriod(PB);
     // Funded by finalized work outside the imported period.
     ledger.postCredit(
@@ -445,20 +445,14 @@ describe('imported periods (F-2)', () => {
       { userId: t.userIds.employee, sourceKey: 'synthetic-credit', minutes: 600, workDate: '2026-09-15', actorUserId: null, origin: 'system' },
     );
     const permission = { approver_name: 'Synthetic Manager', approval_date: '2026-08-25', evidence_ref: 'Synthetic chat reference 0001' };
-    const inside = await t.request('POST', '/api/ot/leave', {
+    const before = { ledger: ledgerCount(), audits: count('SELECT count(*) FROM audit_events'), requests: count('SELECT count(*) FROM ot_leave_requests') };
+    const refused = await t.request('POST', '/api/ot/leave', {
       cookie: employee,
       body: { request_key: 'leave-inside', leave_date: '2026-09-02', requested_minutes: 120, permission },
     });
-    expect(inside.status, JSON.stringify(inside.body)).toBe(201);
-    const before = { ledger: ledgerCount(), audits: count('SELECT count(*) FROM audit_events') };
-    const refused = await t.request('POST', `/api/ot/leave/${inside.body.request.id}/consume`, {
-      cookie: employee,
-      body: { use_key: 'use-1', minutes: 60, expected_version: inside.body.request.version },
-    });
     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
     expect(refused.body.error.code).toBe('imported_period');
-    expect({ ledger: ledgerCount(), audits: count('SELECT count(*) FROM audit_events') }).toEqual(before);
-    expect(count('SELECT consumed_minutes FROM ot_leave_requests WHERE id = ?', inside.body.request.id)).toBe(0);
+    expect({ ledger: ledgerCount(), audits: count('SELECT count(*) FROM audit_events'), requests: count('SELECT count(*) FROM ot_leave_requests') }).toEqual(before);
 
     // A leave date outside the imported period is still used normally.
     const outside = await t.request('POST', '/api/ot/leave', {

@@ -1,0 +1,150 @@
+// WP4-AUDIT-A probe source (masked evidence copy: <work> = the audit scratch folder, <email> = a synthetic example.invalid address).
+// WP4-AUDIT-A probe P5: production bootstrap (WP4-T03) through the built CLI and server, NODE_ENV=production with
+// explicit DATABASE_PATH and DATA_DIR. Checks: only the SHA-256 of the normalized token is stored; it expires 60 minutes
+// after issue; it works once; wrong, replayed, superseded and expired tokens get the same 403; --new-token replaces the
+// token and is refused once an administrator exists; no token or hash appears in the database text, audit rows, server
+// log or any response. Expiry is exercised by moving the stored expiry back by SQL (the CLI uses the system clock).
+// Usage: node p5-bootstrap.mjs <export dir> <work dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work] = process.argv.slice(2);
+const Database = (await import(pathToFileURL(join(exportDir, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href)).default;
+const CLI = join(exportDir, 'dist', 'server', 'cli.js');
+const SERVER = join(exportDir, 'dist', 'server', 'index.js');
+mkdirSync(work, { recursive: true });
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const port = await new Promise((resolvePort) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port: p } = s.address(); s.close(() => resolvePort(p)); }); });
+const origin = 'https://timesheet.example.invalid';
+const databasePath = join(work, 'timesheet.db');
+const env = {
+  ...process.env,
+  NODE_ENV: 'production',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: databasePath,
+  DATA_DIR: join(work, 'private-data'),
+  APP_ORIGINS: origin,
+  PUBLIC_BASE_URL: origin,
+  COOKIE_SECURE: 'false',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+};
+const configFile = join(work, 'bootstrap.json');
+writeFileSync(configFile, JSON.stringify({
+  schema_version: 1,
+  calendar: { name: 'Synthetic audit calendar', reporting_zone: 'America/Los_Angeles', normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+  holidays: [{ date: '2026-01-01', name: 'Synthetic holiday' }],
+  policy: {
+    effective_from: '2026-01-01', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '17:00',
+    breaks: [
+      { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+      { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+      { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+    ],
+    deficit_mode: 'ignore',
+  },
+  payroll: { anchor_payroll_date: '2026-10-02', cycle_days: 14, period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+}));
+const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8' });
+const tokenOf = (stdout) => /^\s{2}([A-Z2-7]{5}(?:-[A-Z2-7]{5})+)\s*$/m.exec(stdout)?.[1] ?? null;
+const hashOf = (token) => createHash('sha256').update(token.replace(/[\s-]/g, '').toUpperCase()).digest('hex');
+const allText = () => {
+  const db = new Database(databasePath, { readonly: true });
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all();
+  const text = tables.map((table) => JSON.stringify(db.prepare(`SELECT * FROM "${table}"`).all())).join('\n');
+  db.close();
+  return text;
+};
+const stateRow = () => {
+  const db = new Database(databasePath, { readonly: true });
+  const row = db.prepare('SELECT token_hash, token_issued_at, token_expires_at, token_used_at FROM bootstrap_state WHERE id = 1').get();
+  db.close();
+  return row;
+};
+
+const bad = cli(['bootstrap', '--config', join(work, 'missing.json')]);
+check('bootstrap with an unreadable file exits 1 and opens no database', bad.status === 1 && !require_exists(databasePath), bad.stderr.trim());
+function require_exists(path) { try { return spawnSync(process.execPath, ['-e', `process.exit(require('node:fs').existsSync(${JSON.stringify(path)}) ? 0 : 1)`]).status === 0; } catch { return false; } }
+
+const first = cli(['bootstrap', '--config', configFile]);
+const token1 = tokenOf(first.stdout);
+check('bootstrap --config in production exits 0 and prints one token', first.status === 0 && token1 !== null, `exit ${first.status}`);
+const s1 = stateRow();
+check('only the SHA-256 of the normalized token is stored', s1.token_hash === hashOf(token1) && s1.token_hash !== token1);
+check('the token expires exactly 60 minutes after it was issued', Date.parse(s1.token_expires_at) - Date.parse(s1.token_issued_at) === 3600_000, `${s1.token_issued_at} -> ${s1.token_expires_at}`);
+check('no table holds the token text', !allText().includes(token1) && !allText().includes(token1.replace(/-/g, '')));
+check('no audit row or other table holds the token hash outside bootstrap_state', allText().split(s1.token_hash).length - 1 === 1);
+
+const second = cli(['bootstrap', '--config', configFile]);
+check('a second bootstrap --config is refused (exit 1) and prints no token', second.status === 1 && tokenOf(second.stdout) === null, second.stderr.trim());
+
+const renewed = cli(['bootstrap', '--new-token']);
+const token2 = tokenOf(renewed.stdout);
+check('--new-token prints a different token and replaces the stored hash', renewed.status === 0 && token2 !== null && token2 !== token1 && stateRow().token_hash === hashOf(token2));
+
+const server = spawn(process.execPath, [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let log = '';
+server.stdout.on('data', (chunk) => { log += chunk; });
+server.stderr.on('data', (chunk) => { log += chunk; });
+for (let i = 0; i < 200 && !log.includes('Timesheet listening'); i += 1) await sleep(50);
+check('the production server starts', log.includes('Timesheet listening'), log.split('\n')[0]);
+const base = `http://127.0.0.1:${port}`;
+const responses = [];
+async function setup(token, email = '<email>') {
+  const response = await fetch(`${base}/api/auth/bootstrap`, {
+    method: 'POST',
+    headers: { origin, 'content-type': 'application/json' },
+    body: JSON.stringify({ token, email, display_name: 'Synthetic First Admin', password: randomBytes(18).toString('base64url') }),
+  });
+  const text = await response.text();
+  responses.push(text);
+  return { status: response.status, text };
+}
+const available = await (await fetch(`${base}/api/auth/setup`)).json();
+check('GET /api/auth/setup says only whether setup is available', JSON.stringify(available) === '{"available":true}');
+const superseded = await setup(token1);
+const wrong = await setup('AAAAA-BBBBB-CCCCC-DDDDD-EEEEE-FFFFF-GGGGG-HHHHH');
+check('the superseded first token and a wrong token get the same 403', superseded.status === 403 && wrong.status === 403 && superseded.text === wrong.text, superseded.text);
+
+// Expiry: move the stored expiry to the past (the server reads the system clock).
+const rw = new Database(databasePath);
+rw.prepare("UPDATE bootstrap_state SET token_expires_at = '2026-01-01T00:00:00Z' WHERE id = 1").run();
+rw.close();
+const expired = await setup(token2);
+check('an expired token gets the same 403', expired.status === 403 && expired.text === wrong.text);
+const fresh = cli(['bootstrap', '--new-token']);
+const token3 = tokenOf(fresh.stdout);
+const lower = token3.toLowerCase().replace(/-/g, ' ');
+const created = await setup(lower);
+check('a valid token, typed in lower case with spaces, creates the first administrator (201)', created.status === 201, created.status);
+const replay = await setup(token3, '<email>');
+check('a replay of the used token gets the same 403', replay.status === 403 && replay.text === wrong.text);
+const closed = cli(['bootstrap', '--new-token']);
+check('--new-token after an administrator exists is refused (exit 1) and prints no token', closed.status === 1 && tokenOf(closed.stdout) === null, closed.stderr.trim());
+const s4 = stateRow();
+check('after the setup the stored hash is cleared and the use is recorded', s4.token_hash === null && s4.token_used_at !== null);
+const after = await (await fetch(`${base}/api/auth/setup`)).json();
+check('GET /api/auth/setup now says unavailable', after.available === false);
+server.kill('SIGTERM');
+await new Promise((done) => server.on('close', done));
+const tokens = [token1, token2, token3];
+check('no response body contains a token or a token hash', responses.every((text) => !tokens.some((t) => text.includes(t) || text.includes(hashOf(t)))));
+check('the server log contains no token, no hash and no email address', !tokens.some((t) => log.includes(t) || log.includes(hashOf(t))) && !/@example\.invalid/.test(log));
+check('the audit trail names no token or hash (expiry and counts only)', !tokens.some((t) => allText().includes(t) || allText().includes(hashOf(t))));
+const db = new Database(databasePath, { readonly: true });
+const audits = db.prepare("SELECT operation, actor_user_id, after_json FROM audit_events WHERE operation LIKE 'bootstrap.%' ORDER BY rowid").all();
+db.close();
+console.log(`INFO  bootstrap audit rows: ${JSON.stringify(audits.map((a) => [a.operation, a.actor_user_id === null ? 'system' : 'user', Object.keys(JSON.parse(a.after_json ?? '{}')).sort().join('|')]))}`);
+check('bootstrap audit rows are system events (no actor)', audits.length >= 4 && audits.every((a) => a.actor_user_id === null));
+console.log(fails === 0 ? 'P5 PASSED' : `P5 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

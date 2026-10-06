@@ -904,6 +904,7 @@ export type ImportDayReason =
   | 'existing_app_rows'
   | 'period_not_in_calendar'
   | 'period_not_ended'
+  | 'period_not_due'
   | 'unknown_label'
   | 'unsupported_label'
   | 'date_cell_missing'
@@ -913,7 +914,7 @@ export type ImportDayReason =
   | 'floating_holiday'
   | 'label_from_formula_cache';
 
-export type ImportPeriodState = 'new' | 'existing_app_rows' | 'finalized' | 'imported' | 'not_in_calendar' | 'not_ended';
+export type ImportPeriodState = 'new' | 'existing_app_rows' | 'finalized' | 'imported' | 'not_in_calendar' | 'not_ended' | 'not_due';
 
 export interface ImportFinding {
   code: string;

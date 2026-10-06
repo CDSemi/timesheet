@@ -46,7 +46,7 @@ Serialization chuẩn có thứ tự key/array ổn định, phút nguyên, ngà
 - Ai nhập (F-1): mỗi người chỉ preview và commit workbook của chính mình, nên người thực hiện là chủ. Admin không thể nhập, preview hay đọc bản nhập cho người khác; đợt nhập của user khác trả 404.
 - Kỳ đã nhập (F-2): kỳ nhập (`imported_unverified`) không ghi sự kiện sổ, không thể ký hay nộp (409 `imported_period`) và là lịch sử chỉ đọc. Số dư đầu rõ ràng là nguồn OT mang sang duy nhất, nên không tính hai lần.
 - Số dư đầu (F-3): phút có dấu, khác không, kèm ngày hiệu lực, lý do và bằng chứng; mỗi user một khoản; chỉ đổi bằng sửa có lý do; lưu thành một loại dòng sổ mới.
-- Tài khoản chưa từng cấu hình (F-3): tài khoản chưa từng lưu setting nộp hiện cho admin cờ "chưa thiết lập" trong trạng thái vận hành, và nhân viên không nhận cảnh báo quá hạn. Khớp với quy tắc H-Q1 (a) ở tài liệu 05 (không tự động trước khi setup).
+- Tài khoản chưa từng cấu hình (F-3): tài khoản chưa từng lưu setting nộp hiện cho admin cờ "chưa thiết lập" trong danh sách tài khoản của quản trị viên, và nhân viên không nhận cảnh báo quá hạn. Khớp với quy tắc H-Q1 (a) ở tài liệu 05 (không tự động trước khi setup).
 - Giữ dòng job (F-4): chỉ được xóa dòng job `deadline_scan` và `reminder_scan` đã thành công và cũ hơn 30 ngày, qua ngoại lệ gắn với migration cho trigger cấm xóa job. Không bao giờ xóa dòng gửi, PDF hay delivery.
 
 ## API và ranh giới hosting

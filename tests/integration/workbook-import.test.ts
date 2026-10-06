@@ -478,6 +478,40 @@ describe('commit', () => {
     expect(preview.body.import.plan.decisions_required[0]).toMatchObject({ reasons: ['imported_period'], allowed_actions: ['skip'] });
   });
 
+  it('red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable', async () => {
+    const PD = '2026-12-25'; // 2026-12-07 .. 2026-12-20; due Tuesday 2026-12-22 17:00 in Los Angeles = 2026-12-23T01:00:00Z
+    t.clock.set('2026-12-21T20:00:00Z'); // the period has ended (last day 12-20) and its due instant is a day away
+    const cookie = await t.login('employee');
+    const preview = await upload(workbook([{ payrollDate: PD }]), cookie);
+    expect(preview.status, JSON.stringify(preview.body)).toBe(201);
+    const id = preview.body.import.id;
+    const plan = preview.body.import.plan;
+    expect(plan.periods).toMatchObject([{ payroll_date: PD, period_start: '2026-12-07', period_end: '2026-12-20', state: 'not_due' }]);
+    expect(plan.importable_days).toBe(0);
+    expect(plan.decisions_required.length).toBeGreaterThan(0);
+    for (const item of plan.decisions_required) expect(item).toMatchObject({ reasons: ['period_not_due'], allowed_actions: ['skip'] });
+    expect(preview.body.import.report.rules.join(' ')).toMatch(/due instant/);
+
+    // An explicit import is refused; skip is the only decision, and it writes nothing.
+    const first = plan.decisions_required[0].work_date;
+    const imported = await commit(id, [{ work_date: first, action: 'import' }], cookie);
+    expect(imported.status).toBe(422);
+    expect(imported.body.error.code).toBe('decision_not_allowed');
+    const before = rowCounts();
+
+    // One second before the due instant it is still skip-only; at the due instant the period is history again.
+    t.clock.set('2026-12-23T00:59:59Z');
+    const later = await t.login('employee'); // the earlier session has expired by now
+    const early = await t.request('GET', `/api/imports/${id}`, { cookie: later });
+    expect(early.status, JSON.stringify(early.body)).toBe(200);
+    expect(early.body.import.plan.periods[0].state).toBe('not_due');
+    t.clock.set('2026-12-23T01:00:00Z');
+    const due = await t.request('GET', `/api/imports/${id}`, { cookie: later });
+    expect(due.body.import.plan.periods[0].state).toBe('new');
+    expect(due.body.import.plan.decisions_required).toEqual([]);
+    expect(rowCounts()).toEqual(before);
+  });
+
   it('asks for a decision on unclear days: skip only, or skip or import for non-authoritative labels', async () => {
     const floating = workbook([
       {
@@ -689,6 +723,30 @@ describe('upload validation', () => {
     expect(storedFiles()).toEqual([]);
   });
 
+  it('red-first (WP4-B-01, B-02): a small upload that would cost seconds or crash the mapping is a typed 422 and stores nothing', async () => {
+    const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    const head = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+    const sheet = (fragment: string, size: number) => head + fragment.repeat(Math.floor((size - head.length) / fragment.length)) + '</row></sheetData></worksheet>';
+    const parts = ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml'];
+    const base = readTemplateBytes();
+    let hostile = base;
+    for (const part of parts) hostile = withEntry(hostile, part, new TextEncoder().encode(sheet('<c/>', 15.8 * 1024 * 1024)));
+    expect(hostile.length).toBeLessThan(100 * 1024);
+    const started = performance.now();
+    const oversized = await upload(hostile);
+    expect(oversized.status).toBe(422);
+    expect(oversized.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'part_too_large' } });
+    expect(performance.now() - started).toBeLessThan(5000); // 8.8 s and a blocked event loop before the fix
+
+    // 150 000 Holiday Dates cells: a 422, never the 500 of the stack overflow.
+    const holidays = withEntry(base, 'xl/worksheets/sheet2.xml', new TextEncoder().encode(sheet('<c r="C1"/>', 2 * 1024 * 1024)));
+    const crowded = await upload(holidays);
+    expect(crowded.status).toBe(422);
+    expect(crowded.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'too_many_cells' } });
+    expect(count('SELECT count(*) FROM imports')).toBe(0);
+    expect(storedFiles()).toEqual([]);
+  });
+
   it('keeps the global 64 KiB JSON limit for every other route, including the commit', async () => {
     const big = { decisions: [], padding: 'x'.repeat(70 * 1024) };
     const response = await t.request('POST', `/api/imports/${randomUUID()}/commit`, { cookie: owner, body: big });
@@ -815,23 +873,24 @@ describe('imported periods are never automated (F-2, docs/05 imported history)',
     saveSubmissionSettings(a.db, a.clock, id, { expectedSeq: 0, to: ['payroll@example.invalid'], autoSubmit: true });
     setAutomationActivation(a.db, a.clock, { actorUserId: a.userIds.admin, activeFrom: '2026-09-21T00:00:00Z', reason: 'Synthetic pilot activation' });
 
-    // The day after P1 ended, before its deadline: the owner imports P1 and records work in the control period P2.
-    a.clock.set('2026-09-28T20:00:00Z');
+    // R3 (WP4-FIXB): a period is imported only once its payroll due instant has passed (before that it is skip-only).
+    // So the owner imports P1 one minute after its deadline and records work in the control period P2.
+    const schedule = getCalendar(a.db, a.calendarId).schedule;
+    const due = (payroll: string) => payPeriodForPayrollDate(schedule, payroll, []).dueAtUtc;
+    a.clock.set(formatUtcInstant(due(P1) + 60));
     const preview = previewImport({ db: a.db, clock: a.clock, files: store, user }, buildSyntheticWorkbook({ periods: [{ payrollDate: P1 }] }));
     expect(preview.batch.plan?.decisions_required).toEqual([]);
     const committed = commitImport({ db: a.db, clock: a.clock, user }, preview.batch.id, []);
     expect(committed.batch.result?.periods.map((period) => period.payroll_date)).toEqual([P1]);
     createSession({ db: a.db, clock: a.clock, user }, '2026-09-28', { start: la('2026-09-28T08:00'), end: la('2026-09-28T12:00'), input_zone: LA, breaks: [], breaks_confirmed: true });
 
-    const schedule = getCalendar(a.db, a.calendarId).schedule;
-    const due = (payroll: string) => payPeriodForPayrollDate(schedule, payroll, []).dueAtUtc;
     const handlers = createJobHandlers({
       db: a.db,
       clock: a.clock,
       files: store,
       delivery: loadDeliveryConfig({ DATA_DIR: dir, MAIL_FROM: 'timesheet@example.invalid' }, { databasePath: a.config.databasePath, port: 3000, production: false }),
     });
-    const instants = [due(P1) - 23 * 3600, due(P1) - 3600, due(P1) + 60, due(P1) + 26 * 3600, due(P2) - 23 * 3600, due(P2) - 3600, due(P2) + 60, due(P2) + 3600];
+    const instants = [due(P1) + 60, due(P1) + 3600, due(P1) + 26 * 3600, due(P2) - 23 * 3600, due(P2) - 3600, due(P2) + 60, due(P2) + 3600];
     for (const instant of instants) {
       a.clock.set(formatUtcInstant(instant));
       runReminderScan(a.db, a.clock);

@@ -120,4 +120,11 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Model: claude-sonnet-5-5. Node v24.21.0.
+- Pre-HEAD 0f6abdf77c313f2dcb45bf624ee56294e5976c78; post-HEAD/commit
+  13a258db86b2f0b6388830e584e2cca5303f1f6c; pushed yes; remote SHA the same.
+- Digest 1ed67f55...addfe (774 files); staged 26.
+- Scope checks: working-tree set matched; no change under src/tests/scripts/.claude/
+  reference/AGENTS/CLAUDE/package.json.
+- Check exit codes: all 0 (see evidence/WP4-T13-FREEZE/checks.txt). No fixes needed.
+- Blockers: none.
