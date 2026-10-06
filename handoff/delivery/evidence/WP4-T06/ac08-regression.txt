@@ -1,0 +1,63 @@
+# WP4-T06 AC-08 regression: an uncertain attempt is never resent automatically; one explicit decision resends exactly once
+delivery-crash.test.ts and delivery.test.ts (WP3, unchanged) plus restore.test.ts (restored copy: two attempts marked uncertain,
+mark_delivered on one and resend on the other; after the resume exactly one new accepted attempt for the resend and none for the
+other; a second runner pass sends nothing more).
+
+Command: node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/delivery-crash.test.ts tests/integration/delivery.test.ts tests/integration/restore.test.ts  -> exit 0
+
+
+ RUN  v5.0.2 <repo>
+
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > writes the exact message and PDF from the frozen snapshot and records the acceptance 436ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > waits for the PDF without creating an attempt 296ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > copies the verified database and files into the empty target only 3ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > keeps balances and revision counts equal to the source 1ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored and marks every interrupted send for an explicit decision 1ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only 1ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing 89ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > a message without an attachment (a reminder or notice) writes no attachment.pdf 208ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 141ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > SMTP: killed after the sink received the message leaves the attempt uncertain; a restart sends nothing 1037ms
+ ✓ tests/integration/delivery.test.ts > capture (default outbound mode) > enqueues a duplicate send job once and sends once 308ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a file whose bytes do not match the manifest and leaves the target empty 11ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a database copy that does not match the manifest 5ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a manifest with an unknown key or a missing file 14ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a backup of a newer schema than this application 237ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a non-empty target and a target inside the live data directory, writing nothing 2ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > acknowledged acceptance: provider id and time, the frozen envelope and content 442ms
+ ✓ tests/integration/restore.test.ts > restore of a version 9 backup (upgrade on restore) > applies migration 10, pauses outbound and keeps every balance 390ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > capture: killed before `sending` was committed; the restart reuses the prepared attempt and sends once 1039ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > implicit TLS (SMTP_SECURITY=tls) and an untrusted certificate 461ms
+ ✓ tests/integration/restore.test.ts > the claim while outbound delivery is paused > leaves exactly the outbound kinds out, spends no attempt on them, and claims them again after the resume 198ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > applies fresh 1 to 10, is consistent and a rerun applies nothing 41ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > upgrades a populated version 9 database, keeps every row and starts not paused 264ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > refuses an inconsistent pause and a preparing attempt made uncertain without the restore reconciliation code 208ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > pre-transfer failure (connection lost before DATA, or refused): temporary, retried, then accepted with a new attempt 624ms
+ ✓ tests/integration/delivery-crash.test.ts > a runner process killed during the send > capture: killed after `sending` was committed; the decision route recovers the expired lease 1053ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit temporary rejection (reject_rcpt_temporary): failed_temporary and retried through the job store 606ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit temporary rejection (reject_data_temporary): failed_temporary and retried through the job store 548ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit permanent rejection (reject_rcpt_permanent): failed_permanent, intervention, never retried 440ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > restores in production, prints counts and the manifest check only, and refuses bad arguments 1863ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > explicit permanent rejection (reject_data_permanent): failed_permanent, intervention, never retried 439ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > uncertain (connection lost after DATA): never retried; one explicit resend creates one new attempt 547ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > mark delivered closes the uncertain attempt without sending 424ms
+ ✓ tests/integration/delivery.test.ts > SMTP adapter against the loopback sink (docs/05 failure table) > classifies a timeout or loss after the transfer began as uncertain and before it as temporary 216ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume needs --confirm, then clears the pause of the restored instance once 1501ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a PDF hash mismatch blocks the send 307ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a missing sender is a visible fault, never "sent" 304ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume --confirm is refused (exit 1) while an attempt awaits its decision 389ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a missing recipient is a visible fault, never "sent" 305ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > the builder refuses a missing or malformed sender and recipient 247ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a process lost after `sending` was committed leaves the attempt uncertain and sends nothing later 294ms
+ ✓ tests/integration/delivery.test.ts > integrity and visible faults > a process lost during the LAST permitted attempt is uncertain with the owner decision, like any earlier attempt (WP3-B-02) 417ms
+ ✓ tests/integration/delivery.test.ts > the send handler meets an attempt that is still `sending` (WP3-FIX2, WP3-RECHECK-BC item 5) > marks the attempt uncertain and stops the job for good, never resending, when the handler itself finds `sending` 291ms
+ ✓ tests/integration/delivery.test.ts > owner scoping > another user cannot see or decide an attempt (404 on ID swap) 470ms
+ ✓ tests/integration/delivery.test.ts > owner scoping > only an uncertain attempt takes a decision 294ms
+ ✓ tests/integration/delivery.test.ts > secrets and the owner-only sending flag > SMTP mode is refused without the owner-only flag; the test process never sets it 196ms
+ ✓ tests/integration/delivery.test.ts > secrets and the owner-only sending flag > credentials never reach rows, logs, captured metadata or responses 557ms
+
+ Test Files  3 passed (3)
+      Tests  47 passed (47)
+   Start at  18:43:17
+   Duration  10.90s (tests 85%, import 10%, transform 5%)
+

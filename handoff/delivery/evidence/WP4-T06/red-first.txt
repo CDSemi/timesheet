@@ -1,0 +1,428 @@
+# WP4-T06 red-first run (pre-change source + the new tests + scratch-only stubs)
+Baseline: git archive HEAD (0c58130) into <scratch>/red; tests/integration/restore.test.ts and jobs-restart.test.ts copied from the
+working tree; scratch-only stubs so the files load and fail on behaviour, not on imports:
+  src/server/ops/restore.ts = naive copy of timesheet.db and files/ (no verification, no pause, no reconciliation);
+  jobStore.ts += OUTBOUND_JOB_KINDS and getOutboundPause() returning null; operationsStatus.ts += getOutboundStatus() returning {paused:false}.
+  No migration 0010, no CLI restore/outbound commands, no claim filter.
+Commands: npm ci -> exit 0; node node_modules/vitest/vitest.mjs run tests/integration/restore.test.ts tests/integration/jobs-restart.test.ts -> exit 1
+Result: 17 failed, 11 passed. Passed: the 9 existing jobs-restart tests, and two restore tests a naive copy also satisfies
+(the copied file set; balances and revision counts equal the source). Every other new test failed, including: a runner
+pass on the restored copy changed the send jobs (sent/spent attempts); resume was not refused; every restore refusal
+(file hash, database hash, manifest, newer schema, non-empty target, inside DATA_DIR); migration 0010; CLI; startup log.
+(The claim-filter unit test was added after this run; the mutation proof shows it failing.)
+
+
+ RUN  v5.0.2 <scratch>/red
+
+ ❯ tests/integration/restore.test.ts (18 tests | 16 failed) 2708ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (6)
+     × pauses outbound delivery with reason restored and marks every interrupted send for an explicit decision 3ms
+     × reports counts and the manifest check only 2ms
+     × a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing 151ms
+     × refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 1ms
+   ❯ restore refusals (5)
+     × refuses a file whose bytes do not match the manifest and leaves the target empty 6ms
+     × refuses a database copy that does not match the manifest 4ms
+     × refuses a manifest with an unknown key or a missing file 9ms
+     × refuses a backup of a newer schema than this application 199ms
+     × refuses a non-empty target and a target inside the live data directory, writing nothing 2ms
+   ❯ restore of a version 9 backup (upgrade on restore) (1)
+     × applies migration 10, pauses outbound and keeps every balance 286ms
+   ❯ migration 0010 (outbound pause) (3)
+     × applies fresh 1 to 10, is consistent and a rerun applies nothing 12ms
+     × upgrades a populated version 9 database, keeps every row and starts not paused 227ms
+     × refuses an inconsistent pause and a preparing attempt made uncertain without the restore reconciliation code 31ms
+   ❯ cli.js restore and cli.js outbound resume (3)
+     × restores in production, prints counts and the manifest check only, and refuses bad arguments 350ms
+     × outbound resume needs --confirm, then clears the pause of the restored instance once 343ms
+     × outbound resume --confirm is refused (exit 1) while an attempt awaits its decision 2ms
+ ❯ tests/integration/jobs-restart.test.ts (10 tests | 1 failed) 9877ms
+   ❯ server entry (3)
+     × logs the outbound pause at startup; its runner renders the PDF but claims no send job until the resume (WP4-T06) 217ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 17 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/jobs-restart.test.ts > server entry > logs the outbound pause at startup; its runner renders the PDF but claims no send job until the resume (WP4-T06)
+SqliteError: no such column: outbound_paused_at
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/jobs-restart.test.ts:358:10
+    356|     const { revisionId } = await signedRevision(dataDir);
+    357|     // A paused instance (as a restore leaves it); synthetic capture s…
+    358|     t.db.prepare("UPDATE operations_state SET outbound_paused_at = '20…
+       |          ^
+    359|     const server = await startServer({ DATA_DIR: dataDir, JOB_RUNNER: …
+    360|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored and marks every interrupted send for an explicit decision
+AssertionError: expected null to deeply equal { …(2) }
+
+- Expected:
+{
+  "pausedAt": "2026-09-29T21:00:00Z",
+  "reason": "restored",
+}
+
++ Received:
+null
+
+ ❯ tests/integration/restore.test.ts:262:40
+    260|
+    261|   it('pauses outbound delivery with reason restored and marks every in…
+    262|     expect(getOutboundPause(restored)).toEqual({ pausedAt: LATER, reas…
+       |                                        ^
+    263|     const attempts = attemptsOf(restored);
+    264|     expect(attempts.map((attempt) => [attempt.revision_id, attempt.sta…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only
+AssertionError: expected { outcome: 'restored' } to deeply equal { outcome: 'restored', …(5) }
+
+- Expected
++ Received
+
+  {
+-   "counts": {
+-     "attachments": 4,
+-     "ledger_entries": 4,
+-     "revisions": 4,
+-     "users": 2,
+-   },
+-   "manifest": {
+-     "database_bytes": Any<Number>,
+-     "files": 4,
+-     "pdfs": 3,
+-     "schema_version": 9,
+-     "signatures": 1,
+-     "verified": true,
+-   },
+-   "outbound": {
+-     "paused": true,
+-     "reason": "restored",
+-   },
+    "outcome": "restored",
+-   "reconciliation": {
+-     "attempts_marked_uncertain": 2,
+-     "awaiting_decision": 2,
+-     "queued_send_jobs": 3,
+-     "send_jobs_held": 3,
+-   },
+-   "schema": {
+-     "applied": [],
+-     "backup": 9,
+-     "restored": 9,
+-   },
+  }
+
+ ❯ tests/integration/restore.test.ts:301:21
+    299|     const attachments = count(source.t.db, 'SELECT count(*) FROM attac…
+    300|     expect(attachments).toBeGreaterThanOrEqual(4);
+    301|     expect(summary).toEqual({
+       |                     ^
+    302|       outcome: 'restored',
+    303|       manifest: { verified: true, schema_version: LATEST, files: attac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing
+AssertionError: expected [ { …(5) }, { …(5) }, { …(5) }, …(3) ] to deeply equal [ { …(5) }, { …(5) }, { …(5) }, …(3) ]
+
+- Expected
++ Received
+
+  [
+    {
+      "attempts": 1,
+      "id": "6d2145e2-9bd0-4684-ad71-b93038c2293e",
+      "kind": "send_email",
+-     "last_error": null,
+-     "state": "leased",
++     "last_error": "delivery_uncertain",
++     "state": "intervention",
+    },
+    {
+-     "attempts": 1,
++     "attempts": 2,
+      "id": "ee9d0462-306d-4e98-b739-c36beab4a6e2",
+      "kind": "send_email",
+      "last_error": null,
+-     "state": "leased",
++     "state": "succeeded",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "f870121f-e1a1-4588-a3b0-8794b298552a",
+      "kind": "send_email",
+      "last_error": null,
+-     "state": "queued",
++     "state": "succeeded",
+    },
+    {
+-     "attempts": 1,
++     "attempts": 2,
+      "id": "184853d0-3ec2-43a0-96aa-e172e585653f",
+      "kind": "send_reminder",
+-     "last_error": null,
+-     "state": "leased",
++     "last_error": "invalid_job_payload",
++     "state": "intervention",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "a9d6a8f4-5ffc-41a1-8ebc-577de0f1b723",
+      "kind": "send_reminder",
+-     "last_error": null,
+-     "state": "queued",
++     "last_error": "invalid_job_payload",
++     "state": "intervention",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "ec5777ae-dff6-4528-a7c2-e190b5d08621",
+      "kind": "send_email",
+      "last_error": null,
+-     "state": "queued",
++     "state": "succeeded",
+    },
+  ]
+
+ ❯ tests/integration/restore.test.ts:324:92
+    322|     // Every send job keeps its state and attempt counter; reminders a…
+    323|     const sendsAfter = sendJobs(restored);
+    324|     expect(sendsAfter.filter((job) => sendsBefore.some((before) => bef…
+       |                                                                                            ^
+    325|     expect(sendsAfter.filter((job) => !sendsBefore.some((before) => be…
+    326|     expect(attemptsOf(restored)).toEqual(attemptsBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08)
+AssertionError: expected { outcome: 'resumed', …(1) } to match object { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "awaitingDecision": 2,
+-   "outcome": "refused",
++   "awaitingDecision": 0,
++   "outcome": "resumed",
+  }
+
+ ❯ tests/integration/restore.test.ts:337:21
+    335|   it('refuses to resume while attempts await a decision; one explicit …
+    336|     const refused = resumeOutbound(restored, clock);
+    337|     expect(refused).toMatchObject({ outcome: 'refused', awaitingDecisi…
+       |                     ^
+    338|     expect(getOutboundPause(restored)).not.toBeNull();
+    339|     expect(count(restored, "SELECT count(*) FROM audit_events WHERE op…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore refusals > refuses a file whose bytes do not match the manifest and leaves the target empty
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:428:19
+    426|       (caught: unknown) => caught,
+    427|     );
+    428|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    429|     return error as RestoreError;
+    430|   }
+ ❯ tests/integration/restore.test.ts:453:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore refusals > refuses a database copy that does not match the manifest
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:428:19
+    426|       (caught: unknown) => caught,
+    427|     );
+    428|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    429|     return error as RestoreError;
+    430|   }
+ ❯ tests/integration/restore.test.ts:460:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore refusals > refuses a manifest with an unknown key or a missing file
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:428:19
+    426|       (caught: unknown) => caught,
+    427|     );
+    428|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    429|     return error as RestoreError;
+    430|   }
+ ❯ tests/integration/restore.test.ts:469:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore refusals > refuses a backup of a newer schema than this application
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:428:19
+    426|       (caught: unknown) => caught,
+    427|     );
+    428|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    429|     return error as RestoreError;
+    430|   }
+ ❯ tests/integration/restore.test.ts:485:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore refusals > refuses a non-empty target and a target inside the live data directory, writing nothing
+AssertionError: expected null to be an instance of RestoreError
+ ❯ refusal tests/integration/restore.test.ts:428:19
+    426|       (caught: unknown) => caught,
+    427|     );
+    428|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    429|     return error as RestoreError;
+    430|   }
+ ❯ tests/integration/restore.test.ts:496:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a version 9 backup (upgrade on restore) > applies migration 10, pauses outbound and keeps every balance
+AssertionError: expected undefined to deeply equal { backup: 9, restored: 9, applied: [] }
+
+- Expected:
+{
+  "applied": [],
+  "backup": 9,
+  "restored": 9,
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/restore.test.ts:530:49
+    528|       expect(backup.manifest.schema_version).toBe(9);
+    529|       const result = await restoreBackup({ fromDir: backup.directory, …
+    530|       expect(restoreSummaryJson(result).schema).toEqual({ backup: 9, r…
+       |                                                 ^
+    531|       const source = openDatabase(databasePath);
+    532|       const copy = openDatabase(join(dir, 'restored', RESTORED_DATABAS…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > migration 0010 (outbound pause) > applies fresh 1 to 10, is consistent and a rerun applies nothing
+AssertionError: expected [ 1, 2, 3, 4, 5, 6, 7, 8, 9 ] to deeply equal [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
+
+- Expected
++ Received
+
+@@ -6,7 +6,6 @@
+    5,
+    6,
+    7,
+    8,
+    9,
+-   10,
+  ]
+
+ ❯ tests/integration/restore.test.ts:566:64
+    564|     const db = openDatabase(join(dir, 'fresh.db'));
+    565|     try {
+    566|       expect(MIGRATIONS.map((migration) => migration.version)).toEqual…
+       |                                                                ^
+    567|       expect(MIGRATIONS.at(-1)?.name).toBe('outbound_pause');
+    568|       expect(migrate(db)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > migration 0010 (outbound pause) > upgrades a populated version 9 database, keeps every row and starts not paused
+AssertionError: expected { applied: [], version: 9 } to deeply equal { applied: [ 10 ], version: 10 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     10,
+-   ],
+-   "version": 10,
++   "applied": [],
++   "version": 9,
+  }
+
+ ❯ tests/integration/restore.test.ts:594:73
+    592|       const snapshot = () => Object.fromEntries(tables.map((name) => […
+    593|       const before = snapshot();
+    594|       expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))…
+       |                                                                         ^
+    595|       const after = snapshot();
+    596|       const strip = (rows: unknown[]) => (rows as Array<Record<string,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > migration 0010 (outbound pause) > refuses an inconsistent pause and a preparing attempt made uncertain without the restore reconciliation code
+SqliteError: no such column: outbound_paused_at
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/restore.test.ts:616:25
+    614|     try {
+    615|       migrate(db);
+    616|       const update = db.prepare('UPDATE operations_state SET outbound_…
+       |                         ^
+    617|       for (const bad of [
+    618|         [NOW, null], // a pause without a reason
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > restores in production, prints counts and the manifest check only, and refuses bad arguments
+AssertionError: expected 'Usage: cli.js <migrate|seed|run-jobs|…' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ Usage: cli.js <migrate|seed|run-jobs|bootstrap|backup>
++
+
+ ❯ tests/integration/restore.test.ts:682:23
+    680|     const to = join(work, 'restored');
+    681|     const ok = cli(['restore', '--from', backupDir, '--to', to], live);
+    682|     expect(ok.stderr).toBe('');
+       |                       ^
+    683|     expect(ok.status).toBe(0);
+    684|     const printed = JSON.parse(ok.stdout) as Record<string, unknown>;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume needs --confirm, then clears the pause of the restored instance once
+SyntaxError: Unexpected end of JSON input
+ ❯ tests/integration/restore.test.ts:702:17
+    700|     const preview = cli(['outbound', 'resume'], restoredLive);
+    701|     expect(preview.status).toBe(2);
+    702|     expect(JSON.parse(preview.stdout)).toEqual({ outcome: 'confirmatio…
+       |                 ^
+    703|     const resumed = cli(['outbound', 'resume', '--confirm'], restoredL…
+    704|     expect(resumed.stderr).toBe('');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/17]⎯
+
+ FAIL  tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume --confirm is refused (exit 1) while an attempt awaits its decision
+SqliteError: no such table: jobs
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ enqueueJob src/server/jobs/jobStore.ts:152:6
+    150|   const now = formatUtcInstant(nowEpoch(clock));
+    151|   const inserted = db
+    152|     .prepare(
+       |      ^
+    153|       `INSERT INTO jobs (id, user_id, revision_id, kind, business_key,…
+    154|        VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)
+ ❯ tests/integration/restore.test.ts:723:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/17]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  17 failed | 11 passed (28)
+   Start at  18:33:27
+   Duration  11.04s (tests 85%, import 10%, transform 5%)
+

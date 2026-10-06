@@ -1,0 +1,109 @@
+# WP4-T06 container drill stages 1-3 (Docker Desktop 28.5.1, Compose project ts-wp4-t06)
+Command: node scripts/container-drill.mjs --work <scratch>/drill3 --project ts-wp4-t06  -> exit 0 (last line of the log)
+Result: DRILL STAGES 1-3 PASSED, 90 PASS and 0 FAIL lines. Cleanup by project name; afterwards docker ps/volume/network
+filtered on ts-wp4-t06 list nothing; the local image ts-wp4-t06-timesheet:drill is kept (as in WP4-T05).
+Earlier runs: <scratch>/drill (same source, script without the ledger_minutes INFO field) passed 90/0; <scratch>/drill2 tried a
+longer stage-1 day so the drill ledger would be non-zero, but the synthetic sign-off still posted no OT (1 FAIL on the added
+non-empty-ledger check); that experiment was reverted, so the drill compares a zero ledger. Non-zero balances are compared in
+tests/integration/restore.test.ts (posted minutes > 0, four revisions).
+
+node v24.21.0; docker Docker version 28.5.1, build e180ab8; project ts-wp4-t06
+PASS  docker build --platform linux/amd64  1 s, log in the work directory
+PASS  build output (including npm ci) has no deprecation line
+INFO  image id sha256:725bdd6af48f52968b3a464ddd94e90511ffc915898770c49f2e7809c69d6bb5, linux/amd64, size 110484261 bytes (105.4 MiB)
+PASS  image architecture is amd64
+PASS  image runtime user is numeric and not root  User=10001:10001
+PASS  image sets NODE_ENV=production and OUTBOUND_MODE=capture
+PASS  image declares a HEALTHCHECK and the /data volume
+PASS  image file list was read  10424 paths
+PASS  forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+PASS  production dependencies only (no devDependency in the image)
+PASS  data directory is fresh  no timesheet.db before the first start
+PASS  container becomes healthy  5.3 s (running healthy)
+PASS  /api/ready reports ready with the schema version  schema 10 of 10
+PASS  running process UID is not 0  uid:gid 10001:10001
+PASS  root filesystem is read-only (cannot write under /app)
+PASS  /tmp tmpfs is writable
+PASS  bootstrap CLI prints a single-use setup token
+PASS  first administrator created with the token  status 201
+PASS  setup token cannot be replayed  status 403
+PASS  administrator sign-in
+PASS  administrator lists accounts (calendar id present)
+PASS  administrator creates a synthetic employee  status 201
+PASS  employee records a synthetic work session  status 201
+PASS  session reads back before the restart
+PASS  administrator cannot read the employee session  status 404
+PASS  database and private directory exist on the host data directory
+PASS  container is healthy again after the restart  5.3 s after the restart (6.3 s in all)
+PASS  schema version unchanged after the restart  schema 10
+PASS  stored sign-in session survives the restart
+PASS  synthetic work session persisted byte for byte after the restart
+PASS  container log has no deprecation warning
+PASS  container log never contains the setup token or a password
+PASS  employee uploads a synthetic signature image
+PASS  employee signs off a past synthetic period (finalization)  status 201
+PASS  the container job runner renders the PDF of the finalized period  10.1 s
+PASS  cli.js backup inside the running container exits 0
+PASS  every synthetic write succeeded  97 writes, 0 not 201
+PASS  writes continued while the backup ran  58 writes completed inside the 1007 ms backup window
+PASS  the backup recorded its success in operations_state
+INFO  backup duration 326 ms inside the CLI, 1007 ms for docker compose exec; writes before/during/after: 6/58/33
+PASS  backup folder name is timesheet-backup-<UTC>-<random>
+PASS  only the finished backup folder exists (no partial folder)  1 entries
+PASS  backup folder holds the database copy, files and manifest only
+PASS  manifest has exactly the allowed keys
+PASS  manifest has no email address, name or host path
+PASS  database copy matches the manifest SHA-256 and size
+PASS  copied file set equals the manifest file list
+PASS  every copied file matches its manifest SHA-256 and size  9 files, 0 mismatched
+PASS  the backup holds signature images and the PDF
+PASS  database copy passes integrity_check outside the container
+PASS  database copy has no foreign key violation
+PASS  schema version of the copy equals the manifest and the running instance  schema 10
+PASS  manifest files equal the attachment rows of the copy
+PASS  the copy is a point-in-time image: every session written before the backup, none beyond the end state  sessions before 6, in the copy 29, at the end 79
+INFO  manifest summary: schema 10, app 0.1.0, 9 files (8 signatures, 1 PDFs), database 581632 bytes, integrity ok, foreign key violations 0
+PASS  a target inside DATA_DIR is refused (exit 2)
+PASS  container log after the backup has no deprecation warning
+PASS  source ledger and revisions read through the API
+PASS  restore into a non-empty target is refused (exit 2, target_not_empty)
+PASS  restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)
+PASS  a refused restore created nothing in the live data directory
+PASS  source instance stopped before the restore  exited
+PASS  restore target is a fresh empty host directory
+PASS  cli.js restore in a one-off container exits 0  1037 ms
+PASS  restore output has exactly the allowed keys and no address, name or path
+PASS  restore verified the manifest and paused outbound delivery (reason restored)
+INFO  restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":10,"files":9,"signatures":8,"pdfs":1,"database_bytes":581632},"schema":{"backup":10,"restored":10,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":0,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":1,"ledger_entries":0,"attachments":9}}
+PASS  the one-off restore container is gone
+PASS  restored directory holds the database and the private data directory only
+PASS  every restored file matches its manifest SHA-256 and size  9 files, 0 mismatched
+PASS  restored database passes integrity_check and has no foreign key violation
+PASS  restored schema version equals the backup  schema 10
+PASS  restored copy is paused with reason restored
+PASS  no outbound job is leased and no attempt is sending or preparing in the restored copy
+PASS  restored balances (ledger entries and sums per user), revisions, sign-offs, files and sessions equal the backup
+INFO  restored counts (equal to the backup): {"users":2,"revisions":1,"ledger_entries":0,"ledger_minutes":0,"signoffs":1,"attachments":9,"work_sessions":29,"outbound_jobs":1,"delivery_attempts":1}
+PASS  restored instance becomes healthy  5.3 s (running healthy)
+PASS  restored instance logs the outbound pause at startup
+PASS  stored sign-in session works on the restored instance
+PASS  OT balance and ledger entries through the API equal the source  0 entries
+PASS  revisions through the API equal the source  1 revisions
+INFO  resend requested on the restored instance: status 201
+PASS  outbound resume without --confirm only previews (exit 2) and shows the paused queue  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":0}
+PASS  the restored runner keeps running (heartbeat) while paused  waited 40 s
+PASS  no job is leased and nothing more was accepted while paused  jobs {"queued":1,"leased":0,"succeeded":1,"intervention":1,"cancelled":0}
+PASS  nothing was captured while paused
+PASS  paused run: no restored outbound job changed state or attempts  1 restored outbound jobs, 0 changed
+PASS  paused run: every new send job is queued with no attempt spent  1 new
+PASS  paused run: still paused, no attempt sending and none accepted beyond the restored ones
+PASS  restored instance healthy again after the clean stop  5.3 s
+PASS  cli.js outbound resume --confirm clears the pause (exit 0)  {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":0}
+PASS  after the resume the runner claims the queued send job  11.0 s
+INFO  delivery attempt states after the resume (capture mode, synthetic data): {"failed_permanent":2}
+PASS  restored instance log has no deprecation warning
+PASS  restored instance log never contains a password
+PASS  cleanup by project name (docker compose down -v)
+PASS  no container of the project remains
+DRILL STAGES 1-3 PASSED
+exit 0

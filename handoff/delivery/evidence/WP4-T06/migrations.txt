@@ -1,0 +1,67 @@
+# WP4-T06 migrations: fresh 1->10, upgrade from v9, rerun applies nothing
+Fresh: applied [1..10], version 10; rerun applied []; integrity ok, foreign_key_check empty, pause columns NULL.
+Upgrade from a populated v9 (seed with sample data, heartbeat and backup status set): applies [10], every row unchanged, the
+two pause columns NULL, integrity ok, FK empty, rerun nothing (restore.test.ts 'upgrades a populated version 9 database').
+A v9 backup restored by this binary is upgraded once on restore (applies [10]) with balances equal to the source.
+Older upgrade tests (v1, v2, v3) now end at 10; the 0009 tests in backup.test.ts pin 0009 alone (UP_TO_9).
+(Skipped lines of the -t filter are omitted.)
+
+## CLI on a fresh database (twice), then integrity/FK of the file
+Commands: DATABASE_PATH=<scratch>/cli-migrate/fresh.db node src/server/cli.ts migrate (x2); node -e (better-sqlite3 readonly pragmas)
+{"database":"<scratch>\\cli-migrate\\fresh.db","applied":[1,2,3,4,5,6,7,8,9,10],"version":10}
+exit 0
+{"database":"<scratch>\\cli-migrate\\fresh.db","applied":[],"version":10}
+exit 0
+{"integrity_check":"ok","foreign_key_check":0,"user_version":10,"operations_state":{"outbound_paused_at":null,"outbound_paused_reason":null}}
+exit 0
+
+## Migration tests (fresh 1->10, upgrade from populated v9 / v8 / v3 / v2 / v1, shape triggers, restore of a v9 backup)
+Command: node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/migrations.test.ts tests/integration/backup.test.ts tests/integration/bootstrap.test.ts tests/integration/restore.test.ts -t "migration|upgrade|migrat|0008|0009|0010"  -> exit 0
+
+ RUN  v5.0.2 <repo>
+
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 52ms
+ ✓ tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > applies fresh 1 to 9, is consistent and a rerun applies nothing 56ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > is the eighth migration and a fresh 1 to 8 database is consistent and a rerun applies nothing 96ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 49ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 41ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > upgrades a populated version 7 database without touching its rows 143ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 79ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 51ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 32ms
+ ✓ tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > upgrades a populated version 8 database, keeps every row and starts with no backup recorded 304ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > keeps the state row a single, undeletable row whose token cannot return once an administrator exists 132ms
+ ✓ tests/integration/backup.test.ts > migration 0009 (backup status in operations_state) > refuses an inconsistent backup status shape 50ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 1 (initial): its checksum stays pinned 48ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 2 (ot_ledger): its checksum stays pinned 16ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 3 (day_entry_source): its checksum stays pinned 22ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 4 (submission): its checksum stays pinned 16ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 5 (automatic_presentation): its checksum stays pinned 12ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 6 (timesheet_shares): its checksum stays pinned 13ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 7 (audit_access): its checksum stays pinned 11ms
+ ✓ tests/integration/restore.test.ts > restore of a version 9 backup (upgrade on restore) > applies migration 10, pauses outbound and keeps every balance 442ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 8 (bootstrap): its checksum stays pinned 13ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > applies fresh 1 to 10, is consistent and a rerun applies nothing 41ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0009, keeps every WP1 row unchanged and leaves a consistent, usable schema 198ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > upgrades a populated version 9 database, keeps every row and starts not paused 234ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows 158ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003) 154ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > refuses an inconsistent pause and a preparing attempt made uncertain without the restore reconciliation code 224ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0009 with unchanged rows and counts, a consistent schema and safe defaults 239ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > adds the note flag (off) and the note text ("Automatic submission") with safe defaults 135ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > constrains the flag to 0/1 and the text to 1-120 characters on one line 142ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > keeps settings versions immutable with the new columns 138ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live 174ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > creates one STRICT table with the item columns, the one-active index and the immutability triggers 37ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > accepts every valid item set and refuses an empty, self, foreign-created or malformed share 269ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > keeps at most one active share per owner and grantee; revoked rows stay as history 213ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > refuses DELETE, any change of identity or items, and a second revocation 226ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 229ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical 240ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers 28ms
+
+ Test Files  4 passed (4)
+      Tests  39 passed | 58 skipped (97)
+   Start at  18:43:28
+   Duration  4.24s (tests 52%, import 31%, transform 17%)
+

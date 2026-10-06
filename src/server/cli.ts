@@ -8,8 +8,21 @@ import { FileStore } from './files/fileStore.ts';
 import { createJobHandlers, runJobsOnce } from './jobs/runner.ts';
 import { BackupError, createBackup } from './ops/backup.ts';
 import { manifestSummary } from './ops/manifest.ts';
+import {
+  dropHeldReminder,
+  heldJobsJson,
+  listHeldJobs,
+  releaseAllHeldJobs,
+  releaseHeldJob,
+  RestoreError,
+  restoreBackup,
+  restoreSummaryJson,
+  resumeJson,
+  resumeOutbound,
+} from './ops/restore.ts';
 import { seedSynthetic } from './seed.ts';
 import { applyBootstrapConfig, BootstrapError, type IssuedSetupToken, issueSetupToken, parseBootstrapConfig } from './services/bootstrap.ts';
+import { getOutboundStatus } from './services/operationsStatus.ts';
 
 /*
  * Maintenance commands:
@@ -26,6 +39,16 @@ import { applyBootstrapConfig, BootstrapError, type IssuedSetupToken, issueSetup
  *   backup --to <dir>
  *            consistent backup (WP4-T05) of the live database and its referenced private files into a new folder
  *            under <dir>, which must be outside DATA_DIR; allowed in production while the server runs
+ *   restore --from <backup folder> --to <empty directory>
+ *            isolated restore (WP4-T06): verify the manifest hashes, integrity and schema, copy the database and files
+ *            into the new directory (<dir>/timesheet.db and <dir>/private-data), pause outbound delivery there and mark
+ *            interrupted sends for explicit reconciliation; never writes the live DATABASE_PATH or DATA_DIR
+ *   outbound resume [--confirm]
+ *            without --confirm: print what a resume would release and exit 2; with --confirm: clear the outbound pause
+ *            of DATABASE_PATH when no delivery attempt awaits its decision (audited system event), otherwise exit 1
+ *   outbound release [--all | --job <id>] [--confirm]   /   outbound drop --job <id> [--confirm]
+ *            the send jobs a restore holds: without --confirm list them with counts (exit 2); with --confirm release
+ *            one or every releasable job back to the queue, or drop one held reminder (audited; refused: exit 1)
  */
 
 const RUN_JOBS_USAGE = 'Usage: cli.js run-jobs --once --now <YYYY-MM-DDTHH:MM:SSZ>';
@@ -188,10 +211,150 @@ async function backup(args: readonly string[]): Promise<number> {
   }
 }
 
+const RESTORE_USAGE = 'Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR>';
+
+/** `--from <backup> --to <dir>` in either order, nothing else; null for any other argument list. */
+function parseRestoreArgs(args: readonly string[]): { from: string; to: string } | null {
+  if (args.length !== 4) return null;
+  const values = new Map<string, string>();
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index];
+    const value = args[index + 1];
+    if ((flag !== '--from' && flag !== '--to') || values.has(flag) || value === undefined || value === '' || value.startsWith('--')) return null;
+    values.set(flag, value);
+  }
+  const from = values.get('--from');
+  const to = values.get('--to');
+  return from === undefined || to === undefined ? null : { from, to };
+}
+
+/**
+ * Isolated restore (WP4-T06). Allowed in production: it reads the live configuration only to refuse a target inside
+ * the live DATA_DIR or holding the live database, and never opens either. Prints counts and the manifest check only; a
+ * refused target exits 2, a backup that fails a check (or a failed copy) exits 1 and leaves nothing behind.
+ */
+async function restore(args: readonly string[]): Promise<number> {
+  const parsed = parseRestoreArgs(args);
+  if (parsed === null) {
+    console.error(RESTORE_USAGE);
+    return 2;
+  }
+  const config = loadConfig();
+  const delivery = loadDeliveryConfig(process.env, config);
+  try {
+    const result = await restoreBackup({
+      fromDir: parsed.from,
+      toDir: parsed.to,
+      liveDataDir: delivery.dataDir,
+      liveDatabasePath: config.databasePath,
+      clock: systemClock,
+    });
+    console.log(JSON.stringify(restoreSummaryJson(result)));
+    return 0;
+  } catch (error) {
+    if (error instanceof RestoreError) {
+      console.error(`Restore ${error.refusal ? 'refused' : 'failed'} (${error.code}): ${error.message}`);
+      return error.refusal ? 2 : 1;
+    }
+    throw error;
+  }
+}
+
+const OUTBOUND_USAGE =
+  'Usage: cli.js outbound resume [--confirm] | outbound release [--all | --job <id>] [--confirm] | outbound drop --job <id> [--confirm]';
+
+type OutboundCommand =
+  | { action: 'resume'; confirm: boolean }
+  | { action: 'release'; target: 'all' | { job: string } | null; confirm: boolean }
+  | { action: 'drop'; job: string; confirm: boolean };
+
+/** The `outbound` sub-commands; null for any other argument list. */
+function parseOutboundArgs(args: readonly string[]): OutboundCommand | null {
+  const [action, ...rest] = args;
+  const confirm = rest.at(-1) === '--confirm';
+  const options = confirm ? rest.slice(0, -1) : rest;
+  const job = options.length === 2 && options[0] === '--job' && options[1] !== undefined && options[1] !== '' && !options[1].startsWith('--') ? options[1] : null;
+  if (action === 'resume' && options.length === 0) return { action, confirm };
+  if (action === 'release') {
+    if (options.length === 0 && !confirm) return { action, target: null, confirm };
+    if (options.length === 1 && options[0] === '--all') return { action, target: 'all', confirm };
+    if (job !== null) return { action, target: { job }, confirm };
+  }
+  if (action === 'drop' && job !== null) return { action, job, confirm };
+  return null;
+}
+
+/**
+ * `outbound resume`: without `--confirm` prints the pause and the counts a resume would release (exit 2); with it,
+ * clears the pause of DATABASE_PATH unless an attempt awaits its decision (exit 1). Counts only.
+ * `outbound release` / `outbound drop` (WP4-T06 attempt 2): without `--confirm` print the jobs a restore holds (ids,
+ * kinds, attempts and blockers; no person) and exit 2; with it, release one held job (`--job <id>`) or every releasable
+ * one (`--all`) back to the queue, or drop one held reminder; a refused release or drop exits 1. Every step is audited.
+ */
+async function outbound(args: readonly string[]): Promise<number> {
+  const command = parseOutboundArgs(args);
+  if (command === null) {
+    console.error(OUTBOUND_USAGE);
+    return 2;
+  }
+  const config = loadConfig();
+  const db = openDatabase(config.databasePath);
+  try {
+    migrate(db);
+    if (!command.confirm) {
+      if (command.action === 'resume') {
+        const status = getOutboundStatus(db);
+        console.log(
+          JSON.stringify({
+            outcome: 'confirmation_required',
+            paused: status.paused,
+            reason: status.reason,
+            awaiting_decision: status.awaitingDecision,
+            queued_send_jobs: status.queuedSendJobs,
+            held_send_jobs: status.heldSendJobs,
+          }),
+        );
+      } else {
+        console.log(JSON.stringify({ outcome: 'confirmation_required', ...heldJobsJson(listHeldJobs(db)) }));
+      }
+      return 2;
+    }
+    if (command.action === 'resume') {
+      const result = resumeOutbound(db, systemClock);
+      console.log(JSON.stringify(resumeJson(result)));
+      if (result.outcome === 'refused') {
+        console.error('Outbound delivery stays paused: record a decision on every uncertain delivery attempt first');
+        return 1;
+      }
+      return 0;
+    }
+    if (command.action === 'drop') {
+      const dropped = dropHeldReminder(db, systemClock, command.job);
+      console.log(JSON.stringify(dropped));
+      return dropped.outcome === 'dropped' ? 0 : 1;
+    }
+    if (command.target === 'all') {
+      console.log(JSON.stringify({ outcome: 'released', ...releaseAllHeldJobs(db, systemClock) }));
+      return 0;
+    }
+    if (command.target === null) {
+      console.error(OUTBOUND_USAGE);
+      return 2;
+    }
+    const released = releaseHeldJob(db, systemClock, command.target.job);
+    console.log(JSON.stringify(released));
+    return released.outcome === 'released' ? 0 : 1;
+  } finally {
+    db.close();
+  }
+}
+
 async function main(command: string | undefined, args: readonly string[]): Promise<number> {
   if (command === 'run-jobs') return runJobs(args);
   if (command === 'bootstrap') return bootstrap(args);
   if (command === 'backup') return backup(args);
+  if (command === 'restore') return restore(args);
+  if (command === 'outbound') return outbound(args);
   const config = loadConfig();
   const db = openDatabase(config.databasePath);
   try {
@@ -233,7 +396,7 @@ async function main(command: string | undefined, args: readonly string[]): Promi
         return 0;
       }
       default:
-        console.error('Usage: cli.js <migrate|seed|run-jobs|bootstrap|backup>');
+        console.error('Usage: cli.js <migrate|seed|run-jobs|bootstrap|backup|restore|outbound>');
         return 2;
     }
   } finally {

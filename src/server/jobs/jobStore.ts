@@ -18,6 +18,10 @@ import { type Db, writeTransaction } from '../db/database.ts';
  *   failure or an expired lease on the last attempt needs visible intervention.
  * - Errors are stored as a redacted code only (never a message, recipient or content).
  * - The runner heartbeat lives in the single operations_state row.
+ * - Outbound pause (WP4-T06, migration 0010): while operations_state holds `outbound_paused_at`, a claim never leases a
+ *   job of `OUTBOUND_JOB_KINDS` (the jobs that hand a message to the outbound adapter, capture included), whatever kinds
+ *   the runner asks for. The pause is read inside the claim's own transaction, so no attempt is spent and nothing is
+ *   sent from the moment it is set; other kinds (PDF rendering, the scans) are claimed as usual.
  * All instants are UTC strings from the injectable clock at second precision.
  */
 
@@ -25,6 +29,19 @@ export const RETRY_DELAYS_MINUTES: readonly number[] = Object.freeze([1, 5, 15, 
 /** The first attempt plus one retry per delay. */
 export const MAX_ATTEMPTS = RETRY_DELAYS_MINUTES.length + 1;
 export const DEFAULT_LEASE_SECONDS = 120;
+
+/**
+ * Job kinds that hand a message to the outbound adapter (finalization.ts `JOB_SEND_EMAIL`, notifications.ts
+ * `JOB_SEND_REMINDER`; restore.test.ts pins the equality). None of them is claimed while outbound delivery is paused.
+ */
+export const OUTBOUND_JOB_KINDS: readonly string[] = Object.freeze(['send_email', 'send_reminder']);
+
+/**
+ * The code a restore (ops/restore.ts) writes on what it marks for explicit reconciliation: the provider response of an
+ * attempt made `uncertain` and the last error of a send job held in intervention (migration 0010 allows a `preparing`
+ * attempt to become `uncertain` with this code only).
+ */
+export const RECONCILE_AFTER_RESTORE = 'reconcile_after_restore';
 
 export type JobState = 'queued' | 'leased' | 'succeeded' | 'intervention' | 'cancelled';
 /** Routing identifiers only (docs/03): never message content, personal text or secrets. */
@@ -177,10 +194,29 @@ export interface ClaimOptions {
   leaseSeconds?: number;
 }
 
+export interface OutboundPause {
+  /** UTC instant the pause was set. */
+  pausedAt: string;
+  /** Lowercase code, for example `restored`. */
+  reason: string;
+}
+
+/** The outbound pause recorded in operations_state, or null when outbound delivery is not paused. */
+export function getOutboundPause(db: Db): OutboundPause | null {
+  const row = db
+    .prepare<[], { outbound_paused_at: string | null; outbound_paused_reason: string | null }>(
+      'SELECT outbound_paused_at, outbound_paused_reason FROM operations_state WHERE id = 1',
+    )
+    .get();
+  if (row === undefined || row.outbound_paused_at === null || row.outbound_paused_reason === null) return null;
+  return { pausedAt: row.outbound_paused_at, reason: row.outbound_paused_reason };
+}
+
 /**
  * Atomically leases the next due job of the given kinds, or returns null. A leased job whose
  * lease expired is reclaimed as a new attempt, unless it already used its last attempt: then it
- * moves to intervention with the code `lease_expired`.
+ * moves to intervention with the code `lease_expired`. While outbound delivery is paused, the
+ * outbound kinds are left out (neither claimed nor swept), so no attempt is spent on them.
  */
 export function claimNextJob(db: Db, clock: Clock, options: ClaimOptions): Job | null {
   checkOwner(options.owner);
@@ -188,13 +224,15 @@ export function claimNextJob(db: Db, clock: Clock, options: ClaimOptions): Job |
   checkLease(leaseSeconds);
   if (options.kinds.length === 0) return null;
   for (const kind of options.kinds) if (!KIND.test(kind)) throw new Error('Invalid job kind');
-  const kindList = options.kinds.map(() => '?').join(', ');
   return writeTransaction(db, (): Job | null => {
+    const kinds = getOutboundPause(db) === null ? options.kinds : options.kinds.filter((kind) => !OUTBOUND_JOB_KINDS.includes(kind));
+    if (kinds.length === 0) return null;
+    const kindList = kinds.map(() => '?').join(', ');
     const now = formatUtcInstant(nowEpoch(clock));
     db.prepare(
       `UPDATE jobs SET state = 'intervention', lease_owner = NULL, lease_expires_at = NULL, last_error = 'lease_expired', updated_at = ?
         WHERE state = 'leased' AND lease_expires_at <= ? AND attempts >= ? AND kind IN (${kindList})`,
-    ).run(now, now, MAX_ATTEMPTS, ...options.kinds);
+    ).run(now, now, MAX_ATTEMPTS, ...kinds);
     const row = db
       .prepare(
         `UPDATE jobs SET state = 'leased', lease_owner = ?, lease_expires_at = ?, attempts = attempts + 1, updated_at = ?
@@ -206,7 +244,7 @@ export function claimNextJob(db: Db, clock: Clock, options: ClaimOptions): Job |
              LIMIT 1)
         RETURNING *`,
       )
-      .get(options.owner, utcAfter(clock, leaseSeconds), now, ...options.kinds, now, now) as JobRow | undefined;
+      .get(options.owner, utcAfter(clock, leaseSeconds), now, ...kinds, now, now) as JobRow | undefined;
     return row === undefined ? null : toJob(row);
   });
 }

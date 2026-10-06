@@ -1,0 +1,24 @@
+Add a consistent online backup with a hashed manifest and backup status
+
+- feat(ops): `cli.js backup --to <dir>` is allowed in production and refuses a
+  target inside DATA_DIR. It takes one SQLite online-backup step from its own
+  read-only connection, so the copy is a single point-in-time read that
+  includes the WAL. It then checks the integrity and foreign keys of the copy,
+  copies every referenced file and verifies its SHA-256 and size.
+- feat(ops): the manifest holds the app and schema versions, the UTC instant,
+  the integrity result and the per-file and DB hashes, and no personal data.
+  The backup is staged in a temporary folder and renamed into place.
+- feat(db): migration 0009 records the backup status in operations_state.
+- test(backup): a backup during a concurrent writer loop restores
+  consistently. The no-WAL and no-hash mutations fail. Drill stage 2 runs
+  inside the container.
+- docs(handoff): the WP4-T04 freeze result, the WP4-T05 records, the board and
+  the checkpoint (+ vi).
+
+Task: WP4-T05-FREEZE
+Gate: precommit, diff --check, JSON parse, orchestration validator,
+check_recovery and preflight passed
+Audit: independent audit of WP4-T05 recorded in the board
+Digest: 724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

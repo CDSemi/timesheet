@@ -1,0 +1,189 @@
+# WP4-T06 mutation proof (scratch export of the working tree)
+Export: GIT_INDEX_FILE=<scratch>/idx-mutation git read-tree HEAD; git add -A; git write-tree -> 816ebf6f826d99716fad114edf979f871a64ba1e; git archive | tar -x -C <scratch>/mutation; npm ci -> exit 0
+Result: with the filter removed 4 tests fail (paused runner pass, resume/AC-08 flow, claim unit test, server-entry startup test); restored: 29/29 pass.
+
+## Mutation: the outbound kind filter of the claim removed (src/server/jobs/jobStore.ts claimNextJob)
+diff --git a/<scratch>/jobStore.ts.orig b/src/server/jobs/jobStore.ts
+index 330fe5d..ba73022 100644
+--- a/<scratch>/jobStore.ts.orig
++++ b/src/server/jobs/jobStore.ts
+@@ -225,7 +225,7 @@ export function claimNextJob(db: Db, clock: Clock, options: ClaimOptions): Job |
+   if (options.kinds.length === 0) return null;
+   for (const kind of options.kinds) if (!KIND.test(kind)) throw new Error('Invalid job kind');
+   return writeTransaction(db, (): Job | null => {
+-    const kinds = getOutboundPause(db) === null ? options.kinds : options.kinds.filter((kind) => !OUTBOUND_JOB_KINDS.includes(kind));
++    const kinds = options.kinds; // MUTATION: the outbound kind filter of the claim removed
+     if (kinds.length === 0) return null;
+     const kindList = kinds.map(() => '?').join(', ');
+     const now = formatUtcInstant(nowEpoch(clock));
+
+Command: node node_modules/vitest/vitest.mjs run tests/integration/restore.test.ts tests/integration/jobs-restart.test.ts  -> exit 1
+
+
+ RUN  v5.0.2 <scratch>/mutation
+
+ ❯ tests/integration/restore.test.ts (19 tests | 3 failed) 6270ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (6)
+     × a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing 136ms
+     × refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 35ms
+   ❯ the claim while outbound delivery is paused (1)
+     × leaves exactly the outbound kinds out, spends no attempt on them, and claims them again after the resume 179ms
+ ❯ tests/integration/jobs-restart.test.ts (10 tests | 1 failed) 11409ms
+   ❯ server entry (3)
+     × logs the outbound pause at startup; its runner renders the PDF but claims no send job until the resume (WP4-T06) 1272ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/jobs-restart.test.ts > server entry > logs the outbound pause at startup; its runner renders the PDF but claims no send job until the resume (WP4-T06)
+AssertionError: expected { state: 'succeeded', attempts: 1 } to deeply equal { state: 'queued', attempts: +0 }
+
+- Expected
++ Received
+
+  {
+-   "attempts": 0,
+-   "state": "queued",
++   "attempts": 1,
++   "state": "succeeded",
+  }
+
+ ❯ tests/integration/jobs-restart.test.ts:365:126
+    363|       await waitFor(() => count("SELECT count(*) FROM jobs WHERE state…
+    364|       await new Promise((resolve) => setTimeout(resolve, 500));
+    365|       expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revi…
+       |                                                                                                                              ^
+    366|       expect(count('SELECT count(*) FROM delivery_attempts')).toBe(0);
+    367|       expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing
+AssertionError: expected [ { …(5) }, { …(5) }, { …(5) }, …(3) ] to deeply equal [ { …(5) }, { …(5) }, { …(5) }, …(3) ]
+
+- Expected
++ Received
+
+@@ -12,28 +12,28 @@
+      "kind": "send_email",
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "c4c89703-c7b6-4eaf-a9a2-9625c658730a",
+      "kind": "send_email",
+      "last_error": null,
+-     "state": "queued",
++     "state": "succeeded",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "173c7af6-f56f-49dc-ab88-c95f3354d59b",
+      "kind": "send_reminder",
+-     "last_error": null,
+-     "state": "queued",
++     "last_error": "invalid_job_payload",
++     "state": "intervention",
+    },
+    {
+-     "attempts": 0,
++     "attempts": 1,
+      "id": "2718b028-e164-4108-a8d8-1e5431278670",
+      "kind": "send_email",
+-     "last_error": null,
++     "last_error": "pdf_not_ready",
+      "state": "queued",
+    },
+    {
+      "attempts": 1,
+      "id": "f359074f-1d62-4afa-992e-cf2bb66c199c",
+
+ ❯ tests/integration/restore.test.ts:328:92
+    326|     // Every send job keeps its state and attempt counter; reminders a…
+    327|     const sendsAfter = sendJobs(restored);
+    328|     expect(sendsAfter.filter((job) => sendsBefore.some((before) => bef…
+       |                                                                                            ^
+    329|     expect(sendsAfter.filter((job) => !sendsBefore.some((before) => be…
+    330|     expect(attemptsOf(restored)).toEqual(attemptsBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08)
+AssertionError: expected { state: 'succeeded', attempts: 1 } to deeply equal { state: 'queued', attempts: +0 }
+
+- Expected
++ Received
+
+  {
+-   "attempts": 0,
+-   "state": "queued",
++   "attempts": 1,
++   "state": "succeeded",
+  }
+
+ ❯ tests/integration/restore.test.ts:364:155
+    362|     const runner = captureRunner(restored, clock, join(target, RESTORE…
+    363|     await runner('runner-before-resume');
+    364|     expect(restored.prepare("SELECT state, attempts FROM jobs WHERE re…
+       |                                                                                                                                                           ^
+    365|     expect(existsSync(join(target, RESTORED_DATA_DIR, 'mail-capture'))…
+    366|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > the claim while outbound delivery is paused > leaves exactly the outbound kinds out, spends no attempt on them, and claims them again after the resume
+AssertionError: expected { …(14) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "attempts": 1,
+  "businessKey": "synthetic:claim:send_email",
+  "createdAt": "2026-09-29T20:00:00Z",
+  "id": "24cd20b1-1af1-4f7f-bd53-088143ec5e27",
+  "kind": "send_email",
+  "lastError": null,
+  "leaseExpiresAt": "2026-09-29T20:02:00Z",
+  "leaseOwner": "runner-claim",
+  "nextRunAt": "2026-09-29T20:00:00Z",
+  "payload": {},
+  "revisionId": null,
+  "state": "leased",
+  "updatedAt": "2026-09-29T20:00:00Z",
+  "userId": "3c8edda2-660b-47c3-9d59-253427733d2d",
+}
+
+ ❯ tests/integration/restore.test.ts:561:114
+    559|       for (const kind of kinds) enqueueJob(t.db, t.clock, { kind, busi…
+    560|       t.db.prepare("UPDATE operations_state SET outbound_paused_at = ?…
+    561|       expect(claimNextJob(t.db, t.clock, { owner: 'runner-claim', kind…
+       |                                                                                                                  ^
+    562|       expect(claimNextJob(t.db, t.clock, { owner: 'runner-claim', kind…
+    563|       expect(claimNextJob(t.db, t.clock, { owner: 'runner-claim', kind…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 25 passed (29)
+   Start at  18:40:27
+   Duration  14.79s (tests 74%, import 19%, transform 7%)
+
+
+## Source restored byte for byte
+sha256 restored c99b8c16c0244cefde4d566f82f1c7734d6cf80cc3c66ac42edf033947165253 = original = repository working tree
+Command: node node_modules/vitest/vitest.mjs run tests/integration/restore.test.ts tests/integration/jobs-restart.test.ts  -> exit 0
+
+
+ RUN  v5.0.2 <scratch>/mutation
+
+
+ Test Files  2 passed (2)
+      Tests  29 passed (29)
+   Start at  18:40:48
+   Duration  12.70s (tests 88%, import 8%, transform 4%)
+

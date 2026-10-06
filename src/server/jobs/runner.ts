@@ -30,6 +30,9 @@ import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
  * straight to intervention without ever running the handler (the attempt would stay `sending`).
  * `startJobRunner` is the in-process loop the server entry starts; tests and the run-jobs CLI
  * call `runJobsOnce` directly with an injected clock, so nothing runs in the background there.
+ * While outbound delivery is paused (WP4-T06, operations_state), the claim (jobStore.ts `claimNextJob`)
+ * leaves the outbound kinds out: the pass still renders PDFs and runs the scans, but no send or
+ * reminder job is leased, no attempt is spent and nothing reaches the outbound adapter.
  */
 
 export interface JobContext {

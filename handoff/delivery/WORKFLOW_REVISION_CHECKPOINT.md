@@ -533,7 +533,25 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - Drill stage 2: backup in 348 ms while writes continued; all hashes match.
        - verify: 1503 tests. Digest: 724d5cd8….
        - Backup status is not yet in the admin status response; this moves to T07.
-     - Running: WP4-T05-FREEZE (committer). The coordinator writes no file during the
+     - WP4-T05-FREEZE is committed and pushed as 0c58130 (27 paths; all checks 0).
+     - WP4-T06 attempt 1 is done (opus).
+       - The pause, restore and resume work.
+       - Tests went red 17 → green 29; the mutation fails 4 tests; AC-08 passes 47/47.
+       - Drill stages 1–3 pass 90/0; verify passes 1523 tests.
+       - The worker flagged one problem: queued sends from the backup go out after
+         resume, which breaks docs/07:30 and :32.
+     - Coordinator decision: hold those sends at restore until an explicit, audited
+       release or drop.
+     - WP4-T06 attempt 2 is done.
+       - Restore now holds queued and leased sends from the backup. `outbound release`
+         and `outbound drop` (reminders only) are audited, and `--confirm` must be passed
+         to act; without it they only preview.
+       - Tests: red 5 → green 31; the mutation fails 4 tests.
+       - Drill: 105/0, including a second-generation restore.
+       - verify: 1525 tests; digest 15b7422e….
+       - Risk for the audit: a send that the source already delivered stays held. It can
+         only be released or left held.
+     - Running: WP4-T06-FREEZE (committer). The coordinator writes no file during the
        commit.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
@@ -574,7 +592,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T05-FREEZE only.
+- Live processes: WP4-T06-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

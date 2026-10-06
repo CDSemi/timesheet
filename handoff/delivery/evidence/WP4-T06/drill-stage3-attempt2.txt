@@ -1,0 +1,124 @@
+# WP4-T06 attempt 2 container drill stages 1-3 (Docker Desktop 28.5.1, Compose project ts-wp4-t06)
+Command: node scripts/container-drill.mjs --work <scratch>/drill6 --project ts-wp4-t06  -> exit 0 (last line)
+Result: DRILL STAGES 1-3 PASSED, 105 PASS and 0 FAIL. Stage 3 now also backs up the paused restored instance with a queued send job,
+restores it again (held), resumes (only the job created after the restore goes out; held sends make no attempt), then releases the
+held jobs by id and in bulk (each exactly one attempt; a second release is refused not_held). Earlier attempt-2 runs: drill4 (2 FAIL:
+the drill picked the older held job by position), drill5 (1 FAIL: the check assumed 0 prior attempts on a revision the source had
+already attempted); both were drill-script assertions, fixed by tracking the held revisions from a host copy. Cleanup by project
+name; no container, volume or network remains; image ts-wp4-t06-timesheet:drill kept.
+
+node v24.21.0; docker Docker version 28.5.1, build e180ab8; project ts-wp4-t06
+PASS  docker build --platform linux/amd64  1 s, log in the work directory
+PASS  build output (including npm ci) has no deprecation line
+INFO  image id sha256:a13bcd86f84726bdd62163ffde6b2750e1e099284a401c4d002b74c1cdbcbb5c, linux/amd64, size 110488368 bytes (105.4 MiB)
+PASS  image architecture is amd64
+PASS  image runtime user is numeric and not root  User=10001:10001
+PASS  image sets NODE_ENV=production and OUTBOUND_MODE=capture
+PASS  image declares a HEALTHCHECK and the /data volume
+PASS  image file list was read  10424 paths
+PASS  forbidden-file scan (*.xlsx, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+PASS  production dependencies only (no devDependency in the image)
+PASS  data directory is fresh  no timesheet.db before the first start
+PASS  container becomes healthy  5.4 s (running healthy)
+PASS  /api/ready reports ready with the schema version  schema 10 of 10
+PASS  running process UID is not 0  uid:gid 10001:10001
+PASS  root filesystem is read-only (cannot write under /app)
+PASS  /tmp tmpfs is writable
+PASS  bootstrap CLI prints a single-use setup token
+PASS  first administrator created with the token  status 201
+PASS  setup token cannot be replayed  status 403
+PASS  administrator sign-in
+PASS  administrator lists accounts (calendar id present)
+PASS  administrator creates a synthetic employee  status 201
+PASS  employee records a synthetic work session  status 201
+PASS  session reads back before the restart
+PASS  administrator cannot read the employee session  status 404
+PASS  database and private directory exist on the host data directory
+PASS  container is healthy again after the restart  5.3 s after the restart (6.3 s in all)
+PASS  schema version unchanged after the restart  schema 10
+PASS  stored sign-in session survives the restart
+PASS  synthetic work session persisted byte for byte after the restart
+PASS  container log has no deprecation warning
+PASS  container log never contains the setup token or a password
+PASS  employee uploads a synthetic signature image
+PASS  employee signs off a past synthetic period (finalization)  status 201
+PASS  the container job runner renders the PDF of the finalized period  10.1 s
+PASS  cli.js backup inside the running container exits 0
+PASS  every synthetic write succeeded  90 writes, 0 not 201
+PASS  writes continued while the backup ran  57 writes completed inside the 1061 ms backup window
+PASS  the backup recorded its success in operations_state
+INFO  backup duration 342 ms inside the CLI, 1061 ms for docker compose exec; writes before/during/after: 5/57/28
+PASS  backup folder name is timesheet-backup-<UTC>-<random>
+PASS  only the finished backup folder exists (no partial folder)  1 entries
+PASS  backup folder holds the database copy, files and manifest only
+PASS  manifest has exactly the allowed keys
+PASS  manifest has no email address, name or host path
+PASS  database copy matches the manifest SHA-256 and size
+PASS  copied file set equals the manifest file list
+PASS  every copied file matches its manifest SHA-256 and size  8 files, 0 mismatched
+PASS  the backup holds signature images and the PDF
+PASS  database copy passes integrity_check outside the container
+PASS  database copy has no foreign key violation
+PASS  schema version of the copy equals the manifest and the running instance  schema 10
+PASS  manifest files equal the attachment rows of the copy
+PASS  the copy is a point-in-time image: every session written before the backup, none beyond the end state  sessions before 5, in the copy 29, at the end 73
+INFO  manifest summary: schema 10, app 0.1.0, 8 files (7 signatures, 1 PDFs), database 573440 bytes, integrity ok, foreign key violations 0
+PASS  a target inside DATA_DIR is refused (exit 2)
+PASS  container log after the backup has no deprecation warning
+PASS  source ledger and revisions read through the API
+PASS  restore into a non-empty target is refused (exit 2, target_not_empty)
+PASS  restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)
+PASS  a refused restore created nothing in the live data directory
+PASS  source instance stopped before the restore  exited
+PASS  restore target is a fresh empty host directory
+PASS  cli.js restore in a one-off container exits 0  1060 ms
+PASS  restore output has exactly the allowed keys and no address, name or path
+PASS  restore verified the manifest and paused outbound delivery (reason restored)
+INFO  restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":10,"files":8,"signatures":7,"pdfs":1,"database_bytes":573440},"schema":{"backup":10,"restored":10,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":1,"ledger_entries":0,"attachments":8}}
+PASS  the one-off restore container is gone
+PASS  restored directory holds the database and the private data directory only
+PASS  every restored file matches its manifest SHA-256 and size  8 files, 0 mismatched
+PASS  restored database passes integrity_check and has no foreign key violation
+PASS  restored schema version equals the backup  schema 10
+PASS  restored copy is paused with reason restored
+PASS  no outbound job is leased and no attempt is sending or preparing in the restored copy
+PASS  restored balances (ledger entries and sums per user), revisions, sign-offs, files and sessions equal the backup
+INFO  restored counts (equal to the backup): {"users":2,"revisions":1,"ledger_entries":0,"ledger_minutes":0,"signoffs":1,"attachments":8,"work_sessions":29,"outbound_jobs":1,"delivery_attempts":0}
+PASS  restored instance becomes healthy  5.5 s (running healthy)
+PASS  restored instance logs the outbound pause at startup
+PASS  stored sign-in session works on the restored instance
+PASS  OT balance and ledger entries through the API equal the source  0 entries
+PASS  revisions through the API equal the source  1 revisions
+PASS  a sign-off on the paused restored instance creates a send job (not held: created after the restore)  status 201
+PASS  its PDF renders while outbound delivery is paused
+PASS  outbound resume without --confirm only previews (exit 2) and shows the paused queue  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":1}
+PASS  the restored runner keeps running (heartbeat) while paused  waited 40 s
+PASS  no job is leased and nothing more was accepted while paused  jobs {"queued":1,"leased":0,"succeeded":2,"intervention":1,"cancelled":0}
+PASS  nothing was captured while paused
+PASS  paused run: no restored outbound job changed state or attempts  1 restored outbound jobs, 0 changed
+PASS  paused run: the new send job is queued with no attempt spent  1 new
+PASS  paused run: still paused, no attempt sending and none accepted beyond the restored ones
+PASS  a backup of the paused restored instance (with its queued send job) exits 0
+PASS  the second restore exits 0 and holds the backed-up queued send job (queued 0)  {"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0}
+INFO  second restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":10,"files":9,"signatures":7,"pdfs":2,"database_bytes":598016},"schema":{"backup":10,"restored":10,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":2,"ledger_entries":0,"attachments":9}}
+PASS  the second restore holds the queued send job of the paused instance  2 held send jobs
+PASS  second restored instance becomes healthy and logs the pause  5.6 s
+PASS  a sign-off after the second restore creates a send job  status 201
+PASS  outbound release (preview, exit 2) lists the held send job as releasable  {"held":2,"releasable":2,"blocked":{}}
+PASS  cli.js outbound resume --confirm clears the pause (exit 0)  {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":2}
+PASS  after the resume the runner claims the send job created after the restore  13.1 s
+PASS  after the resume nothing from the backups went out: no new attempt on any held send  [0,0] -> [0,0]
+PASS  no outbound job is leased after the resume  jobs {"queued":0,"leased":0,"succeeded":3,"intervention":3,"cancelled":0}
+PASS  cli.js outbound release --job <id> --confirm releases one held job (exit 0)  {"outcome":"released"}
+PASS  cli.js outbound release --all --confirm releases the remaining held send job (exit 0)  {"outcome":"released","released":1,"refused":{}}
+PASS  the released jobs are claimed  8.1 s
+PASS  each released job made exactly one delivery attempt  [0,0] -> [1,1]
+PASS  releasing it again is refused (exit 1, not_held)
+INFO  delivery attempt states at the end (capture mode, synthetic data without recipients): {"failed_permanent":3}
+PASS  restored instance log has no deprecation warning
+PASS  restored instance log never contains a password
+PASS  only the compose service container of the project runs (one-off containers are gone)
+PASS  cleanup by project name (docker compose down -v)
+PASS  no container of the project remains
+DRILL STAGES 1-3 PASSED
+exit 0

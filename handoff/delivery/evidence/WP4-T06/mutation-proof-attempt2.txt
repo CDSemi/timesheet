@@ -1,0 +1,185 @@
+# WP4-T06 attempt 2 mutation proof (scratch export of the working tree)
+Export: GIT_INDEX_FILE=<scratch>/idx-mutation2 git read-tree HEAD; git add -A; git write-tree -> 0488f7d0cd45b935704b8922b10f65826bd89d95; git archive | tar -x -C <scratch>/mutation2; npm ci -> exit 0
+Result: holding only leased jobs makes 4 tests fail; restored source 31/31.
+
+## Mutation: the restore holds only leased outbound jobs again (queued ones stay claimable)
+diff --git a/<scratch>/restore.ts.orig b/src/server/ops/restore.ts
+index a0afa47..212e21a 100644
+--- a/<scratch>/restore.ts.orig
++++ b/src/server/ops/restore.ts
+@@ -382,7 +382,7 @@ export function reconcileRestoredCopy(db: Db, clock: Clock, backup: { createdAt:
+     // Every queued or leased outbound job of the backup, which includes the jobs of the attempts marked above.
+     const toHold = new Set<string>(open.map((attempt) => attempt.job_id));
+     for (const job of db
+-      .prepare<string[], { id: string }>(`SELECT id FROM jobs WHERE state IN ('queued', 'leased') AND kind IN (${kindList})`)
++      .prepare<string[], { id: string }>(`SELECT id FROM jobs WHERE state = 'leased' AND kind IN (${kindList})`)
+       .all(...OUTBOUND_JOB_KINDS)) {
+       toHold.add(job.id);
+     }
+
+Command: node node_modules/vitest/vitest.mjs run tests/integration/restore.test.ts tests/integration/jobs-restart.test.ts  -> exit 1
+
+ RUN  v5.0.2 <scratch>/mutation2
+
+ ❯ tests/integration/restore.test.ts (21 tests | 4 failed) 9066ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job 7ms
+     × reports counts and the manifest check only 2ms
+     × refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 107ms
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job
+AssertionError: expected { …(6) } to deeply equal { …(6) }
+
+- Expected
++ Received
+
+@@ -4,29 +4,29 @@
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    "54022f46-0a99-4eb5-82e9-ada6ed6c389e": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "604123b9-fd3b-4c66-a9f1-dc2f7ed02fba": {
+      "attempts": 1,
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    "ff55f5e0-9c2f-4734-bc94-4c515fd5d692": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "synthetic:reminder:leased": {
+      "attempts": 1,
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    "synthetic:reminder:queued": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+  }
+
+ ❯ tests/integration/restore.test.ts:287:19
+    285|         .map((job) => [job.revision_id ?? job.business_key, { state: j…
+    286|     );
+    287|     expect(sends).toEqual({
+       |                   ^
+    288|       [source.revisions.sending]: { state: 'intervention', attempts: 1…
+    289|       [source.revisions.preparing]: { state: 'intervention', attempts:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only
+AssertionError: expected { outcome: 'restored', …(5) } to deeply equal { outcome: 'restored', …(5) }
+
+- Expected
++ Received
+
+@@ -19,12 +19,12 @@
+    },
+    "outcome": "restored",
+    "reconciliation": {
+      "attempts_marked_uncertain": 2,
+      "awaiting_decision": 2,
+-     "queued_send_jobs": 0,
+-     "send_jobs_held": 6,
++     "queued_send_jobs": 3,
++     "send_jobs_held": 3,
+    },
+    "schema": {
+      "applied": [],
+      "backup": 10,
+      "restored": 10,
+
+ ❯ tests/integration/restore.test.ts:313:21
+    311|     const attachments = count(source.t.db, 'SELECT count(*) FROM attac…
+    312|     expect(attachments).toBeGreaterThanOrEqual(4);
+    313|     expect(summary).toEqual({
+       |                     ^
+    314|       outcome: 'restored',
+    315|       manifest: { verified: true, schema_version: LATEST, files: attac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08)
+AssertionError: expected [ [ 'accepted', null ] ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   [
++     "accepted",
++     null,
++   ],
++ ]
+
+ ❯ tests/integration/restore.test.ts:402:49
+    400|       ['accepted', null],
+    401|     ]);
+    402|     expect(byRevision(source.revisions.queued)).toEqual([]);
+       |                                                 ^
+    403|     expect(byRevision(source.revisions.pdfPending)).toEqual([]);
+    404|     const heldIds = (kind: string) =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected [ Array(3) ] to deeply equal [ Array(6) ]
+
+- Expected
++ Received
+
+  [
+    "send_email:attempt_uncertain",
+    "send_email:attempt_uncertain",
+-   "send_email:releasable",
+-   "send_email:releasable",
+-   "send_reminder:releasable",
+    "send_reminder:releasable",
+  ]
+
+ ❯ tests/integration/restore.test.ts:419:86
+    417|     const reminderOf = (key: string) => restored.prepare<[string], { i…
+    418|     const listed = listHeldJobs(restored);
+    419|     expect(listed.map((job) => `${job.kind}:${job.blocker ?? 'releasab…
+       |                                                                                      ^
+    420|       [
+    421|         `${JOB_SEND_EMAIL}:attempt_uncertain`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  4 failed | 27 passed (31)
+   Start at  19:09:11
+   Duration  15.85s (tests 73%, import 21%, transform 7%)
+
+
+## Source restored byte for byte
+sha256 restored 79cd1d1b7de8f7c2fb8310105b6476b4c67d063d2cfbec7e3730a8b7cc351d9c = repository working tree
+Command: same  -> exit 0
+
+ RUN  v5.0.2 <scratch>/mutation2
+
+
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+   Start at  19:09:27
+   Duration  12.44s (tests 90%, import 6%, transform 3%)
+

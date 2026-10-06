@@ -1,6 +1,7 @@
 import { parseUtcInstant } from '../../domain/instants.ts';
 import { type Clock, nowEpoch } from '../clock.ts';
 import type { Db } from '../db/database.ts';
+import { getOutboundPause, OUTBOUND_JOB_KINDS, RECONCILE_AFTER_RESTORE } from '../jobs/jobStore.ts';
 import { DEFAULT_INTERVAL_MS } from '../jobs/runner.ts';
 import type { DeliveryConfig } from '../types.ts';
 import { activationJson, getAutomationActivation } from './automation.ts';
@@ -182,6 +183,55 @@ export function backupStatusJson(status: BackupStatus) {
     last_attempt_at: status.lastAttemptAt,
     last_success_at: status.lastSuccessAt,
     fault_code: status.faultCode,
+  };
+}
+
+/* --------------------------------------------------------- outbound status ---- */
+
+/*
+ * The outbound pause (WP4-T06, migration 0010) and what awaits reconciliation, as data only: the administrator view
+ * that shows it comes in WP4-T07, so it is not yet part of `operationsStatusJson`. Counts and a lowercase reason only:
+ * never a recipient, a job or attempt id, a revision or a name.
+ */
+
+export interface OutboundCounts {
+  /** Delivery attempts that are uncertain without the owner's decision (AC-08); resume is refused while any remain. */
+  awaitingDecision: number;
+  /** Outbound jobs (send_email, send_reminder) waiting queued; they are claimed once delivery is not paused. */
+  queuedSendJobs: number;
+  /** Outbound jobs a restore held in intervention for reconciliation; never claimed again. */
+  heldSendJobs: number;
+}
+
+export interface OutboundStatus extends OutboundCounts {
+  paused: boolean;
+  pausedAt: string | null;
+  reason: string | null;
+}
+
+export function getOutboundStatus(db: Db): OutboundStatus {
+  const pause = getOutboundPause(db);
+  const kindList = OUTBOUND_JOB_KINDS.map(() => '?').join(', ');
+  const queued = db.prepare<string[], { total: number }>(`SELECT count(*) AS total FROM jobs WHERE kind IN (${kindList}) AND state = 'queued'`);
+  const held = db.prepare<string[], { total: number }>(`SELECT count(*) AS total FROM jobs WHERE kind IN (${kindList}) AND state = 'intervention' AND last_error = ?`);
+  return {
+    paused: pause !== null,
+    pausedAt: pause?.pausedAt ?? null,
+    reason: pause?.reason ?? null,
+    awaitingDecision: Number(db.prepare("SELECT count(*) FROM delivery_attempts WHERE state = 'uncertain' AND decision IS NULL").pluck().get()),
+    queuedSendJobs: queued.get(...OUTBOUND_JOB_KINDS)?.total ?? 0,
+    heldSendJobs: held.get(...OUTBOUND_JOB_KINDS, RECONCILE_AFTER_RESTORE)?.total ?? 0,
+  };
+}
+
+export function outboundStatusJson(status: OutboundStatus) {
+  return {
+    paused: status.paused,
+    paused_at: status.pausedAt,
+    reason: status.reason,
+    awaiting_decision: status.awaitingDecision,
+    queued_send_jobs: status.queuedSendJobs,
+    held_send_jobs: status.heldSendJobs,
   };
 }
 

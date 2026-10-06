@@ -5,7 +5,16 @@
 // Stage 2 (WP4-T05): finalizes a synthetic period (signature, PDF), then runs `cli.js backup --to /data/backups` inside
 // the running container while a synthetic writer keeps writing through the API, and verifies the backup outside the
 // container: manifest keys, every file and the database copy against their SHA-256 and size, integrity and foreign
-// keys of the copy, and that the copy is a point-in-time image. Later stages (restore, outbound pause) extend this file.
+// keys of the copy, and that the copy is a point-in-time image.
+// Stage 3 (WP4-T06): refuses restore targets inside the running container, stops the source instance (never two queues
+// on the same data), restores the stage-2 backup with `cli.js restore` in a one-off container (no network, read-only
+// root) into a fresh host directory, checks the restored copy on the host (hashes, integrity, schema, outbound pause,
+// counts and ledger sums equal to the backup), starts the restored instance on that directory, compares the ledger and
+// revisions through its API, signs off a new period and shows that the paused runner renders its PDF but claims no send
+// job and spends no attempt (host copy after a clean stop). Attempt 2 (coordinator decision): that paused instance is
+// backed up with its queued send job and restored again; the restore holds the job, `cli.js outbound resume --confirm`
+// releases only a job created after the restore, nothing from the backup goes out, and only
+// `cli.js outbound release --job <id>` and `--all` (with `--confirm`) send the held jobs, each exactly once.
 //
 // Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--keep]
 //   --work     host directory for the drill data, the env file and the raw logs (created if missing; nothing in it is deleted)
@@ -366,6 +375,306 @@ async function stageTwo(cookie) {
     composeEnv,
   );
   check('a target inside DATA_DIR is refused (exit 2)', refused.status === 2);
+  return String(printed.backup);
+}
+
+/* ---------------------------------------------------------------------------------------------- stage 3 ---- */
+
+/** Counts and ledger sums of a database file (read-only): what the restored copy must equal. No id, name or address. */
+function businessFacts(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    return {
+      users: db.prepare('SELECT count(*) FROM users').pluck().get(),
+      revisions_per_user: db.prepare('SELECT count(*) FROM timesheet_revisions GROUP BY user_id ORDER BY user_id').pluck().all(),
+      ledger_per_user: db.prepare('SELECT count(*) AS entries, sum(delta_minutes) AS minutes FROM ot_ledger GROUP BY user_id ORDER BY user_id').all(),
+      signoffs: db.prepare('SELECT count(*) FROM signoffs').pluck().get(),
+      attachments: db.prepare('SELECT count(*) FROM attachments').pluck().get(),
+      work_sessions: db.prepare('SELECT count(*) FROM work_sessions').pluck().get(),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/** Outbound jobs (id, state, attempts) and delivery attempt states of a database file, read-only. */
+function outboundFacts(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    return {
+      jobs: db.prepare("SELECT id, state, attempts FROM jobs WHERE kind IN ('send_email', 'send_reminder') ORDER BY id").all(),
+      attempts: db.prepare('SELECT id, state, decision FROM delivery_attempts ORDER BY id').all(),
+      pause: db.prepare('SELECT outbound_paused_at, outbound_paused_reason FROM operations_state').get(),
+      schema: db.prepare('SELECT max(version) FROM schema_migrations').pluck().get(),
+      integrity: db.pragma('integrity_check', { simple: true }),
+      foreignKeyViolations: db.pragma('foreign_key_check').length,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/** A host copy of a database file that no running process holds (taken only after a clean stop or before a start). */
+function hostCopy(path, name) {
+  const copy = join(work, name);
+  if (existsSync(copy)) throw new Error(`${name} exists already`);
+  writeFileSync(copy, readFileSync(path));
+  return copy;
+}
+
+const RESTORE_SUMMARY_KEYS = ['counts', 'manifest', 'outbound', 'outcome', 'reconciliation', 'schema'];
+const PAUSE_LINE = /Outbound delivery PAUSED since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(reason: restored\)/;
+const PRIVATE_OUTPUT = /@|Synthetic|employee|\/data|\/backups|\/restore|\\/i;
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Signs off one past synthetic period as the employee; returns the status and the new revision id. */
+async function signOffPeriod(cookie, payrollDate) {
+  const review = await call('GET', `/api/timesheets/${payrollDate}/review`, { cookie });
+  const signoff = await call('POST', `/api/timesheets/${payrollDate}/signoff`, {
+    cookie,
+    body: { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: 'Synthetic Employee', incomplete_evidence_acknowledged: true },
+  });
+  return { status: signoff.status, revisionId: signoff.json?.revision?.id };
+}
+
+/** Polls until `predicate` holds or the timeout passes. */
+async function waitUntil(predicate, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await predicate()) return { ok: true, seconds: (Date.now() - start) / 1000 };
+    await sleep(1000);
+  }
+  return { ok: false, seconds: (Date.now() - start) / 1000 };
+}
+
+async function waitPdfReady(cookie, revisionId) {
+  const ready = await waitUntil(async () => ((await call('GET', '/api/revisions', { cookie })).json?.revisions ?? []).some((item) => item.id === revisionId && item.pdf_state === 'ready'), 120_000);
+  return ready.ok;
+}
+
+async function stageThree({ backupName, cookie, adminPassword }) {
+  const backupFolder = join(dataDir, 'backups', backupName);
+  const manifest = JSON.parse(readFileSync(join(backupFolder, 'manifest.json'), 'utf8'));
+
+  // Source facts while it still runs: its API view of the ledger and revisions, and the backup copy on the host.
+  const sourceLedger = await call('GET', '/api/ot/ledger', { cookie });
+  const sourceRevisions = await call('GET', '/api/revisions', { cookie });
+  check('source ledger and revisions read through the API', sourceLedger.status === 200 && sourceRevisions.status === 200);
+  const backupFacts = businessFacts(join(backupFolder, 'timesheet.db'));
+
+  // Refused targets, inside the running source container.
+  const cliIn = (cliArgs) => compose(['exec', '-T', 'timesheet', 'node', 'dist/server/cli.js', ...cliArgs], { allowFailure: true });
+  const busy = cliIn(['restore', '--from', `/data/backups/${backupName}`, '--to', '/data/backups']);
+  check('restore into a non-empty target is refused (exit 2, target_not_empty)', busy.status === 2 && busy.stderr.includes('target_not_empty'));
+  const inside = cliIn(['restore', '--from', `/data/backups/${backupName}`, '--to', '/data/private-data/restore']);
+  check('restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)', inside.status === 2 && inside.stderr.includes('target_inside_data_dir'));
+  check('a refused restore created nothing in the live data directory', !existsSync(join(dataDir, 'private-data', 'restore')));
+
+  // Stop the source first: the old and the restored queues never run at the same time.
+  const sourceContainer = containerId();
+  compose(['stop', '--timeout', '45', 'timesheet']);
+  const stopped = docker(['inspect', '--format', '{{.State.Status}}', sourceContainer], { allowFailure: true }).stdout.trim();
+  check('source instance stopped before the restore', stopped === 'exited', stopped);
+
+  // The restore: a one-off container without network, read-only root, the backups read-only and a fresh host directory.
+  const restoredDir = join(work, 'restored');
+  mkdirSync(restoredDir);
+  check('restore target is a fresh empty host directory', readdirSync(restoredDir).length === 0);
+  const restoreStart = Date.now();
+  const restore = docker(
+    [
+      'run', '--rm', '--read-only', '--network', 'none', '--tmpfs', '/tmp:size=64m,mode=1777', '--name', `${project}-restore`,
+      '--env-file', envFile, '--volume', `${forwardSlashes(join(dataDir, 'backups'))}:/backups:ro`, '--volume', `${forwardSlashes(restoredDir)}:/restore`,
+      image, 'node', 'dist/server/cli.js', 'restore', '--from', `/backups/${backupName}`, '--to', '/restore',
+    ],
+    { allowFailure: true },
+  );
+  const restoreMs = Date.now() - restoreStart;
+  const summary = parseJson(restore.stdout);
+  check('cli.js restore in a one-off container exits 0', restore.status === 0 && summary?.outcome === 'restored', restore.status === 0 ? `${restoreMs} ms` : `exit ${restore.status}: ${String(restore.stderr).trim().slice(0, 300)}`);
+  if (summary === null) throw new Error('no restore summary');
+  check('restore output has exactly the allowed keys and no address, name or path', JSON.stringify(Object.keys(summary).sort()) === JSON.stringify(RESTORE_SUMMARY_KEYS) && !PRIVATE_OUTPUT.test(restore.stdout));
+  check(
+    'restore verified the manifest and paused outbound delivery (reason restored)',
+    summary.manifest?.verified === true && summary.manifest?.files === manifest.files.length && summary.outbound?.paused === true && summary.outbound?.reason === 'restored',
+  );
+  console.log(`INFO  restore summary: ${JSON.stringify(summary)}`);
+  const left = docker(['ps', '--all', '--quiet', '--filter', `name=${project}-restore`], { allowFailure: true }).stdout.trim();
+  check('the one-off restore container is gone', left === '');
+
+  // Host checks on the restored directory (no process holds it yet; the database is read from a copy).
+  check('restored directory holds the database and the private data directory only', readdirSync(restoredDir).sort().join(',') === 'private-data,timesheet.db');
+  const restoredFiles = join(restoredDir, 'private-data', 'files');
+  const badFiles = manifest.files.filter((file) => {
+    const path = join(restoredFiles, file.storage_key);
+    if (!existsSync(path)) return true;
+    const bytes = readFileSync(path);
+    return sha256Of(bytes) !== file.sha256 || bytes.length !== file.size_bytes;
+  });
+  check(
+    'every restored file matches its manifest SHA-256 and size',
+    badFiles.length === 0 && readdirSync(restoredFiles).length === manifest.files.length,
+    `${manifest.files.length} files, ${badFiles.length} mismatched`,
+  );
+  const atRestore = hostCopy(join(restoredDir, 'timesheet.db'), 'restored-at-restore.db');
+  const restoredOutbound = outboundFacts(atRestore);
+  check('restored database passes integrity_check and has no foreign key violation', restoredOutbound.integrity === 'ok' && restoredOutbound.foreignKeyViolations === 0);
+  check('restored schema version equals the backup', restoredOutbound.schema === manifest.schema_version, `schema ${restoredOutbound.schema}`);
+  check('restored copy is paused with reason restored', restoredOutbound.pause?.outbound_paused_reason === 'restored' && typeof restoredOutbound.pause?.outbound_paused_at === 'string');
+  check(
+    'no outbound job is leased and no attempt is sending or preparing in the restored copy',
+    restoredOutbound.jobs.every((job) => job.state !== 'leased') && restoredOutbound.attempts.every((attempt) => attempt.state !== 'sending' && attempt.state !== 'preparing'),
+  );
+  const restoredFacts = businessFacts(atRestore);
+  check('restored balances (ledger entries and sums per user), revisions, sign-offs, files and sessions equal the backup', JSON.stringify(restoredFacts) === JSON.stringify(backupFacts));
+  const totals = {
+    users: restoredFacts.users,
+    revisions: restoredFacts.revisions_per_user.reduce((sum, value) => sum + value, 0),
+    ledger_entries: restoredFacts.ledger_per_user.reduce((sum, row) => sum + row.entries, 0),
+    ledger_minutes: restoredFacts.ledger_per_user.reduce((sum, row) => sum + row.minutes, 0),
+    signoffs: restoredFacts.signoffs,
+    attachments: restoredFacts.attachments,
+    work_sessions: restoredFacts.work_sessions,
+    outbound_jobs: restoredOutbound.jobs.length,
+    delivery_attempts: restoredOutbound.attempts.length,
+  };
+  console.log(`INFO  restored counts (equal to the backup): ${JSON.stringify(totals)}`);
+
+  // Start the restored instance on the fresh directory (same project; the stopped source container is replaced).
+  composeEnv.TIMESHEET_DATA_DIR = forwardSlashes(restoredDir);
+  compose(['up', '--detach', '--no-build']);
+  const healthy = await waitHealthy(180_000);
+  check('restored instance becomes healthy', healthy.ok, `${healthy.seconds.toFixed(1)} s (${healthy.state})`);
+  if (!healthy.ok) throw new Error('restored instance not healthy');
+  check('restored instance logs the outbound pause at startup', PAUSE_LINE.test(compose(['logs', '--no-color', 'timesheet']).stdout));
+
+  // The same data through the restored instance's API (the employee's stored sign-in session was restored too).
+  const restoredLedger = await call('GET', '/api/ot/ledger', { cookie });
+  check('stored sign-in session works on the restored instance', restoredLedger.status === 200);
+  check(
+    'OT balance and ledger entries through the API equal the source',
+    JSON.stringify(restoredLedger.json?.balance) === JSON.stringify(sourceLedger.json?.balance) && restoredLedger.json?.entries?.length === sourceLedger.json?.entries?.length,
+    `${restoredLedger.json?.entries?.length} entries`,
+  );
+  const restoredRevisions = await call('GET', '/api/revisions', { cookie });
+  check('revisions through the API equal the source', JSON.stringify(restoredRevisions.json?.revisions) === JSON.stringify(sourceRevisions.json?.revisions), `${restoredRevisions.json?.revisions?.length} revisions`);
+
+  // While paused: a new sign-off (a send job created after the restore) waits; its PDF renders, its send is not claimed.
+  const later = await signOffPeriod(cookie, '2026-04-17');
+  check('a sign-off on the paused restored instance creates a send job (not held: created after the restore)', later.status === 201, `status ${later.status}`);
+  check('its PDF renders while outbound delivery is paused', await waitPdfReady(cookie, later.revisionId));
+  const previewBefore = cliIn(['outbound', 'resume']);
+  const before = parseJson(previewBefore.stdout);
+  check('outbound resume without --confirm only previews (exit 2) and shows the paused queue', previewBefore.status === 2 && before?.paused === true && before?.queued_send_jobs >= 1, previewBefore.stdout.trim());
+  const adminLogin = await call('POST', '/api/auth/login', { body: { email: 'admin@example.invalid', password: adminPassword } });
+  const waitStart = Date.now();
+  await sleep(40_000); // more than two passes of the 15 s runner loop
+  const operations = await call('GET', '/api/admin/operations', { cookie: adminLogin.cookie });
+  const ops = operations.json?.operations;
+  check('the restored runner keeps running (heartbeat) while paused', ops?.runner?.state === 'running', `waited ${((Date.now() - waitStart) / 1000).toFixed(0)} s`);
+  const acceptedAtRestore = restoredOutbound.attempts.filter((attempt) => attempt.state === 'accepted').length;
+  check('no job is leased and nothing more was accepted while paused', ops?.jobs?.leased === 0 && (ops?.deliveries?.accepted ?? 0) === acceptedAtRestore, `jobs ${JSON.stringify(ops?.jobs)}`);
+  check('nothing was captured while paused', !existsSync(join(restoredDir, 'private-data', 'mail-capture')));
+
+  // Clean stop, then the attempt counters on a host copy: every restored outbound job unchanged, the new one unclaimed.
+  compose(['stop', '--timeout', '45', 'timesheet']);
+  const paused = outboundFacts(hostCopy(join(restoredDir, 'timesheet.db'), 'restored-after-paused-run.db'));
+  const known = new Map(restoredOutbound.jobs.map((job) => [job.id, job]));
+  const changed = paused.jobs.filter((job) => known.has(job.id) && JSON.stringify(job) !== JSON.stringify(known.get(job.id)));
+  const added = paused.jobs.filter((job) => !known.has(job.id));
+  check('paused run: no restored outbound job changed state or attempts', changed.length === 0, `${restoredOutbound.jobs.length} restored outbound jobs, ${changed.length} changed`);
+  check('paused run: the new send job is queued with no attempt spent', added.length === 1 && added.every((job) => job.state === 'queued' && job.attempts === 0), `${added.length} new`);
+  check(
+    'paused run: still paused, no attempt sending and none accepted beyond the restored ones',
+    paused.pause?.outbound_paused_reason === 'restored' &&
+      paused.attempts.every((attempt) => attempt.state !== 'sending') &&
+      paused.attempts.filter((attempt) => attempt.state === 'accepted').length === acceptedAtRestore,
+  );
+
+  // Second generation (WP4-T06 attempt 2): a backup that holds a queued send job, restored again. After the resume,
+  // nothing from that backup goes out until the operator releases it explicitly.
+  const oneOff = (name, volumes, cliArgs) =>
+    docker(
+      ['run', '--rm', '--read-only', '--network', 'none', '--tmpfs', '/tmp:size=64m,mode=1777', '--name', `${project}-${name}`, '--env-file', envFile, ...volumes.flatMap((volume) => ['--volume', volume]), image, 'node', 'dist/server/cli.js', ...cliArgs],
+      { allowFailure: true },
+    );
+  const backup2 = oneOff('backup', [`${forwardSlashes(restoredDir)}:/data`], ['backup', '--to', '/data/backups']);
+  const backup2Summary = parseJson(backup2.stdout);
+  check('a backup of the paused restored instance (with its queued send job) exits 0', backup2.status === 0 && backup2Summary?.outcome === 'succeeded', backup2.status === 0 ? '' : String(backup2.stderr).trim().slice(0, 300));
+  if (backup2Summary === null) throw new Error('no second backup');
+  const restoredDir2 = join(work, 'restored-2');
+  mkdirSync(restoredDir2);
+  const restore2 = oneOff('restore', [`${forwardSlashes(join(restoredDir, 'backups'))}:/backups:ro`, `${forwardSlashes(restoredDir2)}:/restore`], ['restore', '--from', `/backups/${backup2Summary.backup}`, '--to', '/restore']);
+  const summary2 = parseJson(restore2.stdout);
+  check('the second restore exits 0 and holds the backed-up queued send job (queued 0)', restore2.status === 0 && summary2?.reconciliation?.send_jobs_held >= 1 && summary2?.reconciliation?.queued_send_jobs === 0, JSON.stringify(summary2?.reconciliation));
+  console.log(`INFO  second restore summary: ${JSON.stringify(summary2)}`);
+
+  // Which revisions' send jobs the second restore holds (host copy before the instance starts; ids stay in this process).
+  const heldDb = new Database(hostCopy(join(restoredDir2, 'timesheet.db'), 'restored-2-at-restore.db'), { readonly: true, fileMustExist: true });
+  let heldRevisions;
+  try {
+    heldRevisions = heldDb
+      .prepare("SELECT revision_id FROM jobs WHERE kind = 'send_email' AND state = 'intervention' AND last_error = 'reconcile_after_restore' ORDER BY created_at")
+      .pluck()
+      .all();
+  } finally {
+    heldDb.close();
+  }
+  check('the second restore holds the queued send job of the paused instance', heldRevisions.includes(later.revisionId), `${heldRevisions.length} held send jobs`);
+
+  composeEnv.TIMESHEET_DATA_DIR = forwardSlashes(restoredDir2);
+  compose(['up', '--detach', '--no-build']);
+  const healthy2 = await waitHealthy(180_000);
+  check('second restored instance becomes healthy and logs the pause', healthy2.ok && PAUSE_LINE.test(compose(['logs', '--no-color', 'timesheet']).stdout), `${healthy2.seconds.toFixed(1)} s`);
+  if (!healthy2.ok) throw new Error('second restored instance not healthy');
+  // A job created after this restore (another sign-off) is not held: it only waits for the resume.
+  const fresh = await signOffPeriod(cookie, '2026-05-01');
+  check('a sign-off after the second restore creates a send job', fresh.status === 201 && (await waitPdfReady(cookie, fresh.revisionId)), `status ${fresh.status}`);
+  const held = parseJson(cliIn(['outbound', 'release']).stdout);
+  const heldSend = (held?.jobs ?? []).find((job) => job.kind === 'send_email' && job.blocker === null);
+  check('outbound release (preview, exit 2) lists the held send job as releasable', held?.outcome === 'confirmation_required' && held?.held >= 1 && heldSend !== undefined, JSON.stringify({ held: held?.held, releasable: held?.releasable, blocked: held?.blocked }));
+  const attemptsOf = async (revisionId) => (await call('GET', `/api/deliveries?revision_id=${revisionId}`, { cookie })).json?.deliveries?.length ?? -1;
+  const atRestore2 = await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)));
+  const resume = cliIn(['outbound', 'resume', '--confirm']);
+  check('cli.js outbound resume --confirm clears the pause (exit 0)', resume.status === 0 && parseJson(resume.stdout)?.outcome === 'resumed', resume.stdout.trim());
+  const freshClaimed = await waitUntil(async () => (await attemptsOf(fresh.revisionId)) >= 1, 60_000);
+  check('after the resume the runner claims the send job created after the restore', freshClaimed.ok, `${freshClaimed.seconds.toFixed(1)} s`);
+  await sleep(35_000); // two more runner passes
+  // The held sends of the backup: their revisions keep the attempt count they had at the restore.
+  const after1 = await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)));
+  check('after the resume nothing from the backups went out: no new attempt on any held send', JSON.stringify(after1) === JSON.stringify(atRestore2), `${JSON.stringify(atRestore2)} -> ${JSON.stringify(after1)}`);
+  const opsAfter = (await call('GET', '/api/admin/operations', { cookie: (await call('POST', '/api/auth/login', { body: { email: 'admin@example.invalid', password: adminPassword } })).cookie })).json?.operations;
+  check('no outbound job is leased after the resume', opsAfter?.jobs?.leased === 0, `jobs ${JSON.stringify(opsAfter?.jobs)}`);
+
+  // The explicit, audited release (one by id, then the rest in bulk): each held job goes out exactly once.
+  const release = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+  check('cli.js outbound release --job <id> --confirm releases one held job (exit 0)', release.status === 0 && parseJson(release.stdout)?.outcome === 'released', release.stdout.trim());
+  const bulk = cliIn(['outbound', 'release', '--all', '--confirm']);
+  const bulkResult = parseJson(bulk.stdout);
+  check('cli.js outbound release --all --confirm releases the remaining held send job (exit 0)', bulk.status === 0 && bulkResult?.released === (held?.releasable ?? 0) - 1, bulk.stdout.trim());
+  const releasedClaimed = await waitUntil(async () => (await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)))).every((value, index) => value > (atRestore2[index] ?? 0)), 60_000);
+  check('the released jobs are claimed', releasedClaimed.ok, `${releasedClaimed.seconds.toFixed(1)} s`);
+  await sleep(35_000);
+  const after2 = await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)));
+  check('each released job made exactly one delivery attempt', after2.every((value, index) => value === (atRestore2[index] ?? 0) + 1), `${JSON.stringify(atRestore2)} -> ${JSON.stringify(after2)}`);
+  const again = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+  check('releasing it again is refused (exit 1, not_held)', again.status === 1 && parseJson(again.stdout)?.code === 'not_held');
+  const deliveries = await call('GET', '/api/deliveries', { cookie });
+  const states = {};
+  for (const item of deliveries.json?.deliveries ?? []) states[item.state] = (states[item.state] ?? 0) + 1;
+  console.log(`INFO  delivery attempt states at the end (capture mode, synthetic data without recipients): ${JSON.stringify(states)}`);
+  const finalLog = compose(['logs', '--no-color', 'timesheet']).stdout;
+  check('restored instance log has no deprecation warning', !/deprecat/i.test(finalLog));
+  check('restored instance log never contains a password', !finalLog.includes(adminPassword));
+  const leftovers = docker(['ps', '--all', '--quiet', '--filter', `name=${project}-`], { allowFailure: true }).stdout.trim().split('\n').filter((line) => line !== '');
+  check('only the compose service container of the project runs (one-off containers are gone)', leftovers.length === 1);
 }
 
 mkdirSync(dataDir, { recursive: true });
@@ -514,9 +823,12 @@ try {
   check('container log never contains the setup token or a password', !(token && logs.includes(token)) && !logs.includes(adminPassword) && !logs.includes(employeePassword));
 
   // 7. Stage 2 (WP4-T05): a backup inside the container while writes continue, verified outside it.
-  await stageTwo(relogin.cookie);
+  const backupName = await stageTwo(relogin.cookie);
   const logsAfterBackup = compose(['logs', '--no-color', 'timesheet']).stdout;
   check('container log after the backup has no deprecation warning', !/deprecat/i.test(logsAfterBackup));
+
+  // 8. Stage 3 (WP4-T06): isolated restore of that backup, a paused restored instance, then the explicit resume.
+  await stageThree({ backupName, cookie: relogin.cookie, adminPassword });
 } catch (error) {
   failures += 1;
   console.log(`FAIL  drill stopped: ${error instanceof Error ? error.message : String(error)}`);
@@ -529,5 +841,5 @@ try {
   if (!keep) check('no container of the project remains', left === '');
 }
 
-console.log(failures === 0 ? 'DRILL STAGES 1-2 PASSED' : `DRILL STAGES 1-2 FAILED (${failures})`);
+console.log(failures === 0 ? 'DRILL STAGES 1-3 PASSED' : `DRILL STAGES 1-3 FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

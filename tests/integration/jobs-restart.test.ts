@@ -319,7 +319,7 @@ async function startServer(env: Record<string, string | undefined>) {
   await waitFor(() => output.includes('Timesheet listening'), 'the server to listen');
   // The server runs on the system clock, so its session is created on the system clock too.
   const session = createAuthSession(t.db, systemClock, t.userIds.employee, 3600);
-  return { ...run, base: `http://127.0.0.1:${port}`, cookie: `${SESSION_COOKIE}=${session.token}` };
+  return { ...run, base: `http://127.0.0.1:${port}`, cookie: `${SESSION_COOKIE}=${session.token}`, output: () => output };
 }
 
 describe('server entry', () => {
@@ -344,6 +344,38 @@ describe('server entry', () => {
       server.child.kill();
       await server.done;
     }
+  });
+
+  it('logs the outbound pause at startup; its runner renders the PDF but claims no send job until the resume (WP4-T06)', async () => {
+    const dataDir = join(workDir(), 'server-data');
+    const settings = await t.request('POST', '/api/settings/submission', {
+      cookie: employee,
+      body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false },
+    });
+    expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
+    const { revisionId } = await signedRevision(dataDir);
+    // A paused instance (as a restore leaves it); synthetic capture sender, so an unpaused runner would send at once.
+    t.db.prepare("UPDATE operations_state SET outbound_paused_at = '2026-09-29T20:00:00Z', outbound_paused_reason = 'restored' WHERE id = 1").run();
+    const server = await startServer({ DATA_DIR: dataDir, JOB_RUNNER: undefined, OUTBOUND_MODE: undefined, MAIL_FROM: 'timesheet@example.invalid' });
+    try {
+      await waitFor(() => t.db.prepare('SELECT state FROM revision_files WHERE revision_id = ?').pluck().get(revisionId) === 'ready', 'the PDF job');
+      // The PDF job and any send claim happen in the same pass; wait for the pass to end (nothing else is due).
+      await waitFor(() => count("SELECT count(*) FROM jobs WHERE state = 'leased'") === 0, 'the end of the pass');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(t.db.prepare("SELECT state, attempts FROM jobs WHERE revision_id = ? AND kind = 'send_email'").get(revisionId)).toEqual({ state: 'queued', attempts: 0 });
+      expect(count('SELECT count(*) FROM delivery_attempts')).toBe(0);
+      expect(existsSync(join(dataDir, 'mail-capture'))).toBe(false);
+
+      const resumed = await start([CLI, 'outbound', 'resume', '--confirm'], { NODE_ENV: undefined, DATABASE_PATH: t.config.databasePath, DATA_DIR: dataDir }).done;
+      expect(resumed.code, resumed.stderr).toBe(0);
+      expect(JSON.parse(resumed.stdout)).toMatchObject({ outcome: 'resumed', awaiting_decision: 0, queued_send_jobs: 1 });
+      expect(t.db.prepare('SELECT outbound_paused_at, outbound_paused_reason FROM operations_state').get()).toEqual({ outbound_paused_at: null, outbound_paused_reason: null });
+    } finally {
+      server.child.kill();
+      await server.done;
+    }
+    expect(server.output()).toMatch(/Outbound delivery PAUSED since 2026-09-29T20:00:00Z \(reason: restored\)/);
+    expect(server.output()).not.toMatch(/example\.invalid/);
   });
 
   it('does not start the runner when JOB_RUNNER=off', async () => {

@@ -563,7 +563,27 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - verify: 1503 test. Digest: 724d5cd8….
        - Trạng thái sao lưu chưa có trong phản hồi trạng thái cho admin; việc này chuyển
          sang T07.
-     - Đang chạy: WP4-T05-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
+     - WP4-T05-FREEZE đã commit và push thành 0c58130 (27 đường dẫn; mọi kiểm tra trả về
+       0).
+     - WP4-T06 lần 1 đã xong (opus).
+       - Tạm dừng gửi, khôi phục và resume đều chạy được.
+       - Test: 17 đỏ → 29 xanh; phép thử đột biến làm 4 test fail; AC-08 đạt 47/47.
+       - Drill bước 1–3 đạt 90/0; verify đạt 1523 test.
+       - Worker tự nêu một vấn đề: các job gửi đang xếp hàng trong bản sao lưu sẽ được
+         gửi sau khi resume, trái với docs/07:30 và :32.
+     - Quyết định điều phối: khi khôi phục, giữ lại các job gửi đó cho tới khi người vận
+       hành chủ động release hoặc drop, có ghi audit.
+     - WP4-T06 lần 2 đã xong.
+       - Khi khôi phục, các job gửi đang xếp hàng hoặc đang giữ lease từ bản sao lưu đều
+         bị giữ lại. Hai lệnh `outbound release` và `outbound drop` (chỉ áp dụng cho
+         nhắc nhở) đều ghi audit, và phải có `--confirm` mới thực hiện; không có thì chỉ
+         xem trước.
+       - Test: 5 đỏ → 31 xanh; phép thử đột biến làm 4 test fail.
+       - Drill: 105/0, có cả lần khôi phục thế hệ thứ hai.
+       - verify: 1525 test; digest 15b7422e….
+       - Rủi ro để audit xem: thư mà máy nguồn đã gửi rồi vẫn bị giữ lại, và chỉ có thể
+         release hoặc để giữ nguyên.
+     - Đang chạy: WP4-T06-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
        commit.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
@@ -604,7 +624,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T05-FREEZE.
+- Process còn sống: chỉ WP4-T06-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

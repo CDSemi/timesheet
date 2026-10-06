@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T05-FREEZE",
+  "next_task_id": "WP4-T06-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+    "last_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
     "unpushed": []
   },
   "owner_decisions": [
@@ -227,6 +227,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "docs/07:30 'Reconcile pending/uncertain jobs before enabling delivery' and docs/07:32 'accepted mail must not be automatically sent again'; WP4-T06 attempt 1 flag (queued sends from a backup go out after resume)",
+      "decision": "After a restore, every queued or leased send_email/send_reminder job from the backup is held for reconciliation, like the uncertain attempts. Nothing from the backup is sent automatically after resume. An explicit, audited release (per job, or in bulk after a printed count) or drop lets the operator decide after checking the source mailbox or capture; released jobs follow AC-08. Jobs created after the restore are not held. Implemented in WP4-T06 attempt 2; reversible by the owner."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP4-PLAN (Results A-G); docs/08 one writer, freeze per task, package-final gate and fresh audits",
@@ -8921,9 +8926,120 @@
       "id": "WP4-T05-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T05"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0113111fe68a74f1",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T05-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T05-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T05-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+      "branch": "main",
+      "commit_sha": "0c58130217eb0babd2b870b61a1457d7109d1a15",
+      "pushed": true,
+      "source_digest": "724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 3b2ddf2, remote SHA identical; 27 paths, exactly the expected set; digest 724d5cd8 matched; precommit, diff --cached --check, JSON parse, validator, check_recovery, preflight and push 0.",
+      "next_action": "None; WP4-T06 on 0c58130."
+    },
+    {
+      "id": "WP4-T06",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T05-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a2083ab0a054bd4e4",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a2083ab0a054bd4e4, self-reported claude-opus-5-5): migration 0010 pause columns; claimNextJob leaves send_email/send_reminder out while paused; restore.ts checks target, manifest, hashes, integrity and schema, then copies, migrates, pauses and marks sending/preparing attempts uncertain; resume refused while decisions are pending, audited. Tests red 17 failed, green 29/29; removing the kind filter fails 4 tests; AC-08 47/47; migrations fresh 1-10 and v9 upgrade clean; drill 1-3 PASSED 90/0; e2e 129 passed; verify 1523 tests; digest 56224432. Deviations: backup.test.ts edited (unowned); 0010 recreates the attempt-state trigger; the ts-wp4-t06 image kept. The worker flagged that queued send jobs from the backup go out after resume. Coordinator: this conflicts with docs/07:30 and :32 (the source may have sent them after the snapshot); attempt 2 holds queued and leased outbound jobs at restore for an explicit, audited release or drop."
+      ],
+      "owned_paths": [
+        "src/server/ops/restore.ts",
+        "src/server/cli.ts",
+        "src/server/db/migrations/0010_outbound_pause.ts",
+        "src/server/db/migrations.ts",
+        "src/server/jobs/runner.ts",
+        "src/server/jobs/jobStore.ts",
+        "src/server/index.ts",
+        "src/server/services/operationsStatus.ts",
+        "tests/integration/restore.test.ts",
+        "tests/integration/jobs-restart.test.ts",
+        "tests/integration/migrations.test.ts",
+        "tests/integration/bootstrap.test.ts",
+        "scripts/container-drill.mjs",
+        "handoff/delivery/tasks/WP4-T06.md",
+        "handoff/delivery/evidence/WP4-T06"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T06.md",
+      "report": "handoff/delivery/tasks/WP4-T06.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T06/red-first.txt",
+        "handoff/delivery/evidence/WP4-T06/green-tests.txt",
+        "handoff/delivery/evidence/WP4-T06/mutation-proof.txt",
+        "handoff/delivery/evidence/WP4-T06/migrations.txt",
+        "handoff/delivery/evidence/WP4-T06/ac08-regression.txt",
+        "handoff/delivery/evidence/WP4-T06/drill-stage3.txt",
+        "handoff/delivery/evidence/WP4-T06/red-first-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/green-tests-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/mutation-proof-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/drill-stage3-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/e2e-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/verify-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/digest-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T06/precommit-check-attempt2.txt"
+      ],
+      "baseline_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
+      "source_digest": "15b7422e17de30a746945f64d6c98d5f6e24f792a37fadb3f0165c7f6f43b781",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported, done at attempt 2. Attempt 2: restore holds every queued or leased send job from the backup in intervention; `outbound release --job <id>|--all --confirm` requeues held jobs, `outbound drop` cancels a held reminder; without --confirm a preview prints ids and counts and exits 2; each step audited; a release is refused if the job's attempt is uncertain, another attempt of the revision is open, or the owner already resent it; jobs created after the restore are not held. Tests red 5 failed, green 31/31; holding only leased jobs fails 4 tests. Drill 1-3 105/0 incl. a second-generation restore holding the queued send; after resume only the new job goes out; each released job makes exactly one attempt. e2e exit 0 (129 passed); verify exit 0 (1525 tests); digest 15b7422e. Changed paths over both attempts: new src/server/ops/restore.ts, src/server/db/migrations/0010_outbound_pause.ts, tests/integration/restore.test.ts; modified src/server/cli.ts, src/server/db/migrations.ts, src/server/jobs/jobStore.ts, src/server/jobs/runner.ts (comment), src/server/index.ts, src/server/services/operationsStatus.ts, tests/integration/jobs-restart.test.ts, migrations.test.ts, backup.test.ts, scripts/container-drill.mjs. Deviations: backup.test.ts edited (unowned); 0010 recreates the attempt-state trigger; held send jobs cannot be dropped, only released or left held (risk for the audit: a job the source already sent stays held); the preview prints job ids; the ts-wp4-t06 image kept.",
+      "next_action": "None; WP4-T06-FREEZE."
+    },
+    {
+      "id": "WP4-T06-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T06"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -8941,21 +9057,21 @@
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP4-T05-FREEZE.md",
-        "handoff/delivery/evidence/WP4-T05-FREEZE"
+        "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T06-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP4-T05-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T06-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7",
+      "baseline_commit": "0c58130217eb0babd2b870b61a1457d7109d1a15",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e",
+      "source_digest": "15b7422e17de30a746945f64d6c98d5f6e24f792a37fadb3f0165c7f6f43b781",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T05 with pending handoff records."
+      "next_action": "Commit and push WP4-T06 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

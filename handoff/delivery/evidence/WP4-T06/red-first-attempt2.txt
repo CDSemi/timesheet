@@ -1,0 +1,175 @@
+# WP4-T06 attempt 2 red-first run (attempt-1 implementation + the attempt-2 tests)
+Source: the working tree after attempt 1 (restore holds only leased send jobs and the jobs of marked attempts; no release or drop).
+Tests: tests/integration/restore.test.ts updated first (hold of every queued/leased backed-up send job; no backed-up send after the
+resume; release by id/bulk sends exactly once; a dropped reminder never runs; CLI release/drop).
+Command: node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/restore.test.ts  -> exit 1
+Result: 5 failed, 16 passed. Key red: 'expected [ [ accepted, null ] ] to deeply equal []' = a queued send of the backup WAS sent
+after the resume without any release; the hold expectations, counts, release/drop and CLI release tests failed.
+
+
+ RUN  v5.0.2 <repo>
+
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > copies the verified database and files into the empty target only 3ms
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > keeps balances and revision counts equal to the source 1ms
+ × tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job 5ms
+   → expected { …(6) } to deeply equal { …(6) }
+ × tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only 1ms
+   → expected { outcome: 'restored', …(5) } to deeply equal { outcome: 'restored', …(5) }
+ ✓ tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > a runner pass while paused renders the pending PDF and runs the scans, but claims no send job, spends no attempt and sends nothing 73ms
+ × tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 99ms
+   → expected [ [ 'accepted', null ] ] to deeply equal []
+ × tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 1ms
+   → listHeldJobs is not a function
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a file whose bytes do not match the manifest and leaves the target empty 9ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a database copy that does not match the manifest 4ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a manifest with an unknown key or a missing file 12ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a backup of a newer schema than this application 168ms
+ ✓ tests/integration/restore.test.ts > restore refusals > refuses a non-empty target and a target inside the live data directory, writing nothing 2ms
+ ✓ tests/integration/restore.test.ts > restore of a version 9 backup (upgrade on restore) > applies migration 10, pauses outbound and keeps every balance 298ms
+ ✓ tests/integration/restore.test.ts > the claim while outbound delivery is paused > leaves exactly the outbound kinds out, spends no attempt on them, and claims them again after the resume 149ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > applies fresh 1 to 10, is consistent and a rerun applies nothing 30ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > upgrades a populated version 9 database, keeps every row and starts not paused 254ms
+ ✓ tests/integration/restore.test.ts > migration 0010 (outbound pause) > refuses an inconsistent pause and a preparing attempt made uncertain without the restore reconciliation code 181ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > restores in production, prints counts and the manifest check only, and refuses bad arguments 1710ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume needs --confirm, then clears the pause of the restored instance once 1329ms
+ ✓ tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound resume --confirm is refused (exit 1) while an attempt awaits its decision 356ms
+ × tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound release previews the held jobs, releases one or all with --confirm, and drops a held reminder (exit codes, counts) 344ms
+   → Unexpected end of JSON input
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job
+AssertionError: expected { …(6) } to deeply equal { …(6) }
+
+- Expected
++ Received
+
+@@ -1,10 +1,10 @@
+  {
+    "507587e3-9b1e-4763-b7c3-6d12cbfc62f8": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "6439a136-a7fb-46bd-babb-374846c90c4b": {
+      "attempts": 1,
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+@@ -14,19 +14,19 @@
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    "f145e4c7-e3d6-4b82-8164-f4a1577c35a0": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "synthetic:reminder:leased": {
+      "attempts": 1,
+      "last_error": "reconcile_after_restore",
+      "state": "intervention",
+    },
+    "synthetic:reminder:queued": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+  }
+
+ ❯ tests/integration/restore.test.ts:287:19
+    285|         .map((job) => [job.revision_id ?? job.business_key, { state: j…
+    286|     );
+    287|     expect(sends).toEqual({
+       |                   ^
+    288|       [source.revisions.sending]: { state: 'intervention', attempts: 1…
+    289|       [source.revisions.preparing]: { state: 'intervention', attempts:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only
+AssertionError: expected { outcome: 'restored', …(5) } to deeply equal { outcome: 'restored', …(5) }
+
+- Expected
++ Received
+
+@@ -19,12 +19,12 @@
+    },
+    "outcome": "restored",
+    "reconciliation": {
+      "attempts_marked_uncertain": 2,
+      "awaiting_decision": 2,
+-     "queued_send_jobs": 0,
+-     "send_jobs_held": 6,
++     "queued_send_jobs": 3,
++     "send_jobs_held": 3,
+    },
+    "schema": {
+      "applied": [],
+      "backup": 10,
+      "restored": 10,
+
+ ❯ tests/integration/restore.test.ts:313:21
+    311|     const attachments = count(source.t.db, 'SELECT count(*) FROM attac…
+    312|     expect(attachments).toBeGreaterThanOrEqual(4);
+    313|     expect(summary).toEqual({
+       |                     ^
+    314|       outcome: 'restored',
+    315|       manifest: { verified: true, schema_version: LATEST, files: attac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08)
+AssertionError: expected [ [ 'accepted', null ] ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   [
++     "accepted",
++     null,
++   ],
++ ]
+
+ ❯ tests/integration/restore.test.ts:402:49
+    400|       ['accepted', null],
+    401|     ]);
+    402|     expect(byRevision(source.revisions.queued)).toEqual([]);
+       |                                                 ^
+    403|     expect(byRevision(source.revisions.pdfPending)).toEqual([]);
+    404|     const heldIds = (kind: string) =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+TypeError: listHeldJobs is not a function
+ ❯ tests/integration/restore.test.ts:418:20
+    416|       restored.prepare<[string], { id: string }>("SELECT id FROM jobs …
+    417|     const reminderOf = (key: string) => restored.prepare<[string], { i…
+    418|     const listed = listHeldJobs(restored);
+       |                    ^
+    419|     expect(listed.map((job) => `${job.kind}:${job.blocker ?? 'releasab…
+    420|       [
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > cli.js restore and cli.js outbound resume > outbound release previews the held jobs, releases one or all with --confirm, and drops a held reminder (exit codes, counts)
+SyntaxError: Unexpected end of JSON input
+ ❯ tests/integration/restore.test.ts:883:25
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 16 passed (21)
+   Start at  19:05:52
+   Duration  7.44s (tests 82%, import 12%, transform 6%)
+

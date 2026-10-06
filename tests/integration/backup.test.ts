@@ -365,6 +365,8 @@ describe('backup refusals, failures and status', () => {
 
 describe('migration 0009 (backup status in operations_state)', () => {
   const BACKUP_COLUMNS = ['backup_last_attempt_at', 'backup_last_outcome', 'backup_last_fault_code', 'backup_last_success_at'];
+  /** The migrations up to 0009, so these tests keep pinning what 0009 did on its own after later migrations (WP4-T06). */
+  const UP_TO_9 = MIGRATIONS.filter((migration) => migration.version <= 9);
   let dir: string;
 
   beforeAll(() => {
@@ -382,14 +384,14 @@ describe('migration 0009 (backup status in operations_state)', () => {
   it('applies fresh 1 to 9, is consistent and a rerun applies nothing', () => {
     const db = openDatabase(join(dir, 'fresh.db'));
     try {
-      expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-      expect(MIGRATIONS.at(-1)?.name).toBe('operations_backup');
-      expect(migrate(db)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9], version: 9 });
+      expect(UP_TO_9.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(UP_TO_9.at(-1)?.name).toBe('operations_backup');
+      expect(migrate(db, UP_TO_9)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9], version: 9 });
       expect(db.pragma('user_version', { simple: true })).toBe(9);
       expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(db.pragma('foreign_key_check')).toEqual([]);
       expect(columns(db).slice(-4)).toEqual(BACKUP_COLUMNS);
-      expect(migrate(db)).toEqual({ applied: [], version: 9 });
+      expect(migrate(db, UP_TO_9)).toEqual({ applied: [], version: 9 });
     } finally {
       db.close();
     }
@@ -408,7 +410,7 @@ describe('migration 0009 (backup status in operations_state)', () => {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").pluck().all() as string[];
       const snapshot = () => Object.fromEntries(tables.map((name) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));
       const before = snapshot();
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [9], version: 9 });
+      expect(migrate(db, UP_TO_9, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [9], version: 9 });
       const after = snapshot();
       const strip = (rows: unknown[]) => (rows as Array<Record<string, unknown>>).map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !BACKUP_COLUMNS.includes(key))));
       for (const name of tables) {
@@ -420,7 +422,7 @@ describe('migration 0009 (backup status in operations_state)', () => {
       ]);
       expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(db.pragma('foreign_key_check')).toEqual([]);
-      expect(migrate(db)).toEqual({ applied: [], version: 9 });
+      expect(migrate(db, UP_TO_9)).toEqual({ applied: [], version: 9 });
     } finally {
       db.close();
     }

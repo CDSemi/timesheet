@@ -120,3 +120,11 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Self-reported model: claude-sonnet-5-5
+
+- Pre-HEAD: 3b2ddf2468fec9b04c0aeee526ae3c1bad6d0cf7; post-HEAD: 0c58130217eb0babd2b870b61a1457d7109d1a15.
+- Commit SHA: 0c58130217eb0babd2b870b61a1457d7109d1a15; pushed: yes; remote SHA: 0c58130217eb0babd2b870b61a1457d7109d1a15.
+- Digest: 724d5cd8343fd276a3ad3d7708cd06d91c1b1901befab211990800b80d6f9d2e; staged count: 27.
+- Exit codes: node 24.21.0; precommit 0; diff --check 0; JSON parse 0; validate_orchestration 0; check_recovery 0; preflight 0; push dry-run 0; push 0.
+- Blockers: none. Evidence: handoff/delivery/evidence/WP4-T05-FREEZE/.

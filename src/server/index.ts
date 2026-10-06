@@ -10,6 +10,7 @@ import { openDatabase } from './db/database.ts';
 import { migrate } from './db/migrations.ts';
 import { FileStore } from './files/fileStore.ts';
 import { createJobHandlers, type JobRunner, startJobRunner } from './jobs/runner.ts';
+import { getOutboundStatus } from './services/operationsStatus.ts';
 
 /** Built client next to the compiled server (dist/client); the Vite dev server serves it in development. */
 function resolveStaticDir(): string | null {
@@ -45,8 +46,19 @@ const runner: JobRunner | null =
     ? null
     : startJobRunner({ db, clock: systemClock, handlers: createJobHandlers({ db, clock: systemClock, files: new FileStore(delivery.dataDir), delivery }) });
 
+/** The outbound pause (WP4-T06) as one startup line: a reason code and counts only. */
+function outboundStartupLine(): string {
+  const outbound = getOutboundStatus(db);
+  if (!outbound.paused) return 'Outbound delivery active';
+  return (
+    `Outbound delivery PAUSED since ${outbound.pausedAt} (reason: ${outbound.reason}); ${outbound.awaitingDecision} delivery attempt(s) await a decision, ` +
+    `${outbound.queuedSendJobs} send job(s) wait, ${outbound.heldSendJobs} held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm`
+  );
+}
+
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`Timesheet listening on http://${info.address}:${info.port} (schema v${migration.version})`);
+  console.log(outboundStartupLine());
 });
 
 function shutdown(): void {
