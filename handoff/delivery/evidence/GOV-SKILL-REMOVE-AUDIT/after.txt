@@ -1,0 +1,66 @@
+# GOV-SKILL-REMOVE-AUDIT after state, after writing the review pair and the evidence (after.txt exists before this run, so the review's links resolve); date_utc 2026-10-06T07:07:00Z
+$ git rev-parse HEAD
+a92335184e7dc09b2114ec30a46979ecd02ab92a
+exit 0
+$ git rev-parse origin/main
+a92335184e7dc09b2114ec30a46979ecd02ab92a
+exit 0
+$ git ls-remote origin refs/heads/main
+a92335184e7dc09b2114ec30a46979ecd02ab92a	refs/heads/main
+exit 0
+$ git status --short
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-SKILL-REMOVE-FREEZE.md
+?? handoff/delivery/GOV_SKILL_REMOVE_REVIEW.md
+?? handoff/delivery/GOV_SKILL_REMOVE_REVIEW.vi.md
+?? handoff/delivery/evidence/GOV-SKILL-REMOVE-AUDIT/
+?? handoff/delivery/evidence/GOV-SKILL-REMOVE-FREEZE/
+?? handoff/delivery/evidence/GOV-SKILL-REMOVE-GATE/
+?? handoff/delivery/tasks/GOV-SKILL-REMOVE-AUDIT.md
+?? handoff/delivery/tasks/GOV-SKILL-REMOVE-GATE.md
+?? handoff/delivery/tasks/WP4-T07B.md
+exit 0
+$ git status --short -- . ":!handoff"
+exit 0
+$ node --version (portable Node 24 by full path)
+v24.21.0
+exit 0
+$ node scripts/source-digest.mjs
+fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c  (750 files, handoff/ excluded)
+exit 0
+$ git ls-tree -r --format='%(path) %(objectname)' a923351 | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c *-
+exit 0 0 0 0
+$ <python> --version   (<python> = C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe)
+Python 3.12.14
+$ <python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 196,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit 0
+$ <python> handoff/delivery/check_recovery.py   (status and count lines)
+  "status": "PASS",
+  "count": 82,
+  "actual_board_modified": false,
+exit 0
+$ <python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 71,
+  "local_links": 1624,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit 0

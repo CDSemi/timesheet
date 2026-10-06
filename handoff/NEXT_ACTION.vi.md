@@ -34,9 +34,9 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Gỡ skill GOV-SKILL.** Chủ dự án chọn gỡ skill `.claude/skills/readme-md/` thay vì
-   sửa (2026-10-05, đảo lại H-Q3 (a)). Việc gỡ đi qua một vòng GOV: gỡ, commit đóng
-   băng, gate do verifier chạy, và một audit mới.
+1. **Gỡ skill GOV-SKILL: đã xong.** Chủ dự án chọn gỡ skill `.claude/skills/readme-md/`
+   thay vì sửa (2026-10-05, đảo lại H-Q3 (a)). Skill đã được gỡ ở a923351; gate đạt, và
+   audit mới [GOV_SKILL_REMOVE_REVIEW](delivery/GOV_SKILL_REMOVE_REVIEW.vi.md) đạt.
 2. **Thực hiện WP4.** Làm theo [kế hoạch WP4](delivery/tasks/WP4-PLAN.md):
    - T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5);
    - T09–T11 (nhập workbook và số dư OT đầu kỳ);

@@ -119,4 +119,15 @@ only. Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5.
+
+- Pre-HEAD e5576de27fb3185f22720f989e386a44b1d90488 (= origin/main). Branch main.
+- Commit a92335184e7dc09b2114ec30a46979ecd02ab92a; pushed yes; remote SHA
+  a92335184e7dc09b2114ec30a46979ecd02ab92a (post-HEAD).
+- Node: v24.21.0 (portable).
+- Digest fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c, 750 files.
+- Staged 13 paths; name-status outside handoff/ showed exactly three D lines.
+- Exit codes: node --version 0; git add 0; digest 0; precommit 0; diff --cached --check 0;
+  JSON parse 0; validate_orchestration 0; check_recovery 0; validate_package --preflight 0;
+  commit 0; push dry-run 0; push 0.
+- No fixes applied, no masking, no blockers.

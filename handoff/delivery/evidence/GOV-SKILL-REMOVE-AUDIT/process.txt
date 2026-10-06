@@ -1,0 +1,156 @@
+# Scope 4: authority and process
+## Commit, remote, tags, reflog
+$ git log -1 --format='%H%n%P%n%an <%ae>%n%cn <%ce>%n%aI%n%B' a92335184e7dc09b2114ec30a46979ecd02ab92a
+a92335184e7dc09b2114ec30a46979ecd02ab92a
+e5576de27fb3185f22720f989e386a44b1d90488
+huysrc <email>
+huysrc <email>
+2026-10-05T23:53:16-07:00
+Remove the readme-md skill from the repository
+
+- chore(skills): remove `.claude/skills/readme-md/` (SKILL.md and two reference
+  files), at the owner's choice. This reverses H-Q3 (a).
+  - The audit GOV-SKILL-AUDIT had found two corrupted relative paths, unrecorded
+    provenance and licence, and an obsolete HTML attribute.
+  - Removing the skill resolves those findings. No other file refers to the skill.
+- docs(handoff): WP4-DEC freeze result, GOV-SKILL-REMOVE records, board and
+  checkpoint (+ vi).
+
+Task: GOV-SKILL-REMOVE-FREEZE
+Digest: fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c (750 files, handoff/ excluded)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+exit 0
+$ git ls-remote origin refs/heads/main
+a92335184e7dc09b2114ec30a46979ecd02ab92a	refs/heads/main
+exit 0
+$ git ls-remote --tags origin | wc -l
+0
+exit 0 0
+$ git tag --list | wc -l
+0
+$ git tag --points-at a92335184e7dc09b2114ec30a46979ecd02ab92a
+exit 0
+$ git merge-base --is-ancestor e5576de origin/main
+exit 0
+$ git reflog show --date=iso refs/heads/main -n 4
+a923351 refs/heads/main@{2026-10-05 23:53:16 -0700}: commit: Remove the readme-md skill from the repository
+e5576de refs/heads/main@{2026-10-05 23:49:43 -0700}: commit: Record the owner's WP4 decisions on import, opening balance and retention
+0f989e4 refs/heads/main@{2026-10-05 20:51:52 -0700}: commit: Add upgrade and rollback drill stages, a rollback restore mode and an upgrade test
+dd1422f refs/heads/main@{2026-10-05 20:24:22 -0700}: commit: Add a safe workbook reader, template mapping v1 and a synthetic workbook generator
+exit 0
+$ git reflog show --date=iso refs/remotes/origin/main -n 4
+a923351 refs/remotes/origin/main@{2026-10-05 23:53:22 -0700}: update by push
+e5576de refs/remotes/origin/main@{2026-10-05 23:49:49 -0700}: update by push
+0f989e4 refs/remotes/origin/main@{2026-10-05 20:52:01 -0700}: update by push
+dd1422f refs/remotes/origin/main@{2026-10-05 20:24:31 -0700}: update by push
+exit 0
+$ git log --oneline --all --since=2026-10-05 --format="%h %s"
+a923351 e5576de Remove the readme-md skill from the repository
+e5576de 0f989e4 Record the owner's WP4 decisions on import, opening balance and retention
+0f989e4 dd1422f Add upgrade and rollback drill stages, a rollback restore mode and an upgrade test
+dd1422f e1d97bd Add a safe workbook reader, template mapping v1 and a synthetic workbook generator
+e1d97bd 72ab2ed Show backup, disk and outbound pause status to admins and schedule the orphan sweep
+72ab2ed 0c58130 Add an outbound pause and an isolated restore that holds backed-up sends
+0c58130 3b2ddf2 Add a consistent online backup with a hashed manifest and backup status
+3b2ddf2 199e792 Add a pinned non-root container image, Compose example and container drill
+199e792 37f1be2 Add production bootstrap with an expiring one-time admin setup
+37f1be2 a1dc01b Record the share marker on audit rows and stop HEAD download audits
+a1dc01b 3bdffbe Add container-ready config, readiness check and trusted-proxy handling
+3bdffbe b103923 Add the owner's readme-md skill under governance review
+b103923 49651c8 Record WP3 acceptance: final gate and independent rechecks pass at 49651c8
+49651c8 2d72d35 Restore WP3 deadline guard tests and record the fix-round-2 rechecks
+2d72d35 2f2520e Fix WP3 recheck findings and apply the owner's auto-submit setup rule
+2f2520e a1cd566 Fix WP3 audit findings B-01..03 and C-01..03 and record the audits
+a1cd566 b083739 Document the WP3 package and freeze it for the gate
+b083739 8ad2e4f Add WP3 end-to-end flows, smoke checks and visual PDF evidence
+8ad2e4f c3c35de Add the timesheet sharing interface and a complete revision history
+c3c35de 5b90d30 Add owner-granted timesheet sharing with live per-item access
+5b90d30 943027b Add history, delivery decisions, submission settings and owner-only PDF download
+943027b da6d0cd Present automatic submissions without an automatic indicator
+da6d0cd cb9800e Mirror the updated WP3 scope and gate in the WP3 prompts
+cb9800e 632092d Update the canonical rules for the 2026-10-04 owner decisions
+632092d c1e4bb2 Record the WP3-T13A freeze and a clean full e2e run before the owner pause
+c1e4bb2 19723b6 Separate the acting user from the timesheet owner without behaviour change
+19723b6 8e2c2bf Add the admin operations and submission status within the privacy boundary
+8e2c2bf c3d32b9 Add the review and sign-off screen with stale-review handling and status badges
+c3d32b9 0321be6 Add deadline reminders, overdue warnings and the automatic-submission notice
+0321be6 0a26afa Add deadline automation with the activation boundary
+0a26afa 3d7a17c Add capture and SMTP adapters, the send job and uncertain-delivery decisions
+3d7a17c 2f8011a Add the durable job store, runner and PDF job
+2f8011a 72f1920 Add correction revisions, late review and same-revision resend
+72f1920 c289375 Add the atomic manual sign-off finalization with persisted ledger outcomes
+c289375 b89f8a8 Add the deterministic pdf-lib timesheet renderer
+b89f8a8 79862bb Add the canonical review snapshot, its SHA-256 and a write-free review route
+79862bb b060d33 Add per-user submission settings, a safe email template engine and validated recipients
+b060d33 ac5d0ba Add the private file store and owner-only signature upload and download
+ac5d0ba db75346 Add migration 0004 for submission and delivery, with capture-first configuration
+db75346 3ead61e Harden the OT evidence CSV formula guard and make the smoke pick a free port
+3ead61e 5fafeae Record WP2 acceptance: final gate and independent audits pass at 5fafeae
+5fafeae a3d1b65 Tokenize every WP2 style literal and make the zone oracle throw on DST folds
+a3d1b65 f79413b Fix the WP2 recheck findings: season-independent R-07 e2e, CSS tokens, non-revealing payroll response
+f79413b 8fae685 Fix the WP2 audit findings: holiday-preview privacy and manual-entry zones
+8fae685 da0ffc4 Add the synthetic employee2 dataset, extend the smoke and write the WP2 handoff (WP2-T13)
+da0ffc4 55d3bb8 Add the settings and admin screens with isolation e2e (WP2-T12)
+55d3bb8 26fa7c9 Add the OT screen, own-history screen and evidence download (WP2-T11)
+exit 0
+$ git branch -a --contains a92335184e7dc09b2114ec30a46979ecd02ab92a
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+exit 0
+
+## Board records (owner decision B, task authorship)
+$ <python> board-probe.py.txt <parent board> <freeze board>   (workflow Python C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe)
+[live board] owner_decisions=17 option_B_entries=1
+  date: 2026-10-05
+  source: owner chat, direct reply typed by the owner to the readme-md clarification (A = fix with defaults, B = remove)
+  verbatim: 'B'
+  decision: Option B, reverses H-Q3 (a): remove the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) from the repository instead of fixing it. GOV-SKILL-AUDIT findings GOV-SKILL-01..04 and note N1 are resolved by removal. The removal is a governance-path change and goes through a GOV cycle (removal, freeze, verifier gate, fresh audit).
+  task GOV-SKILL-REMOVE kind fix status done profile timesheet-worker actual_model claude-sonnet-5-5 agent ac7a07d547bcbf8c5 commit_sha None freeze_commit None reviewed_commit None author_agent_ids []
+  task GOV-SKILL-REMOVE-FREEZE kind commit status done profile timesheet-committer actual_model claude-sonnet-5-5 agent a4ef369bc593bda1a commit_sha a92335184e7dc09b2114ec30a46979ecd02ab92a freeze_commit None reviewed_commit None author_agent_ids []
+  task GOV-SKILL-REMOVE-GATE kind gate status done profile timesheet-verifier actual_model claude-sonnet-5-5 agent a9797b5391d7926dc commit_sha None freeze_commit a92335184e7dc09b2114ec30a46979ecd02ab92a reviewed_commit None author_agent_ids []
+  task GOV-SKILL-REMOVE-AUDIT kind audit status running profile timesheet-auditor actual_model None agent adbb762323c56bffb commit_sha None freeze_commit None reviewed_commit a92335184e7dc09b2114ec30a46979ecd02ab92a author_agent_ids ['ac7a07d547bcbf8c5']
+  git: {"branch": "main", "release_declared": false, "last_commit": "a92335184e7dc09b2114ec30a46979ecd02ab92a", "unpushed": []}
+  current_source_digest: aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d
+  GOV author models (non gate/audit/commit tasks): ['claude-opus-5-5', 'claude-sonnet-5-5']
+[board at e5576de (parent)] owner_decisions=17 option_B_entries=1
+  date: 2026-10-05
+  source: owner chat, direct reply typed by the owner to the readme-md clarification (A = fix with defaults, B = remove)
+  verbatim: 'B'
+  decision: Option B, reverses H-Q3 (a): remove the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) from the repository instead of fixing it. GOV-SKILL-AUDIT findings GOV-SKILL-01..04 and note N1 are resolved by removal. The removal is a governance-path change and goes through a GOV cycle (removal, freeze, verifier gate, fresh audit).
+[board at a923351 (freeze)] owner_decisions=17 option_B_entries=1
+  date: 2026-10-05
+  source: owner chat, direct reply typed by the owner to the readme-md clarification (A = fix with defaults, B = remove)
+  verbatim: 'B'
+  decision: Option B, reverses H-Q3 (a): remove the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) from the repository instead of fixing it. GOV-SKILL-AUDIT findings GOV-SKILL-01..04 and note N1 are resolved by removal. The removal is a governance-path change and goes through a GOV cycle (removal, freeze, verifier gate, fresh audit).
+  task GOV-SKILL-REMOVE kind fix status done profile timesheet-worker actual_model claude-sonnet-5-5 agent ac7a07d547bcbf8c5 commit_sha None freeze_commit None reviewed_commit None author_agent_ids []
+  task GOV-SKILL-REMOVE-FREEZE kind commit status running profile timesheet-committer actual_model None agent None commit_sha None freeze_commit None reviewed_commit None author_agent_ids []
+exit 0
+
+## Privacy check of the commit's added handoff lines
+$ git diff --name-only a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- handoff | wc -l
+10
+$ git diff a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- handoff | grep '^+' | grep -n -i -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' | grep -v -i -E 'noreply@anthropic\.com|example\.invalid'   (added lines with an email address)
+exit 0 0 0 1
+$ git diff a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- handoff | grep '^+' | grep -c -i -E '[A-Z]:[\/]+Users[\/]+[^<\/ ]+|/c/Users/[^<]'   (added lines with a concrete user-profile path)
+0
+exit 0 0 1
+$ git diff --name-only a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a | grep -i -E '\.(pdf|png|jpe?g|gif|webp)$' | wc -l
+0
+
+## Precommit check reproduced on the exact freeze set in a scratch clone
+$ git clone --no-checkout --no-hardlinks --quiet <project> <scratch>/clone
+exit 0
+$ git -C <scratch>/clone update-ref --no-deref HEAD e5576de   (scratch clone only)
+exit 0
+$ git -C <scratch>/clone read-tree a923351   (scratch index = freeze tree)
+exit 0
+$ git -C <scratch>/clone diff --cached --name-status | wc -l
+13
+$ git -C <scratch>/clone diff --cached --check
+exit 0
+$ (cd <scratch>/clone && node <project>/scripts/precommit-check.mjs)   (Node 24.21.0 by full path)
+PASS: 13 staged file(s), 0 blocking finding(s), 0 warning(s)
+exit 0

@@ -1,0 +1,33 @@
+# Scope 2 and 3: residual references and README.md:35 accuracy (freeze a923351)
+date_utc: 2026-10-06T07:02:15Z
+$ git grep -n -i readme-md a92335184e7dc09b2114ec30a46979ecd02ab92a -- . ':!handoff'
+exit 1
+$ git grep -n -i -E 'readme[-_ ]?md' a92335184e7dc09b2114ec30a46979ecd02ab92a -- . ':!handoff'
+exit 1
+$ git grep -n -i readme-md a92335184e7dc09b2114ec30a46979ecd02ab92a -- handoff/prompts handoff/templates
+exit 1
+$ git grep -n -i readme-md a92335184e7dc09b2114ec30a46979ecd02ab92a -- AGENTS.md CLAUDE.md docs README.md README.vi.md skills-lock.json .agents .claude
+exit 1
+$ git grep -n -i -E 'lisa-skills|LisaHQ' a92335184e7dc09b2114ec30a46979ecd02ab92a -- . ':!handoff'
+a92335184e7dc09b2114ec30a46979ecd02ab92a:skills-lock.json:29:      "source": "LisaHQ/lisa-skills",
+exit 0
+$ git grep -l -i readme-md a92335184e7dc09b2114ec30a46979ecd02ab92a -- handoff/delivery | wc -l   (historical records; not findings)
+31
+$ git ls-files -co --exclude-standard -- . ":!handoff" | xargs grep -l -i readme-md   (working tree, tracked + untracked)
+exit 0 0 123  (xargs 123 = grep found no match)
+$ git ls-files -o -i --exclude-standard -- .claude .agents   (ignored files)
+exit 0
+$ test -e .claude/skills/readme-md
+exit 1
+
+# skills-lock.json vs skill folders at the freeze (README.md:35 / README.vi.md:35 accuracy)
+lock entries: 48; .claude/skills folders: 48; .agents/skills folders: 47; .claude/skills folders at parent: 49
+-- .claude/skills folders without a lock entry:
+-- .agents/skills folders without a lock entry:
+-- lock entries without a .claude/skills folder:
+-- lock entries without a .agents/skills folder:
+redesign-existing-projects
+-- .claude/skills folders at parent but not at freeze:
+readme-md
+$ git diff --quiet a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- skills-lock.json README.md README.vi.md AGENTS.md CLAUDE.md docs .agents .claude/settings.json .claude/agents
+exit 0

@@ -1,0 +1,83 @@
+# Scope 1 exactness: diff scope, tree, working tree, digests (freeze a923351, parent e5576de)
+$ git cat-file -p a92335184e7dc09b2114ec30a46979ecd02ab92a | head (commit header)
+tree eb25385894688ae028cf1398b2785bdb0e48e56f
+parent e5576de27fb3185f22720f989e386a44b1d90488
+author huysrc <email> 1791269596 -0700
+committer huysrc <email> 1791269596 -0700
+
+Remove the readme-md skill from the repository
+exit 0
+$ git rev-list --parents -n1 a92335184e7dc09b2114ec30a46979ecd02ab92a
+a92335184e7dc09b2114ec30a46979ecd02ab92a e5576de27fb3185f22720f989e386a44b1d90488
+exit 0
+$ git diff --name-status a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a
+D	.claude/skills/readme-md/SKILL.md
+D	.claude/skills/readme-md/references/markdown.md
+D	.claude/skills/readme-md/references/outlines.md
+M	handoff/delivery/ORCHESTRATION.json
+M	handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+M	handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+A	handoff/delivery/evidence/GOV-SKILL-REMOVE/digest.txt
+A	handoff/delivery/evidence/GOV-SKILL-REMOVE/preflight.txt
+A	handoff/delivery/evidence/GOV-SKILL-REMOVE/status.txt
+A	handoff/delivery/evidence/WP4-DEC-FREEZE/commit-message.txt
+A	handoff/delivery/tasks/GOV-SKILL-REMOVE-FREEZE.md
+A	handoff/delivery/tasks/GOV-SKILL-REMOVE.md
+M	handoff/delivery/tasks/WP4-DEC-FREEZE.md
+exit 0
+$ git diff --name-status a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- . ':!handoff'
+D	.claude/skills/readme-md/SKILL.md
+D	.claude/skills/readme-md/references/markdown.md
+D	.claude/skills/readme-md/references/outlines.md
+exit 0
+$ git diff --stat a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a -- . ':!handoff'
+ .claude/skills/readme-md/SKILL.md               | 282 ------------------------
+ .claude/skills/readme-md/references/markdown.md | 150 -------------
+ .claude/skills/readme-md/references/outlines.md | 173 ---------------
+ 3 files changed, 605 deletions(-)
+exit 0
+$ git diff --check a92335184e7dc09b2114ec30a46979ecd02ab92a^ a92335184e7dc09b2114ec30a46979ecd02ab92a
+exit 0
+$ git ls-tree -r a92335184e7dc09b2114ec30a46979ecd02ab92a -- .claude/skills/readme-md
+exit 0
+$ git ls-tree -r --name-only a92335184e7dc09b2114ec30a46979ecd02ab92a | grep -c readme-md
+0
+exit 0 1
+$ git ls-tree -r a92335184e7dc09b2114ec30a46979ecd02ab92a^ -- .claude/skills/readme-md
+100644 blob 3f457942db64399372ad10fd2b6177fd5824cee0	.claude/skills/readme-md/SKILL.md
+100644 blob 56f5eed2787e7f6e5b62af6302bd318b123fa3ce	.claude/skills/readme-md/references/markdown.md
+100644 blob 64de9ad834e66aac906c43fabf83fbbcb9cd4b9c	.claude/skills/readme-md/references/outlines.md
+exit 0
+$ git ls-tree a92335184e7dc09b2114ec30a46979ecd02ab92a -- .claude/skills/ | wc -l ; parent
+48
+49
+$ test -e .claude/skills/readme-md (working tree)
+exit 1
+$ git status --short -- . ":!handoff"
+exit 0
+
+# Digest of record by the ls-tree form, freeze vs parent
+$ git ls-tree -r --format='%(path) %(objectname)' <freeze> | grep -v '^handoff/' | LC_ALL=C sort | sha256sum ; wc -l
+fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c *-
+750
+$ same for parent e5576de
+65247d70f5569f09dda4d328b455a4e39836223f81de5227a3f19a83bd64c23c *-
+753
+$ diff <parent listing> <freeze listing>
+262,264d261
+< .claude/skills/readme-md/SKILL.md 3f457942db64399372ad10fd2b6177fd5824cee0
+< .claude/skills/readme-md/references/markdown.md 56f5eed2787e7f6e5b62af6302bd318b123fa3ce
+< .claude/skills/readme-md/references/outlines.md 64de9ad834e66aac906c43fabf83fbbcb9cd4b9c
+exit 1
+$ git ls-tree -r --format=... <freeze> -- .claude .agents | grep -v handoff | wc -l (governance subtree size) parent vs freeze
+410
+407
+
+# Governance paths changed since the previous GOV audit target 3bdffbe
+$ git diff --name-status 3bdffbe a923351 -- AGENTS.md AGENTS.vi.md CLAUDE.md CLAUDE.vi.md docs/08_AI_WORKFLOW_AND_BUDGET.md docs/08_AI_WORKFLOW_AND_BUDGET.vi.md handoff/prompts handoff/templates .claude .agents docs/agents handoff/delivery/validate_orchestration.py handoff/delivery/validate_package.py handoff/delivery/check_recovery.py scripts/precommit-check.mjs skills-lock.json README.md README.vi.md
+D	.claude/skills/readme-md/SKILL.md
+D	.claude/skills/readme-md/references/markdown.md
+D	.claude/skills/readme-md/references/outlines.md
+exit 0
+$ git diff --quiet 3bdffbe e5576de -- .claude/skills/readme-md (skill unchanged between the audited commit and the parent)
+exit 0

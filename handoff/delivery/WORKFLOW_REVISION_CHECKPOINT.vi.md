@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = e5576de27fb3185f22720f989e386a44b1d90488 (WP4-DEC-FREEZE).
+  - HEAD = origin/main = a92335184e7dc09b2114ec30a46979ecd02ab92a (GOV-SKILL-REMOVE-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -659,8 +659,20 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - Ngoài handoff/ không còn chỗ nào nhắc tới skill; preflight trả về 0.
        - Chưa tính được digest, vì index vẫn còn ghi các tệp đã xóa. Committer sẽ stage
          việc xóa trước, rồi mới tính digest.
-     - Đang chạy: GOV-SKILL-REMOVE-FREEZE. Sau đó là gate do verifier chạy và một audit
-       mới.
+     - GOV-SKILL-REMOVE-FREEZE đã commit và push thành a923351 (13 đường dẫn; 3 tệp bị
+       xóa; digest fcd8fe1e…, 750 tệp; mọi kiểm tra trả về 0).
+     - GOV-SKILL-REMOVE-GATE: PASS (7/7).
+       - Đúng 3 tệp bị xóa; ngoài handoff/ không còn chỗ nào nhắc tới skill.
+       - Verify trên bản export sạch: 1589 test, 0 dòng deprecation.
+       - Các validator trả về 0.
+       - Digest chính thức fcd8fe1e… (750 tệp), khớp con số committer báo.
+     - GOV-SKILL-REMOVE-AUDIT: PASS, không có phát hiện (auditor opus mới; bản review
+       GOV_SKILL_REMOVE_REVIEW.md).
+       - GOV-SKILL-01..04 và N1 đã khép.
+       - Ghi chú R1 cho chủ dự án: các tệp đã gỡ vẫn còn trong lịch sử công khai. Muốn
+         xóa khỏi lịch sử thì phải viết lại lịch sử, điều mà docs/08 cấm.
+       - Digest mã nguồn hiện tại trên board giờ là fcd8fe1e… (R3).
+     - Đang chạy: GOV-SKILL-REMOVE-ACCEPT (commit các bản ghi này và brief WP4-T07B).
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -674,10 +686,9 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả GOV-SKILL-REMOVE-FREEZE. Sau đó chạy gate GOV và một audit mới trên
-     commit đó.
+  1. Ghi kết quả GOV-SKILL-REMOVE-ACCEPT, rồi giao WP4-T07B (brief đã sẵn).
   2. Sau đó làm theo thứ tự:
-     - WP4-T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5; có thể tách);
+     - WP4-T07B (cờ F-3 và việc giữ job F-4), rồi WP4-T05B (xóa bớt bản sao lưu F-5);
      - T09, T10, T11;
      - T12 (bước 6 và chạy lại toàn bộ diễn tập);
      - T13;
@@ -701,7 +712,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ GOV-SKILL-REMOVE-FREEZE (lần 1).
+- Process còn sống: chỉ GOV-SKILL-REMOVE-ACCEPT (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

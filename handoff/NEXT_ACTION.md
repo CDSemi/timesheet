@@ -35,10 +35,10 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **GOV-SKILL removal.** The owner chose to remove the skill
+1. **GOV-SKILL removal: done.** The owner chose to remove the skill
    `.claude/skills/readme-md/` instead of fixing it (2026-10-05, reversing H-Q3 (a)).
-   The removal goes through a GOV cycle: removal, freeze, verifier gate and a fresh
-   audit.
+   It was removed at a923351; the gate passed, and the fresh audit
+   [GOV_SKILL_REMOVE_REVIEW](delivery/GOV_SKILL_REMOVE_REVIEW.md) passed.
 2. **WP4 delivery.** Follow the [WP4 plan](delivery/tasks/WP4-PLAN.md):
    - T07B (the F-3 flag, F-4 job retention and F-5 backup pruning);
    - T09–T11 (import and opening balance);
