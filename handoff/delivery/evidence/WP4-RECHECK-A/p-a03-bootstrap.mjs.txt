@@ -1,0 +1,80 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A probe A-03 (b): what a bootstrap refusal prints. Built export (dist/), development mode, explicit
+// DATABASE_PATH and DATA_DIR under the work folder, synthetic files only. Each invalid file carries marker strings in
+// every free-text place (calendar name, reporting zone, holiday names, unknown keys and values, extra policy fields).
+// docs/11 section 3 and the bootstrap.ts comment say: a refusal names the failing field and rule and may quote a date
+// or a policy number from the file; it never quotes a name, the reporting zone or a secret.
+// A valid file with markers is applied last; its output is checked for markers and the token line is redacted.
+// Usage: node p-a03-bootstrap.mjs <export dir> <work dir>
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [exportDir, work] = process.argv.slice(2);
+if (existsSync(work)) throw new Error('work folder is not fresh');
+mkdirSync(work, { recursive: true });
+const CLI = join(exportDir, 'dist', 'server', 'cli.js');
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const MARK = 'MARKQ7';
+const markers = [`${MARK}-calendar-name`, `${MARK}/Zone_Name`, `${MARK}-holiday-name`, `${MARK}-unknown-key`, `${MARK}-unknown-value`, `${MARK}-policy-extra`, `${MARK}-secret-like`];
+const base = () => ({
+  schema_version: 1,
+  calendar: { name: `${MARK}-calendar-name`, reporting_zone: 'America/Los_Angeles', normal_weekdays_iso: [1, 2, 3, 4, 5] },
+  holidays: [
+    { date: '2026-01-01', name: `${MARK}-holiday-name` },
+    { date: '2026-05-25', name: `${MARK}-holiday-name 2`, kind: 'closure' },
+  ],
+  policy: {
+    effective_from: '2026-01-01', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30,
+    reference_start: '08:00', reference_end: '17:00',
+    breaks: [
+      { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+      { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+      { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+    ],
+    deficit_mode: 'ignore',
+    description: `${MARK}-policy-extra`,
+  },
+  payroll: { anchor_payroll_date: '2026-10-02', cycle_days: 14, period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+});
+const cases = [
+  ['an invalid reporting zone', (f) => { f.calendar.reporting_zone = `${MARK}/Zone_Name`; }],
+  ['an unknown top-level key holding a secret-like value', (f) => { f[`${MARK}-unknown-key`] = `${MARK}-secret-like`; }],
+  ['an unknown calendar key', (f) => { f.calendar[`${MARK}-unknown-key`] = `${MARK}-unknown-value`; }],
+  ['a duplicate holiday date', (f) => { f.holidays.push({ date: '2026-01-01', name: `${MARK}-holiday-name 3` }); }],
+  ['an impossible holiday date', (f) => { f.holidays[0].date = '2026-02-30'; }],
+  ['an empty holiday name', (f) => { f.holidays[1].name = '   '; }],
+  ['a wrong holiday kind holding a marker', (f) => { f.holidays[0].kind = `${MARK}-unknown-value`; }],
+  ['a reference schedule that does not add up', (f) => { f.policy.required_minutes = 470; }],
+  ['overlapping breaks', (f) => { f.policy.breaks[1].start_offset_minutes = 125; }],
+  ['a wrong deficit mode holding a marker', (f) => { f.policy.deficit_mode = `${MARK}-unknown-value`; }],
+  ['periods that do not tile', (f) => { f.payroll.period_start_offset_days = -20; }],
+  ['a duplicate weekday', (f) => { f.calendar.normal_weekdays_iso = [1, 1, 2]; }],
+  ['a file that is not JSON (marker in the text)', null],
+];
+const env = { ...process.env, NODE_ENV: 'development', DATABASE_PATH: join(work, 'timesheet.db'), DATA_DIR: join(work, 'private-data'), OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off' };
+cases.forEach(([label, mutate], index) => {
+  const path = join(work, `bootstrap-${index}.json`);
+  if (mutate === null) writeFileSync(path, `{ "schema_version": 1, "calendar": ${MARK}-secret-like }`);
+  else { const file = base(); mutate(file); writeFileSync(path, JSON.stringify(file)); }
+  const run = spawnSync(process.execPath, [CLI, 'bootstrap', '--config', path], { env, encoding: 'utf8' });
+  const output = `${run.stdout}${run.stderr}`.trim();
+  const leaked = markers.filter((marker) => output.includes(marker)).concat(output.includes(MARK) ? [MARK] : []);
+  console.log(`INFO  ${label}: exit ${run.status}; ${output.replaceAll(work, '<work>')}`);
+  check(`${label}: refused (exit 1), no marker (name, zone, unknown key or value, secret-like) printed`, run.status === 1 && leaked.length === 0 && !output.includes(work), leaked.join(','));
+});
+check('nothing was written: no database file after the refusals', !existsSync(join(work, 'timesheet.db')));
+// A valid file with markers in the free-text places: applied; the output carries counts and the token only.
+const validPath = join(work, 'bootstrap-valid.json');
+writeFileSync(validPath, JSON.stringify(base()));
+const ok = spawnSync(process.execPath, [CLI, 'bootstrap', '--config', validPath], { env, encoding: 'utf8' });
+const okText = `${ok.stdout}${ok.stderr}`;
+const redacted = okText.split('\n').map((line) => (/^\s{2}\S{20,}\s*$/.test(line) ? '  <token redacted>' : line)).join('\n').trim();
+console.log(`INFO  valid file with markers: exit ${ok.status}; ${redacted.replaceAll(work, '<work>')}`);
+check('valid file with markers: applied (exit 0), no marker in the output', ok.status === 0 && !okText.includes(MARK));
+console.log(fails === 0 ? 'A03 PROBE PASSED' : `A03 PROBE FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

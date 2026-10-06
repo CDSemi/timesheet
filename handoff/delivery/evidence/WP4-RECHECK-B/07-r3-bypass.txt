@@ -1,0 +1,9 @@
+# Command: node probes/r3-bypass.mjs (one child per case; ONE worksheet part of ~3.8 MiB, under the 4 MiB per-part and 16 MiB per-package limits; in memory)
+# Exit: 0. Shows the element pre-scan catches <c/> and <row/> but not tag names fast-xml-parser still parses.
+counted <c/> (the scan catches it) | 1 part, upload=25940 B | ms=26 | maxRSS 83 -> 91 MiB | rejected:too_many_cells | exit=0
+counted <row/> (the scan catches it) | 1 part, upload=27871 B | ms=38 | maxRSS 83 -> 96 MiB | rejected:too_many_rows | exit=0
+UNCOUNTED <1/> (digit tag name) | 1 part, upload=25940 B | ms=831 | maxRSS 83 -> 490 MiB | accepted (findings=2) | exit=0
+UNCOUNTED <_x/> then... <9/> | 1 part, upload=25940 B | ms=894 | maxRSS 82 -> 591 MiB | accepted (findings=2) | exit=0
+UNCOUNTED < /> (empty tag name, space) | 1 part, upload=25940 B | ms=822 | maxRSS 82 -> 337 MiB | accepted (findings=2) | exit=0
+UNCOUNTED <.a/> (dot-leading) | 1 part, upload=27870 B | ms=645 | maxRSS 82 -> 303 MiB | accepted (findings=2) | exit=0
+one <c> with ~3.8 MiB of a0="" attributes (scan counts 1) | 1 part, upload=1016829 B | ms=1134 | maxRSS 132 -> 550 MiB | accepted (findings=2) | exit=0

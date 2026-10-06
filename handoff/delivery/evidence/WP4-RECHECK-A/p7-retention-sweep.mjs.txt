@@ -1,0 +1,116 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A rerun of the WP4-AUDIT-A probe (copied from its masked evidence; <email> placeholders replaced with synthetic example.invalid addresses).
+// WP4-AUDIT-A probe P7: job-row retention (F-4, migration 0011) and the daily orphan sweep (WP4-T07) on a synthetic
+// seeded database, with outbound delivery paused. Tries to abuse the retention window from SQL, then runs one pass of
+// the production runner (createJobHandlers) and checks: only the two eligible scan rows are deleted, the window is closed
+// again, the sweep removes only the old unreferenced file (never a referenced signature or import source), and neither
+// job is held by the pause while the queued send stays unclaimed.
+// Usage: node p7-retention-sweep.mjs <export dir> <work dir>
+import { spawnSync } from 'node:child_process';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, utimesSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work] = process.argv.slice(2);
+const dist = (rel) => pathToFileURL(join(exportDir, 'dist', 'server', rel)).href;
+const { openDatabase } = await import(dist('db/database.js'));
+const { FileStore } = await import(dist('files/fileStore.js'));
+const { createJobHandlers, runJobsOnce } = await import(dist('jobs/runner.js'));
+const { loadDeliveryConfig } = await import(dist('config.js'));
+mkdirSync(work, { recursive: true });
+const databasePath = join(work, 'timesheet.db');
+const dataDir = join(work, 'private-data');
+if (existsSync(databasePath)) throw new Error('work folder is not fresh');
+const seed = spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), 'seed'], {
+  env: { ...process.env, NODE_ENV: 'development', DATABASE_PATH: databasePath, DATA_DIR: dataDir, SEED_ADMIN_PASSWORD: randomBytes(18).toString('base64url'), SEED_EMPLOYEE_PASSWORD: randomBytes(18).toString('base64url'), SEED_EMPLOYEE2_PASSWORD: randomBytes(18).toString('base64url') },
+  encoding: 'utf8',
+});
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+check('synthetic seed exits 0 (explicit DATABASE_PATH and DATA_DIR)', seed.status === 0);
+const db = openDatabase(databasePath);
+const nowMs = Date.now();
+const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+const daysAgo = (days) => iso(nowMs - days * 86400_000);
+const insertJob = db.prepare(`INSERT INTO jobs (id, user_id, revision_id, kind, business_key, payload_json, state, attempts, next_run_at, created_at, updated_at)
+  VALUES (?, NULL, NULL, ?, ?, '{}', ?, ?, ?, ?, ?)`);
+const jobs = {};
+function job(name, kind, state, ageDays) {
+  const id = randomUUID();
+  const at = daysAgo(ageDays);
+  insertJob.run(id, kind, `probe:${name}`, state, state === 'succeeded' ? 1 : 0, at, at, at);
+  jobs[name] = id;
+}
+job('scanOld', 'deadline_scan', 'succeeded', 40);
+job('reminderOld', 'reminder_scan', 'succeeded', 31);
+job('scanNew', 'deadline_scan', 'succeeded', 29);
+job('scanCancelled', 'deadline_scan', 'cancelled', 40);
+job('pdfOld', 'render_pdf', 'succeeded', 40);
+job('sendOld', 'send_email', 'succeeded', 40);
+job('reminderSendOld', 'send_reminder', 'succeeded', 40);
+job('sweepOld', 'orphan_sweep', 'succeeded', 40);
+job('retentionOld', 'job_retention', 'succeeded', 40);
+job('sendQueued', 'send_email', 'queued', 0);
+const exists = (name) => db.prepare('SELECT count(*) FROM jobs WHERE id = ?').pluck().get(jobs[name]) === 1;
+const tryRun = (sql, ...params) => { try { db.prepare(sql).run(...params); return 'allowed'; } catch (error) { return String(error.message); } };
+
+// Abuse attempts against the window, outside the retention job.
+check('window closed: deleting an eligible scan row is refused', tryRun('DELETE FROM jobs WHERE id = ?', jobs.scanOld) === 'immutable_job');
+check('window closed: a bulk DELETE of every job is refused and deletes nothing', tryRun('DELETE FROM jobs') === 'immutable_job' && exists('scanOld'));
+db.prepare('UPDATE job_retention_window SET as_of = ? WHERE id = 1').run(iso(nowMs));
+for (const name of ['sendOld', 'pdfOld', 'reminderSendOld', 'sweepOld', 'retentionOld', 'scanNew', 'scanCancelled', 'sendQueued']) {
+  check(`window open (now): ${name} cannot be deleted`, tryRun('DELETE FROM jobs WHERE id = ?', jobs[name]) === 'immutable_job');
+}
+db.prepare("UPDATE job_retention_window SET as_of = '2099-01-01T00:00:00Z' WHERE id = 1").run();
+check('window set far in the future: a send, PDF or sweep row is still refused', ['sendOld', 'pdfOld', 'sweepOld'].every((name) => tryRun('DELETE FROM jobs WHERE id = ?', jobs[name]) === 'immutable_job'));
+db.exec('BEGIN');
+const widened = tryRun('DELETE FROM jobs WHERE id = ?', jobs.scanNew);
+db.exec('ROLLBACK');
+console.log(`INFO  with the window instant moved to 2099 by direct SQL, deleting the 29-day-old succeeded scan row is ${widened} (rolled back): the 30 days count from the instant the caller writes`);
+db.prepare('UPDATE job_retention_window SET as_of = NULL WHERE id = 1').run();
+check('the window row cannot be deleted, duplicated or given a malformed instant',
+  tryRun('DELETE FROM job_retention_window') === 'immutable_job_retention_window' && /CHECK|constraint/i.test(tryRun('INSERT INTO job_retention_window (id) VALUES (2)')) && /CHECK|constraint/i.test(tryRun("UPDATE job_retention_window SET as_of = 'soon' WHERE id = 1")));
+check('a succeeded row cannot be back-dated to become eligible', tryRun('UPDATE jobs SET updated_at = ? WHERE id = ?', daysAgo(90), jobs.scanNew) === 'job_closed');
+check('the retention window is the only writer in the application source (cli, routes and services never touch it)', true, 'by source search: only jobs/retentionJob.ts writes job_retention_window');
+
+// Private files: a referenced signature (old), a referenced import source (old), an old orphan and a new orphan.
+const files = new FileStore(dataDir);
+const oldTime = new Date(nowMs - 3 * 86400_000);
+const signatureKeys = db.prepare("SELECT storage_key FROM attachments WHERE kind = 'signature'").pluck().all();
+for (const key of signatureKeys) utimesSync(files.pathOf(key), oldTime, oldTime);
+const source = files.put(Buffer.from('synthetic workbook bytes for the sweep probe'));
+utimesSync(files.pathOf(source.storageKey), oldTime, oldTime);
+const userId = db.prepare("SELECT id FROM users WHERE role = 'employee' ORDER BY created_at LIMIT 1").pluck().get();
+db.prepare(`INSERT INTO imports (id, user_id, source_sha256, mapping_version, state, storage_key, size_bytes, report_json, created_at)
+  VALUES (?, ?, ?, 1, 'preview', ?, ?, '{}', ?)`).run(randomUUID(), userId, createHash('sha256').update('synthetic workbook bytes for the sweep probe').digest('hex'), source.storageKey, source.sizeBytes, daysAgo(3));
+const orphanOld = files.put(Buffer.from('old orphan'));
+utimesSync(files.pathOf(orphanOld.storageKey), oldTime, oldTime);
+const orphanNew = files.put(Buffer.from('new orphan'));
+
+// Outbound paused, then one production runner pass at the real clock.
+db.prepare("UPDATE operations_state SET outbound_paused_at = ?, outbound_paused_reason = 'restored' WHERE id = 1").run(daysAgo(0));
+const clock = { now: () => new Date(nowMs) };
+const delivery = loadDeliveryConfig({ MAIL_FROM: '<email>', DATA_DIR: dataDir }, { databasePath, port: 3000, production: false });
+const sweeps = [];
+const retentions = [];
+const handlers = createJobHandlers({ db, clock, files, delivery, onSweep: (counts) => sweeps.push(counts), onRetention: (counts) => retentions.push(counts) });
+const summary = await runJobsOnce({ db, clock, owner: 'runner-audit-probe', handlers });
+console.log(`INFO  runner pass while paused: ${JSON.stringify(summary)}; sweep ${JSON.stringify(sweeps)}; retention ${JSON.stringify(retentions)}`);
+check('the retention job ran while outbound is paused and deleted exactly the two eligible scan rows', retentions.length === 1 && retentions[0].deletedScanJobs === 2 && !exists('scanOld') && !exists('reminderOld'));
+check('every other job row survived (new scan, cancelled scan, PDF, sends, sweep, retention, queued send)', ['scanNew', 'scanCancelled', 'pdfOld', 'sendOld', 'reminderSendOld', 'sweepOld', 'retentionOld', 'sendQueued'].every(exists));
+check('the window is closed again after the run', db.prepare('SELECT as_of FROM job_retention_window WHERE id = 1').pluck().get() === null);
+const opsRow = db.prepare('SELECT job_retention_last_run_at AS at, job_retention_last_deleted AS n FROM operations_state WHERE id = 1').get();
+check('operations_state records the run as an instant and a count', opsRow.at !== null && opsRow.n === 2, JSON.stringify(opsRow));
+check('the sweep ran while outbound is paused', sweeps.length === 1);
+check('the sweep removed only the old unreferenced file', !existsSync(files.pathOf(orphanOld.storageKey)) && existsSync(files.pathOf(orphanNew.storageKey)) && sweeps[0]?.removedUnreferenced === 1);
+check('the sweep kept the referenced import source and every referenced signature (all older than the grace)', existsSync(files.pathOf(source.storageKey)) && signatureKeys.every((key) => existsSync(files.pathOf(key))));
+check('the pause held the send: still queued, no attempt, nothing captured, still paused',
+  db.prepare('SELECT state || \':\' || attempts FROM jobs WHERE id = ?').pluck().get(jobs.sendQueued) === 'queued:0' && db.prepare('SELECT count(*) FROM delivery_attempts').pluck().get() === 0 && !existsSync(join(dataDir, 'mail-capture')) && db.prepare('SELECT outbound_paused_reason FROM operations_state').pluck().get() === 'restored');
+db.close();
+console.log(`INFO  files left: ${readdirSync(join(dataDir, 'files')).length}`);
+console.log(fails === 0 ? 'P7 PASSED' : `P7 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

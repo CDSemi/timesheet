@@ -1,0 +1,15 @@
+2026-10-06T12:58:12Z
+$ node probes/p8-admin-privacy.mjs <export> <work>/p2
+PASS  administrator signs in
+INFO  /api/admin/operations key paths: operations, operations.activation, operations.activation.active_from, operations.activation.recorded_at, operations.activation.recorded_by, operations.backup, operations.backup.age_seconds, operations.backup.fault_code, operations.backup.last_attempt_at, operations.backup.last_success_at, operations.backup.outcome, operations.deliveries, operations.deliveries.accepted, operations.deliveries.failed_permanent, operations.deliveries.failed_temporary, operations.deliveries.preparing, operations.deliveries.sending, operations.deliveries.uncertain, operations.disk, operations.disk.free_bytes, operations.disk.total_bytes, operations.jobs, operations.jobs.cancelled, operations.jobs.intervention, operations.jobs.leased, operations.jobs.queued, operations.jobs.succeeded, operations.outbound, operations.outbound.awaiting_decision, operations.outbound.held_send_jobs, operations.outbound.paused, operations.outbound.paused_at, operations.outbound.queued_send_jobs, operations.outbound.reason, operations.retention, operations.retention.last_deleted, operations.retention.last_run_at, operations.runner, operations.runner.heartbeat_at, operations.runner.state, operations.sender, operations.sender.configured, operations.sender.outbound_mode
+INFO  /api/admin/users key paths: users, users[].calendar_id, users[].created_at, users[].display_name, users[].email, users[].id, users[].not_set_up, users[].role, users[].status, users[].updated_at
+INFO  /api/admin/submissions key paths: submissions
+PASS  operations status: exactly the allowlisted key paths (backup, disk, outbound, retention included)  no extra
+PASS  account list: exactly the account fields plus not_set_up
+PASS  not_set_up is a boolean for every account  [true,false,true,true,true,true,true,true,true,true,true]
+PASS  no storage key, file hash or host path in any admin response
+PASS  no OT ledger minutes, balance or session field in any admin response  ledger values present 600,15,30,45,60,75,90,105,120
+PASS  backup status reports the probe P2 backup with an age
+PASS  server log has no email address
+P8 PASSED
+exit=0

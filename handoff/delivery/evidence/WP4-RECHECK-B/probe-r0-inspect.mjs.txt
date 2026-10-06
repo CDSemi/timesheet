@@ -1,0 +1,10 @@
+// WP4-RECHECK-B probe R0: list the tracked template's parts, sheet names and sizes (read only, in memory).
+import { strFromU8 } from '../export/node_modules/fflate/esm/index.mjs';
+import { readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+const e = unpack(readTemplateBytes());
+for (const [name, data] of Object.entries(e)) console.log(name, data.length);
+console.log(strFromU8(e['xl/workbook.xml']).match(/<sheet [^>]*>/g).join('\n'));
+console.log(strFromU8(e['xl/_rels/workbook.xml.rels']));
+const ss = strFromU8(e['xl/sharedStrings.xml'] ?? new Uint8Array());
+console.log('sharedStrings bytes', ss.length, 'si', (ss.match(/<si>/g) ?? []).length);
+console.log(strFromU8(e['xl/worksheets/sheet2.xml']).slice(0, 1500));

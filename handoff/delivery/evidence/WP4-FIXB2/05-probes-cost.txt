@@ -1,0 +1,253 @@
+# WP4-FIXB2 05 parse cost of every probe package, before and after (in memory, one fresh child process per case)
+#
+# Budget (stated in src/server/import/xlsxReader.ts next to DEFAULT_READER_LIMITS): reading any package the reader accepts,
+# or refuses after reading, takes at most 500 ms of event-loop time and adds at most 150 MiB of memory on this reference
+# host (Node v24.21.0, Windows 11 x64 developer workstation). The stored report is at most 2 MiB (MAX_REPORT_BYTES).
+#
+# Commands: PROBE_ROOT=<task>/base PROBE_PKGS=<task>/pkgs node probes/cost.mjs [filter]   (before: source of 0f7fba2)
+#           PROBE_ROOT=<task>/final2 PROBE_BUILD_ROOT=<task>/base PROBE_PKGS=<task>/pkgs node probes/cost.mjs   (after: final working tree)
+#           node probes/summarize.mjs <after> <before>   ; all exit 0
+# Packages are built once from the template by the test-support helpers and kept under <task>/pkgs (never the repository).
+# 'preview ms' is the synchronous previewWorkbook call (reader + mapping) = event-loop time; '+N ms' is JSON.stringify of the
+# preview model; maxRSS delta is the child's high-water mark after minus before. P1b/P7 are the first audit's packages (P6 used
+# the two P1b <c/> packages over HTTP, see 06); r1/r3 are the recheck's; N* are new adversarial shapes of this fix.
+# 'before' is the baseline 0f7fba2 (after WP4-FIXB); the first audit's own pre-FIXB numbers are in evidence/WP4-AUDIT-B.
+#
+## Before -> after, per case (preview ms + JSON ms, maxRSS delta, outcome)
+P1b one 15 MiB sheet of <c/> (P6 37 KB) | before: 13+0 ms, +10 MiB, rejected:part_too_large | after: 6+0 ms, +7 MiB, rejected:part_too_large
+P1b three 15.8 MiB sheets of <c/> (P6 65 KB) | before: 4+0 ms, +3 MiB, rejected:part_too_large | after: 3+0 ms, +3 MiB, rejected:part_too_large
+P1b three 15.8 MiB sheets of <c><v>1</v></c> (113 KB) | before: 4+0 ms, +3 MiB, rejected:part_too_large | after: 3+0 ms, +2 MiB, rejected:part_too_large
+P1b Holiday Dates 150 000 cells in column C | before: 12+0 ms, +10 MiB, rejected:part_too_large | after: 7+0 ms, +8 MiB, rejected:part_too_large
+P7 1 payroll sheet(s) x 199 000 <f>8.5</f> | before: 18+0 ms, +10 MiB, rejected:part_too_large | after: 8+0 ms, +10 MiB, rejected:part_too_large
+P7 3 payroll sheet(s) x 199 000 <f>8.5</f> | before: 18+0 ms, +8 MiB, rejected:part_too_large | after: 8+0 ms, +8 MiB, rejected:part_too_large
+P7 7 payroll sheet(s) x 199 000 <f>8.5</f> | before: 1+0 ms, +0 MiB, rejected:total_too_large | after: 1+0 ms, +0 MiB, rejected:total_too_large
+r1 B-02 Holiday Dates 40 000 cells in column C (under the part limit) | before: 229+0 ms, +158 MiB, accepted, JSON 0.002 MiB | after: 65+0 ms, +28 MiB, accepted, JSON 0.002 MiB
+r1 B-02 Holiday Dates 2 001 date rows in A/B | before: 50+0 ms, +25 MiB, rejected:too_many_holidays | after: 20+0 ms, +9 MiB, rejected:too_many_holidays
+r1 B-02 sparse far row A9999999 | before: 18+0 ms, +10 MiB, accepted, JSON 0.003 MiB | after: 10+0 ms, +11 MiB, accepted, JSON 0.003 MiB
+r1 P7 3 payroll sheets x 15 000 <f>8.5</f> (accepted size) | before: 317+0 ms, +192 MiB, accepted, JSON 0.017 MiB | after: 79+0 ms, +39 MiB, accepted, JSON 0.017 MiB
+ACCEPT tracked template | before: 18+0 ms, +10 MiB, accepted, JSON 0.003 MiB | after: 10+0 ms, +11 MiB, accepted, JSON 0.003 MiB
+ACCEPT realistic 12 dated sheets (clocks, leave, WFH) | before: 55+0 ms, +21 MiB, accepted, JSON 0.072 MiB | after: 24+0 ms, +11 MiB, accepted, JSON 0.072 MiB
+ACCEPT 26 dated sheets (one year) | before: 84+0 ms, +24 MiB, accepted, JSON 0.124 MiB | after: 37+1 ms, +23 MiB, accepted, JSON 0.124 MiB
+ACCEPT 60 dated sheets | before: 151+1 ms, +44 MiB, accepted, JSON 0.253 MiB | after: 58+1 ms, +31 MiB, accepted, JSON 0.253 MiB
+ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit) | before: 158+1 ms, +44 MiB, accepted, JSON 0.323 MiB | after: 59+1 ms, +32 MiB, accepted, JSON 0.323 MiB
+r1 H1a 61 parts of (4 MiB - 64 B) comment padding | before: 0+0 ms, +0 MiB, rejected:total_too_large | after: 1+0 ms, +1 MiB, rejected:total_too_large
+r1 H1b 61 parts of 199 990 <x/> elements | before: 185+0 ms, +98 MiB, rejected:too_many_elements | after: 17+0 ms, +13 MiB, rejected:too_many_elements
+r1 H1c 2 parts of 190 000 <x a="1"/> elements | before: 591+0 ms, +222 MiB, accepted, JSON 0.003 MiB | after: 28+0 ms, +12 MiB, rejected:too_many_elements
+r1 H1d 61 sheets pointing at one 4 MiB part | before: 67+0 ms, +72 MiB, rejected:total_xml_too_large | after: 59+0 ms, +65 MiB, rejected:total_xml_too_large
+r1 H2a 4 parts of <1/> (digit tag names) | before: 3154+0 ms, +1091 MiB, accepted, JSON 0.001 MiB | after: 25+0 ms, +19 MiB, rejected:malformed_xml
+r1 H2b 4 parts of < /> (blank tag names) | before: 3229+0 ms, +575 MiB, accepted, JSON 0.001 MiB | after: 25+0 ms, +20 MiB, rejected:malformed_xml
+r1 H2c 4 parts of <1:c/> (prefixed cells) | before: 2168+0 ms, +405 MiB, accepted, JSON 0.001 MiB | after: 31+0 ms, +21 MiB, rejected:malformed_xml
+r1 H2d 4 parts of <é/> (non-ASCII tag names) | before: 4+0 ms, +2 MiB, rejected:part_too_large | after: 3+0 ms, +2 MiB, rejected:part_too_large
+r1 H2e 4 parts of <-/> (punctuation tag names) | before: 2833+0 ms, +518 MiB, accepted, JSON 0.001 MiB | after: 26+0 ms, +18 MiB, rejected:malformed_xml
+r1 H3a 199 990 nested <a> | before: 23+0 ms, +13 MiB, rejected:malformed_xml | after: 10+0 ms, +12 MiB, rejected:malformed_xml
+r1 H3b 4 MiB of nested <1> (uncounted) | before: 26+0 ms, +25 MiB, rejected:malformed_xml | after: 19+0 ms, +17 MiB, rejected:malformed_xml
+r1 H3c 30-deep nesting repeated (counted) | before: 341+0 ms, +186 MiB, accepted, JSON 0.002 MiB | after: 22+0 ms, +11 MiB, rejected:too_many_elements
+r1 H4a one <c> with 4 MiB of attributes | before: 1354+0 ms, +490 MiB, accepted, JSON 0.002 MiB | after: 66+0 ms, +70 MiB, rejected:too_many_attributes
+r1 H4b 4 parts, one <c> each with 4 MiB of attributes | before: 5056+0 ms, +525 MiB, accepted, JSON 0.001 MiB | after: 57+0 ms, +62 MiB, rejected:too_many_attributes
+r1 H4c 4 parts, 49 000 cells each with short attributes | before: 937+0 ms, +226 MiB, accepted, JSON 0.001 MiB | after: 53+0 ms, +26 MiB, rejected:too_many_attributes
+r1 H5a 49 999 shared strings of 80 bytes | before: 203+0 ms, +137 MiB, accepted, JSON 0.003 MiB | after: 61+0 ms, +23 MiB, accepted, JSON 0.003 MiB
+r1 H5b one 4 MiB shared string x 2000 holiday names | before: 3361+1930 ms, +732 MiB, accepted, JSON THROWN RangeError | after: 42+1 ms, +26 MiB, accepted, JSON 0.567 MiB
+r1 H5c one 4 MiB shared string x 2000 holiday names (upper-case first letter) | before: 3486+1921 ms, +733 MiB, accepted, JSON THROWN RangeError | after: 40+1 ms, +25 MiB, accepted, JSON 0.567 MiB
+r1 H5d one 1 MiB shared string x 100 holiday names | before: 100+59 ms, +253 MiB, accepted, JSON 99.809 MiB | after: 16+0 ms, +15 MiB, accepted, JSON 0.030 MiB
+r1 H5e one 4 MiB shared string x 60 dated sheets x 10 labels | before: 1091+678 ms, +856 MiB, accepted, JSON THROWN RangeError | after: 90+1 ms, +39 MiB, accepted, JSON 0.394 MiB
+r1 H5f one 4 MiB shared string x 60 dated sheets x 10 labels (upper-case first letter) | before: 1096+684 ms, +856 MiB, accepted, JSON THROWN RangeError | after: 80+1 ms, +39 MiB, accepted, JSON 0.394 MiB
+r1 H6a 3 dated sheets, label B14 an inline string of 4 MiB letters | before: 477+14 ms, +512 MiB, accepted, JSON 23.811 MiB | after: 57+0 ms, +52 MiB, accepted, JSON 0.019 MiB
+r1 H6b 3 dated sheets, label B14 an inline string of 4 MiB U+0001 | before: 471+157 ms, +728 MiB, accepted, JSON 142.776 MiB | after: 57+0 ms, +57 MiB, accepted, JSON 0.024 MiB
+r1 H7 Timesheet X24 formula of 4 MiB with an unterminated quote | before: 261+0 ms, +235 MiB, accepted, JSON 0.003 MiB | after: 32+0 ms, +25 MiB, accepted, JSON 0.003 MiB
+r3 counted <c/> | before: 25+0 ms, +24 MiB, rejected:too_many_cells | after: 35+0 ms, +25 MiB, rejected:too_many_cells
+r3 counted <row/> | before: 35+0 ms, +28 MiB, rejected:too_many_rows | after: 38+0 ms, +21 MiB, rejected:too_many_elements
+r3 <1/> (digit tag name) | before: 787+0 ms, +440 MiB, accepted, JSON 0.002 MiB | after: 17+0 ms, +17 MiB, rejected:malformed_xml
+r3 <9/> | before: 878+0 ms, +520 MiB, accepted, JSON 0.002 MiB | after: 18+0 ms, +16 MiB, rejected:malformed_xml
+r3 < /> (empty tag name, space) | before: 812+0 ms, +271 MiB, accepted, JSON 0.002 MiB | after: 19+0 ms, +17 MiB, rejected:malformed_xml
+r3 <.a/> (dot-leading) | before: 660+0 ms, +232 MiB, accepted, JSON 0.002 MiB | after: 28+0 ms, +21 MiB, rejected:malformed_xml
+r3 one <c> with ~3.8 MiB of a0="" attributes | before: 1155+0 ms, +465 MiB, accepted, JSON 0.002 MiB | after: 55+0 ms, +78 MiB, rejected:too_many_attributes
+N1 tiny elements: 3 parts x 83 000 <a/> (total 249 000) | before: 217+0 ms, +100 MiB, accepted, JSON 0.004 MiB | after: 18+0 ms, +11 MiB, rejected:too_many_elements
+N2 tiny elements: 1 part x 99 990 <x/> + comments, PIs, CDATA | before: 70+0 ms, +24 MiB, accepted, JSON 0.003 MiB | after: 19+0 ms, +11 MiB, accepted, JSON 0.003 MiB
+N3 attribute-heavy: 2 parts x 3 100 <x> of 64 attributes (198 400 per part) | before: 264+0 ms, +132 MiB, accepted, JSON 0.003 MiB | after: 50+0 ms, +20 MiB, accepted, JSON 0.003 MiB
+N4 attribute-heavy: 3 parts x 3 100 cells of 64 attributes (total over) | before: 384+0 ms, +182 MiB, accepted, JSON 0.004 MiB | after: 59+0 ms, +16 MiB, rejected:too_many_attributes
+N5 long attribute values: 4 parts, 63 KiB r="..." on 60 cells each | before: 110+0 ms, +65 MiB, accepted, JSON 0.001 MiB | after: 61+0 ms, +59 MiB, accepted, JSON 0.001 MiB
+N6 deep nesting: 39 levels repeated to the element limit | before: 180+0 ms, +92 MiB, accepted, JSON 0.002 MiB | after: 17+0 ms, +12 MiB, accepted, JSON 0.002 MiB
+N7 long text nodes: 4 parts, one cell <v> of 4 MiB | before: 472+0 ms, +444 MiB, accepted, JSON 0.001 MiB | after: 64+0 ms, +61 MiB, accepted, JSON 0.001 MiB
+N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; | before: 939+0 ms, +555 MiB, accepted, JSON 0.001 MiB | after: 176+0 ms, +62 MiB, accepted, JSON 0.001 MiB
+N9 many parts just under the limit: 4 parts x 4 MiB of valued cells | before: 42+0 ms, +29 MiB, rejected:too_many_cells | after: 69+0 ms, +25 MiB, rejected:too_many_elements
+N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values | before: 551+0 ms, +217 MiB, accepted, JSON 0.001 MiB | after: 130+0 ms, +51 MiB, rejected:too_many_elements
+N9c many parts just under the byte limit: 4 parts x 24 000 cells of 140-digit values | before: 493+0 ms, +203 MiB, accepted, JSON 0.001 MiB | after: 130+0 ms, +48 MiB, accepted, JSON 0.001 MiB
+N10b shared formula of 8 KiB used by 19 000 cells on 2 dated sheets | before: 414+0 ms, +160 MiB, accepted, JSON 0.014 MiB | after: 90+0 ms, +32 MiB, accepted, JSON 0.014 MiB
+N11 shared formula of 1 MiB used by 19 000 cells | before: 38242+0 ms, +131 MiB, accepted, JSON 0.008 MiB | after: 65+0 ms, +21 MiB, accepted, JSON 0.008 MiB
+N12 whitespace-only 4 MiB shared string as 2000 holiday dates and names | before: 3779+0 ms, +223 MiB, accepted, JSON 0.005 MiB | after: 39+0 ms, +24 MiB, accepted, JSON 0.005 MiB
+N13 whitespace-only 4 MiB shared string as 61 dated sheets x 10 labels | before: 900+1 ms, +297 MiB, accepted, JSON 0.268 MiB | after: 83+1 ms, +39 MiB, accepted, JSON 0.278 MiB
+N14 sheet name "2026.01.09" + 1 MiB of spaces | before: 31+34 ms, +144 MiB, accepted, JSON 45.008 MiB | after: 6+0 ms, +9 MiB, rejected:tag_too_large
+N15b 58 external-link entries with 60 KiB names | before: 23+2 ms, +15 MiB, accepted, JSON 2.644 MiB | after: 15+0 ms, +5 MiB, accepted, JSON 0.015 MiB
+N18 most kept cells: 3 parts x 40 000 distinct valued cells (246 000 openings) | before: 484+1 ms, +218 MiB, accepted, JSON 0.163 MiB | after: 111+0 ms, +70 MiB, rejected:too_many_elements
+N20 most cells: 4 parts x 49 900 empty cells with distinct addresses | before: 437+0 ms, +211 MiB, rejected:too_many_holidays | after: 118+0 ms, +107 MiB, rejected:too_many_elements
+N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V) | before: 404+0 ms, +196 MiB, accepted, JSON 0.001 MiB | after: 118+0 ms, +103 MiB, accepted, JSON 0.001 MiB
+N21 pinned text: 4 parts of 4 MiB with one non-Latin-1 character and a kept inline string | before: 72+0 ms, +63 MiB, accepted, JSON 0.001 MiB | after: 61+0 ms, +63 MiB, accepted, JSON 0.001 MiB
+N19b most kept text: 49 900 shared strings of 60 characters, 40 000 used as cells | before: 359+0 ms, +177 MiB, accepted, JSON 0.003 MiB | after: 99+0 ms, +40 MiB, accepted, JSON 0.003 MiB
+N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text | before: 234+4 ms, +67 MiB, accepted, JSON 3.339 MiB | after: 95+3 ms, +41 MiB, accepted, JSON 1.073 MiB
+N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON) | before: 64+3 ms, +32 MiB, accepted, JSON 3.593 MiB | after: 29+3 ms, +21 MiB, accepted, JSON 2.441 MiB
+N17 report flood with Excel-sized sheet names (31 chars) and errors everywhere | before: 163+1 ms, +44 MiB, accepted, JSON 0.542 MiB | after: 60+1 ms, +32 MiB, accepted, JSON 0.512 MiB
+-- slowest (preview + JSON): N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; 176 ms; N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values 130 ms; N9c many parts just under the byte limit: 4 parts x 24 000 cells of 140-digit values 130 ms; N20 most cells: 4 parts x 49 900 empty cells with distinct addresses 118 ms; N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V) 118 ms
+-- most memory (maxRSS delta): N20 most cells: 4 parts x 49 900 empty cells with distinct addresses +107 MiB; N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V) +103 MiB; r3 one <c> with ~3.8 MiB of a0="" attributes +78 MiB; r1 H4a one <c> with 4 MiB of attributes +70 MiB; N18 most kept cells: 3 parts x 40 000 distinct valued cells (246 000 openings) +70 MiB
+
+## Intermediate measurements that changed the design (dev runs on the repository source; not the final code):
+# 1. first scanner version (a tree of every kept element; regex entity decoder):
+N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; | upload=41557 B | preview ms=550 (+0 ms JSON) | maxRSS 67 -> 542 MiB (+475) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB
+N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values | upload=78533 B | preview ms=178 (+0 ms JSON) | maxRSS 67 -> 221 MiB (+154) | accepted (sheets=4, periods=0, holidays=0, errors=1, findings=2); preview JSON 0.001 MiB
+# 2. after the one-buffer entity decoder and allocation-free names (still a tree per part):
+N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; | upload=41557 B | preview ms=177 (+0 ms JSON) | maxRSS 66 -> 128 MiB (+62) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB
+N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values | upload=78533 B | preview ms=169 (+0 ms JSON) | maxRSS 67 -> 222 MiB (+155) | accepted (sheets=4, periods=0, holidays=0, errors=1, findings=2); preview JSON 0.001 MiB
+# 3. then rows, cells and shared strings streamed (final design): N9b +51 MiB (now refused at the package opening limit),
+#    N9c (the same shape under that limit) +48 MiB, N8 +62 MiB (see the after lines below);
+#    maxTotalElements lowered from 250 000 to 200 000 after N20 (4 x 49 900 empty cells) measured +106 MiB.
+
+## Raw before lines
+P1b one 15 MiB sheet of <c/> (P6 37 KB) | upload=37400 B | preview ms=13 (+0 ms JSON) | maxRSS 65 -> 75 MiB (+10) | rejected:part_too_large | exit=0
+P1b three 15.8 MiB sheets of <c/> (P6 65 KB) | upload=65173 B | preview ms=4 (+0 ms JSON) | maxRSS 65 -> 68 MiB (+3) | rejected:part_too_large | exit=0
+P1b three 15.8 MiB sheets of <c><v>1</v></c> (113 KB) | upload=113353 B | preview ms=4 (+0 ms JSON) | maxRSS 65 -> 67 MiB (+3) | rejected:part_too_large | exit=0
+P1b Holiday Dates 150 000 cells in column C | upload=692224 B | preview ms=12 (+0 ms JSON) | maxRSS 66 -> 76 MiB (+10) | rejected:part_too_large | exit=0
+P7 1 payroll sheet(s) x 199 000 <f>8.5</f> | upload=914989 B | preview ms=18 (+0 ms JSON) | maxRSS 66 -> 76 MiB (+10) | rejected:part_too_large | exit=0
+P7 3 payroll sheet(s) x 199 000 <f>8.5</f> | upload=2692031 B | preview ms=18 (+0 ms JSON) | maxRSS 70 -> 78 MiB (+8) | rejected:part_too_large | exit=0
+P7 7 payroll sheet(s) x 199 000 <f>8.5</f> | upload=6246103 B | preview ms=1 (+0 ms JSON) | maxRSS 77 -> 77 MiB (+0) | rejected:total_too_large | exit=0
+r1 B-02 Holiday Dates 40 000 cells in column C (under the part limit) | upload=158166 B | preview ms=229 (+0 ms JSON) | maxRSS 65 -> 223 MiB (+158) | accepted (sheets=3, periods=0, holidays=0, errors=0, findings=4); preview JSON 0.002 MiB | exit=0
+r1 B-02 Holiday Dates 2 001 date rows in A/B | upload=45365 B | preview ms=50 (+0 ms JSON) | maxRSS 65 -> 90 MiB (+25) | rejected:too_many_holidays | exit=0
+r1 B-02 sparse far row A9999999 | upload=26467 B | preview ms=18 (+0 ms JSON) | maxRSS 65 -> 75 MiB (+10) | accepted (sheets=3, periods=0, holidays=10, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r1 P7 3 payroll sheets x 15 000 <f>8.5</f> (accepted size) | upload=243785 B | preview ms=317 (+0 ms JSON) | maxRSS 65 -> 257 MiB (+192) | accepted (sheets=6, periods=3, holidays=9, errors=0, findings=15); preview JSON 0.017 MiB | exit=0
+ACCEPT tracked template | upload=26456 B | preview ms=18 (+0 ms JSON) | maxRSS 65 -> 75 MiB (+10) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+ACCEPT realistic 12 dated sheets (clocks, leave, WFH) | upload=85818 B | preview ms=55 (+0 ms JSON) | maxRSS 65 -> 86 MiB (+21) | accepted (sheets=15, periods=12, holidays=9, errors=0, findings=42); preview JSON 0.072 MiB | exit=0
+ACCEPT 26 dated sheets (one year) | upload=153320 B | preview ms=84 (+0 ms JSON) | maxRSS 65 -> 89 MiB (+24) | accepted (sheets=29, periods=26, holidays=9, errors=0, findings=81); preview JSON 0.124 MiB | exit=0
+ACCEPT 60 dated sheets | upload=319087 B | preview ms=151 (+1 ms JSON) | maxRSS 65 -> 109 MiB (+44) | accepted (sheets=63, periods=60, holidays=9, errors=0, findings=81); preview JSON 0.253 MiB | exit=0
+ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit) | upload=327953 B | preview ms=158 (+1 ms JSON) | maxRSS 65 -> 109 MiB (+44) | accepted (sheets=64, periods=61, holidays=9, errors=0, findings=81); preview JSON 0.323 MiB | exit=0
+r1 H1a 61 parts of (4 MiB - 64 B) comment padding | upload=292900 B | preview ms=0 (+0 ms JSON) | maxRSS 65 -> 65 MiB (+0) | rejected:total_too_large | exit=0
+r1 H1b 61 parts of 199 990 <x/> elements | upload=90624 B | preview ms=185 (+0 ms JSON) | maxRSS 65 -> 163 MiB (+98) | rejected:too_many_elements | exit=0
+r1 H1c 2 parts of 190 000 <x a="1"/> elements | upload=34433 B | preview ms=591 (+0 ms JSON) | maxRSS 65 -> 287 MiB (+222) | accepted (sheets=5, periods=0, holidays=9, errors=0, findings=8); preview JSON 0.003 MiB | exit=0
+r1 H1d 61 sheets pointing at one 4 MiB part | upload=31171 B | preview ms=67 (+0 ms JSON) | maxRSS 65 -> 137 MiB (+72) | rejected:total_xml_too_large | exit=0
+r1 H2a 4 parts of <1/> (digit tag names) | upload=33293 B | preview ms=3154 (+0 ms JSON) | maxRSS 65 -> 1156 MiB (+1091) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H2b 4 parts of < /> (blank tag names) | upload=33293 B | preview ms=3229 (+0 ms JSON) | maxRSS 65 -> 640 MiB (+575) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H2c 4 parts of <1:c/> (prefixed cells) | upload=41413 B | preview ms=2168 (+0 ms JSON) | maxRSS 65 -> 470 MiB (+405) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H2d 4 parts of <é/> (non-ASCII tag names) | upload=47513 B | preview ms=4 (+0 ms JSON) | maxRSS 65 -> 67 MiB (+2) | rejected:part_too_large | exit=0
+r1 H2e 4 parts of <-/> (punctuation tag names) | upload=33293 B | preview ms=2833 (+0 ms JSON) | maxRSS 65 -> 584 MiB (+518) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H3a 199 990 nested <a> | upload=23692 B | preview ms=23 (+0 ms JSON) | maxRSS 65 -> 78 MiB (+13) | rejected:malformed_xml | exit=0
+r1 H3b 4 MiB of nested <1> (uncounted) | upload=26144 B | preview ms=26 (+0 ms JSON) | maxRSS 65 -> 90 MiB (+25) | rejected:malformed_xml | exit=0
+r1 H3c 30-deep nesting repeated (counted) | upload=27447 B | preview ms=341 (+0 ms JSON) | maxRSS 65 -> 251 MiB (+186) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r1 H4a one <c> with 4 MiB of attributes | upload=1066748 B | preview ms=1354 (+0 ms JSON) | maxRSS 67 -> 556 MiB (+490) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r1 H4b 4 parts, one <c> each with 4 MiB of attributes | upload=4195737 B | preview ms=5056 (+0 ms JSON) | maxRSS 72 -> 598 MiB (+525) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H4c 4 parts, 49 000 cells each with short attributes | upload=73909 B | preview ms=937 (+0 ms JSON) | maxRSS 65 -> 291 MiB (+226) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+r1 H5a 49 999 shared strings of 80 bytes | upload=40468 B | preview ms=203 (+0 ms JSON) | maxRSS 65 -> 202 MiB (+137) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r1 H5b one 4 MiB shared string x 2000 holiday names | upload=49542 B | preview ms=3361 (+1930 ms JSON) | maxRSS 65 -> 797 MiB (+732) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); JSON.stringify THROWN RangeError: Invalid string length | exit=0
+r1 H5c one 4 MiB shared string x 2000 holiday names (upper-case first letter) | upload=49543 B | preview ms=3486 (+1921 ms JSON) | maxRSS 65 -> 798 MiB (+733) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); JSON.stringify THROWN RangeError: Invalid string length | exit=0
+r1 H5d one 1 MiB shared string x 100 holiday names | upload=27913 B | preview ms=100 (+59 ms JSON) | maxRSS 65 -> 318 MiB (+253) | accepted (sheets=3, periods=0, holidays=100, errors=0, findings=4); preview JSON 99.809 MiB | exit=0
+r1 H5e one 4 MiB shared string x 60 dated sheets x 10 labels | upload=35999 B | preview ms=1091 (+678 ms JSON) | maxRSS 65 -> 921 MiB (+856) | accepted (sheets=63, periods=60, holidays=9, errors=2311, findings=185); JSON.stringify THROWN RangeError: Invalid string length | exit=0
+r1 H5f one 4 MiB shared string x 60 dated sheets x 10 labels (upper-case first letter) | upload=36000 B | preview ms=1096 (+684 ms JSON) | maxRSS 65 -> 922 MiB (+856) | accepted (sheets=63, periods=60, holidays=9, errors=2311, findings=185); JSON.stringify THROWN RangeError: Invalid string length | exit=0
+r1 H6a 3 dated sheets, label B14 an inline string of 4 MiB letters | upload=55700 B | preview ms=477 (+14 ms JSON) | maxRSS 65 -> 577 MiB (+512) | accepted (sheets=6, periods=3, holidays=9, errors=3, findings=18); preview JSON 23.811 MiB | exit=0
+r1 H6b 3 dated sheets, label B14 an inline string of 4 MiB U+0001 | upload=55703 B | preview ms=471 (+157 ms JSON) | maxRSS 65 -> 793 MiB (+728) | accepted (sheets=6, periods=3, holidays=9, errors=3, findings=18); preview JSON 142.776 MiB | exit=0
+r1 H7 Timesheet X24 formula of 4 MiB with an unterminated quote | upload=31054 B | preview ms=261 (+0 ms JSON) | maxRSS 65 -> 300 MiB (+235) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r3 counted <c/> | upload=25940 B | preview ms=25 (+0 ms JSON) | maxRSS 65 -> 89 MiB (+24) | rejected:too_many_cells | exit=0
+r3 counted <row/> | upload=27871 B | preview ms=35 (+0 ms JSON) | maxRSS 65 -> 93 MiB (+28) | rejected:too_many_rows | exit=0
+r3 <1/> (digit tag name) | upload=25940 B | preview ms=787 (+0 ms JSON) | maxRSS 65 -> 505 MiB (+440) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r3 <9/> | upload=25940 B | preview ms=878 (+0 ms JSON) | maxRSS 65 -> 585 MiB (+520) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r3 < /> (empty tag name, space) | upload=25940 B | preview ms=812 (+0 ms JSON) | maxRSS 65 -> 336 MiB (+271) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r3 <.a/> (dot-leading) | upload=27870 B | preview ms=660 (+0 ms JSON) | maxRSS 65 -> 298 MiB (+232) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+r3 one <c> with ~3.8 MiB of a0="" attributes | upload=1016829 B | preview ms=1155 (+0 ms JSON) | maxRSS 67 -> 532 MiB (+465) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+N1 tiny elements: 3 parts x 83 000 <a/> (total 249 000) | upload=28259 B | preview ms=217 (+0 ms JSON) | maxRSS 65 -> 165 MiB (+100) | accepted (sheets=6, periods=0, holidays=9, errors=0, findings=9); preview JSON 0.004 MiB | exit=0
+N2 tiny elements: 1 part x 99 990 <x/> + comments, PIs, CDATA | upload=28707 B | preview ms=70 (+0 ms JSON) | maxRSS 65 -> 89 MiB (+24) | accepted (sheets=4, periods=0, holidays=9, errors=0, findings=7); preview JSON 0.003 MiB | exit=0
+N3 attribute-heavy: 2 parts x 3 100 <x> of 64 attributes (198 400 per part) | upload=38567 B | preview ms=264 (+0 ms JSON) | maxRSS 65 -> 197 MiB (+132) | accepted (sheets=5, periods=0, holidays=9, errors=0, findings=8); preview JSON 0.003 MiB | exit=0
+N4 attribute-heavy: 3 parts x 3 100 cells of 64 attributes (total over) | upload=44624 B | preview ms=384 (+0 ms JSON) | maxRSS 65 -> 247 MiB (+182) | accepted (sheets=6, periods=0, holidays=9, errors=0, findings=9); preview JSON 0.004 MiB | exit=0
+N5 long attribute values: 4 parts, 63 KiB r="..." on 60 cells each | upload=34465 B | preview ms=110 (+0 ms JSON) | maxRSS 65 -> 130 MiB (+65) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N6 deep nesting: 39 levels repeated to the element limit | upload=25070 B | preview ms=180 (+0 ms JSON) | maxRSS 65 -> 158 MiB (+92) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+N7 long text nodes: 4 parts, one cell <v> of 4 MiB | upload=33377 B | preview ms=472 (+0 ms JSON) | maxRSS 65 -> 509 MiB (+444) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; | upload=41557 B | preview ms=939 (+0 ms JSON) | maxRSS 65 -> 621 MiB (+555) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N9 many parts just under the limit: 4 parts x 4 MiB of valued cells | upload=65845 B | preview ms=42 (+0 ms JSON) | maxRSS 65 -> 94 MiB (+29) | rejected:too_many_cells | exit=0
+N10 shared formula of 8 KiB used by 24 000 cells on 2 dated sheets | upload=258580 B | preview ms=27 (+0 ms JSON) | maxRSS 65 -> 94 MiB (+29) | rejected:too_many_rows | exit=0
+N11 shared formula of 1 MiB used by 19 000 cells | upload=121857 B | preview ms=38242 (+0 ms JSON) | maxRSS 65 -> 196 MiB (+131) | accepted (sheets=4, periods=1, holidays=9, errors=0, findings=9); preview JSON 0.008 MiB | exit=0
+N12 whitespace-only 4 MiB shared string as 2000 holiday dates and names | upload=44042 B | preview ms=3779 (+0 ms JSON) | maxRSS 65 -> 288 MiB (+223) | accepted (sheets=3, periods=0, holidays=0, errors=2000, findings=30); preview JSON 0.005 MiB | exit=0
+N13 whitespace-only 4 MiB shared string as 61 dated sheets x 10 labels | upload=36005 B | preview ms=900 (+1 ms JSON) | maxRSS 65 -> 362 MiB (+297) | accepted (sheets=64, periods=61, holidays=9, errors=2350, findings=185); preview JSON 0.268 MiB | exit=0
+N14 sheet name "2026.01.09" + 1 MiB of spaces | upload=32564 B | preview ms=31 (+34 ms JSON) | maxRSS 65 -> 209 MiB (+144) | accepted (sheets=4, periods=1, holidays=9, errors=0, findings=9); preview JSON 45.008 MiB | exit=0
+N15 200 external-link entries with 60 KiB names | upload=24628456 B | preview ms=0 (+0 ms JSON) | maxRSS 112 -> 112 MiB (+0) | rejected:package_too_large | exit=0
+N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text | upload=379460 B | preview ms=234 (+4 ms JSON) | maxRSS 65 -> 132 MiB (+67) | accepted (sheets=64, periods=61, holidays=2000, errors=854, findings=157); preview JSON 3.339 MiB | exit=0
+N17 report flood with Excel-sized sheet names (31 chars) and errors everywhere | upload=334168 B | preview ms=163 (+1 ms JSON) | maxRSS 65 -> 109 MiB (+44) | accepted (sheets=64, periods=61, holidays=9, errors=1769, findings=185); preview JSON 0.542 MiB | exit=0
+N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values | upload=78533 B | preview ms=551 (+0 ms JSON) | maxRSS 65 -> 282 MiB (+217) | accepted (sheets=4, periods=0, holidays=0, errors=1, findings=2); preview JSON 0.001 MiB | exit=0
+N10b shared formula of 8 KiB used by 19 000 cells on 2 dated sheets | upload=213806 B | preview ms=414 (+0 ms JSON) | maxRSS 65 -> 224 MiB (+160) | accepted (sheets=5, periods=2, holidays=9, errors=0, findings=14); preview JSON 0.014 MiB | exit=0
+N15b 58 external-link entries with 60 KiB names | upload=7161036 B | preview ms=23 (+2 ms JSON) | maxRSS 78 -> 93 MiB (+15) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=32); preview JSON 2.644 MiB | exit=0
+N18 most kept cells: 3 parts x 40 000 distinct valued cells (246 000 openings) | upload=352464 B | preview ms=484 (+1 ms JSON) | maxRSS 65 -> 283 MiB (+218) | accepted (sheets=3, periods=0, holidays=1999, errors=0, findings=0); preview JSON 0.163 MiB | exit=0
+N19 most kept text: 49 990 shared strings of 80 characters, all used as cells | upload=280996 B | preview ms=4 (+0 ms JSON) | maxRSS 65 -> 67 MiB (+2) | rejected:part_too_large | exit=0
+N19b most kept text: 49 900 shared strings of 60 characters, 40 000 used as cells | upload=275424 B | preview ms=359 (+0 ms JSON) | maxRSS 65 -> 242 MiB (+177) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+N20 most cells: 4 parts x 49 900 empty cells with distinct addresses | upload=466433 B | preview ms=437 (+0 ms JSON) | maxRSS 65 -> 276 MiB (+211) | rejected:too_many_holidays | exit=0
+N21 pinned text: 4 parts of 4 MiB with one non-Latin-1 character and a kept inline string | upload=33453 B | preview ms=72 (+0 ms JSON) | maxRSS 65 -> 128 MiB (+63) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N9c many parts just under the byte limit: 4 parts x 24 000 cells of 140-digit values | upload=103793 B | preview ms=493 (+0 ms JSON) | maxRSS 65 -> 268 MiB (+203) | accepted (sheets=4, periods=0, holidays=0, errors=1, findings=2); preview JSON 0.001 MiB | exit=0
+N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V) | upload=430485 B | preview ms=404 (+0 ms JSON) | maxRSS 65 -> 261 MiB (+196) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON) | upload=56086 B | preview ms=64 (+3 ms JSON) | maxRSS 65 -> 97 MiB (+32) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); preview JSON 3.593 MiB | exit=0
+
+## Raw after lines
+2026-10-06T14:11:42Z
+P1b one 15 MiB sheet of <c/> (P6 37 KB) | upload=37400 B | preview ms=6 (+0 ms JSON) | maxRSS 67 -> 74 MiB (+7) | rejected:part_too_large | exit=0
+P1b three 15.8 MiB sheets of <c/> (P6 65 KB) | upload=65173 B | preview ms=3 (+0 ms JSON) | maxRSS 67 -> 69 MiB (+3) | rejected:part_too_large | exit=0
+P1b three 15.8 MiB sheets of <c><v>1</v></c> (113 KB) | upload=113353 B | preview ms=3 (+0 ms JSON) | maxRSS 67 -> 68 MiB (+2) | rejected:part_too_large | exit=0
+P1b Holiday Dates 150 000 cells in column C | upload=692224 B | preview ms=7 (+0 ms JSON) | maxRSS 67 -> 75 MiB (+8) | rejected:part_too_large | exit=0
+P7 1 payroll sheet(s) x 199 000 <f>8.5</f> | upload=914989 B | preview ms=8 (+0 ms JSON) | maxRSS 67 -> 77 MiB (+10) | rejected:part_too_large | exit=0
+P7 3 payroll sheet(s) x 199 000 <f>8.5</f> | upload=2692031 B | preview ms=8 (+0 ms JSON) | maxRSS 71 -> 79 MiB (+8) | rejected:part_too_large | exit=0
+P7 7 payroll sheet(s) x 199 000 <f>8.5</f> | upload=6246103 B | preview ms=1 (+0 ms JSON) | maxRSS 76 -> 76 MiB (+0) | rejected:total_too_large | exit=0
+r1 B-02 Holiday Dates 40 000 cells in column C (under the part limit) | upload=158166 B | preview ms=65 (+0 ms JSON) | maxRSS 66 -> 94 MiB (+28) | accepted (sheets=3, periods=0, holidays=0, errors=0, findings=4); preview JSON 0.002 MiB | exit=0
+r1 B-02 Holiday Dates 2 001 date rows in A/B | upload=45365 B | preview ms=20 (+0 ms JSON) | maxRSS 66 -> 75 MiB (+9) | rejected:too_many_holidays | exit=0
+r1 B-02 sparse far row A9999999 | upload=26467 B | preview ms=10 (+0 ms JSON) | maxRSS 66 -> 77 MiB (+11) | accepted (sheets=3, periods=0, holidays=10, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r1 P7 3 payroll sheets x 15 000 <f>8.5</f> (accepted size) | upload=243785 B | preview ms=79 (+0 ms JSON) | maxRSS 67 -> 105 MiB (+39) | accepted (sheets=6, periods=3, holidays=9, errors=0, findings=15); preview JSON 0.017 MiB | exit=0
+ACCEPT tracked template | upload=26456 B | preview ms=10 (+0 ms JSON) | maxRSS 67 -> 77 MiB (+11) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+ACCEPT realistic 12 dated sheets (clocks, leave, WFH) | upload=85818 B | preview ms=24 (+0 ms JSON) | maxRSS 66 -> 78 MiB (+11) | accepted (sheets=15, periods=12, holidays=9, errors=0, findings=42); preview JSON 0.072 MiB | exit=0
+ACCEPT 26 dated sheets (one year) | upload=153320 B | preview ms=37 (+1 ms JSON) | maxRSS 66 -> 89 MiB (+23) | accepted (sheets=29, periods=26, holidays=9, errors=0, findings=81); preview JSON 0.124 MiB | exit=0
+ACCEPT 60 dated sheets | upload=319087 B | preview ms=58 (+1 ms JSON) | maxRSS 67 -> 97 MiB (+31) | accepted (sheets=63, periods=60, holidays=9, errors=0, findings=81); preview JSON 0.253 MiB | exit=0
+ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit) | upload=327953 B | preview ms=59 (+1 ms JSON) | maxRSS 66 -> 98 MiB (+32) | accepted (sheets=64, periods=61, holidays=9, errors=0, findings=81); preview JSON 0.323 MiB | exit=0
+r1 H1a 61 parts of (4 MiB - 64 B) comment padding | upload=292900 B | preview ms=1 (+0 ms JSON) | maxRSS 67 -> 67 MiB (+1) | rejected:total_too_large | exit=0
+r1 H1b 61 parts of 199 990 <x/> elements | upload=90624 B | preview ms=17 (+0 ms JSON) | maxRSS 67 -> 79 MiB (+13) | rejected:too_many_elements | exit=0
+r1 H1c 2 parts of 190 000 <x a="1"/> elements | upload=34433 B | preview ms=28 (+0 ms JSON) | maxRSS 67 -> 78 MiB (+12) | rejected:too_many_elements | exit=0
+r1 H1d 61 sheets pointing at one 4 MiB part | upload=31171 B | preview ms=59 (+0 ms JSON) | maxRSS 66 -> 132 MiB (+65) | rejected:total_xml_too_large | exit=0
+r1 H2a 4 parts of <1/> (digit tag names) | upload=33293 B | preview ms=25 (+0 ms JSON) | maxRSS 67 -> 86 MiB (+19) | rejected:malformed_xml | exit=0
+r1 H2b 4 parts of < /> (blank tag names) | upload=33293 B | preview ms=25 (+0 ms JSON) | maxRSS 66 -> 86 MiB (+20) | rejected:malformed_xml | exit=0
+r1 H2c 4 parts of <1:c/> (prefixed cells) | upload=41413 B | preview ms=31 (+0 ms JSON) | maxRSS 66 -> 88 MiB (+21) | rejected:malformed_xml | exit=0
+r1 H2d 4 parts of <é/> (non-ASCII tag names) | upload=47513 B | preview ms=3 (+0 ms JSON) | maxRSS 67 -> 68 MiB (+2) | rejected:part_too_large | exit=0
+r1 H2e 4 parts of <-/> (punctuation tag names) | upload=33293 B | preview ms=26 (+0 ms JSON) | maxRSS 67 -> 85 MiB (+18) | rejected:malformed_xml | exit=0
+r1 H3a 199 990 nested <a> | upload=23692 B | preview ms=10 (+0 ms JSON) | maxRSS 67 -> 80 MiB (+12) | rejected:malformed_xml | exit=0
+r1 H3b 4 MiB of nested <1> (uncounted) | upload=26144 B | preview ms=19 (+0 ms JSON) | maxRSS 67 -> 84 MiB (+17) | rejected:malformed_xml | exit=0
+r1 H3c 30-deep nesting repeated (counted) | upload=27447 B | preview ms=22 (+0 ms JSON) | maxRSS 66 -> 77 MiB (+11) | rejected:too_many_elements | exit=0
+r1 H4a one <c> with 4 MiB of attributes | upload=1066748 B | preview ms=66 (+0 ms JSON) | maxRSS 69 -> 138 MiB (+70) | rejected:too_many_attributes | exit=0
+r1 H4b 4 parts, one <c> each with 4 MiB of attributes | upload=4195737 B | preview ms=57 (+0 ms JSON) | maxRSS 74 -> 137 MiB (+62) | rejected:too_many_attributes | exit=0
+r1 H4c 4 parts, 49 000 cells each with short attributes | upload=73909 B | preview ms=53 (+0 ms JSON) | maxRSS 67 -> 92 MiB (+26) | rejected:too_many_attributes | exit=0
+r1 H5a 49 999 shared strings of 80 bytes | upload=40468 B | preview ms=61 (+0 ms JSON) | maxRSS 67 -> 90 MiB (+23) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r1 H5b one 4 MiB shared string x 2000 holiday names | upload=49542 B | preview ms=42 (+1 ms JSON) | maxRSS 66 -> 92 MiB (+26) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); preview JSON 0.567 MiB | exit=0
+r1 H5c one 4 MiB shared string x 2000 holiday names (upper-case first letter) | upload=49543 B | preview ms=40 (+1 ms JSON) | maxRSS 66 -> 91 MiB (+25) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); preview JSON 0.567 MiB | exit=0
+r1 H5d one 1 MiB shared string x 100 holiday names | upload=27913 B | preview ms=16 (+0 ms JSON) | maxRSS 66 -> 81 MiB (+15) | accepted (sheets=3, periods=0, holidays=100, errors=0, findings=4); preview JSON 0.030 MiB | exit=0
+r1 H5e one 4 MiB shared string x 60 dated sheets x 10 labels | upload=35999 B | preview ms=90 (+1 ms JSON) | maxRSS 67 -> 106 MiB (+39) | accepted (sheets=63, periods=60, holidays=9, errors=2311, findings=185); preview JSON 0.394 MiB | exit=0
+r1 H5f one 4 MiB shared string x 60 dated sheets x 10 labels (upper-case first letter) | upload=36000 B | preview ms=80 (+1 ms JSON) | maxRSS 66 -> 105 MiB (+39) | accepted (sheets=63, periods=60, holidays=9, errors=2311, findings=185); preview JSON 0.394 MiB | exit=0
+r1 H6a 3 dated sheets, label B14 an inline string of 4 MiB letters | upload=55700 B | preview ms=57 (+0 ms JSON) | maxRSS 67 -> 119 MiB (+52) | accepted (sheets=6, periods=3, holidays=9, errors=3, findings=18); preview JSON 0.019 MiB | exit=0
+r1 H6b 3 dated sheets, label B14 an inline string of 4 MiB U+0001 | upload=55703 B | preview ms=57 (+0 ms JSON) | maxRSS 67 -> 124 MiB (+57) | accepted (sheets=6, periods=3, holidays=9, errors=3, findings=18); preview JSON 0.024 MiB | exit=0
+r1 H7 Timesheet X24 formula of 4 MiB with an unterminated quote | upload=31054 B | preview ms=32 (+0 ms JSON) | maxRSS 66 -> 92 MiB (+25) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+r3 counted <c/> | upload=25940 B | preview ms=35 (+0 ms JSON) | maxRSS 67 -> 91 MiB (+25) | rejected:too_many_cells | exit=0
+r3 counted <row/> | upload=27871 B | preview ms=38 (+0 ms JSON) | maxRSS 67 -> 88 MiB (+21) | rejected:too_many_elements | exit=0
+r3 <1/> (digit tag name) | upload=25940 B | preview ms=17 (+0 ms JSON) | maxRSS 67 -> 83 MiB (+17) | rejected:malformed_xml | exit=0
+r3 <9/> | upload=25940 B | preview ms=18 (+0 ms JSON) | maxRSS 66 -> 82 MiB (+16) | rejected:malformed_xml | exit=0
+r3 < /> (empty tag name, space) | upload=25940 B | preview ms=19 (+0 ms JSON) | maxRSS 66 -> 83 MiB (+17) | rejected:malformed_xml | exit=0
+r3 <.a/> (dot-leading) | upload=27870 B | preview ms=28 (+0 ms JSON) | maxRSS 67 -> 87 MiB (+21) | rejected:malformed_xml | exit=0
+r3 one <c> with ~3.8 MiB of a0="" attributes | upload=1016829 B | preview ms=55 (+0 ms JSON) | maxRSS 68 -> 146 MiB (+78) | rejected:too_many_attributes | exit=0
+N1 tiny elements: 3 parts x 83 000 <a/> (total 249 000) | upload=28259 B | preview ms=18 (+0 ms JSON) | maxRSS 67 -> 78 MiB (+11) | rejected:too_many_elements | exit=0
+N2 tiny elements: 1 part x 99 990 <x/> + comments, PIs, CDATA | upload=28707 B | preview ms=19 (+0 ms JSON) | maxRSS 67 -> 78 MiB (+11) | accepted (sheets=4, periods=0, holidays=9, errors=0, findings=7); preview JSON 0.003 MiB | exit=0
+N3 attribute-heavy: 2 parts x 3 100 <x> of 64 attributes (198 400 per part) | upload=38567 B | preview ms=50 (+0 ms JSON) | maxRSS 67 -> 87 MiB (+20) | accepted (sheets=5, periods=0, holidays=9, errors=0, findings=8); preview JSON 0.003 MiB | exit=0
+N4 attribute-heavy: 3 parts x 3 100 cells of 64 attributes (total over) | upload=44624 B | preview ms=59 (+0 ms JSON) | maxRSS 67 -> 82 MiB (+16) | rejected:too_many_attributes | exit=0
+N5 long attribute values: 4 parts, 63 KiB r="..." on 60 cells each | upload=34465 B | preview ms=61 (+0 ms JSON) | maxRSS 67 -> 126 MiB (+59) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N6 deep nesting: 39 levels repeated to the element limit | upload=25070 B | preview ms=17 (+0 ms JSON) | maxRSS 67 -> 79 MiB (+12) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=2); preview JSON 0.002 MiB | exit=0
+N7 long text nodes: 4 parts, one cell <v> of 4 MiB | upload=33377 B | preview ms=64 (+0 ms JSON) | maxRSS 66 -> 127 MiB (+61) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N8 entity-dense text: 4 parts, one inline string of 4 MiB &amp; | upload=41557 B | preview ms=176 (+0 ms JSON) | maxRSS 67 -> 129 MiB (+62) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N9 many parts just under the limit: 4 parts x 4 MiB of valued cells | upload=65845 B | preview ms=69 (+0 ms JSON) | maxRSS 67 -> 92 MiB (+25) | rejected:too_many_elements | exit=0
+N9b many parts just under the byte limit: 4 parts x 30 000 cells of 110-digit values | upload=78533 B | preview ms=130 (+0 ms JSON) | maxRSS 66 -> 118 MiB (+51) | rejected:too_many_elements | exit=0
+N9c many parts just under the byte limit: 4 parts x 24 000 cells of 140-digit values | upload=103793 B | preview ms=130 (+0 ms JSON) | maxRSS 67 -> 114 MiB (+48) | accepted (sheets=4, periods=0, holidays=0, errors=1, findings=2); preview JSON 0.001 MiB | exit=0
+N10b shared formula of 8 KiB used by 19 000 cells on 2 dated sheets | upload=213806 B | preview ms=90 (+0 ms JSON) | maxRSS 67 -> 99 MiB (+32) | accepted (sheets=5, periods=2, holidays=9, errors=0, findings=14); preview JSON 0.014 MiB | exit=0
+N11 shared formula of 1 MiB used by 19 000 cells | upload=121857 B | preview ms=65 (+0 ms JSON) | maxRSS 67 -> 88 MiB (+21) | accepted (sheets=4, periods=1, holidays=9, errors=0, findings=9); preview JSON 0.008 MiB | exit=0
+N12 whitespace-only 4 MiB shared string as 2000 holiday dates and names | upload=44042 B | preview ms=39 (+0 ms JSON) | maxRSS 67 -> 92 MiB (+24) | accepted (sheets=3, periods=0, holidays=0, errors=2000, findings=30); preview JSON 0.005 MiB | exit=0
+N13 whitespace-only 4 MiB shared string as 61 dated sheets x 10 labels | upload=36005 B | preview ms=83 (+1 ms JSON) | maxRSS 67 -> 106 MiB (+39) | accepted (sheets=64, periods=61, holidays=9, errors=2350, findings=185); preview JSON 0.278 MiB | exit=0
+N14 sheet name "2026.01.09" + 1 MiB of spaces | upload=32564 B | preview ms=6 (+0 ms JSON) | maxRSS 67 -> 76 MiB (+9) | rejected:tag_too_large | exit=0
+N15b 58 external-link entries with 60 KiB names | upload=7161036 B | preview ms=15 (+0 ms JSON) | maxRSS 78 -> 83 MiB (+5) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=32); preview JSON 0.015 MiB | exit=0
+N18 most kept cells: 3 parts x 40 000 distinct valued cells (246 000 openings) | upload=352464 B | preview ms=111 (+0 ms JSON) | maxRSS 67 -> 137 MiB (+70) | rejected:too_many_elements | exit=0
+N20 most cells: 4 parts x 49 900 empty cells with distinct addresses | upload=466433 B | preview ms=118 (+0 ms JSON) | maxRSS 67 -> 174 MiB (+107) | rejected:too_many_elements | exit=0
+N20b most cells under the total: 4 parts x 46 000 empty cells with distinct addresses (columns C-V) | upload=430485 B | preview ms=118 (+0 ms JSON) | maxRSS 67 -> 170 MiB (+103) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N21 pinned text: 4 parts of 4 MiB with one non-Latin-1 character and a kept inline string | upload=33453 B | preview ms=61 (+0 ms JSON) | maxRSS 66 -> 129 MiB (+63) | accepted (sheets=4, periods=0, holidays=0, errors=0, findings=1); preview JSON 0.001 MiB | exit=0
+N19b most kept text: 49 900 shared strings of 60 characters, 40 000 used as cells | upload=275424 B | preview ms=99 (+0 ms JSON) | maxRSS 67 -> 107 MiB (+40) | accepted (sheets=3, periods=0, holidays=9, errors=0, findings=6); preview JSON 0.003 MiB | exit=0
+N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text | upload=379460 B | preview ms=95 (+3 ms JSON) | maxRSS 67 -> 107 MiB (+41) | accepted (sheets=64, periods=61, holidays=2000, errors=854, findings=157); preview JSON 1.073 MiB | exit=0
+N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON) | upload=56086 B | preview ms=29 (+3 ms JSON) | maxRSS 67 -> 88 MiB (+21) | accepted (sheets=3, periods=0, holidays=2000, errors=0, findings=4); preview JSON 2.441 MiB | exit=0
+N17 report flood with Excel-sized sheet names (31 chars) and errors everywhere | upload=334168 B | preview ms=60 (+1 ms JSON) | maxRSS 67 -> 99 MiB (+32) | accepted (sheets=64, periods=61, holidays=9, errors=1769, findings=185); preview JSON 0.512 MiB | exit=0

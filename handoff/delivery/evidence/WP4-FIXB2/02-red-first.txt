@@ -1,0 +1,89 @@
+# WP4-FIXB2 02 red-first
+# Run 1 (13:37 UTC): the new tests as first written, against the UNCHANGED source in the repository.
+# Command: npx vitest run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts ; exit 1
+     × red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500 2856ms
+     × red-first (RB-01): a report over the size cap is a typed 422 and stores nothing 208ms
+     × red-first (RB-01, R-RB1): a failure while the report is serialized is a typed 422, never a 500 193ms
+     × red-first (r3): refuses a part of tags led by a digit, a space, a dot or a hyphen, which the old count let through 812ms
+     × red-first (r1 H2a, H2b, H2e): four near-limit parts of such tags are refused, not parsed for seconds 3378ms
+     × red-first: counts every markup opening, whatever follows the "<": elements, comments, processing instructions, CDATA 22ms
+     × red-first (r1 H1c): four near-limit parts of counted elements are over the package total 307ms
+     × red-first (r3, r1 H4a, H4b): bounds the attributes of one element, of a part and of a package, and the bytes of one tag 1353ms
+     × red-first (r1 H5d): a 1 MiB shared string used as 100 holiday names gives a report of kilobytes, not 100 MiB 151ms
+     × red-first (r1 H5b): a 4 MiB shared string used as 2 000 holiday names builds a bounded report and never throws 5266ms
+     × red-first (r1 H6a, H6b, H5e): labels of megabytes are cut to the text limit, flagged, and never matched 590ms
+     × red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source 63ms
+     × red-first: a shared formula of megabytes used by thousands of cells is examined once, and still counted per cell 6307ms
+     × red-first: megabytes of whitespace used as 2 000 holiday dates and names are examined over a bounded prefix 3780ms
+     × adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound 501ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 201 to be 422 // Object.is equality
+AssertionError: expected null to be an instance of ApiError
+AssertionError: expected 500 to be 422 // Object.is equality
+AssertionError: <1/>: expected null to be 'malformed_xml' // Object.is equality
+AssertionError: <1/>: expected null to be 'malformed_xml' // Object.is equality
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+AssertionError: expected null to be 'too_many_attributes' // Object.is equality
+AssertionError: expected 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…' to have a length of undefined but got 1046478
+RangeError: Invalid string length
+AssertionError: expected 'qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…' to have a length of undefined but got 4148160
+AssertionError: expected null to be 'sheet_name_too_long' // Object.is equality
+AssertionError: expected 6290.2713 to be less than 3000
+AssertionError: expected 3706.897000000001 to be less than 2000
+AssertionError: 100 005 openings in one part: expected null to be 'too_many_elements' // Object.is equality
+ Test Files  2 failed (2)
+      Tests  15 failed | 69 passed (84)
+
+# Run 2 (final): the FINAL test files copied into the baseline export <task>/base (source of 0f7fba2), then the export's own test files restored (sha256 equal to HEAD's, shown at the end).
+# Command (in <task>/base): npx vitest run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts --reporter=verbose ; exit 1
+2026-10-06T14:11:05Z
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: an identical re-import changes no row count and returns the first batch 203ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: two concurrent identical commits produce one committed batch 328ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: a conflicting day without a decision refuses the commit and writes nothing 223ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: never overwrites a finalized period 220ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first (R3): a period that has ended but is not yet due is skip-only, so an import cannot make a live period unsignable 286ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: another user cannot read or commit someone else's preview (404) 311ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: an administrator gets 404 for another person's import and has no route to import for anyone else 267ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: a share grantee cannot import for, read or commit the owner's imports 337ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event 352ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: the timesheet read exposes imported_unverified as a boolean only (WP4-T11) 330ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing 218ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first (WP4-B-01, B-02): a small upload that would cost seconds or crash the mapping is a typed 422 and stores nothing 903ms
+ × tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500 2844ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3): refuses a part of tags led by a digit, a space, a dot or a hyphen, which the old count let through 857ms
+ × tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01): a report over the size cap is a typed 422 and stores nothing 219ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H2a, H2b, H2e): four near-limit parts of such tags are refused, not parsed for seconds 3673ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: counts every markup opening, whatever follows the "<": elements, comments, processing instructions, CDATA 19ms
+ × tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, R-RB1): a failure while the report is serialized is a typed 422, never a 500 241ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the stored source through the orphan sweep 227ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are never automated (F-2, docs/05 imported history) > red-first: no reminder, overdue record, deadline finalization or send across simulated deadlines 846ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H1c): four near-limit parts of counted elements are over the package total 316ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3, r1 H4a, H4b): bounds the attributes of one element, of a part and of a package, and the bytes of one tag 1493ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5d): a 1 MiB shared string used as 100 holiday names gives a report of kilobytes, not 100 MiB 155ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5b): a 4 MiB shared string used as 2 000 holiday names builds a bounded report and never throws 5488ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H6a, H6b, H5e): labels of megabytes are cut to the text limit, flagged, and never matched 579ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source 16ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a shared formula of megabytes used by thousands of cells is examined once, and still counted per cell 6239ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: megabytes of whitespace used as 2 000 holiday dates and names are examined over a bounded prefix 3726ms
+ ✓ tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > keeps the tracked template and a realistic workbook of 12 dated sheets previewing, untruncated, inside the budget 80ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound 512ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 201 to be 422 // Object.is equality
+AssertionError: expected null to be an instance of ApiError
+AssertionError: report_too_large: expected 500 to be 422 // Object.is equality
+AssertionError: <1/>: expected null to be 'malformed_xml' // Object.is equality
+AssertionError: <1/>: expected null to be 'malformed_xml' // Object.is equality
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+AssertionError: expected null to be 'too_many_attributes' // Object.is equality
+AssertionError: expected 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…' to have a length of undefined but got 1046478
+RangeError: Invalid string length
+AssertionError: expected 'qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq…' to have a length of undefined but got 4148160
+AssertionError: expected null to be 'sheet_name_too_long' // Object.is equality
+AssertionError: expected 6222.6365000000005 to be less than 3000
+AssertionError: expected 3654.2700000000004 to be less than 2000
+AssertionError: 100 005 openings in one part: expected null to be 'too_many_elements' // Object.is equality
+ Test Files  2 failed (2)
+      Tests  15 failed | 69 passed (84)
+restore check: workbook-reader.test.ts base=a7193f572b37d568 head=a7193f572b37d568; workbook-import.test.ts base=f3bec0f9f33559d5 head=f3bec0f9f33559d5 (first 16 hex of sha256)

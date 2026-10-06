@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatUtcInstant } from '../../src/domain/instants.ts';
 import { payPeriodForPayrollDate } from '../../src/domain/periods.ts';
 import { createApp } from '../../src/server/app.ts';
@@ -14,6 +14,7 @@ import { loadDeliveryConfig } from '../../src/server/config.ts';
 import { openDatabase } from '../../src/server/db/database.ts';
 import { migrate, MIGRATIONS } from '../../src/server/db/migrations.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
+import { ApiError } from '../../src/server/http/errors.ts';
 import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSweepJobHandler, JOB_ORPHAN_SWEEP } from '../../src/server/jobs/sweepJob.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
@@ -743,6 +744,112 @@ describe('upload validation', () => {
     const crowded = await upload(holidays);
     expect(crowded.status).toBe(422);
     expect(crowded.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'too_many_cells' } });
+    expect(count('SELECT count(*) FROM imports')).toBe(0);
+    expect(storedFiles()).toEqual([]);
+  });
+
+  it('red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500', async () => {
+    const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    const head = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+    const tail = '</row></sheetData></worksheet>';
+    const near = 4 * 1024 * 1024 - 6 * 1024;
+    const encode = (text: string) => new TextEncoder().encode(text);
+    const base = readTemplateBytes();
+
+    // r2 H2a: parts of digit-led tags (a 201 after 3.2 s, with /api/health blocked for 2.9 s, before).
+    let digits = base;
+    for (const part of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml']) {
+      digits = withEntry(digits, part, encode(head + '<1/>'.repeat(Math.floor((near - head.length - tail.length) / 4)) + tail));
+    }
+    const started = performance.now();
+    const refused = await upload(digits);
+    expect(refused.status).toBe(422);
+    expect(refused.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'malformed_xml' } });
+    expect(performance.now() - started).toBeLessThan(5000);
+
+    // A long sheet name would be copied into every source of the report (a megabyte of name: a 124 MiB response before).
+    const sheetName = PB.replace(/-/g, '.');
+    for (const [padding, reason] of [[10_000, 'sheet_name_too_long'], [1024 * 1024, 'tag_too_large']] as const) {
+      const named = withText(workbook([{ payrollDate: PB }]), 'xl/workbook.xml', (xml) => (xml ?? '').replace(`name="${sheetName}"`, `name="${sheetName}${' '.repeat(padding)}"`));
+      const longName = await upload(named);
+      expect(longName.status, reason).toBe(422);
+      expect(longName.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason } });
+    }
+    expect(count('SELECT count(*) FROM imports')).toBe(0);
+    expect(storedFiles()).toEqual([]);
+
+    // r2 H5d and H5b: one shared string of 1 MiB used as 100 holiday names (a 99.8 MiB report before) and of 4 MiB used
+    // as 2 000 holiday names (a RangeError and a 500 internal_error after 5 s before): both preview with a small report.
+    const holidaySheet = (rows: number) => {
+      const out: string[] = [];
+      for (let row = 2; row < 2 + rows; row += 1) out.push(`<row r="${row}"><c r="A${row}"><v>${46_023 + row}</v></c><c r="B${row}" t="s"><v>66</v></c></row>`);
+      return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${out.join('')}</sheetData></worksheet>`;
+    };
+    for (const [size, rows] of [[1024 * 1024, 100], [near, 2000]] as const) {
+      const withString = withText(base, 'xl/sharedStrings.xml', (sst) => (sst ?? '').replace('</sst>', `<si><t>${'a'.repeat(size - (sst ?? '').length - 40)}</t></si></sst>`));
+      const response = await upload(withText(withString, 'xl/worksheets/sheet2.xml', () => holidaySheet(rows)));
+      expect(response.status, `${rows} holiday names`).toBe(201);
+      const holidays = response.body.import.report.holidays as Array<{ name: string; truncated?: boolean }>;
+      expect(holidays).toHaveLength(rows);
+      expect(holidays[0]?.name).toHaveLength(200);
+      expect(holidays[0]?.truncated).toBe(true);
+      const stored = Number(t.db.prepare('SELECT length(report_json) FROM imports WHERE id = ?').pluck().get(response.body.import.id));
+      expect(stored, `${rows} holiday names`).toBeLessThan(1024 * 1024);
+    }
+  });
+
+  it('red-first (RB-01): a report over the size cap is a typed 422 and stores nothing', () => {
+    const user: SessionUser = { id: t.userIds.employee, email: 'employee@example.invalid', displayName: 'Synthetic Employee', role: 'employee', calendarId: t.calendarId, sessionId: 'test' };
+    const bytes = workbook([{ payrollDate: PB }]);
+    let caught: unknown = null;
+    try {
+      previewImport({ db: t.db, clock: t.clock, files, user }, bytes, { maxReportBytes: 4 * 1024 });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect(caught).toMatchObject({ status: 422, code: 'workbook_rejected', details: { reason: 'report_too_large' } });
+    expect(count('SELECT count(*) FROM imports')).toBe(0);
+    expect(storedFiles()).toEqual([]);
+    // The same workbook under the default cap is an ordinary preview.
+    expect(previewImport({ db: t.db, clock: t.clock, files, user }, bytes).created).toBe(true);
+  });
+
+  it('red-first (RB-01, R-RB1): a failure while the report is serialized is a typed 422, never a 500', async () => {
+    const stringify = JSON.stringify;
+    const failures = [
+      [new RangeError('Invalid string length'), 'report_too_large'],
+      [new TypeError('Synthetic failure'), 'report_failed'],
+    ] as const;
+    for (const [failure, reason] of failures) {
+      const failing = vi.spyOn(JSON, 'stringify').mockImplementation((value: unknown, ...rest: unknown[]) => {
+        if (value !== null && typeof value === 'object' && 'rules' in value && 'plan' in value) throw failure;
+        return stringify(value, ...(rest as [undefined, undefined]));
+      });
+      let response: RawResponse;
+      try {
+        response = await upload(workbook([{ payrollDate: PB }]));
+      } finally {
+        failing.mockRestore();
+      }
+      expect(response.status, reason).toBe(422);
+      expect(response.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason } });
+    }
+    // A failure inside the mapping itself (simulated on one cell's text) is a refusal too, never a 500.
+    const marker = 'RB01 failure marker';
+    const trim = String.prototype.trim;
+    const failingTrim = vi.spyOn(String.prototype, 'trim').mockImplementation(function (this: string): string {
+      if (this.startsWith(marker)) throw new RangeError('Maximum call stack size exceeded');
+      return trim.call(this);
+    });
+    let mapped: RawResponse;
+    try {
+      mapped = await upload(workbook([{ payrollDate: PB, employee: marker }]));
+    } finally {
+      failingTrim.mockRestore();
+    }
+    expect(mapped.status).toBe(422);
+    expect(mapped.body.error).toMatchObject({ code: 'workbook_rejected', details: { reason: 'report_failed' } });
     expect(count('SELECT count(*) FROM imports')).toBe(0);
     expect(storedFiles()).toEqual([]);
   });

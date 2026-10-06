@@ -1,0 +1,25 @@
+// WP4-REGATE R-A1 probe: synthetic backup folders, one dated after the clock; the built CLI must exit 2 and remove nothing.
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildManifest, MANIFEST_FILE_NAME, serializeManifest } from '../export/src/server/ops/manifest.ts';
+const [exportDir, work] = process.argv.slice(2);
+const target = join(work, 'target');
+mkdirSync(target, { recursive: true });
+const SHA = '0'.repeat(64);
+const nameOf = (i, hex) => `timesheet-backup-${i.replace(/[-:]/g, '')}-${hex}`;
+for (const [i, hex] of [['2024-01-01T00:00:00Z', 'a1b2c3d4'], ['2026-09-01T00:00:00Z', 'b1b2c3d4'], ['2099-01-01T00:00:00Z', 'c1b2c3d4']]) {
+  const dir = join(target, nameOf(i, hex));
+  mkdirSync(join(dir, 'files'), { recursive: true });
+  writeFileSync(join(dir, 'timesheet.db'), 'synthetic database copy');
+  writeFileSync(join(dir, 'files', 'abc'), 'synthetic file');
+  writeFileSync(join(dir, MANIFEST_FILE_NAME), serializeManifest(buildManifest({ appVersion: '0.0.0', schemaVersion: 9, createdAt: i, database: { sha256: SHA, sizeBytes: 23 }, files: [{ storageKey: 'abc', kind: 'pdf', sha256: SHA, sizeBytes: 14 }] })));
+}
+const before = readdirSync(target).sort();
+const env = { ...process.env, DATABASE_PATH: join(work, 'nodb.db'), DATA_DIR: join(work, 'data') };
+const cli = (args) => spawnSync(process.execPath, [join(exportDir, 'dist', 'server', 'cli.js'), ...args], { env, encoding: 'utf8' });
+const dry = cli(['backup', 'prune', '--in', target, '--dry-run']);
+console.log(`dry run: exit=${dry.status} stdout=${JSON.stringify(dry.stdout)} stderr=${JSON.stringify(dry.stderr.trim())}`);
+const after = readdirSync(target).sort();
+console.log(`before=${before.length} after=${after.length} identical=${JSON.stringify(before) === JSON.stringify(after)}`);
+console.log(`stderr names no path or folder: ${!dry.stderr.includes(work) && !dry.stderr.includes('timesheet-backup-')}`);

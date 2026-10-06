@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { addDays, fromDayNumber, isCivilDate, type CivilDate } from '../../domain/dates.ts';
-import { readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
+import { type CellValue, readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
 
 /*
  * Template mapping, version 1 (WP4-T08). Turns a read workbook into a structured preview model: the dated payroll
@@ -28,6 +28,19 @@ export const MAX_FINDING_SOURCES = 20;
 export const MAX_FINDINGS_PER_CODE = 25;
 /** A holiday table has about ten rows a year; more than this is not a holiday table and is refused. */
 export const MAX_HOLIDAY_ROWS = 2000;
+/**
+ * The longest workbook text the preview keeps (WP4-FIXB2, recheck finding RB-01): a day label, a holiday name, the
+ * employee cell, a label in a finding, a part name. Longer text is cut to this length and flagged `truncated`, so the
+ * report's size does not depend on what a cell holds.
+ */
+export const MAX_TEXT_LENGTH = 200;
+/**
+ * Only this many leading characters of a cell's text are examined (trimmed, compared with the labels and holiday
+ * names, parsed as a date or a time), so the work per examined cell is fixed however long the text is, even when one
+ * shared string of megabytes fills thousands of cells. Longer text is never a known label, a holiday name, a date or
+ * a time.
+ */
+const MAX_TEXT_SCAN = 1024;
 
 export type FindingCode =
   | 'formula_hours_8_5'
@@ -61,7 +74,10 @@ export type Finding = {
   sources: string[];
   /** How many sources the finding has in all (>= `sources.length`). */
   sourceCount: number;
-  /** Small structured facts for the preview; never free-form workbook content beyond the cell text itself. */
+  /**
+   * Small structured facts for the preview; never free-form workbook content beyond the cell text itself, which is
+   * cut to `MAX_TEXT_LENGTH` characters (`truncated: true` when it was cut).
+   */
   details?: Record<string, string | number | boolean>;
 };
 
@@ -130,7 +146,8 @@ export type SheetSummary = {
   hidden: boolean;
 };
 
-export type CellReference<T> = { value: T; source: string; fromFormulaCache: boolean };
+/** A value read from a cell. Text is at most `MAX_TEXT_LENGTH` characters; `truncated` is present only when it was cut. */
+export type CellReference<T> = { value: T; source: string; fromFormulaCache: boolean; truncated?: true };
 
 export type DayPreview = {
   /** 0..13: Monday of week 1 to Sunday of week 2. */
@@ -156,7 +173,8 @@ export type PeriodPreview = {
   days: DayPreview[];
 };
 
-export type HolidayPreview = { date: CivilDate; name: string; floating: boolean; source: string };
+/** `name` is at most `MAX_TEXT_LENGTH` characters; `truncated` is present only when it was cut. */
+export type HolidayPreview = { date: CivilDate; name: string; floating: boolean; source: string; truncated?: true };
 
 export type WorkbookPreview = {
   mappingVersion: typeof MAPPING_VERSION;
@@ -230,11 +248,36 @@ function serialToDate(serial: number, date1904: boolean): CivilDate | null {
   return isCivilDate(date) ? date : null;
 }
 
+/** A cell's text as the mapping examines it: trimmed, over at most `MAX_TEXT_SCAN` characters (WP4-FIXB2). */
+type ScannedText = {
+  text: string;
+  /** False when the cell holds more than `MAX_TEXT_SCAN` characters: such text is never matched or parsed. */
+  complete: boolean;
+};
+
+function scanText(value: CellValue): ScannedText {
+  const raw = String(value);
+  return raw.length <= MAX_TEXT_SCAN ? { text: raw.trim(), complete: true } : { text: raw.slice(0, MAX_TEXT_SCAN).trim(), complete: false };
+}
+
+/** Text as the preview keeps it: at most `MAX_TEXT_LENGTH` characters, and whether anything was cut. */
+function keptText(scanned: ScannedText): { value: string; truncated: boolean } {
+  const truncated = !scanned.complete || scanned.text.length > MAX_TEXT_LENGTH;
+  return { value: truncated ? scanned.text.slice(0, MAX_TEXT_LENGTH) : scanned.text, truncated };
+}
+
+/** Workbook text that is not a cell value (a part name) as the preview keeps it. */
+function clipText(text: string): string {
+  return text.length > MAX_TEXT_LENGTH ? text.slice(0, MAX_TEXT_LENGTH) : text;
+}
+
 function readDate(picked: Picked, date1904: boolean): CivilDate | null {
   const value = pickedValue(picked);
   if (typeof value === 'number') return serialToDate(value, date1904);
   if (typeof value === 'string') {
-    const text = value.trim().replace(/^(\d{4})[./](\d{2})[./](\d{2})$/, '$1-$2-$3');
+    const scanned = scanText(value);
+    if (!scanned.complete) return null;
+    const text = scanned.text.replace(/^(\d{4})[./](\d{2})[./](\d{2})$/, '$1-$2-$3');
     return isCivilDate(text) ? text : null;
   }
   return null;
@@ -247,7 +290,8 @@ function readMinutes(picked: Picked): number | null {
     return value >= 0 && minutes <= MAX_CLOCK_MINUTES ? minutes : null;
   }
   if (typeof value === 'string') {
-    const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+    const scanned = scanText(value);
+    const match = scanned.complete ? /^(\d{1,2}):(\d{2})$/.exec(scanned.text) : null;
     if (match) {
       const minutes = Number(match[1]) * 60 + Number(match[2]);
       return Number(match[2]) < 60 ? minutes : null;
@@ -256,8 +300,10 @@ function readMinutes(picked: Picked): number | null {
   return null;
 }
 
-function reference<T>(picked: Picked, value: T): CellReference<T> {
-  return { value, source: picked.cell.provenance, fromFormulaCache: picked.fromFormulaCache };
+function reference<T>(picked: Picked, value: T, truncated = false): CellReference<T> {
+  const ref: CellReference<T> = { value, source: picked.cell.provenance, fromFormulaCache: picked.fromFormulaCache };
+  if (truncated) ref.truncated = true;
+  return ref;
 }
 
 function dateFromSheetName(name: string): CivilDate | null {
@@ -294,11 +340,19 @@ function detectFormulaDefects(sheet: ReadSheet): RawFinding[] {
   const findings: RawFinding[] = [];
   const hours: string[] = [];
   const volatile: string[] = [];
+  // Each distinct formula text is examined once: every cell of a shared formula holds the same string (WP4-FIXB2),
+  // and the reader keeps at most 8 192 characters of a formula, so the keys hash on their content.
+  const examined = new Map<string, { hours: boolean; volatile: boolean }>();
   for (const cell of sheet.cells.values()) {
     if (cell.formula === null || cell.formula === '') continue;
-    const body = stripStrings(cell.formula);
-    if (HOURS_8_5.test(body)) hours.push(cell.provenance);
-    if (VOLATILE_NOW.test(body) && cell.address !== 'W26') volatile.push(cell.provenance);
+    let facts = examined.get(cell.formula);
+    if (facts === undefined) {
+      const body = stripStrings(cell.formula);
+      facts = { hours: HOURS_8_5.test(body), volatile: VOLATILE_NOW.test(body) };
+      examined.set(cell.formula, facts);
+    }
+    if (facts.hours) hours.push(cell.provenance);
+    if (facts.volatile && cell.address !== 'W26') volatile.push(cell.provenance);
   }
   if (hours.length > 0) {
     findings.push({
@@ -345,8 +399,15 @@ function detectFormulaDefects(sheet: ReadSheet): RawFinding[] {
 // ---------------------------------------------------------------------------------------------------------------------
 // Support sheets
 
-function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[]): HolidayPreview[] {
+type HolidayTable = {
+  holidays: HolidayPreview[];
+  /** Holidays by their whole name in lower case (the first of each name), for label matching. */
+  byName: Map<string, HolidayPreview>;
+};
+
+function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[]): HolidayTable {
   const holidays: HolidayPreview[] = [];
+  const byName = new Map<string, HolidayPreview>();
   const seen = new Map<CivilDate, string>();
   // Visit only the rows that have a date or name cell, in row order. The row numbers come from the cells that exist,
   // never from a spread over the cell list (a stack overflow at about 100 000 cells) and never from a loop up to
@@ -366,7 +427,8 @@ function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[
     const nameCell = pick(sheet, `B${row}`);
     if (dateCell === null && nameCell === null) continue;
     const date = dateCell === null ? null : readDate(dateCell, date1904);
-    const name = nameCell === null ? '' : String(pickedValue(nameCell)).trim();
+    const scanned = nameCell === null ? { text: '', complete: true } : scanText(pickedValue(nameCell));
+    const name = keptText(scanned);
     if (dateCell === null || date === null) {
       findings.push({
         code: 'invalid_date_cell',
@@ -376,7 +438,7 @@ function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[
       });
       continue;
     }
-    const floating = /floating/i.test(name);
+    const floating = /floating/i.test(scanned.text);
     const source = dateCell.cell.provenance;
     const earlier = seen.get(date);
     if (earlier !== undefined) {
@@ -396,12 +458,17 @@ function readHolidays(sheet: ReadSheet, date1904: boolean, findings: RawFinding[
         severity: 'warning',
         message: 'A floating holiday is not a fixed company holiday; the owner decides whether it counts as one.',
         sources: [source, nameCell?.cell.provenance ?? `${sheet.name}!B${row}`],
-        details: { date, label: name },
+        details: name.truncated ? { date, label: name.value, truncated: true } : { date, label: name.value },
       });
     }
-    holidays.push({ date, name, floating, source });
+    const holiday: HolidayPreview = { date, name: name.value, floating, source };
+    if (name.truncated) holiday.truncated = true;
+    holidays.push(holiday);
+    // Only a name read whole can equal a label; a longer one is listed (cut) but never matched.
+    const key = scanned.text.toLowerCase();
+    if (scanned.complete && !byName.has(key)) byName.set(key, holiday);
   }
-  return holidays;
+  return { holidays, byName };
 }
 
 function readPayrollCalendar(sheet: ReadSheet, date1904: boolean): CivilDate[] {
@@ -450,7 +517,8 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
     }
   }
   const employeePick = pick(sheet, 'I8');
-  const employee = employeePick === null ? null : track(reference(employeePick, String(pickedValue(employeePick)).trim()));
+  const employeeText = employeePick === null ? null : keptText(scanText(pickedValue(employeePick)));
+  const employee = employeePick === null || employeeText === null ? null : track(reference(employeePick, employeeText.value, employeeText.truncated));
 
   const periodStart = addDays(payrollDate, -18);
   const days: DayPreview[] = [];
@@ -504,10 +572,13 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
     let mapping: LabelMapping | null = null;
     let holidayName: string | null = null;
     if (labelPick !== null) {
-      const text = String(pickedValue(labelPick)).trim();
-      label = track(reference(labelPick, text));
-      const known = KNOWN_DAY_LABELS.get(text.toLowerCase());
-      const holiday = context.holidayNames.get(text.toLowerCase());
+      const scanned = scanText(pickedValue(labelPick));
+      const text = keptText(scanned);
+      label = track(reference(labelPick, text.value, text.truncated));
+      // A label longer than the scanned prefix is never compared: it can be neither a template label nor a holiday.
+      const key = scanned.complete ? scanned.text.toLowerCase() : null;
+      const known = key === null ? undefined : KNOWN_DAY_LABELS.get(key);
+      const holiday = key === null ? undefined : context.holidayNames.get(key);
       if (known !== undefined) {
         mapping = known;
       } else if (holiday !== undefined) {
@@ -519,7 +590,7 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
           severity: 'error',
           message: 'The day label is not in the template label list or the holiday table.',
           sources: [labelPick.cell.provenance],
-          details: { label: text },
+          details: text.truncated ? { label: text.value, truncated: true } : { label: text.value },
         });
       }
     }
@@ -594,16 +665,14 @@ export function mapWorkbook(workbook: ReadWorkbook, source: { sha256: string; by
   }
   for (const note of workbook.notes) {
     if (note.code === 'external_link_ignored') {
-      findings.push({ code: 'external_link_ignored', severity: 'info', message: 'An external link was ignored and not followed.', sources: [note.part] });
+      findings.push({ code: 'external_link_ignored', severity: 'info', message: 'An external link was ignored and not followed.', sources: [clipText(note.part)] });
     }
   }
 
   const working = workbook.sheets.find((sheet) => sheet.name === WORKING_INFOS && sheet.kind === 'worksheet');
   const holidaySheet = workbook.sheets.find((sheet) => sheet.name === HOLIDAY_DATES && sheet.kind === 'worksheet');
   const calendarDates = working === undefined ? [] : readPayrollCalendar(working, workbook.date1904);
-  const holidays = holidaySheet === undefined ? [] : readHolidays(holidaySheet, workbook.date1904, findings);
-  const holidayNames = new Map<string, HolidayPreview>();
-  for (const holiday of holidays) if (!holidayNames.has(holiday.name.toLowerCase())) holidayNames.set(holiday.name.toLowerCase(), holiday);
+  const { holidays, byName: holidayNames } = holidaySheet === undefined ? { holidays: [], byName: new Map<string, HolidayPreview>() } : readHolidays(holidaySheet, workbook.date1904, findings);
   const context: PeriodContext = { date1904: workbook.date1904, holidayNames, payrollCalendar: new Set(calendarDates), findings };
 
   const payrollSheets = new Map<CivilDate, string[]>();

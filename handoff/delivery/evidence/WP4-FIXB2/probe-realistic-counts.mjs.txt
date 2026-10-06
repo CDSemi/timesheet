@@ -1,0 +1,38 @@
+// WP4-FIXB2: markup counts of realistic workbooks (template, 12, 60 and 64 dated sheets), per parsed part.
+// Usage: PROBE_ROOT=<export> node realistic-counts.mjs
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const ROOT = process.env.PROBE_ROOT;
+const sw = await import(pathToFileURL(join(ROOT, 'tests/support/syntheticWorkbook.ts')).href);
+const { strFromU8 } = await import(pathToFileURL(join(ROOT, 'node_modules/fflate/esm/index.mjs')).href);
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+const books = {
+  template: sw.readTemplateBytes(),
+  'dated-12': sw.buildSyntheticWorkbook({ periods: Array.from({ length: 12 }, (_, i) => ({ payrollDate: addDays('2026-01-09', 14 * i) })) }),
+  'dated-60': sw.buildSyntheticWorkbook({ periods: Array.from({ length: 60 }, (_, i) => ({ payrollDate: addDays('2024-01-12', 14 * i) })) }),
+  'dated-61 (64 sheets)': sw.buildSyntheticWorkbook({ periods: Array.from({ length: 61 }, (_, i) => ({ payrollDate: addDays('2024-01-12', 14 * i) })) }),
+};
+const parsed = (name) => name === '[Content_Types].xml' || name === 'xl/workbook.xml' || name === 'xl/_rels/workbook.xml.rels' || name === 'xl/sharedStrings.xml' || /^xl\/worksheets\/[^/]+\.xml$/.test(name);
+for (const [label, bytes] of Object.entries(books)) {
+  const entries = sw.unpack(bytes);
+  let total = { bytes: 0, opens: 0, attrs: 0, parts: 0, cells: 0 };
+  let max = { bytes: 0, opens: 0, attrs: 0, attrsPerElement: 0, tag: 0, cells: 0, rows: 0, depth: 0 };
+  for (const [name, data] of Object.entries(entries)) {
+    if (!parsed(name)) continue;
+    const text = strFromU8(data);
+    const opens = (text.match(/<(?!\/)/g) ?? []).length;
+    let attrs = 0;
+    for (const tag of text.matchAll(/<[^!?/][^>]*>/g)) {
+      const n = (tag[0].match(/\s[^\s=<>/]+\s*=\s*("[^"]*"|'[^']*')/g) ?? []).length;
+      attrs += n;
+      max.attrsPerElement = Math.max(max.attrsPerElement, n);
+      max.tag = Math.max(max.tag, tag[0].length);
+    }
+    const cells = (text.match(/<c[\s/>]/g) ?? []).length;
+    const rows = (text.match(/<row[\s/>]/g) ?? []).length;
+    total.bytes += data.length; total.opens += opens; total.attrs += attrs; total.parts += 1; total.cells += cells;
+    max.bytes = Math.max(max.bytes, data.length); max.opens = Math.max(max.opens, opens); max.attrs = Math.max(max.attrs, attrs);
+    max.cells = Math.max(max.cells, cells); max.rows = Math.max(max.rows, rows);
+  }
+  console.log(`${label}: upload ${bytes.length} B | parsed parts ${total.parts}, XML ${total.bytes} B, markup openings ${total.opens}, attributes ${total.attrs}, cells ${total.cells} | largest part ${max.bytes} B, ${max.opens} openings, ${max.attrs} attributes, ${max.cells} cells, ${max.rows} rows; most attributes on one element ${max.attrsPerElement}; longest start tag ${max.tag} B`);
+}

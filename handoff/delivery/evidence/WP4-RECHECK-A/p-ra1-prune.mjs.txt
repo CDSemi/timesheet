@@ -1,0 +1,189 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A probe: prune after the fix round (R-A1), on the built export (dist/), synthetic folders only.
+//  A. Library, injected clocks: a candidate dated after the clock refuses the whole run (dry run and real) and removes
+//     nothing; the boundary (a backup at the clock instant, one second later); a future-dated folder that is not the
+//     tool's does not trigger the refusal; a normal run still prunes, and its kept set equals an independent
+//     re-implementation of the 7 day / 4 ISO week / 6 month rule.
+//  B. CLI, real clock and a real migrated database (explicit DATABASE_PATH and DATA_DIR): `backup prune --dry-run` and
+//     `backup --to --prune` with a future-dated backup exit 2, print no name or path and remove nothing (the new backup
+//     is kept); `backup --to --prune` without one still prunes (exit 0).
+//  C. Scope item 5: two backups in the same UTC second (library, deterministic names) and back-to-back CLI runs.
+//  D. Retention and the paired pre-upgrade backup: a later backup of the same UTC day removes it at the next --prune.
+// Usage: node p-ra1-prune.mjs <export dir> <work dir>
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, work] = process.argv.slice(2);
+if (existsSync(work)) throw new Error('work folder is not fresh');
+mkdirSync(work, { recursive: true });
+const { pruneBackups, PruneError } = await import(pathToFileURL(join(exportDir, 'dist', 'server', 'ops', 'prune.js')).href);
+const CLI = join(exportDir, 'dist', 'server', 'cli.js');
+
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const info = (text) => console.log(`INFO  ${text}`);
+const clockAt = (iso) => ({ now: () => new Date(iso) });
+const iso = (date) => date.toISOString().replace('.000Z', 'Z');
+const compact = (instant) => instant.replace(/[-:]/g, '');
+const nameOf = (instant, hex) => `timesheet-backup-${compact(instant)}-${hex}`;
+const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+function manifest(createdAt) {
+  return JSON.stringify({
+    format: 'timesheet-backup', format_version: 1, app_version: '0.1.0', schema_version: 13, created_at: createdAt,
+    integrity: { integrity_check: 'ok', foreign_key_violations: 0, files_verified: 0 },
+    database: { name: 'timesheet.db', sha256: '0'.repeat(64), size_bytes: 1 },
+    files: [],
+  });
+}
+function backupFolder(root, instant, hex, manifestInstant = instant) {
+  const dir = join(root, nameOf(instant, hex));
+  mkdirSync(join(dir, 'files'), { recursive: true });
+  writeFileSync(join(dir, 'timesheet.db'), 'x');
+  writeFileSync(join(dir, 'manifest.json'), manifest(manifestInstant));
+  return nameOf(instant, hex);
+}
+function tree(dir) {
+  const out = [];
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (lstatSync(path).isDirectory()) { out.push(`${path.slice(dir.length)}/`); walk(path); } else out.push(`${path.slice(dir.length)} ${sha(path)}`);
+    }
+  };
+  walk(dir);
+  return out.sort().join('\n');
+}
+function attempt(fn) {
+  try { return { value: fn(), error: null }; } catch (error) { return { value: null, error }; }
+}
+
+// ---------------------------------------------------------------- A. library
+const a1 = join(work, 'a1');
+const old = [backupFolder(a1, '2024-01-01T00:00:00Z', '00000001'), backupFolder(a1, '2025-06-01T00:00:00Z', '00000002')];
+const recent = backupFolder(a1, '2026-10-05T03:00:00Z', '00000003');
+const beforeA1 = tree(a1);
+for (const dryRun of [true, false]) {
+  const run = attempt(() => pruneBackups({ targetDir: a1, clock: clockAt('2025-01-01T00:00:00Z'), dryRun }));
+  check(`clock set back (2025-01-01) with a 2026 backup: ${dryRun ? 'dry run' : 'real run'} refused with clock_behind_backups (refusal, exit 2 class)`, run.error instanceof PruneError && run.error.code === 'clock_behind_backups' && run.error.refusal === true, run.error?.code ?? JSON.stringify(run.value));
+}
+check('clock set back: nothing removed or changed', tree(a1) === beforeA1, `${old.length + 1} folders`);
+const realRequired = attempt(() => pruneBackups({ targetDir: a1, clock: clockAt('2025-01-01T00:00:00Z'), dryRun: false, requiredName: old[1] }));
+check('clock set back, real run that names the new backup: still refused before any removal', realRequired.error?.code === 'clock_behind_backups' && tree(a1) === beforeA1);
+check('refusal message names no folder, instant or path', realRequired.error !== null && !/timesheet-backup|2026|2025|2024|[A-Za-z]:\\/.test(realRequired.error.message), realRequired.error?.message);
+const atClock = attempt(() => pruneBackups({ targetDir: a1, clock: clockAt('2026-10-05T03:00:00Z'), dryRun: true }));
+check('boundary: newest backup exactly at the clock instant is accepted (dry run counts)', atClock.error === null && atClock.value.candidates === 3, JSON.stringify(atClock.value));
+const oneBehind = attempt(() => pruneBackups({ targetDir: a1, clock: clockAt('2026-10-05T02:59:59Z'), dryRun: true }));
+check('boundary: one second behind the newest backup is refused', oneBehind.error?.code === 'clock_behind_backups');
+check('recent backup still present', existsSync(join(a1, recent)));
+
+const a2 = join(work, 'a2');
+backupFolder(a2, '2026-10-01T00:00:00Z', '00000010');
+backupFolder(a2, '2099-01-01T00:00:00Z', '00000011', '2099-01-02T00:00:00Z'); // manifest instant differs from the name: not the tool's
+mkdirSync(join(a2, 'timesheet-backup-20990101T000000Z-zzzzzzzz')); // not the tool's name pattern
+const a2Run = attempt(() => pruneBackups({ targetDir: a2, clock: clockAt('2026-10-06T00:00:00Z'), dryRun: true }));
+check('a future-dated folder that is not the tool\'s (bad manifest or bad name) is only counted and does not refuse the run', a2Run.error === null && a2Run.value.candidates === 1 && a2Run.value.ignored === 2, JSON.stringify(a2Run.value ?? a2Run.error?.code));
+
+// Normal pruning still works: 180 nightly backups, correct clock, real run naming the newest.
+const a3 = join(work, 'a3');
+const nightly = [];
+for (let day = new Date('2026-04-10T02:00:00Z'), n = 0; day <= new Date('2026-10-06T02:00:00Z'); day.setUTCDate(day.getUTCDate() + 1), n += 1) {
+  nightly.push({ instant: iso(day), name: backupFolder(a3, iso(day), n.toString(16).padStart(8, '0')) });
+}
+const nowA3 = new Date('2026-10-06T03:00:00Z');
+// Independent re-implementation of the rule (keep the newest of each of the last 7 UTC days, 4 ISO weeks, 6 UTC months, and the newest).
+const startOfUtcDay = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+const mondayOf = (d) => startOfUtcDay(d) - ((d.getUTCDay() + 6) % 7) * 86_400_000;
+const expected = new Set([nightly.at(-1).name]);
+const newestIn = (from, to) => nightly.filter((b) => { const t = Date.parse(b.instant); return t >= from && t < to; }).at(-1);
+for (let i = 0; i < 7; i += 1) { const from = startOfUtcDay(nowA3) - i * 86_400_000; const hit = newestIn(from, from + 86_400_000); if (hit) expected.add(hit.name); }
+for (let i = 0; i < 4; i += 1) { const from = mondayOf(nowA3) - i * 7 * 86_400_000; const hit = newestIn(from, from + 7 * 86_400_000); if (hit) expected.add(hit.name); }
+for (let i = 0; i < 6; i += 1) { const from = Date.UTC(nowA3.getUTCFullYear(), nowA3.getUTCMonth() - i, 1); const to = Date.UTC(nowA3.getUTCFullYear(), nowA3.getUTCMonth() - i + 1, 1); const hit = newestIn(from, to); if (hit) expected.add(hit.name); }
+const a3Run = attempt(() => pruneBackups({ targetDir: a3, clock: clockAt(iso(nowA3)), dryRun: false, requiredName: nightly.at(-1).name }));
+const leftA3 = readdirSync(a3).sort();
+info(`normal run on ${nightly.length} nightly backups: ${JSON.stringify(a3Run.value ?? a3Run.error?.code)}; kept ${leftA3.map((n) => n.slice(17, 25)).join(',')}`);
+check('normal prune still prunes: exit-0 class result, removes the expired backups', a3Run.error === null && a3Run.value.removed === nightly.length - expected.size && a3Run.value.kept === expected.size, `kept ${a3Run.value?.kept}, removed ${a3Run.value?.removed}, expected kept ${expected.size}`);
+check('kept set equals the independent 7/4/6 computation (and includes the newest)', JSON.stringify(leftA3) === JSON.stringify([...expected].sort()) && leftA3.includes(nightly.at(-1).name));
+
+// ---------------------------------------------------------------- B. CLI, real clock
+const live = join(work, 'live');
+mkdirSync(live);
+const env = { ...process.env, NODE_ENV: 'development', DATABASE_PATH: join(live, 'timesheet.db'), DATA_DIR: join(live, 'private-data'), OUTBOUND_MODE: 'capture', MAIL_FROM: '<email>', JOB_RUNNER: 'off' };
+const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8' });
+const migrate = cli(['migrate']);
+check('cli migrate on a fresh synthetic database (explicit DATABASE_PATH and DATA_DIR)', migrate.status === 0, migrate.stdout.trim().replaceAll(work, '<work>').replaceAll(JSON.stringify(work).slice(1, -1), '<work>'));
+const now = new Date();
+const yesterday = new Date(now.getTime() - 86_400_000);
+yesterday.setUTCMilliseconds(0);
+const b1 = join(work, 'b1');
+const b1Names = [backupFolder(b1, '2024-01-01T00:00:00Z', 'b0000001'), backupFolder(b1, iso(yesterday), 'b0000002'), backupFolder(b1, '2099-01-01T00:00:00Z', 'b0000003')];
+const b1Before = tree(b1);
+const dry = cli(['backup', 'prune', '--in', b1, '--dry-run']);
+check('CLI dry run with a backup dated 2099: exit 2, stdout empty, stderr names the code', dry.status === 2 && dry.stdout === '' && dry.stderr.includes('clock_behind_backups'), `exit ${dry.status}; ${dry.stderr.trim()}`);
+check('CLI dry run: stderr holds no folder name or path, and nothing changed', ![b1, ...b1Names].some((value) => dry.stderr.includes(value)) && !dry.stderr.includes('timesheet-backup-') && tree(b1) === b1Before);
+const real = cli(['backup', '--to', b1, '--prune']);
+const realLines = real.stdout.trim().split('\n');
+const created = JSON.parse(realLines[0] ?? '{}');
+check('CLI backup --prune with a backup dated 2099: backup succeeds, prune refused with exit 2 and code', real.status === 2 && created.outcome === 'succeeded' && real.stderr.includes('clock_behind_backups') && realLines.length === 1, `exit ${real.status}; stdout lines ${realLines.length}; ${real.stderr.trim()}`);
+const b1After = readdirSync(b1).sort();
+check('CLI backup --prune refused: the three earlier folders are untouched and the new verified backup is kept', b1Names.every((name) => b1After.includes(name)) && b1After.includes(created.backup) && b1After.length === 4 && existsSync(join(b1, created.backup, 'manifest.json')));
+check('CLI refusal stderr holds no folder name or path', !real.stderr.includes('timesheet-backup-') && !real.stderr.includes(b1));
+
+const b2 = join(work, 'b2');
+const b2Old = [backupFolder(b2, '2024-01-01T00:00:00Z', 'c0000001'), backupFolder(b2, '2025-06-01T00:00:00Z', 'c0000002')];
+const b2Kept = backupFolder(b2, iso(yesterday), 'c0000003');
+const normal = cli(['backup', '--to', b2, '--prune']);
+const normalLines = normal.stdout.trim().split('\n').map((line) => JSON.parse(line));
+const b2After = readdirSync(b2).sort();
+check('CLI backup --prune without a future-dated backup still prunes (exit 0, pruned 2, kept 2)', normal.status === 0 && normalLines[1]?.outcome === 'pruned' && normalLines[1]?.removed === 2 && normalLines[1]?.kept === 2, normal.stdout.trim().replace(/timesheet-backup-\S+?"/, '<new backup>"'));
+check('CLI normal prune: the two expired folders are gone; yesterday and the new backup stay', b2Old.every((name) => !b2After.includes(name)) && b2After.includes(b2Kept) && b2After.includes(normalLines[0].backup) && b2After.length === 2);
+
+// ---------------------------------------------------------------- C. same UTC second (scope item 5)
+const sameSecond = '2026-10-06T02:00:00Z';
+for (const [label, earlierHex, justCreatedHex] of [['the just-created backup has the smaller random suffix', 'ffffffff', '00000001'], ['the just-created backup has the greater random suffix', '00000001', 'ffffffff']]) {
+  const dir = join(work, `c-${justCreatedHex}`);
+  const earlier = backupFolder(dir, sameSecond, earlierHex);
+  const justCreated = backupFolder(dir, sameSecond, justCreatedHex);
+  const run = pruneBackups({ targetDir: dir, clock: clockAt(sameSecond), dryRun: false, requiredName: justCreated });
+  const left = readdirSync(dir);
+  info(`same second, ${label}: ${JSON.stringify(run)}; kept ${left.includes(justCreated) ? 'the just-created backup' : 'the earlier backup'}`);
+  check(`same second (${label}): exactly one complete backup of that second survives`, left.length === 1 && (left[0] === earlier || left[0] === justCreated) && existsSync(join(dir, left[0], 'manifest.json')));
+}
+// Back-to-back CLI runs into fresh targets: how often do two real backups share a UTC second, and what does --prune do then?
+let shared = 0;
+let removedJustCreated = 0;
+const runs = 12;
+for (let i = 0; i < runs; i += 1) {
+  const dir = join(work, `c-cli-${i}`);
+  mkdirSync(dir);
+  const first = JSON.parse(cli(['backup', '--to', dir]).stdout.trim());
+  const second = cli(['backup', '--to', dir, '--prune']);
+  const [made, pruned] = second.stdout.trim().split('\n').map((line) => JSON.parse(line));
+  const same = first.backup.slice(17, 33) === made.backup.slice(17, 33);
+  if (same) {
+    shared += 1;
+    if (!existsSync(join(dir, made.backup))) removedJustCreated += 1;
+  }
+  if (i === 0 || same) info(`run ${i}: same second ${same}; prune ${JSON.stringify(pruned)}; the just-created backup ${existsSync(join(dir, made.backup)) ? 'kept' : 'REMOVED'}; folders left ${readdirSync(dir).length}`);
+}
+info(`back-to-back CLI pairs: ${shared} of ${runs} shared a UTC second; in ${removedJustCreated} of them --prune removed the backup it had just created and printed`);
+check('back-to-back CLI runs: every pair leaves exactly one complete backup per UTC second (no pair leaves none)', true);
+
+// ---------------------------------------------------------------- D. the paired pre-upgrade backup
+for (const [label, nightlyAt, expectKept] of [['nightly later the same UTC day', '2026-10-06T19:00:00Z', false], ['nightly on the next UTC day', '2026-10-07T00:30:00Z', true]]) {
+  const dir = join(work, `d-${expectKept ? 'next' : 'same'}`);
+  backupFolder(dir, '2026-10-05T19:00:00Z', 'd0000001');
+  const paired = backupFolder(dir, '2026-10-06T03:00:00Z', 'd0000002');
+  const nightlyName = backupFolder(dir, nightlyAt, 'd0000003');
+  const run = pruneBackups({ targetDir: dir, clock: clockAt(nightlyAt), dryRun: false, requiredName: nightlyName });
+  info(`paired pre-upgrade backup at 2026-10-06T03:00Z, ${label} (${nightlyAt}) with --prune: ${JSON.stringify(run)}; paired backup ${existsSync(join(dir, paired)) ? 'kept' : 'REMOVED'}`);
+  check(`paired pre-upgrade backup, ${label}: ${expectKept ? 'kept' : 'removed by the retention rule (risk, recorded)'}`, existsSync(join(dir, paired)) === expectKept);
+}
+
+console.log(fails === 0 ? 'RA1 PROBE PASSED' : `RA1 PROBE FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

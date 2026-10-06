@@ -1,0 +1,306 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A rerun of the WP4-AUDIT-A probe (copied from its masked evidence; <email> placeholders replaced with synthetic example.invalid addresses).
+// WP4-AUDIT-A probe P2: one backup under writes on the host, then an isolated restore, with file-hash and balance
+// comparison. Built server and CLI from the clean export (dist/), synthetic example.invalid data, capture mode, explicit
+// DATABASE_PATH and DATA_DIR under the work folder for every process. Three writers run during the backup: work sessions,
+// signature uploads (files plus attachment rows) and opening balances of eight synthetic users (ledger plus audit rows).
+// Usage: node p2-backup-restore.mjs <export dir> <work dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
+
+const [exportDir, work] = process.argv.slice(2);
+const Database = (await import(pathToFileURL(join(exportDir, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href)).default;
+const CLI = join(exportDir, 'dist', 'server', 'cli.js');
+const SERVER = join(exportDir, 'dist', 'server', 'index.js');
+const live = join(work, 'live');
+const liveDb = join(live, 'timesheet.db');
+const liveData = join(live, 'private-data');
+const backups = join(work, 'backups');
+const restored = join(work, 'restored');
+for (const dir of [live, backups]) mkdirSync(dir, { recursive: true });
+if (existsSync(liveDb) || existsSync(restored)) throw new Error('work folder is not fresh');
+
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const freePort = () => new Promise((resolvePort, reject) => {
+  const probe = createServer();
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolvePort(port)); });
+});
+
+const port = await freePort();
+const origin = `http://localhost:${port}`;
+const base = `http://127.0.0.1:${port}`;
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const envFor = (databasePath, dataDir) => ({
+  ...process.env,
+  NODE_ENV: 'development',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: databasePath,
+  DATA_DIR: dataDir,
+  APP_ORIGINS: origin,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: '<email>',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+});
+const liveEnv = envFor(liveDb, liveData);
+const cli = (args, env = liveEnv) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8' });
+const cliAsync = (args, env = liveEnv) => new Promise((resolveRun) => {
+  const child = spawn(process.execPath, [CLI, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.on('close', (status) => resolveRun({ status, stdout, stderr }));
+});
+
+function startServer(env) {
+  const child = spawn(process.execPath, [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = '';
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  child.stderr.on('data', (chunk) => { output += chunk; });
+  const exited = new Promise((done) => child.on('close', done));
+  return { child, exited, output: () => output };
+}
+async function waitListening(server) {
+  for (let i = 0; i < 200; i += 1) {
+    if (server.output().includes('Timesheet listening')) return true;
+    await sleep(50);
+  }
+  return false;
+}
+async function call(method, path, { cookie, body, raw, type } = {}) {
+  const headers = { origin };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (raw !== undefined) headers['content-type'] = type;
+  const response = await fetch(`${base}${path}`, { method, headers, body: raw ?? (body === undefined ? undefined : JSON.stringify(body)) });
+  const text = await response.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: response.status, json, setCookie: response.headers.get('set-cookie') };
+}
+async function login(email, password) {
+  const response = await call('POST', '/api/auth/login', { body: { email, password } });
+  return response.setCookie?.split(';')[0] ?? null;
+}
+function pngChunk(type, data) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+function syntheticPng(fill) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(24, 0);
+  header.writeUInt32BE(8, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const rows = Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(72, fill)]));
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(Buffer.concat(rows))), pngChunk('IEND', Buffer.alloc(0))]);
+}
+function listTree(dir) {
+  const out = [];
+  if (!existsSync(dir)) return out;
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else out.push(`${path.slice(dir.length)} ${statSync(path).size} ${sha256(readFileSync(path))}`);
+    }
+  };
+  walk(dir);
+  return out.sort();
+}
+
+// 1. Seed and start the live instance.
+const seed = cli(['seed']);
+check('seed (development, synthetic) exits 0', seed.status === 0, String(seed.status));
+const server = startServer(liveEnv);
+check('live server listens', await waitListening(server));
+const admin = await login('<email>', passwords.admin);
+const employee2 = await login('<email>', passwords.employee2);
+check('admin and employee2 sign in', admin !== null && employee2 !== null);
+const users = await call('GET', '/api/admin/users', { cookie: admin });
+const calendarId = users.json?.users?.[0]?.calendar_id;
+const synthetic = [];
+for (let i = 0; i < 8; i += 1) {
+  const email = `probe-user-${i}@example.invalid`;
+  const password = randomBytes(18).toString('base64url');
+  const created = await call('POST', '/api/admin/users', { cookie: admin, body: { email, display_name: `Probe User ${i}`, role: 'employee', password, calendar_id: calendarId } });
+  const cookie = created.status === 201 ? await login(email, password) : null;
+  synthetic.push({ id: created.json?.user?.id, cookie, minutes: (i + 1) * 15 * (i % 2 === 0 ? 1 : -1), posted: null });
+}
+check('eight synthetic users created and signed in', synthetic.every((user) => user.id && user.cookie));
+
+// 2. Writers, then the backup in the middle of them.
+let stop = false;
+const writes = { sessions: [], signatures: [], openings: [] };
+const weekdays = (() => {
+  const out = [];
+  const day = new Date('2026-04-06T00:00:00Z');
+  while (out.length < 300) {
+    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) out.push(day.toISOString().slice(0, 10));
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+  return out;
+})();
+const sessionWriter = (async () => {
+  for (let index = 0; !stop && index < 120; index += 1) {
+    const day = weekdays[index];
+    const startedAt = Date.now();
+    const created = await call('POST', `/api/days/${day}/sessions`, {
+      cookie: employee2,
+      body: {
+        start: { local: `${day}T09:00`, zone: 'America/Los_Angeles' },
+        end: { local: `${day}T17:30`, zone: 'America/Los_Angeles' },
+        input_zone: 'America/Los_Angeles',
+        breaks: [],
+        breaks_confirmed: true,
+        reason: 'Synthetic audit write during the backup',
+      },
+    });
+    if (created.status !== 201 && writes.sessions.every((w) => w.status === 201)) console.log(`INFO  first refused session write: ${created.status} ${JSON.stringify(created.json)}`);
+    writes.sessions.push({ id: created.json?.session?.id ?? null, status: created.status, startedAt, endedAt: Date.now() });
+  }
+})();
+const signatureWriter = (async () => {
+  for (let index = 0; !stop && index < 60; index += 1) {
+    const response = await fetch(`${base}/api/signatures`, { method: 'POST', headers: { origin, cookie: employee2, 'content-type': 'image/png' }, body: syntheticPng(10 + index) });
+    await response.text();
+    writes.signatures.push({ status: response.status, endedAt: Date.now() });
+    await sleep(20);
+  }
+})();
+while (writes.sessions.length < 5) await sleep(10);
+const backupStartedAt = Date.now();
+const backupRun = cliAsync(['backup', '--to', backups]);
+const openingWriter = (async () => {
+  for (const user of synthetic) {
+    const response = await call('POST', '/api/ot/opening-balance', {
+      cookie: user.cookie,
+      body: { minutes: user.minutes, as_of_date: '2026-01-01', reason: 'Synthetic opening balance', evidence_ref: 'synthetic-ref', expected_version: 0 },
+    });
+    user.posted = { status: response.status, endedAt: Date.now() };
+    writes.openings.push(response.status);
+    await sleep(80);
+  }
+})();
+const backupResult = await backupRun;
+const backupEndedAt = Date.now();
+await openingWriter;
+await sleep(200);
+stop = true;
+await Promise.all([sessionWriter, signatureWriter]);
+check('cli.js backup under writes exits 0', backupResult.status === 0, backupResult.stderr.trim());
+const summary = JSON.parse(backupResult.stdout.trim().split('\n').at(-1));
+const during = (list) => list.filter((write) => write.endedAt >= backupStartedAt && write.endedAt <= backupEndedAt).length;
+console.log(`INFO  backup ${backupEndedAt - backupStartedAt} ms; writes completed during the backup: sessions ${during(writes.sessions)}, signatures ${during(writes.signatures)}, opening balances ${synthetic.filter((u) => u.posted.endedAt <= backupEndedAt).length}`);
+check('every write succeeded', writes.sessions.every((w) => w.status === 201) && writes.signatures.every((w) => w.status === 201 || w.status === 200) && writes.openings.every((s) => s === 201), JSON.stringify({ s: [...new Set(writes.sessions.map((w) => w.status))], g: [...new Set(writes.signatures.map((w) => w.status))], o: [...new Set(writes.openings)] }));
+check('writes really overlapped the backup', during(writes.sessions) + during(writes.signatures) > 3, `${during(writes.sessions)} sessions, ${during(writes.signatures)} signatures`);
+check('backup output prints counts only (no path, address or key)', !/@|[A-Za-z]:\\|\/data|private-data|storage_key/.test(backupResult.stdout), backupResult.stdout.trim());
+
+// 3. Stop the live server, freeze the live facts.
+server.child.kill('SIGTERM');
+await server.exited;
+const liveFacts = () => ({ tree: listTree(live).join('\n') }); // database and every private file, by size and hash
+
+// 4. The backup folder.
+const folder = readdirSync(backups).find((name) => name.startsWith('timesheet-backup-'));
+const backupDir = join(backups, folder);
+const manifestText = readFileSync(join(backupDir, 'manifest.json'), 'utf8');
+const manifest = JSON.parse(manifestText);
+check('manifest: exact top-level keys', JSON.stringify(Object.keys(manifest).sort()) === JSON.stringify(['app_version', 'created_at', 'database', 'files', 'format', 'format_version', 'integrity', 'schema_version']));
+check('manifest: every file entry has exactly kind, sha256, size_bytes, storage_key', manifest.files.every((file) => JSON.stringify(Object.keys(file).sort()) === '["kind","sha256","size_bytes","storage_key"]'));
+check('manifest: no email address, name or host path', !/@|example|Probe User|[A-Za-z]:\\\\|\/Users\/|claude-tmp|private-data/.test(manifestText));
+check('backup database copy: SHA-256 and size equal the manifest', sha256(readFileSync(join(backupDir, 'timesheet.db'))) === manifest.database.sha256 && statSync(join(backupDir, 'timesheet.db')).size === manifest.database.size_bytes);
+const fileMismatch = manifest.files.filter((file) => sha256(readFileSync(join(backupDir, 'files', file.storage_key))) !== file.sha256);
+check('backup files: every file hashes to its manifest entry', fileMismatch.length === 0, `${manifest.files.length} files, ${fileMismatch.length} mismatched`);
+const liveMismatch = manifest.files.filter((file) => sha256(readFileSync(join(liveData, 'files', file.storage_key))) !== file.sha256);
+check('backup files: every file equals the live file of the same key', liveMismatch.length === 0);
+check('backup copy is a single file (no -wal or -shm)', readdirSync(backupDir).sort().join(',') === 'files,manifest.json,timesheet.db');
+
+const copy = new Database(join(backupDir, 'timesheet.db'), { readonly: true });
+const facts = (db) => ({
+  ledger: db.prepare('SELECT user_id, count(*) AS n, sum(delta_minutes) AS minutes FROM ot_ledger GROUP BY user_id ORDER BY user_id').all(),
+  openings: db.prepare("SELECT l.id, l.user_id, l.delta_minutes, (SELECT count(*) FROM audit_events a WHERE a.entity_type = 'ot_ledger' AND a.entity_id = l.id AND a.operation = 'ot_ledger.opening_balance') AS audits FROM ot_ledger l WHERE entry_type = 'opening_balance' ORDER BY id").all(),
+  openingAudits: db.prepare("SELECT count(*) FROM audit_events WHERE operation = 'ot_ledger.opening_balance'").pluck().get(),
+  sessions: db.prepare('SELECT id FROM work_sessions ORDER BY id').pluck().all(),
+  attachments: db.prepare('SELECT storage_key, sha256, size_bytes FROM attachments ORDER BY storage_key').all(),
+  revisions: db.prepare('SELECT count(*) FROM timesheet_revisions').pluck().get(),
+  users: db.prepare('SELECT count(*) FROM users').pluck().get(),
+});
+const copyFacts = facts(copy);
+copy.close();
+const liveDbReader = new Database(liveDb, { readonly: true });
+const endFacts = facts(liveDbReader);
+liveDbReader.close();
+console.log(`INFO  point in time: openings in the copy ${copyFacts.openings.length} of ${synthetic.length}; sessions in the copy ${copyFacts.sessions.length}, at the end ${endFacts.sessions.length}; attachments in the copy ${copyFacts.attachments.length}, at the end ${endFacts.attachments.length}`);
+check('atomic ledger: every opening balance in the copy has its audit event and no audit event lacks its ledger row', copyFacts.openings.every((row) => row.audits === 1) && copyFacts.openingAudits === copyFacts.openings.length);
+const sessionsBefore = writes.sessions.filter((w) => w.endedAt < backupStartedAt).map((w) => w.id);
+check('point in time: every session committed before the backup started is in the copy', sessionsBefore.every((id) => copyFacts.sessions.includes(id)), `${sessionsBefore.length} before`);
+check('point in time: the copy holds no session the live database does not have', copyFacts.sessions.every((id) => endFacts.sessions.includes(id)));
+const openingsEndedBefore = synthetic.filter((u) => u.posted.endedAt < backupStartedAt).length;
+check('opening balances: the copy holds a prefix-consistent subset (each with its exact posted minutes)', copyFacts.openings.every((row) => synthetic.some((u) => u.id === row.user_id && u.minutes === row.delta_minutes)) && copyFacts.openings.length >= openingsEndedBefore);
+
+// 5. Isolated restore into a new directory; the live data must not change (snapshot taken after every read of the live files).
+const liveBefore = liveFacts();
+const restore = cli(['restore', '--from', backupDir, '--to', restored]);
+check('cli.js restore exits 0', restore.status === 0, restore.stderr.trim());
+const restoreSummary = JSON.parse(restore.stdout.trim());
+check('restore output: paused with reason restored, manifest verified, counts only', restoreSummary.outbound?.paused === true && restoreSummary.outbound?.reason === 'restored' && restoreSummary.manifest?.verified === true && !/@|[A-Za-z]:\\/.test(restore.stdout));
+const liveAfter = liveFacts();
+if (liveAfter.tree !== liveBefore.tree) {
+  const beforeLines = liveBefore.tree.split('\n');
+  console.log(`INFO  live tree difference: ${JSON.stringify(liveAfter.tree.split('\n').filter((line) => !beforeLines.includes(line)).map((line) => line.split(' ')[0]))}`);
+}
+check('restore never wrote the live DATABASE_PATH or DATA_DIR (database and every private file identical)', liveAfter.tree === liveBefore.tree);
+const restoredFiles = join(restored, 'private-data', 'files');
+const restoredMismatch = manifest.files.filter((file) => sha256(readFileSync(join(restoredFiles, file.storage_key))) !== file.sha256);
+check('restored files: every file hashes to its manifest entry and to the live file', restoredMismatch.length === 0 && readdirSync(restoredFiles).length === manifest.files.length, `${readdirSync(restoredFiles).length} files`);
+const rdb = new Database(join(restored, 'timesheet.db'), { readonly: true });
+check('restored database: integrity_check ok, no foreign key violation', rdb.pragma('integrity_check', { simple: true }) === 'ok' && rdb.pragma('foreign_key_check').length === 0);
+const restoredFacts = facts(rdb);
+check('restored balances: ledger count and sum per user equal the backup copy', JSON.stringify(restoredFacts.ledger) === JSON.stringify(copyFacts.ledger), JSON.stringify(restoredFacts.ledger.map((row) => `${row.n}/${row.minutes}`)));
+check('restored sessions, attachments, revisions and users equal the backup copy', JSON.stringify([restoredFacts.sessions, restoredFacts.attachments, restoredFacts.revisions, restoredFacts.users]) === JSON.stringify([copyFacts.sessions, copyFacts.attachments, copyFacts.revisions, copyFacts.users]));
+check('restored copy is paused (reason restored)', rdb.prepare('SELECT outbound_paused_reason FROM operations_state WHERE id = 1').pluck().get() === 'restored');
+rdb.close();
+
+// 6. Balances through the API of the restored instance (its own Compose-like directory, runner off, capture).
+const restoredServer = startServer(envFor(join(restored, 'timesheet.db'), join(restored, 'private-data')));
+check('restored instance listens and logs the pause', (await waitListening(restoredServer)) && /Outbound delivery PAUSED since .* \(reason: restored\)/.test(restoredServer.output()));
+const apiBalances = [];
+for (const user of synthetic) {
+  const response = await call('GET', '/api/ot/summary', { cookie: user.cookie });
+  const sqlRow = restoredFacts.ledger.find((row) => row.user_id === user.id);
+  apiBalances.push({ api: response.json?.posted_minutes ?? null, sql: sqlRow?.minutes ?? 0, status: response.status });
+}
+const e2Summary = await call('GET', '/api/ot/summary', { cookie: employee2 });
+const e2Row = restoredFacts.ledger.find((row) => row.n > 0 && !synthetic.some((u) => u.id === row.user_id));
+apiBalances.push({ api: e2Summary.json?.posted_minutes ?? null, sql: e2Row?.minutes ?? 0, status: e2Summary.status });
+console.log(`INFO  restored API balances (posted minutes, API vs SQL; last is employee2): ${JSON.stringify(apiBalances.map((b) => `${b.api}/${b.sql}`))}`);
+check('restored OT balances through the API equal the restored ledger sums (sessions of the old cookies still valid)', apiBalances.every((b) => b.status === 200 && b.api === b.sql));
+const ready = await call('GET', '/api/ready');
+check('restored /api/ready: exact keys, schema 13, no personal data', JSON.stringify(Object.keys(ready.json ?? {}).sort()) === '["data_dir_writable","schema","status"]' && ready.json.schema.actual === 13);
+restoredServer.child.kill('SIGTERM');
+await restoredServer.exited;
+check('restored instance log never shows an email address or password', !/@example\.invalid/.test(restoredServer.output()) && !Object.values(passwords).some((p) => restoredServer.output().includes(p)));
+
+console.log(fails === 0 ? 'P2 PASSED' : `P2 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;

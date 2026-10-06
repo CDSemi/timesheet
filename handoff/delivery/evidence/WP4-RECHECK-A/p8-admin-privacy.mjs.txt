@@ -1,0 +1,89 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A rerun of the WP4-AUDIT-A probe (copied from its masked evidence; <email> placeholders replaced with synthetic example.invalid addresses).
+// WP4-AUDIT-A probe P8: the administrator operations status and account list after WP4 (T07, T07B). Uses the stopped
+// synthetic live instance of probe P2 (opening balances, sessions, signatures, a backup) and its built server with
+// explicit DATABASE_PATH and DATA_DIR. Prints every key path of each response and checks them against exact allowlists;
+// checks that no OT value, session, path, storage key or hash is present.
+// Usage: node p8-admin-privacy.mjs <export dir> <p2 work dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [exportDir, p2] = process.argv.slice(2);
+const Database = (await import(pathToFileURL(join(exportDir, 'node_modules', 'better-sqlite3', 'lib', 'index.js')).href)).default;
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const port = await new Promise((resolvePort) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port: p } = s.address(); s.close(() => resolvePort(p)); }); });
+const origin = `http://localhost:${port}`;
+const base = `http://127.0.0.1:${port}`;
+const databasePath = join(p2, 'live', 'timesheet.db');
+const dataDir = join(p2, 'live', 'private-data');
+// A fresh synthetic administrator password (the seed's one was random and is not kept): set through the account table's
+// own hash function is not reachable from here, so a new synthetic administrator is created by the CLI-free path below.
+const { hashPassword } = await import(pathToFileURL(join(exportDir, 'dist', 'server', 'auth', 'passwords.js')).href);
+const password = randomBytes(18).toString('base64url');
+const rw = new Database(databasePath);
+const adminId = rw.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").pluck().get();
+rw.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(password), adminId);
+const adminEmail = rw.prepare('SELECT email FROM users WHERE id = ?').pluck().get(adminId);
+rw.close();
+const env = { ...process.env, NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(port), DATABASE_PATH: databasePath, DATA_DIR: dataDir, APP_ORIGINS: origin, OUTBOUND_MODE: 'capture', MAIL_FROM: '<email>', JOB_RUNNER: 'off' };
+const server = spawn(process.execPath, [join(exportDir, 'dist', 'server', 'index.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let log = '';
+server.stdout.on('data', (chunk) => { log += chunk; });
+server.stderr.on('data', (chunk) => { log += chunk; });
+for (let i = 0; i < 200 && !log.includes('Timesheet listening'); i += 1) await sleep(50);
+const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ email: adminEmail, password }) });
+const cookie = login.headers.get('set-cookie')?.split(';')[0];
+check('administrator signs in', login.status === 200);
+const get = async (path) => (await fetch(`${base}${path}`, { headers: { cookie } })).json();
+function keyPaths(value, prefix = '') {
+  if (Array.isArray(value)) return [...new Set(value.flatMap((item) => keyPaths(item, `${prefix}[]`)))];
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, child]) => {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
+    return [path, ...keyPaths(child, path)];
+  });
+}
+const operations = await get('/api/admin/operations');
+const users = await get('/api/admin/users');
+const submissions = await get('/api/admin/submissions');
+const opsPaths = [...new Set(keyPaths(operations))].sort();
+const userPaths = [...new Set(keyPaths(users))].sort();
+console.log(`INFO  /api/admin/operations key paths: ${opsPaths.join(', ')}`);
+console.log(`INFO  /api/admin/users key paths: ${userPaths.join(', ')}`);
+console.log(`INFO  /api/admin/submissions key paths: ${[...new Set(keyPaths(submissions))].sort().join(', ')}`);
+const expectedOps = [
+  'operations', 'operations.activation', 'operations.activation.active_from', 'operations.activation.recorded_at', 'operations.activation.recorded_by', 'operations.backup', 'operations.backup.age_seconds', 'operations.backup.fault_code',
+  'operations.backup.last_attempt_at', 'operations.backup.last_success_at', 'operations.backup.outcome', 'operations.deliveries', 'operations.deliveries.accepted',
+  'operations.deliveries.failed_permanent', 'operations.deliveries.failed_temporary', 'operations.deliveries.preparing', 'operations.deliveries.sending',
+  'operations.deliveries.uncertain', 'operations.disk', 'operations.disk.free_bytes', 'operations.disk.total_bytes', 'operations.jobs', 'operations.jobs.cancelled',
+  'operations.jobs.intervention', 'operations.jobs.leased', 'operations.jobs.queued', 'operations.jobs.succeeded', 'operations.outbound', 'operations.outbound.awaiting_decision',
+  'operations.outbound.held_send_jobs', 'operations.outbound.paused', 'operations.outbound.paused_at', 'operations.outbound.queued_send_jobs', 'operations.outbound.reason',
+  'operations.retention', 'operations.retention.last_deleted', 'operations.retention.last_run_at', 'operations.runner', 'operations.runner.heartbeat_at', 'operations.runner.state',
+  'operations.sender', 'operations.sender.configured', 'operations.sender.outbound_mode',
+].sort();
+check('operations status: exactly the allowlisted key paths (backup, disk, outbound, retention included)', JSON.stringify(opsPaths) === JSON.stringify(expectedOps), opsPaths.filter((p) => !expectedOps.includes(p)).join(',') || 'no extra');
+check('account list: exactly the account fields plus not_set_up', JSON.stringify(userPaths) === JSON.stringify(['users', 'users[].calendar_id', 'users[].created_at', 'users[].display_name', 'users[].email', 'users[].id', 'users[].not_set_up', 'users[].role', 'users[].status', 'users[].updated_at']));
+check('not_set_up is a boolean for every account', users.users.every((user) => typeof user.not_set_up === 'boolean'), JSON.stringify(users.users.map((user) => user.not_set_up)));
+const text = JSON.stringify([operations, users, submissions]);
+const db = new Database(databasePath, { readonly: true });
+const keys = db.prepare('SELECT storage_key FROM attachments').pluck().all();
+const sha = db.prepare('SELECT sha256 FROM attachments').pluck().all();
+const minutes = db.prepare("SELECT DISTINCT abs(delta_minutes) FROM ot_ledger").pluck().all();
+db.close();
+check('no storage key, file hash or host path in any admin response', !keys.some((k) => text.includes(k)) && !sha.some((h) => text.includes(h)) && !/[A-Za-z]:\\\\|claude-tmp|private-data/.test(text));
+check('no OT ledger minutes, balance or session field in any admin response', !/posted_minutes|available_minutes|delta_minutes|work_session|start_utc|breaks/.test(text), `ledger values present ${minutes.join(',')}`);
+check('backup status reports the probe P2 backup with an age', operations.operations.backup.outcome === 'succeeded' && Number.isInteger(operations.operations.backup.age_seconds));
+server.kill('SIGTERM');
+await new Promise((done) => server.on('close', done));
+check('server log has no email address', !/@example\.invalid/.test(log));
+console.log(fails === 0 ? 'P8 PASSED' : `P8 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;
+void spawnSync;

@@ -1,6 +1,5 @@
 import { crc32 } from 'node:zlib';
 import { Inflate } from 'fflate';
-import { XMLParser } from 'fast-xml-parser';
 
 /*
  * Safe, read-only .xlsx reader (WP4-T08). The input is untrusted: the reader never evaluates a formula, never
@@ -14,15 +13,23 @@ import { XMLParser } from 'fast-xml-parser';
  *    the reader allocate more than the per-entry limit (plus one step) before it stops;
  *  - every inflated entry must match its CRC-32 and declared size;
  *  - `vbaProject.bin`, macro sheets and macro content types are rejected;
- *  - DOCTYPE and ENTITY declarations are rejected, and the XML parser has entity processing switched off; the five
- *    predefined entities and numeric character references are decoded once, by this module;
+ *  - DOCTYPE and ENTITY declarations are rejected and entities are never expanded; the five predefined entities and
+ *    numeric character references are decoded once, by this module;
  *  - external links are listed and ignored; only the workbook, its relationships, the shared strings and the
  *    worksheets are parsed;
- *  - the cost of parsing is bounded before a DOM exists (WP4-FIXB, audit finding WP4-B-01): a part whose decoded
- *    XML is over the per-part size limit is refused before it is inflated or decoded, a cheap scan of the decoded
- *    text counts element, cell, row and shared-string openings and refuses a part (or a package) over the limits
- *    before the XML parser runs, and the total XML parsed per package is capped. The inflate limits above stop
- *    memory; these stop CPU time and the size of the parsed tree.
+ *  - parsing has a stated worst-case cost (WP4-FIXB2, recheck finding RB-01, which reopened audit finding WP4-B-01;
+ *    the budget and its measurements are next to `DEFAULT_READER_LIMITS`). No general XML parser builds a tree: the
+ *    XML is read by the bounded scanner below, in one pass over the decoded text of a part. A part whose decoded XML
+ *    is over the per-part size limit is refused before it is inflated or decoded, and the XML parsed per package is
+ *    capped. The scanner counts every markup opening (every `<` that does not start an end tag, whatever follows it:
+ *    an element of any name, a comment, a processing instruction, CDATA), every attribute and the length of every
+ *    start tag against per-part and per-package limits, refuses a tag name that is not an XML name, a nesting deeper
+ *    than 40 and an end tag that does not match, and stops at the first limit passed. It keeps only the elements,
+ *    attributes and text this reader uses (cells, rows and shared strings are counted against their own limits as
+ *    they are kept) and hands rows, cells and shared strings over one at a time as they close; everything else is
+ *    scanned and dropped. So the time is linear in the bytes allowed, and the memory is bounded by the counted limits
+ *    whatever shape the XML has. Text is kept whole here (formula text is cut at Excel's own 8 192 characters); the
+ *    mapping bounds what it examines and keeps of each value.
  */
 
 export const FORMULA_CACHE_NOTE = 'formula cache, not authoritative';
@@ -39,26 +46,54 @@ export type ReaderLimits = {
   maxPartXmlBytes: number;
   /** Decoded XML bytes of all parsed parts of one package together. */
   maxTotalXmlBytes: number;
-  /** Element openings (`<name`, any prefix) in one parsed part. */
+  /**
+   * Markup openings in one parsed part: every `<` that does not start an end tag, whatever follows it (an element of
+   * any name, a comment, a processing instruction, CDATA). An end tag must close an open element, so it is bounded too.
+   */
   maxPartElements: number;
-  /** Element openings in all parsed parts of one package together. */
+  /** Markup openings in all parsed parts of one package together. */
   maxTotalElements: number;
+  /** Attributes of one element, namespace declarations included. */
+  maxAttributesPerElement: number;
+  /** Attributes in one parsed part. */
+  maxPartAttributes: number;
+  /** Attributes in all parsed parts of one package together. */
+  maxTotalAttributes: number;
+  /** Characters of one start tag, from `<` to `>`, its name and attributes included. */
+  maxTagLength: number;
   maxSheets: number;
-  /** `<c>` openings in one worksheet. */
+  /** Characters of one sheet name (Excel allows 31). */
+  maxSheetNameLength: number;
+  /** `<c>` elements kept in one worksheet. */
   maxCellsPerSheet: number;
-  /** `<row>` openings in one worksheet. */
+  /** `<row>` elements kept in one worksheet. */
   maxRowsPerSheet: number;
-  /** `<si>` openings in the shared strings. */
+  /** `<si>` elements kept in the shared strings. */
   maxSharedStrings: number;
 };
 
 /*
- * Why these numbers (measured on the tracked template and on synthetic workbooks of 3, 26 and 60 dated sheets):
- * the template's largest part is 29 KB with 1 378 elements, 529 cells and 353 rows; 60 dated sheets are 1.4 MB of
- * XML and 53 000 elements in all. So the per-part and total byte limits are 140x and 11x those sizes, the element
- * limits 145x and 7.5x, the cell limit 94x and the row limit 57x: no realistic workbook is near one, while one
- * hostile part can cost at most about 200 000 parsed elements (tens of milliseconds to a few hundred) instead of
- * the 4 million `<c/>` the audit's 65 KB upload packed into 15.8 MiB (8.5 s, +900 MiB).
+ * The parse budget (WP4-FIXB2). Reading any package the reader accepts, or refuses after reading, must take at most
+ * 500 ms of event-loop time and add at most 150 MiB of memory on the reference host (Node 24 on an x64 developer
+ * workstation, one preview at a time). Why: a preview runs synchronously on the single event loop of a small NAS that
+ * also serves every other request, so half a second is the longest a hostile upload may stall the others (a NAS CPU
+ * three to four times slower makes it 1.5 to 2 s, a pause, not a hang); and a small NAS has 1 to 2 GiB of memory for
+ * its own system and every container, so a preview may add at most 150 MiB to what the server already uses (a Node
+ * process with the reader loaded starts at about 66 MiB).
+ *
+ * How the limits keep it: the work is linear in the XML bytes allowed (4 MiB a part, 16 MiB a package) with a small
+ * constant, and the memory kept is bounded by the counted limits (every markup opening, attribute and kept cell),
+ * not by the shape of the XML. Measured worst shapes inside the limits (WP4-FIXB2 probes and the adversarial sweep in
+ * tests/integration/workbook-reader.test.ts): about 180 ms (four parts of 4 MiB of `&amp;` text) and about +105 MiB
+ * (four parts of 46 000 to 50 000 empty cells, at the package opening limit); the tracked template takes about 11 ms
+ * and +11 MiB, 12 dated sheets 24 ms and +13 MiB, 61 dated sheets 58 ms and +32 MiB.
+ *
+ * Realistic sizes (synthetic workbooks cloned from the tracked template; the largest part is the template's own
+ * 29 KB Timesheet sheet with 1 379 markup openings, 1 720 attributes, 529 cells and 353 rows; no element has more than
+ * 9 attributes and no start tag is longer than 643 characters): 12 dated sheets are 325 KB of XML, 12 500 openings and
+ * 21 000 attributes; 61 dated sheets (64 sheets, the sheet limit) are 1.4 MB, 53 400 openings and 92 400 attributes.
+ * The limits below leave these a wide margin: openings 72x a part and 3.7x the largest package, attributes 116x and
+ * 5.4x, start-tag length 100x, XML bytes 142x and 12x, sheet names 3x Excel's own limit of 31 characters.
  */
 export const DEFAULT_READER_LIMITS: Readonly<ReaderLimits> = {
   maxCompressedBytes: 8 * 1024 * 1024,
@@ -67,9 +102,14 @@ export const DEFAULT_READER_LIMITS: Readonly<ReaderLimits> = {
   maxTotalInflatedBytes: 48 * 1024 * 1024,
   maxPartXmlBytes: 4 * 1024 * 1024,
   maxTotalXmlBytes: 16 * 1024 * 1024,
-  maxPartElements: 200_000,
-  maxTotalElements: 400_000,
+  maxPartElements: 100_000,
+  maxTotalElements: 200_000,
+  maxAttributesPerElement: 64,
+  maxPartAttributes: 200_000,
+  maxTotalAttributes: 500_000,
+  maxTagLength: 64 * 1024,
   maxSheets: 64,
+  maxSheetNameLength: 100,
   maxCellsPerSheet: 50_000,
   maxRowsPerSheet: 20_000,
   maxSharedStrings: 50_000,
@@ -94,8 +134,15 @@ export type WorkbookRejectionCode =
   | 'too_many_cells'
   | 'too_many_rows'
   | 'too_many_elements'
+  | 'too_many_attributes'
+  | 'tag_too_large'
+  | 'sheet_name_too_long'
   | 'too_many_holidays'
-  | 'too_many_shared_strings';
+  | 'too_many_shared_strings'
+  /** The report built from an accepted package is over the stored-report cap, or could not be serialized. */
+  | 'report_too_large'
+  /** Anything else thrown while an accepted package was mapped into a report: a refusal, never a 500. */
+  | 'report_failed';
 
 /** The package is refused as a whole; nothing from it is returned. The message never echoes package content. */
 export class WorkbookRejectedError extends Error {
@@ -119,7 +166,7 @@ export type ReadCell = {
   type: 'blank' | 'string' | 'number' | 'boolean' | 'error';
   /** The stored value. Always `null` for a formula cell: its result is never trusted. */
   value: CellValue;
-  /** Formula text, kept for inspection only; never evaluated. */
+  /** Formula text, kept for inspection only; never evaluated. At most 8 192 characters (Excel's own limit). */
   formula: string | null;
   /** Value Excel cached beside a formula. Present only for formula cells. */
   cachedValue: CellValue;
@@ -258,8 +305,10 @@ type Budget = {
   left: number;
   /** Decoded XML bytes still allowed for the parsed parts (`maxTotalXmlBytes`). */
   xmlLeft: number;
-  /** Element openings still allowed over the whole package (`maxTotalElements`). */
+  /** Markup openings still allowed over the whole package (`maxTotalElements`). */
   elementsLeft: number;
+  /** Attributes still allowed over the whole package (`maxTotalAttributes`). */
+  attributesLeft: number;
 };
 
 /** Every part this module inflates is parsed as XML, so a part limit applies to every call. */
@@ -334,127 +383,415 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry, limits: ReaderLimits, 
 // ---------------------------------------------------------------------------------------------------------------------
 // XML
 
-const ARRAY_TAGS = new Set(['row', 'c', 'si', 'sheet', 'r', 't', 'Override', 'Default', 'Relationship', 'definedName']);
-
-const xmlParser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-  parseTagValue: false,
-  parseAttributeValue: false,
-  trimValues: false,
-  removeNSPrefix: true,
-  ignoreDeclaration: true,
-  ignorePiTags: true,
-  // Entities are never expanded by the parser; `decodeXml` below handles the predefined ones exactly once.
-  processEntities: false,
-  htmlEntities: false,
-  maxNestedTags: 40,
-  isArray: (name) => ARRAY_TAGS.has(name),
-});
-
-type XmlNode = Record<string, unknown>;
-
 function decodeXmlBytes(data: Uint8Array): string {
   if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) return new TextDecoder('utf-16le').decode(data.subarray(2));
   if (data.length >= 2 && data[0] === 0xfe && data[1] === 0xff) return new TextDecoder('utf-16be').decode(data.subarray(2));
   return utf8.decode(data);
 }
 
-/** What a part is, so the scan applies the matching limit: cells and rows count in worksheets, strings in the table. */
-type PartKind = 'worksheet' | 'sharedStrings' | 'other';
+const PREDEFINED: ReadonlyArray<readonly [name: string, code: number]> = [
+  ['amp', 0x26],
+  ['lt', 0x3c],
+  ['gt', 0x3e],
+  ['quot', 0x22],
+  ['apos', 0x27],
+];
 
-/** Element opening with an optional namespace prefix: `<c`, `<x:c`; comments, PIs, CDATA and closings never match. */
-const ELEMENT_OPENING = /<(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/g;
+function digitValue(code: number, hex: boolean): number {
+  if (code >= 0x30 && code <= 0x39) return code - 0x30;
+  if (!hex) return -1;
+  if (code >= 0x61 && code <= 0x66) return code - 0x57;
+  if (code >= 0x41 && code <= 0x46) return code - 0x37;
+  return -1;
+}
 
 /**
- * Cheap scan of the decoded text, before any DOM exists (WP4-B-01): counts element openings and refuses the part
- * as soon as a limit is passed, so the scan itself never runs past a limit's worth of elements. It over-counts
- * markup inside comments or CDATA, which only makes it stricter; no real workbook has such markup in a part.
+ * The code point of the reference `text[amp..semi]` (`&` to `;`), or -1 when it is not one this module decodes:
+ * `&#` and 1 to 7 decimal digits, `&#x` and 1 to 6 hexadecimal digits, or one of the five predefined names.
  */
-function scanElements(text: string, kind: PartKind, limits: ReaderLimits, budget: Budget): void {
-  const pattern = new RegExp(ELEMENT_OPENING);
-  let elements = 0;
+function referenceCode(text: string, amp: number, semi: number): number {
+  if (text.charCodeAt(amp + 1) !== 0x23) {
+    for (const [name, code] of PREDEFINED) if (semi - amp - 1 === name.length && text.startsWith(name, amp + 1)) return code;
+    return -1;
+  }
+  const hex = text.charCodeAt(amp + 2) === 0x78;
+  const first = amp + (hex ? 3 : 2);
+  if (semi === first || semi - first > (hex ? 6 : 7)) return -1;
+  let code = 0;
+  for (let at = first; at < semi; at += 1) {
+    const digit = digitValue(text.charCodeAt(at), hex);
+    if (digit < 0) return -1;
+    code = code * (hex ? 16 : 10) + digit;
+  }
+  return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? -1 : code;
+}
+
+/**
+ * Decode the five predefined entities and numeric references in one pass; any other `&name;` stays literal. The
+ * output is built in one buffer, so text dense with references costs no more than its length (WP4-FIXB2).
+ */
+function decodeXml(text: string): string {
+  let amp = text.indexOf('&');
+  if (amp === -1) return text;
+  const out = new Uint16Array(text.length); // a reference is at least 4 characters and decodes to at most 2
+  let length = 0;
+  let from = 0;
+  while (amp !== -1) {
+    // The longest reference decoded is 10 characters (`&#1234567;`, `&#x10FFFF;`).
+    let semi = -1;
+    for (let at = amp + 1; at < Math.min(text.length, amp + 10); at += 1) {
+      if (text.charCodeAt(at) === 0x3b) {
+        semi = at;
+        break;
+      }
+    }
+    const code = semi === -1 ? -1 : referenceCode(text, amp, semi);
+    if (code < 0) {
+      amp = text.indexOf('&', amp + 1);
+      continue;
+    }
+    for (let at = from; at < amp; at += 1) out[length++] = text.charCodeAt(at);
+    if (code > 0xffff) {
+      out[length++] = 0xd800 + ((code - 0x10000) >> 10);
+      out[length++] = 0xdc00 + ((code - 0x10000) & 0x3ff);
+    } else {
+      out[length++] = code;
+    }
+    from = semi + 1;
+    amp = text.indexOf('&', from);
+  }
+  if (from === 0) return text;
+  for (let at = from; at < text.length; at += 1) out[length++] = text.charCodeAt(at);
+  const chunks: string[] = [];
+  for (let start = 0; start < length; start += 8192) chunks.push(String.fromCharCode(...out.subarray(start, Math.min(length, start + 8192))));
+  return chunks.join('');
+}
+
+/** An element the scanner kept: its local name (any namespace prefix removed), kept attributes, kept children and text. */
+type XmlNode = {
+  /** One of the schema's names (the same string instance), never a slice of the part. */
+  readonly name: string;
+  /** Kept attributes as `[local name, value as written, ...]`, one pair per name; entity references not yet decoded. */
+  attributes: string[] | null;
+  children: XmlNode[] | null;
+  /** Decoded text of a text element (`t`, `v`, `f`), CDATA included as written; empty for any other element. */
+  text: string;
+};
+
+/**
+ * What the scanner keeps of one kind of part. Everything else (any other element, attribute or text) is scanned,
+ * counted and dropped, so a part can make the scanner allocate only for the elements this reader reads.
+ */
+type PartSchema = {
+  /** Local name of the root element; a part with another root keeps nothing. */
+  readonly root: string;
+  /** Kept child elements of each kept element, by local name. */
+  readonly children: ReadonlyMap<string, readonly string[]>;
+  /** Kept elements whose text is kept. */
+  readonly text: readonly string[];
+  /** Attributes kept on kept elements, by local name. */
+  readonly attributes: readonly string[];
+  /**
+   * Kept elements handed to the part's reader as they open and close instead of being added to their parent, so
+   * a part holds at most one of them (with its subtree) at a time: rows and cells, shared strings, list items.
+   */
+  readonly streamed: readonly string[];
+  /** Which kept elements count against the cell and row limits (worksheet) or the shared-string limit. */
+  readonly counts: 'worksheet' | 'sharedStrings' | 'none';
+};
+
+function partSchema(schema: {
+  root: string;
+  children: Record<string, readonly string[]>;
+  text?: readonly string[];
+  attributes?: readonly string[];
+  streamed: readonly string[];
+  counts?: PartSchema['counts'];
+}): PartSchema {
+  const { root, children, text = [], attributes = [], streamed, counts = 'none' } = schema;
+  return { root, children: new Map(Object.entries(children)), text, attributes, streamed, counts };
+}
+
+const CONTENT_TYPES_SCHEMA = partSchema({ root: 'Types', children: { Types: ['Default', 'Override'] }, attributes: ['ContentType'], streamed: ['Default', 'Override'] });
+const WORKBOOK_SCHEMA = partSchema({
+  root: 'workbook',
+  children: { workbook: ['workbookPr', 'sheets', 'externalReferences'], sheets: ['sheet'] },
+  attributes: ['date1904', 'name', 'id', 'state'],
+  streamed: ['sheet'],
+});
+const RELATIONSHIPS_SCHEMA = partSchema({ root: 'Relationships', children: { Relationships: ['Relationship'] }, attributes: ['Id', 'Target', 'Type', 'TargetMode'], streamed: ['Relationship'] });
+const SHARED_STRINGS_SCHEMA = partSchema({ root: 'sst', children: { sst: ['si'], si: ['t', 'r'], r: ['t'] }, text: ['t'], streamed: ['si'], counts: 'sharedStrings' });
+const WORKSHEET_SCHEMA = partSchema({
+  root: 'worksheet',
+  children: { worksheet: ['sheetData'], sheetData: ['row'], row: ['c'], c: ['v', 'f', 'is'], is: ['t', 'r'], r: ['t'] },
+  text: ['v', 'f', 't'],
+  attributes: ['r', 't', 'si'],
+  streamed: ['row', 'c'],
+  counts: 'worksheet',
+});
+
+/** What the part's reader does with a streamed element: `opened` once its attributes are read, `closed` at its end. */
+type StreamHandlers = {
+  opened?: (node: XmlNode) => void;
+  closed?: (node: XmlNode) => void;
+};
+
+/** Deepest element nesting accepted; real parts nest about ten deep. */
+const MAX_DEPTH = 40;
+
+function isSpace(code: number): boolean {
+  return code === 0x20 || code === 0x0a || code === 0x09 || code === 0x0d;
+}
+
+/** XML NameStartChar, approximated for non-ASCII: never a digit, `.`, `-`, a space or other ASCII punctuation. */
+function isNameStart(code: number): boolean {
+  return (code >= 0x61 && code <= 0x7a) || (code >= 0x41 && code <= 0x5a) || code === 0x5f || code === 0x3a || (code >= 0xc0 && code !== 0xd7 && code !== 0xf7);
+}
+
+function isNameChar(code: number): boolean {
+  return isNameStart(code) || (code >= 0x30 && code <= 0x39) || code === 0x2d || code === 0x2e || code === 0xb7;
+}
+
+/** The schema name equal to `text[start..end)`, if any (no string is allocated for a name that is not kept). */
+function keptName(text: string, start: number, end: number, names: readonly string[] | undefined): string | undefined {
+  if (names === undefined) return undefined;
+  for (const name of names) if (name.length === end - start && text.startsWith(name, start)) return name;
+  return undefined;
+}
+
+/** True when `text[a..a+length)` equals `text[b..b+length)`. */
+function sameText(text: string, a: number, b: number, length: number): boolean {
+  for (let offset = 0; offset < length; offset += 1) if (text.charCodeAt(a + offset) !== text.charCodeAt(b + offset)) return false;
+  return true;
+}
+
+function setAttribute(node: XmlNode, name: string, value: string): void {
+  const list = (node.attributes ??= []);
+  for (let index = 0; index < list.length; index += 2) {
+    if (list[index] === name) {
+      list[index + 1] = value;
+      return;
+    }
+  }
+  list.push(name, value);
+}
+
+function malformedXml(): never {
+  return reject('malformed_xml', 'A package part is not well-formed XML');
+}
+
+/** One open element. Frames are reused by depth, so an element costs no allocation unless it is kept. */
+type Frame = {
+  /** Where the element's name, as written, stands in the text: its end tag must repeat it. */
+  start: number;
+  end: number;
+  node: XmlNode | null;
+  keepsText: boolean;
+  kept: readonly string[] | undefined;
+  streamed: boolean;
+};
+
+/**
+ * The bounded scanner (WP4-FIXB2). One pass over `text`; every step either advances or refuses the part, and every
+ * markup opening, attribute and start-tag character is counted against a limit before anything is kept for it.
+ * Streamed elements go to `handlers`; the rest of what is kept hangs from the root, which is returned when it is the
+ * schema's root (otherwise `null`).
+ */
+function scanXml(text: string, schema: PartSchema, limits: ReaderLimits, budget: Budget, handlers: StreamHandlers): XmlNode | null {
+  const frames: Frame[] = [];
+  let depth = 0;
+  let root: XmlNode | null = null;
+  let rootSeen = false;
+  let openings = 0;
+  let attributes = 0;
   let cells = 0;
   let rows = 0;
   let strings = 0;
-  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    elements += 1;
-    if (elements > limits.maxPartElements) reject('too_many_elements', `A package part has more than ${limits.maxPartElements} elements`);
-    if (kind === 'worksheet') {
-      const name = match[1];
-      if (name === 'c') {
-        cells += 1;
-        if (cells > limits.maxCellsPerSheet) reject('too_many_cells', `A sheet has more than ${limits.maxCellsPerSheet} cells`);
-      } else if (name === 'row') {
-        rows += 1;
-        if (rows > limits.maxRowsPerSheet) reject('too_many_rows', `A sheet has more than ${limits.maxRowsPerSheet} rows`);
+  let position = 0;
+  while (position < text.length) {
+    const open = text.indexOf('<', position);
+    const textEnd = open === -1 ? text.length : open;
+    const top = depth === 0 ? undefined : frames[depth - 1];
+    if (textEnd > position) {
+      if (top === undefined) {
+        // Only white space may stand outside the root element.
+        for (let at = position; at < textEnd; at += 1) if (!isSpace(text.charCodeAt(at))) malformedXml();
+      } else if (top.keepsText && top.node !== null) {
+        top.node.text += decodeXml(text.slice(position, textEnd));
       }
-    } else if (kind === 'sharedStrings' && match[1] === 'si') {
-      strings += 1;
-      if (strings > limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
     }
+    if (open === -1) break;
+    const next = text.charCodeAt(open + 1);
+
+    if (next === 0x2f) {
+      // End tag: it must close the innermost open element, so end tags never outnumber the counted openings.
+      const close = text.indexOf('>', open + 2);
+      if (close === -1 || top === undefined) return malformedXml();
+      let nameEnd = close;
+      while (nameEnd > open + 2 && isSpace(text.charCodeAt(nameEnd - 1))) nameEnd -= 1;
+      if (nameEnd - (open + 2) !== top.end - top.start || !sameText(text, top.start, open + 2, top.end - top.start)) malformedXml();
+      if (top.streamed && top.node !== null) handlers.closed?.(top.node);
+      top.node = null;
+      depth -= 1;
+      position = close + 1;
+      continue;
+    }
+
+    // Every other `<` opens markup and is counted first, whatever follows it.
+    openings += 1;
+    budget.elementsLeft -= 1;
+    if (openings > limits.maxPartElements) reject('too_many_elements', `A package part has more than ${limits.maxPartElements} markup openings`);
+    if (budget.elementsLeft < 0) reject('too_many_elements', `The package has more than ${limits.maxTotalElements} markup openings in its parsed parts`);
+
+    if (next === 0x21) {
+      if (text.startsWith('!--', open + 1)) {
+        const close = text.indexOf('-->', open + 4);
+        if (close === -1) malformedXml();
+        position = close + 3;
+        continue;
+      }
+      if (text.startsWith('![CDATA[', open + 1)) {
+        const close = text.indexOf(']]>', open + 9);
+        if (close === -1 || top === undefined) return malformedXml();
+        if (top.keepsText && top.node !== null) top.node.text += text.slice(open + 9, close);
+        position = close + 3;
+        continue;
+      }
+      // DOCTYPE and ENTITY were refused before the scan; any other declaration is not workbook XML.
+      malformedXml();
+    }
+    if (next === 0x3f) {
+      const close = text.indexOf('?>', open + 2);
+      if (close === -1) malformedXml();
+      position = close + 2;
+      continue;
+    }
+
+    // A start tag. Its name must be an XML name: `<1/>`, `< />`, `<.a/>` or `<-/>` are not markup.
+    const nameStart = open + 1;
+    let at = nameStart;
+    if (!isNameStart(text.charCodeAt(at))) malformedXml();
+    let localStart = nameStart;
+    for (; isNameChar(text.charCodeAt(at)); at += 1) if (localStart === nameStart && text.charCodeAt(at) === 0x3a) localStart = at + 1;
+    const nameEnd = at;
+    let node: XmlNode | null = null;
+    let streamed = false;
+    if (top === undefined) {
+      if (rootSeen) malformedXml();
+      rootSeen = true;
+      const name = keptName(text, localStart, nameEnd, [schema.root]);
+      if (name !== undefined) node = root = { name, attributes: null, children: null, text: '' };
+    } else if (top.node !== null) {
+      const name = keptName(text, localStart, nameEnd, top.kept);
+      if (name !== undefined) {
+        node = { name, attributes: null, children: null, text: '' };
+        streamed = schema.streamed.includes(name);
+        if (!streamed) (top.node.children ??= []).push(node);
+        if (schema.counts === 'worksheet' && name === 'c') {
+          cells += 1;
+          if (cells > limits.maxCellsPerSheet) reject('too_many_cells', `A sheet has more than ${limits.maxCellsPerSheet} cells`);
+        } else if (schema.counts === 'worksheet' && name === 'row') {
+          rows += 1;
+          if (rows > limits.maxRowsPerSheet) reject('too_many_rows', `A sheet has more than ${limits.maxRowsPerSheet} rows`);
+        } else if (schema.counts === 'sharedStrings' && name === 'si') {
+          strings += 1;
+          if (strings > limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
+        }
+      }
+    }
+
+    // Attributes: each one counted, the tag length checked after each, only the schema's attributes kept.
+    let inElement = 0;
+    let selfClosing = false;
+    for (;;) {
+      if (at - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);
+      const spaced = isSpace(text.charCodeAt(at));
+      while (isSpace(text.charCodeAt(at))) at += 1;
+      const code = text.charCodeAt(at);
+      if (code === 0x3e) {
+        at += 1;
+        break;
+      }
+      if (code === 0x2f && text.charCodeAt(at + 1) === 0x3e) {
+        at += 2;
+        selfClosing = true;
+        break;
+      }
+      if (!spaced || !isNameStart(code)) malformedXml();
+      const attributeStart = at;
+      let attributeLocal = at;
+      for (; isNameChar(text.charCodeAt(at)); at += 1) if (attributeLocal === attributeStart && text.charCodeAt(at) === 0x3a) attributeLocal = at + 1;
+      const attributeEnd = at;
+      while (isSpace(text.charCodeAt(at))) at += 1;
+      if (text.charCodeAt(at) !== 0x3d) malformedXml();
+      at += 1;
+      while (isSpace(text.charCodeAt(at))) at += 1;
+      const quote = text.charCodeAt(at);
+      if (quote !== 0x22 && quote !== 0x27) malformedXml();
+      const valueEnd = text.indexOf(quote === 0x22 ? '"' : "'", at + 1);
+      if (valueEnd === -1) malformedXml();
+      inElement += 1;
+      attributes += 1;
+      budget.attributesLeft -= 1;
+      if (inElement > limits.maxAttributesPerElement) reject('too_many_attributes', `An element has more than ${limits.maxAttributesPerElement} attributes`);
+      if (attributes > limits.maxPartAttributes) reject('too_many_attributes', `A package part has more than ${limits.maxPartAttributes} attributes`);
+      if (budget.attributesLeft < 0) reject('too_many_attributes', `The package has more than ${limits.maxTotalAttributes} attributes in its parsed parts`);
+      // Namespace declarations (`xmlns`, `xmlns:r`) are never kept, whatever their local part.
+      const declaration = text.startsWith('xmlns', attributeStart) && (attributeEnd - attributeStart === 5 || text.charCodeAt(attributeStart + 5) === 0x3a);
+      const kept = node === null || declaration ? undefined : keptName(text, attributeLocal, attributeEnd, schema.attributes);
+      if (node !== null && kept !== undefined) setAttribute(node, kept, text.slice(at + 1, valueEnd));
+      at = valueEnd + 1;
+    }
+    if (at - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);
+    if (streamed && node !== null) {
+      handlers.opened?.(node);
+      if (selfClosing) handlers.closed?.(node);
+    }
+    if (!selfClosing) {
+      if (depth >= MAX_DEPTH) malformedXml();
+      const frame = frames[depth] ?? { start: 0, end: 0, node: null, keepsText: false, kept: undefined, streamed: false };
+      frames[depth] = frame;
+      frame.start = nameStart;
+      frame.end = nameEnd;
+      frame.node = node;
+      frame.keepsText = node !== null && schema.text.includes(node.name);
+      frame.kept = node === null ? undefined : schema.children.get(node.name);
+      frame.streamed = streamed;
+      depth += 1;
+    }
+    position = at;
   }
-  budget.elementsLeft -= elements;
-  if (budget.elementsLeft < 0) reject('too_many_elements', `The package has more than ${limits.maxTotalElements} elements in its parsed parts`);
+  if (depth > 0 || !rootSeen) malformedXml();
+  return root;
 }
 
-function parseXml(data: Uint8Array, kind: PartKind, limits: ReaderLimits, budget: Budget): XmlNode {
+function parseXml(data: Uint8Array, schema: PartSchema, limits: ReaderLimits, budget: Budget, handlers: StreamHandlers = {}): XmlNode | null {
   const text = decodeXmlBytes(data);
   if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(text)) reject('doctype_forbidden', 'XML DOCTYPE and ENTITY declarations are not accepted');
-  scanElements(text, kind, limits, budget);
-  try {
-    const parsed: unknown = xmlParser.parse(text);
-    return isNode(parsed) ? parsed : {};
-  } catch {
-    return reject('malformed_xml', 'A package part is not well-formed XML');
-  }
+  return scanXml(text, schema, limits, budget, handlers);
 }
 
-function isNode(value: unknown): value is XmlNode {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asArray(value: unknown): unknown[] {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
-function nodes(value: unknown): XmlNode[] {
-  return asArray(value).filter(isNode);
-}
-
-const PREDEFINED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-
-/** Decode the five predefined entities and numeric references in one pass; any other `&name;` stays literal. */
-function decodeXml(text: string): string {
-  return text.replace(/&(?:#(\d{1,7})|#x([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos));/g, (whole, dec?: string, hex?: string, name?: string) => {
-    if (name !== undefined) return PREDEFINED[name] ?? whole;
-    const code = dec !== undefined ? Number(dec) : parseInt(hex ?? '', 16);
-    if (code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return whole;
-    return String.fromCodePoint(code);
-  });
+/** The first kept child of that name. */
+function child(node: XmlNode | null | undefined, name: string): XmlNode | undefined {
+  return node?.children?.find((item) => item.name === name);
 }
 
 function attr(node: XmlNode, name: string): string | undefined {
-  const value = node[`@_${name}`];
-  return typeof value === 'string' ? decodeXml(value) : undefined;
-}
-
-function textOf(value: unknown): string {
-  if (typeof value === 'string') return decodeXml(value);
-  if (isNode(value)) {
-    const inner = value['#text'];
-    return typeof inner === 'string' ? decodeXml(inner) : '';
+  const list = node.attributes ?? [];
+  for (let index = 0; index < list.length; index += 2) {
+    const value = list[index + 1];
+    if (list[index] === name && value !== undefined) return decodeXml(value);
   }
-  return '';
+  return undefined;
 }
 
-/** Plain text of a shared-string item or an inline string: all `t` runs, never phonetic hints. */
-function richText(item: unknown): string {
-  if (typeof item === 'string') return decodeXml(item);
-  if (!isNode(item)) return '';
-  let text = asArray(item.t).map(textOf).join('');
-  for (const run of nodes(item.r)) text += asArray(run.t).map(textOf).join('');
+/** Plain text of a shared-string item or an inline string: its `t` runs in order, never phonetic hints. */
+function richText(item: XmlNode): string {
+  let text = '';
+  for (const part of item.children ?? []) {
+    if (part.name === 't') text += part.text;
+    else if (part.name === 'r') for (const run of part.children ?? []) text += run.text;
+  }
   return text;
 }
 
@@ -488,74 +825,94 @@ function resolveTarget(base: string, target: string): string {
   return parts.join('/');
 }
 
-function readCellValue(type: string | undefined, raw: unknown, shared: readonly string[]): { type: ReadCell['type']; value: CellValue } {
-  const text = typeof raw === 'string' ? raw : isNode(raw) && typeof raw['#text'] === 'string' ? raw['#text'] : undefined;
+/** `text` is the decoded text of the cell's `<v>`, or `undefined` when it has none. */
+function readCellValue(type: string | undefined, text: string | undefined, shared: readonly string[]): { type: ReadCell['type']; value: CellValue } {
   if (type === 's') {
     const index = Number(text);
     const value = Number.isInteger(index) ? shared[index] : undefined;
     return value === undefined ? { type: 'blank', value: null } : { type: 'string', value };
   }
-  if (type === 'str' || type === 'inlineStr') return { type: 'string', value: decodeXml(text ?? '') };
+  if (type === 'str' || type === 'inlineStr') return { type: 'string', value: text ?? '' };
   if (type === 'b') return { type: 'boolean', value: text === '1' };
-  if (type === 'e') return { type: 'error', value: decodeXml(text ?? '') };
-  if (type === 'd') return { type: 'string', value: decodeXml(text ?? '') };
+  if (type === 'e') return { type: 'error', value: text ?? '' };
+  if (type === 'd') return { type: 'string', value: text ?? '' };
   if (text === undefined || text.trim() === '') return { type: 'blank', value: null };
   const number = Number(text);
   return Number.isFinite(number) ? { type: 'number', value: number } : { type: 'error', value: 'invalid_number' };
 }
 
-function readWorksheet(name: string, root: XmlNode, shared: readonly string[], limits: ReaderLimits): Map<string, ReadCell> {
+/** Excel's own limit on the length of a formula; longer formula text is cut, so every kept formula is short. */
+const MAX_FORMULA_LENGTH = 8192;
+/**
+ * A relationship id or a shared-formula id longer than this is ignored. Real ids are a few characters (`rId3`, `0`);
+ * a short key also keeps the lookup maps cheap (V8 hashes strings over 16 383 characters by length alone).
+ */
+const MAX_ID_LENGTH = 255;
+
+/**
+ * The cells of one worksheet part. Rows and cells are streamed: each cell is read when its end tag is scanned, so the
+ * part never holds more than one row and one cell element besides the cells it returns.
+ */
+function readWorksheet(name: string, data: Uint8Array, shared: readonly string[], limits: ReaderLimits, budget: Budget): Map<string, ReadCell> {
   const cells = new Map<string, ReadCell>();
-  const sheet = isNode(root.worksheet) ? root.worksheet : {};
-  const sheetData = isNode(sheet.sheetData) ? sheet.sheetData : {};
   const sharedFormulas = new Map<string, string>();
   let rowNumber = 0;
-  for (const row of nodes(sheetData.row)) {
-    const declaredRow = Number(attr(row, 'r'));
-    rowNumber = Number.isInteger(declaredRow) && declaredRow > 0 ? declaredRow : rowNumber + 1;
-    let columnIndex = 0;
-    for (const cell of nodes(row.c)) {
-      const declared = attr(cell, 'r');
-      let address: string;
-      const match = declared === undefined ? null : CELL_ADDRESS.exec(declared.toUpperCase());
-      if (match) {
-        address = `${match[1]}${match[2]}`;
-        columnIndex = columnNumber(match[1] ?? 'A');
-      } else {
-        columnIndex += 1;
-        address = `${columnLetters(columnIndex)}${rowNumber}`;
-      }
-      if (cells.size >= limits.maxCellsPerSheet) reject('too_many_cells', `A sheet has more than ${limits.maxCellsPerSheet} cells`);
-
-      let formula: string | null = null;
-      if (cell.f !== undefined) {
-        const element = Array.isArray(cell.f) ? cell.f[0] : cell.f;
-        const body = textOf(element);
-        const shareId = isNode(element) ? attr(element, 'si') : undefined;
-        if (body !== '') {
-          formula = body;
-          if (shareId !== undefined && isNode(element) && attr(element, 't') === 'shared') sharedFormulas.set(shareId, body);
-        } else {
-          formula = (shareId !== undefined ? sharedFormulas.get(shareId) : undefined) ?? '';
-        }
-      }
-      const inline = cell.is !== undefined ? richText(Array.isArray(cell.is) ? cell.is[0] : cell.is) : undefined;
-      const stored = inline !== undefined && attr(cell, 't') === 'inlineStr'
-        ? { type: 'string' as const, value: inline }
-        : readCellValue(attr(cell, 't'), cell.v, shared);
-      const isFormula = formula !== null;
-      cells.set(address, {
-        sheet: name,
-        address,
-        provenance: `${name}!${address}`,
-        type: isFormula ? 'blank' : stored.type,
-        value: isFormula ? null : stored.value,
-        formula,
-        cachedValue: isFormula ? stored.value : null,
-        cacheNote: isFormula ? FORMULA_CACHE_NOTE : null,
-      });
+  let columnIndex = 0;
+  const readCell = (cell: XmlNode): void => {
+    const declared = attr(cell, 'r');
+    let address: string;
+    const match = declared === undefined ? null : CELL_ADDRESS.exec(declared.toUpperCase());
+    if (match) {
+      address = `${match[1]}${match[2]}`;
+      columnIndex = columnNumber(match[1] ?? 'A');
+    } else {
+      columnIndex += 1;
+      address = `${columnLetters(columnIndex)}${rowNumber}`;
     }
-  }
+    if (cells.size >= limits.maxCellsPerSheet) reject('too_many_cells', `A sheet has more than ${limits.maxCellsPerSheet} cells`);
+
+    let formula: string | null = null;
+    const element = child(cell, 'f');
+    if (element !== undefined) {
+      const body = element.text.length > MAX_FORMULA_LENGTH ? element.text.slice(0, MAX_FORMULA_LENGTH) : element.text;
+      const declaredId = attr(element, 'si');
+      const shareId = declaredId !== undefined && declaredId.length <= MAX_ID_LENGTH ? declaredId : undefined;
+      if (body !== '') {
+        formula = body;
+        // Every cell of a shared formula gets this one string, so the mapping examines it once (WP4-FIXB2).
+        if (shareId !== undefined && attr(element, 't') === 'shared') sharedFormulas.set(shareId, body);
+      } else {
+        formula = (shareId !== undefined ? sharedFormulas.get(shareId) : undefined) ?? '';
+      }
+    }
+    const inlineElement = child(cell, 'is');
+    const inline = inlineElement !== undefined ? richText(inlineElement) : undefined;
+    const stored = inline !== undefined && attr(cell, 't') === 'inlineStr'
+      ? { type: 'string' as const, value: inline }
+      : readCellValue(attr(cell, 't'), child(cell, 'v')?.text, shared);
+    const isFormula = formula !== null;
+    cells.set(address, {
+      sheet: name,
+      address,
+      provenance: `${name}!${address}`,
+      type: isFormula ? 'blank' : stored.type,
+      value: isFormula ? null : stored.value,
+      formula,
+      cachedValue: isFormula ? stored.value : null,
+      cacheNote: isFormula ? FORMULA_CACHE_NOTE : null,
+    });
+  };
+  parseXml(data, WORKSHEET_SCHEMA, limits, budget, {
+    opened: (node) => {
+      if (node.name !== 'row') return;
+      const declaredRow = Number(attr(node, 'r'));
+      rowNumber = Number.isInteger(declaredRow) && declaredRow > 0 ? declaredRow : rowNumber + 1;
+      columnIndex = 0;
+    },
+    closed: (node) => {
+      if (node.name === 'c') readCell(node);
+    },
+  });
   return cells;
 }
 
@@ -563,7 +920,12 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const limits: ReaderLimits = { ...DEFAULT_READER_LIMITS, ...overrides };
   const entries = listEntries(input, limits);
   const byName = new Map(entries.map((entry) => [entry.name, entry]));
-  const budget: Budget = { left: limits.maxTotalInflatedBytes, xmlLeft: limits.maxTotalXmlBytes, elementsLeft: limits.maxTotalElements };
+  const budget: Budget = {
+    left: limits.maxTotalInflatedBytes,
+    xmlLeft: limits.maxTotalXmlBytes,
+    elementsLeft: limits.maxTotalElements,
+    attributesLeft: limits.maxTotalAttributes,
+  };
   const read = (name: string): Uint8Array | null => {
     const entry = byName.get(name);
     return entry === undefined ? null : inflateEntry(input, entry, limits, budget);
@@ -572,11 +934,11 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
   const contentTypes = read('[Content_Types].xml');
   const workbookPart = read('xl/workbook.xml');
   if (contentTypes === null || workbookPart === null) reject('not_a_workbook', 'Package is not an Excel workbook');
-  const typesRoot = parseXml(contentTypes, 'other', limits, budget);
-  const types = isNode(typesRoot.Types) ? typesRoot.Types : {};
-  for (const item of [...nodes(types.Default), ...nodes(types.Override)]) {
-    if (MACRO_CONTENT_TYPE.test(attr(item, 'ContentType') ?? '')) reject('macro_content', 'Macro-enabled packages are not accepted');
-  }
+  parseXml(contentTypes, CONTENT_TYPES_SCHEMA, limits, budget, {
+    closed: (item) => {
+      if (MACRO_CONTENT_TYPE.test(attr(item, 'ContentType') ?? '')) reject('macro_content', 'Macro-enabled packages are not accepted');
+    },
+  });
 
   const notes: ReaderNote[] = [];
   for (const entry of entries) {
@@ -585,39 +947,47 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
     }
   }
 
-  const workbookRoot = parseXml(workbookPart, 'other', limits, budget);
-  const workbook = isNode(workbookRoot.workbook) ? workbookRoot.workbook : {};
-  if (workbook.externalReferences !== undefined) notes.push({ code: 'external_link_ignored', part: 'xl/workbook.xml#externalReferences' });
-  const date1904 = isNode(workbook.workbookPr) && ['1', 'true'].includes(attr(workbook.workbookPr, 'date1904') ?? '');
+  const sheetNodes: XmlNode[] = [];
+  const workbook = parseXml(workbookPart, WORKBOOK_SCHEMA, limits, budget, {
+    closed: (node) => {
+      sheetNodes.push(node);
+      if (sheetNodes.length > limits.maxSheets) reject('too_many_sheets', `Workbook has more than ${limits.maxSheets} sheets`);
+      // A sheet name is part of every source address the report lists (`sheet!A1`), so its length is bounded here.
+      if ((attr(node, 'name') ?? '').length > limits.maxSheetNameLength) {
+        reject('sheet_name_too_long', `A sheet name is longer than ${limits.maxSheetNameLength} characters`);
+      }
+    },
+  });
+  if (child(workbook, 'externalReferences') !== undefined) notes.push({ code: 'external_link_ignored', part: 'xl/workbook.xml#externalReferences' });
+  const workbookPr = child(workbook, 'workbookPr');
+  const date1904 = workbookPr !== undefined && ['1', 'true'].includes(attr(workbookPr, 'date1904') ?? '');
 
   const relsPart = read('xl/_rels/workbook.xml.rels');
   const relationships = new Map<string, { target: string; type: string; external: boolean }>();
   if (relsPart !== null) {
-    const relsRoot = parseXml(relsPart, 'other', limits, budget);
-    const container = isNode(relsRoot.Relationships) ? relsRoot.Relationships : {};
-    for (const rel of nodes(container.Relationship)) {
-      const id = attr(rel, 'Id');
-      const target = attr(rel, 'Target');
-      if (id === undefined || target === undefined) continue;
-      const external = attr(rel, 'TargetMode') === 'External';
-      if (external) notes.push({ code: 'external_link_ignored', part: 'xl/_rels/workbook.xml.rels' });
-      relationships.set(id, { target, type: attr(rel, 'Type') ?? '', external });
-    }
+    parseXml(relsPart, RELATIONSHIPS_SCHEMA, limits, budget, {
+      closed: (rel) => {
+        const id = attr(rel, 'Id');
+        const target = attr(rel, 'Target');
+        if (id === undefined || id.length > MAX_ID_LENGTH || target === undefined) return;
+        const external = attr(rel, 'TargetMode') === 'External';
+        if (external) notes.push({ code: 'external_link_ignored', part: 'xl/_rels/workbook.xml.rels' });
+        relationships.set(id, { target, type: attr(rel, 'Type') ?? '', external });
+      },
+    });
   }
 
   const sharedPart = read(SHARED_STRINGS_PART);
   const shared: string[] = [];
   if (sharedPart !== null) {
-    const sstRoot = parseXml(sharedPart, 'sharedStrings', limits, budget);
-    const sst = isNode(sstRoot.sst) ? sstRoot.sst : {};
-    for (const item of asArray(sst.si)) {
-      if (shared.length >= limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
-      shared.push(richText(item));
-    }
+    parseXml(sharedPart, SHARED_STRINGS_SCHEMA, limits, budget, {
+      closed: (item) => {
+        if (shared.length >= limits.maxSharedStrings) reject('too_many_shared_strings', 'Too many shared strings');
+        shared.push(richText(item));
+      },
+    });
   }
 
-  const sheetNodes = nodes(isNode(workbook.sheets) ? workbook.sheets.sheet : undefined);
-  if (sheetNodes.length > limits.maxSheets) reject('too_many_sheets', `Workbook has more than ${limits.maxSheets} sheets`);
   const sheets: ReadSheet[] = [];
   for (const node of sheetNodes) {
     const name = attr(node, 'name') ?? '';
@@ -638,7 +1008,7 @@ export function readWorkbook(input: Uint8Array, overrides: Partial<ReaderLimits>
       sheets.push({ name, part, kind: 'worksheet', hidden, cells: new Map() });
       continue;
     }
-    sheets.push({ name, part, kind: 'worksheet', hidden, cells: readWorksheet(name, parseXml(data, 'worksheet', limits, budget), shared, limits) });
+    sheets.push({ name, part, kind: 'worksheet', hidden, cells: readWorksheet(name, data, shared, limits, budget) });
   }
   return { sheets, notes, date1904, entryCount: entries.length, inflatedBytes: limits.maxTotalInflatedBytes - budget.left };
 }

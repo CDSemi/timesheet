@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 13a258db86b2f0b6388830e584e2cca5303f1f6c (WP4-T13-FREEZE, commit đóng băng cả package WP4).
+  - HEAD = origin/main = 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65 (WP4-FIX-FREEZE, commit đóng băng vòng sửa WP4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -812,7 +812,50 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
            hai job.
          - Đã đồng bộ docs.
          - Diễn tập: 208 PASS. Verify: 1734 test. Digest: dfe4541d….
-       - Đang chạy: WP4-FIX-FREEZE.
+       - WP4-FIX-FREEZE đã commit và push thành 0f7fba2 (149 đường dẫn; mọi kiểm tra trả về
+         0). Digest mã nguồn hiện tại trên board là dfe4541d….
+       - WP4-REGATE: PASS, đạt cả 13 hạng mục và mọi phần kiểm lỗi.
+         - Digest chính thức: dfe4541d… (775 tệp).
+         - Verify: 1734 test. e2e: 145 đạt. Diễn tập: 208 PASS.
+         - Tệp bom 65 KB bị từ chối trong 5 ms, trong lúc đó health vẫn trả lời sau 2 ms.
+         - Image không còn source map; các test tranh chấp đạt 60/60.
+         - Phạm vi thay đổi: chỉ các đường dẫn của FIXA và FIXB.
+         - Lưu ý: hai bản sao lưu trong cùng một giây thì được chọn theo tên; lần kiểm
+           tra lại sẽ đánh giá điểm này.
+       - WP4-RECHECK-B: **FIX REQUIRED**, phát hiện WP4-RB-01 (Medium). Lỗi này mở lại
+         B-01:
+         - thẻ bắt đầu bằng chữ số hoặc dấu cách, và các thuộc tính, lọt qua bộ đếm phần
+           tử: bốn phần cỡ 26 KB tốn khoảng 3 giây và khoảng 1,4 GiB;
+         - giá trị ô trong danh sách cảnh báo không bị giới hạn: một báo cáo 99,8 MiB bị
+           lưu lại, còn báo cáo lớn hơn thì gây lỗi 500.
+         - B-02, R3 và R1 đã khép, và không có hồi quy.
+       - WP4-RECHECK-A: **PASS**, không có phát hiện.
+         - A-01 đến A-04 đã khép; R-A1, R-A5 và R-A7 đúng; không có hồi quy.
+         - Các rủi ro R-RA1 đến R-RA4 không chặn nghiệm thu.
+         - Nếu mã nguồn thay đổi, phải kiểm tra lại phần chênh của mảng A (lần 2) trên
+           digest mới.
+       - WP4-FIXB2 đã xong (expert, opus; tác giả tự báo).
+         - Một bộ quét XML dạng luồng, có giới hạn, thay cho fast-xml-parser. Nó đếm mọi
+           dấu `<`, và giới hạn thuộc tính, độ dài thẻ và tên thẻ.
+         - Văn bản bị cắt ở 200 ký tự, báo cáo tối đa 2 MiB. Lỗi khi dựng báo cáo trả
+           422.
+         - Mọi probe đều bị từ chối trong tối đa 57 ms. Gói được nhận nặng nhất tốn 180
+           ms và thêm 107 MiB.
+         - Test: 15 test viết trước để thấy đỏ, cộng một lượt quét 35 kiểu tệp; 10 phép
+           thử đột biến đều bị bắt. Verify: 1.750 test. Digest: 9848e8d7….
+       - WP4-DEPCLEAN đã xong: đã gỡ fast-xml-parser và 7 gói phụ thuộc kéo theo, không
+         đổi thư viện nào khác. `npm ci` sạch; audit --omit=dev báo 0 lỗ hổng; verify đạt
+         1.750 test. Digest: 96445de4….
+       - Board đã sẵn sàng cho digest mới:
+         - WP4-RECHECK-A chuyển sang lần 2 (đang chờ; kết quả PASS của lần 1 vẫn lưu
+           trong lịch sử);
+         - WP4-REGATE2 và WP4-RECHECK-B2 đang chờ.
+       - Đang chạy: WP4-FIXB2-FREEZE.
+       - Sau đó:
+         - WP4-FIXB2-FREEZE;
+         - WP4-REGATE2;
+         - WP4-RECHECK-B2, một auditor mới;
+         - WP4-RECHECK-A lần 2, kiểm tra phần chênh của mảng A trên digest mới.
        - Sau đó một commit đóng băng, WP4-REGATE, và kiểm tra lại A và B bằng auditor
          mới.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
@@ -830,7 +873,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-FIX-FREEZE. Sau đó WP4-REGATE,
+  1. Ghi kết quả hai lần kiểm tra lại. Sau đó
      WP4-RECHECK-A và WP4-RECHECK-B (auditor opus mới), WP4-ACCREC và WP4-ACCEPT.
   2. Sau đó:
      - nghiệm thu.
@@ -851,7 +894,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-FIX-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-FIXB2-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

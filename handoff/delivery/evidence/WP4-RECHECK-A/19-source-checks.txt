@@ -1,0 +1,96 @@
+Source checks on the export of 0f7fba2 (read-only greps), 2026-10-06T13:05:47Z
+
+$ grep -rn -i retention src/client   (A-03 a: the screen does not render the retention run)
+src/client/api.ts:495:  /** The latest daily job-row retention (WP4-T07B): when it ran and how many rows it deleted; counts only. */
+src/client/api.ts:496:  retention: { last_run_at: string | null; last_deleted: number | null };
+
+$ grep -rln -i retention src/client/components   (expect no file)
+(no file)
+
+$ grep -n JOB_RUNNER .env.example src/server/cli.ts src/server/ops/restore.ts   (A-02 wording and the CLI warning)
+.env.example:60:# JOB_RUNNER=off disables the in-process job runner. Set it to off after a `restore --keep-schema --confirm`
+.env.example:62:# JOB_RUNNER=
+src/server/cli.ts:325:          'but jobs created later are not held: start the previous build on it with JOB_RUNNER=off until the reconciliation is done.',
+src/server/ops/restore.ts:75: * previous build with JOB_RUNNER=off until reconciliation is done (printed as a warning by `cli.js restore`). A backup
+src/server/ops/restore.ts:130:    'The backup schema predates the outbound pause, so the restored copy cannot be paused; its backed-up send jobs are held, but confirm that the previous build will be started with JOB_RUNNER=off until reconciliation',
+
+$ sed -n 59,62p .env.example
+# --- Optional ------------------------------------------------------------------------------
+# JOB_RUNNER=off disables the in-process job runner. Set it to off after a `restore --keep-schema --confirm`
+# rollback to an older build, and keep it off until reconciliation is done (docs/11); otherwise leave it unset.
+# JOB_RUNNER=
+
+$ grep -n "/assets/\*" -A 3 src/server/app.ts   (A-01 static 404 route)
+152:    app.all('/assets/*', () => {
+153-      throw notFound('Asset');
+154-    });
+155-    app.get('*', serveStatic({ path: join(root, 'index.html') }));
+
+$ grep -n "sourceMap\|sourcemap\|BUILD_SOURCEMAPS" Dockerfile vite.config.ts tsconfig.server.json
+Dockerfile:16:# maps and no sourceMappingURL comments (WP4-A-01): tsc gets --sourceMap false, and vite.config.ts turns build.sourcemap
+Dockerfile:17:# off when BUILD_SOURCEMAPS=off. Local development keeps its maps.
+Dockerfile:23:RUN npm run build:server -- --sourceMap false \
+Dockerfile:24:    && BUILD_SOURCEMAPS=off npm run build:client
+vite.config.ts:6:// builds; the image build sets BUILD_SOURCEMAPS=off (Dockerfile), so the image carries no map and no map comment.
+vite.config.ts:13:    sourcemap: process.env.BUILD_SOURCEMAPS !== 'off',
+tsconfig.server.json:9:    "sourceMap": true,
+
+$ grep -n "\.map" scripts/container-drill.mjs | head
+220:    else if (/\.map$/i.test(name) && topLevelUnderApp === 'dist') offenders.push(path); // the app's own build; dependencies may ship maps
+1510:  // No source maps are served (WP4-A-01): the bundle has no sourceMappingURL and /assets/<bundle>.map answers 404.
+1514:  check('the client bundle is served and carries no sourceMappingURL', bundle?.status === 200 && bundle.text.length > 1000 && !/sourceMappingURL/.test(bundle.text), `${bundlePath ?? 'no bundle in index.html'} ${bundle?.text.length ?? 0} bytes`);
+1516:  check('/assets/<bundle>.map answers 404', mapAnswer.status === 404, `status ${mapAnswer.status}`);
+
+$ grep -n "DATA_DIR" scripts/smoke-built-server.mjs   (A-04)
+50:  // Its own private-data folder: an exported DATA_DIR must not leak in (the capture check reads this folder).
+51:  DATA_DIR: join(work, 'private-data'),
+
+$ grep -n "clock_behind_backups\|candidate.instant > now" src/server/ops/prune.ts   (R-A1)
+39:export type PruneFaultCode = 'target_unusable' | 'candidate_outside_target' | 'new_backup_missing' | 'clock_behind_backups' | 'remove_failed';
+45:  clock_behind_backups: 'A backup is dated after the system clock, so the clock may be wrong; check the host time. Nothing was removed',
+238:  if (candidates.some((candidate) => candidate.instant > now)) throw new PruneError('clock_behind_backups');
+
+$ grep -n "function newerFirst" -A 4 src/server/ops/prune.ts   (scope item 5 tie-break)
+77:function newerFirst(a: RetentionCandidate, b: RetentionCandidate): number {
+78-  if (a.instant !== b.instant) return b.instant - a.instant;
+79-  return a.name < b.name ? 1 : a.name > b.name ? -1 : 0;
+80-}
+81-
+
+$ sed -n 63,76p src/server/import/xlsxReader.ts   (docs/07 reader limits)
+export const DEFAULT_READER_LIMITS: Readonly<ReaderLimits> = {
+  maxCompressedBytes: 8 * 1024 * 1024,
+  maxEntries: 256,
+  maxEntryInflatedBytes: 16 * 1024 * 1024,
+  maxTotalInflatedBytes: 48 * 1024 * 1024,
+  maxPartXmlBytes: 4 * 1024 * 1024,
+  maxTotalXmlBytes: 16 * 1024 * 1024,
+  maxPartElements: 200_000,
+  maxTotalElements: 400_000,
+  maxSheets: 64,
+  maxCellsPerSheet: 50_000,
+  maxRowsPerSheet: 20_000,
+  maxSharedStrings: 50_000,
+};
+
+$ grep -n "MAX_HOLIDAY_ROWS\|MAX_FINDING_SOURCES =\|MAX_FINDINGS_PER_CODE =" src/server/import/templateMapping.ts
+26:export const MAX_FINDING_SOURCES = 20;
+28:export const MAX_FINDINGS_PER_CODE = 25;
+30:export const MAX_HOLIDAY_ROWS = 2000;
+360:  if (rowSet.size > MAX_HOLIDAY_ROWS) {
+361:    throw new WorkbookRejectedError('too_many_holidays', `The holiday table has more than ${MAX_HOLIDAY_ROWS} rows`);
+
+$ grep -n "workbook_rejected" src/server/services/workbookImport.ts
+456: * (`created: false`) and store nothing. A refused package stores nothing and is 422 `workbook_rejected`.
+470:      throw new ApiError(422, 'workbook_rejected', 'The workbook cannot be read safely and was not stored', { reason: error.code });
+
+$ grep -n "not_ended\|not_due" src/server/services/workbookImport.ts   (I-3 safe default)
+337:  } else if (period.periodEnd >= today) state = 'not_ended';
+338:  else if (period.dueAtUtc > nowSeconds) state = 'not_due'; // the due instant itself counts as due (like the deadline scan)
+
+$ grep -n "dueAtUtc > nowEpoch\|dueAtUtc <= now" src/server/services/automation.ts   (deadline scan: the due instant counts as due)
+200:  if (period.dueAtUtc > nowEpoch(clock)) return { kind: 'skip', reason: 'not_due' };
+265:      if (period.dueAtUtc >= start && period.dueAtUtc <= now) candidates.push({ user: owner, period });
+
+$ grep -n "not set up\|account list" docs/03_ARCHITECTURE_AND_DATA.md   (R-A7)
+49:- Never-configured accounts (F-3): an account that never saved its submission settings shows an administrator a "not set up" flag in the administrator's account list, and the employee gets no overdue warning. This matches the H-Q1 (a) rule in document 05 (no automation before setup).

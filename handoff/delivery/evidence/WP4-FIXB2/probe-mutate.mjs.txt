@@ -1,0 +1,123 @@
+// WP4-FIXB2 mutation checks, run ONLY in a scratch copy (MUT_ROOT, never the repository). Each mutation replaces one
+// exact fragment (which must occur exactly once), runs the named test files, records whether any test failed
+// (KILLED) or all passed (SURVIVED), then restores the file and checks its SHA-256 equals the original.
+// Usage: MUT_ROOT=<scratch copy> node mutate.mjs [id...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const ROOT = process.env.MUT_ROOT;
+if (!ROOT || /Dropbox/i.test(ROOT)) throw new Error('MUT_ROOT must be a scratch copy outside the repository');
+const READER = 'src/server/import/xlsxReader.ts';
+const MAPPING = 'src/server/import/templateMapping.ts';
+const SERVICE = 'src/server/services/workbookImport.ts';
+const READER_TESTS = 'tests/integration/workbook-reader.test.ts';
+const IMPORT_TESTS = 'tests/integration/workbook-import.test.ts';
+
+const MUTATIONS = [
+  {
+    id: 'M1 letter-only count (the WP4-FIXB rule): only openings led by a letter or _ are counted',
+    file: READER,
+    find: '    openings += 1;\n    budget.elementsLeft -= 1;\n',
+    replace: '    const counted = (next >= 0x41 && next <= 0x5a) || (next >= 0x61 && next <= 0x7a) || next === 0x5f;\n    openings += counted ? 1 : 0;\n    budget.elementsLeft -= counted ? 1 : 0;\n',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M2 drop the value-length cap: kept text is not cut',
+    file: MAPPING,
+    find: '  return { value: truncated ? scanned.text.slice(0, MAX_TEXT_LENGTH) : scanned.text, truncated };',
+    replace: '  return { value: scanned.text, truncated: truncated && false };',
+    tests: [READER_TESTS, IMPORT_TESTS],
+  },
+  {
+    id: 'M3 drop the report-size guard',
+    file: SERVICE,
+    find: "  if (Buffer.byteLength(json, 'utf8') > maxBytes) throw workbookRejected('report_too_large');\n",
+    replace: '',
+    tests: [IMPORT_TESTS],
+  },
+  {
+    id: 'M4 (extra) accept a tag name that is not an XML name',
+    file: READER,
+    find: '    if (!isNameStart(text.charCodeAt(at))) malformedXml();\n    let localStart = nameStart;',
+    replace: '    let localStart = nameStart;',
+    tests: [READER_TESTS, IMPORT_TESTS],
+  },
+  {
+    id: 'M5 (extra) drop the attributes-per-element limit',
+    file: READER,
+    find: "      if (inElement > limits.maxAttributesPerElement) reject('too_many_attributes', `An element has more than ${limits.maxAttributesPerElement} attributes`);\n",
+    replace: '',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M6 (extra) drop the attributes-per-part limit',
+    file: READER,
+    find: "      if (attributes > limits.maxPartAttributes) reject('too_many_attributes', `A package part has more than ${limits.maxPartAttributes} attributes`);\n",
+    replace: '',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M7 (extra) drop the start-tag length limit (both checks)',
+    file: READER,
+    find: "      if (at - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);\n      const spaced",
+    replace: '      const spaced',
+    also: { find: "    if (at - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);\n    if (streamed", replace: '    if (streamed' },
+    tests: [READER_TESTS, IMPORT_TESTS],
+  },
+  {
+    id: 'M8 (extra) drop the scan prefix: the mapping examines whole cell text',
+    file: MAPPING,
+    find: '  return raw.length <= MAX_TEXT_SCAN ? { text: raw.trim(), complete: true } : { text: raw.slice(0, MAX_TEXT_SCAN).trim(), complete: false };',
+    replace: '  return { text: raw.trim(), complete: MAX_TEXT_SCAN > 0 };',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M9 (extra) drop the formula memo: every formula cell is examined again',
+    file: MAPPING,
+    find: '    let facts = examined.get(cell.formula);',
+    replace: '    let facts: { hours: boolean; volatile: boolean } | undefined;',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M10 (extra) a failure while the report is built is rethrown (a 500)',
+    file: SERVICE,
+    find: "    throw workbookRejected(error instanceof WorkbookRejectedError ? error.code : 'report_failed');\n",
+    replace: "    if (error instanceof WorkbookRejectedError) throw workbookRejected(error.code);\n    throw error;\n",
+    tests: [IMPORT_TESTS],
+  },
+];
+
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+const only = process.argv.slice(2);
+const vitest = join(ROOT, 'node_modules/vitest/vitest.mjs');
+for (const mutation of MUTATIONS.filter((m) => only.length === 0 || only.some((id) => m.id.startsWith(id)))) {
+  const path = join(ROOT, mutation.file);
+  const original = readFileSync(path, 'utf8');
+  const before = sha(original);
+  const count = original.split(mutation.find).length - 1;
+  if (count !== 1) {
+    console.log(`${mutation.id} | NOT APPLIED: fragment found ${count} times`);
+    continue;
+  }
+  let mutated = original.replace(mutation.find, () => mutation.replace);
+  if (mutation.also) {
+    const second = mutated.split(mutation.also.find).length - 1;
+    if (second !== 1) {
+      console.log(`${mutation.id} | NOT APPLIED: second fragment found ${second} times`);
+      continue;
+    }
+    mutated = mutated.replace(mutation.also.find, () => mutation.also.replace);
+  }
+  writeFileSync(path, mutated);
+  const started = Date.now();
+  const run = spawnSync(process.execPath, [vitest, 'run', ...mutation.tests, '--reporter=verbose'], { cwd: ROOT, encoding: 'utf8', env: process.env, maxBuffer: 256 * 1024 * 1024, timeout: 900_000 });
+  writeFileSync(path, original);
+  const restored = sha(readFileSync(path, 'utf8')) === before;
+  const plain = `${run.stdout ?? ''}\n${run.stderr ?? ''}`.replace(/\x1b\[[0-9;]*m/g, '');
+  const failed = plain.split('\n').filter((line) => /^\s+×/.test(line)).map((line) => line.replace(/^\s+×\s+tests\/integration\//, '').replace(/ \d+ms$/, '').slice(0, 150));
+  const summary = (plain.match(/Tests\s+[^\n]+/) ?? ['Tests ?'])[0].trim();
+  console.log(`${mutation.id} | exit=${run.status} | ${failed.length > 0 ? 'KILLED' : 'SURVIVED'} | ${summary} | ${Math.round((Date.now() - started) / 1000)} s | restored byte-identical: ${restored}`);
+  for (const line of failed) console.log(`    failed: ${line}`);
+}

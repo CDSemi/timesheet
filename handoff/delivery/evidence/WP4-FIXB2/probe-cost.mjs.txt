@@ -1,0 +1,64 @@
+// WP4-FIXB2 cost probe: one synchronous preview (reader + mapping) per case in a fresh child process, so the
+// event-loop time and the maxRSS high-water mark belong to that case only; then JSON.stringify of the preview model
+// (the stored report holds the same cell text). Packages are built once by a separate child from PROBE_BUILD_ROOT's
+// helpers and kept under the task folder (never the repository); PROBE_ROOT selects the source under test.
+// Usage: PROBE_ROOT=<export> PROBE_PKGS=<dir> node cost.mjs [filter]
+//        node cost.mjs --build <case> | --run <case>
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const MiB = 1024 * 1024;
+const PKGS = process.env.PROBE_PKGS;
+if (!PKGS) throw new Error('PROBE_PKGS required');
+const fileOf = (name) => join(PKGS, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 90)}.xlsx`);
+const args = process.argv.slice(2);
+
+if (args[0] === '--build') {
+  const { buildCase } = await import('./cases.mjs');
+  mkdirSync(PKGS, { recursive: true });
+  writeFileSync(fileOf(args[1]), buildCase(args[1]));
+} else if (args[0] === '--run') {
+  const { previewWorkbook } = await import(pathToFileURL(join(process.env.PROBE_ROOT, 'src/server/import/templateMapping.ts')).href);
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  let jsonMs = 0;
+  let previewMs;
+  try {
+    const out = previewWorkbook(bytes);
+    previewMs = performance.now() - t0;
+    const t1 = performance.now();
+    let size;
+    try {
+      size = `preview JSON ${(JSON.stringify(out).length / MiB).toFixed(3)} MiB`;
+    } catch (error) {
+      size = `JSON.stringify THROWN ${error.name}: ${error.message}`;
+    }
+    jsonMs = Math.round(performance.now() - t1);
+    outcome = `accepted (sheets=${out.sheets.length}, periods=${out.periods.length}, holidays=${out.holidays.length}, errors=${out.summary.errors}, findings=${out.findings.length}); ${size}`;
+  } catch (error) {
+    previewMs = performance.now() - t0;
+    outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${String(error.message).slice(0, 120)}`;
+  }
+  const after = process.resourceUsage().maxRSS;
+  console.log(`${args[1]} | upload=${bytes.length} B | preview ms=${Math.round(previewMs)} (+${jsonMs} ms JSON) | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(after / 1024)} MiB (+${Math.round((after - baseline) / 1024)}) | ${outcome}`);
+} else {
+  const { CASES } = await import('./cases.mjs');
+  const filter = args[0] ?? '';
+  const opts = { encoding: 'utf8', env: process.env, timeout: 300_000, maxBuffer: 64 * MiB };
+  const clean = (s) => (s ?? '').trim().split('\n').filter((l) => !l.includes('ExperimentalWarning') && !l.includes('--trace-warnings')).slice(0, 2).join(' / ').slice(0, 300);
+  const self = fileURLToPath(import.meta.url);
+  for (const name of Object.keys(CASES).filter((n) => n.includes(filter))) {
+    if (!existsSync(fileOf(name))) {
+      const build = spawnSync(process.execPath, [self, '--build', name], { ...opts, env: { ...process.env, PROBE_ROOT: process.env.PROBE_BUILD_ROOT ?? process.env.PROBE_ROOT } });
+      if (build.status !== 0) { process.stdout.write(`${name} | BUILD FAILED exit=${build.status} ${clean(build.stderr)}\n`); continue; }
+    }
+    const child = spawnSync(process.execPath, [self, '--run', name], opts);
+    const err = clean(child.stderr);
+    process.stdout.write(`${(child.stdout ?? '').trim() || name} | exit=${child.status}${child.signal ? ' signal=' + child.signal : ''}${err ? ' | stderr=' + err : ''}\n`);
+  }
+}

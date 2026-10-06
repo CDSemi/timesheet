@@ -18,7 +18,7 @@ import {
   previewWorkbook,
   type WorkbookPreview,
 } from '../import/templateMapping.ts';
-import { WorkbookRejectedError } from '../import/xlsxReader.ts';
+import { type ReaderLimits, type WorkbookRejectionCode, WorkbookRejectedError } from '../import/xlsxReader.ts';
 import { recordAudit } from './audit.ts';
 import { ensurePayPeriodRow } from './periods.ts';
 import { findTimesheet, loadScope, todayInReportingZone, type UserScope } from './timesheets.ts';
@@ -35,7 +35,10 @@ import { findTimesheet, loadScope, todayInReportingZone, type UserScope } from '
  * privately through the file store and stores a report: the mapped days with their source cells, the reader's
  * findings (unknown labels, duplicates, template defects) and the conflict plan against the owner's existing rows.
  * The idempotency key is owner + source SHA-256 + mapping version: the same upload returns the existing batch and
- * stores nothing new.
+ * stores nothing new. The stored report is bounded (WP4-FIXB2): the mapping keeps at most 200 characters of any cell
+ * text, and a report whose JSON (plan included) is over `MAX_REPORT_BYTES`, or that cannot be serialized, is refused
+ * as 422 `workbook_rejected` (`report_too_large`); anything else thrown while the untrusted package is read, mapped or
+ * turned into a report is 422 `report_failed`, never a 500. A refused upload stores nothing.
  *
  * Commit (one short IMMEDIATE transaction, no network and no file write inside) writes only:
  * - `timesheets` rows with `imported_unverified = 1` (plus the shared `pay_periods` row the timesheet refers to,
@@ -72,6 +75,18 @@ import { findTimesheet, loadScope, todayInReportingZone, type UserScope } from '
  */
 
 export const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/**
+ * The largest stored report (`imports.report_json`, plan included), in UTF-8 bytes (WP4-FIXB2). Measured stored
+ * reports: the tracked template 4 KB, 12 dated sheets 0.11 MiB, 61 dated sheets (the 64-sheet limit) 0.58 MiB, and a
+ * flood of 2 000 holidays and 854 labels of capped text 1.4 MiB. Every text in a report is capped, but JSON escaping
+ * can still make a hostile one larger (2 000 holiday names of control characters: 2.4 MiB); it is refused, never
+ * stored.
+ */
+export const MAX_REPORT_BYTES = 2 * 1024 * 1024;
+
+/** Lowered limits for tests: the reader's, and the stored-report cap. */
+export type PreviewLimits = Partial<ReaderLimits> & { maxReportBytes?: number };
 
 export type DecisionAction = 'skip' | 'import';
 
@@ -117,7 +132,8 @@ export const IMPORT_RULES: readonly string[] = [
   'An imported period is read-only history: no ledger event, no sign-off, no submission and no automation.',
 ];
 
-type ReportCell<T> = { value: T; source: string; from_formula_cache: boolean };
+/** Text is at most `MAX_TEXT_LENGTH` characters; `truncated` is present only when it was cut. */
+type ReportCell<T> = { value: T; source: string; from_formula_cache: boolean; truncated?: true };
 
 export interface ReportDay {
   sheet: string;
@@ -244,7 +260,9 @@ export function isImportedTimesheet(db: Db, userId: string, timesheetId: string)
 /* ------------------------------------------------------------------ report ---- */
 
 function cell<T>(ref: CellReference<T>): ReportCell<T> {
-  return { value: ref.value, source: ref.source, from_formula_cache: ref.fromFormulaCache };
+  const reported: ReportCell<T> = { value: ref.value, source: ref.source, from_formula_cache: ref.fromFormulaCache };
+  if (ref.truncated === true) reported.truncated = true;
+  return reported;
 }
 
 /** Mapping v1 label -> day category. "Off day (overtime used)" has no single category (no OT-funded category). */
@@ -451,27 +469,48 @@ function sha256Hex(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function workbookRejected(reason: WorkbookRejectionCode): ApiError {
+  return new ApiError(422, 'workbook_rejected', 'The workbook cannot be read safely and was not stored', { reason });
+}
+
+/** The stored form of a report; 422 `report_too_large` when it is over the cap or cannot be serialized at all. */
+function serializeReport(report: Omit<ImportReport, 'plan'> | ImportReport, maxBytes: number): string {
+  let json: string;
+  try {
+    json = JSON.stringify(report);
+  } catch (error) {
+    throw workbookRejected(error instanceof RangeError ? 'report_too_large' : 'report_failed');
+  }
+  if (Buffer.byteLength(json, 'utf8') > maxBytes) throw workbookRejected('report_too_large');
+  return json;
+}
+
 /**
  * Previews an upload of the owner. The same bytes under the same mapping version return the existing batch
- * (`created: false`) and store nothing. A refused package stores nothing and is 422 `workbook_rejected`.
+ * (`created: false`) and store nothing. A refused package stores nothing and is 422 `workbook_rejected`, and so is a
+ * report over `MAX_REPORT_BYTES` or any other failure to read, map or serialize the untrusted package (WP4-FIXB2).
+ * `limits` lowers the reader's limits or the report cap, for tests.
  */
-export function previewImport(ctx: ImportContext, bytes: Uint8Array): { created: boolean; batch: ImportBatchJson } {
+export function previewImport(ctx: ImportContext, bytes: Uint8Array, limits: PreviewLimits = {}): { created: boolean; batch: ImportBatchJson } {
   const { db, clock, files, user } = ctx;
+  const { maxReportBytes = MAX_REPORT_BYTES, ...readerLimits } = limits;
   if (bytes.length === 0) throw new ApiError(422, 'empty_upload', 'The upload is empty');
   const sha256 = sha256Hex(bytes);
   const known = findByKey(db, user.id, sha256, MAPPING_VERSION);
   if (known !== undefined) return { created: false, batch: batchJson(db, clock, user, known) };
 
   let preview: WorkbookPreview;
+  let report: Omit<ImportReport, 'plan'>;
   try {
-    preview = previewWorkbook(bytes);
+    preview = previewWorkbook(bytes, readerLimits);
+    report = buildReport(preview);
   } catch (error) {
-    if (error instanceof WorkbookRejectedError) {
-      throw new ApiError(422, 'workbook_rejected', 'The workbook cannot be read safely and was not stored', { reason: error.code });
-    }
-    throw error;
+    // Reading, mapping and building the report are pure functions of the untrusted bytes: whatever they throw is a
+    // refusal of the package, never a 500 (the recheck's 4 MiB string x 2 000 holiday names gave one).
+    throw workbookRejected(error instanceof WorkbookRejectedError ? error.code : 'report_failed');
   }
-  const report = buildReport(preview);
+  // Checked before the source is stored, so an oversized report writes nothing; checked again below with the plan.
+  serializeReport(report, maxReportBytes);
   // The file is complete on disk before any row refers to it; a row that cannot be saved removes it again.
   const stored = files.put(bytes);
   let outcome: { created: boolean; row: ImportRow };
@@ -481,12 +520,13 @@ export function previewImport(ctx: ImportContext, bytes: Uint8Array): { created:
       if (raced !== undefined) return { created: false, row: raced };
       const scope = loadScope(db, user);
       const plan = buildPlan(db, clock, scope, report.days);
+      const reportJson = serializeReport({ ...report, plan }, maxReportBytes);
       const id = randomUUID();
       const now = nowUtc(clock);
       db.prepare(
         `INSERT INTO imports (id, user_id, source_sha256, mapping_version, state, storage_key, size_bytes, report_json, created_at)
          VALUES (?, ?, ?, ?, 'preview', ?, ?, ?, ?)`,
-      ).run(id, user.id, sha256, MAPPING_VERSION, stored.storageKey, stored.sizeBytes, JSON.stringify({ ...report, plan }), now);
+      ).run(id, user.id, sha256, MAPPING_VERSION, stored.storageKey, stored.sizeBytes, reportJson, now);
       recordAudit(db, clock, {
         actorUserId: user.id,
         ownerUserId: user.id,

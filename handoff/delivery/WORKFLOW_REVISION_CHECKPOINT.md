@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 13a258db86b2f0b6388830e584e2cca5303f1f6c (WP4-T13-FREEZE, the WP4 package freeze).
+  - HEAD = origin/main = 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65 (WP4-FIX-FREEZE, the WP4 fix-round freeze).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -759,7 +759,50 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - Prune refuses when the clock is backward, and the drill releases two jobs.
          - The docs sync is done.
          - Drill: 208 PASS. Verify: 1734 tests. Digest: dfe4541d….
-       - Running: WP4-FIX-FREEZE.
+       - WP4-FIX-FREEZE committed and pushed 0f7fba2 (149 paths; all checks 0). The
+         board's current source digest is dfe4541d….
+       - WP4-REGATE: PASS, with 13/13 items and every finding check.
+         - Digest of record: dfe4541d… (775 files).
+         - Verify: 1734 tests. e2e: 145 passed. Drill: 208 PASS.
+         - The 65 KB bomb is refused in 5 ms while health stays at 2 ms.
+         - The image has no maps; races passed 60/60.
+         - Diff: FIXA and FIXB paths only.
+         - Observation: two backups in the same second break the tie by name; the
+           recheck will judge it.
+       - WP4-RECHECK-B: **FIX REQUIRED**, finding WP4-RB-01 (Medium). It reopens B-01:
+         - tags led by a digit or a space, and attributes, slip past the element count:
+           four 26 KB-class parts take about 3 s and about 1.4 GiB;
+         - cell values in findings are not capped: a 99.8 MiB report is stored, and
+           a larger one gives 500.
+         - B-02, R3 and R1 are closed, and regression holds.
+       - WP4-RECHECK-A: **PASS**, with no findings.
+         - A-01 to A-04 are closed; R-A1, R-A5 and R-A7 are correct; there is no
+           regression.
+         - Risks R-RA1 to R-RA4 are non-blocking.
+         - If the source changes, an area-A delta recheck (attempt 2) must bind to the
+           new digest.
+       - WP4-FIXB2 is done (expert, opus; author-reported).
+         - A bounded streaming scanner replaces fast-xml-parser. It counts every `<`
+           and bounds attributes, the tag length and names.
+         - Text is cut at 200 characters, and the report is at most 2 MiB. A report
+           failure gives 422.
+         - All probes are refused in at most 57 ms. The worst accepted package takes
+           180 ms and adds 107 MiB.
+         - Tests: 15 red-first plus a sweep of 35 shapes; 10 mutations killed.
+           Verify: 1,750 tests. Digest: 9848e8d7….
+       - WP4-DEPCLEAN is done: fast-xml-parser and its 7 transitive packages were
+         removed, and no other dependency changed. `npm ci` is clean; audit --omit=dev
+         shows 0 vulnerabilities; verify passes 1,750 tests. Digest: 96445de4….
+       - The board is ready for the new digest:
+         - WP4-RECHECK-A moves to attempt 2 (pending; attempt 1 PASS is kept in its
+           history);
+         - WP4-REGATE2 and WP4-RECHECK-B2 are pending.
+       - Running: WP4-FIXB2-FREEZE.
+       - Then:
+         - WP4-FIXB2-FREEZE;
+         - WP4-REGATE2;
+         - WP4-RECHECK-B2, a fresh auditor;
+         - WP4-RECHECK-A attempt 2, the area-A delta on the new digest.
        - Then one freeze, WP4-REGATE, and fresh rechecks of A and B.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
      - Owner questions: I-5 (preview quota), and R-A3 before WP5.
@@ -776,7 +819,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-FIX-FREEZE. Then WP4-REGATE,
+  1. Record the two rechecks. Then
      WP4-RECHECK-A and WP4-RECHECK-B (fresh opus auditors), WP4-ACCREC and WP4-ACCEPT.
   2. Then:
      - acceptance.
@@ -796,7 +839,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-FIX-FREEZE (attempt 1) only.
+- Live processes: WP4-FIXB2-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

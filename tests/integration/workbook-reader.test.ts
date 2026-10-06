@@ -1,7 +1,16 @@
-import { strToU8 } from 'fflate';
-import { afterAll, describe, expect, it } from 'vitest';
+import { strFromU8, strToU8 } from 'fflate';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.ts';
-import { mapWorkbook, MAX_FINDING_SOURCES, MAX_FINDINGS_PER_CODE, previewWorkbook, type Finding, type FindingCode, type WorkbookPreview } from '../../src/server/import/templateMapping.ts';
+import {
+  mapWorkbook,
+  MAX_FINDING_SOURCES,
+  MAX_FINDINGS_PER_CODE,
+  MAX_TEXT_LENGTH,
+  previewWorkbook,
+  type Finding,
+  type FindingCode,
+  type WorkbookPreview,
+} from '../../src/server/import/templateMapping.ts';
 import {
   DEFAULT_READER_LIMITS,
   FORMULA_CACHE_NOTE,
@@ -518,13 +527,14 @@ describe('parse cost and report size are bounded (WP4-B-01)', () => {
   });
 
   it('caps the stored findings: the first sources of a finding plus a total count, whatever the cell count', () => {
-    // 3 x 40 000 formula cells (2 000 rows of 20) fit every limit; before the fix they gave one source per cell.
-    const rows = Array.from({ length: 2000 }, (_, row) => `<row r="${row + 1}">${Array.from({ length: 20 }, (_, col) => `<c r="${String.fromCharCode(65 + col)}${row + 1}"><f>8.5</f></c>`).join('')}</row>`).join('');
+    // 3 x 30 000 formula cells (1 500 rows of 20) fit every limit (200 000 markup openings per package since WP4-FIXB2);
+    // before the WP4-FIXB fix they gave one source per cell.
+    const rows = Array.from({ length: 1500 }, (_, row) => `<row r="${row + 1}">${Array.from({ length: 20 }, (_, col) => `<c r="${String.fromCharCode(65 + col)}${row + 1}"><f>8.5</f></c>`).join('')}</row>`).join('');
     const xml = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows}</sheetData></worksheet>`;
     const entries = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }, { payrollDate: '2026-02-06' }] }));
     for (let index = 0; index < 3; index += 1) entries[`xl/worksheets/sheet${100 + index}.xml`] = strToU8(xml);
     const preview = previewWorkbook(pack(entries));
-    const hours = findings(preview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 40_000); // the template's own sheet has 14
+    const hours = findings(preview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 30_000); // the template's own sheet has 14
     expect(hours).toHaveLength(3);
     for (const finding of hours) expect(finding.sources).toHaveLength(MAX_FINDING_SOURCES);
     for (const finding of preview.findings) expect(finding.sources.length).toBeLessThanOrEqual(MAX_FINDING_SOURCES);
@@ -563,7 +573,15 @@ describe('Holiday Dates sheet inside the cell limit never crashes the mapping (W
     return withEntry(template, 'xl/worksheets/sheet2.xml', strToU8(xml));
   }
 
-  const RAISED: Partial<ReaderLimits> = { maxCellsPerSheet: 200_000, maxRowsPerSheet: 200_000, maxPartElements: 1_000_000, maxPartXmlBytes: 16 * MIB, maxTotalElements: 2_000_000 };
+  const RAISED: Partial<ReaderLimits> = {
+    maxCellsPerSheet: 200_000,
+    maxRowsPerSheet: 200_000,
+    maxPartElements: 1_000_000,
+    maxPartXmlBytes: 16 * MIB,
+    maxTotalElements: 2_000_000,
+    maxPartAttributes: 2_000_000,
+    maxTotalAttributes: 2_000_000,
+  };
 
   it('previews a sheet of 150 000 cells in column C instead of overflowing the stack (the audit gave a 500)', () => {
     const rows = Array.from({ length: 150_000 }, (_, index) => `<row r="${index + 1}"><c r="C${index + 1}"><v>1</v></c></row>`).join('');
@@ -620,5 +638,329 @@ describe('Holiday Dates sheet inside the cell limit never crashes the mapping (W
     expect(preview.holidays.map((holiday) => holiday.name)).toEqual(['Far Day']);
     // Only the rows that exist are looked at: a walk over 9 999 997 row numbers made about 20 million lookups.
     expect(lookups()).toBeLessThan(1000);
+  });
+});
+
+/*
+ * WP4-FIXB2 (recheck finding RB-01, which reopened WP4-B-01). The WP4-FIXB pre-scan counted only element openings whose
+ * name starts with a letter, so tags such as `<1/>`, `< />` or `<.a/>` and attribute-heavy tags still reached the DOM
+ * (a 33 KB upload: 3.2 s, +1.1 GiB), and cell text went into the report in full (a 28 KB upload: a 100 MiB report; a
+ * 50 KB upload: a RangeError and a 500). The refusal code and the report size are the main assertions; the time bounds
+ * are generous (the costs before the fix were seconds), so they stay stable on a slow runner.
+ */
+describe('RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small', () => {
+  const template = readTemplateBytes();
+  const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const WORKSHEET_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
+  const HEAD = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData><row r="1">`;
+  const TAIL = '</row></sheetData></worksheet>';
+  /** One part of about 3.8 MiB, as in the recheck's r3 probe. */
+  const ONE_PART = Math.floor(3.8 * MIB);
+  /** Four such parts plus the template's small parts stay under the 16 MiB package total (r1 H2a, H4b). */
+  const NEAR_PART = 4 * MIB - 6 * 1024;
+  const SHEET_PARTS = ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml'];
+  type Shape = [name: string, build: () => Uint8Array, expected: WorkbookRejectionCode | null];
+
+  /** A worksheet whose single row is `unit` repeated to about `bytes` characters. */
+  function fill(unit: string, bytes: number): string {
+    return HEAD + unit.repeat(Math.floor((bytes - HEAD.length - TAIL.length) / unit.length)) + TAIL;
+  }
+
+  /** A worksheet whose single row is `unit` exactly `count` times (four markup openings besides). */
+  function exact(unit: string, count: number): string {
+    return HEAD + unit.repeat(count) + TAIL;
+  }
+
+  /** The template whose three sheets are replaced by the first three parts; further parts are added as sheets. */
+  function partsWorkbook(xmls: readonly string[], base: Uint8Array = template): Uint8Array {
+    const entries = unpack(base);
+    let workbook = strFromU8(entries['xl/workbook.xml'] ?? new Uint8Array());
+    let rels = strFromU8(entries['xl/_rels/workbook.xml.rels'] ?? new Uint8Array());
+    xmls.forEach((xml, index) => {
+      const replaced = SHEET_PARTS[index];
+      if (replaced !== undefined) {
+        entries[replaced] = strToU8(xml);
+        return;
+      }
+      entries[`xl/worksheets/rb${index}.xml`] = strToU8(xml);
+      workbook = workbook.replace('</sheets>', `<sheet name="RB${index}" sheetId="${700 + index}" r:id="rIdRb${index}"/></sheets>`);
+      rels = rels.replace('</Relationships>', `<Relationship Id="rIdRb${index}" Type="${WORKSHEET_TYPE}" Target="worksheets/rb${index}.xml"/></Relationships>`);
+    });
+    entries['xl/workbook.xml'] = strToU8(workbook);
+    entries['xl/_rels/workbook.xml.rels'] = strToU8(rels);
+    return pack(entries);
+  }
+
+  /** Preview `bytes`: the refusal code or `null`, the time, and the size of the preview model as JSON. */
+  function measure(bytes: Uint8Array, limits: Partial<ReaderLimits> = {}): { code: WorkbookRejectionCode | null; ms: number; json: number; preview: WorkbookPreview | null } {
+    const started = performance.now();
+    try {
+      const preview = previewWorkbook(bytes, limits);
+      const json = JSON.stringify(preview).length;
+      return { code: null, ms: performance.now() - started, json, preview };
+    } catch (error) {
+      if (error instanceof WorkbookRejectedError) return { code: error.code, ms: performance.now() - started, json: 0, preview: null };
+      throw error;
+    }
+  }
+
+  /** The template whose shared strings gain one string (index 66) of about `bytes` characters of `body`. */
+  function withBigSharedString(bytes: number, body = 'a', base: Uint8Array = template): Uint8Array {
+    return withText(base, 'xl/sharedStrings.xml', (sst) => {
+      const text = sst ?? '';
+      return text.replace('</sst>', `<si><t>${body.repeat(Math.floor((bytes - text.length - 40) / body.length))}</t></si></sst>`);
+    });
+  }
+
+  /** A Holiday Dates sheet of `rows` rows: column A a date serial (or shared string `dateIndex`), column B shared string `nameIndex`. */
+  function holidaySheet(rows: number, nameIndex: number, dateIndex?: number): string {
+    const out: string[] = [];
+    for (let row = 2; row < 2 + rows; row += 1) {
+      const date = dateIndex === undefined ? `<c r="A${row}"><v>${46_023 + row}</v></c>` : `<c r="A${row}" t="s"><v>${dateIndex}</v></c>`;
+      out.push(`<row r="${row}">${date}<c r="B${row}" t="s"><v>${nameIndex}</v></c></row>`);
+    }
+    return `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${out.join('')}</sheetData></worksheet>`;
+  }
+
+  function attributes(count: number): string {
+    return Array.from({ length: count }, (_, index) => ` a${index.toString(36)}=""`).join('');
+  }
+
+  it('red-first (r3): refuses a part of tags led by a digit, a space, a dot or a hyphen, which the old count let through', () => {
+    for (const unit of ['<1/>', '<9/>', '< />', '<.a/>', '<-/>', '<1:c/>']) {
+      const outcome = measure(partsWorkbook([fill(unit, ONE_PART)]));
+      expect(outcome.code, unit).toBe('malformed_xml');
+      expect(outcome.ms, unit).toBeLessThan(2000); // 0.6 to 0.9 s and +0.3 to 0.6 GiB before
+    }
+  });
+
+  it('red-first (r1 H2a, H2b, H2e): four near-limit parts of such tags are refused, not parsed for seconds', () => {
+    for (const unit of ['<1/>', '< />', '<-/>']) {
+      const outcome = measure(partsWorkbook([1, 2, 3, 4].map(() => fill(unit, NEAR_PART))));
+      expect(outcome.code, unit).toBe('malformed_xml');
+      expect(outcome.ms, unit).toBeLessThan(3000); // 2.8 to 3.2 s and +0.5 to 1.1 GiB before
+    }
+  });
+
+  it('red-first: counts every markup opening, whatever follows the "<": elements, comments, processing instructions, CDATA', () => {
+    // About 5 900 elements and 17 600 other openings: the old count saw only the elements.
+    const mixed = fill('<x/><!--c--><?p q?><![CDATA[d]]>', 200_000);
+    expect(reject(partsWorkbook([mixed]), { maxPartElements: 10_000 })).toBe('too_many_elements');
+    expect(reject(partsWorkbook([mixed]), { maxPartElements: 30_000 })).toBeNull();
+  });
+
+  it('red-first (r1 H1c): four near-limit parts of counted elements are over the package total', () => {
+    expect(measure(partsWorkbook([1, 2, 3, 4].map(() => fill('<a/>', 99_000 * 4)))).code).toBe('too_many_elements');
+  });
+
+  it('red-first (r3, r1 H4a, H4b): bounds the attributes of one element, of a part and of a package, and the bytes of one tag', () => {
+    // One cell with 3.8 MiB of attributes: the old count saw one element (1.1 s, +0.47 GiB).
+    let huge = '';
+    for (let index = 0; huge.length < ONE_PART - 400; index += 1) huge += ` a${index.toString(36)}=""`;
+    expect(measure(partsWorkbook([`${HEAD}<c r="A1"${huge}/>${TAIL}`])).code).toBe('too_many_attributes');
+    expect(reject(partsWorkbook([`${HEAD}<c r="A1"${attributes(64)}/>${TAIL}`]))).toBe('too_many_attributes');
+    expect(reject(partsWorkbook([`${HEAD}<c r="A1"${attributes(63)}/>${TAIL}`]))).toBeNull();
+    // 64 attributes on 3 100 elements is under the part limit; 3 200 is over it; three such parts are over the package total.
+    const element = `<x${attributes(64)}/>`;
+    expect(reject(partsWorkbook([exact(element, 3_100)]))).toBeNull();
+    expect(reject(partsWorkbook([exact(element, 3_200)]))).toBe('too_many_attributes');
+    expect(reject(partsWorkbook([1, 2, 3].map(() => exact(element, 3_100))))).toBe('too_many_attributes');
+    // One tag of more than 64 KiB, whatever its attribute count (four parts of them: H4b's 5 s before).
+    expect(reject(partsWorkbook([`${HEAD}<c r="${'A'.repeat(70 * 1024)}"/>${TAIL}`]))).toBe('tag_too_large');
+  });
+
+  it('red-first (r1 H5d): a 1 MiB shared string used as 100 holiday names gives a report of kilobytes, not 100 MiB', () => {
+    const bytes = withText(withBigSharedString(1 * MIB), 'xl/worksheets/sheet2.xml', () => holidaySheet(100, 66));
+    const outcome = measure(bytes);
+    expect(outcome.code).toBeNull();
+    expect(outcome.preview?.holidays).toHaveLength(100);
+    for (const holiday of outcome.preview?.holidays ?? []) {
+      expect(holiday.name).toHaveLength(MAX_TEXT_LENGTH);
+      expect(holiday.truncated).toBe(true);
+    }
+    expect(outcome.json).toBeLessThan(256 * 1024); // 99.8 MiB before
+  });
+
+  it('red-first (r1 H5b): a 4 MiB shared string used as 2 000 holiday names builds a bounded report and never throws', () => {
+    const bytes = withText(withBigSharedString(NEAR_PART), 'xl/worksheets/sheet2.xml', () => holidaySheet(2000, 66));
+    const outcome = measure(bytes); // a RangeError from JSON.stringify before (a 500 over HTTP)
+    expect(outcome.code).toBeNull();
+    expect(outcome.preview?.holidays).toHaveLength(2000);
+    expect(outcome.json).toBeLessThan(2 * MIB);
+    expect(outcome.ms).toBeLessThan(3000); // 3.4 s plus 1.9 s of JSON before
+  });
+
+  it('red-first (r1 H6a, H6b, H5e): labels of megabytes are cut to the text limit, flagged, and never matched', () => {
+    const periods = [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }, { payrollDate: '2026-02-06' }] as const;
+    for (const character of ['q', '\u0001']) {
+      let bytes = buildSyntheticWorkbook({ periods: [...periods] });
+      for (let index = 0; index < 3; index += 1) {
+        bytes = withText(bytes, `xl/worksheets/sheet${100 + index}.xml`, (xml) =>
+          (xml ?? '').replace(/(<c r="B14"[^>]*t="inlineStr"><is><t>)Worked(<\/t>)/, `$1${character.repeat(NEAR_PART - 40_000)}$2`),
+        );
+      }
+      const outcome = measure(bytes);
+      expect(outcome.code).toBeNull();
+      const label = outcome.preview?.periods[0]?.days[0]?.label;
+      expect(label?.value).toHaveLength(MAX_TEXT_LENGTH);
+      expect(label?.truncated).toBe(true);
+      expect(outcome.preview?.periods[0]?.days[0]?.mapping).toBeNull();
+      const unknown = findings(outcome.preview as WorkbookPreview, 'unknown_label');
+      expect(unknown).toHaveLength(3);
+      for (const finding of unknown) expect(finding.details).toMatchObject({ truncated: true });
+      expect(outcome.json).toBeLessThan(256 * 1024); // 24 MiB (letters) and 143 MiB (control characters) before
+    }
+    // One 4 MiB shared string used as ten labels on 60 dated sheets (H5e): 1.1 s, +0.86 GiB and a RangeError before.
+    let amplified = withBigSharedString(NEAR_PART, 'a', buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }));
+    amplified = withText(amplified, 'xl/worksheets/sheet100.xml', (xml) => (xml ?? '').replace(/t="inlineStr"><is><t>Worked<\/t><\/is>/g, 't="s"><v>66</v>'));
+    amplified = withText(amplified, 'xl/workbook.xml', (xml) => {
+      let sheets = '';
+      for (let index = 1; index < 60; index += 1) sheets += `<sheet name="${addDays('2026-01-09', 14 * index).replace(/-/g, '.')}" sheetId="${800 + index}" r:id="rIdSyn0"/>`;
+      return (xml ?? '').replace('</sheets>', `${sheets}</sheets>`);
+    });
+    const many = measure(amplified);
+    expect(many.code).toBeNull();
+    expect(many.preview?.periods).toHaveLength(60);
+    expect(many.json).toBeLessThan(2 * MIB);
+    expect(many.ms).toBeLessThan(3000);
+  });
+
+  it('red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source', () => {
+    const named = (padding: number) =>
+      withText(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }), 'xl/workbook.xml', (xml) =>
+        (xml ?? '').replace('name="2026.01.09"', `name="2026.01.09${' '.repeat(padding)}"`),
+      );
+    // 10 000 characters: a dated sheet whose every source repeated the name (about 1 MiB of report before).
+    expect(measure(named(10_000)).code).toBe('sheet_name_too_long');
+    // A megabyte (a 45 MiB preview and a 124 MiB response before) is already over the start-tag limit.
+    expect(measure(named(MIB)).code).toBe('tag_too_large');
+  });
+
+  it('red-first: a shared formula of megabytes used by thousands of cells is examined once, and still counted per cell', () => {
+    const bytes = withText(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }), 'xl/worksheets/sheet100.xml', (xml) => {
+      const rows = [`<row r="100"><c r="AA100"><f t="shared" si="0" ref="AA100:AA6099">8.5+"${'x'.repeat(512 * 1024)}</f></c></row>`];
+      for (let row = 101; row < 6_100; row += 1) rows.push(`<row r="${row}"><c r="AA${row}"><f t="shared" si="0"/></c></row>`);
+      return (xml ?? '').replace('</sheetData>', `${rows.join('')}</sheetData>`);
+    });
+    const outcome = measure(bytes);
+    expect(outcome.code).toBeNull();
+    expect(outcome.ms).toBeLessThan(3000); // seconds before: the formula was scanned once per cell
+    const hours = findings(outcome.preview as WorkbookPreview, 'formula_hours_8_5').find((finding) => finding.sources[0]?.startsWith('2026.01.09!'));
+    expect(hours?.sourceCount).toBeGreaterThanOrEqual(6_000);
+    expect(readWorkbook(bytes).sheets.at(-1)?.cells.get('AA6000')?.formula).toHaveLength(8192); // Excel's own limit
+
+    // Two dated sheets of 45 000 cells sharing one formula at that length: each distinct text is examined once.
+    const shared = (xml: string | null) => {
+      const rows: string[] = [];
+      for (let row = 100; row < 2_350; row += 1) {
+        let cells = '';
+        for (let column = 0; column < 20; column += 1) {
+          const address = `${String.fromCharCode(65 + column)}${row}`;
+          cells += row === 100 && column === 0 ? `<c r="${address}"><f t="shared" si="0" ref="A100:T2349">8.5+"${'x'.repeat(8_200)}</f></c>` : `<c r="${address}"><f t="shared" si="0"/></c>`;
+        }
+        rows.push(`<row r="${row}">${cells}</row>`);
+      }
+      return (xml ?? '').replace('</sheetData>', `${rows.join('')}</sheetData>`);
+    };
+    let many = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }] });
+    many = withText(withText(many, 'xl/worksheets/sheet100.xml', shared), 'xl/worksheets/sheet101.xml', shared);
+    const wide = measure(many);
+    expect(wide.code).toBeNull();
+    expect(wide.ms).toBeLessThan(3000);
+    const counted = findings(wide.preview as WorkbookPreview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 45_000);
+    expect(counted).toHaveLength(2);
+    // Counted, not timed: the mapping runs its formula patterns once per distinct formula text, not once per cell.
+    const workbook = readWorkbook(many);
+    const patterns = vi.spyOn(RegExp.prototype, 'test');
+    try {
+      mapWorkbook(workbook, { sha256: '0'.repeat(64), bytes: many.length });
+      expect(patterns.mock.calls.length).toBeLessThan(5_000); // 90 000 cells share the one formula
+    } finally {
+      patterns.mockRestore();
+    }
+  });
+
+  it('red-first: megabytes of whitespace used as 2 000 holiday dates and names are examined over a bounded prefix', () => {
+    const bytes = withText(withBigSharedString(NEAR_PART, ' '), 'xl/worksheets/sheet2.xml', () => holidaySheet(2000, 66, 66));
+    const outcome = measure(bytes);
+    expect(outcome.code).toBeNull();
+    expect(outcome.preview?.summary.errors).toBe(2000); // no valid date
+    expect(outcome.ms).toBeLessThan(2000); // 3.8 s before
+  });
+
+  it('keeps the tracked template and a realistic workbook of 12 dated sheets previewing, untruncated, inside the budget', () => {
+    const days: Record<number, { label: string; start?: number; end?: number }> = {};
+    for (let index = 0; index < 14; index += 1) if (index % 7 < 5) days[index] = { label: 'Worked', start: 8 * 60, end: 17 * 60 + 30 };
+    days[2] = { label: 'Vacation' };
+    days[9] = { label: 'Work from home', start: 9 * 60, end: 18 * 60 };
+    const realistic = buildSyntheticWorkbook({ periods: Array.from({ length: 12 }, (_, index) => ({ payrollDate: addDays('2026-01-09', 14 * index), days })) });
+    for (const [name, bytes, periods] of [['template', template, 0], ['12 dated sheets', realistic, 12]] as const) {
+      const outcome = measure(bytes);
+      expect(outcome.code, name).toBeNull();
+      expect(outcome.preview?.periods, name).toHaveLength(periods);
+      expect(outcome.preview?.holidays, name).toHaveLength(9);
+      expect(JSON.stringify(outcome.preview), name).not.toContain('"truncated"');
+      expect(outcome.ms, name).toBeLessThan(2000); // measured before the fix: 18 ms and 55 ms
+    }
+    const preview = measure(realistic).preview;
+    expect(preview?.periods[0]?.days[0]).toMatchObject({ label: { value: 'Worked' }, mapping: { category: 'worked' }, startMinutes: { value: 480 }, endMinutes: { value: 1050 } });
+    expect(preview?.periods[0]?.days[9]?.mapping).toEqual({ category: 'worked', workFromHome: true });
+  });
+
+  it('adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound', () => {
+    const at64 = `<x${attributes(64)}/>`;
+    const open = HEAD.replace('<row r="1">', '');
+    const close = '</sheetData></worksheet>';
+    const nest = (depth: number) => `${open}${'<a>'.repeat(depth - 2)}${'</a>'.repeat(depth - 2)}${close}`;
+    const strings = (count: number) => `<?xml version="1.0"?><sst xmlns="${NS}">${'<si/>'.repeat(count)}</sst>`;
+    const sheetName = (name: string) =>
+      withText(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }), 'xl/workbook.xml', (xml) => (xml ?? '').replace('name="2026.01.09"', `name="${name}"`));
+    const holidays = (rows: number) => withText(template, 'xl/worksheets/sheet2.xml', () => holidaySheet(rows, 16));
+    const badNames = ['<1/>', '< />', '<.a/>', '<-/>', '<=/>', '<"/>'].map((unit): Shape => [`a part of ${unit}`, () => partsWorkbook([fill(unit, ONE_PART)]), 'malformed_xml']);
+    const shapes: Shape[] = [
+      // bytes: one part, and near-limit parts of the parsed total
+      ['a part just over 4 MiB', () => partsWorkbook([paddedSheetXml(4 * MIB + 16)]), 'part_too_large'],
+      ['four parts of 4 MiB less 6 KiB (comment)', () => partsWorkbook([1, 2, 3, 4].map(() => paddedSheetXml(NEAR_PART))), null],
+      ['five such parts', () => partsWorkbook([1, 2, 3, 4, 5].map(() => paddedSheetXml(NEAR_PART))), 'total_xml_too_large'],
+      // markup openings of any kind, per part and per package, and names of any shape
+      ['99 904 openings of mixed markup in one part', () => partsWorkbook([exact('<x/><!--c--><?p?><![CDATA[d]]>', 24_975)]), null],
+      ['100 005 openings in one part', () => partsWorkbook([exact('<x/>', 100_001)]), 'too_many_elements'],
+      ['three parts of 84 004 openings', () => partsWorkbook([1, 2, 3].map(() => exact('<x/>', 84_000))), 'too_many_elements'],
+      ['a part of non-ASCII names', () => partsWorkbook([fill('<é/>', 3 * MIB)]), 'too_many_elements'],
+      ...badNames,
+      // attributes per element, per part and per package; bytes of one tag
+      ['64 attributes on one element', () => partsWorkbook([exact(at64, 1)]), null],
+      ['65 attributes on one element', () => partsWorkbook([exact(`<x${attributes(65)}/>`, 1)]), 'too_many_attributes'],
+      ['198 402 attributes in one part', () => partsWorkbook([exact(at64, 3_100)]), null],
+      ['204 802 attributes in one part', () => partsWorkbook([exact(at64, 3_200)]), 'too_many_attributes'],
+      ['three parts of 198 402 attributes', () => partsWorkbook([1, 2, 3].map(() => exact(at64, 3_100))), 'too_many_attributes'],
+      ['a tag of 64 KiB less 64 bytes', () => partsWorkbook([`${HEAD}<c r="${'A'.repeat(64 * 1024 - 64)}"/>${TAIL}`]), null],
+      ['a tag of 64 KiB and 64 bytes', () => partsWorkbook([`${HEAD}<c r="${'A'.repeat(64 * 1024 + 64)}"/>${TAIL}`]), 'tag_too_large'],
+      ['a part of 63 KiB attribute values', () => partsWorkbook([fill(`<c r="${'A'.repeat(63 * 1024)}"/>`, ONE_PART)]), null],
+      // nesting
+      ['40 levels of nesting', () => partsWorkbook([nest(40)]), null],
+      ['41 levels of nesting', () => partsWorkbook([nest(41)]), 'malformed_xml'],
+      // cells, rows and shared strings
+      ['50 000 cells in one sheet', () => partsWorkbook([exact('<c/>', 50_000)]), null],
+      ['50 001 cells in one sheet', () => partsWorkbook([exact('<c/>', 50_001)]), 'too_many_cells'],
+      ['20 001 rows in one sheet', () => partsWorkbook([`${open}${'<row/>'.repeat(20_001)}${close}`]), 'too_many_rows'],
+      ['50 001 shared strings', () => withEntry(template, 'xl/sharedStrings.xml', strToU8(strings(50_001))), 'too_many_shared_strings'],
+      // long text: one text node, entity-dense text and CDATA near the part limit; many long-valued cells
+      ['a 3.8 MiB text cell', () => partsWorkbook([`${HEAD}<c r="A1" t="str"><v>${'v'.repeat(ONE_PART)}</v></c>${TAIL}`]), null],
+      ['3.8 MiB of entities in an inline string', () => partsWorkbook([`${HEAD}<c r="A1" t="inlineStr"><is><t>${'&amp;'.repeat(ONE_PART / 5)}</t></is></c>${TAIL}`]), null],
+      ['3.8 MiB of CDATA in an inline string', () => partsWorkbook([`${HEAD}<c r="A1" t="inlineStr"><is><t><![CDATA[${'d'.repeat(ONE_PART)}]]></t></is></c>${TAIL}`]), null],
+      ['four parts of 24 000 long-valued cells', () => partsWorkbook([1, 2, 3, 4].map(() => exact(`<c r="B13"><v>${'1'.repeat(140)}</v></c>`, 24_000))), null],
+      // sheet names and holiday rows
+      ['a sheet name of 100 characters', () => sheetName('n'.repeat(100)), null],
+      ['a sheet name of 101 characters', () => sheetName('n'.repeat(101)), 'sheet_name_too_long'],
+      ['2 000 holiday rows', () => holidays(2000), null],
+      ['2 001 holiday rows', () => holidays(2001), 'too_many_holidays'],
+    ];
+    for (const [name, build, expected] of shapes) {
+      const outcome = measure(build());
+      expect(outcome.code, name).toBe(expected);
+      expect(outcome.ms, name).toBeLessThan(2000); // the budget is 500 ms on the reference host
+      expect(outcome.json, name).toBeLessThan(2 * MIB);
+    }
   });
 });

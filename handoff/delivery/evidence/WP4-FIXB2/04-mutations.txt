@@ -1,0 +1,43 @@
+# WP4-FIXB2 04 mutation checks, in the scratch copy <task>/mut2 (an export of the final working tree; never the repository)
+# Command: MUT_ROOT=<task>/mut2 node probes/mutate.mjs ; exit 0. Each mutation: exact fragment replaced once, the named test files run, file restored and its sha256 checked.
+# The first three are the brief's required mutations; M4-M10 are extra. Hashes: repo vs scratch copy before the run.
+src/server/import/xlsxReader.ts repo=43269a1acb537b75 mut2=43269a1acb537b75
+src/server/import/templateMapping.ts repo=aeee4163bb1117a9 mut2=aeee4163bb1117a9
+src/server/services/workbookImport.ts repo=8af0ae0529b4d95d mut2=8af0ae0529b4d95d
+tests/integration/workbook-reader.test.ts repo=1ce58bddff8b611d mut2=1ce58bddff8b611d
+tests/integration/workbook-import.test.ts repo=8b53663c46a7ee6f mut2=8b53663c46a7ee6f
+2026-10-06T14:09:18Z
+M1 letter-only count (the WP4-FIXB rule): only openings led by a letter or _ are counted | exit=1 | KILLED | Tests  2 failed | 55 passed (57) | 7 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: counts every markup 
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+M2 drop the value-length cap: kept text is not cut | exit=1 | KILLED | Tests  4 failed | 80 passed (84) | 9 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5d): a 1 MiB sha
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5b): a 4 MiB sha
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H6a, H6b, H5e): l
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bo
+M3 drop the report-size guard | exit=1 | KILLED | Tests  1 failed | 26 passed (27) | 9 s | restored byte-identical: true
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01): a report over the size cap is a typed 422 and stores nothing
+M4 (extra) accept a tag name that is not an XML name | exit=1 | KILLED | Tests  4 failed | 80 passed (84) | 9 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3): refuses a part 
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H2a, H2b, H2e): f
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bo
+M5 (extra) drop the attributes-per-element limit | exit=1 | KILLED | Tests  2 failed | 55 passed (57) | 7 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3, r1 H4a, H4b): bo
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+M6 (extra) drop the attributes-per-part limit | exit=1 | KILLED | Tests  2 failed | 55 passed (57) | 7 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3, r1 H4a, H4b): bo
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+M7 (extra) drop the start-tag length limit (both checks) | exit=1 | KILLED | Tests  4 failed | 80 passed (84) | 10 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r3, r1 H4a, H4b): bo
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer 
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bo
+M8 (extra) drop the scan prefix: the mapping examines whole cell text | exit=1 | KILLED | Tests  2 failed | 55 passed (57) | 20 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (r1 H5b): a 4 MiB sha
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: megabytes of whitesp
+M9 (extra) drop the formula memo: every formula cell is examined again | exit=1 | KILLED | Tests  1 failed | 56 passed (57) | 10 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a shared formula of 
+M10 (extra) a failure while the report is built is rethrown (a 500) | exit=1 | KILLED | Tests  1 failed | 26 passed (27) | 9 s | restored byte-identical: true
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, R-RB1): a failure while the report is serialized is a typed 422, never a 500
+2026-10-06T14:10:55Z

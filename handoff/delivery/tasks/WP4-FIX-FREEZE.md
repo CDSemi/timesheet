@@ -154,4 +154,10 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5
+- Pre-HEAD 13a258db86b2f0b6388830e584e2cca5303f1f6c (= origin/main); post-HEAD 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65.
+- Commit 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65 on main; pushed yes; remote SHA the same.
+- Digest dfe4541d... (775 files) matched; 149 files staged (46 explicit paths plus 6 evidence folders, 103 .txt files).
+- Scope checks: working tree matched the expected set; no .claude/reference/migrations/AGENTS/CLAUDE/package change; no non-.txt evidence file.
+- Exit codes: node 0, digest 0, add 0, precommit 0, diff --check 0, JSON 0, validator 0, check_recovery 0, preflight 0. Details in evidence/WP4-FIX-FREEZE/checks.txt. No masking or fixes needed.
+- Blockers: none.

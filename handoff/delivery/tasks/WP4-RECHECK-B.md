@@ -85,4 +85,45 @@ Return at most 160 words, beginning with your self-reported model.
 
 ## Results
 
-(Auditor appends here.)
+Self-reported model: claude-opus-5-5 (effort not observable). Date 2026-10-06. Not committed.
+Reports: `handoff/delivery/WP4_RECHECK_B.md` and `.vi.md` (REVIEW form). Masked LF evidence:
+`handoff/delivery/evidence/WP4-RECHECK-B/` (01-baseline, 02-npm-ci, 03-verify, 04-suites,
+05-r1-cost, 06-r2-http, 07-r3-bypass, 09-digest-after, 10-export-integrity; probes as
+`probe-r0/r1/r2/r3-*.mjs.txt`). Precommit over the evidence: PASS, 13 files, 0 findings.
+
+### Decision: FIX REQUIRED
+
+Finding RB-01 (Medium) reopens WP4-B-01. WP4-B-02, R3 and R1 are closed; the rest of area B holds.
+
+- Digest. HEAD 0f7fba2 before and after; digest
+  `dfe4541d2c6c908a00782ed9fbe2fb7a3be48ea18aa9fc23ae1ced9085b86742` (775 files) both ways on
+  HEAD and the commit, equal to the gate digest; no non-handoff working-tree change; the four
+  audited files in the export hash-equal the commit blobs. Node v24.21.0 by full path, Git
+  Bash, capture mode, `JOB_RUNNER=off`, `DATA_DIR`/`DATABASE_PATH` explicit per run.
+- WP4-B-02 closed: 150,000 Holiday Dates cells → 422 `part_too_large` (7–13 ms), never 500;
+  40,000-cell sheet previews; 2,001 date rows → `too_many_holidays`; sparse far rows fast.
+- R3 (`not_due`) correct and within I-3 canon: ended-but-not-due is skip-only, flips to `new`
+  at the due instant, writes nothing, rule stored; owner-reversible per docs/10. R1 correct:
+  reserving OT leave inside an imported period → 409 `imported_period`, creates nothing.
+- Regression holds: `npm ci` + `npm run verify` on the export (76 files / 1734 tests, SMOKE
+  PASSED, no deprecation); 6 area suites / 176 tests pass; diff confined to FIXB/FIXA paths.
+- WP4-B-01 NOT closed (RB-01). The three audited packages are now refused fast, but I got
+  around the limits with new hostile packages that respect every enforced limit:
+  - (a) `scanElements`'s `ELEMENT_OPENING` regex only counts tag names starting with
+    `[A-Za-z_]`. A single ~3.8 MiB part of `<1/>`, `<9/>`, `< />` or `<.a/>` (26 KB upload,
+    well under the 4/16 MiB limits) is parsed into a DOM by fast-xml-parser: 0.6–0.9 s and
+    0.3–0.59 GiB. Four such parts (33 KB) → 201 after 3221 ms with `/api/health` blocked 2920
+    ms; ~1.4 GiB in memory. Attributes are never counted: one `<c>` with 3.8 MiB of attributes
+    → 1.1 s / 0.55 GiB; four parts (4.19 MB) → 201 after 5073 ms, health 4772 ms.
+  - (b) `MAX_FINDING_SOURCES` caps only `sources`, not cell values. A 1 MiB shared string ×
+    100 holiday names (28 KB) → a 99.81 MiB `report_json` stored and returned; a 4 MiB string
+    × 2,000 holiday names (50 KB) → 500 `internal_error`, server logs `RangeError: Invalid
+    string length`; a 4 MiB inline-string label → a 24–143 MiB report.
+  - Bounded fix: count every tag opening (not only `[A-Za-z_]`-led) and bound attributes in
+    `scanElements`/`inflateEntry`; cap stored cell-value length in `templateMapping.ts` and
+    never 500 on report building in `workbookImport.ts`; add red-first tests from r1/r2/r3.
+- Docs sync (docs/07, docs/10) accurate as written; the overclaim that the limits bound the
+  work is in `xlsxReader.ts`'s header comment and is part of RB-01.
+- Next action: one bounded FIX_FINDINGS task for RB-01, then freeze, regate and a fresh area-B
+  recheck on the new digest. Nothing left running; the built server was stopped through its
+  handle; no workbook or binary is in the repository or evidence.

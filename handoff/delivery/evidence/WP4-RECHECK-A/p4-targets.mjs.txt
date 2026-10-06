@@ -1,0 +1,86 @@
+// WP4-RECHECK-A source (masked evidence copy: <work> = the audit task folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A rerun of the WP4-AUDIT-A probe (copied from its masked evidence; <email> placeholders replaced with synthetic example.invalid addresses).
+// WP4-AUDIT-A probe P4: backup and restore target boundaries through the built CLI, with NTFS junctions, plus tampered
+// backups. Reuses the stopped live instance and the backup of probe P2 (synthetic). Every CLI run sets DATABASE_PATH and
+// DATA_DIR explicitly to that live instance; the live tree must be byte-identical after every refused or failed run.
+// Usage: node p4-targets.mjs <export dir> <p2 work dir> <work dir>
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [exportDir, p2, work] = process.argv.slice(2);
+const CLI = join(exportDir, 'dist', 'server', 'cli.js');
+const live = join(p2, 'live');
+const liveData = join(live, 'private-data');
+const env = { ...process.env, NODE_ENV: 'development', DATABASE_PATH: join(live, 'timesheet.db'), DATA_DIR: liveData, OUTBOUND_MODE: 'capture' };
+const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8' });
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const sha = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+function tree(dir) {
+  const out = [];
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) { out.push(`${path.slice(dir.length)}/`); walk(path); } else out.push(`${path.slice(dir.length)} ${statSync(path).size} ${sha(path)}`);
+    }
+  };
+  walk(dir);
+  return out.sort().join('\n');
+}
+mkdirSync(work, { recursive: true });
+const liveBefore = tree(live);
+const backupDir = join(p2, 'backups', readdirSync(join(p2, 'backups')).find((name) => name.startsWith('timesheet-backup-')));
+
+// Junctions into the live private data directory.
+const intoData = join(work, 'junction-into-data');
+symlinkSync(liveData, intoData, 'junction');
+const emptyInside = join(liveData, 'tmp');
+const intoEmpty = join(work, 'junction-into-empty-tmp');
+symlinkSync(emptyInside, intoEmpty, 'junction');
+
+const cases = [
+  ['backup --to the live DATA_DIR', ['backup', '--to', liveData], 2, 'target_inside_data_dir'],
+  ['backup --to a junction that points into DATA_DIR', ['backup', '--to', intoData], 2, 'target_inside_data_dir'],
+  ['backup --to a new folder below such a junction', ['backup', '--to', join(intoData, 'new-backups')], 2, 'target_inside_data_dir'],
+  ['restore --to a junction that points to an empty folder inside DATA_DIR', ['restore', '--from', backupDir, '--to', intoEmpty], 2, 'target_inside_data_dir'],
+  ['restore --to a new folder below a junction into DATA_DIR', ['restore', '--from', backupDir, '--to', join(intoData, 'restored')], 2, 'target_inside_data_dir'],
+  ['restore --to the live instance folder (holds the database and DATA_DIR)', ['restore', '--from', backupDir, '--to', live], 2, 'target_is_live'],
+  ['restore --to a folder inside the backup folder', ['restore', '--from', backupDir, '--to', join(backupDir, 'inner')], 2, 'target_inside_backup'],
+  ['restore --confirm without --keep-schema is a usage error', ['restore', '--from', backupDir, '--to', join(work, 'x'), '--confirm'], 2, 'Usage'],
+];
+for (const [label, args, code, text] of cases) {
+  const run = cli(args);
+  check(`${label}: exit ${code} (${text})`, run.status === code && run.stderr.includes(text), `${run.status} ${run.stderr.trim().slice(0, 90)}`);
+}
+check('the refused runs wrote nothing in the live instance (database and every private file identical)', tree(live) === liveBefore);
+check('no partial backup folder was left anywhere in DATA_DIR', !readdirSync(liveData).some((name) => name.startsWith('.partial-') || name.startsWith('timesheet-backup-')));
+
+// Tampered backups: each must fail its check (exit 1) and leave no restored copy behind.
+function tampered(name, change) {
+  const copy = join(work, name);
+  cpSync(backupDir, copy, { recursive: true });
+  change(copy);
+  return copy;
+}
+const firstKey = JSON.parse(readFileSync(join(backupDir, 'manifest.json'), 'utf8')).files[0].storage_key;
+const tamperCases = [
+  ['a changed file byte', 'tamper-file', (dir) => { const path = join(dir, 'files', firstKey); const bytes = readFileSync(path); bytes[bytes.length - 1] ^= 1; writeFileSync(path, bytes); }, 1, 'file_hash_mismatch'],
+  ['a changed database byte', 'tamper-db', (dir) => { const path = join(dir, 'timesheet.db'); const bytes = readFileSync(path); bytes[bytes.length - 100] ^= 1; writeFileSync(path, bytes); }, 1, 'database_hash_mismatch'],
+  ['an extra manifest key (a person field)', 'tamper-key', (dir) => { const path = join(dir, 'manifest.json'); const m = JSON.parse(readFileSync(path, 'utf8')); m.owner_email = '<email>'; writeFileSync(path, JSON.stringify(m)); }, 1, 'manifest_invalid'],
+  ['a newer schema in the manifest', 'tamper-schema', (dir) => { const path = join(dir, 'manifest.json'); const m = JSON.parse(readFileSync(path, 'utf8')); m.schema_version = 99; writeFileSync(path, JSON.stringify(m)); }, 1, 'schema_newer'],
+  ['a missing file', 'tamper-missing', (dir) => { writeFileSync(join(dir, 'files', firstKey), ''); }, 1, 'file_'],
+];
+for (const [label, name, change, code, text] of tamperCases) {
+  const source = tampered(name, change);
+  const target = join(work, `${name}-restored`);
+  const run = cli(['restore', '--from', source, '--to', target]);
+  check(`restore of a backup with ${label}: exit ${code} (${text}), nothing left in the target`, run.status === code && run.stderr.includes(text) && !existsSync(target), `${run.status} ${run.stderr.trim().slice(0, 90)}`);
+}
+check('the failed restores wrote nothing in the live instance', tree(live) === liveBefore);
+console.log(fails === 0 ? 'P4 PASSED' : `P4 FAILED (${fails})`);
+process.exitCode = fails === 0 ? 0 : 1;
