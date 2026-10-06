@@ -142,4 +142,62 @@ Chạy WP4-GATE trên commit WP4-T13-FREEZE như mục E của [WP4-PLAN](tasks/
 
 ## Biên bản chấp nhận (WP4-ACCEPT)
 
-Chưa điền. WP4-ACCREC ghi gate, quyết định của các audit và digest được chấp nhận tại đây sau khi chúng đạt.
+Do WP4-ACCREC chuẩn bị (chỉ bản ghi, không sửa source). Các mục phía trên là ảnh chụp WP4-T13 và được bản ghi này thay thế khi khác nhau (ví dụ số test, digest, "chưa có review độc lập" và danh sách câu hỏi mở). Nguồn: các tác vụ bảng điều phối từ WP4-GATE đến WP4-RECHECK-B4 (`decision`, `findings`, `notes`, `gate_notes`, `history`), `owner_decisions` và `coordinator_decisions` ngày 2026-10-05 và 2026-10-06, `pending_owner_question` và `runtime_observations` của bảng, cùng các báo cáo [WP4_REVIEW_A](WP4_REVIEW_A.vi.md), [WP4_REVIEW_B](WP4_REVIEW_B.vi.md), [WP4_RECHECK_A](WP4_RECHECK_A.vi.md), [WP4_RECHECK_B](WP4_RECHECK_B.vi.md), [WP4_RECHECK_A2](WP4_RECHECK_A2.vi.md), [WP4_RECHECK_A3](WP4_RECHECK_A3.vi.md), [WP4_RECHECK_A4](WP4_RECHECK_A4.vi.md), [WP4_RECHECK_B2](WP4_RECHECK_B2.vi.md), [WP4_RECHECK_B3](WP4_RECHECK_B3.vi.md) và [WP4_RECHECK_B4](WP4_RECHECK_B4.vi.md) (mỗi báo cáo có bản `.vi.md`). Mọi con số được chép từ các bản ghi đó; không chạy lại gì. Bước chấp nhận trên bảng điều phối thuộc về coordinator. Mục lục nguồn: [evidence/WP4-ACCREC/01-sources.txt](evidence/WP4-ACCREC/01-sources.txt).
+
+- **Source được chấp nhận:** commit `546cddaf6747aef85e8b6d9b7712de9e28f138bf` (WP4-FIXB4-FREEZE, đã push), digest source `26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081` trên 775 file (WP4-REGATE4 PASS; repo, dạng `git ls-tree` và bản export sạch khớp nhau). Số liệu cuối từ WP4-REGATE4:
+  - 76 file và 1.758 test; smoke 41 `PASS`, không có dòng deprecation;
+  - e2e 145 đạt và 5 bỏ qua;
+  - drill stage 1 đến 6 với `--wp3`, 208 `PASS` và 0 `FAIL`;
+  - migration và nâng cấp, 61 đạt;
+  - race 60/60 (10 trên 10 tiến trình mới cho mỗi suite trong 6 suite);
+  - NAS CHƯA ĐƯỢC KIỂM CHỨNG.
+- **Giới hạn tài nguyên khi nhập** (suy ra trước, đo sau). Lớp chi phí phân tích cú pháp được đóng bằng suy diễn và trần thực tế, không bằng tìm kiếm hình dạng (quyết định coordinator 2026-10-06):
+  - cận suy ra theo số byte XML X và số lần mở markup O: thời gian t ≤ 40 ms + 14,8 ns·X + 339 ns·O, bộ nhớ m ≤ 15 MiB + 13,3 B·X + 428 B·O (đã đo 61 loại đơn vị; thuộc tính không thêm chi phí đo được);
+  - các trần: upload 2 MiB, 1 MiB mỗi part, 3 MiB mỗi package và 100.000 lần mở; cận tại các trần là khoảng 121 ms và +95 MiB (biên 76% và 37%). Workbook 64 sheet nặng 0,33 MB và workbook 61 sheet nặng 318 KB; đúng 2 MiB tới được bộ đọc (422), 2 MiB + 1, 3 MiB và 8 MiB trả 413;
+  - đo so với ngân sách 500 ms / +150 MiB: WP4-FIXB4 báo tối đa 114 ms và +72 MiB cho các cấu trúc xấu nhất (một lần chạy ngoại lệ 149 ms); WP4-REGATE4 đo 23 cấu trúc xấu nhất tại các trần, xấu nhất 107 ms và +70 MiB, toàn dịch vụ xấu nhất 104 ms và +46 MiB, `/api/health` xấu nhất 113 ms khi có tải, không có 5xx; WP4-RECHECK-B4 tính lại cận từ phép đo độc lập 61 họ ở mức 105,5 ms và +90,8 MiB (công bố 121 ms và +95 MiB) và đo xấu nhất 89 ms và +71 MiB cho một bản xem trước, 90 ms và +46 MiB cho toàn dịch vụ;
+  - các hình dạng RB3-01 trước đây (611 ms) giờ bị từ chối trong 0 đến 3 ms, HTTP 413 trong 3 ms. Số liệu chỉ đo trên máy trạm của nhà phát triển; theo hệ số 3-4 lần của NAS mà chính chú thích mã nêu, bản xem trước xấu nhất khoảng 0,3 đến 0,4 s trên NAS (R-B4-2).
+- **Chuỗi gate** (verifier, bản export sạch ngoài Dropbox, Node 24.21.0, chỉ capture):
+  - WP4-GATE PASS trên `13a258d` (`1ed67f55`);
+  - WP4-REGATE PASS trên `0f7fba2` (`dfe4541d`);
+  - WP4-REGATE2 PASS trên `cc34e7f` (`96445de4`);
+  - WP4-REGATE3 PASS trên `972ccda` (`635f909d`);
+  - WP4-REGATE4 PASS trên `546cdda` (`26fcc969`).
+- **Chuỗi audit:**
+  - WP4-AUDIT-A trên `13a258d`: FIX REQUIRED (A-01 source map trong image, A-02 cách diễn đạt `JOB_RUNNER`, A-03 độ chính xác của sổ tay, A-04 smoke thừa hưởng `DATA_DIR`);
+  - WP4-AUDIT-B trên `13a258d`: FIX REQUIRED (B-01 chi phí phân tích workbook, B-02 tràn bộ đếm ngày lễ);
+  - WP4-RECHECK-A: lần 1 đến 3 PASS trên `0f7fba2`, `cc34e7f` và `972ccda`, mỗi lần bị vòng sửa sau thay thế về ràng buộc digest; lần 4 PASS trên `546cdda`, digest `26fcc969`, không có phát hiện, là kết quả cuối của khu vực A;
+  - WP4-RECHECK-B trên `0f7fba2`: FIX REQUIRED (RB-01, mở lại B-01);
+  - WP4-RECHECK-B2 trên `cc34e7f`: FIX REQUIRED (RB2-01);
+  - WP4-RECHECK-B3 trên `972ccda`: FIX REQUIRED (RB3-01);
+  - WP4-RECHECK-B4 trên `546cdda`: PASS, digest `26fcc969`, không có phát hiện, là kết quả cuối của khu vực B.
+- **Các vòng sửa** (profile theo bảng điều phối; model và effort tự báo cáo hoặc được yêu cầu):
+  - vòng 1: WP4-FIXB và WP4-FIXA, đều là `timesheet-worker-high` (`claude-sonnet-5-5`), một lần đóng băng (`0f7fba2`);
+  - vòng 2: WP4-FIXB2, được nâng lên `timesheet-expert` (`claude-opus-5-5`, yêu cầu xhigh) vì RB-01 lặp lại trên B-01, và WP4-DEPCLEAN, `timesheet-worker` (`claude-sonnet-5-5`), gỡ `fast-xml-parser` không dùng cùng bảy gói phụ thuộc gián tiếp; đóng băng `cc34e7f`;
+  - vòng 3: WP4-FIXB3, `timesheet-expert` (`claude-opus-5-5`); đóng băng `972ccda`;
+  - vòng 4: WP4-FIXB4, `timesheet-expert` (`claude-opus-5-5`), và WP4-DEPCLEAN2, `timesheet-worker` (`claude-sonnet-5-5`), chuyển `fflate` 0.8.3 sang `devDependencies` (không gói nào khác đổi); đóng băng `546cdda`.
+- **Quyết định của chủ sở hữu:**
+  - F-1 đến F-6 (2026-10-05, đều theo khuyến nghị ở mục F của WP4-PLAN): chỉ nhập workbook của chính mình; kỳ đã nhập chỉ đọc và không có sự kiện sổ cái; số dư mở đầu có dấu kèm cờ "not set up"; giữ dòng job 30 ngày; prune backup 7/4/6; docs/07 nêu không có session secret của ứng dụng;
+  - phương án B (2026-10-05, đảo H-Q3 (a)): skill `.claude/skills/readme-md/` được gỡ bỏ thay vì sửa, với GOV-SKILL-REMOVE PASS;
+  - câu hỏi mở I-1 đến I-5 (hỏi ngày 2026-10-06; không có gì bị chặn, mỗi mục đều đảo ngược được và mặc định an toàn vẫn giữ): I-1 kỳ nháp của ứng dụng không bao giờ nhận ngày nhập (a); I-2 "Off day (overtime used)" bị bỏ qua (a là hiện hành, b được khuyến nghị); I-3 kỳ chưa kết thúc không được nhập, và từ WP4-FIXB kỳ đã kết thúc nhưng chưa tới thời điểm đến hạn trả lương cũng chỉ bỏ qua (a); I-4 số dư mở đầu nhập nhầm không thể điều chỉnh về ròng bằng không (b là hiện hành, a được khuyến nghị); I-5 bản xem trước chưa commit được giữ không có hạn mức (khuyến nghị giới hạn 20 bản mỗi người). Câu trả lời khác mặc định sẽ thành một việc bổ sung nhỏ.
+- **Quyết định của coordinator:**
+  - lần gửi bị giữ sau restore (2026-10-05): mọi job gửi và nhắc đang xếp hàng hoặc đang được thuê của backup đều bị giữ; việc giải phóng hoặc bỏ có ghi nhật ký kiểm toán quyết định;
+  - chế độ restore rollback và `JOB_RUNNER=off` cho đến khi đối soát (2026-10-05);
+  - tách T07 (phần không phụ thuộc F trước, cờ "not set up" và giữ lại là T07B) và tách T12 (T12A trước, rồi stage 6) (2026-10-05);
+  - mặc định thận trọng `not_due` cho kỳ chưa đến hạn trả (WP4-FIXB, nằm trong quy tắc I-3);
+  - 2026-10-06: đóng lớp chi phí phân tích cú pháp bằng suy diễn và trần thực tế, không bằng tìm kiếm; mục tiêu 500 ms / +150 MiB giữ nguyên.
+- **Hạng mục không chặn được chuyển tiếp** (không hạng mục nào chặn việc chấp nhận):
+  - NAS CHƯA ĐƯỢC KIỂM CHỨNG;
+  - R-A2 (thử lại việc chuyển WAL cho nhiều bên mở đồng thời một file CSDL mới), R-A3 (giới hạn tồn dư của rollback; lựa chọn của chủ sở hữu trước pilot WP5: quy tắc `JOB_RUNNER=off` hoặc xóa thời điểm kích hoạt), R-A6 (kiểm số job automation theo loại) và R-A8 (lệnh bảo trì CLI mặc định dùng CSDL dev khi không có `DATABASE_PATH`);
+  - R-RA1 đến R-RA4 từ RECHECK-A: R-RA1 hòa nhau trong cùng một giây khi prune (Info), R-RA2 một lần `--prune` sau đó trong cùng ngày UTC xóa backup ghép đôi trước nâng cấp (Low), R-RA3 source map của bên thứ ba dưới `node_modules`, không bao giờ được phục vụ (Info), R-RA4 một backup có ngày ở tương lai xa chặn mọi lần prune cho đến khi được chuyển đi (Info); cùng R-RA5 đến R-RA7 (Info);
+  - từ RECHECK-A lần 4: R-RA8 (Info) phản hồi 413 sớm và việc tái sử dụng kết nối ở các route upload thô (đã có từ trước, không thấy trong trình duyệt) và R-RA9 (Low) restore vào một junction treo trả `write_failed` thay vì `target_inside_data_dir` và không ghi gì vào instance đang chạy (đã có từ trước, tùy chọn từ chối bằng `lstat`);
+  - B-R2 (đánh dấu ngày đã nhập trong planBatch) và B-R4, tức I-5 (không có hạn mức bản xem trước);
+  - cảnh báo npm chỉ ở dev (`source-map-js`, mức cao; `npm audit --omit=dev` cho 0);
+  - từ RECHECK-B4: R-B4-1 (khai báo encoding lỏng), R-B4-2 (không có hạn mức bản xem trước và NAS CHƯA ĐƯỢC KIỂM CHỨNG), R-B4-3 (hơn 64 sheet bị chặn bởi trần `maxSheets` hiện có) và R-B4-4 (cận chỉ bao phủ 61 họ đơn vị đã đo).
+- **Sự cố runtime** (một dòng mỗi sự cố):
+  - WP4-GATE: lần thử migrate đầu tiên chạy không có `DATABASE_PATH` và đã migrate CSDL phát triển cục bộ của chủ sở hữu (ngoài repo, chỉ dữ liệu dev) từ schema 1 lên 13; các kiểm tra sau dùng đường dẫn nằm trong thư mục tác vụ và brief giờ yêu cầu cả hai đường dẫn;
+  - WP4-AUDIT-B: một heredoc đưa vào `python` mở ra một REPL lặp vô hạn trong tác vụ nền và ghi một file đầu ra rất lớn ngoài repo; coordinator đã dừng nó, và file được để lại cho chủ sở hữu xóa;
+  - WP4-REGATE4: một probe pipe vào `head` để lại một tiến trình con server Node 24 đang chạy; coordinator đã dừng agent, và danh sách tiến trình của RECHECK-A lần 4 sau đó không còn tiến trình Node 24 portable nào.
+- **Tách biệt ba kết quả:**
+  - mức sẵn sàng phần mềm của WP4: đã triển khai, đã qua gate (WP4-REGATE4 PASS) và được audit độc lập (RECHECK-A lần 4 và RECHECK-B4 PASS trên cùng bản đóng băng `546cdda`, digest `26fcc969`), đích NAS CHƯA ĐƯỢC KIỂM CHỨNG; coordinator ghi WP4-ACCEPT;
+  - sự cho phép của chủ sở hữu: chưa yêu cầu và chưa được cấp; không triển khai, không email thật, không dữ liệu thật, `PRODUCTION_SENDING_ENABLED` không bao giờ được đặt;
+  - kết quả pilot: không có; chưa chạy pilot nào.

@@ -1,0 +1,25 @@
+# 22-p4-targets: P4 rerun: backup and restore target boundaries (WP4-RECHECK-A4)
+date_utc: 2026-10-06T19:46:19Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (each probe passes its own pair under its work folder to every child)
+app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate; plus reference/examples for the development seed; run 2)
+$ node probes/p4-targets.mjs <work>\prod <work>\pr2\p2 <work>\pr2\p4
+PASS  backup --to the live DATA_DIR: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+PASS  backup --to a junction that points into DATA_DIR: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+PASS  backup --to a new folder below such a junction: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+PASS  restore --to a junction that points to an empty folder inside DATA_DIR: exit 2 (target_inside_data_dir)  2 Restore refused (target_inside_data_dir): The restore target must be outside the live priv
+PASS  restore --to a new folder below a junction into DATA_DIR: exit 2 (target_inside_data_dir)  2 Restore refused (target_inside_data_dir): The restore target must be outside the live priv
+PASS  restore --to the live instance folder (holds the database and DATA_DIR): exit 2 (target_is_live)  2 Restore refused (target_is_live): The restore target must not hold the live database or th
+PASS  restore --to a folder inside the backup folder: exit 2 (target_inside_backup)  2 Restore refused (target_inside_backup): The restore target must be outside the backup fold
+PASS  restore --confirm without --keep-schema is a usage error: exit 2 (Usage)  2 Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR> [--ke
+PASS  the refused runs wrote nothing in the live instance (database and every private file identical)
+PASS  no partial backup folder was left anywhere in DATA_DIR
+PASS  restore of a backup with a changed file byte: exit 1 (file_hash_mismatch), nothing left in the target  1 Restore failed (file_hash_mismatch): A file does not match the SHA-256 recorded in the man
+PASS  restore of a backup with a changed database byte: exit 1 (database_hash_mismatch), nothing left in the target  1 Restore failed (database_hash_mismatch): The database copy does not match the SHA-256 and
+PASS  restore of a backup with an extra manifest key (a person field): exit 1 (manifest_invalid), nothing left in the target  1 Restore failed (manifest_invalid): The backup manifest is not a valid timesheet backup man
+PASS  restore of a backup with a newer schema in the manifest: exit 1 (schema_newer), nothing left in the target  1 Restore failed (schema_newer): The backup has a newer database schema than this applicatio
+PASS  restore of a backup with a missing file: exit 1 (file_), nothing left in the target  1 Restore failed (file_size_mismatch): A file does not have the size recorded in the manifes
+PASS  the failed restores wrote nothing in the live instance
+P4 PASSED
+exit 0
+date_utc: 2026-10-06T19:46:23Z
+[end]

@@ -1,0 +1,73 @@
+# 15 WP4-REGATE4 drill result read (WP4-RECHECK-A4)
+date_utc: 2026-10-06T19:50:54Z
+source: handoff/delivery/evidence/WP4-REGATE4/04-drill.txt (verifier run, a reported result) compared with WP4-REGATE3/04-drill.txt
+== stage summary lines (REGATE4)
+40:STAGE 1 (build, image, start, persistence): 33 PASS, 0 FAIL
+74:STAGE 2 (backup, import sources, prune dry run): 31 PASS, 0 FAIL
+136:STAGE 3 (restore, pause, release): 57 PASS, 0 FAIL
+173:STAGE 4 (upgrade from the WP3 schema): 35 PASS, 0 FAIL
+204:STAGE 5 (rollback to the WP3 build): 27 PASS, 0 FAIL
+233:STAGE 6 (import and opening balance): 23 PASS, 0 FAIL
+237:DRILL STAGES 1-6 PASSED
+== PASS / FAIL counts: REGATE4 208 / 0; REGATE3 208 / 0
+== check-name diff REGATE3 -> REGATE4 (label up to the first double space; no lines = identical):
+diff exit=0
+== stage 1 area-A lines (maps, 404, user, production dependencies, forbidden files, deprecation):
+7:PASS  build output (including npm ci) has no deprecation line
+14:PASS  forbidden-file scan (*.xlsx, source maps under /app/dist, .env*, handoff, tests, docs, reference, .claude, .agents, databases)
+15:PASS  production dependencies only (no devDependency in the image)
+19:PASS  the client bundle is served and carries no sourceMappingURL  /assets/index-DH2TBHE1.js 454172 bytes
+20:PASS  /assets/<bundle>.map answers 404  status 404
+21:PASS  running process UID is not 0  uid:gid 10001:10001
+32:PASS  administrator cannot read the employee session  status 404
+38:PASS  container log has no deprecation warning
+73:PASS  container log after the backup has no deprecation warning
+133:PASS  restored instance log has no deprecation warning
+160:PASS  upgraded instance log has no deprecation warning
+172:PASS  instance log after the restart has no deprecation warning
+201:PASS  previous build log has no deprecation warning and no error
+228:PASS  another synthetic user gets 404 for the batch (read and commit) and lists none  status 404/404/200
+229:PASS  an administrator gets 404 for the batch as well
+232:PASS  the stage 6 instance log has no deprecation warning and never contains a password
+== stage 2 import-source lines:
+44:PASS  employee previews a synthetic workbook through /api/imports (201, new batch)  status 201
+61:PASS  the backup holds both import sources (committed and preview), with the SHA-256 and size of the uploaded workbooks  2 import sources
+62:PASS  every import source file in the backup hashes to its manifest entry
+66:PASS  manifest files equal the attachment and import-source rows of the copy
+74:STAGE 2 (backup, import sources, prune dry run): 31 PASS, 0 FAIL
+93:PASS  restored import batches (ids, states, source hashes and sizes) equal the backup and the uploaded workbooks  2 batches
+94:PASS  every import source file is restored and hashes to its batch  2 of 2 sources
+95:INFO  restored counts (equal to the backup): {"users":2,"import_batches":2,"revisions":1,"ledger_entries":0,"ledger_minutes":0,"signoffs":1,"attachments":8,"work_sessions":29,"outbound_jobs":1,"delivery_attempts":1}
+101:PASS  the employee lists the same import batches through the API of the restored instance  2 batches
+119:PASS  the second restore (a backup of a restored instance) also holds every import source  2 of 2 sources
+163:PASS  migrations 0011 (job retention), 0012 (imports) and 0013 (opening balance) are among the applied ones  versions 7,8,9,10,11,12,13
+164:PASS  the upgraded database has the imports table (empty) and the retention window row
+== stage 6 lines:
+PASS  the stage 1 instance starts again for stage 6 (healthy)  5.5 s (running healthy)
+PASS  the job runner is off in the container (counts cannot move in the background)
+PASS  the synthetic owner and the administrator sign in
+PASS  another synthetic user exists and signs in  status 201/200
+INFO  counts before the first import: timesheets 10, day_entries 84, work_sessions 74, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 1, imports 2, opening_balance 0
+PASS  the owner previews the workbook through /api/imports (201, new batch, plan with decisions to make)  status 201, 3 days need a decision, 17 importable
+PASS  the preview stored only the batch: no timesheet, day entry, session, ledger entry, revision, sign-off, job or delivery attempt
+PASS  every listed day gets a decision (skip, or import where the plan allows it)  1 skip, 2 import
+PASS  the commit answers 200 committed  status 200
+INFO  counts after the first commit: timesheets 12, day_entries 103, work_sessions 74, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 1, imports 3, opening_balance 0
+PASS  the commit wrote only timesheets (two imported periods) and day entries: no session, ledger entry, revision, sign-off, job or delivery attempt
+PASS  the identical workbook returns the same batch (200, not created)
+PASS  committing the identical workbook again answers 200 replayed
+PASS  committing the batch with other decisions is refused (409 import_already_committed)
+INFO  counts after the second commit: timesheets 12, day_entries 103, work_sessions 74, ot_ledger 0, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 1, imports 3, opening_balance 0
+PASS  the eight table counts (timesheets, day_entries, work_sessions, ot_ledger, timesheet_revisions, signoffs, jobs, delivery_attempts) and the import batches are unchanged by the second commit
+PASS  the opening balance posts once (201 posted) and a repeat is a no-op (200 duplicate)  status 201/200
+PASS  a different opening balance is refused (409 opening_balance_exists)
+INFO  counts after the opening balance: timesheets 12, day_entries 103, work_sessions 74, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 1, imports 3, opening_balance 1
+PASS  exactly one opening_balance entry exists, and it is the only new ledger row
+PASS  the owner reads the opening balance back (150 minutes, as of 2026-01-01)
+PASS  a sign-off of an imported period answers 409 imported_period  status 200/409 imported_period
+PASS  the refused sign-off wrote nothing
+PASS  another synthetic user gets 404 for the batch (read and commit) and lists none  status 404/404/200
+PASS  an administrator gets 404 for the batch as well
+INFO  counts at the end of stage 6: timesheets 12, day_entries 103, work_sessions 74, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 4, delivery_attempts 1, imports 3, opening_balance 1
+PASS  the ownership attempts wrote nothing
+PASS  the stage 6 instance log has no deprecation warning and never contains a password

@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 972ccda6409a7521a008c55c35a5b5cf416daf1e (WP4-FIXB3-FREEZE, the WP4 round-3 fix freeze).
+  - HEAD = origin/main = 546cddaf6747aef85e8b6d9b7712de9e28f138bf (WP4-FIXB4-FREEZE, the WP4 round-4 fix freeze).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -875,23 +875,36 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - WP4-FIXB4-FREEZE attempt 1 stopped correctly, with no commit. The validator
          rejected the board because the coordinator had left WP4-RECHECK-A as `done`
          while moving it to attempt 4. The coordinator fixed the board.
-       - Running: WP4-FIXB4-FREEZE attempt 2, with the same committer.
-       - Then: freeze, WP4-REGATE4, a fresh WP4-RECHECK-B4, and WP4-RECHECK-A
-         attempt 4 (delta).
-       - Then: freeze, regate, a fresh recheck of B (B3), and an area-A delta recheck
-         (attempt 3).
-       - Then:
-         - WP4-FIXB2-FREEZE;
-         - WP4-REGATE2;
-         - WP4-RECHECK-B2, a fresh auditor;
-         - WP4-RECHECK-A attempt 2, the area-A delta on the new digest.
-       - Then one freeze, WP4-REGATE, and fresh rechecks of A and B.
+       - WP4-FIXB4-FREEZE attempt 2 committed and pushed 546cddaf (215 paths; digest
+         26fcc969, 775 files; all checks 0).
+       - WP4-REGATE4: **PASS** on 546cdda (digest 26fcc969, 775 files). verify 1,758,
+         e2e 145/5 skipped, drill 208/0, races 10/10 x6. RB3 worst at the ceilings
+         107 ms / +70 MiB against a derived ~120 ms / +96 MiB; no 5xx. 2 MiB ceiling
+         enforced (413 above it); the differential is identical. Incident: one stray
+         Node server child may remain from its task folder; the agent was TaskStopped.
+       - WP4-RECHECK-B4 (fresh opus): **PASS** on 546cdda, digest 26fcc969 before and
+         after, no findings. RB3-01 is closed. An independent LP recomputation of the
+         bound gives 105.5 ms / +90.8 MiB (stated 121 ms / +95 MiB). Worst at the
+         ceilings: 89–90 ms. Risks R-B4-1..4 are recorded.
+       - WP4-RECHECK-A attempt 4 (fresh opus, delta): **PASS** on 546cdda, digest
+         26fcc969 before and after, no findings. The 14 delta paths are FIXB4 and
+         DEPCLEAN2 only; the other route limits are unchanged; fflate is absent from
+         production with no area-A effect. New risks R-RA8 (Info) and R-RA9 (Low) are in
+         old code. Its process listing shows the stray probe server is gone.
+       - WP4-ACCREC is done (light, sonnet): the WP4_HANDOFF acceptance record (EN and
+         VI) for 546cdda. Preflight 0; precommit 0.
+       - STATE marks WP4 passed with its carried risks; NEXT_ACTION (EN and VI) points
+         to WP5.
+       - WP4-ACCEPT attempt 1 stopped correctly, with no commit. The validator found
+         WP4-REGATE4 and WP4-RECHECK-B4 still at `running`. The coordinator had
+         recorded their results without changing the status, and has now fixed it.
+       - Running: WP4-ACCEPT attempt 2, with the same committer. Then the board
+         switches to WP5.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
-     - Owner questions: I-5 (preview quota), and R-A3 before WP5.
-     - Waiting on the owner:
-       - F-1..F-3 for T09 and T10;
-       - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
-       - GOV-SKILL Q1–Q4.
+     - Owner questions still open: WP4-I-1..I-5 (safe defaults in force), and R-A3
+       (rollback approach) before the WP5 pilot.
+     - Answered by the owner: F-1..F-6 (recommendations) and GOV-SKILL option B
+       (readme-md skill removed).
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -901,12 +914,11 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record the two rechecks. Then
-     WP4-RECHECK-A and WP4-RECHECK-B (fresh opus auditors), WP4-ACCREC and WP4-ACCEPT.
-  2. Then:
-     - acceptance.
-  3. Then WP5 (it starts with an independent acceptance) and a concrete pilot packet.
-     The real pilot stays owner-controlled.
+  1. Record WP4-ACCREC, then dispatch WP4-ACCEPT (committer; brief ready; STATE marks
+     WP4 passed and NEXT_ACTION points to WP5).
+  2. Then switch the board to WP5 and follow WP5_IMPLEMENT: it starts with an
+     independent acceptance, then a concrete pilot packet. The real pilot stays
+     owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its

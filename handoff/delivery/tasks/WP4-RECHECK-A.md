@@ -353,3 +353,82 @@ observable). Date 2026-10-06, 17:00 to about 17:25 UTC. Not committed. Report: [
 - No probe failed, and no command was rerun after a failure.
 - No `/dev/null` redirect, stdin script, PID kill or recursive removal was used.
 - Nothing of this audit is left running.
+
+### Auditor result (attempt 4): decision PASS
+
+Self-reported model: claude-opus-5-5 (board agent `aa7e8b8b5f42b5f09` as recorded by the coordinator; effort not
+observable). Date 2026-10-06, 19:37 to about 20:05 UTC. Not committed. Report: [WP4_RECHECK_A4](../WP4_RECHECK_A4.md)
+(VI: `WP4_RECHECK_A4.vi.md`). Evidence: `handoff/delivery/evidence/WP4-RECHECK-A4/` (index `00-README.txt`; masked, LF).
+`WP4_RECHECK_A3.md`, `WP4_RECHECK_A2.md`, `WP4_RECHECK_A.md` and their evidence are unchanged.
+
+**Target and digest.** Reviewed commit `546cddaf6747aef85e8b6d9b7712de9e28f138bf` (= `origin/main`, the WP4-REGATE4
+`freeze_commit`; parent `972ccda`).
+- HEAD and the digest were recorded before (19:37 UTC), after the checks (19:52 UTC) and again after the reports were
+  written (`99b`).
+- Both forms were used in the repository (ls-tree and `scripts/source-digest.mjs`). The same digest was computed on two
+  `git archive` exports, whose tree `16e3e0fe…` equals the freeze tree.
+- The digest was `26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081` (775 files) every time, equal to the
+  gate digest. No non-handoff file changed.
+
+**Separation.**
+- The delta authors are WP4-FIXB4 `a25ba7423ae0846ed` (opus, expert), WP4-DEPCLEAN2 `a6a48b0c9d59f3cb2`, committer
+  `a6dda119886e663af` and verifier `a2309045d22c66236` (the last three sonnet). The strongest author model is opus, so the
+  reviewer is not weaker.
+- The reviewer is none of `a659b8cbd52722f18`, `aabafcca9efc225db`, `a9f9312409bbc8109`, `af8b9184c8adf6eb0` or the
+  WP4-RECHECK-B4 auditor `aea194a66a8cd3b00`.
+- It authored nothing in WP4 and shared no file with WP4-RECHECK-B4.
+
+| # | Attempt-4 scope item | Result | Evidence |
+|---|---|---|---|
+| 1 | Delta since 972ccda | 215 paths: 201 under `handoff/`, 14 outside it, all FIXB4 or DEPCLEAN2 paths. Area-A runtime is touched only in `app.ts` (2 lines) and `routes/imports.ts` (1 line), all comments; both files are identical at both commits once comment lines are removed. The ceiling comes from the reader's `maxCompressedBytes` (8 → 2 MiB). The other limits are unchanged: JSON 64 KiB, signature 256 KiB, CLI configuration 256 KiB, manifest caps. A probe on the built app confirms each of them, plus exactly 2 MiB → 422 and 2 MiB + 1 or 8 MiB → 413. Every other area-A path is blob-identical since `0f7fba2`, and no area-A module imports a changed module. | `10`, `11`, `11b`, `28` |
+| 1 | docs/11 | Line 221 only, EN and VI. The word diff is `8` → `2` in the import step; no other docs/11 size or 413 statement. docs/07 changes line 46 only (the area-B import paragraph); its route sentence matches the route. docs/03 is unchanged. | `11` |
+| 1 | Package files | `p-lock`: 197 = 197 entries; only `fflate` gains `dev: true` and moves to devDependencies. No dependent; not among the 16 non-dev entries. No `src/` or `scripts/` import. The runtime stage omits dev dependencies. No area-A runtime effect: the area-A probes pass on an image-equivalent folder without `fflate`, and the REGATE4 image lists 21 paths fewer (`fflate`: 17 files and 4 folders). | `11c`, `14b`, `15b` |
+| 2 | `npm ci`, verify | `npm ci`: exit 0, 161 packages, no deprecation line, `npm audit --omit=dev` 0. `npm run verify` with `DATA_DIR`, `DATABASE_PATH` and `SMOKE_PORT` exported and deprecation tracing: exit 0, 76 files / 1758 tests, the same 41 smoke checks as attempt 3, no deprecation line, the exported `DATA_DIR` stays empty. | `12`, `12b`, `13`, `13b` |
+| 2 | REGATE4 drill | Read: `DRILL STAGES 1-6 PASSED`, 208 PASS (33/31/57/35/27/23), 0 FAIL; check names identical to REGATE3. Not rerun (see "Not run"). The Dockerfile stages without Docker give `dist/` 116 files, 0 `*.map`, 0 `sourceMappingURL`, and the same bundle (`index-DH2TBHE1.js`) that the REGATE4 container served. | `14`, `14d`, `15` |
+| 3 | Earlier conclusions | All still apply. The attempt-1 probes ran unchanged on the image-equivalent folder: P2 31, P8 8, P4 16, P7 23, P3 10, R-A1 24 and A-03 15 PASS, with check lines identical to attempt 3. Changed counts: digest, tests 1755 to 1758, import ceiling 8 to 2 MiB, `fflate` dev only. | `20`-`27` |
+
+**Findings:** none.
+
+**Risks (non-blocking):**
+- R-RA1 (Info), unchanged: 7 of 12 same-second pairs this run, 3 of which removed the just-printed backup.
+- R-RA2 (Low), R-RA4, R-RA6 and R-RA7 (Info): unchanged.
+- R-RA3 (Info): re-measured, 560 pdf-lib maps in the production `node_modules`.
+- R-RA5 (Info): still applies; in REGATE4 the package files changed, so the `npm ci` layers were very likely rebuilt
+  (inference).
+- R-RA8 (Info, new, HTTP transport, pre-existing, outside area A): after an early 413 on a raw upload route, `fetch` read
+  no status ("other side closed"), and a keep-alive `node:http` client got `ECONNRESET` on the next upload. With one
+  connection per upload, every status was correct. The signature route behaves the same since before WP4, and the client
+  checks sizes first. Optional: `Connection: close` on early 413s.
+- R-RA9 (Low, new, pre-existing in `ops/restore.ts`): `restore --to` a dangling junction whose target would lie in
+  DATA_DIR answered `write_failed` (exit 1) instead of `target_inside_data_dir` (exit 2), and wrote nothing. A race in
+  which the link target appears mid-restore is theoretical and was not reproduced. Optional: refuse an unresolvable link
+  target as `target_unusable`.
+- Wording nit in docs/11 section 4, unchanged.
+
+**Not run:**
+- The container drill and the image layer scan, by this audit. The brief asks to read the REGATE4 result. The Dockerfile
+  build, prod-deps and runtime stages were reproduced without Docker, and the area-A probes ran on the result. No Docker
+  command ran, and `ts-wp4-rca4` was never created.
+- NAS and native arm64: NOT VERIFIED.
+- e2e: not rerun (REGATE4: 145 passed, 5 skipped).
+- P1, P1b, P5, P6 and P9: not rerun as separate probes, because their code is unchanged.
+- The area-B correctness of FIXB4 belongs to WP4-RECHECK-B4.
+
+**Validators:** `validate_package.py --preflight` (workflow Python): exit 0, PASS, 83 translation pairs, each run (`31`).
+`precommit-check.mjs` over this task's files, staged in a private git dir outside the repository and run last: run 1
+BLOCK with 2 findings (the bare refused-login password literal in the limit probe's source copy, removed by run 4 of that
+probe); every later run exit 0, 0 findings (`32`).
+
+**Procedure:**
+- The first run of the attempt-1 probes (`run1-*`) used an app folder without `reference/examples`, which the development
+  `seed` reads next to `dist/`. Seed failed with ENOENT (`30`), so P2, P8, P4 and P7 failed as a consequence; P8 crashed
+  before stopping its server child, and that child was gone when checked (`05c`). The run was repeated in fresh folders
+  with the two example files added (`20`-`26`).
+- The limit probe needed four runs: `fetch` (run 1) and a keep-alive agent (run 2) lost responses after early 413s
+  (R-RA8). Run 3 uses one connection per upload and passed. Run 4 (`28`, port 47618) only renames the refused-login
+  password literal, which the precommit check blocked, and gives the same 20 check lines. All four runs are kept.
+- `11b` corrects three wrong paths of `11` (bootstrap, automation and operationsStatus live under `services/`; docs/10 is
+  `10_DECISIONS_AND_SOURCES`) and an exit status that was the pipe's, not `git grep`'s.
+- No `/dev/null` redirect, stdin script, PID kill or recursive removal was used. Servers used explicit ports 47613 and
+  47615-47618, or a loopback port the OS handed out as free.
+- Nothing of this audit is left running (`98`).

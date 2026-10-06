@@ -171,3 +171,9 @@ For attempt 2:
 - Scope: only listed paths; templateMapping, workbookImport, ImportScreen, ImportPreview, docs/03 did not change; package.json only the fflate move; no .xlsx/.map.
 - Exit codes: version 0, digest 0, add 0, precommit 0, diff --check 0, JSON 0, validate_orchestration 1.
 - Blocker: validate_orchestration.py: "Gate/audit lacks digest/execution evidence: WP4-RECHECK-A" (board entry needs source_digest/evidence). Not an allowed fix. Index left staged.
+
+### Attempt 2 results
+- Pre-HEAD 972ccda; commit 546cddaf6747aef85e8b6d9b7712de9e28f138bf; pushed to main; remote SHA 546cddaf6747aef85e8b6d9b7712de9e28f138bf.
+- Digest 26fcc969...d9081 (775 files); 215 staged (re-staged board, checkpoint pair, brief).
+- Exit codes: precommit 0, diff --check 0, JSON 0, validate_orchestration 0, check_recovery 0, preflight 0, commit 0, fetch/dry-run/push 0.
+- Blockers: none.

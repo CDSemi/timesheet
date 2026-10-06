@@ -1,0 +1,138 @@
+== A. app.ts and routes/imports.ts: every changed line of the diff (-U0)
+-  /** Route-scoped size limit of the workbook import upload (bytes); default 8 MiB, the reader's package limit. */
++  /** Route-scoped size limit of the workbook import upload (bytes); default 2 MiB, the reader's package limit. */
+-    // the owner's workbook (8 MiB, .xlsx only) each have their own limit and content type in their
++    // the owner's workbook (2 MiB, .xlsx only) each have their own limit and content type in their
+-/** Route-scoped upload limit: the reader's own package limit (8 MiB). Every other /api route keeps 64 KiB. */
++/** Route-scoped upload limit: the reader's own package limit (2 MiB). Every other /api route keeps 64 KiB. */
+== A2. changed lines that are not comments (expect none):
+(grep exit=1; 1 = no non-comment line)
+== B. the request-size limits in force at both commits
+-- 972ccda6409a7521a008c55c35a5b5cf416daf1e
+src/server/app.ts:38:const GLOBAL_JSON_LIMIT_BYTES = 64 * 1024;
+src/server/cli.ts:111:const MAX_CONFIG_BYTES = 256 * 1024;
+src/server/import/xlsxReader.ts:115:  maxCompressedBytes: 8 * 1024 * 1024,
+src/server/ops/prune.ts:36:const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
+src/server/ops/restore.ts:203:const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
+src/server/routes/imports.ts:21:export const DEFAULT_IMPORT_MAX_BYTES = DEFAULT_READER_LIMITS.maxCompressedBytes;
+src/server/routes/signatures.ts:22:export const DEFAULT_SIGNATURE_MAX_BYTES = 256 * 1024;
+src/server/app.ts:105:      bodyLimit({
+src/server/app.ts:106:        maxSize: GLOBAL_JSON_LIMIT_BYTES,
+src/server/app.ts:130:  app.route('/api/auth', authRoutes(deps));
+src/server/app.ts:131:  app.route('/api/admin', adminRoutes(deps));
+src/server/app.ts:132:  app.route('/api/ot', otRoutes(deps));
+src/server/app.ts:133:  app.route('/api/history', historyRoutes(deps));
+src/server/app.ts:134:  app.route('/api/settings', settingsRoutes(deps));
+src/server/app.ts:135:  app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+src/server/app.ts:137:  app.route('/api/imports', importRoutes(deps, files, options.importMaxBytes ?? DEFAULT_IMPORT_MAX_BYTES));
+src/server/app.ts:140:  app.route('/api/shares', sharesRoutes(deps));
+src/server/app.ts:141:  app.route('/api/shared/:ownerId', sharedRoutes(deps, files));
+src/server/app.ts:142:  app.route('/api', submissionRoutes(deps, { files }));
+src/server/app.ts:143:  app.route('/api', apiRoutes(deps));
+src/server/routes/imports.ts:62:    bodyLimit({
+src/server/routes/imports.ts:63:      maxSize: maxBytes,
+src/server/routes/signatures.ts:68:    bodyLimit({
+src/server/routes/signatures.ts:69:      maxSize: maxBytes,
+-- 546cddaf6747aef85e8b6d9b7712de9e28f138bf
+src/server/app.ts:38:const GLOBAL_JSON_LIMIT_BYTES = 64 * 1024;
+src/server/cli.ts:111:const MAX_CONFIG_BYTES = 256 * 1024;
+src/server/import/xlsxReader.ts:129:  maxCompressedBytes: 2 * 1024 * 1024,
+src/server/ops/prune.ts:36:const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
+src/server/ops/restore.ts:203:const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
+src/server/routes/imports.ts:21:export const DEFAULT_IMPORT_MAX_BYTES = DEFAULT_READER_LIMITS.maxCompressedBytes;
+src/server/routes/signatures.ts:22:export const DEFAULT_SIGNATURE_MAX_BYTES = 256 * 1024;
+src/server/app.ts:105:      bodyLimit({
+src/server/app.ts:106:        maxSize: GLOBAL_JSON_LIMIT_BYTES,
+src/server/app.ts:130:  app.route('/api/auth', authRoutes(deps));
+src/server/app.ts:131:  app.route('/api/admin', adminRoutes(deps));
+src/server/app.ts:132:  app.route('/api/ot', otRoutes(deps));
+src/server/app.ts:133:  app.route('/api/history', historyRoutes(deps));
+src/server/app.ts:134:  app.route('/api/settings', settingsRoutes(deps));
+src/server/app.ts:135:  app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+src/server/app.ts:137:  app.route('/api/imports', importRoutes(deps, files, options.importMaxBytes ?? DEFAULT_IMPORT_MAX_BYTES));
+src/server/app.ts:140:  app.route('/api/shares', sharesRoutes(deps));
+src/server/app.ts:141:  app.route('/api/shared/:ownerId', sharedRoutes(deps, files));
+src/server/app.ts:142:  app.route('/api', submissionRoutes(deps, { files }));
+src/server/app.ts:143:  app.route('/api', apiRoutes(deps));
+src/server/routes/imports.ts:62:    bodyLimit({
+src/server/routes/imports.ts:63:      maxSize: maxBytes,
+src/server/routes/signatures.ts:68:    bodyLimit({
+src/server/routes/signatures.ts:69:      maxSize: maxBytes,
+== B2. route wiring lines of app.ts identical at both commits (cmp of the bodyLimit/route region with comments removed)
+cmp exit=0 (0 = app.ts identical without comment lines)
+cmp exit=0 (0 = routes/imports.ts identical without comment lines)
+== C. area-A runtime, image and ops paths: blob ids at 0f7fba2, cc34e7f, 972ccda, 546cdda
+src/server/ops: 7195d48644 7195d48644 7195d48644 7195d48644
+src/server/db: 1765db8620 1765db8620 1765db8620 1765db8620
+src/server/jobs: 3622d63c30 3622d63c30 3622d63c30 3622d63c30
+src/server/routes: c2166352d1 c2166352d1 c2166352d1 c939aa2e4d
+src/server/mail: b3c8d649fb b3c8d649fb b3c8d649fb b3c8d649fb
+src/server/files: c3bbcdd2e3 c3bbcdd2e3 c3bbcdd2e3 c3bbcdd2e3
+src/server/cli.ts: d49e0a16a6 d49e0a16a6 d49e0a16a6 d49e0a16a6
+src/server/app.ts: bf52b22838 bf52b22838 bf52b22838 44d71ac89f
+src/server/index.ts: a5aa137c42 a5aa137c42 a5aa137c42 a5aa137c42
+src/server/config.ts: 6fd5d92db4 6fd5d92db4 6fd5d92db4 6fd5d92db4
+src/server/bootstrap.ts: (absent) (absent) (absent) (absent)
+src/server/automation.ts: (absent) (absent) (absent) (absent)
+src/server/operationsStatus.ts: (absent) (absent) (absent) (absent)
+Dockerfile: 9497a05463 9497a05463 9497a05463 9497a05463
+compose.example.yaml: 1f4d2f95b6 1f4d2f95b6 1f4d2f95b6 1f4d2f95b6
+.dockerignore: 3e34488821 3e34488821 3e34488821 3e34488821
+.env.example: dd6ba6bd70 dd6ba6bd70 dd6ba6bd70 dd6ba6bd70
+.npmrc: d9ca8860b0 d9ca8860b0 d9ca8860b0 d9ca8860b0
+scripts: a41a60d5a0 a41a60d5a0 a41a60d5a0 a41a60d5a0
+vite.config.ts: aef80e7ae3 aef80e7ae3 aef80e7ae3 aef80e7ae3
+tsconfig.json: 298fd3be64 298fd3be64 298fd3be64 298fd3be64
+migrations: (absent) (absent) (absent) (absent)
+docs/03_ARCHITECTURE_AND_DATA.md: 200cacc891 200cacc891 200cacc891 200cacc891
+docs/03_ARCHITECTURE_AND_DATA.vi.md: 8b4fd41121 8b4fd41121 8b4fd41121 8b4fd41121
+docs/10_DECISIONS_AND_OPEN_QUESTIONS.md: (absent) (absent) (absent) (absent)
+docs/10_DECISIONS_AND_OPEN_QUESTIONS.vi.md: (absent) (absent) (absent) (absent)
+docs/11_OPERATIONS_RUNBOOK.md: 62c8e401fd 62c8e401fd 62c8e401fd 4f9f555cd2
+docs/11_OPERATIONS_RUNBOOK.vi.md: e260321467 e260321467 e260321467 4f795085a2
+== C2. non-handoff paths changed 972ccda..546cdda under src/server/ (all of them)
+src/server/app.ts
+src/server/import/xlsxReader.ts
+src/server/routes/imports.ts
+== C3. changed paths that sit under an area-A runtime folder or file (ops, db, jobs, mail, files, cli, index, config, bootstrap, automation, operationsStatus, Dockerfile, compose, scripts, migrations):
+(end of list)
+== D. who imports xlsxReader / the import route at the freeze
+src/server/app.ts:15:import { DEFAULT_IMPORT_MAX_BYTES, importRoutes, isWorkbookUpload } from './routes/imports.ts';
+src/server/import/templateMapping.ts:3:import { type CellValue, readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
+src/server/routes/imports.ts:10:import { DEFAULT_READER_LIMITS } from '../import/xlsxReader.ts';
+src/server/services/workbookImport.ts:22:import { type ReaderLimits, type WorkbookRejectionCode, WorkbookRejectedError } from '../import/xlsxReader.ts';
+== D2. area-A modules importing any changed module (expect none)
+(grep exit=0; 1 = none)
+== E. fflate at the freeze: references in src/, scripts/, Dockerfile, package.json
+package.json:51:    "fflate": "0.8.3",
+src/server/import/xlsxReader.ts:367:  // WP4-FIXB4 (recheck finding WP4-RB3-01): one native inflate call (zlib) instead of fflate's streaming inflate in
+== E2. Dockerfile npm commands at the freeze
+Dockerfile:20:RUN npm ci
+Dockerfile:23:RUN npm run build:server -- --sourceMap false \
+Dockerfile:24:    && BUILD_SOURCEMAPS=off npm run build:client
+Dockerfile:29:RUN npm ci --omit=dev --ignore-scripts
+== E3. tests importing fflate at the freeze
+tests/integration/workbook-reader.test.ts
+tests/support/syntheticWorkbook.ts
+== F. docs/11 changed lines (EN, VI; -U0)
+@@ -221 +221 @@ For the owner's people. Each person imports only their own workbook; an administ
+-1. Sign in and open Import (`#/import`). Upload one `.xlsx` file of at most 8 MiB (a macro-enabled workbook is refused). The preview lists every day with its source cell, the unknown labels, duplicat
++1. Sign in and open Import (`#/import`). Upload one `.xlsx` file of at most 2 MiB (a macro-enabled workbook is refused). The preview lists every day with its source cell, the unknown labels, duplicat
+@@ -221 +221 @@ Dành cho những người của chủ sở hữu. Mỗi người chỉ nhập w
+-1. Đăng nhập và mở Import (`#/import`). Tải lên một file `.xlsx` tối đa 8 MiB (workbook có macro bị từ chối). Bản xem trước liệt kê mọi ngày kèm ô nguồn, nhãn l�
++1. Đăng nhập và mở Import (`#/import`). Tải lên một file `.xlsx` tối đa 2 MiB (workbook có macro bị từ chối). Bản xem trước liệt kê mọi ngày kèm ô nguồn, nhãn l�
+== F2. docs/11 word diff (EN, VI): changed words only
+-8
++2
+-8
++2
+== F3. docs/07 hunks (EN, VI)
+@@ -46 +46 @@ The original source had 11 sheets (8 dated periods plus 3 support/template sheet
+@@ -46 +46 @@ Nguồn gốc có 11 sheet (8 kỳ có ngày và 3 sheet hỗ trợ/mẫu); mẫ
+== F4. docs/03 changed? (expect no output)
+(end)
+== G. client limit text and the reader limit at the freeze
+src/client/importModel.ts:26:export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+src/client/importModel.ts:27:const IMPORT_MAX_TEXT = '2 MiB';
+== H. untouched governed paths (expect no output)
+(end)

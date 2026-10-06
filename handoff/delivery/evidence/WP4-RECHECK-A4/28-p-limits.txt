@@ -1,0 +1,31 @@
+# 28-p-limits (run 4): request-size limits and the import source in a backup (WP4-RECHECK-A4)
+date_utc: 2026-10-06T20:00:24Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (the probe passes its own pair under <work>\pl4\live to every child)
+app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate; plus reference/examples for the development seed)
+$ node probes/p-limits.mjs <work>\prod <work>\pl4 47618 <work>\export-img\reference\inputs\Timesheet_Rev8_2026.xlsx
+PASS  seed (development, synthetic) exits 0  0
+PASS  server listens on the explicit port 47618
+PASS  GET /api/health 200  200
+PASS  JSON route /api/auth/login: exactly 64 KiB passes the body limit (not 413)  422 validation_error
+PASS  JSON route /api/auth/login: 64 KiB + 1 answers 413 payload_too_large  413 payload_too_large
+PASS  employee2 signs in  200
+PASS  JSON route on the import router (POST /api/imports/:id/commit): exactly 64 KiB is not 413  422 validation_error
+PASS  JSON route on the import router (POST /api/imports/:id/commit): 64 KiB + 1 answers 413  413 payload_too_large
+PASS  JSON route PUT /api/settings: 64 KiB + 1 answers 413  413 payload_too_large
+PASS  signature upload: exactly 256 KiB passes the body limit and reaches the image check (not 413)  415 unsupported_media_type
+PASS  signature upload: 256 KiB + 1 answers 413 payload_too_large  413 payload_too_large
+PASS  workbook upload: exactly 2 MiB reaches the reader (422, not 413)  422 workbook_rejected not_a_zip 6 ms
+PASS  workbook upload: 2 MiB + 1 answers 413 payload_too_large  413 payload_too_large 2 ms
+PASS  workbook upload: the old ceiling, 8 MiB, now answers 413  413 payload_too_large 4 ms
+PASS  workbook upload: the tracked template is accepted (201)  201 25878 bytes 24 ms
+PASS  GET /api/health 200 after the uploads  200 2 ms
+PASS  cli.js backup exits 0  0
+INFO  manifest file kinds: ["import","signature"]
+PASS  backup manifest holds the stored import source with the template hash and size  import 25878
+PASS  the backup copy of the import source hashes to the template
+PASS  server log shows no error line
+INFO  server stopped (its own child handle)
+P-LIMITS PASSED
+exit 0
+date_utc: 2026-10-06T20:00:26Z
+[end]

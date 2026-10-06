@@ -1,0 +1,64 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: read-only source checks on the delta 972ccda..546cdda (area-A effect).
+REPO=<project>
+cd $REPO
+OLD=972ccda6409a7521a008c55c35a5b5cf416daf1e; NEW=546cddaf6747aef85e8b6d9b7712de9e28f138bf
+A1=0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65; A2=cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d
+
+echo "== A. app.ts and routes/imports.ts: every changed line of the diff (-U0)"
+git diff -U0 $OLD $NEW -- src/server/app.ts src/server/routes/imports.ts | grep -E '^[-+]' | grep -v -E '^(\+\+\+|---) '
+echo "== A2. changed lines that are not comments (expect none):"
+git diff -U0 $OLD $NEW -- src/server/app.ts src/server/routes/imports.ts | grep -E '^[-+]' | grep -v -E '^(\+\+\+|---) ' | grep -v -E '^[-+][[:space:]]*(//|/\*\*|\*)' ; echo "(grep exit=$?; 1 = no non-comment line)"
+
+echo "== B. the request-size limits in force at both commits"
+for c in $OLD $NEW; do
+  echo "-- $c"
+  git grep -n -E 'GLOBAL_JSON_LIMIT_BYTES =|DEFAULT_SIGNATURE_MAX_BYTES =|DEFAULT_IMPORT_MAX_BYTES =|maxCompressedBytes: [0-9]|MAX_CONFIG_BYTES =|MAX_MANIFEST_BYTES =' $c -- src/server | sed "s/^$c://"
+  git grep -n -E 'bodyLimit\(|maxSize:|app\.route\(' $c -- src/server/app.ts src/server/routes/signatures.ts src/server/routes/imports.ts | sed "s/^$c://"
+done
+echo "== B2. route wiring lines of app.ts identical at both commits (cmp of the bodyLimit/route region with comments removed)"
+for c in $OLD $NEW; do git show $c:src/server/app.ts | grep -v -E '^[[:space:]]*(//|/\*\*|\*)' > <work>/tmp/app-nocomment-${c:0:7}.ts; done
+cmp <work>/tmp/app-nocomment-${OLD:0:7}.ts <work>/tmp/app-nocomment-${NEW:0:7}.ts; echo "cmp exit=$? (0 = app.ts identical without comment lines)"
+for c in $OLD $NEW; do git show $c:src/server/routes/imports.ts | grep -v -E '^[[:space:]]*(//|/\*\*|\*)' > <work>/tmp/imp-nocomment-${c:0:7}.ts; done
+cmp <work>/tmp/imp-nocomment-${OLD:0:7}.ts <work>/tmp/imp-nocomment-${NEW:0:7}.ts; echo "cmp exit=$? (0 = routes/imports.ts identical without comment lines)"
+
+echo "== C. area-A runtime, image and ops paths: blob ids at 0f7fba2, cc34e7f, 972ccda, 546cdda"
+PATHS="src/server/ops src/server/db src/server/jobs src/server/routes src/server/mail src/server/files src/server/cli.ts src/server/app.ts src/server/index.ts src/server/config.ts src/server/bootstrap.ts src/server/automation.ts src/server/operationsStatus.ts Dockerfile compose.example.yaml .dockerignore .env.example .npmrc scripts vite.config.ts tsconfig.json migrations docs/03_ARCHITECTURE_AND_DATA.md docs/03_ARCHITECTURE_AND_DATA.vi.md docs/10_DECISIONS_AND_OPEN_QUESTIONS.md docs/10_DECISIONS_AND_OPEN_QUESTIONS.vi.md docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md"
+for p in $PATHS; do
+  ids=""
+  for c in $A1 $A2 $OLD $NEW; do id=$(git rev-parse -q --verify "$c:$p" 2>&1) || id="(absent)"; ids="$ids ${id:0:10}"; done
+  echo "$p:$ids"
+done
+echo "== C2. non-handoff paths changed 972ccda..546cdda under src/server/ (all of them)"
+git diff --name-only $OLD $NEW -- src/server
+echo "== C3. changed paths that sit under an area-A runtime folder or file (ops, db, jobs, mail, files, cli, index, config, bootstrap, automation, operationsStatus, Dockerfile, compose, scripts, migrations):"
+git diff --name-only $OLD $NEW -- src/server/ops src/server/db src/server/jobs src/server/mail src/server/files src/server/cli.ts src/server/index.ts src/server/config.ts src/server/bootstrap.ts src/server/automation.ts src/server/operationsStatus.ts Dockerfile compose.example.yaml .dockerignore .env.example .npmrc scripts migrations vite.config.ts 'tsconfig*.json'
+echo "(end of list)"
+
+echo "== D. who imports xlsxReader / the import route at the freeze"
+git grep -n -E "from '(\.\./|\./)+(import/)?xlsxReader\.ts'|from '\./routes/imports\.ts'" $NEW -- src scripts | sed "s/^$NEW://"
+echo "== D2. area-A modules importing any changed module (expect none)"
+git grep -l -E "xlsxReader|routes/imports|importModel" $NEW -- src/server/ops src/server/db src/server/jobs src/server/mail src/server/files src/server/cli.ts src/server/index.ts src/server/config.ts src/server/bootstrap.ts src/server/automation.ts src/server/operationsStatus.ts scripts | sed "s/^$NEW://"; echo "(grep exit=$?; 1 = none)"
+
+echo "== E. fflate at the freeze: references in src/, scripts/, Dockerfile, package.json"
+git grep -n fflate $NEW -- src scripts Dockerfile package.json | sed "s/^$NEW://"
+echo "== E2. Dockerfile npm commands at the freeze"
+git grep -n -E 'npm (ci|install|prune|run)' $NEW -- Dockerfile | sed "s/^$NEW://"
+echo "== E3. tests importing fflate at the freeze"
+git grep -l fflate $NEW -- tests | sed "s/^$NEW://"
+
+echo "== F. docs/11 changed lines (EN, VI; -U0)"
+git diff -U0 $OLD $NEW -- docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md | grep -E '^(@@|[-+])' | grep -v -E '^(\+\+\+|---) ' | cut -c1-200
+echo "== F2. docs/11 word diff (EN, VI): changed words only"
+git diff -U0 --word-diff=porcelain $OLD $NEW -- docs/11_OPERATIONS_RUNBOOK.md docs/11_OPERATIONS_RUNBOOK.vi.md | grep -E '^[-+][^-+]'
+echo "== F3. docs/07 hunks (EN, VI)"
+git diff -U0 $OLD $NEW -- docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md | grep -E '^@@'
+echo "== F4. docs/03 changed? (expect no output)"
+git diff --name-only $OLD $NEW -- docs/03_ARCHITECTURE_AND_DATA.md docs/03_ARCHITECTURE_AND_DATA.vi.md docs/10_DECISIONS_AND_OPEN_QUESTIONS.md docs/10_DECISIONS_AND_OPEN_QUESTIONS.vi.md
+echo "(end)"
+echo "== G. client limit text and the reader limit at the freeze"
+git grep -n -E 'IMPORT_MAX_BYTES =|IMPORT_MAX_TEXT =' $NEW -- src/client | sed "s/^$NEW://"
+echo "== H. untouched governed paths (expect no output)"
+git diff --name-only $OLD $NEW -- .claude reference AGENTS.md CLAUDE.md migrations src/server/db/migrations
+echo "(end)"

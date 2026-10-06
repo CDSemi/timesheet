@@ -1,0 +1,18 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: makes runnable copies of the attempt-1 probes (evidence/WP4-RECHECK-A/*.mjs.txt), the same way as
+# attempts 2 and 3: drops the masked header line, inserts one comment line, and restores synthetic example.invalid addresses
+# where the masking replaced them. No other change.
+W=<work>
+E=<project>/handoff/delivery/evidence/WP4-RECHECK-A
+mkdir -p $W/probes
+for f in p2-backup-restore p3-prune p4-targets p7-retention-sweep p8-admin-privacy p-ra1-prune p-a03-bootstrap; do
+  sed -e '1d' \
+      -e "s/MAIL_FROM: '<email>'/MAIL_FROM: '<email>'/" \
+      -e "s/login('<email>', passwords.admin)/login('<email>', passwords.admin)/" \
+      -e "s/login('<email>', passwords.employee2)/login('<email>', passwords.employee2)/" \
+      -e "s/m.owner_email = '<email>'/m.owner_email = '<email>'/" \
+      -e "2i // WP4-RECHECK-A4: rerun on 546cdda, copied unchanged from evidence/WP4-RECHECK-A/$f.mjs.txt (header line removed, synthetic addresses restored)." \
+      $E/$f.mjs.txt > $W/probes/$f.mjs
+  echo "$f: $(grep -c '<email>' $W/probes/$f.mjs) remaining <email> placeholders; $(wc -l < $W/probes/$f.mjs) lines"
+done

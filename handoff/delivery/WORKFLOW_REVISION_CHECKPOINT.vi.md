@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 972ccda6409a7521a008c55c35a5b5cf416daf1e (WP4-FIXB3-FREEZE, commit đóng băng vòng sửa 3 của WP4).
+  - HEAD = origin/main = 546cddaf6747aef85e8b6d9b7712de9e28f138bf (WP4-FIXB4-FREEZE, commit đóng băng vòng sửa 4 của WP4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -927,24 +927,37 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - WP4-FIXB4-FREEZE lần 1 dừng đúng quy tắc, không có commit. Validator từ chối
          board vì coordinator để WP4-RECHECK-A ở trạng thái `done` khi chuyển sang lần 4.
          Coordinator đã sửa board.
-       - Đang chạy: WP4-FIXB4-FREEZE lần 2, cùng committer.
-       - Sau đó: commit đóng băng, WP4-REGATE4, WP4-RECHECK-B4 với auditor mới, và
-         WP4-RECHECK-A lần 4 (kiểm phần chênh).
-       - Sau đó: commit đóng băng, chạy lại gate, kiểm tra lại mảng B (lần B3) bằng
-         auditor mới, và kiểm phần chênh của mảng A (lần 3).
-       - Sau đó:
-         - WP4-FIXB2-FREEZE;
-         - WP4-REGATE2;
-         - WP4-RECHECK-B2, một auditor mới;
-         - WP4-RECHECK-A lần 2, kiểm tra phần chênh của mảng A trên digest mới.
-       - Sau đó một commit đóng băng, WP4-REGATE, và kiểm tra lại A và B bằng auditor
-         mới.
+       - WP4-FIXB4-FREEZE lần 2 đã commit và push 546cddaf (215 đường dẫn; digest
+         26fcc969, 775 tệp; mọi kiểm tra trả 0).
+       - WP4-REGATE4: **PASS** trên 546cdda (digest 26fcc969, 775 tệp). verify 1.758,
+         e2e 145/bỏ qua 5, drill 208/0, races 10/10 x6. RB3 tệ nhất tại các trần là
+         107 ms / +70 MiB, so với công thức khoảng 120 ms / +96 MiB; không có lỗi 5xx.
+         Trần 2 MiB được áp dụng (vượt thì 413); phép đối chiếu giống hệt. Sự cố: có thể
+         còn sót một tiến trình server Node từ thư mục tác vụ của nó; agent đã được
+         TaskStop.
+       - WP4-RECHECK-B4 (auditor opus mới): **PASS** trên 546cdda, digest 26fcc969 trước
+         và sau, không có phát hiện. RB3-01 đã đóng. Tính lại công thức giới hạn một cách
+         độc lập bằng LP cho 105,5 ms / +90,8 MiB (con số đã ghi là 121 ms / +95 MiB).
+         Tệ nhất tại các trần: 89–90 ms. Đã ghi các rủi ro R-B4-1..4.
+       - WP4-RECHECK-A lần 4 (auditor opus mới, kiểm phần chênh): **PASS** trên 546cdda,
+         digest 26fcc969 trước và sau, không có phát hiện. 14 đường dẫn thay đổi đều
+         thuộc FIXB4 và DEPCLEAN2; giới hạn của các route khác không đổi; bản production
+         không còn fflate và điều này không ảnh hưởng mảng A. Hai rủi ro mới R-RA8 (Info)
+         và R-RA9 (Low) nằm trong code cũ. Danh sách tiến trình của nó cho thấy server
+         probe còn sót đã tắt.
+       - WP4-ACCREC đã xong (light, sonnet): biên bản nghiệm thu trong WP4_HANDOFF (EN và
+         VI) cho 546cdda. Preflight trả 0; precommit trả 0.
+       - STATE ghi WP4 đã đạt kèm các rủi ro mang theo; NEXT_ACTION (EN và VI) trỏ sang
+         WP5.
+       - WP4-ACCEPT lần 1 dừng đúng quy tắc, không có commit. Validator thấy
+         WP4-REGATE4 và WP4-RECHECK-B4 vẫn ở trạng thái `running`. Coordinator đã ghi kết
+         quả của chúng nhưng quên đổi trạng thái, và nay đã sửa.
+       - Đang chạy: WP4-ACCEPT lần 2, cùng committer. Sau đó board chuyển sang WP5.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
-     - Câu hỏi cho chủ dự án: I-5 (hạn mức bản xem trước), và R-A3 trước WP5.
-     - Đang chờ chủ dự án:
-       - F-1..F-3 cho T09 và T10;
-       - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
-       - các câu GOV-SKILL Q1–Q4.
+     - Câu hỏi còn mở cho chủ dự án: WP4-I-1..I-5 (đang áp dụng mặc định an toàn), và
+       R-A3 (cách rollback) trước pilot WP5.
+     - Chủ dự án đã trả lời: F-1..F-6 (theo khuyến nghị) và GOV-SKILL phương án B (đã gỡ
+       skill readme-md).
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -954,12 +967,10 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả hai lần kiểm tra lại. Sau đó
-     WP4-RECHECK-A và WP4-RECHECK-B (auditor opus mới), WP4-ACCREC và WP4-ACCEPT.
-  2. Sau đó:
-     - nghiệm thu.
-  3. Sau đó WP5 (bắt đầu bằng nghiệm thu độc lập) và pilot packet cụ thể. Pilot thật do
-     chủ dự án quyết.
+  1. Ghi kết quả WP4-ACCREC, rồi giao WP4-ACCEPT (committer; brief đã sẵn; STATE ghi WP4
+     đã đạt và NEXT_ACTION trỏ sang WP5).
+  2. Sau đó chuyển board sang WP5 và làm theo WP5_IMPLEMENT: bắt đầu bằng nghiệm thu
+     độc lập, rồi đến pilot packet cụ thể. Pilot thật do chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động

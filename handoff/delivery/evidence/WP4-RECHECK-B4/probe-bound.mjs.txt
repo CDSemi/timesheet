@@ -1,0 +1,103 @@
+// WP4-FIXB4 derived cost bound. Reads the per-unit coefficients that coeff.mjs printed (`@@` lines: each unit's
+// footprint in XML bytes b, markup openings o and attributes a, and its measured time slope ns and memory slope mem),
+// and bounds the cost of ANY package within the limits X (package XML bytes), O (openings) and A (attributes):
+//
+//   time   <= T0 + tX * X + tO * O + tA * A        memory <= M0 + mX * X + mO * O + mA * A
+//
+// where (tX, tO, tA) are prices that cover every measured unit (tX * b + tO * o + tA * a >= ns for each unit; LP
+// duality: then any mix of units within the limits costs at most the right-hand side), chosen as the cheapest such
+// prices for the limits evaluated. T0 and M0 are the largest fixed costs (intercepts) measured. It also prints the
+// worst mix (the primal optimum) so that it can be built and measured as a confirmation.
+// Usage: node bound.mjs <X bytes> <O openings> <A attributes> <coeff output files...>
+import { readFileSync } from 'node:fs';
+
+const [X, O, A] = process.argv.slice(2, 5).map(Number);
+const units = [];
+let T0 = 0;
+let M0 = 0;
+for (const file of process.argv.slice(5)) {
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line.startsWith('@@ ')) continue;
+    const unit = JSON.parse(line.slice(3));
+    // A slope below zero is noise: count the unit as free, never as a saving.
+    unit.ns = Math.max(0, unit.ns);
+    unit.mem = Math.max(0, unit.mem);
+    units.push(unit);
+    T0 = Math.max(T0, unit.fullMs - (unit.ns * unit.units) / 1e6);
+    M0 = Math.max(M0, unit.fullRss - (unit.mem * unit.units) / 1048576);
+  }
+}
+const L = [X, O, A];
+const foot = (u) => [u.b, u.o, u.a];
+
+/** Solves the n x n system m x = v (Gaussian elimination); null when singular. */
+function solve(m, v) {
+  const n = v.length;
+  const a = m.map((row, i) => [...row, v[i]]);
+  for (let c = 0; c < n; c += 1) {
+    let p = c;
+    for (let r = c + 1; r < n; r += 1) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r;
+    if (Math.abs(a[p][c]) < 1e-12) return null;
+    [a[c], a[p]] = [a[p], a[c]];
+    for (let r = 0; r < n; r += 1) {
+      if (r === c) continue;
+      const f = a[r][c] / a[c][c];
+      for (let k = c; k <= n; k += 1) a[r][k] -= f * a[c][k];
+    }
+  }
+  return a.map((row, i) => row[n] / row[i]);
+}
+
+function subsets(n, k, start = 0, acc = [], out = []) {
+  if (acc.length === k) out.push([...acc]);
+  else for (let i = start; i < n; i += 1) subsets(n, k, i + 1, [...acc, i], out);
+  return out;
+}
+
+/** Cheapest prices p >= 0 with p . footprint >= cost for every unit, minimizing p . L (dual vertices enumerated). */
+function prices(cost) {
+  // Rows: one per unit (p . f_k >= c_k) and one per price (p_j >= 0); a vertex makes three of them tight.
+  const rows = [...units.map((u) => [foot(u), cost(u)]), [[1, 0, 0], 0], [[0, 1, 0], 0], [[0, 0, 1], 0]];
+  let best = null;
+  for (const pick of subsets(rows.length, 3)) {
+    const p = solve(pick.map((i) => rows[i][0]), pick.map((i) => rows[i][1]));
+    if (p === null || p.some((x) => x < -1e-9)) continue;
+    if (rows.some(([f, c]) => f[0] * p[0] + f[1] * p[1] + f[2] * p[2] < c - 1e-6)) continue;
+    const value = p[0] * L[0] + p[1] * L[1] + p[2] * L[2];
+    if (best === null || value < best.value) best = { p: p.map((x) => Math.max(0, x)), value };
+  }
+  return best;
+}
+
+/** The costliest mix of units within the limits (primal vertices enumerated). */
+function worstMix(cost) {
+  let best = null;
+  for (let k = 1; k <= 3; k += 1) {
+    for (const chosen of subsets(units.length, k)) {
+      for (const tight of subsets(3, k)) {
+        const u = solve(tight.map((j) => chosen.map((i) => foot(units[i])[j])), tight.map((j) => L[j]));
+        if (u === null || u.some((x) => x < -1e-9)) continue;
+        if ([0, 1, 2].some((j) => chosen.reduce((s, i, n) => s + foot(units[i])[j] * u[n], 0) > L[j] * (1 + 1e-9))) continue;
+        const value = chosen.reduce((s, i, n) => s + cost(units[i]) * u[n], 0);
+        if (best === null || value > best.value) best = { value, mix: chosen.map((i, n) => ({ family: units[i].family, units: Math.round(u[n]) })) };
+      }
+    }
+  }
+  return best;
+}
+
+const fmt = (x, d = 1) => x.toFixed(d);
+console.log(`limits: X=${X} XML bytes, O=${O} openings, A=${A} attributes; ${units.length} measured units`);
+for (const u of units) console.log(`  ${u.family.padEnd(28)} b=${fmt(u.b, 2).padStart(8)} o=${fmt(u.o, 3)} a=${fmt(u.a, 3)} | ${fmt(u.ns).padStart(7)} ns ${fmt(u.mem).padStart(7)} B per ${u.unit}`);
+const time = prices((u) => u.ns);
+const memory = prices((u) => u.mem);
+const tBound = T0 + time.value / 1e6;
+const mBound = M0 + memory.value / 1048576;
+console.log(`time:   T <= T0 + tX*X + tO*O + tA*A with T0=${fmt(T0)} ms, tX=${fmt(time.p[0], 2)} ns/byte, tO=${fmt(time.p[1], 1)} ns/opening, tA=${fmt(time.p[2], 1)} ns/attribute`);
+console.log(`        = ${fmt(T0)} + ${fmt((time.p[0] * X) / 1e6)} + ${fmt((time.p[1] * O) / 1e6)} + ${fmt((time.p[2] * A) / 1e6)} = ${fmt(tBound)} ms (${fmt((100 * tBound) / 500, 0)} % of 500 ms; margin ${fmt(100 - (100 * tBound) / 500, 0)} %)`);
+console.log(`memory: M <= M0 + mX*X + mO*O + mA*A with M0=${fmt(M0)} MiB, mX=${fmt(memory.p[0], 2)} B/byte, mO=${fmt(memory.p[1], 1)} B/opening, mA=${fmt(memory.p[2], 1)} B/attribute`);
+console.log(`        = ${fmt(M0)} + ${fmt((memory.p[0] * X) / 1048576)} + ${fmt((memory.p[1] * O) / 1048576)} + ${fmt((memory.p[2] * A) / 1048576)} = ${fmt(mBound)} MiB (${fmt((100 * mBound) / 150, 0)} % of 150 MiB; margin ${fmt(100 - (100 * mBound) / 150, 0)} %)`);
+const wt = worstMix((u) => u.ns);
+const wm = worstMix((u) => u.mem);
+console.log(`worst mix for time:   ${wt.mix.map((m) => `${m.units} x ${m.family}`).join(' + ')} -> ${fmt(T0 + wt.value / 1e6)} ms`);
+console.log(`worst mix for memory: ${wm.mix.map((m) => `${m.units} x ${m.family}`).join(' + ')} -> ${fmt(M0 + wm.value / 1048576)} MiB`);

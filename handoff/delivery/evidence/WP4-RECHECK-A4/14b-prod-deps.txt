@@ -1,0 +1,47 @@
+date_utc: 2026-10-06T19:43:12Z
+Dockerfile prod-deps and runtime stages, run without Docker (<work>/prod = package.json, package-lock.json, .npmrc of 546cdda)
+$ npm ci --omit=dev --ignore-scripts
+
+added 16 packages, and audited 17 packages in 2s
+
+1 package is looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+exit=0
+$ cp -r <work>/export-img/dist <work>/prod/dist   (runtime stage: dist/, production node_modules, package.json)
+exit=0
+top-level packages in node_modules: 14
+node_modules/fflate present: no
+any fflate directory anywhere under node_modules: 0
+$ npm ls --omit=dev --all (depth listing)
+timesheet@0.1.0 <work>\prod
++-- @hono/node-server@2.1.3
+| `-- hono@4.13.11 deduped
++-- @pdf-lib/fontkit@1.1.1
+| `-- pako@1.0.11
++-- better-sqlite3@13.0.3
+| `-- node-addon-api@8.9.2
++-- dejavu-fonts-ttf@2.37.3
++-- hono@4.13.11
++-- nodemailer@10.0.14
++-- pdf-lib@1.17.1
+| +-- @pdf-lib/standard-fonts@1.0.0
+| | `-- pako@1.0.11 deduped
+| +-- @pdf-lib/upng@1.0.1
+| | `-- pako@1.0.11 deduped
+| +-- pako@1.0.11 deduped
+| `-- tslib@1.14.1
++-- react-dom@19.3.0
+| +-- react@19.3.0 deduped
+| `-- scheduler@0.28.0
++-- react@19.3.0
+`-- zod@4.6.5
+
+exit=0
+$ npm ls fflate
+timesheet@0.1.0 <work>\prod
+`-- (empty)
+
+exit=1
+dist files: 116; *.map: 0

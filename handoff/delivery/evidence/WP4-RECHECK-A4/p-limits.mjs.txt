@@ -1,0 +1,173 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A4 probe: request-size limits on the built app after WP4-FIXB4 (import ceiling 8 -> 2 MiB), and the
+// import-source copy in a backup. Built server and CLI from the given app folder, synthetic example.invalid data,
+// development mode, capture mode, explicit DATABASE_PATH and DATA_DIR under the work folder, an explicit port.
+// Checks: the JSON-only routes keep 64 KiB (including the import router's own JSON commit route), the signature
+// upload keeps 256 KiB, the workbook upload takes exactly 2 MiB and answers 413 above it (and at the old 8 MiB), the
+// tracked template is still accepted, and a backup taken afterwards carries the stored import source with its hash.
+// Usage: node p-limits.mjs <app dir> <fresh work dir> <port> <template .xlsx>
+// Run 2: the raw uploads over a limit go through node:http, which reads a response the server sends before the whole
+// body is written (fetch failed in run 1 with "other side closed" on the 2 MiB + 1 upload and read no status).
+// Run 3: each raw upload on its own connection (agent false); see rawUpload.
+// Run 4: the refused-login password literal reads synthetic-wrong-password (the precommit check blocked the bare literal).
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { request } from 'node:http';
+import { join } from 'node:path';
+
+const [appDir, work, portText, templatePath] = process.argv.slice(2);
+if (existsSync(work)) throw new Error('work folder is not fresh');
+const port = Number(portText);
+const CLI = join(appDir, 'dist', 'server', 'cli.js');
+const SERVER = join(appDir, 'dist', 'server', 'index.js');
+const live = join(work, 'live');
+const backups = join(work, 'backups');
+mkdirSync(live, { recursive: true });
+mkdirSync(backups, { recursive: true });
+
+let fails = 0;
+const check = (label, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
+  if (!ok) fails += 1;
+};
+const info = (label) => console.log(`INFO  ${label}`);
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const origin = `http://localhost:${port}`;
+const base = `http://127.0.0.1:${port}`;
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: join(live, 'timesheet.db'),
+  DATA_DIR: join(live, 'private-data'),
+  APP_ORIGINS: origin,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: '<email>',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: passwords.admin,
+  SEED_EMPLOYEE_PASSWORD: passwords.employee,
+  SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+};
+const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8' });
+
+async function call(method, path, { cookie, body, type } = {}) {
+  const headers = { origin };
+  if (cookie) headers.cookie = cookie;
+  if (type) headers['content-type'] = type;
+  const started = performance.now();
+  const response = await fetch(`${base}${path}`, { method, headers, body });
+  const text = await response.text();
+  const ms = Math.round(performance.now() - started);
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: response.status, json, ms, setCookie: response.headers.get('set-cookie') };
+}
+// A raw upload through node:http: resolves with the first response the server sends (also an early one), or with the
+// transport error when no response arrives.
+function rawUpload(path, { cookie, type, body }) {
+  return new Promise((resolveUpload) => {
+    const started = performance.now();
+    let settled = false;
+    const finish = (result) => { if (!settled) { settled = true; resolveUpload({ ...result, ms: Math.round(performance.now() - started) }); } };
+    // Run 3: agent false, a new connection per upload. In run 2 the default keep-alive agent reused the connection of
+    // an early 413 and the next upload on it got ECONNRESET without a response.
+    const req = request(`${base}${path}`, { method: 'POST', agent: false, headers: { origin, cookie, 'content-type': type, 'content-length': body.length } }, (res) => {
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { text += chunk; });
+      res.on('end', () => {
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* not JSON */ }
+        finish({ status: res.statusCode, json, transport: '' });
+      });
+      res.on('error', (error) => finish({ status: res.statusCode, json: null, transport: error.code ?? error.message }));
+    });
+    req.on('error', (error) => setTimeout(() => finish({ status: 0, json: null, transport: error.code ?? error.message }), 200));
+    req.end(body);
+  });
+}
+const code = (response) => response.json?.error?.code ?? response.json?.error ?? '';
+const jsonOfLength = (length, fields) => {
+  const bare = JSON.stringify({ ...fields, pad: '' });
+  const text = JSON.stringify({ ...fields, pad: 'x'.repeat(length - Buffer.byteLength(bare)) });
+  if (Buffer.byteLength(text) !== length) throw new Error('padding arithmetic');
+  return text;
+};
+
+const seed = cli(['seed']);
+check('seed (development, synthetic) exits 0', seed.status === 0, String(seed.status));
+const server = spawn(process.execPath, [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let output = '';
+server.stdout.on('data', (chunk) => { output += chunk; });
+server.stderr.on('data', (chunk) => { output += chunk; });
+const exited = new Promise((done) => server.on('close', done));
+try {
+  let listening = false;
+  for (let i = 0; i < 200 && !listening; i += 1) { listening = output.includes('Timesheet listening'); if (!listening) await sleep(50); }
+  check(`server listens on the explicit port ${port}`, listening && output.includes(`:${port}`));
+  const health = await call('GET', '/api/health');
+  check('GET /api/health 200', health.status === 200, String(health.status));
+
+  const KiB = 1024;
+  const MiB = 1024 * KiB;
+  // JSON-only routes: 64 KiB.
+  const loginExact = await call('POST', '/api/auth/login', { type: 'application/json', body: jsonOfLength(64 * KiB, { email: '<email>', password: 'synthetic-wrong-password' }) });
+  check('JSON route /api/auth/login: exactly 64 KiB passes the body limit (not 413)', loginExact.status !== 413, `${loginExact.status} ${code(loginExact)}`);
+  const loginOver = await call('POST', '/api/auth/login', { type: 'application/json', body: jsonOfLength(64 * KiB + 1, { email: '<email>', password: 'synthetic-wrong-password' }) });
+  check('JSON route /api/auth/login: 64 KiB + 1 answers 413 payload_too_large', loginOver.status === 413 && code(loginOver) === 'payload_too_large', `${loginOver.status} ${code(loginOver)}`);
+
+  const login = await call('POST', '/api/auth/login', { type: 'application/json', body: JSON.stringify({ email: '<email>', password: passwords.employee2 }) });
+  const cookie = login.setCookie?.split(';')[0] ?? null;
+  check('employee2 signs in', login.status === 200 && cookie !== null, String(login.status));
+
+  const commitPath = `/api/imports/${randomUUID()}/commit`;
+  const commitExact = await call('POST', commitPath, { cookie, type: 'application/json', body: jsonOfLength(64 * KiB, { decisions: [] }) });
+  check('JSON route on the import router (POST /api/imports/:id/commit): exactly 64 KiB is not 413', commitExact.status !== 413, `${commitExact.status} ${code(commitExact)}`);
+  const commitOver = await call('POST', commitPath, { cookie, type: 'application/json', body: jsonOfLength(64 * KiB + 1, { decisions: [] }) });
+  check('JSON route on the import router (POST /api/imports/:id/commit): 64 KiB + 1 answers 413', commitOver.status === 413 && code(commitOver) === 'payload_too_large', `${commitOver.status} ${code(commitOver)}`);
+  const settingsOver = await call('PUT', '/api/settings', { cookie, type: 'application/json', body: jsonOfLength(64 * KiB + 1, {}) });
+  check('JSON route PUT /api/settings: 64 KiB + 1 answers 413', settingsOver.status === 413 && code(settingsOver) === 'payload_too_large', `${settingsOver.status} ${code(settingsOver)}`);
+
+  // Signature upload: 256 KiB.
+  const signatureExact = await rawUpload('/api/signatures', { cookie, type: 'image/png', body: Buffer.alloc(256 * KiB) });
+  check('signature upload: exactly 256 KiB passes the body limit and reaches the image check (not 413)', signatureExact.status !== 413 && signatureExact.status !== 0, `${signatureExact.status} ${code(signatureExact)} ${signatureExact.transport}`);
+  const signatureOver = await rawUpload('/api/signatures', { cookie, type: 'image/png', body: Buffer.alloc(256 * KiB + 1) });
+  check('signature upload: 256 KiB + 1 answers 413 payload_too_large', signatureOver.status === 413 && code(signatureOver) === 'payload_too_large', `${signatureOver.status} ${code(signatureOver)} ${signatureOver.transport}`);
+
+  // Workbook upload: 2 MiB since WP4-FIXB4 (8 MiB before).
+  const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const importExact = await rawUpload('/api/imports', { cookie, type: XLSX, body: Buffer.alloc(2 * MiB) });
+  check('workbook upload: exactly 2 MiB reaches the reader (422, not 413)', importExact.status === 422, `${importExact.status} ${code(importExact)} ${importExact.json?.error?.details?.reason ?? importExact.json?.error?.reason ?? ''} ${importExact.ms} ms ${importExact.transport}`);
+  const importOver = await rawUpload('/api/imports', { cookie, type: XLSX, body: Buffer.alloc(2 * MiB + 1) });
+  check('workbook upload: 2 MiB + 1 answers 413 payload_too_large', importOver.status === 413 && code(importOver) === 'payload_too_large', `${importOver.status} ${code(importOver)} ${importOver.ms} ms ${importOver.transport}`);
+  const importOld = await rawUpload('/api/imports', { cookie, type: XLSX, body: Buffer.alloc(8 * MiB) });
+  check('workbook upload: the old ceiling, 8 MiB, now answers 413', importOld.status === 413 && code(importOld) === 'payload_too_large', `${importOld.status} ${code(importOld)} ${importOld.ms} ms ${importOld.transport}`);
+  const template = readFileSync(templatePath);
+  const imported = await rawUpload('/api/imports', { cookie, type: XLSX, body: template });
+  check('workbook upload: the tracked template is accepted (201)', imported.status === 201, `${imported.status} ${template.length} bytes ${imported.ms} ms`);
+  const healthAfter = await call('GET', '/api/health');
+  check('GET /api/health 200 after the uploads', healthAfter.status === 200, `${healthAfter.status} ${healthAfter.ms} ms`);
+
+  // Backup after the import: the stored source workbook is in the manifest with the uploaded bytes' hash.
+  const backup = cli(['backup', '--to', backups]);
+  check('cli.js backup exits 0', backup.status === 0, String(backup.status));
+  const name = readdirSync(backups).find((entry) => entry.startsWith('timesheet-backup-'));
+  const manifest = JSON.parse(readFileSync(join(backups, name, 'manifest.json'), 'utf8'));
+  const kinds = manifest.files.map((file) => file.kind);
+  info(`manifest file kinds: ${JSON.stringify(kinds)}`);
+  const source = manifest.files.find((file) => file.sha256 === sha256(template));
+  check('backup manifest holds the stored import source with the template hash and size', source !== undefined && source.size_bytes === template.length, source ? `${source.kind} ${source.size_bytes}` : 'missing');
+  const copied = source ? readdirSync(join(backups, name), { recursive: true }).map(String).find((entry) => entry.replaceAll('\\', '/').endsWith(source.storage_key)) : undefined;
+  check('the backup copy of the import source hashes to the template', copied !== undefined && sha256(readFileSync(join(backups, name, copied))) === sha256(template));
+  check('server log shows no error line', !/error|exception/i.test(output.replace(/Timesheet listening[^\n]*/g, '')), output.split('\n').filter((line) => /error|exception/i.test(line)).slice(0, 3).join(' | '));
+} finally {
+  server.kill('SIGTERM');
+  await exited;
+  info('server stopped (its own child handle)');
+}
+console.log(fails === 0 ? 'P-LIMITS PASSED' : `P-LIMITS FAILED (${fails})`);
+process.exit(fails === 0 ? 0 : 1);

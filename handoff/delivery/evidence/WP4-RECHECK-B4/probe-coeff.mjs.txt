@@ -1,0 +1,282 @@
+// WP4-FIXB4 per-unit cost coefficients. Each family isolates one unit of work and is built at two sizes (half and
+// full of what the limits allow); one fresh child process per package and run measures the synchronous preview time
+// (previewWorkbook: reader + mapping) and the maxRSS delta. The slope between the two sizes, divided by the units
+// added, is the coefficient; the intercept is the fixed cost. Families come in compressible and incompressible (random
+// text, so the upload is close to the XML size) variants. Synthetic data only; packages under PKG_DIR (task folder).
+// Usage: EXPORT=<tree under test> PKG_DIR=<dir> node coeff.mjs [filter] [repeat]
+//        node coeff.mjs --build <name> | --run <name>
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const MiB = 1024 * 1024;
+const { EXPORT, PKG_DIR } = process.env;
+if (!EXPORT || !PKG_DIR) throw new Error('EXPORT and PKG_DIR required');
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const fileOf = (name) => join(PKG_DIR, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 100)}.xlsx`);
+/** Limits the families are sized against (the ones in force when the packages are built, from the environment). */
+const XML = Number(process.env.COEFF_XML ?? 8 * MiB) - 64 * 1024;
+const OPENINGS = Number(process.env.COEFF_OPENINGS ?? 150_000) - 2_000;
+const ATTRIBUTES = Number(process.env.COEFF_ATTRIBUTES ?? 500_000) - 2_000;
+/** Parts the units are spread over: as few as the per-part XML limit (COEFF_PART) allows, so each part is near it. */
+const PARTS = Math.max(1, Math.ceil(XML / (Number(process.env.COEFF_PART ?? 4 * MiB) - 4096)));
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** Deterministic pseudo-random text over an alphabet (mulberry32): it does not compress much. */
+function random(seed, alphabet) {
+  let a = seed >>> 0;
+  return (n) => {
+    let s = '';
+    for (let i = 0; i < n; i += 1) {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      s += alphabet[((t ^ (t >>> 14)) >>> 0) % alphabet.length];
+    }
+    return s;
+  };
+}
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const WIDE = Array.from({ length: 64 }, (_, i) => String.fromCharCode(0x100 + i)).join('');
+/** While a `-wide` family builds, every part carries one comment with a character above U+00FF: it decodes two-byte. */
+let WIDE_PARTS = false;
+const mark = () => (WIDE_PARTS ? '<!--ā-->' : '');
+const ws = (inner, tail = '') => `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${NS}">${mark()}<sheetData>${inner}</sheetData></worksheet>${tail}`;
+const column = (i) => `${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + (Math.floor(i / 26) % 26))}${String.fromCharCode(65 + (Math.floor(i / 676) % 26))}`;
+const address = (i) => `${column(i % 17_576)}${1_000_000 + i}`;
+const dated = (i) => new Date(Date.UTC(2026, 0, 9) + 14 * i * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '.');
+
+async function pkg(parts, names, sst) {
+  const { strToU8, zipSync } = await import(mod('node_modules/fflate/esm/index.mjs'));
+  const entries = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets>${parts.map((_, i) => `<sheet name="${names[i]}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${parts.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${RNS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`,
+  };
+  parts.forEach((xml, i) => { entries[`xl/worksheets/sheet${i + 1}.xml`] = xml; });
+  if (sst !== undefined) entries['xl/sharedStrings.xml'] = sst;
+  return zipWithStats(entries, strToU8, zipSync);
+}
+
+/** Zips the entries and notes what the reader will count: XML bytes, markup openings and attributes of all parts. */
+function zipWithStats(entries, strToU8, zipSync) {
+  const zippable = {};
+  const stats = { xml: 0, openings: 0, attributes: 0 };
+  for (const [name, data] of Object.entries(entries)) {
+    const bytes = strToU8(data);
+    zippable[name] = [bytes, { level: 6, mtime: 1_767_225_600_000 }];
+    stats.xml += bytes.length;
+    stats.openings += (data.match(/<(?!\/)/g) ?? []).length;
+    stats.attributes += (data.match(/\s[A-Za-z_:][-A-Za-z0-9_:.]*\s*=\s*["']/g) ?? []).length;
+  }
+  const zipped = zipSync(zippable);
+  zipped.stats = stats;
+  return zipped;
+}
+
+/** `count` units of `unit(i)` spread over the parts in rows of 20 (rows add one opening per 20 units). */
+function spread(count, unit, rowed = true, tail = () => '') {
+  const per = Math.ceil(count / PARTS);
+  return Array.from({ length: PARTS }, (_, p) => {
+    let inner = '';
+    for (let start = 0; start < per; start += 20) {
+      let cells = '';
+      for (let i = start; i < Math.min(per, start + 20); i += 1) cells += unit(p * per + i);
+      inner += rowed ? `<row r="${1_000_000 + start / 20}">${cells}</row>` : cells;
+    }
+    return ws(inner, tail(p));
+  });
+}
+
+const GENERIC = ['P1', 'P2', 'P3', 'P4'];
+const DATED = [0, 1, 2, 3].map(dated);
+
+/** Units of `bytesPerUnit` bytes each that fit both a count limit and the package XML limit, times `fraction`. */
+const fit = (fraction, countLimit, bytesPerUnit) => Math.floor(fraction * Math.min(countLimit, Math.floor((XML - 8192) / bytesPerUnit)));
+const REFS = ['&amp;', '&lt;', '&#65;', '&#x1F600;', '&quot;'];
+function referenceText(seed) {
+  const pickLetter = random(seed, LETTERS);
+  const pickRef = random(seed + 100, '01234');
+  return (n) => {
+    let s = '';
+    while (s.length < n) s += pickRef(1) === '0' ? pickLetter(3) : REFS[Number(pickRef(1))];
+    return s.slice(0, n).replace(/&[^;]*$/, '');
+  };
+}
+
+// Each family: (fraction) => { units, unit, build }. `fraction` is 0.5 or 1 of what the limits allow.
+const FAMILIES = {
+  // kept text dense with references whose values vary (does not compress much): decode plus inflate
+  'kept-text-refs-inc': (f) => { const r = referenceText(11); return { units: Math.floor(XML * f), unit: 'kept text byte', build: () => pkg(spread(PARTS, () => `<c r="A1" t="inlineStr"><is><t>${r(Math.floor((XML * f) / PARTS) - 200)}</t></is></c>`), GENERIC) }; },
+  // long distinct formulas (cut at 8 192 characters), examined once each by the mapping, per formula byte
+  'formula-bytes-inc': (f) => { const r = random(12, LETTERS); const n = fit(f, OPENINGS / 2, 8_240); return { units: n * 8_192, unit: 'formula byte', build: () => pkg(spread(n, (i) => `<c r="${address(i)}"><f>${r(8_180)}+8.5</f></c>`), DATED) }; },
+  // shared strings used by cells: per string (an <si>, its text and a cell that uses it: four openings)
+  'shared-strings-inc': (f) => { const r = random(13, LETTERS); const n = Math.min(49_000, fit(f, OPENINGS / 4, 90)); return { units: n, unit: 'shared string with its cell', build: async () => pkg(spread(n, (i) => `<c r="${address(i)}" t="s"><v>${i}</v></c>`), GENERIC, `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS}">${mark()}${Array.from({ length: n }, (_, i) => `<si><t>${String(i).padStart(6, '0')}${r(16)}</t></si>`).join('')}</sst>`) }; },
+  // workbook relationships the reader keeps (Id, Type, Target), each into the relationship map
+  'relationships': (f) => { const n = fit(f, PART_OPENINGS_LIMIT - 100, 200); return { units: n, unit: 'relationship', build: async () => relsPackage(n) }; },
+  // content-type overrides the reader keeps (ContentType tested against the macro types)
+  'content-types': (f) => { const n = fit(f, PART_OPENINGS_LIMIT - 100, 150); return { units: n, unit: 'content type', build: async () => typesPackage(n) }; },
+  // the smallest unkept attribute (` a=""`, one name repeated: the scanner does not look for repeats it does not keep)
+  'attributes-min': (f) => { const n = fit(f, ATTRIBUTES / 63, 63 * 5 + 4) * 63; const list = ' a=""'.repeat(63); return { units: n, unit: 'attribute', build: () => pkg(spread(n / 63, () => `<x${list}/>`, false), GENERIC) }; },
+  // the smallest kept cell (`<c/>`, its address taken from its place)
+  'cells-min': (f) => { const n = fit(f, OPENINGS * 0.94, 5); return { units: n, unit: 'kept cell', build: () => pkg(spread(n, () => '<c/>'), GENERIC) }; },
+  // a kept cell with all three kept attributes, each decoded (a reference) and copied (14 characters)
+  'kept-cell-max-inc': (f) => { const r = random(14, LETTERS); const n = fit(f, OPENINGS * 0.94, 70); return { units: n, unit: 'kept cell with r, t and si', build: () => pkg(spread(n, (i) => `<c r="${address(i)}" t="&#65;${r(13)}" si="&#66;${r(13)}"/>`), GENERIC) }; },
+  // a relationship with all four kept attributes, each decoded (a reference) and copied (14 characters)
+  'relationship-max-inc': (f) => { const n = fit(f, PART_OPENINGS_LIMIT - 100, 130); return { units: n, unit: 'relationship with four kept attributes', build: async () => relsPackage(n, random(15, LETTERS)) }; },
+  // the shortest distinct formulas on dated sheets, each examined once by the mapping
+  'formulas-min': (f) => { const n = fit(f, (OPENINGS * 0.94) / 2, 25); return { units: n, unit: 'distinct formula', build: () => pkg(spread(n, (i) => `<c><f>${i}</f></c>`), DATED) }; },
+  // the shortest kept values on dated sheets
+  'values-min': (f) => { const n = fit(f, (OPENINGS * 0.94) / 2, 25); return { units: n, unit: 'kept cell with value', build: () => pkg(spread(n, (i) => `<c><v>${i}</v></c>`), DATED) }; },
+  // empty rows (kept and handed over as they open)
+  'rows': (f) => ({ units: fit(f, PARTS * 19_900, 30), unit: 'kept row', build: () => { const n = fit(f, PARTS * 19_900, 30); return pkg(Array.from({ length: PARTS }, (_, p) => ws(Array.from({ length: Math.ceil(n / PARTS) }, (_, k) => `<row r="${p * 100_000 + k + 1}"/>`).join(''))), GENERIC); } }),
+  // bytes the scanner skips (one comment per part): inflate + decode + skip
+  'bytes-comp': (f) => ({ units: Math.floor(XML * f), unit: 'XML byte', build: () => pkg(spread(0, () => '', false, () => `<!--${'a'.repeat(Math.floor((XML * f) / PARTS))}-->`), GENERIC) }),
+  'bytes-inc': (f) => { const r = random(1, LETTERS); return { units: Math.floor(XML * f), unit: 'XML byte', build: () => pkg(spread(0, () => '', false, () => `<!--${r(Math.floor((XML * f) / PARTS))}-->`), GENERIC) }; },
+  'bytes-wide-inc': (f) => { const r = random(2, WIDE); return { units: Math.floor(XML * f), unit: 'XML byte', build: () => pkg(spread(0, () => '', false, () => `<!--${r(Math.floor((XML * f) / PARTS / 2))}-->`), GENERIC) }; },
+  // kept text: one inline string per part
+  'kept-text-comp': (f) => ({ units: Math.floor(XML * f), unit: 'kept text byte', build: () => pkg(spread(PARTS, () => `<c r="A1" t="inlineStr"><is><t>${'k'.repeat(Math.floor((XML * f) / PARTS) - 200)}</t></is></c>`), GENERIC) }),
+  'kept-text-inc': (f) => { const r = random(3, LETTERS); return { units: Math.floor(XML * f), unit: 'kept text byte', build: () => pkg(spread(PARTS, () => `<c r="A1" t="inlineStr"><is><t>${r(Math.floor((XML * f) / PARTS) - 200)}</t></is></c>`), GENERIC) }; },
+  'kept-text-amp': (f) => ({ units: Math.floor(XML * f), unit: 'kept text byte', build: () => pkg(spread(PARTS, () => `<c r="A1" t="inlineStr"><is><t>${'&amp;'.repeat(Math.floor((XML * f) / PARTS / 5) - 40)}</t></is></c>`), GENERIC) }),
+  'kept-text-bare-amp-inc': (f) => { const r = random(4, `${LETTERS}&&&&&&&&`); return { units: Math.floor(XML * f), unit: 'kept text byte', build: () => pkg(spread(PARTS, () => `<c r="A1" t="inlineStr"><is><t>${r(Math.floor((XML * f) / PARTS) - 200)}</t></is></c>`), GENERIC) }; },
+  // markup openings the reader does not keep
+  'openings': (f) => ({ units: Math.floor(OPENINGS * f), unit: 'opening', build: () => pkg(spread(Math.floor(OPENINGS * f), () => '<x/>', false), GENERIC) }),
+  // attributes the reader does not keep: 63 a="" on elements that are not kept
+  'attributes': (f) => ({ units: Math.floor(ATTRIBUTES * f), unit: 'attribute', build: () => { const list = Array.from({ length: 63 }, (_, k) => ` a${k}=""`).join(''); return pkg(spread(Math.floor((ATTRIBUTES * f) / 63), () => `<x${list}/>`, false), GENERIC); } }),
+  'attributes-inc': (f) => { const r = random(5, LETTERS); const n = fit(f, ATTRIBUTES / 63, 63 * 11 + 4) * 63; return { units: n, unit: 'attribute', build: () => pkg(spread(n / 63, () => `<x${Array.from({ length: 63 }, (_, k) => ` a${k}="${r(4)}"`).join('')}/>`, false), GENERIC) }; },
+  // kept cells: empty cells with distinct 10-character addresses
+  'cells': (f) => { const n = fit(f, OPENINGS * 0.95, 20); return { units: n, unit: 'kept cell', build: () => pkg(spread(n, (i) => `<c r="${address(i)}"/>`), GENERIC) }; },
+  // kept attribute values decoded and copied: cells with r and a 14-character random t of references
+  'kept-attributes-inc': (f) => { const r = random(6, LETTERS); const n = fit(f, OPENINGS * 0.95, 40); return { units: n * 2, unit: 'kept attribute', build: () => pkg(spread(n, (i) => `<c r="${address(i)}" t="&amp;${r(13)}"/>`), GENERIC) }; },
+  // the same cells with 64 attributes each, all named t: every occurrence parsed, only the last decoded
+  'kept-attribute-flood-inc': (f) => { const r = random(9, LETTERS); const n = fit(f, Math.min(OPENINGS * 0.95, ATTRIBUTES / 64), 64 * 22 + 20); return { units: n * 64, unit: 'attribute named t', build: () => pkg(spread(n, (i) => `<c r="${address(i)}"${Array.from({ length: 63 }, () => ` t="&amp;${r(13)}"`).join('')}/>`), GENERIC) }; },
+  // kept values: cells with a 20-character string value each
+  'values-inc': (f) => { const r = random(7, LETTERS); const n = fit(f, (OPENINGS * 0.95) / 2, 50); return { units: n, unit: 'kept cell with value', build: () => pkg(spread(n, (i) => `<c r="${address(i)}" t="str"><v>${r(20)}</v></c>`), GENERIC) }; },
+  // distinct formulas on dated sheets: each examined once by the mapping
+  'formulas-comp': (f) => { const n = fit(f, (OPENINGS * 0.95) / 2, 100); return { units: n, unit: 'distinct formula', build: () => pkg(spread(n, (i) => `<c r="${address(i)}"><f>SUM(A${i}:B${i})+"${String(i).padStart(60, '0')}"+8.5</f></c>`), DATED) }; },
+  'formulas-inc': (f) => { const r = random(8, LETTERS); const n = fit(f, (OPENINGS * 0.95) / 2, 110); return { units: n, unit: 'distinct formula', build: () => pkg(spread(n, (i) => `<c r="${address(i)}"><f>${r(30)}&amp;${r(60)}+8.5</f></c>`), DATED) }; },
+};
+
+// The recheck's costliest formula bodies (WP4-RECHECK-B3 F2), as per-formula units on dated sheets.
+const F2 = {
+  amp100: (i) => `${String(i).padStart(6, '0')}${'&amp;"a"'.repeat(12)}`,
+  hits: (i) => `${String(i).padStart(6, '0')}+8.5-TODAY()${'&amp;"a"'.repeat(10)}`,
+  plain100: (i) => `${String(i).padStart(6, '0')}${'"a"b'.repeat(24)}`,
+  rand100: (() => { const r = random(16, LETTERS); return (i) => `${String(i).padStart(6, '0')}"${r(46)}"&amp;${r(40)}`; })(),
+};
+for (const [key, body] of Object.entries(F2)) {
+  FAMILIES[`formulas-${key}`] = (f) => { const n = fit(f, (OPENINGS * 0.94) / 2, 17 + body(0).length); return { units: n, unit: 'distinct formula', build: () => pkg(spread(n, (i) => `<c><f>${body(i)}</f></c>`), DATED) }; };
+}
+// The recheck's A2 shape: 64 kept-name attributes a kept cell (r, t, si and prefixed forms), 14 decoded characters each.
+FAMILIES['kept-attribute-a2-inc'] = (f) => {
+  const r = random(17, LETTERS);
+  const n = fit(f, Math.min(OPENINGS * 0.94, ATTRIBUTES / 64), 64 * 21 + 8);
+  const names = ['r', 't', 'si', 'x:r', 'y:t', 'z:si'];
+  return { units: n, unit: 'kept cell with 64 kept-name attributes', build: () => pkg(spread(n, () => `<c${Array.from({ length: 64 }, (_, j) => ` ${names[j % 6]}="&#65;${r(13)}"`).join('')}/>`), DATED) };
+};
+// Two-byte variants: the same units in parts that decode as two-byte strings.
+for (const name of Object.keys(FAMILIES)) {
+  if (name.startsWith('bytes-') || name.endsWith('-comp')) continue;
+  FAMILIES[`${name}-wide`] = (f) => {
+    const spec = FAMILIES[name](f);
+    return { ...spec, build: async () => { WIDE_PARTS = true; try { return await spec.build(); } finally { WIDE_PARTS = false; } } };
+  };
+}
+
+const PART_OPENINGS_LIMIT = 100_000;
+async function relsPackage(n, r) {
+  const { strToU8, zipSync } = await import(mod('node_modules/fflate/esm/index.mjs'));
+  const rels = Array.from({ length: n }, (_, i) => (r === undefined
+    ? `<Relationship Id="rIdX${i}" Type="${RNS}/externalLink" Target="externalLinks/externalLink${i}.xml"/>`
+    : `<Relationship Id="&#65;${r(13)}" Type="&#66;${r(13)}" Target="&#67;${r(13)}" TargetMode="&#68;${r(13)}"/>`)).join('');
+  const entries = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets><sheet name="P1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${mark()}<Relationship Id="rId1" Type="${RNS}/worksheet" Target="worksheets/sheet1.xml"/>${rels}</Relationships>`,
+    'xl/worksheets/sheet1.xml': ws(''),
+  };
+  return zipWithStats(entries, strToU8, zipSync);
+}
+async function typesPackage(n) {
+  const { strToU8, zipSync } = await import(mod('node_modules/fflate/esm/index.mjs'));
+  const overrides = Array.from({ length: n }, (_, i) => `<Override PartName="/xl/p${i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  const entries = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/>${mark()}${overrides}</Types>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets><sheet name="P1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${RNS}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    'xl/worksheets/sheet1.xml': ws(''),
+  };
+  return zipWithStats(entries, strToU8, zipSync);
+}
+
+const args = process.argv.slice(2);
+if (args[0] === '--build') {
+  const [family, fraction] = args[1].split('@');
+  mkdirSync(PKG_DIR, { recursive: true });
+  const spec = FAMILIES[family](Number(fraction));
+  const bytes = await spec.build();
+  writeFileSync(fileOf(args[1]), bytes);
+  writeFileSync(`${fileOf(args[1])}.json`, JSON.stringify({ ...bytes.stats, units: spec.units, upload: bytes.length }));
+} else if (args[0] === '--run') {
+  const { previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  try {
+    const out = previewWorkbook(bytes);
+    outcome = `accepted (cells ${out.sheets.length} sheets)`;
+  } catch (error) {
+    outcome = error?.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error?.name}: ${String(error?.message).slice(0, 100)}`;
+  }
+  const ms = performance.now() - t0;
+  const delta = (process.resourceUsage().maxRSS - baseline) / 1024;
+  console.log(`${args[1]} | upload=${bytes.length} B | ms=${ms.toFixed(1)} | rss=+${delta.toFixed(1)} MiB | ${outcome}`);
+} else {
+  const filter = args[0] ?? '';
+  const repeat = Number(args[1] ?? 3);
+  const opts = { encoding: 'utf8', env: process.env, timeout: 300_000, maxBuffer: 64 * MiB };
+  const self = fileURLToPath(import.meta.url);
+  const wanted = filter.split(',');
+  for (const family of Object.keys(FAMILIES).filter((name) => wanted.some((item) => (item.startsWith('=') ? name === item.slice(1) : name.includes(item))))) {
+    const rows = {};
+    const fractions = (process.env.COEFF_FRACTIONS ?? '0.5,1').split(',').map(Number);
+    for (const fraction of fractions) {
+      const name = `${family}@${fraction}`;
+      if (!existsSync(fileOf(name))) {
+        const build = spawnSync(process.execPath, ['--max-old-space-size=4096', self, '--build', name], opts);
+        if (build.status !== 0) { console.log(`${name} | BUILD FAILED ${(build.stderr ?? '').slice(0, 200)}`); continue; }
+      }
+      const runs = [];
+      for (let k = 0; k < repeat; k += 1) {
+        const child = spawnSync(process.execPath, [self, '--run', name], opts);
+        const line = (child.stdout ?? '').trim();
+        console.log(`${line} | exit=${child.status}`);
+        const ms = Number(/ms=([\d.]+)/.exec(line)?.[1]);
+        const rss = Number(/rss=\+([\d.]+)/.exec(line)?.[1]);
+        runs.push({ ms, rss, upload: Number(/upload=(\d+)/.exec(line)?.[1]) });
+      }
+      const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+      rows[fraction] = { ms: median(runs.map((r) => r.ms)), rss: median(runs.map((r) => r.rss)), upload: runs[0]?.upload, units: FAMILIES[family](fraction).units, unit: FAMILIES[family](fraction).unit };
+    }
+    if (fractions.length > 2) console.log(`-- ${family} medians: ${fractions.map((fraction) => `${fraction}: ${rows[fraction]?.units} units ${rows[fraction]?.ms} ms +${rows[fraction]?.rss} MiB`).join('; ')}`);
+    const half = rows[fractions[0]];
+    const full = rows[fractions[fractions.length - 1]];
+    if (half && full) {
+      const du = full.units - half.units;
+      const msPer = (full.ms - half.ms) / du;
+      const rssPer = ((full.rss - half.rss) * MiB) / du;
+      const fixed = full.ms - msPer * full.units;
+      console.log(`== ${family}: ${full.units} ${full.unit}s at full (upload ${full.upload} B); median ${half.ms} -> ${full.ms} ms, +${half.rss} -> +${full.rss} MiB; slope ${(msPer * 1e6).toFixed(1)} ns and ${rssPer.toFixed(1)} bytes per ${full.unit}; intercept ${fixed.toFixed(1)} ms`);
+      const statsAt = (fraction) => JSON.parse(readFileSync(`${fileOf(`${family}@${fraction}`)}.json`, 'utf8'));
+      const [s0, s1] = [statsAt(fractions[0]), statsAt(fractions[fractions.length - 1])];
+      const per = (key) => ((s1[key] - s0[key]) / du).toFixed(3);
+      // Machine-readable: footprint per unit (XML bytes, openings, attributes), slope and the full-size average cost.
+      console.log(`@@ ${JSON.stringify({ family, unit: full.unit, units: full.units, b: Number(per('xml')), o: Number(per('openings')), a: Number(per('attributes')), ns: Math.round(msPer * 1e6 * 10) / 10, mem: Math.round(rssPer * 10) / 10, fullMs: full.ms, fullRss: full.rss, full: s1 })}`);
+    }
+  }
+}

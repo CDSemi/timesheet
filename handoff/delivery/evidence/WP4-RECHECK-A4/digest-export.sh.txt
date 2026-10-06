@@ -1,0 +1,16 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: computes the handoff-excluded source digest of the export with a private git dir
+# (outside the repository), and compares the full tree id with the freeze commit tree.
+W=<work>
+REPO="<project>"
+G="git --git-dir=$W/pcgit --work-tree=$W/export -c core.autocrlf=false -c safe.directory=*"
+[ -d $W/pcgit ] || $G init -q
+rm -f $W/pcgit/index
+$G add -A 2> $W/tmp/pcgit-add.stderr
+TREE=$($G write-tree)
+echo "export tree: $TREE"
+echo "freeze tree: $(git -C "$REPO" rev-parse '546cddaf6747aef85e8b6d9b7712de9e28f138bf^{tree}')"
+echo "export digest (handoff excluded):"
+$G ls-tree -r --format='%(path) %(objectname)' $TREE | grep -v '^handoff/' | LC_ALL=C sort | sha256sum | sed 's/ \*-$/  -/'
+echo "export file count: $($G ls-tree -r --name-only $TREE | grep -v '^handoff/' | wc -l)"

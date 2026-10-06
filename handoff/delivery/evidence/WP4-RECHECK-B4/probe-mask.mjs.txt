@@ -1,0 +1,26 @@
+// WP4-RECHECK-B4 evidence masking: strips ANSI, converts CRLF to LF, masks the project, task and user paths
+// (<project>, <task>, <user>) in both Windows and Git-Bash forms and every e-mail address (<email>). Writes `.txt` only.
+// Usage: PROJECT=<winpath> TASK=<winpath> node mask.mjs <input> <output.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+if (!input || !output || !output.endsWith('.txt')) throw new Error('usage: node mask.mjs <input> <output.txt>');
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Windows path, its forward-slash form, its /d/ Git-Bash form and its double-backslash form. */
+function variants(win) {
+  const forward = win.replace(/\\/g, '/');
+  const drive = forward[0].toLowerCase();
+  return [win, forward, `/${drive}${forward.slice(2)}`, win.replace(/\\/g, '\\\\')];
+}
+const profile = process.env.USERPROFILE ?? '';
+const account = process.env.USERNAME ?? '';
+const replacements = [];
+for (const path of variants(process.env.TASK ?? '')) if (path.length > 3) replacements.push([path, '<task>']);
+for (const path of variants(process.env.PROJECT ?? '')) if (path.length > 3) replacements.push([path, '<project>']);
+for (const path of variants(profile)) if (path.length > 3) replacements.push([path, '<user>']);
+let text = readFileSync(input, 'utf8').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+for (const [from, to] of replacements) text = text.replace(new RegExp(escape(from), 'gi'), to);
+text = text.replace(/(?:[a-z]:[\\/]+|\/(?:mnt\/)?[a-z]\/)users[\\/]+[^\\/\s"'`,;)]+/gi, '<user>');
+if (account.length > 2) text = text.replace(new RegExp(`\\b${escape(account)}\\b`, 'gi'), '<user>');
+text = text.replace(/[\w.%+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, '<email>');
+writeFileSync(output, text.endsWith('\n') ? text : `${text}\n`);

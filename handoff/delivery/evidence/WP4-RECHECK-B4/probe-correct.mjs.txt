@@ -1,0 +1,174 @@
+// WP4-RECHECK-B3 correctness probe (auditor's own; synthetic data; the reviewed export's modules only).
+//  1. Decode exactly once: references in kept text (t, v, f, shared strings), CDATA, split segments and kept attributes
+//     (sheet name, r, Id/Target) decode one level and nothing decodes them again (reader, mapping, stored report).
+//  2. The kept-attribute cap: 255 characters as written is accepted and kept whole; 256 is refused (never cut); an
+//     unkept attribute of 1 000 characters is not capped; a sheet name of 255 written characters that decodes to a
+//     payroll date with spaces imports under that date.
+//  3. R-B2-1: two holidays whose names share their first 300 characters, one floating: each label's flag follows the
+//     holiday it matched.
+//  4. R-B2-2: declared encodings other than UTF-8/UTF-16 are refused in every parsed part; UTF-8/UTF-16/none accepted;
+//     the lenient cases are listed.
+// Usage: EXPORT=<export> WORK=<task dir> node correct.mjs
+import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const EXPORT = process.env.EXPORT;
+const WORK = process.env.WORK;
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const { strFromU8, strToU8, zipSync } = await import(mod('node_modules/fflate/esm/index.mjs'));
+const { readWorkbook } = await import(mod('src/server/import/xlsxReader.ts'));
+const { previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+const { buildSyntheticWorkbook, pack, unpack } = await import(mod('tests/support/syntheticWorkbook.ts'));
+const { openDatabase } = await import(mod('src/server/db/database.ts'));
+const { migrate } = await import(mod('src/server/db/migrations.ts'));
+const { seedSynthetic } = await import(mod('src/server/seed.ts'));
+const { FileStore } = await import(mod('src/server/files/fileStore.ts'));
+const { previewImport } = await import(mod('src/server/services/workbookImport.ts'));
+
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+let pass = 0;
+let fail = 0;
+const check = (label, ok, detail = '') => { if (ok) pass += 1; else fail += 1; console.log(`${ok ? 'PASS' : 'FAIL'} ${label}${detail ? ` | ${detail}` : ''}`); };
+const outcome = (bytes) => { try { return { wb: readWorkbook(bytes) }; } catch (error) { return { code: error.code ?? error.name }; } };
+function pkg({ sheetName = 'S', sheetXml, sst, wbDecl = '', relId = 'rId1', relsDecl = '', ctDecl = '' }) {
+  const e = {
+    '[Content_Types].xml': `<?xml version="1.0"${ctDecl}?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>`,
+    'xl/workbook.xml': `<?xml version="1.0"${wbDecl}?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets><sheet name="${sheetName}" sheetId="1" r:id="${relId}"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0"${relsDecl}?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="${relId}" Type="${RNS}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    'xl/worksheets/sheet1.xml': sheetXml,
+  };
+  if (sst !== undefined) e['xl/sharedStrings.xml'] = sst;
+  const z = {};
+  for (const [k, v] of Object.entries(e)) z[k] = [strToU8(v), { level: 6, mtime: 1_767_225_600_000 }];
+  return zipSync(z);
+}
+const ws = (inner, decl = '') => `<?xml version="1.0"${decl}?><worksheet xmlns="${NS}"><sheetData>${inner}</sheetData></worksheet>`;
+const cellOf = (wb, a) => wb.sheets[0].cells.get(a);
+
+// 1. Decode exactly once
+{
+  const sst = `<?xml version="1.0"?><sst xmlns="${NS}"><si><t>&amp;amp;</t></si><si><r><t>&amp;</t></r><r><t>lt;</t></r></si></sst>`;
+  const inner = [
+    '<row r="1">',
+    '<c r="A1" t="inlineStr"><is><t>&amp;amp;</t></is></c>',
+    '<c r="B1" t="inlineStr"><is><t>&amp;lt;</t></is></c>',
+    '<c r="C1" t="inlineStr"><is><t>&#38;#65;</t></is></c>',
+    '<c r="D1" t="inlineStr"><is><t>&#x26;amp;</t></is></c>',
+    '<c r="E1" t="inlineStr"><is><t><![CDATA[&amp;]]></t></is></c>',
+    '<c r="F1" t="inlineStr"><is><t>&am<!---->p;</t></is></c>',
+    '<c r="G1" t="str"><v>&amp;quot;</v></c>',
+    '<c r="H1"><f>"&amp;amp;"&amp;A1</f><v>1</v></c>',
+    '<c r="I1" t="s"><v>0</v></c>',
+    '<c r="J1" t="s"><v>1</v></c>',
+    '<c r="&#75;1" t="inlineStr"><is><t>&#x1F600;&amp;#x1F600;</t></is></c>',
+    '</row>',
+  ].join('');
+  const r = outcome(pkg({ sheetName: 'S&amp;amp;T', sheetXml: ws(inner), sst, relId: 'r&amp;Id' }));
+  const wb = r.wb;
+  const v = (a) => cellOf(wb, a)?.value;
+  check('decode once: text &amp;amp; -> &amp;', v('A1') === '&amp;', JSON.stringify(v('A1')));
+  check('decode once: text &amp;lt; -> &lt;', v('B1') === '&lt;', JSON.stringify(v('B1')));
+  check('decode once: text &#38;#65; -> &#65;', v('C1') === '&#65;', JSON.stringify(v('C1')));
+  check('decode once: text &#x26;amp; -> &amp;', v('D1') === '&amp;', JSON.stringify(v('D1')));
+  check('CDATA is not decoded: &amp; stays &amp;', v('E1') === '&amp;', JSON.stringify(v('E1')));
+  check('segments split by a comment are not joined into a reference (&am + p; stays literal, decoded never)', v('F1') === '&amp;', JSON.stringify(v('F1')));
+  check('decode once: <v> &amp;quot; -> &quot;', v('G1') === '&quot;', JSON.stringify(v('G1')));
+  check('decode once: formula "&amp;amp;"&amp;A1 -> "&amp;"&A1', cellOf(wb, 'H1')?.formula === '"&amp;"&A1', JSON.stringify(cellOf(wb, 'H1')?.formula));
+  check('decode once: shared string &amp;amp; -> &amp;', v('I1') === '&amp;', JSON.stringify(v('I1')));
+  check('rich runs "&amp;" + "lt;" stay two literal pieces: &lt; (no second decode after joining)', v('J1') === '&lt;', JSON.stringify(v('J1')));
+  check('decode once: kept attribute r="&#75;1" -> K1, text &#x1F600;&amp;#x1F600; -> U+1F600 + &#x1F600;', v('K1') === '\u{1F600}&#x1F600;', JSON.stringify(v('K1')));
+  check('decode once: sheet name S&amp;amp;T -> S&amp;T; relationship id r&amp;Id matched once', wb.sheets[0].name === 'S&amp;T' && wb.sheets[0].kind === 'worksheet', `${JSON.stringify(wb.sheets[0].name)} ${wb.sheets[0].kind}`);
+  // Through the mapping and a stored report: a label written &amp;amp; is shown as &amp; (unknown label, skip only).
+  const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-05-29', days: { 0: { label: 'Worked' }, 1: { label: 'X' } } }] }));
+  const name = Object.keys(e).find((k) => /sheet100\.xml$/.test(k));
+  e[name] = strToU8(strFromU8(e[name]).replace(/(<c r="F14"[^>]*>)(.*?)(<\/c>)/, '$1<is><t>&amp;amp;Worked</t></is>$3').replace(/<c r="F14"([^>]*?) t="[^"]*"/, '<c r="F14"$1').replace(/<c r="F14"/, '<c r="F14" t="inlineStr"'));
+  const prev = previewWorkbook(pack(e));
+  const label = prev.periods[0]?.days[1]?.label?.value;
+  check('decode once through the mapping: label &amp;amp;Worked -> &amp;Worked, unknown', label === '&amp;Worked' && prev.periods[0].days[1].mapping === null, JSON.stringify(label));
+}
+
+// 2. The kept-attribute cap never cuts a value
+{
+  const v255 = 'v'.repeat(255);
+  const ok = outcome(pkg({ sheetXml: ws(`<row r="1"><c r="A1" t="str" si="${v255}"><v>x</v></c></row>`) }));
+  check('a kept attribute of exactly 255 characters is accepted', ok.wb !== undefined, ok.code ?? 'accepted');
+  const over = outcome(pkg({ sheetXml: ws(`<row r="1"><c r="A1" t="str" si="${v255}v"><v>x</v></c></row>`) }));
+  check('a kept attribute of 256 characters refuses the package (attribute_too_large), nothing is cut', over.code === 'attribute_too_large', over.code ?? 'accepted');
+  const refs = outcome(pkg({ sheetXml: ws(`<row r="1"><c r="A1" t="${'&amp;'.repeat(51)}"><v>x</v></c></row>`) }));
+  check('the cap counts characters as written: 51 x &amp; (255 written) accepted, 51 decoded & kept whole', refs.wb !== undefined && cellOf(refs.wb, 'A1') !== undefined, refs.code ?? 'accepted');
+  const unkept = outcome(pkg({ sheetXml: ws(`<row r="1"><c r="A1" t="str" custom="${'u'.repeat(1000)}"><v>x</v></c></row>`) }));
+  check('an unkept attribute of 1 000 characters is not capped', unkept.wb !== undefined, unkept.code ?? 'accepted');
+  // A sheet name written in 255 characters (references) that decodes to a payroll date plus spaces.
+  const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-05-29', days: { 0: { label: 'Worked' } } }] }));
+  const written = `2026.05.29${'&#32;'.repeat(49)}`;
+  e['xl/workbook.xml'] = strToU8(strFromU8(e['xl/workbook.xml']).replace('name="2026.05.29"', `name="${written}"`));
+  const prev = (() => { try { return previewWorkbook(pack(e)); } catch (error) { return error.code; } })();
+  check(`a 255-character written sheet name (${written.length}) decodes whole (59 characters) and maps to payroll 2026-05-29`, typeof prev === 'object' && prev.periods.length === 1 && prev.periods[0].payrollDate === '2026-05-29' && prev.periods[0].sheetName.length === 59, typeof prev === 'object' ? `${prev.periods[0]?.payrollDate} name length ${prev.periods[0]?.sheetName.length}` : prev);
+  e['xl/workbook.xml'] = strToU8(strFromU8(e['xl/workbook.xml']).replace(`name="${written}"`, `name="${written} "`));
+  const cut = (() => { try { return previewWorkbook(pack(e)); } catch (error) { return error.code; } })();
+  check('the same sheet name with one more written character is refused, not cut to a payroll date', cut === 'attribute_too_large', typeof cut === 'string' ? cut : 'accepted');
+}
+
+// 3. R-B2-1: the floating flag follows the matched holiday (through previewImport and the stored report)
+{
+  const stem = `Founders ${'x'.repeat(300)}`;
+  const fixedName = `${stem} fixed`;
+  const floatingName = `${stem} floating`;
+  const e = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-05-29', days: { 0: { label: fixedName }, 1: { label: floatingName }, 2: { label: 'Worked' } } }] }));
+  const hol = (r, serial, n) => `<row r="${r}"><c r="A${r}"><v>${serial}</v></c><c r="B${r}" t="inlineStr"><is><t>${n}</t></is></c></row>`;
+  e['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${hol(2, 46154, fixedName)}${hol(3, 46155, floatingName)}</sheetData></worksheet>`);
+  const bytes = pack(e);
+  const dir = join(WORK, `correct-db-${randomBytes(4).toString('hex')}`);
+  mkdirSync(dir, { recursive: true });
+  const db = openDatabase(join(dir, 'timesheet.db'));
+  migrate(db);
+  const clock = { now: () => new Date('2026-10-06T12:00:00Z') };
+  const seed = await seedSynthetic(db, clock, { passwords: { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url') } });
+  const u = seed.users.find((x) => x.role === 'employee');
+  const user = { id: u.id, email: u.email, displayName: 'Synthetic Employee', role: 'employee', calendarId: seed.calendarId ?? '', sessionId: 'probe' };
+  const { batch } = previewImport({ db, clock, files: new FileStore(join(dir, 'files')), user }, bytes);
+  const days = batch.report.days;
+  const hs = batch.report.holidays;
+  check('R-B2-1: both holidays are listed with the same 200-character cut name', hs.length === 2 && hs[0].name === hs[1].name && hs[0].floating === false && hs[1].floating === true, hs.map((h) => `${h.name.length}/${h.floating}`).join(' '));
+  check('R-B2-1: the label matching the fixed holiday is not floating', days[0].category === 'Holiday' && days[0].floating_holiday === false, `${days[0].category} ${days[0].floating_holiday}`);
+  check('R-B2-1: the label matching the floating holiday is floating and needs a decision', days[1].category === 'Holiday' && days[1].floating_holiday === true && batch.plan.decisions_required.some((d) => d.work_date === days[1].work_date && d.reasons.includes('floating_holiday')), `${days[1].category} ${days[1].floating_holiday}`);
+  check('R-B2-1: the fixed holiday day needs no floating decision', !batch.plan.decisions_required.some((d) => d.work_date === days[0].work_date && d.reasons.includes('floating_holiday')), JSON.stringify(batch.plan.decisions_required.filter((d) => d.work_date === days[0].work_date).map((d) => d.reasons)));
+  const stored = JSON.parse(db.prepare('SELECT report_json FROM imports WHERE id = ?').pluck().get(batch.id));
+  check('R-B2-1: the stored report keeps the same flags', stored.days[0].floating_holiday === false && stored.days[1].floating_holiday === true);
+  db.close();
+}
+
+// 4. R-B2-2: declared encodings
+{
+  const enc = (e, q = '"') => ` encoding=${q}${e}${q}`;
+  for (const name of ['ISO-8859-1', 'latin1', 'windows-1252', 'US-ASCII', 'UTF-32', 'UTF-7', 'Shift_JIS', 'UTF8', ' UTF-8 ']) {
+    for (const where of ['ctDecl', 'wbDecl', 'relsDecl', 'sheet', 'sst']) {
+      const decl = enc(name, where === 'sst' ? "'" : '"');
+      const sheetXml = ws('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', where === 'sheet' ? decl : '');
+      const sst = `<?xml version="1.0"${where === 'sst' ? decl : ''}?><sst xmlns="${NS}"><si><t>x</t></si></sst>`;
+      const r = outcome(pkg({ sheetXml, sst, ...(where.endsWith('Decl') ? { [where]: decl } : {}) }));
+      check(`R-B2-2: encoding "${name}" in ${where} refused`, r.code === 'unsupported_encoding', r.code ?? 'accepted');
+    }
+  }
+  for (const name of ['UTF-8', 'utf-8', 'UTF-16', 'utf-16le', 'UTF-16BE']) {
+    const r = outcome(pkg({ sheetXml: ws('<row r="1"><c r="A1" t="str"><v>x</v></c></row>', enc(name)), wbDecl: enc(name) }));
+    check(`R-B2-2: encoding "${name}" accepted`, r.wb !== undefined, r.code ?? 'accepted');
+  }
+  const none = outcome(pkg({ sheetXml: ws('<row r="1"><c r="A1" t="str"><v>x</v></c></row>') }));
+  check('R-B2-2: no declared encoding accepted', none.wb !== undefined, none.code ?? 'accepted');
+  // Lenient cases (reported, not judged): a declaration that is not first, or malformed, is not read as one.
+  const lenient = {
+    'leading white space before an ISO-8859-1 declaration': `\n<?xml version="1.0" encoding="ISO-8859-1"?><worksheet xmlns="${NS}"><sheetData/></worksheet>`,
+    'a "?" inside the version before an ISO-8859-1 encoding': `<?xml version="1.0?" encoding="ISO-8859-1"?><worksheet xmlns="${NS}"><sheetData/></worksheet>`,
+    'mismatched quotes around ISO-8859-1': `<?xml version="1.0" encoding="ISO-8859-1'?><worksheet xmlns="${NS}"><sheetData/></worksheet>`,
+  };
+  for (const [label, xml] of Object.entries(lenient)) {
+    const r = outcome(pkg({ sheetXml: xml }));
+    console.log(`LENIENT ${label}: ${r.code ?? 'accepted (read as UTF-8)'}`);
+  }
+}
+console.log(`correctness: ${pass} PASS, ${fail} FAIL`);
+process.exitCode = fail === 0 ? 0 : 1;

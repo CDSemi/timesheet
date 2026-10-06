@@ -1,0 +1,40 @@
+// WP4-RECHECK-B3 differential inputs (auditor's own): the tracked template and one realistic synthetic workbook with
+// 12 dated sheets, built once with the reviewed export's test support (deterministic ZIP timestamps) and written under
+// the task folder, so both readers (972ccda and the accepted WP4-T09 export 13a258d) read the same bytes.
+// The 12 sheets mix: every template label, holiday names from the template's own holiday table (a floating one
+// included), unknown labels, labels from a formula cache, clocks, a start without an end, a blank and an unexpected
+// date, a hidden sheet, a payroll-cell mismatch, clean and inherited formulas, labels with references.
+// Usage: EXPORT=<export> node diff-build.mjs <out dir>
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const EXPORT = process.env.EXPORT;
+const out = process.argv[2];
+mkdirSync(out, { recursive: true });
+const mod = (rel) => pathToFileURL(join(EXPORT, rel)).href;
+const { buildSyntheticWorkbook, readTemplateBytes } = await import(mod('tests/support/syntheticWorkbook.ts'));
+const { previewWorkbook } = await import(mod('src/server/import/templateMapping.ts'));
+const template = readTemplateBytes();
+const holidays = previewWorkbook(template).holidays;
+const fixed = holidays.find((h) => !h.floating)?.name ?? 'Holiday';
+const floating = holidays.find((h) => h.floating)?.name ?? 'Holiday';
+const labels = ['Worked', 'Work from home', 'Holiday', 'Shutdown', 'Vacation', 'Sick day', 'Off day (overtime used)', fixed, floating, 'Team offsite', 'worked', ' Vacation ', 'R&D day', 'Holiday'];
+const addDays = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const periods = Array.from({ length: 12 }, (_, s) => {
+  const payrollDate = addDays('2026-01-09', 14 * s);
+  const days = {};
+  for (let d = 0; d < 14; d += 1) {
+    if ((d + s) % 5 === 4) continue; // blank day
+    const label = labels[(d + s) % labels.length];
+    days[d] = { label, ...(d % 3 === 0 ? { start: 540, end: 1050 } : {}) };
+  }
+  if (s === 1) days[2] = { label: 'Worked', labelFormulaCache: 'Worked' };
+  if (s === 2) days[3] = { label: 'Worked', start: 480 };
+  if (s === 3) days[4] = { label: 'Worked', date: null };
+  if (s === 4) days[5] = { label: 'Worked', date: addDays(payrollDate, -3) };
+  return { payrollDate, days, ...(s === 5 ? { hidden: true } : {}), ...(s === 6 ? { payrollCellDate: addDays(payrollDate, 1) } : {}), ...(s % 2 === 0 ? { cleanFormulas: true } : {}), employee: `Synthetic Employee ${s}` };
+});
+writeFileSync(join(out, 'template.xlsx'), template);
+writeFileSync(join(out, 'twelve.xlsx'), buildSyntheticWorkbook({ periods }));
+console.log(`built template (${template.length} B) and twelve; holiday labels used: fixed ${fixed.length} chars, floating ${floating.length} chars`);

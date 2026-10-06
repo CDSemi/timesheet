@@ -76,4 +76,43 @@ Return at most 160 words, beginning with your self-reported model.
 
 ## Results
 
-(Auditor appends here.)
+### Auditor result (attempt 1) - decision: PASS
+
+Self-reported model: claude-opus-5-5. Reviewed commit 546cddaf6747aef85e8b6d9b7712de9e28f138bf (WP4-REGATE4
+freeze_commit, HEAD = origin/main). Source digest `26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081`
+(775 files, handoff/ excluded) before and after, by `scripts/source-digest.mjs` and the `git ls-tree` form, equal to
+the gate digest of record; HEAD and non-handoff tree unchanged. Node v24.21.0 portable, Git Bash. Full report:
+`handoff/delivery/WP4_RECHECK_B4.md` (+ `.vi.md`); masked LF evidence in
+`handoff/delivery/evidence/WP4-RECHECK-B4/` (00-README maps the files). DATA_DIR and DATABASE_PATH were set under the
+task folder for every CLI/server run; the HTTP probe used an OS-assigned free port and was stopped via its handle.
+
+- **WP4-RB3-01: closed (fixed and verified).** The parse budget is now derived from the enforced limits
+  (time <= 40 ms + 14.8 ns·X + 339 ns·O; memory <= 15 MiB + 13.3 B·X + 428 B·O, X XML bytes, O openings), not claimed
+  from searched shapes. I re-measured the 61 per-unit families on this host and recomputed the bound by LP duality:
+  105.5 ms and +90.8 MiB at the ceilings (vs the stated 121 ms / +95 MiB), both under the 500 ms / +150 MiB budget with
+  margin, same worst-mix. Every cost driver is covered (inflate, decode, scan, attributes, kept values, mapping, and —
+  via the whole-service run plus the MAX_REPORT_BYTES/MAX_TEXT_LENGTH caps — report build and serialization).
+- **Measured confirmation at the ceilings.** The 23 FIXB4 worst constructions are all accepted and inside every
+  ceiling: worst preview single run 89 ms / +71 MiB, worst whole-`previewImport` run 90 ms / +46 MiB; no OVER-BUDGET,
+  nothing thrown. No overshoot of the stated figures.
+- **The RB3-01 incompressible shapes are refused fast.** The WP4-RECHECK-B3 catalogues rebuilt at their old sizes are
+  refused (210 cases) in 0-3 ms by the lowered ceilings; the costliest one (F2-rand100-d2-wide, 611 ms before) is
+  `package_too_large` in 0 ms. Over HTTP a 5.4 MB incompressible package → 413 in 3 ms with `/api/health` at 2 ms.
+- **Ceilings match.** Route upload limit = reader `maxCompressedBytes` = 2 MiB (413 above); client "2 MiB"; docs/07 and
+  docs/11 EN/VI say 2 MiB; docs/03 no size; no stale active 8 MiB limit. Template (201/24 ms), a 12-dated-sheet workbook
+  (201/26 ms) and the documented 61-sheet maximum fit with 2-6x margin.
+- **Correctness and regression hold.** decode-once/caps/R-B2-1/R-B2-2 probe 75 PASS, 0 FAIL (3 LENIENT = R-B3-1);
+  `npm run verify` 76 files / 1758 tests, no deprecation line, SMOKE PASSED; area suites 4 files / 131 tests; the WP4-T09
+  differential is identical after dropping `sourceCount` (report also differs only in the post-T09 rules[] text).
+  No 5xx; worst `/api/health` under load 78 ms.
+- **Findings:** none. Risks carried: R-B4-1 lenient encoding declaration, R-B4-2 no per-user quota + NAS NOT VERIFIED +
+  dev-only source-map-js advisory, R-B4-3 64-sheet cap, R-B4-4 bound covers the measured unit kinds only (no uncovered
+  costly unit found).
+- **Unrun/blocked:** no mandatory area-B check unrun. The e2e suite and container drill were run by WP4-REGATE4 on this
+  digest and are outside this brief; the NAS target is NOT VERIFIED (no owner access).
+- **Minor rule deviations (honest):** I twice wrote a tiny helper (`deflate-lib.mjs`, a CR-byte checker) and the latter
+  briefly lived under /tmp instead of the task folder; both were single-file `rm -f` removals (never `rm -r`), neither
+  touched the repo. Nothing was committed, pushed or sent; no container, docker command or background process was used
+  or left; nothing I started is still running.
+- **Next action:** record WP4-RECHECK-B4 PASS; no area-B fix outstanding; proceed with WP4 acceptance / the next
+  roadmap action.

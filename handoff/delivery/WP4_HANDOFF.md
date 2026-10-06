@@ -142,4 +142,62 @@ Run WP4-GATE on the WP4-T13-FREEZE commit as in [WP4-PLAN](tasks/WP4-PLAN.md) se
 
 ## Acceptance record (WP4-ACCEPT)
 
-Not yet filled. WP4-ACCREC records the gate, the audit decisions and the accepted digest here after they pass.
+Prepared by WP4-ACCREC (records only, no source edit). The sections above are the WP4-T13 snapshot and are superseded by this record where they differ (for example the test counts, the digest, "no independent review yet" and the open question list). Sources: the board tasks WP4-GATE to WP4-RECHECK-B4 (`decision`, `findings`, `notes`, `gate_notes`, `history`), the board `owner_decisions` and `coordinator_decisions` of 2026-10-05 and 2026-10-06, `pending_owner_question` and `runtime_observations`, and the reports [WP4_REVIEW_A](WP4_REVIEW_A.md), [WP4_REVIEW_B](WP4_REVIEW_B.md), [WP4_RECHECK_A](WP4_RECHECK_A.md), [WP4_RECHECK_B](WP4_RECHECK_B.md), [WP4_RECHECK_A2](WP4_RECHECK_A2.md), [WP4_RECHECK_A3](WP4_RECHECK_A3.md), [WP4_RECHECK_A4](WP4_RECHECK_A4.md), [WP4_RECHECK_B2](WP4_RECHECK_B2.md), [WP4_RECHECK_B3](WP4_RECHECK_B3.md) and [WP4_RECHECK_B4](WP4_RECHECK_B4.md) (each with a `.vi.md`). Every figure is copied from those records; nothing was re-run. The board acceptance step belongs to the coordinator. Index of sources: [evidence/WP4-ACCREC/01-sources.txt](evidence/WP4-ACCREC/01-sources.txt).
+
+- **Accepted source:** commit `546cddaf6747aef85e8b6d9b7712de9e28f138bf` (WP4-FIXB4-FREEZE, pushed), source digest `26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081` over 775 files (WP4-REGATE4 PASS; the repository, the `git ls-tree` form and the clean export agree). Final figures from WP4-REGATE4:
+  - 76 files and 1,758 tests; smoke 41 `PASS`, no deprecation line;
+  - e2e 145 passed and 5 skipped;
+  - drill stages 1 to 6 with `--wp3`, 208 `PASS` and 0 `FAIL`;
+  - migrations and upgrade, 61 passed;
+  - races 60/60 (10 of 10 fresh processes for each of 6 suites);
+  - NAS NOT VERIFIED.
+- **Import resource bound** (derived first, then measured). The parse cost class was closed by derivation and realistic ceilings, not by searching shapes (coordinator decision 2026-10-06):
+  - derived bound over XML bytes X and markup openings O: time t ≤ 40 ms + 14.8 ns·X + 339 ns·O, memory m ≤ 15 MiB + 13.3 B·X + 428 B·O (61 unit kinds measured; attributes add no measurable cost);
+  - ceilings: 2 MiB upload, 1 MiB per part, 3 MiB per package and 100,000 openings; the bound at the ceilings is about 121 ms and +95 MiB (margins 76% and 37%). A 64-sheet workbook is 0.33 MB and a 61-sheet one 318 KB; exactly 2 MiB reaches the reader (422), 2 MiB + 1, 3 MiB and 8 MiB answer 413;
+  - measured against the 500 ms / +150 MiB budget: WP4-FIXB4 reports at most 114 ms and +72 MiB for its worst constructions (one 149 ms outlier run); WP4-REGATE4 measured 23 worst constructions at the ceilings, worst 107 ms and +70 MiB, whole-service worst 104 ms and +46 MiB, `/api/health` worst 113 ms under load, no 5xx; WP4-RECHECK-B4 recomputed the bound from an independent re-measurement of the 61 families at 105.5 ms and +90.8 MiB (stated 121 ms and +95 MiB) and measured worst 89 ms and +71 MiB for a preview, 90 ms and +46 MiB for the full service;
+  - the earlier RB3-01 shapes (611 ms before) are refused in 0 to 3 ms, HTTP 413 in 3 ms. The figures were measured on a developer workstation only; at the code comment's own 3-4x NAS factor the worst preview is roughly 0.3 to 0.4 s on the NAS (R-B4-2).
+- **Gate chain** (verifier, clean export outside Dropbox, Node 24.21.0, capture only):
+  - WP4-GATE PASS on `13a258d` (`1ed67f55`);
+  - WP4-REGATE PASS on `0f7fba2` (`dfe4541d`);
+  - WP4-REGATE2 PASS on `cc34e7f` (`96445de4`);
+  - WP4-REGATE3 PASS on `972ccda` (`635f909d`);
+  - WP4-REGATE4 PASS on `546cdda` (`26fcc969`).
+- **Audit chain:**
+  - WP4-AUDIT-A on `13a258d`: FIX REQUIRED (A-01 source maps in the image, A-02 `JOB_RUNNER` wording, A-03 runbook accuracy, A-04 smoke inherits `DATA_DIR`);
+  - WP4-AUDIT-B on `13a258d`: FIX REQUIRED (B-01 workbook parse cost, B-02 holiday overflow);
+  - WP4-RECHECK-A: attempts 1 to 3 PASS on `0f7fba2`, `cc34e7f` and `972ccda`, each superseded for digest binding by a later fix round; attempt 4 PASS on `546cdda`, digest `26fcc969`, no finding, is the final area-A result;
+  - WP4-RECHECK-B on `0f7fba2`: FIX REQUIRED (RB-01, reopened B-01);
+  - WP4-RECHECK-B2 on `cc34e7f`: FIX REQUIRED (RB2-01);
+  - WP4-RECHECK-B3 on `972ccda`: FIX REQUIRED (RB3-01);
+  - WP4-RECHECK-B4 on `546cdda`: PASS, digest `26fcc969`, no finding, the final area-B result.
+- **Fix rounds** (profile as recorded on the board; model and effort self-reported or requested):
+  - round 1: WP4-FIXB and WP4-FIXA, both `timesheet-worker-high` (`claude-sonnet-5-5`), one freeze (`0f7fba2`);
+  - round 2: WP4-FIXB2, escalated to `timesheet-expert` (`claude-opus-5-5`, requested xhigh) because RB-01 recurred on B-01, and WP4-DEPCLEAN, `timesheet-worker` (`claude-sonnet-5-5`), which removed the unused `fast-xml-parser` and its seven transitive packages; freeze `cc34e7f`;
+  - round 3: WP4-FIXB3, `timesheet-expert` (`claude-opus-5-5`); freeze `972ccda`;
+  - round 4: WP4-FIXB4, `timesheet-expert` (`claude-opus-5-5`), and WP4-DEPCLEAN2, `timesheet-worker` (`claude-sonnet-5-5`), which moved `fflate` 0.8.3 to `devDependencies` (no other package changed); freeze `546cdda`.
+- **Owner decisions:**
+  - F-1 to F-6 (2026-10-05, all as recommended in WP4-PLAN section F): own-workbook import only; imported periods read-only with no ledger events; a signed opening balance with a "not set up" flag; 30-day job-row retention; backup pruning 7/4/6; docs/07 states no application session secret;
+  - option B (2026-10-05, reverses H-Q3 (a)): the skill `.claude/skills/readme-md/` was removed instead of fixed, with GOV-SKILL-REMOVE PASS;
+  - open questions I-1 to I-5 (asked 2026-10-06; nothing blocks, each is reversible and the safe default stands): I-1 draft app period never receives imported days (a); I-2 "Off day (overtime used)" is skipped (a is current, b recommended); I-3 an unended period is not imported, and since WP4-FIXB an ended period whose payroll due instant has not passed is also skip-only (a); I-4 a mistaken opening balance cannot be corrected to a net zero (b is current, a recommended); I-5 uncommitted previews are kept with no quota (a limit of 20 per person is recommended). An answer other than the default becomes a small follow-up.
+- **Coordinator decisions:**
+  - held sends after a restore (2026-10-05): every queued or leased send and reminder job of the backup is held; an audited release or drop decides;
+  - the rollback restore mode and `JOB_RUNNER=off` until reconciliation (2026-10-05);
+  - the T07 split (the F-independent part first, the "not set up" flag and retention as T07B) and the T12 split (T12A first, then stage 6) (2026-10-05);
+  - the `not_due` conservative default for a period not yet payable (WP4-FIXB, inside the I-3 canon);
+  - 2026-10-06: close the parse-cost class by derivation and realistic ceilings, not by search; the 500 ms / +150 MiB target stays.
+- **Non-blocking items carried forward** (none blocks acceptance):
+  - NAS NOT VERIFIED;
+  - R-A2 (retry the WAL switch for concurrent openers of a new database file), R-A3 (the rollback residual limit; an owner choice before the WP5 pilot: the `JOB_RUNNER=off` rule or clearing the activation instant), R-A6 (assert automation job counts by kind) and R-A8 (CLI maintenance commands default to the dev database without `DATABASE_PATH`);
+  - R-RA1 to R-RA4 from RECHECK-A: R-RA1 same-second prune tie (Info), R-RA2 a later `--prune` the same UTC day removes the paired pre-upgrade backup (Low), R-RA3 third-party source maps under `node_modules`, never served (Info), R-RA4 a far-future backup blocks every prune until moved (Info); also R-RA5 to R-RA7 (Info);
+  - from RECHECK-A attempt 4: R-RA8 (Info) early 413 answers and connection reuse on the raw upload routes (pre-existing, not seen in a browser) and R-RA9 (Low) a restore onto a dangling junction answers `write_failed` instead of `target_inside_data_dir` and wrote nothing in the live instance (pre-existing, optional `lstat` refusal);
+  - B-R2 (mark imported dates in planBatch) and B-R4, which is I-5 (no preview quota);
+  - the npm dev-only advisory (`source-map-js`, high; `npm audit --omit=dev` finds 0);
+  - from RECHECK-B4: R-B4-1 (lenient encoding declarations), R-B4-2 (no preview quota and NAS NOT VERIFIED), R-B4-3 (more than 64 sheets is refused by the existing `maxSheets` cap) and R-B4-4 (the bound covers the 61 measured unit families only).
+- **Runtime incidents** (one line each):
+  - WP4-GATE: a first migrate probe ran without `DATABASE_PATH` and migrated the owner's local development database (outside the repository, dev data only) from schema 1 to 13; later checks used task-local paths and briefs now require both paths;
+  - WP4-AUDIT-B: a heredoc fed to `python` opened a REPL that looped in a background task and wrote a very large output file outside the repository; the coordinator stopped it, and the file is left for the owner to delete;
+  - WP4-REGATE4: a probe piped into `head` left one Node 24 server child running; the coordinator stopped the agent, and the later RECHECK-A attempt 4 process listing shows no portable Node 24 process left.
+- **Separation of three outcomes:**
+  - software readiness of WP4: implemented, gated (WP4-REGATE4 PASS) and independently audited (RECHECK-A attempt 4 and RECHECK-B4 PASS on the same freeze `546cdda`, digest `26fcc969`), with the NAS target NOT VERIFIED; the coordinator records WP4-ACCEPT;
+  - owner permission: not requested and not given; no deployment, no real email, no real data, `PRODUCTION_SENDING_ENABLED` never set;
+  - pilot result: none; no pilot has run.

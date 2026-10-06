@@ -1,0 +1,29 @@
+# 22-p4-targets: P4 rerun: backup and restore target boundaries (WP4-RECHECK-A4)
+date_utc: 2026-10-06T19:44:25Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (each probe passes its own pair under its work folder to every child)
+app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate)
+$ node probes/p4-targets.mjs <work>\prod <work>\pr\p2 <work>\pr\p4
+PASS  backup --to the live DATA_DIR: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+PASS  backup --to a junction that points into DATA_DIR: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+PASS  backup --to a new folder below such a junction: exit 2 (target_inside_data_dir)  2 Backup refused (target_inside_data_dir): The backup target must be outside the private dat
+FAIL  restore --to a junction that points to an empty folder inside DATA_DIR: exit 2 (target_inside_data_dir)  1 Restore failed (write_failed): The restore could not be written to the target
+PASS  restore --to a new folder below a junction into DATA_DIR: exit 2 (target_inside_data_dir)  2 Restore refused (target_inside_data_dir): The restore target must be outside the live priv
+PASS  restore --to the live instance folder (holds the database and DATA_DIR): exit 2 (target_is_live)  2 Restore refused (target_is_live): The restore target must not hold the live database or th
+PASS  restore --to a folder inside the backup folder: exit 2 (target_inside_backup)  2 Restore refused (target_inside_backup): The restore target must be outside the backup fold
+PASS  restore --confirm without --keep-schema is a usage error: exit 2 (Usage)  2 Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR> [--ke
+PASS  the refused runs wrote nothing in the live instance (database and every private file identical)
+PASS  no partial backup folder was left anywhere in DATA_DIR
+<work>/probes/p4-targets.mjs:70
+const firstKey = JSON.parse(readFileSync(join(backupDir, 'manifest.json'), 'utf8')).files[0].storage_key;
+                                                                                            ^
+
+TypeError: Cannot read properties of undefined (reading 'storage_key')
+    at <work>/probes/p4-targets.mjs:70:93
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.21.0
+exit 1
+date_utc: 2026-10-06T19:44:30Z
+[end]

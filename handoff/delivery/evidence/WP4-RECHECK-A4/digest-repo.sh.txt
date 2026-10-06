@@ -1,0 +1,17 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: HEAD, origin/main, freeze tree and the handoff-excluded source digest in the repository
+# (git ls-tree form and scripts/source-digest.mjs), plus the non-handoff working-tree status.
+source <work>/env.sh
+REPO=<project>
+echo "date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "HEAD:        $(git -C $REPO rev-parse HEAD)"
+echo "origin/main: $(git -C $REPO rev-parse origin/main)"
+echo "HEAD tree:   $(git -C $REPO rev-parse 'HEAD^{tree}')"
+echo "ls-tree digest (handoff excluded):"
+git -C $REPO ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum | sed 's/ \*-$/  -/'
+echo "ls-tree file count: $(git -C $REPO ls-tree -r --name-only HEAD | grep -v '^handoff/' | wc -l)"
+echo "scripts/source-digest.mjs:"
+( cd $REPO && "$NODE" scripts/source-digest.mjs; echo "exit=$?" )
+echo "non-handoff working-tree status (git status --porcelain, handoff/ excluded):"
+git -C $REPO status --porcelain --untracked-files=all | grep -v ' handoff/' ; echo "(end; grep exit=$?, 1 = no line)"

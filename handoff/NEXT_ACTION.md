@@ -5,13 +5,15 @@
 - WP2 accepted (5fafeae, digest e61fa914).
 - WP3 accepted: WP3-REGATE3 PASS and final independent rechecks WP3-RECHECK-A
   attempt 3 and WP3-RECHECK-BC3 PASS at 49651c8, digest c31c300c.
-- WP4 in progress: tasks T01–T08 and T12A are committed, and the owner's decisions
-  F-1..F-6 are recorded in docs (WP4-DEC). The board names the next task.
+- WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
+  attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969. Owner questions
+  WP4-I-1..I-5 stay open with safe defaults; R-A3 needs an owner choice before the
+  WP5 pilot.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
-[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP3 handoff](delivery/WP3_HANDOFF.md),
-[WP3 recheck A3](delivery/WP3_RECHECK_A3.md) and [WP3 recheck BC3](delivery/WP3_RECHECK_BC3.md).
+[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP4 handoff](delivery/WP4_HANDOFF.md),
+[WP4 recheck A4](delivery/WP4_RECHECK_A4.md) and [WP4 recheck B4](delivery/WP4_RECHECK_B4.md).
 
 Open this repository in Claude Code with subscription sign-in. Project configuration
 selects the coordinator; [document 08](../docs/08_AI_WORKFLOW_AND_BUDGET.md) defines
@@ -35,19 +37,14 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **GOV-SKILL removal: done.** The owner chose to remove the skill
-   `.claude/skills/readme-md/` instead of fixing it (2026-10-05, reversing H-Q3 (a)).
-   It was removed at a923351; the gate passed, and the fresh audit
-   [GOV_SKILL_REMOVE_REVIEW](delivery/GOV_SKILL_REMOVE_REVIEW.md) passed.
-2. **WP4 delivery.** Follow the [WP4 plan](delivery/tasks/WP4-PLAN.md):
-   - T07B (the F-3 flag, F-4 job retention and F-5 backup pruning);
-   - T09–T11 (import and opening balance);
-   - T12 (stage 6 and a full drill rerun) and T13 (runbook and handoff).
-
-   Workers implement, and the committer freezes each task. A verifier then runs the
-   package-final WP4 gate, and fresh auditors run [WP4_REVIEW](prompts/WP4_REVIEW.md).
-3. **WP5.** WP5 starts with independent acceptance. The real pilot remains
-   owner-controlled.
+1. **WP4 acceptance record.** WP4-ACCREC fills the
+   [WP4 handoff](delivery/WP4_HANDOFF.md) acceptance record, and the WP4-ACCEPT commit
+   records it. No source changes.
+2. **WP5.** Follow [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.md): WP5 starts with
+   independent acceptance, then the concrete pilot packet. Fresh auditors use
+   [WP5_REVIEW](prompts/WP5_REVIEW.md). The real pilot, real sending and deployment
+   remain owner-controlled.
+3. **Owner items:** WP4-I-1..I-5, and the R-A3 rollback choice before the pilot.
 
 After usage reset: Resume/Continue the existing session, for example
 `claude --continue` here or `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`.

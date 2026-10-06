@@ -1,0 +1,35 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: runs the seven attempt-1 area-A probes, unchanged, against <work>/prod: the image-equivalent app
+# folder (dist/ built with the Dockerfile's build-stage commands, production-only node_modules from
+# `npm ci --omit=dev --ignore-scripts`, so no fflate and no dev dependency) built from 546cdda. Each probe passes its own
+# DATABASE_PATH and DATA_DIR under its work folder to every child; env.sh also exports a pair under <work>/data.
+# Run 2 (pr2): <work>/prod also holds reference/examples/policy.example.json and holidays.2026.example.json, which the
+# development-only `seed` command reads relative to dist/ (run 1 in pr/ lacked them, so every seed failed with ENOENT).
+# The servers that P2 and P8 start listen on a loopback port the OS hands out as free; each probe stops its own child.
+source <work>/env.sh
+APP="$(cygpath -w $W/prod)"
+PR=$W/pr2
+mkdir -p $PR
+run() { # $1 = evidence name, $2 = title, rest = probe and arguments
+  local name=$1 title=$2; shift 2
+  {
+    echo "# $name: $title (WP4-RECHECK-A4)"
+    echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "DATA_DIR=$DATA_DIR DATABASE_PATH=$DATABASE_PATH (each probe passes its own pair under its work folder to every child)"
+    echo "app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate; plus reference/examples for the development seed; run 2)"
+    echo "\$ node $*"
+    ( cd $W && "$NODE" "$@" 2>&1 ); echo "exit $?"
+    echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "[end]"
+  } > $W/raw/$name.txt 2>&1
+  echo "$name: $(grep -c '^PASS ' $W/raw/$name.txt) PASS, $(grep -c '^FAIL' $W/raw/$name.txt) FAIL, $(grep '^exit ' $W/raw/$name.txt)"
+}
+mkdir -p $PR/p2 $PR/p4 $PR/p7 $PR/p3
+run 20-p2-backup-restore "P2 rerun: backup under three writers and isolated restore" probes/p2-backup-restore.mjs "$APP" "$(cygpath -w $PR/p2)"
+run 21-p8-admin-privacy "P8 rerun: admin allowlists" probes/p8-admin-privacy.mjs "$APP" "$(cygpath -w $PR/p2)"
+run 22-p4-targets "P4 rerun: backup and restore target boundaries" probes/p4-targets.mjs "$APP" "$(cygpath -w $PR/p2)" "$(cygpath -w $PR/p4)"
+run 23-p7-retention-sweep "P7 rerun: retention window and paused sweep" probes/p7-retention-sweep.mjs "$APP" "$(cygpath -w $PR/p7)"
+run 24-p3-prune "P3 rerun: prune junction escapes and selection" probes/p3-prune.mjs "$APP" "$(cygpath -w $PR/p3)"
+run 25-ra1-prune "R-A1 rerun: prune refusal, normal pruning, same-second tie" probes/p-ra1-prune.mjs "$APP" "$(cygpath -w $PR/ra1-run)"
+run 26-a03-bootstrap "A-03 rerun: bootstrap refusals print no marker" probes/p-a03-bootstrap.mjs "$APP" "$(cygpath -w $PR/a03-run)"

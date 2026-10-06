@@ -5,13 +5,15 @@
 - WP2 đã nghiệm thu (5fafeae, digest e61fa914).
 - WP3 đã nghiệm thu: WP3-REGATE3 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
-- WP4 đang làm: các task T01–T08 và T12A đã commit, và các quyết định F-1..F-6 của chủ
-  dự án đã ghi vào docs (WP4-DEC). Board ghi task kế tiếp.
+- WP4 đã nghiệm thu: WP4-REGATE4 PASS và hai lần kiểm tra lại độc lập cuối cùng,
+  WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969. Các câu
+  hỏi WP4-I-1..I-5 vẫn mở, đang áp dụng mặc định an toàn; R-A3 cần chủ dự án chọn trước
+  pilot WP5.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
-[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP3 handoff](delivery/WP3_HANDOFF.vi.md),
-[WP3 recheck A3](delivery/WP3_RECHECK_A3.vi.md) và [WP3 recheck BC3](delivery/WP3_RECHECK_BC3.vi.md).
+[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP4 handoff](delivery/WP4_HANDOFF.vi.md),
+[WP4 recheck A4](delivery/WP4_RECHECK_A4.vi.md) và [WP4 recheck B4](delivery/WP4_RECHECK_B4.vi.md).
 
 Mở repo này trong Claude Code bằng đăng nhập subscription. Cấu hình dự án chọn
 coordinator; [tài liệu 08](../docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) quy định định tuyến
@@ -34,17 +36,14 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Gỡ skill GOV-SKILL: đã xong.** Chủ dự án chọn gỡ skill `.claude/skills/readme-md/`
-   thay vì sửa (2026-10-05, đảo lại H-Q3 (a)). Skill đã được gỡ ở a923351; gate đạt, và
-   audit mới [GOV_SKILL_REMOVE_REVIEW](delivery/GOV_SKILL_REMOVE_REVIEW.vi.md) đạt.
-2. **Thực hiện WP4.** Làm theo [kế hoạch WP4](delivery/tasks/WP4-PLAN.md):
-   - T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5);
-   - T09–T11 (nhập workbook và số dư OT đầu kỳ);
-   - T12 (bước 6 và chạy lại toàn bộ diễn tập) và T13 (runbook và bàn giao).
-
-   Worker implement, và committer đóng băng từng task. Sau đó verifier chạy gate cuối
-   package WP4, và auditor mới chạy [WP4_REVIEW](prompts/WP4_REVIEW.vi.md).
-3. **WP5.** WP5 bắt đầu bằng nghiệm thu độc lập. Pilot thật do chủ dự án quyết định.
+1. **Biên bản nghiệm thu WP4.** WP4-ACCREC điền biên bản nghiệm thu trong
+   [WP4 handoff](delivery/WP4_HANDOFF.vi.md), và commit WP4-ACCEPT ghi lại nó. Không đổi
+   source.
+2. **WP5.** Làm theo [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.vi.md): WP5 bắt đầu bằng
+   nghiệm thu độc lập, sau đó là pilot packet cụ thể. Auditor mới dùng
+   [WP5_REVIEW](prompts/WP5_REVIEW.vi.md). Pilot thật, gửi thật và triển khai thật do
+   chủ dự án quyết định.
+3. **Việc của chủ dự án:** WP4-I-1..I-5, và chọn cách rollback R-A3 trước pilot.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
 `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới

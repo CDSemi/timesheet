@@ -1,0 +1,25 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A4: corrections to source-checks.sh. C2 uses the real paths of bootstrap, automation and
+# operationsStatus (src/server/services/), docs/10 (10_DECISIONS_AND_SOURCES) and the migrations (src/server/db/,
+# already inside src/server/db in C); D3 reports git grep's own exit status instead of the pipe's.
+REPO=<project>
+cd $REPO
+OLD=972ccda6409a7521a008c55c35a5b5cf416daf1e; NEW=546cddaf6747aef85e8b6d9b7712de9e28f138bf
+A1=0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65; A2=cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d
+echo "== C2 (corrects C). blob ids at 0f7fba2, cc34e7f, 972ccda, 546cdda"
+for p in src/server/services/bootstrap.ts src/server/services/automation.ts src/server/services/operationsStatus.ts src/server/db/migrations.ts src/server/db/migrations docs/10_DECISIONS_AND_SOURCES.md docs/10_DECISIONS_AND_SOURCES.vi.md docs/07_DEPLOYMENT_AND_OPERATIONS.md docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md src/server/routes/signatures.ts src/server/routes/admin.ts src/server/routes/auth.ts tsconfig.server.json tsconfig.client.json; do
+  ids=""
+  for c in $A1 $A2 $OLD $NEW; do id=$(git rev-parse -q --verify "$c:$p") || id="(absent)"; ids="$ids ${id:0:10}"; done
+  echo "$p:$ids"
+done
+echo "== C4. files under src/server/routes changed 972ccda..546cdda"
+git diff --name-status $OLD $NEW -- src/server/routes
+echo "== C5. files under src/server/services changed 972ccda..546cdda (expect none)"
+git diff --name-status $OLD $NEW -- src/server/services; echo "(end)"
+echo "== D3 (corrects D2's exit report). area-A modules that mention xlsxReader, routes/imports or importModel"
+git grep -l -E "xlsxReader|routes/imports|importModel" $NEW -- src/server/ops src/server/db src/server/jobs src/server/mail src/server/files src/server/cli.ts src/server/index.ts src/server/config.ts src/server/services/bootstrap.ts src/server/services/automation.ts src/server/services/operationsStatus.ts scripts
+echo "git grep exit=$? (1 = no match)"
+echo "== D4. the area-A services that import workbookImport or templateMapping (expect none)"
+git grep -l -E "workbookImport|templateMapping" $NEW -- src/server/ops src/server/db src/server/jobs src/server/mail src/server/files src/server/cli.ts src/server/index.ts src/server/config.ts src/server/services/bootstrap.ts src/server/services/automation.ts src/server/services/operationsStatus.ts scripts
+echo "git grep exit=$? (1 = no match)"

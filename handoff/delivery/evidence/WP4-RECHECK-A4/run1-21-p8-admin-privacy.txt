@@ -1,0 +1,23 @@
+# 21-p8-admin-privacy: P8 rerun: admin allowlists (WP4-RECHECK-A4)
+date_utc: 2026-10-06T19:44:23Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (each probe passes its own pair under its work folder to every child)
+app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate)
+$ node probes/p8-admin-privacy.mjs <work>\prod <work>\pr\p2
+FAIL  administrator signs in
+INFO  /api/admin/operations key paths: error, error.code, error.message
+INFO  /api/admin/users key paths: error, error.code, error.message
+INFO  /api/admin/submissions key paths: error, error.code, error.message
+FAIL  operations status: exactly the allowlisted key paths (backup, disk, outbound, retention included)  error,error.code,error.message
+FAIL  account list: exactly the account fields plus not_set_up
+<work>/probes/p8-admin-privacy.mjs:74
+check('not_set_up is a boolean for every account', users.users.every((user) => typeof user.not_set_up === 'boolean'), JSON.stringify(users.users.map((user) => user.not_set_up)));
+                                                               ^
+
+TypeError: Cannot read properties of undefined (reading 'every')
+    at <work>/probes/p8-admin-privacy.mjs:74:64
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+Node.js v24.21.0
+exit 1
+date_utc: 2026-10-06T19:44:25Z
+[end]

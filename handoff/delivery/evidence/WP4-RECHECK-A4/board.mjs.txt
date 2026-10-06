@@ -1,0 +1,23 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A4: prints the board entries of the round-4 tasks (id, status, attempt, agent ids, model, effort) for the
+// author/auditor separation check. Read-only; reads a copy of the board.
+import { readFileSync } from 'node:fs';
+const board = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const wanted = new Set(['WP4-FIXB4', 'WP4-DEPCLEAN2', 'WP4-FIXB4-FREEZE', 'WP4-REGATE4', 'WP4-RECHECK-B4', 'WP4-RECHECK-A', 'WP4-FIXB3', 'WP4-RECHECK-B3']);
+const seen = [];
+const walk = (node) => {
+  if (Array.isArray(node)) { node.forEach(walk); return; }
+  if (node && typeof node === 'object') {
+    const id = node.id ?? node.task_id;
+    if (typeof id === 'string' && wanted.has(id)) seen.push(node);
+    Object.values(node).forEach(walk);
+  }
+};
+walk(board);
+for (const task of seen) {
+  const pick = {};
+  for (const [key, value] of Object.entries(task)) {
+    if (/agent|model|effort|status|attempt|author|auditor|profile|reviewer|digest|reviewed|freeze/i.test(key)) pick[key] = value;
+  }
+  console.log(`${task.id ?? task.task_id}: ${JSON.stringify(pick)}`);
+}

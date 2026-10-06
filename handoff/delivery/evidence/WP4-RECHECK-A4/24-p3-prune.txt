@@ -1,0 +1,23 @@
+# 24-p3-prune: P3 rerun: prune junction escapes and selection (WP4-RECHECK-A4)
+date_utc: 2026-10-06T19:46:24Z
+DATA_DIR=<work>\data DATABASE_PATH=<work>\data\timesheet.db (each probe passes its own pair under its work folder to every child)
+app folder: <work>\prod (image-equivalent: production-only node_modules, no fflate; plus reference/examples for the development seed; run 2)
+$ node probes/p3-prune.mjs <work>\prod <work>\pr2\p3
+INFO  candidates 6: 20260315T000000Z, 20260615T000000Z, 20260620T000000Z, 20261006T070000Z, 20261006T080000Z, 20261006T100000Z; ignored 5
+PASS  junction named like a backup is not a candidate (and is only counted)
+PASS  a manifest whose instant differs from the name, a staging folder, a plain file and another folder are not candidates  ignored 5
+PASS  dry run reports counts and removes nothing  {"candidates":6,"kept":2,"removed":4,"ignored":5,"dryRun":true}
+PASS  a run whose new backup is not among the candidates is refused and removes nothing
+PASS  a candidate that resolves outside the target at removal time refuses the whole run before any removal
+INFO  real run: {"candidates":6,"kept":2,"removed":4,"ignored":5,"dryRun":false}
+INFO  left in the target: .partial-timesheet-backup-20260301T000000Z-ffffffff, owner-notes, tb-20260101T000000Z-dddddddd, tb-20260201T000000Z-eeeeeeee, tb-20260302T000000Z-11111111, tb-20260620T000000Z-44444444, tb-20261006T100000Z-aaaaaaaa
+PASS  the newest backup survives
+PASS  removed: the two older same-day backups and the March backup; kept: newest, June monthly
+PASS  junction escape: every victim folder is unchanged (files/ junction and junction entry were unlinked, not followed)
+PASS  the backup-named junction and every non-tool entry are untouched
+INFO  180 nightly backups; prune with the correct clock keeps 13 and removes 167; with the clock set back to 2025-01-01: clock_behind_backups
+PASS  R-A1: a backward clock now refuses the run (clock_behind_backups) instead of keeping fewer than the 7/4/6 policy  180 of 180 folders left
+P3 PASSED
+exit 0
+date_utc: 2026-10-06T19:46:24Z
+[end]

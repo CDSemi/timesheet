@@ -1,0 +1,42 @@
+// WP4-RECHECK-A4 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A4: compares package.json and package-lock.json at 972ccda and 546cdda by package path, version,
+// resolved, integrity and the dev/optional/peer flags; lists every difference.
+import { readFileSync } from 'node:fs';
+const [oldLockPath, newLockPath, oldPkgPath, newPkgPath] = process.argv.slice(2);
+const oldLock = JSON.parse(readFileSync(oldLockPath, 'utf8'));
+const newLock = JSON.parse(readFileSync(newLockPath, 'utf8'));
+const oldPkg = JSON.parse(readFileSync(oldPkgPath, 'utf8'));
+const newPkg = JSON.parse(readFileSync(newPkgPath, 'utf8'));
+const fields = ['version', 'resolved', 'integrity', 'dev', 'optional', 'devOptional', 'peer', 'license'];
+let differences = 0;
+const report = (line) => { differences += 1; console.log(line); };
+console.log(`lockfileVersion old=${oldLock.lockfileVersion} new=${newLock.lockfileVersion}`);
+const oldKeys = Object.keys(oldLock.packages), newKeys = Object.keys(newLock.packages);
+console.log(`package entries old=${oldKeys.length} new=${newKeys.length}`);
+for (const key of oldKeys) if (!(key in newLock.packages)) report(`REMOVED ${key}`);
+for (const key of newKeys) if (!(key in oldLock.packages)) report(`ADDED ${key}`);
+for (const key of oldKeys) {
+  if (!(key in newLock.packages) || key === '') continue;
+  const a = oldLock.packages[key], b = newLock.packages[key];
+  for (const field of fields) if (JSON.stringify(a[field]) !== JSON.stringify(b[field])) report(`CHANGED ${key} ${field}: ${JSON.stringify(a[field])} -> ${JSON.stringify(b[field])}`);
+  const rest = (o) => JSON.stringify(Object.fromEntries(Object.entries(o).filter(([k]) => !fields.includes(k)).sort()));
+  if (rest(a) !== rest(b)) report(`CHANGED ${key} other fields`);
+}
+const root = (lock) => lock.packages[''];
+for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+  const a = root(oldLock)[section] ?? {}, b = root(newLock)[section] ?? {};
+  for (const name of new Set([...Object.keys(a), ...Object.keys(b)])) if (a[name] !== b[name]) report(`ROOT lock ${section} ${name}: ${a[name]} -> ${b[name]}`);
+}
+for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies', 'overrides']) {
+  const a = oldPkg[section] ?? {}, b = newPkg[section] ?? {};
+  for (const name of new Set([...Object.keys(a), ...Object.keys(b)])) if (JSON.stringify(a[name]) !== JSON.stringify(b[name])) report(`package.json ${section} ${name}: ${JSON.stringify(a[name])} -> ${JSON.stringify(b[name])}`);
+}
+const otherPkg = (p) => JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => !['dependencies', 'devDependencies'].includes(k))));
+console.log(`package.json fields other than dependencies/devDependencies identical: ${otherPkg(oldPkg) === otherPkg(newPkg)}`);
+// Who depends on fflate in the new lock (other than the root)?
+const dependents = newKeys.filter((key) => key !== '' && ['dependencies', 'peerDependencies', 'optionalDependencies'].some((s) => newLock.packages[key][s]?.fflate));
+console.log(`lock entries that depend on fflate: ${dependents.length === 0 ? 'none' : dependents.join(', ')}`);
+// Production closure of the new lock: every entry without dev:true.
+const prod = newKeys.filter((key) => key !== '' && !newLock.packages[key].dev);
+console.log(`new lock: ${prod.length} non-dev entries; fflate among them: ${prod.includes('node_modules/fflate')}`);
+console.log(`differences listed: ${differences}`);
