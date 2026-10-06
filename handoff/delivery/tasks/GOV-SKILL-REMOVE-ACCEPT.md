@@ -112,4 +112,11 @@ Return at most 120 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD a92335184e7dc09b2114ec30a46979ecd02ab92a; post-HEAD and commit
+  c398cab2ec896999543589c574bd0ac701247a7d; pushed yes; remote SHA the same.
+- Digest fcd8fe1e859ca34b63c6b82e2d4f593c8bfd422a2d8b04f24d056f82bb6b194c (750 files);
+  staged 27 files.
+- Node v24.21.0 by full path (a first call through PATH gave v26, rerun with full path).
+- Exit codes, all 0: digest, add, precommit, diff --check, JSON parse, validator,
+  check_recovery, validate_package --preflight. Evidence: evidence/GOV-SKILL-REMOVE-ACCEPT/checks.txt.
+- No fixes applied; no blockers.

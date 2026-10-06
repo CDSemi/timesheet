@@ -280,8 +280,8 @@ describe('capture (default outbound mode)', () => {
     const handlers = createJobHandlers({ db: t.db, clock: t.clock, files, delivery });
     t.clock.set('2026-09-29T20:10:00Z');
     const summary = await runJobsOnce({ db: t.db, clock: t.clock, owner: 'runner-default', handlers });
-    // The send job, and the day's orphan sweep (WP4-T07) that every pass with the production handlers schedules.
-    expect(summary).toMatchObject({ claimed: 2, succeeded: 2 });
+    // The send job, the day's orphan sweep (WP4-T07) and the day's job-row retention (WP4-T07B) that every pass with the production handlers schedules.
+    expect(summary).toMatchObject({ claimed: 3, succeeded: 3 });
 
     const [attempt, ...others] = attempts(revisionId);
     expect(others).toHaveLength(0);

@@ -1,0 +1,55 @@
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/WP4-T07B/mut
+
+ ❯ tests/integration/job-retention.test.ts (18 tests | 2 failed) 3364ms
+   ❯ the jobs_no_delete trigger after migration 0011 (6)
+     × refuses every other delete even while the window is open 230ms
+   ❯ migration 0011 (3)
+     × upgrades a populated version 10 database, keeping every job row, and the exception then applies 237ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > refuses every other delete even while the window is open
+AssertionError: send: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/integration/job-retention.test.ts:255:81
+    253|     openWindow(NOW);
+    254|     for (const [name, id] of Object.entries(rows)) {
+    255|       expect(() => t.db.prepare('DELETE FROM jobs WHERE id = ?').run(i…
+       |                                                                                 ^
+    256|       expect(exists(id), name).toBe(true);
+    257|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/job-retention.test.ts > migration 0011 > upgrades a populated version 10 database, keeping every job row, and the exception then applies
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/integration/job-retention.test.ts:340:80
+    338|       db.prepare("UPDATE job_retention_window SET as_of = '2026-10-20T…
+    339|       expect(db.prepare("DELETE FROM jobs WHERE id = 'old-scan'").run(…
+    340|       expect(() => db.prepare("DELETE FROM jobs WHERE id = 'old-send'"…
+       |                                                                                ^
+    341|     } finally {
+    342|       db.close();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  00:22:14
+   Duration  5.28s (tests 65%, import 23%, transform 12%)
+

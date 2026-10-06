@@ -11,7 +11,7 @@ import {
   holidayImportPreviewBody,
 } from '../http/schemas.ts';
 import { normalizeReason, readJson } from '../http/validation.ts';
-import { activationJson, getAutomationActivation, setAutomationActivation } from '../services/automation.ts';
+import { activationJson, getAutomationActivation, hasSavedSettings, setAutomationActivation } from '../services/automation.ts';
 import { createPayrollException } from '../services/calendars.ts';
 import { calendarVersionJson, commitHolidayImport, previewHolidayImport } from '../services/holidayImport.ts';
 import {
@@ -57,8 +57,12 @@ function parseSubmissionLimit(value: string | undefined): number {
   return limit;
 }
 
-/** Account fields only: never the password hash and never another user's private data. */
-function accountJson(account: UserAccount) {
+/**
+ * Account fields only: never the password hash and never another user's private data. `not_set_up` is the one derived value, a
+ * boolean (owner decision F-3 (a), docs/03): true while the account never saved its submission settings, by the same function that
+ * makes the automation skip such an account (H-Q1 (a)). It carries no setting value, period, entry or date.
+ */
+function accountJson(db: AppDeps['db'], account: UserAccount) {
   return {
     id: account.id,
     email: account.email,
@@ -68,6 +72,7 @@ function accountJson(account: UserAccount) {
     calendar_id: account.calendar_id,
     created_at: account.created_at,
     updated_at: account.updated_at,
+    not_set_up: !hasSavedSettings(db, account.id),
   };
 }
 
@@ -84,6 +89,8 @@ function accountJson(account: UserAccount) {
  * backup and its age, the free space of the data volume, the outbound pause with counts of held and waiting
  * sends, job and delivery totals; per person and period the revision, PDF and delivery states, redacted fault
  * codes and recipient addresses) and never a person's timesheet details, templates or message content.
+ * The account list adds one boolean per person, `not_set_up` (owner decision F-3 (a), WP4-T07B), and the status the last job-row
+ * retention run (a UTC instant and a count); neither carries any setting value, period, entry or date.
  *
  * Calendar administration (FR-13, AC-05) is company configuration, not personal data: the
  * holiday CSV preview/commit and payroll exceptions return calendar-only fields (dates, names,
@@ -111,7 +118,7 @@ export function adminRoutes(deps: AppDeps) {
     c.json({ submissions: submissionStatusJson(listSubmissionStatus(deps.db, { limit: parseSubmissionLimit(c.req.query('limit')) })) }),
   );
 
-  app.get('/users', (c) => c.json({ users: listUsers(deps.db).map(accountJson) }));
+  app.get('/users', (c) => c.json({ users: listUsers(deps.db).map((account) => accountJson(deps.db, account)) }));
 
   app.get('/shares', (c) => c.json({ shares: listAllShares(deps.db) }));
 
@@ -143,7 +150,7 @@ export function adminRoutes(deps: AppDeps) {
     );
     const account = getUserAccount(deps.db, id);
     if (account === undefined) throw notFound('User');
-    return c.json({ user: accountJson(account) }, 201);
+    return c.json({ user: accountJson(deps.db, account) }, 201);
   });
 
   app.patch('/users/:id', async (c) => {
@@ -156,7 +163,7 @@ export function adminRoutes(deps: AppDeps) {
       ...(body.role === undefined ? {} : { role: body.role }),
       ...(body.calendar_id === undefined ? {} : { calendarId: body.calendar_id }),
     });
-    return c.json({ user: accountJson(account) });
+    return c.json({ user: accountJson(deps.db, account) });
   });
 
   app.post('/users/:id/deactivate', async (c) => {
@@ -167,7 +174,7 @@ export function adminRoutes(deps: AppDeps) {
       userId: c.req.param('id'),
       reason: normalizeReason(body.reason),
     });
-    return c.json({ user: accountJson(account) });
+    return c.json({ user: accountJson(deps.db, account) });
   });
 
   app.post('/users/:id/reactivate', async (c) => {
@@ -178,7 +185,7 @@ export function adminRoutes(deps: AppDeps) {
       userId: c.req.param('id'),
       reason: normalizeReason(body.reason),
     });
-    return c.json({ user: accountJson(account) });
+    return c.json({ user: accountJson(deps.db, account) });
   });
 
   // Holiday CSV: preview writes nothing; commit needs the preview hash (E-4, AC-05, R-07).

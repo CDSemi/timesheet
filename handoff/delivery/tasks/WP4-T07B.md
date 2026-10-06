@@ -32,8 +32,8 @@
   - `src/server/services/operationsStatus.ts` and `src/server/routes/admin.ts`;
   - `src/client/components/AdminUsers.tsx`, `src/client/adminModel.ts` and
     `src/client/styles.css`.
-- Baseline: main at a92335184e7dc09b2114ec30a46979ecd02ab92a. The working tree differs
-  only in handoff/.
+- Baseline: main at c398cab2ec896999543589c574bd0ac701247a7d. Its source equals
+  a923351 (digest fcd8fe1e…, 750 files). The working tree differs only in handoff/.
 
 ## Runtime
 
@@ -143,4 +143,89 @@ Return at most 160 words, beginning with your self-reported model:
 
 ## Results
 
-(Worker appends here.)
+Self-reported model: claude-sonnet-5-5. Status: done, all required checks green; nothing committed.
+
+### F-3 flag
+- `GET /api/admin/users` and the create, update, deactivate and reactivate responses carry one new key, `not_set_up`
+  (boolean). It is `!hasSavedSettings(db, user.id)`: `hasSavedSettings` in `automation.ts` is the function the deadline
+  scan already used to tell `not_configured` from `before_effective` (H-Q1 (a)); it is now exported, so there is one
+  definition. No settings value, period, entry or date is exposed.
+- The exact key lists that pin the admin account JSON include it: `tests/integration/operations-status.test.ts`
+  (new `USER_PATHS`, inside the privacy-boundary test, with forbidden-needle and forbidden-key scans over the users
+  response too), and the existing pins in user-admin, isolation, the isolation e2e and the smoke script.
+- Never-configured accounts still get no automation and no overdue record: already pinned by
+  `tests/integration/deadline.test.ts` ("never automates an account that never saved ..." and "records the overdue
+  period for an account that saved auto-submit off, and nothing for one that never saved"); no new test added.
+- UI: `AdminUsers.tsx` shows a `badge badge-warn` "Not set up" and a `hint muted` sentence from the new pure
+  `setupFlag()` in `src/client/components/adminModel.ts` (the brief named `src/client/adminModel.ts`; the file is under
+  `components/`). No CSS change at all: existing `.badge-warn`, `.hint`, `.muted` reuse the E-8 tokens.
+
+### F-4 retention
+- Migration `0011_job_retention.ts` (version 11, `job_retention`): rebuilds `jobs_no_delete` as
+  `WHEN COALESCE(kind IN (deadline_scan, reminder_scan) AND state = 'succeeded' AND updated_at < as_of - 30 days AND no
+  delivery_attempts row AND no reminder_occurrences row, 0) = 0 -> RAISE(ABORT, 'immutable_job')`. A trigger cannot see
+  the injected clock, so the instant travels in a new single-row table `job_retention_window(id = 1, as_of)`, NULL
+  (closed) except inside the retention job's own transaction; the 30 days and the kinds live only in the trigger. The
+  COALESCE matters: a NULL comparison (window closed) would otherwise let the delete through. The migration also adds
+  `operations_state.job_retention_last_run_at` and `job_retention_last_deleted` (shape trigger: both or neither).
+- `src/server/jobs/retentionJob.ts`: kind `job_retention`, one job per UTC day (`job_retention:<day>`), enqueued by the
+  runner next to the sweep for any runner that owns the handler, not an outbound kind (so the pause never holds it back),
+  registered in `createJobHandlers` (`onRetention`, counts-only log line when it deleted something). It deletes in chunks
+  of 1000, each its own transaction that opens the window, deletes eligible rows and closes the window; referenced rows
+  are excluded in its own WHERE so one referenced row never aborts a batch. Exactly 30 days is kept (strictly more than).
+- Status: `operations.retention = { last_run_at, last_deleted }` (instant and count only) in the admin operations JSON,
+  allowlisted in `OPERATIONS_PATHS`. The `OperationsStatus` type in `api.ts` has it; `OperationsStatus.tsx` is not an owned
+  path, so the screen does not display it yet.
+
+### Tests, red to green
+- Red first (`evidence/WP4-T07B/red.txt`): 6 failed in operations-status and adminModel; `job-retention.test.ts` failed to
+  import the missing module, so its tests did not run red individually (honest note). Then green.
+- New `tests/integration/job-retention.test.ts` (18 tests): 31-day scan job deleted and 29-day kept, exactly 30 days
+  kept, cut-off follows the injected clock; failed/cancelled/queued scans and send, send_reminder, render_pdf,
+  orphan_sweep, job_retention rows never deleted; referenced scan row kept and the job still succeeds; direct DELETE refused
+  by the trigger with the window closed, and for every non-eligible row (including a 29-day row and a referenced row) with the
+  window open; per-UTC-day idempotency; outbound pause does not hold it; production registration; counts only; window
+  single-row; migration fresh 1 to 11 and upgrade from a populated v10 database. Also operations-status tests for the flag
+  (cleared on first save, same condition, create response, writes nothing) and for the retention status; adminModel test.
+- Mutation (scratch clone, kind condition removed from the trigger): 2 tests fail (`mutation.txt`).
+- e2e `tests/e2e/admin-users.spec.ts` (desktop and mobile): only the never-configured account is flagged.
+
+### Migrations
+- Fresh 1 to 11 and upgrade of a populated v10 database are tested (job-retention.test.ts); `migrations.test.ts` pins
+  updated to 11 (names list, tables incl. `job_retention_window`, operations_state columns); restore.test.ts keeps its
+  migration-0010 tests on the 1-to-10 set (`UP_TO_10`).
+
+### Screenshots viewed
+`admin-users-not-set-up-desktop-synthetic.png` and `admin-users-not-set-up-mobile-synthetic.png`: the badge sits in the
+account head beside Active, the sentence below it, no sideways scroll on mobile; the configured account has no flag.
+
+### CSS check
+`git diff src/client/styles.css` is empty: no colour, length, duration or shadow added.
+
+### Last commands (after the final edit)
+- `npm run test:e2e`: exit 0, 133 passed, 5 skipped.
+- `NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify`: exit 0, 71 files, 1613 tests, SMOKE PASSED, no deprecation line.
+- `npm run digest`: `7fe65713f54a427b290ba3c67895bedeb4dd0c1d596504d6765aa73fc7ebbfb4` (754 files, handoff/ excluded).
+- Precommit check on a temporary index over the changed files and the evidence: `evidence/WP4-T07B/precommit.txt`.
+
+### Changed paths
+- New: `src/server/db/migrations/0011_job_retention.ts`, `src/server/jobs/retentionJob.ts`,
+  `tests/integration/job-retention.test.ts`, `tests/e2e/admin-users.spec.ts`, `handoff/delivery/evidence/WP4-T07B/`.
+- Owned and changed: `src/server/db/migrations.ts`, `src/server/jobs/runner.ts`, `src/server/services/operationsStatus.ts`,
+  `src/server/routes/admin.ts`, `src/client/components/AdminUsers.tsx`, `src/client/components/adminModel.ts`,
+  `src/client/api.ts`, `tests/integration/operations-status.test.ts`, `tests/integration/migrations.test.ts`,
+  `tests/client/adminModel.test.ts`, this brief.
+- `jobStore.ts`, `sweepJob.ts`, `src/client/styles.css`, `bootstrap.test.ts`, `upgrade.test.ts`: unchanged (not needed).
+
+### Deviations (minimal edits outside the owned list)
+1. `src/server/services/automation.ts`: `hasSavedSettings` exported with a doc comment (one definition of "set up").
+2. Pins that the new job and key broke, mechanical: `tests/integration/delivery.test.ts` and `jobs-restart.test.ts`
+   (a full-handler pass now also claims the daily retention job: claimed +1), `tests/integration/restore.test.ts`
+   (migration-0010 tests use the 1-to-10 set), `tests/integration/user-admin.test.ts` and `isolation.test.ts`
+   (`not_set_up` in the account key list), `tests/e2e/isolation.spec.ts` (same), `tests/e2e/automation.spec.ts` (job-count
+   caps 1 to 2 and 2 to 4 for sweep plus retention), `scripts/smoke-built-server.mjs` (account field list).
+3. The admin router keeps its reviewed import list: `accountJson` types its db as `AppDeps['db']` instead of importing `Db`.
+4. `adminModel.ts` is at `src/client/components/adminModel.ts`, not `src/client/adminModel.ts`.
+5. `handoff/delivery/tasks/WP4-T05B.md` appeared untracked during the task; it is not mine and was not touched.
+
+Commit description: Add the administrator "not set up" flag and 30-day retention of succeeded scan job rows (migration 0011).

@@ -15,7 +15,7 @@ let t: TestContext;
 let admin: string;
 let employee: string;
 
-const ACCOUNT_KEYS = ['calendar_id', 'created_at', 'display_name', 'email', 'id', 'role', 'status', 'updated_at'];
+const ACCOUNT_KEYS = ['calendar_id', 'created_at', 'display_name', 'email', 'id', 'not_set_up', 'role', 'status', 'updated_at'];
 const freshPassword = () => randomBytes(18).toString('base64url');
 
 beforeEach(async () => {

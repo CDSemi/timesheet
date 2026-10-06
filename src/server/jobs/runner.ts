@@ -18,6 +18,7 @@ import {
 } from './jobStore.ts';
 import { createPdfJobHandler, JOB_RENDER_PDF } from './pdfJob.ts';
 import { createReminderScanHandler, createSendReminderHandler, enqueueReminderScan, JOB_REMINDER_SCAN, JOB_SEND_REMINDER } from './reminderJob.ts';
+import { createRetentionJobHandler, enqueueJobRetention, JOB_RETENTION, type RetentionCounts, retentionLine } from './retentionJob.ts';
 import { createSendJobHandler, JOB_SEND_EMAIL } from './sendJob.ts';
 import { createSweepJobHandler, enqueueOrphanSweep, JOB_ORPHAN_SWEEP, type OrphanSweepCounts, sweepLine } from './sweepJob.ts';
 
@@ -35,7 +36,8 @@ import { createSweepJobHandler, enqueueOrphanSweep, JOB_ORPHAN_SWEEP, type Orpha
  * leaves the outbound kinds out: the pass still renders PDFs and runs the scans, but no send or
  * reminder job is leased, no attempt is spent and nothing reaches the outbound adapter.
  * A pass that owns the sweep handler also enqueues today's orphan sweep (WP4-T07): one job per UTC day, idempotent, not an
- * outbound kind, so the pause never holds it back.
+ * outbound kind, so the pause never holds it back. Likewise it enqueues today's job-row retention (WP4-T07B, F-4 (a)): one
+ * job per UTC day that deletes succeeded scan job rows finished more than 30 days ago, and counts only.
  */
 
 export interface JobContext {
@@ -72,7 +74,7 @@ export const DEFAULT_INTERVAL_MS = 15_000;
 
 /**
  * The production handlers: the PDF job, the send job, the deadline scan, the reminder scan and
- * send jobs and the daily orphan sweep (its counts are printed as one line when it removed something); later job kinds register here. The send jobs use the configured outbound mode (capture
+ * send jobs the daily orphan sweep and the daily job-row retention (their counts are printed as one line when they removed something); later job kinds register here. The send jobs use the configured outbound mode (capture
  * by default, under the files' private data directory) and the configured sender; reminders link
  * to the configured public base URL.
  */
@@ -83,6 +85,8 @@ export function createJobHandlers(deps: {
   delivery: Pick<DeliveryConfig, 'senderAddress' | 'outbound' | 'publicBaseUrl'>;
   /** Receives the counts of every orphan sweep; by default a sweep that removed something prints one counts-only line. */
   onSweep?: (counts: OrphanSweepCounts) => void;
+  /** Receives the counts of every job-row retention run; by default a run that deleted something prints one counts-only line. */
+  onRetention?: (counts: RetentionCounts) => void;
 }): JobHandlers {
   const { db, clock, files, delivery } = deps;
   const outbound = createOutboundAdapter(delivery.outbound, { dataDir: files.root });
@@ -92,6 +96,15 @@ export function createJobHandlers(deps: {
     [JOB_DEADLINE_SCAN]: createDeadlineJobHandler({ db, clock }),
     [JOB_REMINDER_SCAN]: createReminderScanHandler({ db, clock }),
     [JOB_SEND_REMINDER]: createSendReminderHandler({ db, clock, outbound, senderAddress: delivery.senderAddress, publicBaseUrl: delivery.publicBaseUrl }),
+    [JOB_RETENTION]: createRetentionJobHandler({
+      db,
+      clock,
+      onResult:
+        deps.onRetention ??
+        ((counts) => {
+          if (counts.deletedScanJobs > 0) console.log(retentionLine(counts));
+        }),
+    }),
     [JOB_ORPHAN_SWEEP]: createSweepJobHandler({
       db,
       clock,
@@ -120,6 +133,8 @@ export async function runJobsOnce(options: RunnerOptions): Promise<RunSummary> {
   if (kinds.includes(JOB_REMINDER_SCAN)) enqueueReminderScan(db, clock);
   // Today's orphan sweep (idempotent on the UTC day; not gated by the activation instant or the outbound pause).
   if (kinds.includes(JOB_ORPHAN_SWEEP)) enqueueOrphanSweep(db, clock);
+  // Today's job-row retention (idempotent on the UTC day; not gated by the activation instant or the outbound pause).
+  if (kinds.includes(JOB_RETENTION)) enqueueJobRetention(db, clock);
 
   // Before the claim sweep below can end the job of a dead runner (docs/05 failure table: uncertain, never resent).
   if (kinds.includes(JOB_SEND_EMAIL)) recoverInterruptedSends(db, clock);

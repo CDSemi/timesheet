@@ -285,8 +285,8 @@ describe('run-jobs CLI', () => {
     // WP3-T09: the send job is registered too. Claimed before the PDF it waits (pdf_not_ready);
     // claimed after it, the unset MAIL_FROM blocks it with the visible fault sender_missing.
     const summary = JSON.parse(result.stdout) as Record<string, number>;
-    // The PDF job, the send job and the day's orphan sweep (WP4-T07); the sweep succeeds.
-    expect(summary).toMatchObject({ claimed: 3, succeeded: 2, lost: 0 });
+    // The PDF job, the send job, the day's orphan sweep (WP4-T07) and the day's job-row retention (WP4-T07B); the sweep and the retention succeed.
+    expect(summary).toMatchObject({ claimed: 4, succeeded: 3, lost: 0 });
     expect((summary.retried ?? 0) + (summary.intervention ?? 0)).toBe(1);
     expect(t.db.prepare('SELECT state, attempts, updated_at FROM jobs WHERE id = ?').get(pdfJobId)).toEqual({ state: 'succeeded', attempts: 1, updated_at: '2026-09-29T20:05:00Z' });
     const key = t.db

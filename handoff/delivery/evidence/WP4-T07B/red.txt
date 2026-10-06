@@ -1,0 +1,159 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/adminModel.test.ts (18 tests | 1 failed) 8ms
+   ❯ "not set up" flag (owner decision F-3 (a), WP4-T07B) (1)
+     × shows the flag only for an account whose settings were never saved 3ms
+ ❯ tests/integration/job-retention.test.ts (0 test)
+ ❯ tests/integration/operations-status.test.ts (22 tests | 5 failed) 7480ms
+   ❯ the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) (2)
+     × returns exactly the allowlisted fields and none of the private content 598ms
+   ❯ the "not set up" flag of the account list (owner decision F-3 (a), WP4-T07B) (4)
+     × flags an account that never saved its submission settings and clears it on the first save 277ms
+     × uses the H-Q1 (a) condition that governs automation, not a second definition 278ms
+     × also appears on the create response, true for a new account, and exposes no settings value 350ms
+   ❯ the retention result in the status (F-4 (a), WP4-T07B) (1)
+     × is empty until a retention job ran, then shows the run time and a count only 319ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/job-retention.test.ts [ tests/integration/job-retention.test.ts ]
+Error: Cannot find module '../../src/server/jobs/retentionJob.ts' imported from D:/Dropbox/Work.CDSemi/timesheet/tests/integration/job-retention.test.ts
+ ❯ tests/integration/job-retention.test.ts:11:1
+      9| import { OUTBOUND_JOB_KINDS } from '../../src/server/jobs/jobStore.ts';
+     10| import { JOB_REMINDER_SCAN } from '../../src/server/jobs/reminderJob.t…
+     11| import {
+       | ^
+     12|   createRetentionJobHandler,
+     13|   enqueueJobRetention,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/adminModel.test.ts > "not set up" flag (owner decision F-3 (a), WP4-T07B) > shows the flag only for an account whose settings were never saved
+TypeError: setupFlag is not a function
+ ❯ tests/client/adminModel.test.ts:150:12
+    148| describe('"not set up" flag (owner decision F-3 (a), WP4-T07B)', () =>…
+    149|   it('shows the flag only for an account whose settings were never sav…
+    150|     expect(setupFlag({ not_set_up: true })).toEqual({
+       |            ^
+    151|       label: 'Not set up',
+    152|       detail: 'This person has not saved submission settings yet, so n…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the privacy boundary of every admin response (F-3, WP2-A-01, A3-01) > returns exactly the allowlisted fields and none of the private content
+AssertionError: expected [ 'operations', …(39) ] to deeply equal [ 'operations', …(42) ]
+
+- Expected
++ Received
+
+@@ -31,13 +31,10 @@
+    "operations.outbound.held_send_jobs",
+    "operations.outbound.paused",
+    "operations.outbound.paused_at",
+    "operations.outbound.queued_send_jobs",
+    "operations.outbound.reason",
+-   "operations.retention",
+-   "operations.retention.last_deleted",
+-   "operations.retention.last_run_at",
+    "operations.runner",
+    "operations.runner.heartbeat_at",
+    "operations.runner.state",
+    "operations.sender",
+    "operations.sender.configured",
+
+ ❯ tests/integration/operations-status.test.ts:506:46
+    504|     expect(operations.status).toBe(200);
+    505|     expect(keyPaths(submissions.body).sort()).toEqual(SUBMISSION_PATHS…
+    506|     expect(keyPaths(operations.body).sort()).toEqual(OPERATIONS_PATHS);
+       |                                              ^
+    507|     const users = await statusOf('/api/admin/users', admin);
+    508|     expect(users.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the "not set up" flag of the account list (owner decision F-3 (a), WP4-T07B) > flags an account that never saved its submission settings and clears it on the first save
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+  {
+-   "85624057-4aa6-4c49-9478-d00a62963dc5": true,
+-   "ea1beaca-ab0e-48ae-bfe8-0cdf3d6bf7b3": true,
++   "85624057-4aa6-4c49-9478-d00a62963dc5": undefined,
++   "ea1beaca-ab0e-48ae-bfe8-0cdf3d6bf7b3": undefined,
+  }
+
+ ❯ tests/integration/operations-status.test.ts:573:27
+    571|
+    572|   it('flags an account that never saved its submission settings and cl…
+    573|     expect(await flags()).toEqual({ [t.userIds.admin]: true, [t.userId…
+       |                           ^
+    574|     const saved = await t.request('POST', '/api/settings/submission', {
+    575|       cookie: employee,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the "not set up" flag of the account list (owner decision F-3 (a), WP4-T07B) > uses the H-Q1 (a) condition that governs automation, not a second definition
+TypeError: hasSavedSettings is not a function
+ ❯ tests/integration/operations-status.test.ts:586:89
+    584|     await t.request('POST', '/api/settings/submission', { cookie: empl…
+    585|     const shown = await flags();
+    586|     for (const id of [t.userIds.admin, t.userIds.employee]) expect(sho…
+       |                                                                                         ^
+    587|   });
+    588|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the "not set up" flag of the account list (owner decision F-3 (a), WP4-T07B) > also appears on the create response, true for a new account, and exposes no settings value
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/operations-status.test.ts:595:42
+    593|     });
+    594|     expect(created.status, JSON.stringify(created.body)).toBe(201);
+    595|     expect(created.body.user.not_set_up).toBe(true);
+       |                                          ^
+    596|     expect(JSON.stringify(created.body)).not.toContain('payroll');
+    597|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/integration/operations-status.test.ts > the retention result in the status (F-4 (a), WP4-T07B) > is empty until a retention job ran, then shows the run time and a count only
+AssertionError: expected undefined to deeply equal { last_run_at: null, …(1) }
+
+- Expected:
+{
+  "last_deleted": null,
+  "last_run_at": null,
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/operations-status.test.ts:608:88
+    606| describe('the retention result in the status (F-4 (a), WP4-T07B)', () …
+    607|   it('is empty until a retention job ran, then shows the run time and …
+    608|     expect((await statusOf('/api/admin/operations', admin)).body.opera…
+       |                                                                                        ^
+    609|     t.db.prepare("UPDATE operations_state SET job_retention_last_run_a…
+    610|     expect((await statusOf('/api/admin/operations', admin)).body.opera…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  6 failed | 34 passed (40)
+   Start at  00:15:15
+   Duration  9.07s (tests 83%, import 11%, transform 6%)
+

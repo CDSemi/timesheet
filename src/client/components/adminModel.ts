@@ -51,6 +51,25 @@ export function refusalMessage(caught: unknown): string {
   return sentence === undefined ? describeError(caught) : `${sentence} (${code})`;
 }
 
+/** What the account list says about an account that never saved its submission settings (owner decision F-3 (a)). */
+export interface SetupFlag {
+  label: string;
+  detail: string;
+}
+
+/**
+ * The "not set up" flag of one account: null once the person saved settings. The server sends a boolean only (docs/03), so the
+ * flag names no setting, period or date; the sentence says what it means for that person, matching the H-Q1 (a) rule.
+ */
+export function setupFlag(user: Pick<AdminUser, 'not_set_up'>): SetupFlag | null {
+  return user.not_set_up
+    ? {
+        label: 'Not set up',
+        detail: 'This person has not saved submission settings yet, so nothing is submitted automatically and no overdue warning is shown to them.',
+      }
+    : null;
+}
+
 export interface CalendarOption {
   id: string;
   label: string;

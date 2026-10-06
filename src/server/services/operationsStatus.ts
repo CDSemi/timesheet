@@ -139,6 +139,7 @@ export interface OperationsStatus {
   backup: BackupStatus & { ageSeconds: number | null };
   disk: DataVolume;
   outbound: OutboundStatus;
+  retention: RetentionStatus;
   jobs: Record<(typeof JOB_STATES)[number], number>;
   deliveries: Record<(typeof DELIVERY_STATES)[number], number>;
 }
@@ -170,6 +171,7 @@ export function getOperationsStatus(db: Db, clock: Clock, sender: DeliverySetup,
     backup: { ...backup, ageSeconds: backupAgeSeconds(clock, backup.lastSuccessAt) },
     disk: readDataVolume(dataDir),
     outbound: getOutboundStatus(db),
+    retention: getRetentionStatus(db),
     jobs: totals(db, 'SELECT state, count(*) AS total FROM jobs GROUP BY state', JOB_STATES),
     deliveries: totals(db, 'SELECT state, count(*) AS total FROM delivery_attempts GROUP BY state', DELIVERY_STATES),
   };
@@ -183,6 +185,7 @@ export function operationsStatusJson(status: OperationsStatus) {
     backup: { ...backupStatusJson(status.backup), age_seconds: status.backup.ageSeconds },
     disk: { free_bytes: status.disk.freeBytes, total_bytes: status.disk.totalBytes },
     outbound: outboundStatusJson(status.outbound),
+    retention: retentionStatusJson(status.retention),
     jobs: status.jobs,
     deliveries: status.deliveries,
   };
@@ -288,6 +291,33 @@ export function outboundStatusJson(status: OutboundStatus) {
     queued_send_jobs: status.queuedSendJobs,
     held_send_jobs: status.heldSendJobs,
   };
+}
+
+/* ------------------------------------------------------- retention status ---- */
+
+/*
+ * The result of the latest daily job-row retention (WP4-T07B, migration 0011, owner decision F-4 (a)): when it ran and how many
+ * succeeded scan job rows it deleted. A UTC instant and a count only: never a job id, a business key or a user.
+ */
+
+export interface RetentionStatus {
+  /** When the latest retention run ended; null before the first run. */
+  lastRunAt: string | null;
+  /** How many job rows that run deleted; null before the first run. */
+  lastDeleted: number | null;
+}
+
+export function getRetentionStatus(db: Db): RetentionStatus {
+  const row = db
+    .prepare<[], { job_retention_last_run_at: string | null; job_retention_last_deleted: number | null }>(
+      'SELECT job_retention_last_run_at, job_retention_last_deleted FROM operations_state WHERE id = 1',
+    )
+    .get();
+  return { lastRunAt: row?.job_retention_last_run_at ?? null, lastDeleted: row?.job_retention_last_deleted ?? null };
+}
+
+export function retentionStatusJson(status: RetentionStatus) {
+  return { last_run_at: status.lastRunAt, last_deleted: status.lastDeleted };
 }
 
 /* ------------------------------------------------------- submission status ---- */

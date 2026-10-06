@@ -702,18 +702,21 @@ describe('migration 0010 (outbound pause)', () => {
   const PAUSE_COLUMNS = ['outbound_paused_at', 'outbound_paused_reason'];
   const columns = (db: Db): string[] => (db.pragma('table_info(operations_state)') as Array<{ name: string }>).map((column) => column.name);
 
+  /** Migration 0010 is pinned as the last of its own set; later migrations have their own tests. */
+  const UP_TO_10 = MIGRATIONS.filter((migration) => migration.version <= 10);
+
   it('applies fresh 1 to 10, is consistent and a rerun applies nothing', () => {
     const db = openDatabase(join(dir, 'fresh.db'));
     try {
-      expect(MIGRATIONS.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-      expect(MIGRATIONS.at(-1)?.name).toBe('outbound_pause');
-      expect(migrate(db)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], version: 10 });
+      expect(UP_TO_10.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(UP_TO_10.at(-1)?.name).toBe('outbound_pause');
+      expect(migrate(db, UP_TO_10)).toEqual({ applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], version: 10 });
       expect(db.pragma('user_version', { simple: true })).toBe(10);
       expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(db.pragma('foreign_key_check')).toEqual([]);
       expect(columns(db).slice(-2)).toEqual(PAUSE_COLUMNS);
       expect(getOutboundPause(db)).toBeNull();
-      expect(migrate(db)).toEqual({ applied: [], version: 10 });
+      expect(migrate(db, UP_TO_10)).toEqual({ applied: [], version: 10 });
     } finally {
       db.close();
     }
@@ -733,7 +736,7 @@ describe('migration 0010 (outbound pause)', () => {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").pluck().all() as string[];
       const snapshot = () => Object.fromEntries(tables.map((name) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));
       const before = snapshot();
-      expect(migrate(db, MIGRATIONS, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [10], version: 10 });
+      expect(migrate(db, UP_TO_10, new Date('2026-10-05T18:00:00Z'))).toEqual({ applied: [10], version: 10 });
       const after = snapshot();
       const strip = (rows: unknown[]) => (rows as Array<Record<string, unknown>>).map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !PAUSE_COLUMNS.includes(key))));
       for (const name of tables) {
@@ -745,7 +748,7 @@ describe('migration 0010 (outbound pause)', () => {
       ]);
       expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
       expect(db.pragma('foreign_key_check')).toEqual([]);
-      expect(migrate(db)).toEqual({ applied: [], version: 10 });
+      expect(migrate(db, UP_TO_10)).toEqual({ applied: [], version: 10 });
     } finally {
       db.close();
     }

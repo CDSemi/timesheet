@@ -411,6 +411,7 @@ describe('admin router is account administration, not private-data access (AC-01
         'display_name',
         'email',
         'id',
+        'not_set_up',
         'role',
         'status',
         'updated_at',

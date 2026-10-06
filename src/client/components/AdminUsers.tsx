@@ -1,6 +1,6 @@
 import { type SubmitEvent, useState } from 'react';
 import { type AdminUser, type AdminUserCreateRequest, type AdminUserUpdateRequest } from '../api.ts';
-import { type CalendarOption, passwordProblem, refusalMessage } from './adminModel.ts';
+import { type CalendarOption, passwordProblem, refusalMessage, setupFlag } from './adminModel.ts';
 
 type Role = AdminUser['role'];
 
@@ -146,6 +146,7 @@ export function UserRow({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const active = user.status === 'active';
+  const notSetUp = setupFlag(user);
 
   async function run(work: () => Promise<void>, message: string) {
     setError(null);
@@ -189,7 +190,17 @@ export function UserRow({
         <h3>{user.display_name}</h3>
         <span className={`badge ${active ? 'current' : 'old'}`}>{active ? 'Active' : 'Deactivated'}</span>
         {isSelf && <span className="badge">You</span>}
+        {notSetUp !== null && (
+          <span className="badge badge-warn" data-flag="not-set-up">
+            {notSetUp.label}
+          </span>
+        )}
       </div>
+      {notSetUp !== null && (
+        <p className="hint muted" data-flag-detail="not-set-up">
+          {notSetUp.detail}
+        </p>
+      )}
       <dl className="facts">
         <div>
           <dt>Email</dt>

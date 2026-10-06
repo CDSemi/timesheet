@@ -12,6 +12,7 @@ import {
   outboundBanner,
   passwordProblem,
   refusalMessage,
+  setupFlag,
 } from '../../src/client/components/adminModel.ts';
 
 describe('refusal messages', () => {
@@ -141,5 +142,15 @@ describe('outbound banner', () => {
   it('falls back to the reason code for any other reason', () => {
     const banner = outboundBanner({ paused: true, paused_at: '2026-10-04T09:00:00Z', reason: 'maintenance_window', awaiting_decision: 0, queued_send_jobs: 0, held_send_jobs: 0 });
     expect(banner?.reason).toBe('Paused: maintenance_window.');
+  });
+});
+
+describe('"not set up" flag (owner decision F-3 (a), WP4-T07B)', () => {
+  it('shows the flag only for an account whose settings were never saved', () => {
+    expect(setupFlag({ not_set_up: true })).toEqual({
+      label: 'Not set up',
+      detail: 'This person has not saved submission settings yet, so nothing is submitted automatically and no overdue warning is shown to them.',
+    });
+    expect(setupFlag({ not_set_up: false })).toBeNull();
   });
 });

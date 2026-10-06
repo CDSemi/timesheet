@@ -155,7 +155,7 @@ test('an admin cannot open employee data through any admin screen', async (
     // The account list carries account fields only.
     const users = await adminSeed.call<{ users: Array<Record<string, unknown>> }>('GET', '/api/admin/users');
     const fields = new Set(users.users.flatMap((user) => Object.keys(user)));
-    expect([...fields].sort()).toEqual(['calendar_id', 'created_at', 'display_name', 'email', 'id', 'role', 'status', 'updated_at']);
+    expect([...fields].sort()).toEqual(['calendar_id', 'created_at', 'display_name', 'email', 'id', 'not_set_up', 'role', 'status', 'updated_at']);
     expect(JSON.stringify(users)).not.toContain(owner.note);
 
     // No admin route returns another person's records, and admin is no blanket access to a foreign id.

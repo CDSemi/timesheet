@@ -9,7 +9,7 @@ import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
 import { runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { createSendJobHandler } from '../../src/server/jobs/sendJob.ts';
 import { createOutboundAdapter } from '../../src/server/mail/outbound.ts';
-import { setAutomationActivation } from '../../src/server/services/automation.ts';
+import { hasSavedSettings, setAutomationActivation } from '../../src/server/services/automation.ts';
 import { faultCode, HEARTBEAT_STALE_SECONDS } from '../../src/server/services/operationsStatus.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import type { DeliveryConfig } from '../../src/server/types.ts';
@@ -240,12 +240,29 @@ const OPERATIONS_PATHS = [
   'operations.jobs.leased',
   'operations.jobs.queued',
   'operations.jobs.succeeded',
+  'operations.retention',
+  'operations.retention.last_deleted',
+  'operations.retention.last_run_at',
   'operations.runner',
   'operations.runner.heartbeat_at',
   'operations.runner.state',
   'operations.sender',
   'operations.sender.configured',
   'operations.sender.outbound_mode',
+].sort();
+
+/** The account list of the administrator (WP4-T07B, F-3 (a)): account fields and one boolean, nothing from any timesheet. */
+const USER_PATHS = [
+  'users',
+  'users[].calendar_id',
+  'users[].created_at',
+  'users[].display_name',
+  'users[].email',
+  'users[].id',
+  'users[].not_set_up',
+  'users[].role',
+  'users[].status',
+  'users[].updated_at',
 ].sort();
 
 describe('access (F-3: administrators only)', () => {
@@ -294,6 +311,7 @@ describe('system status', () => {
       backup: { outcome: 'never', last_attempt_at: null, last_success_at: null, fault_code: null, age_seconds: null },
       disk: { free_bytes: expect.any(Number), total_bytes: expect.any(Number) },
       outbound: { paused: false, paused_at: null, reason: null, awaiting_decision: 0, queued_send_jobs: 0, held_send_jobs: 0 },
+      retention: { last_run_at: null, last_deleted: null },
       jobs: { queued: 0, leased: 0, succeeded: 0, intervention: 0, cancelled: 0 },
       deliveries: { preparing: 0, sending: 0, accepted: 0, failed_temporary: 0, failed_permanent: 0, uncertain: 0 },
     });
@@ -487,6 +505,10 @@ describe('the privacy boundary of every admin response (F-3, WP2-A-01, A3-01)', 
     expect(operations.status).toBe(200);
     expect(keyPaths(submissions.body).sort()).toEqual(SUBMISSION_PATHS);
     expect(keyPaths(operations.body).sort()).toEqual(OPERATIONS_PATHS);
+    const users = await statusOf('/api/admin/users', admin);
+    expect(users.status).toBe(200);
+    expect(keyPaths(users.body).sort()).toEqual(USER_PATHS);
+    for (const user of users.body.users) expect(typeof user.not_set_up, 'the flag is a boolean only').toBe('boolean');
 
     const row = t.db
       .prepare('SELECT message_id, provider_message_id, envelope_json FROM delivery_attempts WHERE revision_id = ?')
@@ -519,7 +541,7 @@ describe('the privacy boundary of every admin response (F-3, WP2-A-01, A3-01)', 
       'envelope_json',
       'Synthetic shift',
     ];
-    for (const [name, response] of [['submissions', submissions], ['operations', operations]] as const) {
+    for (const [name, response] of [['submissions', submissions], ['operations', operations], ['users', users]] as const) {
       const text = JSON.stringify(response.body);
       for (const needle of forbidden) expect(text, `${name} must not contain ${needle}`).not.toContain(needle);
       for (const key of ['notes', 'minutes', 'sessions', 'breaks', 'ledger', 'start_utc', 'end_utc', 'message_id', 'subject', 'body', 'template', 'payload', 'leave', 'signature', 'audit']) {
@@ -538,6 +560,55 @@ describe('the privacy boundary of every admin response (F-3, WP2-A-01, A3-01)', 
     await statusOf('/api/admin/submissions', admin);
     await statusOf('/api/admin/submissions?limit=1', admin);
     expect(fingerprint()).toBe(before);
+  });
+});
+
+describe('the "not set up" flag of the account list (owner decision F-3 (a), WP4-T07B)', () => {
+  const flags = async () => {
+    const response = await statusOf('/api/admin/users', admin);
+    expect(response.status).toBe(200);
+    return Object.fromEntries((response.body.users as Array<{ id: string; not_set_up: boolean }>).map((user) => [user.id, user.not_set_up]));
+  };
+
+  it('flags an account that never saved its submission settings and clears it on the first save', async () => {
+    expect(await flags()).toEqual({ [t.userIds.admin]: true, [t.userIds.employee]: true });
+    const saved = await t.request('POST', '/api/settings/submission', {
+      cookie: employee,
+      body: { expected_seq: 0, to: EMPLOYEE_TO, cc: [], auto_submit: false },
+    });
+    expect(saved.status, JSON.stringify(saved.body)).toBeLessThan(300);
+    // Only the person who saved is cleared; turning auto-submit off still counts as set up (H-Q1 (a)).
+    expect(await flags()).toEqual({ [t.userIds.admin]: true, [t.userIds.employee]: false });
+  });
+
+  it('uses the H-Q1 (a) condition that governs automation, not a second definition', async () => {
+    await t.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: EMPLOYEE_TO, cc: [], auto_submit: true } });
+    const shown = await flags();
+    for (const id of [t.userIds.admin, t.userIds.employee]) expect(shown[id], id).toBe(!hasSavedSettings(t.db, id));
+  });
+
+  it('also appears on the create response, true for a new account, and exposes no settings value', async () => {
+    const created = await t.request('POST', '/api/admin/users', {
+      cookie: admin,
+      body: { email: 'new-person@example.invalid', display_name: 'New Person', role: 'employee', password: 'synthetic-pass-12345', calendar_id: t.calendarId },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.user.not_set_up).toBe(true);
+    expect(JSON.stringify(created.body)).not.toContain('payroll');
+  });
+
+  it('writes nothing: listing accounts leaves every table as it was', async () => {
+    const before = fingerprint();
+    await flags();
+    expect(fingerprint()).toBe(before);
+  });
+});
+
+describe('the retention result in the status (F-4 (a), WP4-T07B)', () => {
+  it('is empty until a retention job ran, then shows the run time and a count only', async () => {
+    expect((await statusOf('/api/admin/operations', admin)).body.operations.retention).toEqual({ last_run_at: null, last_deleted: null });
+    t.db.prepare("UPDATE operations_state SET job_retention_last_run_at = '2026-09-29T20:00:00Z', job_retention_last_deleted = 7 WHERE id = 1").run();
+    expect((await statusOf('/api/admin/operations', admin)).body.operations.retention).toEqual({ last_run_at: '2026-09-29T20:00:00Z', last_deleted: 7 });
   });
 });
 

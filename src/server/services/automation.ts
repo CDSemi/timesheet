@@ -165,7 +165,12 @@ function governingSwitch(db: Db, userId: string, dueAt: string): { autoSubmit: b
   return row === undefined ? null : { autoSubmit: row.auto_submit === 1 };
 }
 
-function hasSavedSettings(db: Db, userId: string): boolean {
+/**
+ * Whether the user ever saved submission settings (owner decision H-Q1 (a)): the one definition of "set up". The scan uses it to tell
+ * an account that never saved (`not_configured`: no automation, no overdue state) from one whose saved settings took effect later, and the
+ * administrator's account list uses the same function for its "not set up" flag (F-3 (a), WP4-T07B).
+ */
+export function hasSavedSettings(db: Db, userId: string): boolean {
   return db.prepare<[string], { one: number }>('SELECT 1 AS one FROM submission_settings WHERE user_id = ? LIMIT 1').get(userId) !== undefined;
 }
 

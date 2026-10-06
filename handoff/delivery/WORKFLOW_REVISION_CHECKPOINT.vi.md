@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = a92335184e7dc09b2114ec30a46979ecd02ab92a (GOV-SKILL-REMOVE-FREEZE).
+  - HEAD = origin/main = c398cab2ec896999543589c574bd0ac701247a7d (GOV-SKILL-REMOVE-ACCEPT).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -672,7 +672,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - Ghi chú R1 cho chủ dự án: các tệp đã gỡ vẫn còn trong lịch sử công khai. Muốn
          xóa khỏi lịch sử thì phải viết lại lịch sử, điều mà docs/08 cấm.
        - Digest mã nguồn hiện tại trên board giờ là fcd8fe1e… (R3).
-     - Đang chạy: GOV-SKILL-REMOVE-ACCEPT (commit các bản ghi này và brief WP4-T07B).
+     - GOV-SKILL-REMOVE-ACCEPT đã commit và push thành c398cab (27 đường dẫn trong
+       handoff; mọi kiểm tra trả về 0). Việc gỡ skill readme-md (GOV) đã khép.
+     - WP4-T07B đã xong (tác giả tự báo).
+       - F-3: `not_set_up` dùng lại điều kiện `hasSavedSettings` của H-Q1 (a); giao diện
+         hiện một nhãn.
+       - F-4: migration 0011 thêm một ngoại lệ hẹp cho trigger, chỉ mở được qua một
+         bảng "cửa sổ" một dòng, và một job `job_retention` chạy mỗi ngày.
+       - Test: 18 test mới; phép thử đột biến làm 2 test fail. e2e: 133 đạt. Verify:
+         1613 test. Digest: 7fe65713….
+       - Sai lệch: sửa các chỗ ghim số lượng và key một cách cơ học. Giới hạn số job
+         trong automation.spec được nới (1 lên 2, 2 lên 4); audit sẽ đánh giá việc này.
+     - Đang chạy: WP4-T07B-FREEZE.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -686,9 +697,9 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả GOV-SKILL-REMOVE-ACCEPT, rồi giao WP4-T07B (brief đã sẵn).
+  1. Ghi kết quả WP4-T07B-FREEZE, rồi giao WP4-T05B (brief đã sẵn).
   2. Sau đó làm theo thứ tự:
-     - WP4-T07B (cờ F-3 và việc giữ job F-4), rồi WP4-T05B (xóa bớt bản sao lưu F-5);
+     - WP4-T05B (xóa bớt bản sao lưu F-5);
      - T09, T10, T11;
      - T12 (bước 6 và chạy lại toàn bộ diễn tập);
      - T13;
@@ -712,7 +723,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ GOV-SKILL-REMOVE-ACCEPT (lần 1).
+- Process còn sống: chỉ WP4-T07B-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

@@ -220,7 +220,7 @@ try {
   );
   const adminUsers = await call('GET', '/api/admin/users', { cookie: adminCookie });
   const accountKeys = new Set((adminUsers.json?.users ?? []).flatMap((account) => Object.keys(account)));
-  const accountFields = ['id', 'email', 'display_name', 'role', 'status', 'calendar_id', 'created_at', 'updated_at'];
+  const accountFields = ['id', 'email', 'display_name', 'role', 'status', 'calendar_id', 'created_at', 'updated_at', 'not_set_up'];
   check(
     'admin lists the three accounts with account fields only',
     adminUsers.status === 200 && (adminUsers.json?.users ?? []).length === 3 && [...accountKeys].every((key) => accountFields.includes(key)),

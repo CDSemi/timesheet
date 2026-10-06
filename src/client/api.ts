@@ -368,6 +368,8 @@ export interface AdminUser {
   calendar_id: string;
   created_at: string;
   updated_at: string;
+  /** True while the account never saved its submission settings (owner decision F-3 (a)); a boolean only. */
+  not_set_up: boolean;
 }
 
 export interface AdminUserCreateRequest {
@@ -489,6 +491,8 @@ export interface OperationsStatus {
     queued_send_jobs: number;
     held_send_jobs: number;
   };
+  /** The latest daily job-row retention (WP4-T07B): when it ran and how many rows it deleted; counts only. */
+  retention: { last_run_at: string | null; last_deleted: number | null };
   jobs: Record<'queued' | 'leased' | 'succeeded' | 'intervention' | 'cancelled', number>;
   deliveries: Record<'preparing' | 'sending' | 'accepted' | 'failed_temporary' | 'failed_permanent' | 'uncertain', number>;
 }

@@ -1,0 +1,14 @@
+Commands (Node v24.21.0 portable, TEMP/TMP in the task scratch directory D:\.claude-tmp\timesheet\WP4-T07B) and exits
+1. red-first: vitest run tests/integration/job-retention.test.ts tests/integration/operations-status.test.ts tests/client/adminModel.test.ts, before any source change -> exit 1
+   (6 tests failed; job-retention.test.ts failed to import the missing retentionJob.ts, so its tests never ran); see red.txt
+2. mutation (scratch clone, the kind condition removed from the jobs_no_delete trigger so ANY succeeded kind may be deleted in the window):
+   vitest run tests/integration/job-retention.test.ts -> exit 1, 2 failed (refuses every other delete even while the window is open;
+   upgrades a populated version 10 database ...); see mutation.txt
+3. CSS diff: git diff src/client/styles.css is empty (the flag reuses .badge, .badge-warn, .hint and .muted; no new value) -> no hard-coded colour, length, duration or shadow added
+4. npm run test:e2e (final run, after the last file change) -> exit 0, 133 passed, 5 skipped (desktop and mobile projects, Edge channel); see e2e.txt
+   (an earlier run exited 1: 2 failed in automation.spec.ts on the pinned job count, which now includes the daily retention job; the pin was updated, see deviations)
+5. NODE_OPTIONS="--trace-deprecation --pending-deprecation" npm run verify -> exit 0, 71 files, 1613 tests, SMOKE PASSED, no deprecation line; see verify.txt
+   (an earlier run exited 1: smoke "admin lists the three accounts with account fields only" pinned the account keys; the pin was updated and e2e rerun)
+6. npm run digest -> exit 0; see digest.txt
+7. node scripts/precommit-check.mjs on a temporary index holding the changed files and this evidence directory -> see precommit.txt
+Screenshots viewed: admin-users-not-set-up-desktop-synthetic.png and admin-users-not-set-up-mobile-synthetic.png (Edge channel).

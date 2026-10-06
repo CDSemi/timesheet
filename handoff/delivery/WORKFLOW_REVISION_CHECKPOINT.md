@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = a92335184e7dc09b2114ec30a46979ecd02ab92a (GOV-SKILL-REMOVE-FREEZE).
+  - HEAD = origin/main = c398cab2ec896999543589c574bd0ac701247a7d (GOV-SKILL-REMOVE-ACCEPT).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -630,7 +630,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - Note R1 for the owner: the removed files stay in public history. Removing them
          would need a history rewrite, which docs/08 forbids.
        - The board's current source digest is now fcd8fe1e… (R3).
-     - Running: GOV-SKILL-REMOVE-ACCEPT (commits these records and the WP4-T07B brief).
+     - GOV-SKILL-REMOVE-ACCEPT committed and pushed c398cab (27 handoff paths; all checks
+       0). The GOV readme-md removal is closed.
+     - WP4-T07B is done (author-reported).
+       - F-3: `not_set_up` reuses the H-Q1 (a) `hasSavedSettings` condition; the UI
+         shows a badge.
+       - F-4: migration 0011 adds a narrow trigger exception, opened only through a
+         single-row retention window, and a daily `job_retention` job.
+       - Tests: 18 new; the mutation fails 2. e2e: 133 passed. Verify: 1613 tests.
+         Digest: 7fe65713….
+       - Deviations: mechanical count and key pins. The automation.spec job caps were
+         raised (1 to 2, 2 to 4); the audit should judge this.
+     - Running: WP4-T07B-FREEZE.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -644,9 +655,9 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record GOV-SKILL-REMOVE-ACCEPT, then dispatch WP4-T07B (brief ready).
+  1. Record WP4-T07B-FREEZE, then dispatch WP4-T05B (brief ready).
   2. Then, in this order:
-     - WP4-T07B (F-3 flag and F-4 retention), then WP4-T05B (F-5 backup pruning);
+     - WP4-T05B (F-5 backup pruning);
      - T09, T10, T11;
      - T12 (stage 6 and a full drill rerun);
      - T13;
@@ -669,7 +680,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: GOV-SKILL-REMOVE-ACCEPT (attempt 1) only.
+- Live processes: WP4-T07B-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.
