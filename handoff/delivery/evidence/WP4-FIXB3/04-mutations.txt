@@ -1,0 +1,54 @@
+# WP4-FIXB3 04 mutation checks in the scratch copy <task>/mut (an export of the final working tree; never the repository)
+# Command: MUT_ROOT=<task>/mut PROBE_PKGS_SEARCH=<task>/pkgs-B node probes/mutate.mjs ; exit 0. Each: exact fragment replaced once,
+# test files run, file restored and its sha256 checked. M1/M1b/M2/M3 are the brief's required mutations, M4-M7 extra.
+# M3 (slices) is invisible to the tests (vitest cannot force a full GC, and maxRSS includes uncollected garbage, so
+# memory is not asserted there); what stands in is probes/retained.mjs: heap + external memory retained after gc()
+# for shapes with a kept value in every part (pinned) and without (unpinned). Fixed: pinned = unpinned; M3: +16 MiB.
+src/server/import/xlsxReader.ts repo=5d62a91b6314be20 mut=5d62a91b6314be20
+src/server/import/templateMapping.ts repo=b8a379af6aff25a0 mut=b8a379af6aff25a0
+src/server/services/workbookImport.ts repo=673f171b5ac25600 mut=673f171b5ac25600
+tests/integration/workbook-reader.test.ts repo=e919aa0bb1436be4 mut=e919aa0bb1436be4
+tests/integration/workbook-import.test.ts repo=071c667860df10ec mut=071c667860df10ec
+2026-10-06T16:10:34Z
+baseline (unmutated scratch copy):
+    retained: S3 cells one-wide generic pinned | retained after gc (heap + external): +31.4 MiB | accepted, 142708 cells
+    retained: S3 cells one-wide generic unpinned | retained after gc (heap + external): +31.7 MiB | accepted, 142704 cells
+    retained: S3 strings one-wide generic | retained after gc (heap + external): +22.6 MiB | accepted, 73092 cells
+M1 double decoding of kept attribute values: attr() decodes the decoded value again | exit=1 | KILLED by tests | Tests  1 failed | 60 passed (61) | 12 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > decodes every kept text and attrib
+M1b double decoding of kept text: the text is decoded again when its element closes | exit=1 | KILLED by tests | Tests  2 failed | 59 passed (61) | 11 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > reader limits and hostile packages > decodes the predefined entities exactly once and leaves unknown references literal
+    failed: workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > decodes every kept text and attrib
+M2 the kept-attribute length cap is removed | exit=1 | KILLED by tests | Tests  4 failed | 85 passed (89) | 13 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer 
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, E7): a k
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bo
+M3 slices come back: kept values are not copied (memory sweep: retained memory after gc) | exit=0 | SURVIVED by tests | Tests  61 passed (61) | 11 s | restored byte-identical: true
+    retained: S3 cells one-wide generic pinned | retained after gc (heap + external): +47.3 MiB | accepted, 142708 cells
+    retained: S3 cells one-wide generic unpinned | retained after gc (heap + external): +31.7 MiB | accepted, 142704 cells
+    retained: S3 strings one-wide generic | retained after gc (heap + external): +34.1 MiB | accepted, 73092 cells
+M4 (extra) the encoding declaration is not checked | exit=1 | KILLED by tests | Tests  1 failed | 60 passed (61) | 10 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > red-first (R-B2-2): refuses a part
+M5 (extra) the floating flag comes from the cut holiday name again | exit=1 | KILLED by tests | Tests  1 failed | 27 passed (28) | 12 s | restored byte-identical: true
+    failed: workbook-import.test.ts > preview > red-first (R-B2-1): a day takes its floating flag from the holiday its label matched, not from a cut name
+M6 (extra) the package limits go back to 16 MiB of XML and 200 000 openings | exit=1 | KILLED by tests | Tests  2 failed | 59 passed (61) | 8 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, Y7): fou
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape 
+M7 (extra) the tag length is checked only after a kept value is stored | exit=1 | KILLED by tests | Tests  2 failed | 87 passed (89) | 13 s | restored byte-identical: true
+    failed: workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer 
+    failed: workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bo
+2026-10-06T16:12:04Z
+
+# Note: a first run of mutate.mjs used the stale WP4-FIXB2 mutation list by mistake (the new file had not been written);
+# it ran on the same scratch copy and restored every file. Its summary, kept for the record:
+M1 letter-only count (the WP4-FIXB rule): only openings led by a letter or _ are counted | exit=1 | KILLED | Tests  2 failed | 59 passed (61) | 9 s | restored byte-identical: true
+M2 drop the value-length cap: kept text is not cut | exit=1 | KILLED | Tests  5 failed | 84 passed (89) | 14 s | restored byte-identical: true
+M3 drop the report-size guard | exit=1 | KILLED | Tests  1 failed | 27 passed (28) | 11 s | restored byte-identical: true
+M4 (extra) accept a tag name that is not an XML name | exit=1 | KILLED | Tests  4 failed | 85 passed (89) | 12 s | restored byte-identical: true
+M5 (extra) drop the attributes-per-element limit | exit=1 | KILLED | Tests  2 failed | 59 passed (61) | 8 s | restored byte-identical: true
+M6 (extra) drop the attributes-per-part limit | exit=1 | KILLED | Tests  2 failed | 59 passed (61) | 8 s | restored byte-identical: true
+M7 (extra) drop the start-tag length limit (both checks) | exit=0 | SURVIVED | Tests  89 passed (89) | 11 s | restored byte-identical: true
+M8 (extra) drop the scan prefix: the mapping examines whole cell text | exit=1 | KILLED | Tests  2 failed | 59 passed (61) | 18 s | restored byte-identical: true
+M9 (extra) drop the formula memo: every formula cell is examined again | exit=1 | KILLED | Tests  1 failed | 60 passed (61) | 12 s | restored byte-identical: true
+M10 (extra) a failure while the report is built is rethrown (a 500) | exit=1 | KILLED | Tests  1 failed | 27 passed (28) | 12 s | restored byte-identical: true

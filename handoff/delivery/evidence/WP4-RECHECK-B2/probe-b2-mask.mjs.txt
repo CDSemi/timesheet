@@ -1,0 +1,21 @@
+// WP4-RECHECK-B2 helper: copy raw logs and probes into the repository evidence folder, masked and LF.
+// Strips ANSI codes and CR, drops Node's ExperimentalWarning lines, masks the task folder, the user profile and the
+// user name. Probes are stored as *.mjs.txt. Usage: node b2-mask.mjs <raw dir> <probe dir> <evidence dir>
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const [raw, probes, out] = process.argv.slice(2);
+mkdirSync(out, { recursive: true });
+const mask = (text) => text
+  .replace(/\x1b\[[0-9;]*m/g, '')
+  .replace(/\r/g, '')
+  .split('\n').filter((l) => !/ExperimentalWarning|--trace-warnings|Support for loading ES Module in require/.test(l)).join('\n')
+  .replace(/[A-Za-z]:[\/]\.claude-tmp[\/]timesheet[\/]WP4-RECHECK-B2/gi, '<task>')
+  .replace(/\/d\/\.claude-tmp\/timesheet\/WP4-RECHECK-B2/gi, '<task>')
+  .replace(/[A-Za-z]:[\/]Users[\/][^\/\s]+/gi, '<user-profile>')
+  .replace(/[A-Za-z]:[\/]Dropbox[\/]Work\.CDSemi[\/]timesheet/gi, '<repo>')
+  .replace(/\/d\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<repo>')
+  .replace(/<user-name masked in this stored copy>/gi, '<user>');
+let n = 0;
+for (const f of readdirSync(raw)) { writeFileSync(join(out, f.replace(/\.raw$/, '.txt')), mask(readFileSync(join(raw, f), 'utf8')).replace(/\n*$/, '\n')); n += 1; }
+for (const f of readdirSync(probes).filter((x) => x.startsWith('b2-') && x.endsWith('.mjs'))) { writeFileSync(join(out, `probe-${f}.txt`), mask(readFileSync(join(probes, f), 'utf8')).replace(/\n*$/, '\n')); n += 1; }
+console.log(`wrote ${n} files`);

@@ -1,0 +1,127 @@
+// WP4-RECHECK-B2 probe SCANNER: correctness of the hand-written streaming XML scanner (cc34e7f) against the XML 1.0
+// spec and the OOXML parts the template uses. Each case replaces the template's `Timesheet` worksheet part (or the
+// shared strings) with a small crafted part, reads it with the new reader and the accepted WP4-T09 reader (13a258d),
+// and checks the new reader's outcome against the outcome the spec requires (the oracle is the spec, not T09).
+// `lenient` marks a not-well-formed input that the spec says is a fatal error but that the reader accepts; it is
+// reported, not counted as a pass. In memory only; synthetic data only.
+// Usage: node b2-scanner.mjs
+import { strFromU8, strToU8 } from '../export/node_modules/fflate/esm/index.mjs';
+import { readWorkbook as readNew } from '../export/src/server/import/xlsxReader.ts';
+import { readWorkbook as readOld } from '../t09/src/server/import/xlsxReader.ts';
+import { pack, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const sheet = (rowXml, { decl = DECL, root = `<worksheet xmlns="${NS}">`, end = '</worksheet>' } = {}) => `${decl}${root}<sheetData><row r="1">${rowXml}</row></sheetData>${end}`;
+const inline = (address, inner) => `<c r="${address}" t="inlineStr"><is>${inner}</is></c>`;
+
+function packageWith(partText, { part = 'xl/worksheets/sheet3.xml', bytes } = {}) {
+  const e = unpack(readTemplateBytes());
+  e[part] = bytes ?? strToU8(partText);
+  return pack(e);
+}
+
+function outcome(read, pkg, addresses) {
+  try {
+    const wb = read(pkg);
+    const ts = wb.sheets.find((s) => s.name === 'Timesheet');
+    const values = addresses.map((a) => {
+      const c = ts.cells.get(a);
+      if (c === undefined) return `${a}:missing`;
+      return `${a}:${c.type}:${JSON.stringify(c.formula ?? c.value)}`;
+    });
+    return { ok: true, text: values.join(' ') };
+  } catch (error) {
+    return { ok: false, text: error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${error.message}` };
+  }
+}
+
+const utf16le = (s) => { const b = Buffer.from(s, 'utf16le'); return new Uint8Array(Buffer.concat([Buffer.from([0xff, 0xfe]), b])); };
+const utf16be = (s) => { const b = Buffer.from(s, 'utf16le'); for (let i = 0; i < b.length; i += 2) { const t = b[i]; b[i] = b[i + 1]; b[i + 1] = t; } return new Uint8Array(Buffer.concat([Buffer.from([0xfe, 0xff]), b])); };
+const latin1 = (s) => new Uint8Array(Buffer.from(s, 'latin1'));
+const utf8bom = (s) => new Uint8Array(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(s, 'utf8')]));
+
+// [id, description, part text or {bytes}, addresses, expected (string for values, 'rejected:*' or 'rejected:<code>'), kind]
+// kind: 'spec' (the spec fixes the outcome), 'lenient' (spec: fatal error; reader accepts; reported only)
+const CASES = [
+  ['C01', 'predefined entities in text', sheet(inline('A1', '<t>a&amp;b&lt;c&gt;d&quot;e&apos;f</t>')), ['A1'], 'A1:string:"a&b<c>d\\"e\'f"', 'spec'],
+  ['C02', 'decimal and hex character references incl. astral', sheet(inline('A1', '<t>&#65;&#x42;&#x1F600;&#128512;&#x9;&#xA;</t>')), ['A1'], 'A1:string:"AB😀😀\\t\\n"', 'spec'],
+  ['C03', 'single decoding (&amp;lt; stays &lt;)', sheet(inline('A1', '<t>&amp;lt;&amp;#65;</t>')), ['A1'], 'A1:string:"&lt;&#65;"', 'spec'],
+  ['C04', 'CDATA is literal (no reference decoding, markup kept)', sheet(inline('A1', '<t><![CDATA[a&amp;<b>]]></t>')), ['A1'], 'A1:string:"a&amp;<b>"', 'spec'],
+  ['C05', 'CDATA mixed with text and references', sheet(inline('A1', '<t>x<![CDATA[&lt;]]>&lt;</t>')), ['A1'], 'A1:string:"x&lt;<"', 'spec'],
+  ['C06', 'comment inside text is not text', sheet(inline('A1', '<t>ab<!-- c<d> -->cd</t>')), ['A1'], 'A1:string:"abcd"', 'spec'],
+  ['C07', 'processing instruction inside text is not text', sheet(inline('A1', '<t>ab<?pi a > b?>cd</t>')), ['A1'], 'A1:string:"abcd"', 'spec'],
+  ['C08', 'single-quoted attributes', sheet(`<c r='A1' t='inlineStr'><is><t>sq</t></is></c>`), ['A1'], 'A1:string:"sq"', 'spec'],
+  ['C09', '> and single quote inside a double-quoted attribute value', sheet(`<c r="A1" foo="a>b'c" t="inlineStr"><is><t>gt</t></is></c>`), ['A1'], 'A1:string:"gt"', 'spec'],
+  ['C10', 'whitespace (LF, tab, CR) around = and between attributes, before > and />', sheet(`<c\n\tr = "A1"\r\n t=\n'inlineStr' ><is ><t\t>ws</t ></is\n></c >`), ['A1'], 'A1:string:"ws"', 'spec'],
+  ['C11', 'self-closing cell with space, empty <t/>, empty <t></t>', sheet(`<c r="A1" /><c r="B1" t="inlineStr"><is><t/></is></c><c r="C1" t="inlineStr"><is><t></t></is></c>`), ['A1', 'B1', 'C1'], 'A1:blank:null B1:string:"" C1:string:""', 'spec'],
+  ['C12', 'numeric value with surrounding spaces, CDATA value, reference in value', sheet(`<c r="A1"><v> 42 </v></c><c r="B1"><v><![CDATA[7]]></v></c><c r="C1"><v>&#52;&#50;</v></c>`), ['A1', 'B1', 'C1'], 'A1:number:42 B1:number:7 C1:number:42', 'spec'],
+  ['C13', 'namespace prefix on elements (bound to the main namespace)', sheet(`<x:c r="A1" t="inlineStr"><x:is><x:t>pref</x:t></x:is></x:c>`, { root: `<x:worksheet xmlns:x="${NS}">`, end: '</x:worksheet>' }).replace('<sheetData><row r="1">', '<x:sheetData><x:row r="1">').replace('</row></sheetData>', '</x:row></x:sheetData>'), ['A1'], 'A1:string:"pref"', 'spec'],
+  ['C14', 'xml:space="preserve" keeps leading and trailing spaces', sheet(inline('A1', '<t xml:space="preserve">  sp  </t>')), ['A1'], 'A1:string:"  sp  "', 'spec'],
+  ['C15', 'character reference inside an attribute value (cell address A&#55; = A7)', sheet(`<c r="A&#55;" t="inlineStr"><is><t>ar</t></is></c>`), ['A7'], 'A7:string:"ar"', 'spec'],
+  ['C16', 'rich text runs with run properties and a phonetic run (phonetic text excluded)', sheet(inline('A1', '<r><rPr><b/></rPr><t xml:space="preserve">Work </t></r><r><t>from home</t></r><rPh sb="0" eb="1"><t>PH</t></rPh><phoneticPr fontId="1"/>')), ['A1'], 'A1:string:"Work from home"', 'spec'],
+  ['C17', 'formula text with references (never evaluated), cached value kept', sheet(`<c r="A1" t="str"><f>IF(B1&lt;&gt;"",1,0)</f><v>1</v></c>`), ['A1'], 'A1:blank:"IF(B1<>\\"\\",1,0)"', 'spec'],
+  ['C18', 'comments and PIs between elements and outside the root', `${DECL}<!-- head --><?pi x?><worksheet xmlns="${NS}"><!-- a --><sheetData><?pi y?><row r="1"><!-- b --><c r="A1" t="inlineStr"><is><t>ok</t></is></c></row></sheetData></worksheet><!-- tail -->\n`, ['A1'], 'A1:string:"ok"', 'spec'],
+  ['C19', 'UTF-8 BOM before the declaration', { bytes: utf8bom(sheet(inline('A1', '<t>bom Tết</t>'))) }, ['A1'], 'A1:string:"bom Tết"', 'spec'],
+  ['C20', 'UTF-16LE with BOM, declared UTF-16', { bytes: utf16le(sheet(inline('A1', '<t>le Tết 😀</t>'), { decl: '<?xml version="1.0" encoding="UTF-16"?>' })) }, ['A1'], 'A1:string:"le Tết 😀"', 'spec'],
+  ['C21', 'UTF-16BE with BOM, declared UTF-16', { bytes: utf16be(sheet(inline('A1', '<t>be Tết</t>'), { decl: '<?xml version="1.0" encoding="UTF-16"?>' })) }, ['A1'], 'A1:string:"be Tết"', 'spec'],
+  ['C22', 'end tag with trailing whitespace </c >', sheet(`<c r="A1" t="inlineStr"><is><t>et</t ></is ></c >`), ['A1'], 'A1:string:"et"', 'spec'],
+  ['C23', '40-deep nesting (worksheet, sheetData, row and 37 more: the stated limit) is accepted', sheet(`<c r="A1"><v>5</v></c>${'<z>'.repeat(37)}${'</z>'.repeat(37)}`), ['A1'], 'A1:number:5', 'spec'],
+  ['C24', 'non-ASCII element and attribute names (XML names) are scanned and ignored', sheet(`<c r="A1" é="1"><v>3</v></c><é><ü a="1"/></é>`), ['A1'], 'A1:number:3', 'spec'],
+  // --- refusals the spec or the reader's own rules require ---
+  ['R01', 'DOCTYPE before the root', `${DECL}<!DOCTYPE worksheet [<!ENTITY e "x">]>${sheet(inline('A1', '<t>&e;</t>'), { decl: '' })}`, ['A1'], 'rejected:doctype_forbidden', 'spec'],
+  ['R02', 'lower-case doctype', `${DECL}<!doctype worksheet>${sheet('', { decl: '' })}`, ['A1'], 'rejected:doctype_forbidden', 'spec'],
+  ['R03', 'ENTITY declaration alone (inside the root)', sheet('<!ENTITY e SYSTEM "file:///etc/passwd">'), ['A1'], 'rejected:doctype_forbidden', 'spec'],
+  ['R04', 'DOCTYPE in a UTF-16LE part with BOM', { bytes: utf16le(`<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE w>${sheet('', { decl: '' })}`) }, ['A1'], 'rejected:doctype_forbidden', 'spec'],
+  ['R05', 'DOCTYPE with whitespace after <!', `${DECL}<! DOCTYPE w>${sheet('', { decl: '' })}`, ['A1'], 'rejected:*', 'spec'],
+  ['R06', 'ELEMENT / ATTLIST declarations', sheet('<!ELEMENT c ANY>'), ['A1'], 'rejected:*', 'spec'],
+  ['R07', 'mismatched end tag', sheet(`<c r="A1"><v>1</x></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R08', 'unclosed root element', `${DECL}<worksheet xmlns="${NS}"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R09a', 'unclosed comment', sheet(`<c r="A1"><v>1</v></c><!-- open`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R09b', 'unclosed processing instruction', sheet(`<c r="A1"><v>1</v></c><?pi open`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R09c', 'unclosed CDATA', sheet(`<c r="A1"><v><![CDATA[1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R10', 'two root elements', `${sheet(`<c r="A1"><v>1</v></c>`)}<worksheet/>`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R11', 'text outside the root', `${sheet(`<c r="A1"><v>1</v></c>`)}junk`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R12', 'unquoted attribute value', sheet(`<c r=A1><v>1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R13', 'no whitespace between attributes', sheet(`<c r="A1"t="n"><v>1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R14a', 'space after < (< c>)', sheet(`< c r="A1"><v>1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R14b', 'digit-led tag name <1>', sheet(`<1/>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R15', '41-deep nesting (one more than the stated limit)', sheet(`${'<z>'.repeat(38)}${'</z>'.repeat(38)}`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R16', 'end tag with a space after </', sheet(`<c r="A1"><v>1</ v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R17', 'attribute without a value', sheet(`<c r="A1" hidden><v>1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R18', 'UTF-16LE without BOM (declared UTF-16)', { bytes: new Uint8Array(Buffer.from(sheet(inline('A1', '<t>x</t>'), { decl: '<?xml version="1.0" encoding="UTF-16"?>' }), 'utf16le')) }, ['A1'], 'rejected:*', 'spec'],
+  ['R19', 'CDATA outside the root', `${DECL}<![CDATA[x]]>${sheet('', { decl: '' })}`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R20', 'unterminated attribute quote', sheet(`<c r="A1><v>1</v></c>`), ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R21', 'lone < at the end', `${sheet(`<c r="A1"><v>1</v></c>`)}<`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  ['R22', 'end tag closing nothing', `${sheet('')}</x>`, ['A1'], 'rejected:malformed_xml', 'spec'],
+  // --- not well-formed per the spec, accepted leniently (reported) ---
+  ['L01', 'undeclared entity &nbsp; (kept literal, never expanded)', sheet(inline('A1', '<t>a&nbsp;b</t>')), ['A1'], 'A1:string:"a&nbsp;b"', 'lenient'],
+  ['L02', 'invalid character references &#0; &#xD800; &#x110000; (kept literal)', sheet(inline('A1', '<t>&#0;&#xD800;&#x110000;</t>')), ['A1'], 'A1:string:"&#0;&#xD800;&#x110000;"', 'lenient'],
+  ['L03', 'bare & in text', sheet(inline('A1', '<t>a & b</t>')), ['A1'], 'A1:string:"a & b"', 'lenient'],
+  ['L04', 'duplicate attribute (last wins)', sheet(`<c r="A1" r="B1"><v>9</v></c>`), ['A1', 'B1'], 'A1:missing B1:number:9', 'lenient'],
+  ['L05', '< inside an attribute value', sheet(`<c r="A1" x="<y/>"><v>8</v></c>`), ['A1'], 'A1:number:8', 'lenient'],
+  ['L06', ']]> in text', sheet(inline('A1', '<t>a]]>b</t>')), ['A1'], 'A1:string:"a]]>b"', 'lenient'],
+  ['L07', '-- inside a comment', sheet(`<c r="A1"><v>6</v></c><!-- a -- b -->`), ['A1'], 'A1:number:6', 'lenient'],
+  ['L08', 'unbound namespace prefix (no xmlns:q)', sheet(`<q:c r="A1"><q:v>4</q:v></q:c>`), ['A1'], 'A1:number:4', 'lenient'],
+  ['L09', 'control character by reference &#1; (XML 1.0 Char excludes it)', sheet(inline('A1', '<t>a&#1;b</t>')), ['A1'], 'A1:string:"a\\u0001b"', 'lenient'],
+  ['L10', 'declared ISO-8859-1 with a Latin-1 byte (OPC allows only UTF-8/UTF-16)', { bytes: latin1(sheet(inline('A1', '<t>café</t>'), { decl: '<?xml version="1.0" encoding="ISO-8859-1"?>' })) }, ['A1'], 'A1:string:"caf�"', 'lenient'],
+  ['L11', 'element in a foreign namespace with a kept local name (prefix stripped)', sheet(`<q:c xmlns:q="urn:other" r="A1"><q:v>2</q:v></q:c>`), ['A1'], 'A1:number:2', 'lenient'],
+];
+
+let pass = 0;
+let fail = 0;
+let lenient = 0;
+const lines = [];
+for (const [id, description, part, addresses, expected, kind] of CASES) {
+  const pkg = typeof part === 'string' ? packageWith(part) : packageWith(null, part);
+  const n = outcome(readNew, pkg, addresses);
+  const o = outcome(readOld, pkg, addresses);
+  const matches = expected === 'rejected:*' ? !n.ok && n.text.startsWith('rejected:') : n.text === expected;
+  let verdict;
+  if (kind === 'lenient') { verdict = matches ? 'LENIENT (as described)' : 'LENIENT-UNEXPECTED'; lenient += 1; }
+  else if (matches) { verdict = 'PASS'; pass += 1; }
+  else { verdict = 'FAIL'; fail += 1; }
+  lines.push(`${verdict} ${id} ${description} | new: ${n.text} | expected: ${expected} | T09: ${o.text}${o.text === n.text ? ' (same)' : ' (DIFFERS)'}`);
+}
+console.log(lines.join('\n'));
+console.log(`SUMMARY spec cases: ${pass} PASS, ${fail} FAIL; lenient cases reported: ${lenient}`);

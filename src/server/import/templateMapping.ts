@@ -160,11 +160,24 @@ export type DayPreview = {
   label: CellReference<string> | null;
   /** Mapped label, or `null` for a blank or unknown label. */
   mapping: LabelMapping | null;
+  /** The matched holiday's name, cut like every kept text; `matchedHoliday` gives the holiday itself. */
   holidayName: string | null;
   /** Minutes since midnight; `null` when blank. */
   startMinutes: CellReference<number> | null;
   endMinutes: CellReference<number> | null;
 };
+
+/**
+ * The holiday each day's label matched, kept beside the preview rather than in it, so the preview model and its JSON
+ * stay as they were. Two holiday names may share the 200 characters a preview keeps; the matched holiday itself says
+ * whether the day is a floating holiday (WP4-FIXB3, recheck risk R-B2-1).
+ */
+const matchedHolidays = new WeakMap<DayPreview, HolidayPreview>();
+
+/** The holiday a day's label matched, if any. */
+export function matchedHoliday(day: DayPreview): HolidayPreview | undefined {
+  return matchedHolidays.get(day);
+}
 
 export type PeriodPreview = {
   sheetName: string;
@@ -571,6 +584,7 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
     let label: CellReference<string> | null = null;
     let mapping: LabelMapping | null = null;
     let holidayName: string | null = null;
+    let matched: HolidayPreview | undefined;
     if (labelPick !== null) {
       const scanned = scanText(pickedValue(labelPick));
       const text = keptText(scanned);
@@ -584,6 +598,7 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
       } else if (holiday !== undefined) {
         mapping = { category: 'holiday' };
         holidayName = holiday.name;
+        matched = holiday;
       } else {
         findings.push({
           code: 'unknown_label',
@@ -624,7 +639,9 @@ function readPeriod(sheet: ReadSheet, payrollDate: CivilDate, context: PeriodCon
       });
     }
 
-    days.push({ index, date, expectedDate, label, mapping, holidayName, startMinutes, endMinutes });
+    const day: DayPreview = { index, date, expectedDate, label, mapping, holidayName, startMinutes, endMinutes };
+    if (matched !== undefined) matchedHolidays.set(day, matched);
+    days.push(day);
   }
 
   if (!context.payrollCalendar.has(payrollDate) && context.payrollCalendar.size > 0) {

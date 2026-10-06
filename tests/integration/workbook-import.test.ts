@@ -273,6 +273,23 @@ describe('preview', () => {
     ]);
   });
 
+  it('red-first (R-B2-1): a day takes its floating flag from the holiday its label matched, not from a cut name', async () => {
+    // Two holiday names share their first 200 characters (all the report keeps); only the first one is floating.
+    const stem = 'Q'.repeat(200);
+    const floating = `${stem} floating`;
+    const regular = `${stem} regular`;
+    const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    const holidays = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>` +
+      `<row r="2"><c r="A2"><v>46100</v></c><c r="B2" t="inlineStr"><is><t>${floating}</t></is></c></row>` +
+      `<row r="3"><c r="A3"><v>46101</v></c><c r="B3" t="inlineStr"><is><t>${regular}</t></is></c></row></sheetData></worksheet>`;
+    const bytes = withText(workbook([{ payrollDate: PB, days: { 0: { label: regular }, 1: { label: floating } } }]), 'xl/worksheets/sheet2.xml', () => holidays);
+    const response = await upload(bytes);
+    expect(response.status, JSON.stringify(response.body).slice(0, 300)).toBe(201);
+    const days = response.body.import.report.days as Array<{ index: number; holiday_name: string | null; floating_holiday: boolean; label: { truncated?: boolean } | null }>;
+    expect(days[0]).toMatchObject({ holiday_name: stem, floating_holiday: false, label: { truncated: true } });
+    expect(days[1]).toMatchObject({ holiday_name: stem, floating_holiday: true, label: { truncated: true } });
+  });
+
   it('returns the existing batch for the same upload and stores nothing new', async () => {
     const bytes = workbook([{ payrollDate: PB }]);
     const first = await upload(bytes);
@@ -769,7 +786,8 @@ describe('upload validation', () => {
 
     // A long sheet name would be copied into every source of the report (a megabyte of name: a 124 MiB response before).
     const sheetName = PB.replace(/-/g, '.');
-    for (const [padding, reason] of [[10_000, 'sheet_name_too_long'], [1024 * 1024, 'tag_too_large']] as const) {
+    const lengths = [[140, 'sheet_name_too_long'], [10_000, 'attribute_too_large'], [1024 * 1024, 'tag_too_large']] as const;
+    for (const [padding, reason] of lengths) {
       const named = withText(workbook([{ payrollDate: PB }]), 'xl/workbook.xml', (xml) => (xml ?? '').replace(`name="${sheetName}"`, `name="${sheetName}${' '.repeat(padding)}"`));
       const longName = await upload(named);
       expect(longName.status, reason).toBe(422);

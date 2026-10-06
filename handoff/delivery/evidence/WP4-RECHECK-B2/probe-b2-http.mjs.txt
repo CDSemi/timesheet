@@ -1,0 +1,183 @@
+// WP4-RECHECK-B2 probe HTTP: the BUILT server (dist/ of the export) over real HTTP; synthetic example.invalid users,
+// capture mode, job runner off, DATA_DIR and DATABASE_PATH explicit under the given work folder. It
+//  1. uploads every package of b2-cases.mjs (built by b2-cost.mjs under <task>/work/b2pkgs) and, while each upload
+//     runs, polls GET /api/health back to back on fresh connections, recording the worst health latency; then status,
+//     reason, time, response size; after all uploads, every stored report size in UTF-8 bytes (cap 2 MiB), the source
+//     files kept (no file for a refused upload) and the server's error output (no 500, no stack);
+//  2. checks that truncation never changes an imported value: a workbook with long labels and long holiday names is
+//     previewed and committed, and the day entries written are compared with the expected categories;
+//  3. previews and commits edge payroll dates (1900.01.01, 1900.01.19, 2999.12.31): never a 500;
+//  4. spot-checks the unchanged area-B rules: identical re-upload, owner-only reads and commits, replay and conflict.
+// The server child is stopped through its handle. Usage (cwd = export): node ../probes/b2-http.mjs <work folder> [filter]
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { CASES, fileOf } from './b2-cases.mjs';
+import { buildSyntheticWorkbook, pack, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+import { strFromU8, strToU8 } from '../export/node_modules/fflate/esm/index.mjs';
+
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const Database = require('better-sqlite3');
+const work = process.argv[2];
+const filter = process.argv[3] ?? '';
+if (!work) throw new Error('work folder required');
+mkdirSync(work, { recursive: true });
+const port = await new Promise((resolve) => {
+  const s = createServer();
+  s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
+});
+const origin = `http://localhost:${port}`;
+const pw = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const DATABASE_PATH = join(work, 'timesheet.db');
+const DATA_DIR = join(work, 'data');
+const env = {
+  ...process.env, NODE_ENV: 'development', PORT: String(port), HOST: '127.0.0.1', DATABASE_PATH, DATA_DIR, APP_ORIGINS: origin,
+  MAIL_FROM: 'probe-sender@example.invalid', OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: pw.admin, SEED_EMPLOYEE_PASSWORD: pw.employee, SEED_EMPLOYEE2_PASSWORD: pw.employee2,
+};
+for (const a of [['migrate'], ['seed']]) console.log(`cli ${a[0]}: exit ${spawnSync(process.execPath, ['dist/server/cli.js', ...a], { env, encoding: 'utf8' }).status}`);
+const server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: ['ignore', 'ignore', 'pipe'] });
+let serverErr = '';
+server.stderr.on('data', (c) => { serverErr += c.toString('utf8'); });
+const stop = async () => { if (server.exitCode === null && server.signalCode === null) { server.kill('SIGTERM'); await new Promise((r) => server.once('exit', r)); } };
+process.on('uncaughtException', async (e) => { console.log('FATAL', e?.stack ?? e); await stop(); process.exit(2); });
+
+function send(method, path, { body, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const req = httpRequest({ host: '127.0.0.1', port, method, path, agent: false, headers: { origin, ...headers, ...(body ? { 'content-length': body.length } : {}) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        let json = null;
+        try { json = JSON.parse(buf.toString('utf8')); } catch { /* not JSON */ }
+        resolve({ status: res.statusCode, ms: performance.now() - t0, headers: res.headers, size: buf.length, json });
+      });
+    });
+    req.on('error', (e) => resolve({ status: 0, ms: performance.now() - t0, error: e.code ?? e.message, size: 0, json: null }));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+for (let i = 0; i < 100; i += 1) { if ((await send('GET', '/api/ready')).status === 200) break; await new Promise((r) => setTimeout(r, 100)); }
+const login = async (email, password) => String((await send('POST', '/api/auth/login', { body: Buffer.from(JSON.stringify({ email, password })), headers: { 'content-type': 'application/json' } })).headers['set-cookie']?.[0] ?? '').split(';')[0];
+const cookie = { employee: await login('employee@example.invalid', pw.employee), employee2: await login('employee2@example.invalid', pw.employee2), admin: await login('admin@example.invalid', pw.admin) };
+console.log(`logins: ${Object.entries(cookie).map(([k, v]) => `${k}=${v ? 'ok' : 'FAILED'}`).join(' ')}`);
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const upload = (bytes, who = 'employee') => send('POST', '/api/imports', { body: Buffer.from(bytes), headers: { cookie: cookie[who], 'content-type': XLSX } });
+const commit = (id, decisions, who = 'employee') => send('POST', `/api/imports/${id}/commit`, { body: Buffer.from(JSON.stringify({ decisions })), headers: { cookie: cookie[who], 'content-type': 'application/json' } });
+const reason = (r) => (r.json?.error ? `${r.json.error.code}${r.json.error.details?.reason ? '/' + r.json.error.details.reason : ''}` : '');
+let fivehundreds = 0;
+const note = (r) => { if (r.status >= 500 || r.status === 0) fivehundreds += 1; return r; };
+
+/** Upload while polling /api/health back to back; returns the upload result and the worst health latency. */
+async function uploadWithHealth(bytes) {
+  let done = false;
+  let worst = 0;
+  let polls = 0;
+  const poller = (async () => {
+    while (!done) {
+      const h = await send('GET', '/api/health');
+      polls += 1;
+      if (h.status !== 200) worst = Infinity;
+      worst = Math.max(worst, h.ms);
+    }
+  })();
+  const r = note(await upload(bytes));
+  done = true;
+  await poller;
+  return { r, worst, polls };
+}
+
+// 1. every new hostile shape
+const MiB = 1024 * 1024;
+const over = [];
+for (const name of Object.keys(CASES).filter((n) => filter === '' || n.startsWith(filter))) {
+  let bytes;
+  try { bytes = readFileSync(fileOf(name)); } catch { console.log(`${name.split(' ')[0]}: package not built`); continue; }
+  const { r, worst, polls } = await uploadWithHealth(bytes);
+  const flag = worst > 500 ? ' HEALTH>500ms' : '';
+  if (flag) over.push(name.split(' ')[0]);
+  console.log(`${name.split(' ')[0]}: ${bytes.length} B -> ${r.status} ${reason(r)} in ${Math.round(r.ms)} ms, response ${(r.size / MiB).toFixed(3)} MiB; worst /api/health during the upload ${Math.round(worst)} ms over ${polls} polls${flag}`);
+}
+const db = new Database(DATABASE_PATH, { readonly: true, fileMustExist: true });
+const sizes = db.prepare('SELECT count(*) AS n, coalesce(max(length(CAST(report_json AS BLOB))), 0) AS largest FROM imports').get();
+const files = (() => { try { return readdirSync(join(DATA_DIR, 'files')).length; } catch { return 0; } })();
+console.log(`stored: ${sizes.n} preview rows, largest report_json ${sizes.largest} bytes (${(sizes.largest / MiB).toFixed(3)} MiB; cap 2097152: ${sizes.largest <= 2 * MiB ? 'within' : 'OVER'}); source files kept ${files} (rows ${sizes.n})`);
+
+// 2. truncation never changes an imported value
+const P = 'p'.repeat(250);
+const longHoliday = `Founders Day ${'x'.repeat(250)}`;
+const labels = {
+  0: 'Worked',
+  1: `Worked${' '.repeat(300)}x`,
+  2: `Worked${' '.repeat(2000)}`,
+  3: longHoliday,
+  4: `${P}B`,
+  5: `${' '.repeat(1100)}Vacation`,
+  6: 'Vacation',
+};
+const periodDays = {};
+for (const [d, label] of Object.entries(labels)) periodDays[d] = { label };
+const v1 = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-05-29', days: periodDays }] }));
+const hol = (r, serial, name) => `<row r="${r}"><c r="A${r}"><v>${serial}</v></c><c r="B${r}" t="inlineStr"><is><t>${name}</t></is></c></row>`;
+v1['xl/worksheets/sheet2.xml'] = strToU8(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${hol(2, 46204, longHoliday)}${hol(3, 46205, `${P}A floating`)}${hol(4, 46206, `${P}B`)}</sheetData></worksheet>`);
+const v1r = note(await upload(pack(v1)));
+const batch = v1r.json?.import;
+console.log(`V1 preview: ${v1r.status} ${reason(v1r)}; plan period state: ${batch?.plan?.periods?.map((p) => p.state).join(',')}`);
+const days = batch?.report?.days ?? [];
+for (const d of days.filter((x) => x.index <= 6)) {
+  console.log(`  day ${d.index} ${d.work_date}: label ${JSON.stringify(d.label?.value ?? null).slice(0, 40)}${(d.label?.value?.length ?? 0) > 30 ? `... (${d.label.value.length} chars)` : ''} truncated=${d.label?.truncated === true} status=${d.label_status} category=${d.category} holiday_name_len=${d.holiday_name?.length ?? 0} floating=${d.floating_holiday}`);
+}
+const decisions = (batch?.plan?.decisions_required ?? []).map((item) => ({ work_date: item.work_date, action: item.allowed_actions.includes('import') ? 'import' : 'skip', reasons: item.reasons.join('+'), allowed: item.allowed_actions.join('/') }));
+console.log(`  decisions required: ${decisions.map((d) => `${d.work_date}[${d.reasons}; ${d.allowed}]`).join(' ')}`);
+const skipOnly = decisions.find((d) => d.allowed === 'skip');
+if (skipOnly) {
+  const bad = note(await commit(batch.id, decisions.map((d) => ({ work_date: d.work_date, action: d.work_date === skipOnly.work_date ? 'import' : d.action }))));
+  console.log(`  import forced on skip-only ${skipOnly.work_date}: ${bad.status} ${reason(bad)}`);
+}
+const ok = note(await commit(batch.id, decisions.map(({ work_date, action }) => ({ work_date, action }))));
+console.log(`  commit: ${ok.status} ${ok.json?.status ?? reason(ok)}; result ${JSON.stringify(ok.json?.import?.result ?? null)}`);
+const rows = db.prepare(`SELECT d.work_date, d.category, d.wfh FROM day_entries d JOIN users u ON u.id = d.user_id WHERE u.email = 'employee@example.invalid' AND d.work_date BETWEEN '2026-05-11' AND '2026-05-24' ORDER BY d.work_date`).all();
+const expected = { '2026-05-11': 'Worked', '2026-05-14': 'Holiday', '2026-05-15': 'Holiday', '2026-05-17': 'Vacation', '2026-05-18': 'Worked', '2026-05-19': 'Worked', '2026-05-20': 'Worked', '2026-05-21': 'Worked', '2026-05-22': 'Worked' };
+const got = Object.fromEntries(rows.map((r) => [r.work_date, r.category]));
+const same = JSON.stringify(got) === JSON.stringify(expected);
+console.log(`  day entries written: ${JSON.stringify(got)}; expected ${same ? 'EQUAL' : 'DIFFERENT: ' + JSON.stringify(expected)}; none for the cut labels of 05-12, 05-13, 05-16: ${!('2026-05-12' in got) && !('2026-05-13' in got) && !('2026-05-16' in got)}`);
+
+// 3. edge payroll dates
+const edge = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09', sheetName: '1900.01.01' }, { payrollDate: '2026-01-23', sheetName: '1900.01.19' }, { payrollDate: '2026-02-06', sheetName: '2999.12.31' }] }));
+const er = note(await upload(pack(edge)));
+console.log(`V2 edge payroll dates preview: ${er.status} ${reason(er)}; states ${er.json?.import?.plan?.periods?.map((p) => `${p.payroll_date}:${p.state}`).join(',')}`);
+if (er.json?.import) {
+  const ec = note(await commit(er.json.import.id, er.json.import.plan.decisions_required.map((i) => ({ work_date: i.work_date, action: 'skip' }))));
+  console.log(`  commit with skips: ${ec.status} ${ec.json?.status ?? reason(ec)}`);
+}
+
+// 4. unchanged rules (spot checks)
+const tpl = readFileSync(fileOf(Object.keys(CASES).find((n) => n.startsWith('M2 '))));
+const first = note(await upload(tpl));
+const again = note(await upload(tpl));
+console.log(`V3 identical re-upload: ${first.status} then ${again.status} created=${again.json?.created} same id=${first.json?.import?.id === again.json?.import?.id}`);
+const id = batch.id;
+for (const who of ['employee2', 'admin']) {
+  const g = note(await send('GET', `/api/imports/${id}`, { headers: { cookie: cookie[who] } }));
+  const c = note(await commit(id, [], who));
+  const l = note(await send('GET', '/api/imports', { headers: { cookie: cookie[who] } }));
+  console.log(`  ${who}: GET own-of-other ${g.status}, commit ${c.status}, list contains it: ${JSON.stringify(l.json?.imports ?? []).includes(id)}`);
+}
+const replay = note(await commit(batch.id, decisions.map(({ work_date, action }) => ({ work_date, action }))));
+const conflict = note(await commit(batch.id, decisions.map(({ work_date }) => ({ work_date, action: 'skip' }))));
+console.log(`  replay identical commit: ${replay.status} ${replay.json?.status}; different decisions: ${conflict.status} ${reason(conflict)}`);
+
+const idle = await send('GET', '/api/health');
+console.log(`idle /api/health ${idle.status} in ${Math.round(idle.ms)} ms; responses 5xx or transport errors: ${fivehundreds}; health over 500 ms during: ${over.length ? over.join(',') : 'none'}`);
+db.close();
+await stop();
+const errLines = serverErr.split('\n').filter((l) => /Error|internal|500|stack/i.test(l)).slice(0, 6).map((l) => l.slice(0, 200));
+console.log(`server stopped through its handle: ${server.signalCode ?? server.exitCode}; server stderr error lines: ${errLines.length ? errLines.join(' / ') : 'none'}`);

@@ -1,0 +1,36 @@
+// WP4-RECHECK-A2 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# Inspects an image without running a container: docker save, then list every layer and extract /app/dist only.
+# Usage: image-scan.sh <image> <label>
+W=<work>
+IMAGE=$1; LABEL=$2
+D=$W/img-$LABEL
+mkdir -p $D/oci $D/dist
+docker image save "$IMAGE" -o $D/image.tar || exit 1
+tar -xf $D/image.tar -C $D/oci || exit 1
+echo "image: $IMAGE ($(docker image inspect --format '{{.Id}}' "$IMAGE"))"
+echo "config user: $(docker image inspect --format '{{.Config.User}}' "$IMAGE")"
+total=0; maps_all=0; maps_dist=0
+for blob in $D/oci/blobs/sha256/*; do
+  if tar -tf "$blob" > $D/list.tmp 2>&1; then
+    n=$(wc -l < $D/list.tmp); total=$((total+n))
+    m=$(grep -cE '\.map$' $D/list.tmp); maps_all=$((maps_all+m))
+    md=$(grep -cE '^app/dist/.*\.map$' $D/list.tmp); maps_dist=$((maps_dist+md))
+    cat $D/list.tmp >> $D/all-entries.txt
+    if grep -q '^app/dist/' $D/list.tmp; then
+      echo "layer $(basename $blob | cut -c1-12): $n entries, app/dist entries $(grep -c '^app/dist/' $D/list.tmp)"
+      tar -xf "$blob" -C $D/dist app/dist 2>> $D/extract.stderr
+    fi
+  fi
+done
+echo "entries in all layers: $total"
+echo "*.map entries in all layers: $maps_all (under app/dist: $maps_dist)"
+echo "*.map entries outside app/dist (dependencies):"
+for blob in $D/oci/blobs/sha256/*; do tar -tf "$blob" 2>&1 | grep -E '\.map$' | grep -v '^app/dist/'; done | sed -E 's#^(app/node_modules/[^/]+(/[^/]+)?)/.*#\1/...#' | sort | uniq -c
+echo "files extracted from app/dist: $(find $D/dist/app/dist -type f | wc -l)"
+echo "files under app/dist containing 'sourceMappingURL': $(grep -rl 'sourceMappingURL' $D/dist/app/dist | wc -l)"
+grep -rl 'sourceMappingURL' $D/dist/app/dist | sed "s#$D/dist/##" | head -5
+echo "client assets:"; ls $D/dist/app/dist/client/assets
+echo "removed packages present under app/node_modules (expect 0 lines):"
+grep -E '^app/node_modules/(fast-xml-parser|fast-xml-builder|strnum|@nodable/entities|anynum|is-unsafe|path-expression-matcher|xml-naming)/' $D/all-entries.txt | cut -d/ -f1-4 | sort -u
+echo "(end)"

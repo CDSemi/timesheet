@@ -495,7 +495,7 @@ describe('parse cost and report size are bounded (WP4-B-01)', () => {
   });
 
   it('bounds the total XML parsed per package, not only each part', () => {
-    // Five worksheets of 3.9 MiB each pass the part limit (4 MiB) and the inflated budget (48 MiB), not the 16 MiB total.
+    // Five worksheets of 3.9 MiB each pass the part limit (4 MiB) and the inflated budget (48 MiB), not the package total (8 MiB since WP4-FIXB3).
     const periods = [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }] as const;
     const parts = ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/worksheets/sheet100.xml', 'xl/worksheets/sheet101.xml'];
     const entries = unpack(buildSyntheticWorkbook({ periods: [...periods] }));
@@ -509,9 +509,9 @@ describe('parse cost and report size are bounded (WP4-B-01)', () => {
     const bytes = buildSyntheticWorkbook({ periods });
     const preview = previewWorkbook(bytes);
     expect(preview.periods).toHaveLength(60);
-    // Measured on this package: the largest part is about 29 KB and 1 400 elements; the limits are 4 MiB and 200 000.
+    // Measured on this package: the largest part is about 29 KB and 1 400 openings; the package is 1.4 MB of XML (the total is 8 MiB).
     const workbook = readWorkbook(bytes);
-    expect(workbook.inflatedBytes).toBeLessThan(DEFAULT_READER_LIMITS.maxTotalXmlBytes / 8);
+    expect(workbook.inflatedBytes).toBeLessThan(DEFAULT_READER_LIMITS.maxTotalXmlBytes / 4);
   });
 
   it('refuses the 2.7 MB formula-heavy package of the audit (3 x 199 000 formula cells)', () => {
@@ -527,14 +527,14 @@ describe('parse cost and report size are bounded (WP4-B-01)', () => {
   });
 
   it('caps the stored findings: the first sources of a finding plus a total count, whatever the cell count', () => {
-    // 3 x 30 000 formula cells (1 500 rows of 20) fit every limit (200 000 markup openings per package since WP4-FIXB2);
+    // 3 x 22 000 formula cells (1 100 rows of 20) fit every limit (150 000 markup openings per package since WP4-FIXB3);
     // before the WP4-FIXB fix they gave one source per cell.
-    const rows = Array.from({ length: 1500 }, (_, row) => `<row r="${row + 1}">${Array.from({ length: 20 }, (_, col) => `<c r="${String.fromCharCode(65 + col)}${row + 1}"><f>8.5</f></c>`).join('')}</row>`).join('');
+    const rows = Array.from({ length: 1100 }, (_, row) => `<row r="${row + 1}">${Array.from({ length: 20 }, (_, col) => `<c r="${String.fromCharCode(65 + col)}${row + 1}"><f>8.5</f></c>`).join('')}</row>`).join('');
     const xml = `<?xml version="1.0"?><worksheet xmlns="${NS}"><sheetData>${rows}</sheetData></worksheet>`;
     const entries = unpack(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }, { payrollDate: '2026-01-23' }, { payrollDate: '2026-02-06' }] }));
     for (let index = 0; index < 3; index += 1) entries[`xl/worksheets/sheet${100 + index}.xml`] = strToU8(xml);
     const preview = previewWorkbook(pack(entries));
-    const hours = findings(preview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 30_000); // the template's own sheet has 14
+    const hours = findings(preview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 22_000); // the template's own sheet has 14
     expect(hours).toHaveLength(3);
     for (const finding of hours) expect(finding.sources).toHaveLength(MAX_FINDING_SOURCES);
     for (const finding of preview.findings) expect(finding.sources.length).toBeLessThanOrEqual(MAX_FINDING_SOURCES);
@@ -726,6 +726,36 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     return Array.from({ length: count }, (_, index) => ` a${index.toString(36)}=""`).join('');
   }
 
+  /** The recheck's E7 part (WP4-RB2-01): cells with a 65 000-character kept `t="&&&..."` and an inline string. */
+  function e7Part(): string {
+    return fill(`<c r="A1" t="${'&'.repeat(65_000)}"><is><t>x</t></is></c>`, NEAR_PART);
+  }
+
+  /** Cells with distinct 10-character addresses (columns AAA.., rows 1000000..). */
+  function farCells(count: number): string {
+    let out = '';
+    for (let index = 0; index < count; index += 1) {
+      const letters = [index % 26, Math.floor(index / 26) % 26, Math.floor(index / 676) % 26].map((code) => String.fromCharCode(65 + code)).join('');
+      out += `<c r="${letters}${1_000_000 + index}"/>`;
+    }
+    return out;
+  }
+
+  /**
+   * The recheck's Y7 part (WP4-RB2-01): `cells` empty cells with distinct addresses, one kept 20-character value and
+   * an ASCII comment with one non-Latin-1 character filling the part, so the part decodes as a two-byte string.
+   */
+  function y7Part(cells: number, bytes = NEAR_PART): string {
+    const body = `${HEAD}<c r="ZZZ1" t="str"><v>${'w'.repeat(20)}</v></c>${farCells(cells)}${TAIL}`;
+    return `${body}<!--ā${'a'.repeat(bytes - body.length - 16)}-->`;
+  }
+
+  /** Y7 sized to the current limits: four parts sharing the package XML total and opening limit. */
+  function y7AtTheLimits(): string[] {
+    const cells = Math.floor(DEFAULT_READER_LIMITS.maxTotalElements / 4) - 400;
+    return [1, 2, 3, 4].map(() => y7Part(cells, Math.floor(DEFAULT_READER_LIMITS.maxTotalXmlBytes / 4) - 6 * 1024));
+  }
+
   it('red-first (r3): refuses a part of tags led by a digit, a space, a dot or a hyphen, which the old count let through', () => {
     for (const unit of ['<1/>', '<9/>', '< />', '<.a/>', '<-/>', '<1:c/>']) {
       const outcome = measure(partsWorkbook([fill(unit, ONE_PART)]));
@@ -765,8 +795,9 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     expect(reject(partsWorkbook([exact(element, 3_100)]))).toBeNull();
     expect(reject(partsWorkbook([exact(element, 3_200)]))).toBe('too_many_attributes');
     expect(reject(partsWorkbook([1, 2, 3].map(() => exact(element, 3_100))))).toBe('too_many_attributes');
-    // One tag of more than 64 KiB, whatever its attribute count (four parts of them: H4b's 5 s before).
-    expect(reject(partsWorkbook([`${HEAD}<c r="${'A'.repeat(70 * 1024)}"/>${TAIL}`]))).toBe('tag_too_large');
+    // One tag of more than 64 KiB, whatever its attribute count (four parts of them: H4b's 5 s before). The attribute
+    // is one the reader does not keep (`s`); a kept one that long is refused earlier, by its own cap (WP4-FIXB3).
+    expect(reject(partsWorkbook([`${HEAD}<c s="${'A'.repeat(70 * 1024)}"/>${TAIL}`]))).toBe('tag_too_large');
   });
 
   it('red-first (r1 H5d): a 1 MiB shared string used as 100 holiday names gives a report of kilobytes, not 100 MiB', () => {
@@ -796,7 +827,7 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       let bytes = buildSyntheticWorkbook({ periods: [...periods] });
       for (let index = 0; index < 3; index += 1) {
         bytes = withText(bytes, `xl/worksheets/sheet${100 + index}.xml`, (xml) =>
-          (xml ?? '').replace(/(<c r="B14"[^>]*t="inlineStr"><is><t>)Worked(<\/t>)/, `$1${character.repeat(NEAR_PART - 40_000)}$2`),
+          (xml ?? '').replace(/(<c r="B14"[^>]*t="inlineStr"><is><t>)Worked(<\/t>)/, `$1${character.repeat(Math.floor((8 * MIB - 300 * 1024) / 3))}$2`),
         );
       }
       const outcome = measure(bytes);
@@ -808,7 +839,8 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       const unknown = findings(outcome.preview as WorkbookPreview, 'unknown_label');
       expect(unknown).toHaveLength(3);
       for (const finding of unknown) expect(finding.details).toMatchObject({ truncated: true });
-      expect(outcome.json).toBeLessThan(256 * 1024); // 24 MiB (letters) and 143 MiB (control characters) before
+      // Labels of about 2.7 MiB each now that a package holds 8 MiB of XML (the recheck used 4 MiB: 24 MiB and 143 MiB before).
+      expect(outcome.json).toBeLessThan(256 * 1024);
     }
     // One 4 MiB shared string used as ten labels on 60 dated sheets (H5e): 1.1 s, +0.86 GiB and a RangeError before.
     let amplified = withBigSharedString(NEAR_PART, 'a', buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }));
@@ -830,9 +862,12 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       withText(buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09' }] }), 'xl/workbook.xml', (xml) =>
         (xml ?? '').replace('name="2026.01.09"', `name="2026.01.09${' '.repeat(padding)}"`),
       );
-    // 10 000 characters: a dated sheet whose every source repeated the name (about 1 MiB of report before).
-    expect(measure(named(10_000)).code).toBe('sheet_name_too_long');
-    // A megabyte (a 45 MiB preview and a 124 MiB response before) is already over the start-tag limit.
+    // 150 characters: over the sheet-name limit (100) and under the kept-attribute cap (255).
+    expect(measure(named(140)).code).toBe('sheet_name_too_long');
+    // 10 000 characters: a dated sheet whose every source repeated the name (about 1 MiB of report before) is now over
+    // the cap on a kept attribute value (WP4-FIXB3); a megabyte (a 45 MiB preview and a 124 MiB response before) is
+    // over the start-tag limit.
+    expect(measure(named(10_000)).code).toBe('attribute_too_large');
     expect(measure(named(MIB)).code).toBe('tag_too_large');
   });
 
@@ -849,14 +884,14 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     expect(hours?.sourceCount).toBeGreaterThanOrEqual(6_000);
     expect(readWorkbook(bytes).sheets.at(-1)?.cells.get('AA6000')?.formula).toHaveLength(8192); // Excel's own limit
 
-    // Two dated sheets of 45 000 cells sharing one formula at that length: each distinct text is examined once.
+    // Two dated sheets of 33 000 cells sharing one formula at that length: each distinct text is examined once.
     const shared = (xml: string | null) => {
       const rows: string[] = [];
-      for (let row = 100; row < 2_350; row += 1) {
+      for (let row = 100; row < 1_750; row += 1) {
         let cells = '';
         for (let column = 0; column < 20; column += 1) {
           const address = `${String.fromCharCode(65 + column)}${row}`;
-          cells += row === 100 && column === 0 ? `<c r="${address}"><f t="shared" si="0" ref="A100:T2349">8.5+"${'x'.repeat(8_200)}</f></c>` : `<c r="${address}"><f t="shared" si="0"/></c>`;
+          cells += row === 100 && column === 0 ? `<c r="${address}"><f t="shared" si="0" ref="A100:T1749">8.5+"${'x'.repeat(8_200)}</f></c>` : `<c r="${address}"><f t="shared" si="0"/></c>`;
         }
         rows.push(`<row r="${row}">${cells}</row>`);
       }
@@ -867,14 +902,14 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     const wide = measure(many);
     expect(wide.code).toBeNull();
     expect(wide.ms).toBeLessThan(3000);
-    const counted = findings(wide.preview as WorkbookPreview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 45_000);
+    const counted = findings(wide.preview as WorkbookPreview, 'formula_hours_8_5').filter((finding) => finding.sourceCount >= 33_000);
     expect(counted).toHaveLength(2);
     // Counted, not timed: the mapping runs its formula patterns once per distinct formula text, not once per cell.
     const workbook = readWorkbook(many);
     const patterns = vi.spyOn(RegExp.prototype, 'test');
     try {
       mapWorkbook(workbook, { sha256: '0'.repeat(64), bytes: many.length });
-      expect(patterns.mock.calls.length).toBeLessThan(5_000); // 90 000 cells share the one formula
+      expect(patterns.mock.calls.length).toBeLessThan(5_000); // 66 000 cells share the one formula
     } finally {
       patterns.mockRestore();
     }
@@ -907,6 +942,31 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     expect(preview?.periods[0]?.days[9]?.mapping).toEqual({ category: 'worked', workFromHome: true });
   });
 
+  it('red-first (WP4-RB2-01, E7): a kept attribute value over 255 characters is refused; one at the cap is decoded once', () => {
+    // E7 took about 610 ms: each cell's 65 000-character t="&&&..." was decoded on every read of the attribute.
+    for (const part of [e7Part(), fill(`<c r="${'&'.repeat(65_000)}"/>`, NEAR_PART)]) {
+      const outcome = measure(partsWorkbook([1, 2, 3, 4].map(() => part)));
+      expect(outcome.code).toBe('attribute_too_large');
+      expect(outcome.ms).toBeLessThan(2000);
+    }
+    expect(reject(partsWorkbook([exact(`<c r="A1" t="${'s'.repeat(255)}"/>`, 1)]))).toBeNull();
+    expect(reject(partsWorkbook([exact(`<c r="A1" t="${'s'.repeat(256)}"/>`, 1)]))).toBe('attribute_too_large');
+    expect(reject(partsWorkbook([exact(`<c r="A1" t="${'s'.repeat(256)}"/>`, 1)]), { maxKeptAttributeLength: 300 })).toBeNull();
+    // An attribute the reader does not keep may still be as long as the start-tag limit allows.
+    expect(reject(partsWorkbook([exact(`<c r="A1" s="${'&'.repeat(65_000)}"/>`, 1)]))).toBeNull();
+  });
+
+  it('red-first (WP4-RB2-01, Y7): four 4 MiB parts of pinned two-byte cells are over the package limits', () => {
+    // Y7 took +158 MiB: 200 000 kept cells in four parts of 4 MiB, and one kept value per part pinned each decoded
+    // two-byte part. The package now holds at most 8 MiB of XML and 150 000 markup openings (WP4-FIXB3).
+    expect(measure(partsWorkbook([1, 2, 3, 4].map(() => y7Part(49_900)))).code).toBe('total_xml_too_large');
+    expect(measure(partsWorkbook([1, 2, 3, 4].map(() => y7Part(49_900, 2 * MIB - 6 * 1024)))).code).toBe('too_many_elements');
+    // The same shape at the new limits previews; its memory is measured by the WP4-FIXB3 probes (in a fresh process).
+    const under = measure(partsWorkbook(y7AtTheLimits()));
+    expect(under.code).toBeNull();
+    expect(under.ms).toBeLessThan(2000);
+  });
+
   it('adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound', () => {
     const at64 = `<x${attributes(64)}/>`;
     const open = HEAD.replace('<row r="1">', '');
@@ -920,8 +980,9 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
     const shapes: Shape[] = [
       // bytes: one part, and near-limit parts of the parsed total
       ['a part just over 4 MiB', () => partsWorkbook([paddedSheetXml(4 * MIB + 16)]), 'part_too_large'],
-      ['four parts of 4 MiB less 6 KiB (comment)', () => partsWorkbook([1, 2, 3, 4].map(() => paddedSheetXml(NEAR_PART))), null],
-      ['five such parts', () => partsWorkbook([1, 2, 3, 4, 5].map(() => paddedSheetXml(NEAR_PART))), 'total_xml_too_large'],
+      ['two parts of 4 MiB less 40 KiB (comment)', () => partsWorkbook([1, 2].map(() => paddedSheetXml(4 * MIB - 40 * 1024))), null],
+      ['three such parts (over the 8 MiB package total)', () => partsWorkbook([1, 2, 3].map(() => paddedSheetXml(NEAR_PART))), 'total_xml_too_large'],
+      ['four parts of 2 MiB less 6 KiB', () => partsWorkbook([1, 2, 3, 4].map(() => paddedSheetXml(2 * MIB - 6 * 1024))), null],
       // markup openings of any kind, per part and per package, and names of any shape
       ['99 904 openings of mixed markup in one part', () => partsWorkbook([exact('<x/><!--c--><?p?><![CDATA[d]]>', 24_975)]), null],
       ['100 005 openings in one part', () => partsWorkbook([exact('<x/>', 100_001)]), 'too_many_elements'],
@@ -934,9 +995,17 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       ['198 402 attributes in one part', () => partsWorkbook([exact(at64, 3_100)]), null],
       ['204 802 attributes in one part', () => partsWorkbook([exact(at64, 3_200)]), 'too_many_attributes'],
       ['three parts of 198 402 attributes', () => partsWorkbook([1, 2, 3].map(() => exact(at64, 3_100))), 'too_many_attributes'],
-      ['a tag of 64 KiB less 64 bytes', () => partsWorkbook([`${HEAD}<c r="${'A'.repeat(64 * 1024 - 64)}"/>${TAIL}`]), null],
-      ['a tag of 64 KiB and 64 bytes', () => partsWorkbook([`${HEAD}<c r="${'A'.repeat(64 * 1024 + 64)}"/>${TAIL}`]), 'tag_too_large'],
-      ['a part of 63 KiB attribute values', () => partsWorkbook([fill(`<c r="${'A'.repeat(63 * 1024)}"/>`, ONE_PART)]), null],
+      ['a tag of 64 KiB less 64 bytes', () => partsWorkbook([`${HEAD}<c s="${'A'.repeat(64 * 1024 - 64)}"/>${TAIL}`]), null],
+      ['a tag of 64 KiB and 64 bytes', () => partsWorkbook([`${HEAD}<c s="${'A'.repeat(64 * 1024 + 64)}"/>${TAIL}`]), 'tag_too_large'],
+      ['a part of 63 KiB values of an attribute that is not kept', () => partsWorkbook([fill(`<c s="${'A'.repeat(63 * 1024)}"/>`, ONE_PART)]), null],
+      // kept attribute values (WP4-FIXB3): at most 255 characters as written
+      ['a kept attribute value of 255 characters', () => partsWorkbook([exact(`<c r="A1" t="${'&amp;'.repeat(51)}"><is><t>x</t></is></c>`, 64)]), null],
+      ['a kept attribute value of 256 characters', () => partsWorkbook([exact(`<c r="A1" t="${'s'.repeat(256)}"/>`, 1)]), 'attribute_too_large'],
+      // the recheck's WP4-RB2-01 shapes (E7: 610 ms; Y7: +158 MiB) and Y7 under the package opening limit
+      ['E7: four parts of cells with a 65 000-character kept t="&&&..."', () => partsWorkbook([1, 2, 3, 4].map(() => e7Part())), 'attribute_too_large'],
+      ['Y7: four 4 MiB parts of 49 900 cells, pinned two-byte', () => partsWorkbook([1, 2, 3, 4].map(() => y7Part(49_900))), 'total_xml_too_large'],
+      ['Y7: four 2 MiB parts of 49 900 cells, pinned two-byte', () => partsWorkbook([1, 2, 3, 4].map(() => y7Part(49_900, 2 * MIB - 6 * 1024))), 'too_many_elements'],
+      ['Y7 at the package XML and opening limits', () => partsWorkbook(y7AtTheLimits()), null],
       // nesting
       ['40 levels of nesting', () => partsWorkbook([nest(40)]), null],
       ['41 levels of nesting', () => partsWorkbook([nest(41)]), 'malformed_xml'],
@@ -949,7 +1018,8 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       ['a 3.8 MiB text cell', () => partsWorkbook([`${HEAD}<c r="A1" t="str"><v>${'v'.repeat(ONE_PART)}</v></c>${TAIL}`]), null],
       ['3.8 MiB of entities in an inline string', () => partsWorkbook([`${HEAD}<c r="A1" t="inlineStr"><is><t>${'&amp;'.repeat(ONE_PART / 5)}</t></is></c>${TAIL}`]), null],
       ['3.8 MiB of CDATA in an inline string', () => partsWorkbook([`${HEAD}<c r="A1" t="inlineStr"><is><t><![CDATA[${'d'.repeat(ONE_PART)}]]></t></is></c>${TAIL}`]), null],
-      ['four parts of 24 000 long-valued cells', () => partsWorkbook([1, 2, 3, 4].map(() => exact(`<c r="B13"><v>${'1'.repeat(140)}</v></c>`, 24_000))), null],
+      ['two parts of 24 000 long-valued cells', () => partsWorkbook([1, 2].map(() => exact(`<c r="B13"><v>${'1'.repeat(140)}</v></c>`, 24_000))), null],
+      ['four parts of 13 000 cells with a kept 60-character two-byte value', () => partsWorkbook([1, 2, 3, 4].map(() => exact(`<c r="B13" t="str"><v>${'ā'.repeat(60)}</v></c>`, 13_000))), null],
       // sheet names and holiday rows
       ['a sheet name of 100 characters', () => sheetName('n'.repeat(100)), null],
       ['a sheet name of 101 characters', () => sheetName('n'.repeat(101)), 'sheet_name_too_long'],
@@ -963,4 +1033,71 @@ describe('RB-01: no XML shape inside the limits escapes the parse budget, and th
       expect(outcome.json, name).toBeLessThan(2 * MIB);
     }
   });
+});
+
+/*
+ * WP4-FIXB3. Every value is decoded exactly once: kept attribute values when the scanner reads them, kept text when
+ * its element closes; nothing decodes a decoded value again. And a part that declares an encoding other than UTF-8 or
+ * UTF-16 is refused (OPC allows only those two; the reader used to read such a part as UTF-8). Recheck risk R-B2-2.
+ */
+describe('WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read', () => {
+  const ONE_LEVEL = '&amp;amp; &amp;lt; &#38;#65; &#x26;amp; &amp;#x41;';
+  const DECODED = '&amp; &lt; &#65; &amp; &#x41;';
+
+  function workbookWithReferences(): Uint8Array {
+    let bytes = buildSyntheticWorkbook({ periods: [{ payrollDate: '2026-01-09', employee: 'MARK' }] });
+    bytes = withText(bytes, 'xl/sharedStrings.xml', (sst) => (sst ?? '').replace('</sst>', `<si><t>${ONE_LEVEL}</t></si><si><r><t>${ONE_LEVEL}</t></r></si></sst>`));
+    bytes = withText(bytes, 'xl/worksheets/sheet100.xml', (xml) =>
+      (xml ?? '')
+        .replace('MARK', ONE_LEVEL)
+        .replace(
+          '</sheetData>',
+          `<row r="40"><c r="A40" t="s"><v>66</v></c><c r="B40" t="&#115;"><v>67</v></c><c r="C40" t="str"><v>${ONE_LEVEL}</v></c>` +
+            `<c r="D40"><f>${ONE_LEVEL}</f><v>1</v></c><c r="E40" t="inlineStr"><is><t><![CDATA[${ONE_LEVEL}]]></t></is></c><c r="F&#52;0"><v>7</v></c></row></sheetData>`,
+        ),
+    );
+    return withText(bytes, 'xl/workbook.xml', (xml) => (xml ?? '').replace('name="Timesheet"', 'name="Timesheet &amp;amp;"'));
+  }
+
+  it('decodes every kept text and attribute value exactly one level, and leaves CDATA as written', () => {
+    const workbook = readWorkbook(workbookWithReferences());
+    expect(workbook.sheets.map((item) => item.name)).toContain('Timesheet &amp;'); // a kept attribute value
+    const cells = workbook.sheets.find((item) => item.name === '2026.01.09')?.cells;
+    expect(cells?.get('I8')?.value).toBe(DECODED); // inline string
+    expect(cells?.get('A40')?.value).toBe(DECODED); // shared string, plain
+    expect(cells?.get('B40')).toMatchObject({ type: 'string', value: DECODED }); // t="&#115;" is "s"; rich-text shared string
+    expect(cells?.get('C40')?.value).toBe(DECODED); // t="str" value
+    expect(cells?.get('D40')?.formula).toBe(DECODED); // formula text
+    expect(cells?.get('E40')?.value).toBe(ONE_LEVEL); // CDATA is never decoded
+    expect(cells?.get('F40')?.value).toBe(7); // r="F&#52;0" is F40
+    // The mapping shows the employee exactly as read.
+    expect(previewWorkbook(workbookWithReferences()).periods[0]?.employee?.value).toBe(DECODED);
+  });
+
+  it('red-first (R-B2-2): refuses a part that declares an encoding other than UTF-8 or UTF-16', () => {
+    const template = readTemplateBytes();
+    const declared = (encoding: string) =>
+      withText(template, 'xl/worksheets/sheet2.xml', (xml) => (xml ?? '').replace(/^<\?xml[^?]*\?>/, `<?xml version="1.0" encoding="${encoding}" standalone="yes"?>`));
+    for (const encoding of ['ISO-8859-1', 'windows-1252', 'Shift_JIS', 'US-ASCII', 'UTF-32']) {
+      expect(rejection(() => readWorkbook(declared(encoding))), encoding).toBe('unsupported_encoding');
+    }
+    for (const encoding of ['UTF-8', 'utf-8', 'UTF-16', 'utf-16']) {
+      const bytes = encoding.toLowerCase() === 'utf-16' ? withEntry(template, 'xl/worksheets/sheet2.xml', utf16(declaredText(template, encoding))) : declared(encoding);
+      expect(rejection(() => readWorkbook(bytes)), encoding).toBeNull();
+    }
+    // A declaration without an encoding is UTF-8 (or UTF-16 with a byte-order mark), as before.
+    expect(rejection(() => readWorkbook(withText(template, 'xl/worksheets/sheet2.xml', (xml) => (xml ?? '').replace(/^<\?xml[^?]*\?>/, '<?xml version="1.0"?>'))))).toBeNull();
+  });
+
+  function declaredText(template: Uint8Array, encoding: string): string {
+    const xml = strFromU8(unpack(template)['xl/worksheets/sheet2.xml'] ?? new Uint8Array());
+    return xml.replace(/^<\?xml[^?]*\?>/, `<?xml version="1.0" encoding="${encoding}" standalone="yes"?>`);
+  }
+
+  function utf16(text: string): Uint8Array {
+    const out = new Uint8Array(2 + text.length * 2);
+    out.set([0xff, 0xfe]);
+    out.set(new Uint8Array(Buffer.from(text, 'utf16le')), 2);
+    return out;
+  }
 });

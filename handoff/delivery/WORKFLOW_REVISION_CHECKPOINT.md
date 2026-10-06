@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65 (WP4-FIX-FREEZE, the WP4 fix-round freeze).
+  - HEAD = origin/main = cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d (WP4-FIXB2-FREEZE, the WP4 round-2 fix freeze).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -797,7 +797,46 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - WP4-RECHECK-A moves to attempt 2 (pending; attempt 1 PASS is kept in its
            history);
          - WP4-REGATE2 and WP4-RECHECK-B2 are pending.
-       - Running: WP4-FIXB2-FREEZE.
+       - WP4-FIXB2-FREEZE committed and pushed cc34e7f (127 paths; checks 0, after one
+         EOF-blank-line fix the brief allows). The board's current source digest is
+         96445de4….
+       - WP4-REGATE2: PASS.
+         - Digest: 96445de4….
+         - Verify: 1,750 tests. e2e: 145 passed. Drill: 208 PASS.
+         - The RB-01 probes are all refused fast or stay within the budget: worst
+           62 ms and +73 MiB. Health answers in 1–3 ms, no request returns 500, and
+           the largest report is 0.57 MiB.
+         - The benign-workbook differential is byte-identical against the old reader.
+       - WP4-RECHECK-A attempt 2: **PASS** on cc34e7f (digest 96445de4), with no
+         findings.
+         - The delta touches only FIXB2 and DEPCLEAN files.
+         - The lock change removes only fast-xml-parser.
+         - Verify: 1,750 tests. Drill: 208 PASS. No maps.
+         - The attempt-1 conclusions hold. New: R-RA5 (Info).
+       - WP4-RECHECK-B2: **FIX REQUIRED**, finding WP4-RB2-01 (Low).
+         - Two shapes break the stated budget: about 610 ms (a `t` attribute is decoded
+           twice) and +158 MiB (slices pin two-byte parts).
+         - Cost stays linear, with no 500.
+         - Everything else held:
+           - the scanner passes 49/49 spec cases and refuses DOCTYPE;
+           - the differential is identical;
+           - 72 new shapes stay bounded;
+           - the report is at most 1.61 MiB.
+       - Coordinator decision: fix the code instead of restating the budget.
+       - WP4-FIXB3 is done (expert; author-reported).
+         - Kept values are decoded once and stored as copies; attributes are capped at
+           255; `decodeXml` is linear.
+         - Limits tightened: 8 MiB of XML and 150k openings.
+         - Worst case: 289 ms / +89 MiB, about 60% of the budget. E7 and Y7 are
+           refused.
+         - R-B2-1 and R-B2-2 are fixed.
+         - Tests: 89/89; the differential is identical. Verify: 1,755 tests. Digest:
+           635f909d….
+       - The board moves WP4-RECHECK-A to attempt 3 (pending) and adds WP4-REGATE3 and
+         WP4-RECHECK-B3 (pending).
+       - Running: WP4-FIXB3-FREEZE.
+       - Then: freeze, regate, a fresh recheck of B (B3), and an area-A delta recheck
+         (attempt 3).
        - Then:
          - WP4-FIXB2-FREEZE;
          - WP4-REGATE2;
@@ -839,7 +878,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-FIXB2-FREEZE (attempt 1) only.
+- Live processes: WP4-FIXB3-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

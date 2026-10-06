@@ -1,0 +1,47 @@
+# WP4-FIXB3 13 incidents, deviations and open points
+
+1. A first run of probes/mutate.mjs used the stale WP4-FIXB2 mutation list: the Write of the new file was refused because
+   the file had not been read in this session, and the run started anyway. It ran only in the scratch copy <task>/mut and
+   restored every file byte-identical. Its FIXB2 M7 ("drop the start-tag length limit, both checks") survived because a
+   third tag-length check now exists; every other FIXB2 mutation was still killed. The file was then written and the
+   FIXB3 list run twice. 04 is the final run on the final tests and source.
+2. The test-sizing changes made after the first red-first run, all in owned test files and all rerun red against the
+   baseline (02 run 2):
+   a. the Y7 test first used 49 985 cells a part. With the template's own parts that is just over the old 200 000
+      openings, so it was refused on the baseline too. It now uses 49 900 cells, under the old limit;
+   b. after the package limits went to 8 MiB and 150 000, earlier tests were resized to keep testing what they test:
+      - Y7 expects `total_xml_too_large` for four 4 MiB parts;
+      - the sweep's byte shapes became two parts of 4 MiB less 40 KiB, three parts refused, and four parts of 2 MiB;
+      - the long-valued cells shape became two parts;
+      - the H6 labels became about 2.7 MiB each, sized by a constant;
+      - the shared-formula test uses 2 x 33 000 cells;
+      - the findings-cap test uses 3 x 22 000 cells;
+      - the 60-sheet test bounds the XML by a quarter of the total instead of an eighth;
+   c. the attribute-cap order: a 1 MiB sheet name first reported `attribute_too_large`. The start-tag length is now
+      checked as soon as an attribute value ends, before the cap on a kept value, so a megabyte tag is still
+      `tag_too_large`. Tests that meant the tag limit now use an attribute the reader does not keep (`s`).
+3. Limit choice (06, limit experiments). Copies, one decode and the linear decoder brought time well under target. But
+   with the old 16 MiB and 200 000 the search still reached +154 MiB, and 150 000 with 16 MiB or 12 MiB, or 175 000 with
+   8 MiB, stayed over the +105 MiB target. Only 150 000 openings with 8 MiB of XML per package kept every shape under
+   it (+89 MiB). The per-part limit (4 MiB) and every other limit are unchanged. Realistic margins: the 64-sheet workbook
+   is 1.4 MB of XML and 53 400 openings, so 6x and 2.8x.
+4. Timing variance. One single run of "S3 cells two-byte generic pinned" took 289 ms (06, search run). Five repeats of
+   the worst shapes gave at most 206 ms. The code comment and docs/07 state the conservative 290 ms (58 %).
+5. Memory cannot be asserted stably in vitest: a worker cannot force a full GC, and maxRSS includes garbage not yet
+   collected. The tests assert the refusal codes and generous time bounds. Memory is measured by
+   probes/cost.mjs (maxRSS, a fresh process per case) and by probes/retained.mjs (memory retained after a forced GC,
+   stable), which stands in for the slices mutation M3 (04: +16 MiB).
+6. The decode-once test passes on the baseline as well: cc34e7f already decoded each value once, only more times
+   per read. It is a guard against double decoding, and mutations M1 and M1b are killed by it.
+7. src/client/importModel.ts is unchanged: the new reasons `attribute_too_large` and `unsupported_encoding` show the
+   existing generic text ("The workbook cannot be read safely. The workbook was not stored."). routes/imports.ts is
+   unchanged.
+8. ownCopy relies on a V8 behaviour: slicing a concatenation flattens it into a new string first. The retained-memory
+   probe shows the effect (07: pinned equals unpinned after the fix).
+9. Scratch copies, all under <task>: base (cc34e7f), t09 (13a258d), exp and exp2 (limit experiments), final (probe
+   export), mut (mutations). The baseline test files in <task>/base were temporarily replaced to record the red-first
+   run and restored (sha256 equal to HEAD's, 02). No folder was removed and nothing inside the repository was deleted.
+10. Servers were stopped through their handles. No process was killed by PID, no docker command was run, nothing was
+    redirected to /dev/null or nul, and no script was fed to an interpreter through stdin. No workbook was written into
+    the repository (the template hash is unchanged, 12). The NAS is NOT VERIFIED; the budget is measured on the
+    workstation.

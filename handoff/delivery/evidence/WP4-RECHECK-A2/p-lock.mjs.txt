@@ -1,0 +1,92 @@
+// WP4-RECHECK-A2 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+// WP4-RECHECK-A2: verifies that the DEPCLEAN lock change removes only fast-xml-parser and packages that only it needs.
+// Usage: node p-lock.mjs <dir with old-lock.json, new-lock.json, old-package.json, new-package.json>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const read = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+const oldLock = read('old-lock.json');
+const newLock = read('new-lock.json');
+const oldPkg = read('old-package.json');
+const newPkg = read('new-package.json');
+let failures = 0;
+const check = (ok, text) => {
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${text}`);
+  if (!ok) failures += 1;
+};
+
+// package.json: every field equal except dependencies.fast-xml-parser.
+const strip = (pkg) => {
+  const copy = structuredClone(pkg);
+  delete copy.dependencies['fast-xml-parser'];
+  return JSON.stringify(copy);
+};
+check(oldPkg.dependencies['fast-xml-parser'] !== undefined, `old package.json names fast-xml-parser ${oldPkg.dependencies['fast-xml-parser']}`);
+check(newPkg.dependencies['fast-xml-parser'] === undefined, 'new package.json does not name fast-xml-parser');
+check(strip(oldPkg) === strip(newPkg), 'package.json is otherwise identical (all fields, all dependency sections)');
+
+// Lock: compare every entry of "packages" by path, version, integrity and every other field.
+const oldPackages = oldLock.packages;
+const newPackages = newLock.packages;
+const removed = Object.keys(oldPackages).filter((path) => !(path in newPackages));
+const added = Object.keys(newPackages).filter((path) => !(path in oldPackages));
+const changed = Object.keys(newPackages).filter(
+  (path) => path in oldPackages && JSON.stringify(oldPackages[path]) !== JSON.stringify(newPackages[path]),
+);
+console.log(`old lock entries: ${Object.keys(oldPackages).length}, new lock entries: ${Object.keys(newPackages).length}`);
+console.log('removed entries:');
+for (const path of removed) console.log(`  ${path} ${oldPackages[path].version}${oldPackages[path].dev ? ' (dev)' : ''}`);
+check(added.length === 0, `added entries: ${added.length}`);
+// The root entry "" carries the dependency list: allow only the fast-xml-parser line to change there.
+const rootChanged = changed.filter((path) => path !== '');
+check(rootChanged.length === 0, `changed non-root entries: ${rootChanged.length} ${rootChanged.join(', ')}`);
+const oldRoot = structuredClone(oldPackages['']);
+delete oldRoot.dependencies['fast-xml-parser'];
+check(JSON.stringify(oldRoot) === JSON.stringify(newPackages['']), 'root lock entry differs only by fast-xml-parser');
+const otherTop = Object.keys(oldLock).filter((key) => key !== 'packages' && JSON.stringify(oldLock[key]) !== JSON.stringify(newLock[key]));
+check(otherTop.length === 0, `other top-level lock fields changed: ${otherTop.length}`);
+
+// The transitive closure of fast-xml-parser in the old lock (node_modules resolution: nested first, then hoisted).
+const resolve = (fromPath, name) => {
+  let base = fromPath;
+  for (;;) {
+    const candidate = base === '' ? `node_modules/${name}` : `${base}/node_modules/${name}`;
+    if (candidate in oldPackages) return candidate;
+    if (base === '') return undefined;
+    const index = base.lastIndexOf('/node_modules/');
+    base = index === -1 ? '' : base.slice(0, index);
+  }
+};
+const depsOf = (path) => {
+  const entry = oldPackages[path];
+  return { ...(entry.dependencies ?? {}), ...(entry.optionalDependencies ?? {}), ...(entry.peerDependencies ?? {}) };
+};
+const closure = new Set();
+const queue = ['node_modules/fast-xml-parser'];
+while (queue.length > 0) {
+  const path = queue.shift();
+  if (path === undefined || closure.has(path)) continue;
+  closure.add(path);
+  for (const name of Object.keys(depsOf(path))) {
+    const target = resolve(path, name);
+    if (target !== undefined) queue.push(target);
+  }
+}
+console.log(`fast-xml-parser closure in the old lock (${closure.size}): ${[...closure].map((p) => p.replace(/^node_modules\//, '')).join(', ')}`);
+check(removed.every((path) => closure.has(path)), 'every removed entry is in the fast-xml-parser closure');
+
+// Every closure member that stays in the new lock must be needed by another package; every removed one must not be.
+const requiredBy = (target) => Object.keys(oldPackages).filter((path) => {
+  if (path === '' || closure.has(path)) return false;
+  return Object.keys(depsOf(path)).some((name) => resolve(path, name) === target);
+});
+for (const path of closure) {
+  const others = requiredBy(path);
+  const rootNeeds = Object.keys({ ...(oldPackages[''].dependencies ?? {}), ...(oldPackages[''].devDependencies ?? {}) })
+    .some((name) => name !== 'fast-xml-parser' && `node_modules/${name}` === path);
+  const stays = path in newPackages;
+  check(stays === (others.length > 0 || rootNeeds), `${path.replace(/^node_modules\//, '')}: ${stays ? 'kept' : 'removed'}; needed outside the closure by ${others.length + (rootNeeds ? 1 : 0)}`);
+}
+console.log(failures === 0 ? 'LOCK CHECK PASSED' : `LOCK CHECK FAILED (${failures})`);
+process.exitCode = failures === 0 ? 0 : 1;

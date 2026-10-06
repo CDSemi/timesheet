@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65 (WP4-FIX-FREEZE, commit đóng băng vòng sửa WP4).
+  - HEAD = origin/main = cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d (WP4-FIXB2-FREEZE, commit đóng băng vòng sửa 2 của WP4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -850,7 +850,46 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - WP4-RECHECK-A chuyển sang lần 2 (đang chờ; kết quả PASS của lần 1 vẫn lưu
            trong lịch sử);
          - WP4-REGATE2 và WP4-RECHECK-B2 đang chờ.
-       - Đang chạy: WP4-FIXB2-FREEZE.
+       - WP4-FIXB2-FREEZE đã commit và push thành cc34e7f (127 đường dẫn; mọi kiểm tra trả
+         về 0, sau một lần sửa dòng trống cuối tệp mà brief cho phép). Digest mã nguồn
+         hiện tại trên board là 96445de4….
+       - WP4-REGATE2: PASS.
+         - Digest: 96445de4….
+         - Verify: 1.750 test. e2e: 145 đạt. Diễn tập: 208 PASS.
+         - Mọi probe RB-01 đều bị từ chối nhanh hoặc nằm trong ngân sách: tệ nhất 62 ms
+           và +73 MiB. Health trả lời trong 1–3 ms, không request nào trả 500, báo cáo
+           lớn nhất 0,57 MiB.
+         - Phép đối chiếu với workbook bình thường cho kết quả giống hệt bộ đọc cũ đến
+           từng byte.
+       - WP4-RECHECK-A lần 2: **PASS** trên cc34e7f (digest 96445de4), không có phát
+         hiện.
+         - Phần chênh chỉ gồm các tệp của FIXB2 và DEPCLEAN.
+         - Thay đổi trong lock chỉ gỡ fast-xml-parser.
+         - Verify: 1.750 test. Diễn tập: 208 PASS. Không có source map.
+         - Các kết luận của lần 1 vẫn đúng. Mới: R-RA5 (Info).
+       - WP4-RECHECK-B2: **FIX REQUIRED**, phát hiện WP4-RB2-01 (Low).
+         - Hai kiểu tệp vượt ngân sách đã công bố: khoảng 610 ms (thuộc tính `t` bị
+           giải mã hai lần) và +158 MiB (slice giữ lại cả phần chuỗi hai byte).
+         - Chi phí vẫn tăng tuyến tính, không có lỗi 500.
+         - Mọi phần khác đều đạt:
+           - bộ quét qua 49/49 trường hợp theo spec và từ chối DOCTYPE;
+           - phép đối chiếu cho kết quả giống hệt;
+           - 72 kiểu tệp mới đều nằm trong giới hạn;
+           - báo cáo tối đa 1,61 MiB.
+       - Quyết định của coordinator: sửa code thay vì nới con số ngân sách.
+       - WP4-FIXB3 đã xong (expert; tác giả tự báo).
+         - Giá trị được giữ lại chỉ giải mã một lần và lưu thành bản sao; thuộc tính bị
+           giới hạn 255 ký tự; `decodeXml` chạy tuyến tính.
+         - Giới hạn siết lại: 8 MiB XML và 150 nghìn thẻ mở.
+         - Ca tệ nhất: 289 ms / +89 MiB, khoảng 60% ngân sách. E7 và Y7 bị từ chối.
+         - Đã sửa R-B2-1 và R-B2-2.
+         - Test: 89/89; phép đối chiếu cho kết quả giống hệt. Verify: 1.755 test. Digest:
+           635f909d….
+       - Board chuyển WP4-RECHECK-A sang lần 3 (đang chờ) và thêm WP4-REGATE3,
+         WP4-RECHECK-B3 (đang chờ).
+       - Đang chạy: WP4-FIXB3-FREEZE.
+       - Sau đó: commit đóng băng, chạy lại gate, kiểm tra lại mảng B (lần B3) bằng
+         auditor mới, và kiểm phần chênh của mảng A (lần 3).
        - Sau đó:
          - WP4-FIXB2-FREEZE;
          - WP4-REGATE2;
@@ -894,7 +933,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-FIXB2-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-FIXB3-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

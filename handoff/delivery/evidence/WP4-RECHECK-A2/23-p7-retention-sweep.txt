@@ -1,0 +1,30 @@
+date_utc: 2026-10-06T15:07:02Z
+$ node <work>/probes/p7-retention-sweep.mjs <work>\export <work>\p7
+PASS  synthetic seed exits 0 (explicit DATABASE_PATH and DATA_DIR)
+PASS  window closed: deleting an eligible scan row is refused
+PASS  window closed: a bulk DELETE of every job is refused and deletes nothing
+PASS  window open (now): sendOld cannot be deleted
+PASS  window open (now): pdfOld cannot be deleted
+PASS  window open (now): reminderSendOld cannot be deleted
+PASS  window open (now): sweepOld cannot be deleted
+PASS  window open (now): retentionOld cannot be deleted
+PASS  window open (now): scanNew cannot be deleted
+PASS  window open (now): scanCancelled cannot be deleted
+PASS  window open (now): sendQueued cannot be deleted
+PASS  window set far in the future: a send, PDF or sweep row is still refused
+INFO  with the window instant moved to 2099 by direct SQL, deleting the 29-day-old succeeded scan row is allowed (rolled back): the 30 days count from the instant the caller writes
+PASS  the window row cannot be deleted, duplicated or given a malformed instant
+PASS  a succeeded row cannot be back-dated to become eligible
+PASS  the retention window is the only writer in the application source (cli, routes and services never touch it)  by source search: only jobs/retentionJob.ts writes job_retention_window
+INFO  runner pass while paused: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}; sweep [{"removedTemporary":0,"removedUnreferenced":1,"keptReferenced":2}]; retention [{"deletedScanJobs":2}]
+PASS  the retention job ran while outbound is paused and deleted exactly the two eligible scan rows
+PASS  every other job row survived (new scan, cancelled scan, PDF, sends, sweep, retention, queued send)
+PASS  the window is closed again after the run
+PASS  operations_state records the run as an instant and a count  {"at":"2026-10-06T15:07:03Z","n":2}
+PASS  the sweep ran while outbound is paused
+PASS  the sweep removed only the old unreferenced file
+PASS  the sweep kept the referenced import source and every referenced signature (all older than the grace)
+PASS  the pause held the send: still queued, no attempt, nothing captured, still paused
+INFO  files left: 3
+P7 PASSED
+exit: 0

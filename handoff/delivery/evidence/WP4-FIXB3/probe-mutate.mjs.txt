@@ -1,0 +1,118 @@
+// WP4-FIXB3 mutation checks, run ONLY in a scratch copy (MUT_ROOT, never the repository). Each mutation replaces one
+// exact fragment (which must occur exactly once), runs the named test files, records whether any test failed (KILLED)
+// or all passed (SURVIVED), optionally runs the retained-memory probe on the mutated source, then restores the file and
+// checks that its SHA-256 equals the original.
+// Usage: MUT_ROOT=<scratch copy> PROBE_PKGS_SEARCH=<dir> node mutate.mjs [id...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = process.env.MUT_ROOT;
+if (!ROOT || /Dropbox/i.test(ROOT)) throw new Error('MUT_ROOT must be a scratch copy outside the repository');
+const READER = 'src/server/import/xlsxReader.ts';
+const SERVICE = 'src/server/services/workbookImport.ts';
+const READER_TESTS = 'tests/integration/workbook-reader.test.ts';
+const IMPORT_TESTS = 'tests/integration/workbook-import.test.ts';
+/** Retained memory after gc with a kept value in every part (pinned) and without (unpinned): equal unless slices pin. */
+const RETAINED = ['S3 cells one-wide generic pinned', 'S3 cells one-wide generic unpinned', 'S3 strings one-wide generic'];
+
+const MUTATIONS = [
+  {
+    id: 'M1 double decoding of kept attribute values: attr() decodes the decoded value again',
+    file: READER,
+    find: '    if (list[index] === name) return list[index + 1];',
+    replace: "    if (list[index] === name) return decodeXml(list[index + 1] ?? '');",
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M1b double decoding of kept text: the text is decoded again when its element closes',
+    file: READER,
+    find: '      if (top.keepsText && top.node !== null) top.node.text = ownCopy(top.node.text);',
+    replace: '      if (top.keepsText && top.node !== null) top.node.text = ownCopy(decodeXml(top.node.text));',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M2 the kept-attribute length cap is removed',
+    file: READER,
+    find: "        if (valueEnd - (at + 1) > limits.maxKeptAttributeLength) {\n          reject('attribute_too_large', `A kept attribute value is longer than ${limits.maxKeptAttributeLength} characters`);\n        }\n",
+    replace: '',
+    tests: [READER_TESTS, IMPORT_TESTS],
+  },
+  {
+    id: 'M3 slices come back: kept values are not copied (memory sweep: retained memory after gc)',
+    file: READER,
+    find: '  return value.length < 13 ? value : `${value} `.slice(0, -1);',
+    replace: '  return value;',
+    tests: [READER_TESTS],
+    retained: true,
+  },
+  {
+    id: 'M4 (extra) the encoding declaration is not checked',
+    file: READER,
+    find: '  if (encoding !== undefined && !SUPPORTED_ENCODING.test(encoding)) {',
+    replace: '  if (encoding !== undefined && !SUPPORTED_ENCODING.test(encoding) && encoding.length < 0) {',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M5 (extra) the floating flag comes from the cut holiday name again',
+    file: SERVICE,
+    find: '    floating_holiday: matchedHoliday(day)?.floating === true,',
+    replace: "    floating_holiday: matchedHoliday(day) !== undefined && /floating/i.test(day.holidayName ?? ''),",
+    tests: [IMPORT_TESTS],
+  },
+  {
+    id: 'M6 (extra) the package limits go back to 16 MiB of XML and 200 000 openings',
+    file: READER,
+    find: '  maxTotalXmlBytes: 8 * 1024 * 1024,\n  maxPartElements: 100_000,\n  maxTotalElements: 150_000,',
+    replace: '  maxTotalXmlBytes: 16 * 1024 * 1024,\n  maxPartElements: 100_000,\n  maxTotalElements: 200_000,',
+    tests: [READER_TESTS],
+  },
+  {
+    id: 'M7 (extra) the tag length is checked only after a kept value is stored',
+    file: READER,
+    find: "      if (valueEnd + 1 - open > limits.maxTagLength) reject('tag_too_large', `A start tag is longer than ${limits.maxTagLength} characters`);\n",
+    replace: '',
+    tests: [READER_TESTS, IMPORT_TESTS],
+  },
+];
+
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+const only = process.argv.slice(2);
+const vitest = join(ROOT, 'node_modules/vitest/vitest.mjs');
+const retainedProbe = fileURLToPath(new URL('./retained.mjs', import.meta.url));
+
+function retained() {
+  const run = spawnSync(process.execPath, ['--expose-gc', retainedProbe, ...RETAINED], {
+    encoding: 'utf8',
+    env: { ...process.env, PROBE_ROOT: ROOT, PROBE_PKGS: process.env.PROBE_PKGS_SEARCH },
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return (run.stdout ?? '').trim().split('\n').map((line) => `    retained: ${line}`).join('\n');
+}
+
+console.log('baseline (unmutated scratch copy):');
+console.log(retained());
+for (const mutation of MUTATIONS.filter((m) => only.length === 0 || only.some((id) => m.id.startsWith(id)))) {
+  const path = join(ROOT, mutation.file);
+  const original = readFileSync(path, 'utf8');
+  const before = sha(original);
+  const count = original.split(mutation.find).length - 1;
+  if (count !== 1) {
+    console.log(`${mutation.id} | NOT APPLIED: fragment found ${count} times`);
+    continue;
+  }
+  writeFileSync(path, original.replace(mutation.find, () => mutation.replace));
+  const started = Date.now();
+  const run = spawnSync(process.execPath, [vitest, 'run', ...mutation.tests, '--reporter=verbose'], { cwd: ROOT, encoding: 'utf8', env: process.env, maxBuffer: 256 * 1024 * 1024, timeout: 900_000 });
+  const memory = mutation.retained ? retained() : '';
+  writeFileSync(path, original);
+  const restored = sha(readFileSync(path, 'utf8')) === before;
+  const plain = `${run.stdout ?? ''}\n${run.stderr ?? ''}`.replace(/\x1b\[[0-9;]*m/g, '');
+  const failed = plain.split('\n').filter((line) => /^\s+×/.test(line)).map((line) => line.replace(/^\s+×\s+tests\/integration\//, '').replace(/ \d+ms$/, '').slice(0, 150));
+  const summary = (plain.match(/Tests\s+[^\n]+/) ?? ['Tests ?'])[0].trim();
+  console.log(`${mutation.id} | exit=${run.status} | ${failed.length > 0 ? 'KILLED' : 'SURVIVED'} by tests | ${summary} | ${Math.round((Date.now() - started) / 1000)} s | restored byte-identical: ${restored}`);
+  for (const line of failed) console.log(`    failed: ${line}`);
+  if (memory) console.log(memory);
+}

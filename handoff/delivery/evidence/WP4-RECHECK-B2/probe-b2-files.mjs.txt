@@ -1,0 +1,20 @@
+// WP4-RECHECK-B2 probe FILES: after b2-http, map every file kept in DATA_DIR/files to the row that refers to it
+// (imports.storage_key or any other storage_key column), so a refused upload is shown to have left no file. Read only.
+// Usage: node b2-files.mjs <work folder>
+import { readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+const require = createRequire(new URL('../export/package.json', import.meta.url));
+const Database = require('better-sqlite3');
+const work = process.argv[2];
+const db = new Database(join(work, 'timesheet.db'), { readonly: true, fileMustExist: true });
+const files = new Set(readdirSync(join(work, 'data', 'files')));
+const refs = new Map();
+for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()) {
+  const cols = db.prepare(`PRAGMA table_info(${name})`).all().map((c) => c.name).filter((c) => c === 'storage_key');
+  for (const col of cols) for (const row of db.prepare(`SELECT ${col} AS k FROM ${name} WHERE ${col} IS NOT NULL`).all()) refs.set(row.k, `${name}.${col}`);
+}
+const byTable = {};
+let orphans = 0;
+for (const f of files) { const t = refs.get(f); if (t === undefined) orphans += 1; else byTable[t] = (byTable[t] ?? 0) + 1; }
+console.log(`files ${files.size}; referenced by ${JSON.stringify(byTable)}; unreferenced ${orphans}; rows whose file is missing ${[...refs.keys()].filter((k) => !files.has(k)).length}`);

@@ -1,0 +1,13 @@
+// WP4-RECHECK-B2 probe: print the template's holiday names, labels list and shared strings count (read only).
+import { previewWorkbook } from '../export/src/server/import/templateMapping.ts';
+import { readWorkbook } from '../export/src/server/import/xlsxReader.ts';
+import { readTemplateBytes } from '../export/tests/support/syntheticWorkbook.ts';
+const p = previewWorkbook(readTemplateBytes());
+console.log('holidays', JSON.stringify(p.holidays.map((h) => [h.date, h.name, h.floating])));
+console.log('calendar', JSON.stringify(p.payrollCalendar));
+console.log('sheets', JSON.stringify(p.sheets));
+console.log('findings', JSON.stringify(p.findings.map((f) => [f.code, f.sourceCount])));
+const w = readWorkbook(readTemplateBytes());
+for (const s of w.sheets) console.log(s.name, s.part, s.cells.size);
+const wi = w.sheets.find((s) => s.name === 'Working Infos');
+console.log([...wi.cells.values()].filter((c) => c.address.startsWith('A') && Number(c.address.slice(1)) < 13).map((c) => `${c.address}=${c.value}`).join(' | '));

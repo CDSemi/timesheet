@@ -1,0 +1,21 @@
+// WP4-RECHECK-B2 probe: list the tracked template's parts and the XML features they use (in memory, read only).
+import { strFromU8 } from '../export/node_modules/fflate/esm/index.mjs';
+import { readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+const e = unpack(readTemplateBytes());
+for (const [name, data] of Object.entries(e)) {
+  const t = strFromU8(data);
+  const features = {
+    bytes: data.length,
+    bom: data[0] === 0xef && data[1] === 0xbb ? 'utf8-bom' : data[0] === 0xff ? 'utf16le' : 'none',
+    decl: (/^<\?xml[^>]*\?>/.exec(t) ?? [''])[0].slice(0, 80),
+    prefixedElements: [...new Set([...t.matchAll(/<([A-Za-z0-9_]+):[A-Za-z]/g)].map((m) => m[1]))].join(','),
+    nsDecls: (t.match(/xmlns(:[A-Za-z0-9]+)?=/g) ?? []).length,
+    entities: [...new Set(t.match(/&[#a-zA-Z0-9]+;/g) ?? [])].slice(0, 8).join(' '),
+    cdata: (t.match(/<!\[CDATA\[/g) ?? []).length,
+    comments: (t.match(/<!--/g) ?? []).length,
+    pis: (t.match(/<\?(?!xml )/g) ?? []).length,
+    singleQuotedAttrs: (t.match(/=\s*'/g) ?? []).length,
+    openings: (t.match(/<(?!\/)/g) ?? []).length,
+  };
+  console.log(name, JSON.stringify(features));
+}

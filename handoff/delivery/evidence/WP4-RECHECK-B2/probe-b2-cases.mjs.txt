@@ -1,0 +1,224 @@
+// WP4-RECHECK-B2 hostile package catalogue (new shapes of this recheck). Packages are built from scratch (only the
+// parts the reader parses, so the whole 16 MiB XML budget goes to the hostile content) or from the tracked template
+// with the test support. Synthetic data only; packages are written only under <task>/work/b2pkgs (never the repo).
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { strFromU8, strToU8, zipSync } from '../export/node_modules/fflate/esm/index.mjs';
+import { buildSyntheticWorkbook, readTemplateBytes, unpack } from '../export/tests/support/syntheticWorkbook.ts';
+
+export const MiB = 1024 * 1024;
+export const PKG_DIR = fileURLToPath(new URL('../work/b2pkgs/', import.meta.url));
+export const fileOf = (name) => join(PKG_DIR, `${name.split(' ')[0]}.xlsx`);
+
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PART = 4 * MiB - 2048; // four of these plus the small parts stay under the 16 MiB XML total
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const ws = (inner) => `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${NS}"><sheetData>${inner}</sheetData></worksheet>`;
+const row1 = (cells) => ws(`<row r="1">${cells}</row>`);
+/** `unit` repeated so that the whole part stays under `bytes` (UTF-8 bytes counted). */
+function fillPart(unit, bytes = PART, wrap = row1) {
+  const overhead = Buffer.byteLength(wrap(''));
+  const n = Math.floor((bytes - overhead) / Buffer.byteLength(unit));
+  return wrap(unit.repeat(n));
+}
+const addDays = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const dated = (i) => addDays('2026-01-09', 14 * i).replace(/-/g, '.');
+
+/** A minimal package: content types, workbook, relationships, the given worksheets and optional shared strings. */
+function pkg(sheets, { sst, rels, extra = {}, workbookTail = '' } = {}) {
+  const entries = {};
+  const overrides = sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  entries['[Content_Types].xml'] = `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`;
+  entries['xl/workbook.xml'] = `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="${RNS}"><sheets>${sheets.map((s, i) => `<sheet name="${esc(s.name)}" sheetId="${i + 1}"${s.hidden ? ' state="hidden"' : ''} r:id="rId${i + 1}"/>`).join('')}</sheets>${workbookTail}</workbook>`;
+  entries['xl/_rels/workbook.xml.rels'] = rels ?? `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${RNS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`;
+  sheets.forEach((s, i) => { entries[`xl/worksheets/sheet${i + 1}.xml`] = s.xml; });
+  if (sst !== undefined) entries['xl/sharedStrings.xml'] = sst;
+  Object.assign(entries, extra);
+  const zippable = {};
+  for (const [name, data] of Object.entries(entries)) zippable[name] = [typeof data === 'string' ? strToU8(data) : data, { level: 6, mtime: 1_767_225_600_000 }];
+  return zipSync(zippable);
+}
+const four = (xml, names = ['P1', 'P2', 'P3', 'P4']) => pkg(names.map((name) => ({ name, xml })));
+const sst = (items) => `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS}">${items}</sst>`;
+const attrs = (n, name = (i) => `a${i}`) => Array.from({ length: n }, (_, i) => ` ${name(i)}=""`).join('');
+const inlineCell = (address, text) => `<c r="${address}" t="inlineStr"><is><t>${text}</t></is></c>`;
+
+/** A dated payroll sheet cloned from the template's form, its B14 label replaced by `labelXml` (raw `<t>` content). */
+function datedWithLabel(count, labelXml, { formula } = {}) {
+  const periods = Array.from({ length: count }, (_, i) => ({ payrollDate: addDays('2026-01-09', 14 * i) }));
+  const e = unpack(buildSyntheticWorkbook({ periods }));
+  for (let i = 0; i < count; i += 1) {
+    const part = `xl/worksheets/sheet${100 + i}.xml`;
+    let xml = strFromU8(e[part]);
+    if (labelXml !== undefined) xml = xml.replace(/(<c r="B14"[^>]*t="inlineStr"><is><t>)Worked(<\/t>)/, `$1${labelXml}$2`);
+    if (formula !== undefined) xml = xml.replace('</sheetData>', `<row r="400"><c r="AA400"><f>${formula}</f><v>0</v></c></row></sheetData>`);
+    e[part] = strToU8(xml);
+  }
+  const zippable = {};
+  for (const [name, data] of Object.entries(e)) zippable[name] = [data, { level: 6, mtime: 1_767_225_600_000 }];
+  return zipSync(zippable);
+}
+
+/** 61 dated sheets (the 64-sheet limit with the 3 support sheets) whose 14 labels are `label(i, d)`. */
+function sixtyOneLabels(label, extra = {}) {
+  const periods = Array.from({ length: 61 }, (_, i) => {
+    const days = {};
+    for (let d = 0; d < 14; d += 1) days[d] = { label: label(i, d) };
+    return { payrollDate: addDays('2024-01-12', 14 * i), days, ...extra };
+  });
+  return buildSyntheticWorkbook({ periods });
+}
+
+/** Holiday Dates sheet of the template replaced by `rows` holiday rows named `name(r)` (inline strings). */
+function withHolidays(bytes, rows, name) {
+  const e = unpack(bytes);
+  const out = [];
+  for (let r = 2; r < 2 + rows; r += 1) out.push(`<row r="${r}"><c r="A${r}"><v>${44000 + r}</v></c>${inlineCell(`B${r}`, name(r))}</row>`);
+  e['xl/worksheets/sheet2.xml'] = strToU8(ws(out.join('')));
+  const zippable = {};
+  for (const [n, data] of Object.entries(e)) zippable[n] = [data, { level: 6, mtime: 1_767_225_600_000 }];
+  return zipSync(zippable);
+}
+
+/** Cells with distinct 10-character addresses (columns AAA.., rows 1000000..). */
+const farCells = (count, tail = '/>') => {
+  let out = '';
+  for (let i = 0; i < count; i += 1) out += `<c r="${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + (Math.floor(i / 26) % 26))}${String.fromCharCode(65 + (Math.floor(i / 676) % 26))}${1000000 + i}"${tail}`;
+  return out;
+};
+const NAME100 = 'N'.repeat(97);
+
+export const CASES = {
+  // ---- character and entity references in bulk (kept text and kept attributes) ----
+  'E1 4 parts x 4 MiB of bare & in one kept inline string each': () => four(fillPart('&', PART, (x) => row1(inlineCell('A1', x)))),
+  'E2 4 parts x 4 MiB of &#1234567; (out of range, digits parsed, kept literal)': () => four(fillPart('&#1234567;', PART, (x) => row1(inlineCell('A1', x)))),
+  'E3 4 parts x 4 MiB of &#x1F600; (astral, decoded to surrogate pairs)': () => four(fillPart('&#x1F600;', PART, (x) => row1(inlineCell('A1', x)))),
+  'E4 4 parts x 4 MiB of &abcdefgh; (unknown 8-letter names)': () => four(fillPart('&abcdefgh;', PART, (x) => row1(inlineCell('A1', x)))),
+  'E5 4 parts x 4 MiB of &amp; (decoded, for reference)': () => four(fillPart('&amp;', PART, (x) => row1(inlineCell('A1', x)))),
+  'E6 4 parts x 4 MiB of &;&a; (short non-references)': () => four(fillPart('&;&a;', PART, (x) => row1(inlineCell('A1', x)))),
+  'E7 4 parts, 64 cells each with a 65 000-char t="&&&..." (kept attribute, decoded twice per cell)': () => four(fillPart(`<c r="A1" t="${'&'.repeat(65_000)}"><is><t>x</t></is></c>`)),
+  'E8 4 parts, 64 cells each with a 65 000-char r="&&&..." (kept attribute, decoded and upper-cased)': () => four(fillPart(`<c r="${'&'.repeat(65_000)}"/>`)),
+  'E9 4 dated sheets, a formula of 4 MiB of bare & (kept text, cut at 8 192)': () => pkg([0, 1, 2, 3].map((i) => ({ name: dated(i), xml: fillPart('&', PART, (x) => ws(`<row r="400"><c r="AA400"><f>${x}</f></c></row>`)) }))),
+  'E10 shared strings 4 MiB of & plus 3 parts of 4 MiB & (16 MiB of & in kept text)': () => pkg([1, 2, 3].map((i) => ({ name: `P${i}`, xml: fillPart('&', PART, (x) => row1(inlineCell('A1', x))) })), { sst: fillPart('&', PART, (x) => sst(`<si><t>${x}</t></si>`)) }),
+  'E11 relationships part of 4 MiB: targets of bare & (each decoded once)': () => {
+    const one = `<Relationship Id="x" Type="t" Target="${'&'.repeat(60_000)}"/>`;
+    const rels = fillPart(one, PART, (x) => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${RNS}/worksheet" Target="worksheets/sheet1.xml"/>${x}</Relationships>`);
+    return pkg([{ name: 'P1', xml: fillPart('&', PART, (x) => row1(inlineCell('A1', x))) }], { rels, sst: fillPart('&', PART, (x) => sst(`<si><t>${x}</t></si>`)) });
+  },
+  // ---- every tag-name shape ----
+  'T1 2 parts x 99 990 <x/> (just under the part and package opening limits)': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<x/>'.repeat(99_990)) }))),
+  'T2 4 parts x 49 990 prefixed kept cells <x:c/> (cells and openings just under)': () => four(ws(`<x:row xmlns:x="${NS}" r="1">${'<x:c/>'.repeat(49_990)}</x:row>`)),
+  'T3 2 parts x 99 990 <ā/> (non-Latin-1 names, two-byte part)': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<ā/>'.repeat(99_990)) }))),
+  'T4 2 parts x 99 990 astral names <\u{10000}/>': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<\u{10000}/>'.repeat(99_990)) }))),
+  'T5 4 parts of 65 000-char element names (self-closing)': () => four(fillPart(`<${'a'.repeat(65_000)}/>`)),
+  'T6 4 parts of 32 000-char names, open and close (end tags compared)': () => four(fillPart(`<${'b'.repeat(32_000)}></${'b'.repeat(32_000)}>`)),
+  'T7 4 parts, end tags padded with 4 MiB of white space (end tags have no length limit)': () => four(fillPart(' ', PART, (x) => ws(`<row r="1"><x></x${x}></row>`))),
+  'T8 4 parts, start tags of 65 000 spaces <x   ...   />': () => four(fillPart(`<x${' '.repeat(65_000)}/>`)),
+  'T9 2 parts x 99 990 <Row/> and <C/> (case differs from kept names)': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<Row/><C/>'.repeat(49_995)) }))),
+  'T10 2 parts x 99 990 <a.b-c·d:e/> (every name character class)': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<a.b-c·d:e/>'.repeat(99_990)) }))),
+  'T11 4 parts x 19 999 kept rows <row/> (row limit) and a cell each': () => four(ws('<row/>'.repeat(19_998) + '<row r="20000"><c r="A20000"><v>1</v></c></row>')),
+  // ---- attribute floods just under each cap ----
+  'A1 64 attributes x 3 124 elements x 2 parts + 1 562 (499 840 attributes)': () => pkg([3124, 3124, 1562].map((n, i) => ({ name: `P${i}`, xml: row1(`<x${attrs(64)}/>`.repeat(n)) }))),
+  'A2 kept cells with 64 attributes, all named r (3 124 x 2 + 1 562)': () => pkg([3124, 3124, 1562].map((n, i) => ({ name: `P${i}`, xml: row1(`<c${attrs(64, (k) => (k === 0 ? 'r' : `r${k}`)).replace(/ r\d+=""/g, ' r="A1"')}/>`.repeat(n)) }))),
+  'A3 4 parts, 64 attributes of 1 000-char names per element (tag just under 64 KiB)': () => four(fillPart(`<x${attrs(64, (k) => `${'n'.repeat(997)}${String(k).padStart(2, '0')}`)}/>`)),
+  'A4 namespace declarations: 64 xmlns:pN per element x 3 124 x 2 + 1 562': () => pkg([3124, 3124, 1562].map((n, i) => ({ name: `P${i}`, xml: row1(`<x${attrs(64, (k) => `xmlns:p${k}`).replace(/=""/g, '="u"')}/>`.repeat(n)) }))),
+  'A5 4 parts, 64 KiB attribute values full of > and quotes': () => four(fillPart(`<x a="${">'>".repeat(21_600)}"/>`)),
+  'A6 65 attributes on one element (one over the per-element cap)': () => pkg([{ name: 'P1', xml: row1(`<x${attrs(65)}/>`) }]),
+  'A7 retained kept nodes: 66 000 <sheetData r t si/> under the root (non-streamed, 198 000 attributes)': () => pkg([{ name: 'P1', xml: `<?xml version="1.0"?><worksheet xmlns="${NS}">${'<sheetData r="1" t="2" si="3"/>'.repeat(66_000)}</worksheet>` }]),
+  // ---- deep nesting ----
+  'D1 40-deep blocks (37 below row) repeated to 99 990 openings x 2 parts': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1(('<z>'.repeat(37) + '</z>'.repeat(37)).repeat(Math.floor(99_990 / 37))) }))),
+  'D2 kept nesting: a cell with 33 330 <is><r><t>x</t></r></is> children x 2 parts': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1(`<c r="A1" t="inlineStr">${'<is><r><t>x</t></r></is>'.repeat(33_330)}</c>`) }))),
+  // ---- long text and CDATA ----
+  'X1 4 dated sheets, label B14 = 4 MiB CDATA': () => pkg([0, 1, 2, 3].map((i) => ({ name: dated(i), xml: fillPart('q', PART, (x) => ws(`<row r="14"><c r="B14" t="inlineStr"><is><t><![CDATA[${x}]]></t></is></c></row>`)) }))),
+  'X2 2 parts, one kept <t> of 99 990 CDATA sections': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1(inlineCell('A1', '<![CDATA[ab]]>'.repeat(99_990))) }))),
+  'X3 4 parts, 4 MiB text in an element the reader does not keep': () => four(fillPart('t', PART, (x) => row1(`<x>${x}</x>`))),
+  'X4 4 dated sheets, formula = 4 MiB of quotes and 8.5 (cut at 8 192)': () => pkg([0, 1, 2, 3].map((i) => ({ name: dated(i), xml: fillPart('"8.5"+', PART, (x) => ws(`<row r="400"><c r="AA400"><f>${x}</f></c></row>`)) }))),
+  'X5 4 dated sheets, label B14 = 2 M two-byte characters (4 MiB UTF-8)': () => pkg([0, 1, 2, 3].map((i) => ({ name: dated(i), xml: fillPart('ā', PART, (x) => ws(`<row r="14"><c r="B14" t="inlineStr"><is><t>${x}</t></is></c></row>`)) }))),
+  'X6 4 parts, one <v> of 4 MiB of digits (t=s and number parsing)': () => four(fillPart('7', PART, (x) => row1(`<c r="A1" t="s"><v>${x}</v></c><c r="B1"><v>${x.slice(0, 10)}</v></c>`))),
+  'X7 4 parts, one <v> of 4 MiB of white space (blank test)': () => four(fillPart(' ', PART, (x) => row1(`<c r="A1"><v>${x}</v></c>`))),
+  // ---- comments and processing instructions ----
+  'K1 2 parts x 99 990 empty comments': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<!---->'.repeat(99_990)) }))),
+  'K2 2 parts x 99 990 processing instructions': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1('<?p?>'.repeat(99_990)) }))),
+  'K3 2 parts, one kept <t> split by 99 990 comments, each segment an &amp;': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1(inlineCell('A1', '&amp;<!---->'.repeat(99_990))) }))),
+  'K4 4 parts, one 4 MiB comment each': () => four(fillPart('c', PART, (x) => `${row1('')}<!--${x}-->`)),
+  'K5 4 parts, one 4 MiB processing instruction each': () => four(fillPart('p', PART, (x) => `${row1('')}<?pi ${x}?>`)),
+  // ---- many parts just under the part cap ----
+  'M1 4 parts just under 4 MiB: 23 000 kept str cells of 156 characters': () => four(row1(Array.from({ length: 23_000 }, (_, k) => `<c t="str"><v>${String(k).padStart(6, '0')}${'w'.repeat(150)}</v></c>`).join(''))),
+  'M2 61 dated sheets of 270 000 bytes each (template form plus comment padding; 16 MiB)': () => {
+    const periods = Array.from({ length: 61 }, (_, i) => ({ payrollDate: addDays('2024-01-12', 14 * i) }));
+    const e = unpack(buildSyntheticWorkbook({ periods }));
+    for (let i = 0; i < 61; i += 1) {
+      const part = `xl/worksheets/sheet${100 + i}.xml`;
+      const xml = strFromU8(e[part]);
+      e[part] = strToU8(`${xml}<!--${'m'.repeat(270_000 - xml.length)}-->`);
+    }
+    const zippable = {};
+    for (const [n, data] of Object.entries(e)) zippable[n] = [data, { level: 6, mtime: 1_767_225_600_000 }];
+    return zipSync(zippable);
+  },
+  'M3 256 ZIP entries: 4 parsed 4 MiB parts and 249 unparsed entries declaring 32 MB': () => {
+    const extra = {};
+    for (let k = 0; k < 249; k += 1) extra[`xl/media/junk${k}.bin`] = new Uint8Array(130_000);
+    return pkg(['P1', 'P2', 'P3', 'P4'].map((name) => ({ name, xml: `${row1('')}<!--${'j'.repeat(PART - 200)}-->` })), { extra });
+  },
+  // ---- many shared strings ----
+  'S1 49 999 shared strings of 60 characters (string and part opening limits)': () => pkg([{ name: 'P1', xml: row1('') }], { sst: sst(Array.from({ length: 49_999 }, (_, k) => `<si><t>${String(k).padStart(8, '0')}${'s'.repeat(52)}</t></si>`).join('')) }),
+  'S2 33 332 rich-text shared strings (si, r, t)': () => pkg([{ name: 'P1', xml: row1('') }], { sst: sst(Array.from({ length: 33_332 }, (_, k) => `<si><r><t>${String(k).padStart(8, '0')}${'r'.repeat(80)}</t></r></si>`).join('')) }),
+  'S3 49 999 shared strings and 49 000 cells using distinct ones': () => pkg([{ name: 'P1', xml: row1(Array.from({ length: 49_000 }, (_, k) => `<c t="s"><v>${k}</v></c>`).join('')) }], { sst: sst(Array.from({ length: 49_999 }, (_, k) => `<si><t>${String(k).padStart(8, '0')}${'s'.repeat(52)}</t></si>`).join('')) }),
+  'S4 one shared string of 99 998 runs (rope of runs), used by 2 000 holiday names': () => {
+    const e = unpack(readTemplateBytes());
+    const text = strFromU8(e['xl/sharedStrings.xml']);
+    e['xl/sharedStrings.xml'] = strToU8(text.replace('</sst>', `<si>${'<r><t>ab</t></r>'.repeat(33_000)}</si></sst>`));
+    const out = [];
+    for (let r = 2; r < 2002; r += 1) out.push(`<row r="${r}"><c r="A${r}"><v>${44000 + r}</v></c><c r="B${r}" t="s"><v>66</v></c></row>`);
+    e['xl/worksheets/sheet2.xml'] = strToU8(ws(out.join('')));
+    const zippable = {};
+    for (const [n, data] of Object.entries(e)) zippable[n] = [data, { level: 6, mtime: 1_767_225_600_000 }];
+    return zipSync(zippable);
+  },
+  // ---- long inline strings and the report ----
+  'L1 61 dated sheets x 14 labels, inline strings of 17 000 letters (about 16 MiB)': () => sixtyOneLabels((i, d) => `${i}-${d}-${'L'.repeat(17_000)}`),
+  'L2 61 dated sheets x 14 labels of 1 000 raw U+0001 (escaped 6x in JSON)': () => sixtyOneLabels((i, d) => `${i}-${d}-${'\u0001'.repeat(1000)}`),
+  'L3 61 dated sheets x 14 labels of 1 000 euro signs (3 UTF-8 bytes each)': () => sixtyOneLabels((i, d) => `${i}-${d}-${'€'.repeat(1000)}`),
+  'L4 2 000 holidays of 1 020-char names, 61 x 14 labels equal to them (complete, compared)': () => withHolidays(sixtyOneLabels((i, d) => `H${(i * 14 + d) % 2000}-${'h'.repeat(1015)}`), 2000, (r) => `H${r - 2}-${'h'.repeat(1015)}`),
+  'L5 report near the cap: 2 000 holiday names and 854 labels of 200 three-byte characters': () => withHolidays(sixtyOneLabels((i, d) => `${i}${d}${'€'.repeat(200)}`), 2000, (r) => `floating ${r} ${'€'.repeat(200)}`),
+  'L6 report over the cap: 2 000 holiday names and 854 labels of 200 raw U+0001': () => withHolidays(sixtyOneLabels((i, d) => `${i}${d}${'\u0001'.repeat(200)}`), 2000, (r) => `floating ${r} ${'\u0001'.repeat(200)}`),
+  // ---- the most memory ----
+  'Y1 4 parts x 49 990 empty cells, 10-char addresses, 97-char sheet names': () => four(row1(farCells(49_990)), [1, 2, 3, 4].map((k) => `${NAME100.slice(0, 96)}${k}`)),
+  'Y2 Y1 with every part pinned two-byte (kept 20-char str value and a non-Latin-1 comment filling 4 MiB)': () => {
+    const body = row1(`<c r="ZZZ1" t="str"><v>${'ā'.repeat(20)}</v></c>${farCells(49_985)}`);
+    return four(`${body}<!--${'ā'.repeat(Math.floor((PART - Buffer.byteLength(body) - 16) / 2))}-->`, [1, 2, 3, 4].map((k) => `${NAME100.slice(0, 96)}${k}`));
+  },
+  'Y3 Y2 with mapped roles (Working Infos, Holiday Dates, Timesheet, a dated sheet)': () => {
+    const body = row1(`<c r="ZZZ1" t="str"><v>${'ā'.repeat(20)}</v></c>${farCells(49_985)}`);
+    return four(`${body}<!--${'ā'.repeat(Math.floor((PART - Buffer.byteLength(body) - 16) / 2))}-->`, ['Working Infos', 'Holiday Dates', 'Timesheet', '2026.01.09']);
+  },
+  'Y4 2 parts x 33 300 cells with distinct 14-char inline strings': () => pkg([1, 2].map((i) => ({ name: `P${i}`, xml: row1(Array.from({ length: 33_300 }, (_, k) => inlineCell(`A${k + 1}`, `v${i}-${String(k).padStart(10, '0')}`)).join('')) }))),
+  'Y5 Working Infos calendar: 19 990 contiguous A cells (row limit) of a 1 024-space shared string': () => pkg([{ name: 'Working Infos', xml: ws(Array.from({ length: 19_990 }, (_, k) => `<row r="${k + 13}"><c r="A${k + 13}" t="s"><v>0</v></c></row>`).join('')) }], { sst: sst(`<si><t xml:space="preserve">${' '.repeat(1024)}</t></si>`) }),
+  'Y6 2 dated sheets x 49 990 distinct formulas of about 43 characters (examined once each)': () => pkg([0, 1].map((i) => ({ name: dated(i), xml: row1(Array.from({ length: 49_990 }, (_, k) => `<c><f>SUM(A${k}:B${k})+"${String(k).padStart(8, '0')}"+8.5+TODAY()+${i}</f></c>`).join('')) }))),
+  'Y7 Y1 with every part pinned two-byte: one non-Latin-1 char, a kept 20-char str value, ASCII comment filling 4 MiB': () => {
+    const body = row1(`<c r="ZZZ1" t="str"><v>${'w'.repeat(20)}</v></c>${farCells(49_985)}`);
+    return four(`${body}<!--ā${'a'.repeat(PART - Buffer.byteLength(body) - 16)}-->`, [1, 2, 3, 4].map((k) => `${NAME100.slice(0, 96)}${k}`));
+  },
+  'Y8 Y7 with mapped roles (Working Infos, Holiday Dates, Timesheet, a dated sheet)': () => {
+    const body = row1(`<c r="ZZZ1" t="str"><v>${'w'.repeat(20)}</v></c>${farCells(49_985)}`);
+    return four(`${body}<!--ā${'a'.repeat(PART - Buffer.byteLength(body) - 16)}-->`, ['Working Infos', 'Holiday Dates', 'Timesheet', '2026.01.09']);
+  },
+  'Y9 mechanism control: Y7 without the kept 20-char value (nothing pins the decoded parts)': () => {
+    const body = row1(`<c r="ZZZ1"/>${farCells(49_985)}`);
+    return four(`${body}<!--ā${'a'.repeat(PART - Buffer.byteLength(body) - 16)}-->`, [1, 2, 3, 4].map((k) => `${NAME100.slice(0, 96)}${k}`));
+  },
+  'E7b E7 with t="&&&..." of 65 500 chars (tag at 65 515 of 65 536)': () => four(fillPart(`<c r="A1" t="${'&'.repeat(65_500)}"><is><t>x</t></is></c>`)),
+  'E7c E7 without r: <c t="&&&..."> of 65 520 chars': () => four(fillPart(`<c t="${'&'.repeat(65_520)}"><is><t>x</t></is></c>`)),
+  'E7d mechanism control: E7 without the <is> child (t decoded once per cell)': () => four(fillPart(`<c r="A1" t="${'&'.repeat(65_000)}"/>`)),
+  // ---- late refusals after the most work ----
+  'Z1 openings limit passed at the end of the 4th part (after 4 x 49 990 cells)': () => four(row1(farCells(49_990) + '<x/>'.repeat(60))),
+  'Z2 tag too large at the end of the 4th part (after 12 MiB of bare &)': () => pkg([1, 2, 3, 4].map((i) => ({ name: `P${i}`, xml: i < 4 ? fillPart('&', PART, (x) => row1(inlineCell('A1', x))) : fillPart('&', PART - 70_000, (x) => row1(inlineCell('A1', x))).replace('</sheetData>', `<x${' '.repeat(66_000)}/></sheetData>`) }))),
+  'Z3 malformed at the very end of the 4th part (after 4 x 4 MiB of &)': () => pkg([1, 2, 3, 4].map((i) => ({ name: `P${i}`, xml: i < 4 ? fillPart('&', PART, (x) => row1(inlineCell('A1', x))) : fillPart('&', PART, (x) => row1(inlineCell('A1', x))).replace(/<\/worksheet>$/, '</worksheet') }))),
+  'Z4 too many holidays after a maximal Working Infos and Timesheet': () => pkg([
+    { name: 'Working Infos', xml: row1(farCells(49_990)) },
+    { name: 'Timesheet', xml: row1(farCells(49_990)) },
+    { name: 'Holiday Dates', xml: ws(Array.from({ length: 2001 }, (_, k) => `<row r="${k + 2}"><c r="A${k + 2}"><v>${44000 + k}</v></c></row>`).join('')) },
+  ]),
+};

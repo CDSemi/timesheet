@@ -1,0 +1,29 @@
+// WP4-FIXB2 diagnostic: where the time and memory of one preview go (reader vs mapping), for one package built by
+// cost.mjs. Usage: PROBE_ROOT=<tree> PROBE_PKGS=<dir> node --expose-gc diag-mem.mjs <case>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = process.env.PROBE_ROOT;
+const { readWorkbook } = await import(pathToFileURL(join(ROOT, 'src/server/import/xlsxReader.ts')).href);
+const { mapWorkbook } = await import(pathToFileURL(join(ROOT, 'src/server/import/templateMapping.ts')).href);
+const name = process.argv[2];
+const file = join(process.env.PROBE_PKGS, `${name.replace(/[^A-Za-z0-9]+/g, "_").slice(0, 90)}.xlsx`);
+const bytes = new Uint8Array(readFileSync(file));
+const MiB = 1024 * 1024;
+const mem = () => {
+  const m = process.memoryUsage();
+  return `rss ${(m.rss / MiB).toFixed(0)} heapUsed ${(m.heapUsed / MiB).toFixed(0)} heapTotal ${(m.heapTotal / MiB).toFixed(0)} external ${(m.external / MiB).toFixed(0)} maxRSS ${(process.resourceUsage().maxRSS / 1024).toFixed(0)}`;
+};
+globalThis.gc();
+console.log(`start: ${mem()}`);
+const t0 = performance.now();
+const workbook = readWorkbook(bytes);
+const t1 = performance.now();
+console.log(`read ${Math.round(t1 - t0)} ms: ${mem()}; cells ${workbook.sheets.reduce((n, s) => n + s.cells.size, 0)}`);
+globalThis.gc();
+console.log(`read, after gc: ${mem()}`);
+const preview = mapWorkbook(workbook, { sha256: '0'.repeat(64), bytes: bytes.length });
+const t2 = performance.now();
+console.log(`map ${Math.round(t2 - t1)} ms: ${mem()}; findings ${preview.findings.length}`);

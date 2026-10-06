@@ -1,0 +1,92 @@
+date_utc: 2026-10-06T15:08:40Z
+## 1. Importers of the three changed runtime modules (src, scripts, tests of the export):
+src/server/import/templateMapping.ts:3:import { type CellValue, readWorkbook, type ReadCell, type ReaderLimits, type ReadSheet, type ReadWorkbook, WorkbookRejectedError } from './xlsxReader.ts';
+src/server/routes/imports.ts:10:import { DEFAULT_READER_LIMITS } from '../import/xlsxReader.ts';
+src/server/routes/imports.ts:11:import { commitImport, getImport, listImports, previewImport, XLSX_MEDIA_TYPE } from '../services/workbookImport.ts';
+src/server/services/finalization.ts:41:import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
+src/server/services/otLeave.ts:19:import { importedPeriodError } from './workbookImport.ts';
+src/server/services/timesheetCommands.ts:45:import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
+src/server/services/workbookImport.ts:20:} from '../import/templateMapping.ts';
+src/server/services/workbookImport.ts:21:import { type ReaderLimits, type WorkbookRejectionCode, WorkbookRejectedError } from '../import/xlsxReader.ts';
+tests/integration/backup.test.ts:18:import { commitImport, previewImport } from '../../src/server/services/workbookImport.ts';
+tests/integration/opening-balance.test.ts:13:import { XLSX_MEDIA_TYPE } from '../../src/server/services/workbookImport.ts';
+tests/integration/restore.test.ts:44:import { commitImport, previewImport } from '../../src/server/services/workbookImport.ts';
+tests/integration/workbook-import.test.ts:30:import { commitImport, previewImport, XLSX_MEDIA_TYPE } from '../../src/server/services/workbookImport.ts';
+tests/integration/workbook-import.test.ts:882:const SERVICE_MODULE = pathToFileURL(fileURLToPath(new URL('../../src/server/services/workbookImport.ts', import.meta.url))).href;
+tests/integration/workbook-reader.test.ts:13:} from '../../src/server/import/templateMapping.ts';
+tests/integration/workbook-reader.test.ts:23:} from '../../src/server/import/xlsxReader.ts';
+## 2. Area-A runtime modules that import any changed module (expect none):
+  src/server/ops: 0 file(s)
+  src/server/cli.ts: 0 file(s)
+  src/server/app.ts: 0 file(s)
+  src/server/index.ts: 0 file(s)
+  src/server/config.ts: 0 file(s)
+  src/server/db: 0 file(s)
+  src/server/services/bootstrap.ts: 0 file(s)
+  src/server/services/automation.ts: 0 file(s)
+  src/server/jobs: 0 file(s)
+  src/server/routes/admin.ts: 0 file(s)
+  scripts/container-drill.mjs: 0 file(s)
+  scripts/smoke-built-server.mjs: 0 file(s)
+  Dockerfile: 0 file(s)
+  compose.example.yaml: 0 file(s)
+  .dockerignore: 0 file(s)
+  .env.example: 0 file(s)
+## 3. Exports of workbookImport.ts used outside area B (timesheetCommands, otLeave, finalization): importedPeriodError, isImportedTimesheet; diff 0f7fba2..cc34e7f lines touching them (expect none):
+  (none)
+## 4. Area-A paths changed since 0f7fba2 (ops, cli, app, config, db, bootstrap, automation, jobs, admin routes, Dockerfile, compose, .dockerignore, .env.example, scripts, docs/10, docs/11, docs/03):
+  (end of list)
+## 5. docs/07 hunks changed (line numbers): only the workbook import paragraph
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.md
+@@ -46 +46 @@ The original source had 11 sheets (8 dated periods plus 3 support/template sheet
++++ b/docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md
+@@ -46 +46 @@ Nguồn gốc có 11 sheet (8 kỳ có ngày và 3 sheet hỗ trợ/mẫu); mẫ
+## 6. docs/07 limits vs code (DEFAULT_READER_LIMITS, MAX_DEPTH, MAX_HOLIDAY_ROWS, MAX_TEXT_LENGTH, MAX_REPORT_BYTES):
+46:  maxPartXmlBytes: number;
+48:  maxTotalXmlBytes: number;
+53:  maxPartElements: number;
+55:  maxTotalElements: number;
+57:  maxAttributesPerElement: number;
+59:  maxPartAttributes: number;
+61:  maxTotalAttributes: number;
+63:  maxTagLength: number;
+66:  maxSheetNameLength: number;
+103:  maxPartXmlBytes: 4 * 1024 * 1024,
+104:  maxTotalXmlBytes: 16 * 1024 * 1024,
+105:  maxPartElements: 100_000,
+106:  maxTotalElements: 200_000,
+107:  maxAttributesPerElement: 64,
+108:  maxPartAttributes: 200_000,
+109:  maxTotalAttributes: 500_000,
+110:  maxTagLength: 64 * 1024,
+112:  maxSheetNameLength: 100,
+540:const MAX_DEPTH = 40;
+30:export const MAX_HOLIDAY_ROWS = 2000;
+36:export const MAX_TEXT_LENGTH = 200;
+86:export const MAX_REPORT_BYTES = 2 * 1024 * 1024;
+markup openings of any kind (100,000 a part, 200,000 a package)
+attributes (64 an element, 200,000 a part, 500,000 a package)
+start-tag length (64 KiB)
+nesting depth (40)
+sheet-name length (100)
+more than 2,000 holiday rows
+500 ms of event-loop time and 150 MiB
+at most 200 characters
+over 2 MiB
+## 7. Stale references to the removed dependency outside handoff/ (expect none):
+  (end of list)
+## 8. Dockerfile map settings and the drill's map rule (unchanged files):
+Dockerfile:16:# maps and no sourceMappingURL comments (WP4-A-01): tsc gets --sourceMap false, and vite.config.ts turns build.sourcemap
+Dockerfile:17:# off when BUILD_SOURCEMAPS=off. Local development keeps its maps.
+Dockerfile:23:RUN npm run build:server -- --sourceMap false \
+Dockerfile:24:    && BUILD_SOURCEMAPS=off npm run build:client
+vite.config.ts:6:// builds; the image build sets BUILD_SOURCEMAPS=off (Dockerfile), so the image carries no map and no map comment.
+vite.config.ts:13:    sourcemap: process.env.BUILD_SOURCEMAPS !== 'off',
+187:  const cookies = response.headers.getSetCookie().map((line) => line.split(';')[0]);
+220:    else if (/\.map$/i.test(name) && topLevelUnderApp === 'dist') offenders.push(path); // the app's own build; dependencies may ship maps
+313:const decideAll = (plan) => (plan?.decisions_required ?? []).map((item) => ({ work_date: item.work_date, action: item.allowed_actions.includes('import') ? 'import' : 'skip' }));
+463:  check('copied file set equals the manifest file list', JSON.stringify(copiedKeys) === JSON.stringify(manifest.files.map((file) => file.storage_key)));
+473:  const expectedSources = importSources.map((source) => ({ kind: 'import', sha256: source.sha256, size_bytes: source.size })).sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1));
+476:    JSON.stringify(manifestImports.map((file) => ({ kind: file.kind, sha256: file.sha256, size_bytes: file.size_bytes })).sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1))) === JSON.stringify(expectedSources),
+752:    restoredList.status === 200 && JSON.stringify((restoredList.json?.imports ?? []).map((item) => item.id).sort()) === JSON.stringify(importSources.map((source) => source.id).sort()),
+784:  const known = new Map(restoredOutbound.jobs.map((job) => [job.id, job]));

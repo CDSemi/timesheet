@@ -1,0 +1,113 @@
+// WP4-FIXB2 HTTP probe (the first audit's P6 and the recheck's r2): the BUILT server (PROBE_ROOT/dist) over real
+// HTTP, synthetic example.invalid users, capture mode, job runner off. For each package already built by cost.mjs
+// under PROBE_PKGS (never the repository) it records the status and reason, the upload time, the latency of
+// GET /api/health sent 300 ms after the upload started (own connection), the response size and the largest stored
+// imports.report_json. DATA_DIR and DATABASE_PATH are explicit under the work folder; the server child is stopped
+// through its handle.
+// Usage: PROBE_ROOT=<export> PROBE_PKGS=<dir> node http.mjs <work folder> <case>...
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+
+const ROOT = process.env.PROBE_ROOT;
+const PKGS = process.env.PROBE_PKGS;
+const [work, ...cases] = process.argv.slice(2);
+if (!ROOT || !PKGS || !work) throw new Error('PROBE_ROOT, PROBE_PKGS and a work folder are required');
+const require = createRequire(join(ROOT, 'package.json'));
+const Database = require('better-sqlite3');
+mkdirSync(work, { recursive: true });
+const fileOf = (name) => join(PKGS, `${name.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 90)}.xlsx`);
+const port = await new Promise((resolve) => {
+  const s = createServer();
+  s.listen(0, '127.0.0.1', () => {
+    const p = s.address().port;
+    s.close(() => resolve(p));
+  });
+});
+const origin = `http://localhost:${port}`;
+const pw = randomBytes(18).toString('base64url');
+const DATABASE_PATH = join(work, 'timesheet.db');
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  PORT: String(port),
+  HOST: '127.0.0.1',
+  DATABASE_PATH,
+  DATA_DIR: join(work, 'data'),
+  APP_ORIGINS: origin,
+  MAIL_FROM: '<email>',
+  OUTBOUND_MODE: 'capture',
+  JOB_RUNNER: 'off',
+  SEED_ADMIN_PASSWORD: randomBytes(18).toString('base64url'),
+  SEED_EMPLOYEE_PASSWORD: pw,
+  SEED_EMPLOYEE2_PASSWORD: randomBytes(18).toString('base64url'),
+};
+for (const args of [['migrate'], ['seed']]) {
+  const r = spawnSync(process.execPath, [join(ROOT, 'dist/server/cli.js'), ...args], { env, encoding: 'utf8', cwd: ROOT });
+  console.log(`cli ${args[0]}: exit ${r.status}`);
+}
+const server = spawn(process.execPath, [join(ROOT, 'dist/server/index.js')], { env, cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
+let serverErr = '';
+server.stderr.on('data', (c) => { serverErr += c.toString('utf8'); });
+const fail = (e) => {
+  console.log('FATAL', e?.message ?? e);
+  server.kill('SIGTERM');
+  process.exitCode = 2;
+};
+process.on('uncaughtException', fail);
+process.on('unhandledRejection', fail);
+
+function send(method, path, { body, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const req = httpRequest({ host: '127.0.0.1', port, method, path, agent: false, headers: { origin, ...headers, ...(body ? { 'content-length': body.length } : {}) } }, (res) => {
+      let size = 0;
+      const head = [];
+      res.on('data', (c) => { size += c.length; if (head.length < 4) head.push(c); });
+      res.on('end', () => resolve({ status: res.statusCode, ms: Math.round(performance.now() - t0), headers: res.headers, size, text: Buffer.concat(head).toString('utf8').slice(0, 4000) }));
+    });
+    req.on('error', (e) => resolve({ status: 0, ms: Math.round(performance.now() - t0), error: e.code ?? e.message, size: 0, text: '' }));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+for (let i = 0; i < 100; i += 1) {
+  const r = await send('GET', '/api/ready');
+  if (r.status === 200) break;
+  await new Promise((r2) => setTimeout(r2, 100));
+}
+const login = await send('POST', '/api/auth/login', { body: Buffer.from(JSON.stringify({ email: '<email>', password: pw })), headers: { 'content-type': 'application/json' } });
+const cookie = String(login.headers['set-cookie']?.[0] ?? '').split(';')[0];
+console.log(`login: ${login.status}`);
+
+const db = new Database(DATABASE_PATH, { readonly: true, fileMustExist: true });
+for (const name of cases) {
+  const bytes = readFileSync(fileOf(name));
+  const upload = send('POST', '/api/imports', { body: bytes, headers: { cookie, 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+  await new Promise((r) => setTimeout(r, 300));
+  const health = await send('GET', '/api/health');
+  const done = await upload;
+  let reason = '';
+  try {
+    const parsed = JSON.parse(done.text);
+    reason = parsed?.error ? ` ${parsed.error.code}${parsed.error.details?.reason ? '/' + parsed.error.details.reason : ''}` : '';
+  } catch {
+    reason = done.status === 201 || done.status === 200 ? ' (body larger than the captured head)' : '';
+  }
+  const stored = db.prepare('SELECT count(*) AS n, coalesce(max(length(CAST(report_json AS BLOB))), 0) AS largest FROM imports').get();
+  const created = done.status === 201 ? db.prepare('SELECT length(CAST(report_json AS BLOB)) AS size FROM imports ORDER BY rowid DESC LIMIT 1').get().size : null;
+  const own = created === null ? 'nothing stored' : `stored report_json ${(created / 1024 / 1024).toFixed(3)} MiB`;
+  console.log(`${name}: upload ${bytes.length} B -> ${done.status}${reason}${done.error ? ' ' + done.error : ''} in ${done.ms} ms, response ${(done.size / 1024 / 1024).toFixed(3)} MiB, ${own}; GET /api/health 300 ms later -> ${health.status} after ${health.ms} ms; imports rows ${stored.n}, largest report_json ${(stored.largest / 1024 / 1024).toFixed(3)} MiB`);
+}
+const idle = await send('GET', '/api/health');
+console.log(`idle GET /api/health afterwards -> ${idle.status} in ${idle.ms} ms`);
+db.close();
+server.kill('SIGTERM');
+await new Promise((r) => server.once('exit', r));
+const errLines = serverErr.split('\n').filter((l) => /RangeError|Error|internal/i.test(l)).slice(0, 4).map((l) => l.slice(0, 200));
+console.log(`server stopped through its handle: ${server.signalCode ?? server.exitCode}; server stderr error lines: ${errLines.length ? errLines.join(' / ') : 'none'}`);

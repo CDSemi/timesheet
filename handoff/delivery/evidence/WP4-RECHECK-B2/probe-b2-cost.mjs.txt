@@ -1,0 +1,58 @@
+// WP4-RECHECK-B2 probe COST: time, memory and preview size of one synchronous preview (reader + mapping, the
+// event-loop work of POST /api/imports before the report is stored) for every new hostile shape in b2-cases.mjs.
+// Two children per case: one builds the package and writes it under <task>/work/b2pkgs (never the repository), a fresh
+// one reads it, records maxRSS, previews it and records maxRSS again, so the delta belongs to that preview only.
+// Budget under test (xlsxReader.ts, docs/07): at most 500 ms and +150 MiB per preview on the reference host, for every
+// package accepted or refused after reading. Synthetic data only.
+// Usage: node b2-cost.mjs [filter] [repeat]     (parent)
+//        node b2-cost.mjs --build <name> | --run <name>   (children)
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
+
+const MiB = 1024 * 1024;
+const args = process.argv.slice(2);
+if (args[0] === '--build') {
+  const { CASES, PKG_DIR, fileOf } = await import('./b2-cases.mjs');
+  mkdirSync(PKG_DIR, { recursive: true });
+  writeFileSync(fileOf(args[1]), CASES[args[1]]());
+} else if (args[0] === '--run') {
+  const { fileOf } = await import('./b2-cases.mjs');
+  const { previewWorkbook } = await import('../export/src/server/import/templateMapping.ts');
+  const bytes = new Uint8Array(readFileSync(fileOf(args[1])));
+  const baseline = process.resourceUsage().maxRSS;
+  const t0 = performance.now();
+  let outcome;
+  let jsonMs = 0;
+  try {
+    const out = previewWorkbook(bytes);
+    const t1 = performance.now();
+    const json = JSON.stringify(out);
+    jsonMs = performance.now() - t1;
+    const truncated = (json.match(/"truncated":true/g) ?? []).length;
+    outcome = `accepted (sheets=${out.sheets.length}, periods=${out.periods.length}, holidays=${out.holidays.length}, errors=${out.summary.errors}, findings=${out.findings.length}, truncated=${truncated}); preview JSON ${(Buffer.byteLength(json) / MiB).toFixed(3)} MiB`;
+  } catch (error) {
+    outcome = error.name === 'WorkbookRejectedError' ? `rejected:${error.code}` : `THROWN ${error.name}: ${String(error.message).slice(0, 120)}`;
+  }
+  const ms = performance.now() - t0 - jsonMs;
+  const delta = Math.round((process.resourceUsage().maxRSS - baseline) / 1024);
+  const over = ms > 500 || delta > 150 ? ' OVER-BUDGET' : '';
+  console.log(`${args[1]} | upload=${bytes.length} B | preview ms=${Math.round(ms)} (+${Math.round(jsonMs)} ms JSON) | maxRSS ${Math.round(baseline / 1024)} -> ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB (+${delta})${over} | ${outcome}`);
+} else {
+  const { CASES } = await import('./b2-cases.mjs');
+  const filter = args[0] ?? '';
+  const repeat = Number(args[1] ?? 1);
+  const opts = { encoding: 'utf8', env: process.env, timeout: 300_000, maxBuffer: 64 * MiB };
+  const clean = (s) => (s ?? '').trim().split('\n').filter((l) => !/ExperimentalWarning|trace-warnings/.test(l)).slice(0, 2).join(' / ').slice(0, 300);
+  const self = fileURLToPath(import.meta.url);
+  for (const name of Object.keys(CASES).filter((n) => n.split(' ')[0] === filter || (filter.endsWith('*') && n.startsWith(filter.slice(0, -1))) || filter === '')) {
+    const build = spawnSync(process.execPath, [self, '--build', name], opts);
+    if (build.status !== 0) { process.stdout.write(`${name} | BUILD FAILED exit=${build.status} ${clean(build.stderr)}\n`); continue; }
+    for (let k = 0; k < repeat; k += 1) {
+      const child = spawnSync(process.execPath, [self, '--run', name], opts);
+      const err = clean(child.stderr);
+      process.stdout.write(`${(child.stdout ?? '').trim() || name} | exit=${child.status}${child.signal ? ' signal=' + child.signal : ''}${err ? ' | stderr=' + err : ''}\n`);
+    }
+  }
+}

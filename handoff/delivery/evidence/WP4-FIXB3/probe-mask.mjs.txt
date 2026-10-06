@@ -1,0 +1,28 @@
+// WP4-FIXB3 evidence masking (copied from WP4-FIXB2): strips ANSI codes, converts CRLF to LF and masks the project, task and profile paths
+// (<project>, <task>, <user>) and every e-mail address (<email>). Writes `.txt` evidence only.
+// Usage: node mask.mjs <input> <output.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+if (!input || !output || !output.endsWith('.txt')) throw new Error('usage: node mask.mjs <input> <output.txt>');
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const variants = (windows) => {
+  const forward = windows.replace(/\\/g, '/');
+  const drive = forward[0].toLowerCase();
+  return [windows, forward, `/${drive}${forward.slice(2)}`, windows.replace(/\\/g, '\\\\')];
+};
+// The profile path and account name come from the environment, so this script names no person.
+const profile = process.env.USERPROFILE ?? '';
+const account = process.env.USERNAME ?? '';
+const replacements = [
+  ...variants('<task>').map((path) => [path, '<task>']),
+  ...variants('<fixb2-task>').map((path) => [path, '<fixb2-task>']),
+  ...variants('<project>').map((path) => [path, '<project>']),
+  ...(profile.length > 3 ? variants(profile).map((path) => [path, '<user>']) : []),
+];
+let text = readFileSync(input, 'utf8').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+for (const [from, to] of replacements) text = text.replace(new RegExp(escape(from), 'gi'), to);
+text = text.replace(/(?:[a-z]:[\\/]+|\/(?:mnt\/)?[a-z]\/)users[\\/]+[^\\/\s"'`,;)]+/gi, '<user>');
+if (account.length > 2) text = text.replace(new RegExp(`\\b${escape(account)}\\b`, 'gi'), '<user>');
+text = text.replace(/[\w.%+-]+@(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, '<email>');
+writeFileSync(output, text.endsWith('\n') ? text : `${text}\n`);

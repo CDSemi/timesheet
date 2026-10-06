@@ -1,0 +1,38 @@
+// WP4-FIXB3 (copied from WP4-FIXB2; the OVER-TARGET and OVER-BUDGET flags are now parsed): summarize cost.mjs output files.
+// Prints, per case, preview ms, JSON ms, maxRSS delta and outcome (before -> after when two files are given), and the
+// worst time and memory of the after file.
+import { readFileSync } from 'node:fs';
+
+function parse(file) {
+  const rows = new Map();
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const match = /^(.*?) \| upload=(\d+) B \| preview ms=(\d+) \(\+(\d+) ms JSON\) \| maxRSS (\d+) -> (\d+) MiB \(\+(-?\d+)\)(?: OVER-[A-Z]+)? \| (.*?) \| exit=(\d+)/.exec(line);
+    if (match) {
+      const [, name, upload, ms, json, , , rss, outcome] = match;
+      const size = /preview JSON ([\d.]+) MiB/.exec(outcome)?.[1];
+      const short = outcome.startsWith('accepted') ? `accepted${size ? `, JSON ${size} MiB` : ''}${outcome.includes('THROWN') ? ', JSON THROWN RangeError' : ''}` : outcome;
+      rows.set(name, { name, upload: Number(upload), ms: Number(ms), json: Number(json), rss: Number(rss), outcome: short });
+      continue;
+    }
+    // Lines of the recheck's own format (r1 probe): same fields, slightly different wording.
+    const old = /^(.*?) \| upload=(\d+) B \| preview ms=(\d+) \(\+(\d+) ms JSON\) \| maxRSS (\d+) -> (\d+) MiB \| (.*?) \| exit=(\d+)/.exec(line);
+    if (old) {
+      const [, name, upload, ms, json, before, after, outcome] = old;
+      rows.set(name, { name, upload: Number(upload), ms: Number(ms), json: Number(json), rss: Number(after) - Number(before), outcome });
+    }
+  }
+  return rows;
+}
+
+const [afterFile, beforeFile] = process.argv.slice(2);
+const after = parse(afterFile);
+const before = beforeFile ? parse(beforeFile) : new Map();
+const fmt = (row) => (row ? `${row.ms}+${row.json} ms, +${row.rss} MiB, ${row.outcome}` : 'n/a');
+for (const row of after.values()) {
+  console.log(before.size ? `${row.name} | before: ${fmt(before.get(row.name))} | after: ${fmt(row)}` : `${row.name} | ${fmt(row)}`);
+}
+const all = [...after.values()];
+const slowest = [...all].sort((a, b) => b.ms + b.json - (a.ms + a.json)).slice(0, 5);
+const largest = [...all].sort((a, b) => b.rss - a.rss).slice(0, 5);
+console.log(`-- slowest (preview + JSON): ${slowest.map((r) => `${r.name} ${r.ms + r.json} ms`).join('; ')}`);
+console.log(`-- most memory (maxRSS delta): ${largest.map((r) => `${r.name} +${r.rss} MiB`).join('; ')}`);

@@ -1,0 +1,18 @@
+# WP4-FIXB3 07 retained memory after a full GC (stable from run to run): what a read workbook keeps alive
+# On the baseline a kept value in every part pins each decoded part (two-byte parts of 2 MiB: +16 MiB); after the fix
+# kept values are own copies and pinned = unpinned. Shapes from the search at the final limits (<task>/pkgs-B).
+2026-10-06T16:22:24Z
+## PROBE_ROOT=<task>/base PROBE_PKGS=<task>/pkgs-B node --expose-gc probes/retained.mjs ...
+S3 cells one-wide generic pinned | retained after gc (heap + external): +47.2 MiB | accepted, 142708 cells
+S3 cells one-wide generic unpinned | retained after gc (heap + external): +31.7 MiB | accepted, 142704 cells
+S3 cells ascii generic pinned | retained after gc (heap + external): +39.7 MiB | accepted, 142708 cells
+S3 strings one-wide generic | retained after gc (heap + external): +29.6 MiB | accepted, 73092 cells
+S3 inline one-wide generic | retained after gc (heap + external): +25.3 MiB | accepted, 36996 cells
+exit=0
+## PROBE_ROOT=<task>/final PROBE_PKGS=<task>/pkgs-B node --expose-gc probes/retained.mjs ...
+S3 cells one-wide generic pinned | retained after gc (heap + external): +31.4 MiB | accepted, 142708 cells
+S3 cells one-wide generic unpinned | retained after gc (heap + external): +31.7 MiB | accepted, 142704 cells
+S3 cells ascii generic pinned | retained after gc (heap + external): +31.7 MiB | accepted, 142708 cells
+S3 strings one-wide generic | retained after gc (heap + external): +18.1 MiB | accepted, 73092 cells
+S3 inline one-wide generic | retained after gc (heap + external): +21.8 MiB | accepted, 36996 cells
+exit=0

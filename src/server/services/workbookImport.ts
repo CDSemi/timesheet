@@ -15,6 +15,7 @@ import {
   type Finding,
   type LabelMapping,
   MAPPING_VERSION,
+  matchedHoliday,
   previewWorkbook,
   type WorkbookPreview,
 } from '../import/templateMapping.ts';
@@ -281,7 +282,7 @@ function categoryOf(mapping: LabelMapping): DayCategory | null {
   }
 }
 
-function reportDay(sheet: string, payrollDate: CivilDate, day: DayPreview, floating: ReadonlySet<string>): ReportDay {
+function reportDay(sheet: string, payrollDate: CivilDate, day: DayPreview): ReportDay {
   const category = day.mapping === null ? null : categoryOf(day.mapping);
   const labelStatus = day.label === null ? 'blank' : day.mapping === null ? 'unknown' : category === null ? 'unsupported' : 'mapped';
   return {
@@ -295,14 +296,14 @@ function reportDay(sheet: string, payrollDate: CivilDate, day: DayPreview, float
     category,
     wfh: day.mapping?.workFromHome === true,
     holiday_name: day.holidayName,
-    floating_holiday: day.holidayName !== null && floating.has(day.holidayName),
+    // From the holiday the label matched, never from a comparison of cut names (WP4-FIXB3, recheck risk R-B2-1).
+    floating_holiday: matchedHoliday(day)?.floating === true,
     start_clock: day.startMinutes === null ? null : cell(day.startMinutes),
     end_clock: day.endMinutes === null ? null : cell(day.endMinutes),
   };
 }
 
 function buildReport(preview: WorkbookPreview): Omit<ImportReport, 'plan'> {
-  const floating = new Set(preview.holidays.filter((holiday) => holiday.floating).map((holiday) => holiday.name));
   return {
     mapping_version: preview.mappingVersion,
     source_sha256: preview.sourceSha256,
@@ -314,7 +315,7 @@ function buildReport(preview: WorkbookPreview): Omit<ImportReport, 'plan'> {
     summary: preview.summary,
     clean: preview.clean,
     employee_cells: preview.periods.flatMap((period) => (period.employee === null ? [] : [period.employee.source])),
-    days: preview.periods.flatMap((period) => period.days.map((day) => reportDay(period.sheetName, period.payrollDate, day, floating))),
+    days: preview.periods.flatMap((period) => period.days.map((day) => reportDay(period.sheetName, period.payrollDate, day))),
     rules: IMPORT_RULES,
   };
 }

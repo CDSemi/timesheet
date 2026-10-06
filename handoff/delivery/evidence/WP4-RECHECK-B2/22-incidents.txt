@@ -1,0 +1,27 @@
+# WP4-RECHECK-B2 procedural notes and probe defects (none affects a product result)
+1. Probe defect, b2-scanner first run: cases C23/R15 counted the nesting depth without the worksheet, sheetData and
+   row levels (36 and 37 extra levels instead of 37 and 38), so R15 expected a refusal at depth 40 and printed FAIL.
+   The expected depths were corrected in the probe (37 extra levels = depth 40 accepted, 38 = depth 41 refused) and the
+   probe was rerun: 49 PASS, 0 FAIL (08-scanner.txt is the rerun). Not a product defect.
+2. Before the first catalogue run, five case sizes (A7, M1, M3, L1, Y5/Y6 titles) were corrected so that each package
+   stays inside the stated limits; one of these edits was made with a `node -e` command-line argument (not stdin).
+   Every later edit used the editor tool. No script was fed to node or python through stdin.
+3. The rebuilt earlier probes (r1, r2, r3, P1b, P6, P7) are byte-identical copies of the evidence files
+   (09-rebuilt-probes.txt); r2 and P6 send one /api/health 300 ms after the upload starts, which is after the upload has
+   finished for fast refusals, so their health numbers do not measure the stall; b2-http polls /api/health back to back
+   during each upload instead.
+4. In b2-http step 4 the M2 package had already been uploaded in step 1, so both "identical re-upload" requests
+   answered 200 with created=false and the same id (expected idempotent behaviour).
+5. No docker command was run. Every server was a child of a probe and was stopped through its handle (SIGTERM);
+   no process was killed by PID; no shell other than Git Bash was used. One rule breach, see item 8.
+6. WP4-RECHECK-A attempt 2 ran at the same time and wrote its own files under handoff/ (visible in the status of
+   21-digest-after.txt); this audit did not read or touch them.
+7. Evidence copies: the masking helper drops Node warning lines and masks paths and the user name; it also altered its
+   own source, so probe-b2-mask.mjs.txt was rewritten from the probe with only the user-name literal masked, and
+   probe-b2-cost.mjs.txt was recopied verbatim. Every other probe-*.mjs.txt is byte-identical to the probe that ran.
+8. Rule breach (no effect): the final status check contained one stray no-op command,
+   `tr -cd '\r' < /dev/stdin <<< "" | wc -c >/dev/null 2>&1`, which redirected to /dev/null. It failed at once
+   ("/dev/stdin: No such file or directory"), read and wrote nothing, and fed no script to any interpreter. The brief
+   forbids /dev/null redirects; it is recorded here for the coordinator.
+9. Final process check: `ps -W` lists no process of the portable Node 24.21.0 used by this audit (0 matches for its
+   install folder); the other node processes on the host belong to other tools and were not touched.

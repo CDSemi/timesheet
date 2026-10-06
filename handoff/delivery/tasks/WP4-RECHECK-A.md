@@ -113,6 +113,39 @@ Runtime: as above, with these settings:
 Keep `WP4_RECHECK_A.md` unchanged. Append the attempt-2 results after the attempt-1
 results below.
 
+## Attempt 3 (coordinator note): area-A delta recheck on the round-3 freeze
+
+Attempt 2 passed on cc34e7f. After that, WP4-FIXB3 changed the source in area B only:
+- `xlsxReader.ts`, `templateMapping.ts` and `workbookImport.ts`;
+- their tests;
+- docs/07.
+
+Attempt 3 is a digest-bound delta recheck by another fresh auditor. That auditor must be
+none of these:
+- a659b8cbd52722f18 or aabafcca9efc225db;
+- a WP4 author;
+- the WP4-RECHECK-B3 auditor.
+
+Target: `reviewed_commit` = the WP4-REGATE3 `freeze_commit`. The coordinator gives the
+SHA and the digest.
+
+Scope:
+1. Delta: run `git diff --name-status cc34e7f <freeze>`. Outside handoff/, it may show
+   only WP4-FIXB3 paths, none of them area-A runtime.
+   - `package.json` and the lock are unchanged.
+   - The docs/07 change touches only the workbook budget sentence.
+2. Rerun `npm ci` and `npm run verify` on your export.
+3. Read the WP4-REGATE3 drill result.
+4. Confirm that the attempt-1 and attempt-2 conclusions still apply.
+
+Runtime as above, with these settings:
+- folder `D:\.claude-tmp\timesheet\WP4-RECHECK-A3`;
+- Compose project `ts-wp4-rca3`, only if needed.
+
+Report: `handoff/delivery/WP4_RECHECK_A3.md` and `.vi.md`. Evidence:
+`handoff/delivery/evidence/WP4-RECHECK-A3/`. Append the attempt-3 results after the
+attempt-2 results.
+
 ## Results
 
 ### Auditor result (attempt 1): decision PASS
@@ -167,3 +200,61 @@ task's files, staged in a private git dir: exit 0, 0 findings (`21`).
 - Docker: nothing of `ts-wp4-rca` is left (`18`).
 - No probe was rerun.
 - Nothing is left running.
+
+### Auditor result (attempt 2): decision PASS
+
+Self-reported model: claude-opus-5-5 (board agent `aabafcca9efc225db`; effort not observable). Date 2026-10-06,
+14:54 to about 15:20 UTC. Not committed. Report: [WP4_RECHECK_A2](../WP4_RECHECK_A2.md) (VI: `WP4_RECHECK_A2.vi.md`).
+Evidence: `handoff/delivery/evidence/WP4-RECHECK-A2/` (index `00-README.txt`; masked, LF). Attempt-1 report
+`WP4_RECHECK_A.md` and its evidence are unchanged.
+
+**Target and digest.** Reviewed commit `cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d` (= `origin/main`, the WP4-REGATE2
+`freeze_commit`). HEAD and the digest were recorded before (14:54 UTC), after (15:08 UTC) and again after the reports were
+written (`99b`). Both forms were used in the repository (ls-tree and `scripts/source-digest.mjs`), and the same digest was
+computed on the `git archive` export (its tree `940def94…` equals the freeze tree). The digest was
+`96445de4ad266f0fa70f78c0c72b03625775d170e8841c757c39b2b5cae7d503` (775 files) every time, equal to the gate digest. No
+non-handoff file changed.
+
+**Separation.** The delta authors are WP4-FIXB2 `a25ba7423ae0846ed` (opus, expert) and WP4-DEPCLEAN `af38846cc479cc2e3`
+(sonnet). The strongest author model is opus, so the reviewer is not weaker. The reviewer is not the attempt-1 auditor
+`a659b8cbd52722f18`, the first area-A auditor `af8b9184c8adf6eb0` or the WP4-RECHECK-B2 auditor `af0ca5d5f3ab94048`. It
+authored nothing in WP4 and shared no file with WP4-RECHECK-B2.
+
+| # | Attempt-2 scope item | Result | Evidence |
+|---|---|---|---|
+| 1 | Delta since 0f7fba2 | 127 paths: 118 under `handoff/delivery/` and 9 outside it, all owned by FIXB2 (3 import modules, 2 workbook tests, docs/07 EN and VI) or DEPCLEAN (`package.json`, lock). No area-A runtime path changed. No area-A module imports a changed module, and the two `workbookImport.ts` exports used by area C are untouched. The docs/07 hunk is the workbook-import paragraph only, and its numbers equal the code. | `10`, `27` |
+| 1 | Lock change | `p-lock` probe exit 0. 8 entries removed (`fast-xml-parser` and its 7 transitive packages), 0 added, 0 changed. Each removed entry is in the old `fast-xml-parser` closure and is needed by nothing outside it. `package.json` differs by that one line. No stale reference outside handoff/. | `11`, `27` |
+| 2 | `npm ci`, verify | `npm ci`: exit 0, 161 packages, no deprecation line, removed packages absent, `npm audit --omit=dev` 0. `npm run verify` with `DATA_DIR`/`DATABASE_PATH` exported: exit 0, 76 files / 1750 tests, the same 41 smoke checks as attempt 1, no deprecation line, the exported `DATA_DIR` stays empty. | `12`, `13` |
+| 2 | Drill | REGATE2 result read (208 PASS). Rerun because the image dependencies and the stage-6 import code changed. Result: exit 0, 208 PASS (33/31/57/35/27/23), Compose project `ts-wp4-rca2`. | `14`, `15` |
+| 2 | Image ships no maps | Drill image (served from the BuildKit cache) and a `docker compose -p ts-wp4-rca2 build --no-cache` image: `/app/dist` 116 files, 0 `*.map`, 0 `sourceMappingURL`, byte-identical between the two. Third-party maps: 560, pdf-lib only. Drill stage 1: `/assets/<bundle>.map` 404. | `15`-`18` |
+| 2 | Area-A probes | Attempt-1 probes rerun unchanged. P2 31, P8 8, P4 16, P7 23, P3 10, R-A1 24 and A-03 15 PASS; check lines identical to attempt 1. | `20`-`26` |
+| 3 | Attempt-1 conclusions | All still apply. The area-A code is byte-identical to 0f7fba2. Changed counts: digest, packages 169 to 161, tests 1734 to 1750 (area-B suites), third-party maps 566 to 560 (R-RA3). | all |
+
+**Findings:** none.
+
+**Risks (non-blocking):**
+- R-RA1 (Info), unchanged: this run had 8 of 12 same-second pairs, 5 of which removed the just-printed backup.
+- R-RA2 (Low), unchanged.
+- R-RA3 (Info): now 560 pdf-lib maps.
+- R-RA4 (Info), unchanged.
+- R-RA5 (Info, new, drill tooling, pre-existing): the stage-1 check "build output (including npm ci) has no deprecation line" passes vacuously when every build step is cached (this run: 11 `CACHED`, no `npm ci` output in the log). The product is unaffected (`12`, `17`). Optional: `--no-cache`, or report a fully cached build.
+- Wording nit in docs/11 section 4, unchanged.
+
+**Not run:**
+- NAS and native arm64: NOT VERIFIED.
+- e2e: not rerun (REGATE2: 145 passed, 5 skipped).
+- P1, P1b, P5, P6 and P9: not rerun as separate probes, because their code is unchanged.
+- The scanner's area-B correctness belongs to WP4-RECHECK-B2.
+
+**Validators:** `validate_package.py --preflight` (workflow Python): exit 0, PASS, 78 translation pairs (`28`).
+`precommit-check.mjs` over this task's files, staged in a private git dir outside the repository and run last: exit 0,
+0 findings (`29`).
+
+**Procedure:**
+- The first launches of the R-A1 and A-03 probes were refused by their own fresh-folder guard, because I had pre-created
+  the folders (`25a`, `26a`). Nothing ran; both were rerun into fresh folders.
+- Two read-only commands used `2>/dev/null` against the rule: a `ps -W` process listing and a grep of two briefs. They had
+  no effect.
+- The no-cache build used Compose project `ts-wp4-rca2` (build only); both images were removed by name. No container,
+  volume, network or image of `ts-wp4-rca2` is left (`19`).
+- None of this audit's processes is left running.

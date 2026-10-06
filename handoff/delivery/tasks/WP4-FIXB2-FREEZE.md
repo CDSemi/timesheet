@@ -141,3 +141,7 @@ Return at most 150 words, beginning with your self-reported model.
 ## Results
 
 (Committer appends here.)
+
+- Pre-HEAD 0f7fba2ee6bc2a7affcd1a3bf800e085351c7b65; commit cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d on main; pushed; remote SHA cc34e7ff11e6c27f23fd2bf1b86f77159f95eb8d.
+- Digest 96445de4... (775 files); staged 127. Scope checks clean (no .claude/reference/migrations/AGENTS/CLAUDE change, no .xlsx/.map, package.json removes only fast-xml-parser, lock removes 8 packages, 121 deletions, 0 additions).
+- Exit codes: all 0. One allowed fix: removed EOF blank line in tasks/WP4-REGATE.md (check rc 2 first). No masking. Blockers: none. Details: evidence/WP4-FIXB2-FREEZE/checks.txt.

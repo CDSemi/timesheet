@@ -1,0 +1,25 @@
+Bound workbook parsing with a streaming scanner and remove fast-xml-parser
+
+- fix(import) (WP4-RB-01, WP4-B-01): a bounded streaming scanner replaces
+  fast-xml-parser.
+  - It counts every "<": 100k per part and 200k per package.
+  - It bounds attributes: 64 per element, 200k per part and 500k per package.
+  - Tag length is capped at 64 KiB, and non-XML names are refused.
+  - Kept text is cut at 200 characters with a truncated flag, the report is
+    capped at 2 MiB, and a report failure answers 422, never 500.
+  - The proven budget is at most 500 ms and +150 MiB per preview.
+- test(import): 15 red-first tests and a 35-shape adversarial sweep; ten
+  mutations are killed.
+- build(deps): remove the unused fast-xml-parser and its seven transitive
+  packages. No other dependency changes.
+- docs(ops): the docs/07 workbook limits (+ vi).
+- docs(handoff): the WP4-REGATE PASS, WP4-RECHECK-A PASS (attempt 1),
+  WP4-RECHECK-B FIX REQUIRED, the round-2 fix records, the regate and recheck
+  briefs, the board and the checkpoint (+ vi).
+
+Task: WP4-FIXB2-FREEZE
+Gate: WP4 fix round 2 freeze (REGATE2, RECHECK-B2, RECHECK-A attempt 2 pending)
+Audit: pending, independent regate and rechecks review this commit
+Digest: 96445de4ad266f0fa70f78c0c72b03625775d170e8841c757c39b2b5cae7d503 (775 files)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

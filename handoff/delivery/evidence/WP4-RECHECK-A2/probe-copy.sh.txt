@@ -1,0 +1,23 @@
+// WP4-RECHECK-A2 source (masked evidence copy: <work> = the audit task folder, <project> = the repository folder, <email> = a synthetic example.invalid address).
+#!/usr/bin/env bash
+# WP4-RECHECK-A2: makes runnable copies of the attempt-1 probes (evidence/WP4-RECHECK-A/*.mjs.txt): drops the masked
+# header line, inserts one comment line, and restores the synthetic example.invalid addresses that the masking replaced.
+W=<work>
+E=<project>/handoff/delivery/evidence/WP4-RECHECK-A
+for f in p2-backup-restore p3-prune p4-targets p7-retention-sweep p8-admin-privacy p-ra1-prune p-a03-bootstrap; do
+  sed -e '1d' \
+      -e "s/MAIL_FROM: '<email>'/MAIL_FROM: '<email>'/" \
+      -e "s/login('<email>', passwords.admin)/login('<email>', passwords.admin)/" \
+      -e "s/login('<email>', passwords.employee2)/login('<email>', passwords.employee2)/" \
+      -e "s/m.owner_email = '<email>'/m.owner_email = '<email>'/" \
+      -e "2i // WP4-RECHECK-A2: rerun on cc34e7f, copied unchanged from evidence/WP4-RECHECK-A/$f.mjs.txt (header line removed, synthetic addresses restored)." \
+      $E/$f.mjs.txt > $W/probes/$f.mjs
+done
+# Runs (each probe gets the export and its own work folder; each passes its own DATABASE_PATH and DATA_DIR to every child):
+#   node probes/p2-backup-restore.mjs <work>\export <work>\p2
+#   node probes/p8-admin-privacy.mjs  <work>\export <work>\p2
+#   node probes/p4-targets.mjs        <work>\export <work>\p2 <work>\p4
+#   node probes/p7-retention-sweep.mjs <work>\export <work>\p7
+#   node probes/p3-prune.mjs          <work>\export <work>\p3
+#   node probes/p-ra1-prune.mjs       <work>\export <work>\ra1-run   (must not exist beforehand)
+#   node probes/p-a03-bootstrap.mjs   <work>\export <work>\a03-run   (must not exist beforehand)

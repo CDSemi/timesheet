@@ -1,0 +1,68 @@
+# WP4-FIXB3 08 the built server over real HTTP (the first audit's P6, the recheck's r2, WP4-RECHECK-B2 E7/Y7/Y1/Y6, the search's worst)
+# Command: PROBE_ROOT=<export> PROBE_PKGS=<dir> node probes/http.mjs <work folder> <case>... ; exit 0 each run.
+# Built dist/ of the export, NODE_ENV=development, capture mode, JOB_RUNNER=off, synthetic example.invalid users;
+# DATA_DIR and DATABASE_PATH explicit under <task>/run/<run>; GET /api/health 300 ms after each upload starts (own
+# connection); stored report_json in UTF-8 bytes; the server stopped through its handle.
+
+## BEFORE (<task>/base, cc34e7f)
+2026-10-06T16:02:57Z
+cli migrate: exit 0
+cli seed: exit 0
+login: 200
+ACCEPT tracked template: upload 26456 B -> 201 (body larger than the captured head) in 37 ms, response 0.004 MiB, stored report_json 0.004 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 1, largest report_json 0.004 MiB
+ACCEPT realistic 12 dated sheets (clocks, leave, WFH): upload 85818 B -> 201 (body larger than the captured head) in 47 ms, response 0.139 MiB, stored report_json 0.113 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 2, largest report_json 0.113 MiB
+ACCEPT 60 dated sheets: upload 319087 B -> 201 (body larger than the captured head) in 105 ms, response 0.712 MiB, stored report_json 0.521 MiB; GET /api/health 300 ms later -> 200 after 5 ms; imports rows 3, largest report_json 0.521 MiB
+ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit): upload 327953 B -> 201 (body larger than the captured head) in 132 ms, response 0.759 MiB, stored report_json 0.580 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 4, largest report_json 0.580 MiB
+P1b one 15 MiB sheet of <c/> (P6 37 KB): upload 37400 B -> 422 workbook_rejected/part_too_large in 5 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 4, largest report_json 0.580 MiB
+P1b three 15.8 MiB sheets of <c/> (P6 65 KB): upload 65173 B -> 422 workbook_rejected/part_too_large in 8 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+P7 3 payroll sheet(s) x 199 000 <f>8.5</f>: upload 2692031 B -> 422 workbook_rejected/part_too_large in 16 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H2a 4 parts of <1/> (digit tag names): upload 33293 B -> 422 workbook_rejected/malformed_xml in 23 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H4b 4 parts, one <c> each with 4 MiB of attributes: upload 4195737 B -> 422 workbook_rejected/too_many_attributes in 96 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H5d one 1 MiB shared string x 100 holiday names: upload 27913 B -> 201 (body larger than the captured head) in 21 ms, response 0.031 MiB, stored report_json 0.031 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 5, largest report_json 0.580 MiB
+r1 H5b one 4 MiB shared string x 2000 holiday names: upload 49542 B -> 201 (body larger than the captured head) in 46 ms, response 0.568 MiB, stored report_json 0.568 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 6, largest report_json 0.580 MiB
+N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text: upload 379460 B -> 201 (body larger than the captured head) in 138 ms, response 1.681 MiB, stored report_json 1.421 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 7, largest report_json 1.421 MiB
+N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON): upload 56086 B -> 422 workbook_rejected/report_too_large in 19 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 7, largest report_json 1.421 MiB
+B2 E7 4 parts, 64 cells each with a 65 000-char t="&&&..." (kept attribute, decoded twice per cell): upload 24780 B -> 201 in 670 ms, response 0.003 MiB, stored report_json 0.002 MiB; GET /api/health 300 ms later -> 200 after 371 ms; imports rows 8, largest report_json 1.421 MiB
+B2 Y7 Y1 with every part pinned two-byte: one non-Latin-1 char, a kept 20-char str value, ASCII comment filling 4 MiB: upload 545605 B -> 201 in 251 ms, response 0.003 MiB, stored report_json 0.003 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 9, largest report_json 1.421 MiB
+B2 Y1 4 parts x 49 990 empty cells, 10-char addresses, 97-char sheet names: upload 530685 B -> 201 in 165 ms, response 0.003 MiB, stored report_json 0.003 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 10, largest report_json 1.421 MiB
+B2 Y6 2 dated sheets x 49 990 distinct formulas of about 43 characters (examined once each): upload 605919 B -> 201 (body larger than the captured head) in 142 ms, response 0.018 MiB, stored report_json 0.014 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 11, largest report_json 1.421 MiB
+idle GET /api/health afterwards -> 200 in 2 ms
+server stopped through its handle: SIGTERM; server stderr error lines: none
+
+## AFTER (<task>/final)
+2026-10-06T16:03:10Z
+cli migrate: exit 0
+cli seed: exit 0
+login: 200
+ACCEPT tracked template: upload 26456 B -> 201 (body larger than the captured head) in 48 ms, response 0.004 MiB, stored report_json 0.004 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 1, largest report_json 0.004 MiB
+ACCEPT realistic 12 dated sheets (clocks, leave, WFH): upload 85818 B -> 201 (body larger than the captured head) in 64 ms, response 0.139 MiB, stored report_json 0.113 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 2, largest report_json 0.113 MiB
+ACCEPT 60 dated sheets: upload 319087 B -> 201 (body larger than the captured head) in 92 ms, response 0.712 MiB, stored report_json 0.521 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 3, largest report_json 0.521 MiB
+ACCEPT realistic 61 dated sheets (64 sheets, the sheet limit): upload 327953 B -> 201 (body larger than the captured head) in 91 ms, response 0.759 MiB, stored report_json 0.580 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+P1b one 15 MiB sheet of <c/> (P6 37 KB): upload 37400 B -> 422 workbook_rejected/part_too_large in 4 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 4, largest report_json 0.580 MiB
+P1b three 15.8 MiB sheets of <c/> (P6 65 KB): upload 65173 B -> 422 workbook_rejected/part_too_large in 3 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 4, largest report_json 0.580 MiB
+P7 3 payroll sheet(s) x 199 000 <f>8.5</f>: upload 2692031 B -> 422 workbook_rejected/part_too_large in 11 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H2a 4 parts of <1/> (digit tag names): upload 33293 B -> 422 workbook_rejected/malformed_xml in 12 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H4b 4 parts, one <c> each with 4 MiB of attributes: upload 4195737 B -> 422 workbook_rejected/too_many_attributes in 104 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 4, largest report_json 0.580 MiB
+r1 H5d one 1 MiB shared string x 100 holiday names: upload 27913 B -> 201 (body larger than the captured head) in 21 ms, response 0.031 MiB, stored report_json 0.031 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 5, largest report_json 0.580 MiB
+r1 H5b one 4 MiB shared string x 2000 holiday names: upload 49542 B -> 201 (body larger than the captured head) in 47 ms, response 0.568 MiB, stored report_json 0.568 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 6, largest report_json 0.580 MiB
+N16 report flood: 2000 holidays and 61 x 14 labels of 1 KiB distinct text: upload 379460 B -> 201 (body larger than the captured head) in 129 ms, response 1.681 MiB, stored report_json 1.421 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 7, largest report_json 1.421 MiB
+N22 report over the cap: 2000 holiday names of 300 control characters (escaped 6x in JSON): upload 56086 B -> 422 workbook_rejected/report_too_large in 23 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 7, largest report_json 1.421 MiB
+B2 E7 4 parts, 64 cells each with a 65 000-char t="&&&..." (kept attribute, decoded twice per cell): upload 24780 B -> 422 workbook_rejected/attribute_too_large in 15 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 7, largest report_json 1.421 MiB
+B2 Y7 Y1 with every part pinned two-byte: one non-Latin-1 char, a kept 20-char str value, ASCII comment filling 4 MiB: upload 545605 B -> 422 workbook_rejected/total_xml_too_large in 127 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 7, largest report_json 1.421 MiB
+B2 Y1 4 parts x 49 990 empty cells, 10-char addresses, 97-char sheet names: upload 530685 B -> 422 workbook_rejected/too_many_elements in 107 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 7, largest report_json 1.421 MiB
+B2 Y6 2 dated sheets x 49 990 distinct formulas of about 43 characters (examined once each): upload 605919 B -> 422 workbook_rejected/too_many_elements in 136 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 7, largest report_json 1.421 MiB
+idle GET /api/health afterwards -> 200 in 2 ms
+server stopped through its handle: SIGTERM; server stderr error lines: none
+
+## AFTER, the search's worst shapes (<task>/final, packages <task>/pkgs-B)
+2026-10-06T16:03:29Z
+cli migrate: exit 0
+cli seed: exit 0
+login: 200
+S3 cells one-wide mapped unpinned: upload 431880 B -> 201 (body larger than the captured head) in 207 ms, response 0.009 MiB, stored report_json 0.007 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 1, largest report_json 0.007 MiB
+S3 cells two-byte generic pinned: upload 432049 B -> 201 in 168 ms, response 0.003 MiB, stored report_json 0.003 MiB; GET /api/health 300 ms later -> 200 after 4 ms; imports rows 2, largest report_json 0.007 MiB
+S3 strings one-wide generic: upload 464661 B -> 201 in 194 ms, response 0.003 MiB, stored report_json 0.003 MiB; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 3, largest report_json 0.007 MiB
+S3 shared one-wide generic: upload 460510 B -> 422 workbook_rejected/too_many_elements in 119 ms, response 0.000 MiB, nothing stored; GET /api/health 300 ms later -> 200 after 3 ms; imports rows 3, largest report_json 0.007 MiB
+S3 kept-attributes one-wide mapped: upload 94172 B -> 201 (body larger than the captured head) in 116 ms, response 0.009 MiB, stored report_json 0.007 MiB; GET /api/health 300 ms later -> 200 after 2 ms; imports rows 4, largest report_json 0.007 MiB
+idle GET /api/health afterwards -> 200 in 1 ms
+server stopped through its handle: SIGTERM; server stderr error lines: none

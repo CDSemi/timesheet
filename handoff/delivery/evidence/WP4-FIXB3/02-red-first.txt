@@ -1,0 +1,47 @@
+# WP4-FIXB3 02 red-first
+# Run 1: the new and adjusted tests against the UNCHANGED source in the repository (cc34e7f source; tests only edited).
+# Command: npx vitest run tests/integration/workbook-reader.test.ts tests/integration/workbook-import.test.ts --reporter=verbose ; exit 1
+2026-10-06T15:45:19Z
+ × tests/integration/workbook-import.test.ts > preview > red-first (R-B2-1): a day takes its floating flag from the holiday its label matched, not from a cut name 227ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source 28ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, E7): a kept attribute value over 255 characters is refused; one at the cap is decoded once 715ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, Y7): four parts of pinned two-byte cells at the old opening limit are refused by the package limit 425ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound 871ms
+ × tests/integration/workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > red-first (R-B2-2): refuses a part that declares an encoding other than UTF-8 or UTF-16 7ms
+ × tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500 395ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected { sheet: '2026.09.18', …(12) } to match object { …(3) }
+AssertionError: expected { code: 'workbook_rejected', …(2) } to match object { code: 'workbook_rejected', …(1) }
+AssertionError: expected 'sheet_name_too_long' to be 'attribute_too_large' // Object.is equality
+AssertionError: expected null to be 'attribute_too_large' // Object.is equality
+AssertionError: expected null to be 'too_many_elements' // Object.is equality
+AssertionError: a kept attribute value of 256 characters: expected null to be 'attribute_too_large' // Object.is equality
+AssertionError: ISO-8859-1: expected null to be 'unsupported_encoding' // Object.is equality
+ Test Files  2 failed (2)
+      Tests  7 failed | 82 passed (89)
+
+# Run 2 (final): the FINAL test files copied into the baseline export <task>/base (source of cc34e7f), then restored
+# (sha256 of the restored files equal to HEAD's, at the end). Command: same; exit 1
+2026-10-06T16:10:09Z
+ × tests/integration/workbook-import.test.ts > preview > red-first (R-B2-1): a day takes its floating flag from the holiday its label matched, not from a cut name 339ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first: a sheet name longer than any spreadsheet allows is refused before it is copied into every source 35ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, E7): a kept attribute value over 255 characters is refused; one at the cap is decoded once 1239ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > red-first (WP4-RB2-01, Y7): four 4 MiB parts of pinned two-byte cells are over the package limits 611ms
+ × tests/integration/workbook-reader.test.ts > RB-01: no XML shape inside the limits escapes the parse budget, and the report stays small > adversarial sweep: every shape near every limit is refused with its code or previews inside a generous bound 373ms
+ ✓ tests/integration/workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > decodes every kept text and attribute value exactly one level, and leaves CDATA as written 51ms
+ × tests/integration/workbook-reader.test.ts > WP4-FIXB3: references are decoded exactly once, and only UTF-8 or UTF-16 parts are read > red-first (R-B2-2): refuses a part that declares an encoding other than UTF-8 or UTF-16 7ms
+ × tests/integration/workbook-import.test.ts > upload validation > red-first (RB-01, recheck r2): tags of any name shape and megabytes of cell text are a typed 422 or a bounded report, never a 500 583ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the stored source through the orphan sweep 222ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected { sheet: '2026.09.18', …(12) } to match object { …(3) }
+AssertionError: expected { code: 'workbook_rejected', …(2) } to match object { code: 'workbook_rejected', …(1) }
+AssertionError: expected 'sheet_name_too_long' to be 'attribute_too_large' // Object.is equality
+AssertionError: expected null to be 'attribute_too_large' // Object.is equality
+AssertionError: expected null to be 'total_xml_too_large' // Object.is equality
+AssertionError: three such parts (over the 8 MiB package total): expected null to be 'total_xml_too_large' // Object.is equality
+AssertionError: ISO-8859-1: expected null to be 'unsupported_encoding' // Object.is equality
+ Test Files  2 failed (2)
+      Tests  7 failed | 82 passed (89)
+workbook-reader.test.ts base=1ce58bddff8b611d head=1ce58bddff8b611d
+workbook-import.test.ts base=8b53663c46a7ee6f head=8b53663c46a7ee6f
+# The decode-once test passes on the baseline too (cc34e7f already decoded once): it is a guard, killed by mutations M1/M1b (04).

@@ -1,0 +1,119 @@
+date_utc start: 2026-10-06T15:05:25Z
+$ TIMESHEET_IMAGE=ts-wp4-rca2-timesheet:nocache TIMESHEET_ENV_FILE=<work>/drill/timesheet.env TIMESHEET_DATA_DIR=<work>/nocache-data docker compose --progress plain --project-name ts-wp4-rca2 --file compose.example.yaml build --no-cache
+#1 [internal] load local bake definitions
+#1 reading from stdin 606B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.17kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 563B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 11.08kB 0.1s done
+#5 DONE 0.1s
+
+#6 [base 1/2] FROM docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#6 resolve docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe 0.0s done
+#6 DONE 0.0s
+
+#7 [base 2/2] WORKDIR /app
+#7 CACHED
+
+#8 [build 1/5] COPY package.json package-lock.json .npmrc ./
+#8 DONE 0.1s
+
+#9 [runtime 1/4] RUN groupadd --gid 10001 timesheet     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin timesheet     && install --directory --owner 10001 --group 10001 --mode 0700 /data
+#9 DONE 0.6s
+
+#10 [build 2/5] RUN npm ci
+#10 ...
+
+#11 [prod-deps 2/2] RUN npm ci --omit=dev --ignore-scripts
+#11 5.261
+#11 5.261 added 17 packages, and audited 18 packages in 5s
+#11 5.261
+#11 5.261 1 package is looking for funding
+#11 5.261   run `npm fund` for details
+#11 5.262
+#11 5.262 found 0 vulnerabilities
+#11 DONE 5.4s
+
+#10 [build 2/5] RUN npm ci
+#10 ...
+
+#12 [runtime 2/4] COPY --from=prod-deps /app/node_modules ./node_modules
+#12 DONE 0.4s
+
+#10 [build 2/5] RUN npm ci
+#10 6.387
+#10 6.387 added 161 packages, and audited 162 packages in 6s
+#10 6.387
+#10 6.387 42 packages are looking for funding
+#10 6.387   run `npm fund` for details
+#10 6.388
+#10 6.388 1 high severity vulnerability
+#10 6.388
+#10 6.388 To address all issues, run:
+#10 6.388   npm audit fix
+#10 6.388
+#10 6.388 Run `npm audit` for details.
+#10 DONE 6.5s
+
+#13 [build 3/5] COPY tsconfig*.json vite.config.ts ./
+#13 DONE 0.1s
+
+#14 [build 4/5] COPY src ./src
+#14 DONE 0.1s
+
+#15 [build 5/5] RUN npm run build:server -- --sourceMap false     && BUILD_SOURCEMAPS=off npm run build:client
+#15 0.343
+#15 0.343 > timesheet@0.1.0 build:server
+#15 0.343 > tsc -p tsconfig.server.json --sourceMap false
+#15 0.343
+#15 2.223
+#15 2.223 > timesheet@0.1.0 build:client
+#15 2.223 > vite build
+#15 2.223
+#15 2.356 vite v8.3.1 building client environment for production...
+#15 2.362 transforming...
+#15 2.421 ✓ 107 modules transformed.
+#15 2.489 rendering chunks...
+#15 2.537 computing gzip size...
+#15 2.542 dist/client/index.html                   0.39 kB │ gzip:   0.25 kB
+#15 2.542 dist/client/assets/index-B8sNpoCz.css   21.92 kB │ gzip:   4.61 kB
+#15 2.542 dist/client/assets/index-ZGs6tcbH.js   454.21 kB │ gzip: 128.64 kB
+#15 2.542
+#15 2.542 ✓ built in 186ms
+#15 DONE 2.6s
+
+#16 [runtime 3/4] COPY --from=build /app/dist ./dist
+#16 DONE 0.1s
+
+#17 [runtime 4/4] COPY package.json ./
+#17 DONE 0.1s
+
+#18 exporting to image
+#18 exporting layers
+#18 exporting layers 1.8s done
+#18 exporting manifest sha256:0b3ffdd70ad12f39126acfd43e893c33a607a3ec1792f65f2b57fbe2b4a351ec 0.0s done
+#18 exporting config sha256:fb47d125563edbc1b00b282c3dfe454f3f3743a70dec9e8ce540a350575ee0dd 0.0s done
+#18 exporting attestation manifest sha256:e14902137ce3463143cc9192a48d22b2b84773394cc2edcec5d16dc5589f0490 0.0s done
+#18 exporting manifest list sha256:2303ef529537594537cfecfbef91b78a74dc89966e4e35e3ecd1a3c500198203 0.0s done
+#18 naming to docker.io/library/ts-wp4-rca2-timesheet:nocache
+#18 naming to docker.io/library/ts-wp4-rca2-timesheet:nocache done
+#18 unpacking to docker.io/library/ts-wp4-rca2-timesheet:nocache
+#18 unpacking to docker.io/library/ts-wp4-rca2-timesheet:nocache 0.8s done
+#18 DONE 2.8s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ ts-wp4-rca2-timesheet:nocache  Built
+exit: 0
+date_utc end: 2026-10-06T15:05:39Z
