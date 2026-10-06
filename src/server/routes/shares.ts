@@ -161,14 +161,19 @@ export function sharedRoutes(deps: AppDeps, files?: FileStore) {
       submissionRoutes(checked, {
         access: requireShare(deps, access),
         ...(files === undefined ? {} : { files }),
-        beforePdfSend: (c, revision) =>
+        beforePdfSend: (c, revision) => {
+          // Hono answers a HEAD through the GET handler and discards the body. A HEAD hands over no bytes, so it
+          // is not a download and writes no audit event (WP4-T02, WP3_REVIEW_C R1). The guard has already checked
+          // the share and its PDF item for the request, so it still gets the same refusals as a GET.
+          if (c.req.method === 'HEAD') return;
           recordSharedPdfDownload(deps.db, deps.clock, {
             ownerUserId: c.get('subject').id,
             granteeUserId: c.get('actor').id,
             revisionId: revision.id,
             payrollDate: revision.payrollDate,
             revisionNo: revision.revisionNo,
-          }),
+          });
+        },
       }),
   };
   const app = new Hono<AppEnv>();

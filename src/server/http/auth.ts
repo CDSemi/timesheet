@@ -80,6 +80,7 @@ export function requireShare(deps: AppDeps, access: ShareAccess) {
     c.set('user', user);
     c.set('actor', user);
     c.set('subject', ownerPrincipal(share.owner));
+    c.set('viaShareId', share.id);
     await shareScope.run({ ownerUserId: share.owner.id, granteeUserId: user.id, access }, next);
   });
 }

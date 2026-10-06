@@ -1,0 +1,45 @@
+Mutation proof in the scratch clone D:/.claude-tmp/timesheet/WP4-T02/scratch (copy of the working tree; the repository was never mutated). After each mutation the file was restored from the repository copy and verified with cmp.
+
+## Control: unmutated scratch clone (history + pdf-download)
+ Test Files  2 passed (2)
+      Tests  27 passed (27)
+   Duration  6.33s (tests 81%, import 13%, transform 6%)
+
+## M1: DELETE /api/shared/:ownerId/sessions/:id drops the marker (timesheetCommands.ts deleteSession audit call without viaShareId)
+     × WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is 363ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 23 passed (24)
+   Duration  6.03s (tests 80%, import 13%, transform 7%)
+
+## M2: shared PDF download audit drops the marker (shares.ts viaShareId: null)
+     × records one audit event with the share marker for a GET 393ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/pdf-download.test.ts > shared PDF download audit > records one audit event with the share marker for a GET
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Duration  5.69s (tests 76%, import 16%, transform 8%)
+
+## M3: HEAD guard removed (routes/shares.ts)
+     × returns the headers for a HEAD and writes no audit event 402ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/pdf-download.test.ts > shared PDF download audit > returns the headers for a HEAD and writes no audit event
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Duration  5.45s (tests 76%, import 16%, transform 8%)
+
+## M4: legacy inference without the migration-time bound (sharedActs.ts)
+     × WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act 161ms
+     × does not attribute a day or session event written outside /api/shared (the marker is NULL after the migration) 330ms
+     × stops inferring exactly at the migration instant: a NULL-marker row at or after it is not a share act 345ms
+     × WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee 444ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/integration/actor-subject.test.ts > commands and audit record actor and subject > WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act
+ FAIL  tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > does not attribute a day or session event written outside /api/shared (the marker is NULL after the migration)
+ FAIL  tests/integration/audit-access.test.ts > rows written before the migration keep the operation-code inference > stops inferring exactly at the migration instant: a NULL-marker row at or after it is not a share act
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee
+ Test Files  3 failed (3)
+      Tests  4 failed | 35 passed (39)
+   Duration  7.69s (tests 83%, import 11%, transform 6%)
+

@@ -298,6 +298,15 @@ describe('route inventory', () => {
     expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED].sort());
   });
 
+  it('WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker', () => {
+    // Each of these records `audit_events.via_share_id` (asserted by the history drift test, which performs them all).
+    // A new shared write route fails here until the marker is recorded for it and that test performs it.
+    const writes = MATRIX.filter(([method]) => method !== 'GET').map(([method, path]) => `${method} ${path}`);
+    expect(writes.sort()).toEqual(
+      ['DELETE /sessions/:id', 'POST /days/:workDate/sessions', 'POST /days/batch', 'PUT /days/:workDate', 'PUT /sessions/:id'].sort(),
+    );
+  });
+
   it('covers the 11 valid item sets', () => {
     expect(ITEM_SETS).toHaveLength(11);
     expect(new Set(ITEM_SETS.map(label)).size).toBe(11);

@@ -25,13 +25,16 @@ export interface AppDeps {
  * written). On the personal routes the access guard sets all three to the session user. Under
  * /api/shared/:ownerId (`requireShare`) `user` and `actor` are the grantee and `subject` is the
  * owner named in the path, whose share was checked live. Personal routers read the owner from
- * `subject` and never from `user`.
+ * `subject` and never from `user`. `viaShareId` is the id of that share and is set by `requireShare`
+ * alone, so a write records "through a share" in its audit event (WP4-T02); it is absent on every
+ * personal route.
  */
 export interface AppEnv {
   Variables: {
     user: SessionUser;
     actor: SessionUser;
     subject: SessionUser;
+    viaShareId?: string;
   };
 }
 

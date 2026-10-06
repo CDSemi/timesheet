@@ -6,18 +6,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = b103923d7f412860b189f692cf23c11ee2915e86 (WP3-ACCEPT). Mã
-    nguồn WP3 được nghiệm thu là 49651c8, digest c31c300c…. Các commit đóng băng WP3
-    trước đó là a1cd566, 2f2520e và 2d72d35.
+  - HEAD = origin/main = a1dc01b98f3c8be7478384adf73d9c194bf9a105 (WP4-T01-FREEZE).
+    WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
+    đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
     5fafeaee72509c6110a907458643bf7582dad81a.
   - Digest chính thức của gate: eeb417d3… (WP3-REGATE PASS trên 2f2520e). Digest gate
     WP3 đầu tiên là 96870f7e… (WP3-GATE trên a1cd566); digest gate WP2 là e61fa914…
     (WP2-GATE4).
-  - Chưa commit:
-    - trong handoff: board, STATE, checkpoint này, kết quả và bằng chứng của WP3-ACCEPT;
-    - 3 tệp skill chưa track của chủ dự án trong `.claude/skills/readme-md/`, sẽ do
-      GOV-SKILL-FREEZE commit.
+  - Chưa commit (chỉ trong handoff): board, checkpoint này, kết quả và bằng chứng của
+    WP4-T01-FREEZE, và brief của WP4-T02.
 
     Digest chính thức của gate là 0d513fca… (WP3-REGATE2 PASS).
   - Không có commit chưa push.
@@ -517,7 +515,23 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - test: 23 đỏ → 83 xanh; phép thử đột biến làm 2 test fail;
        - e2e 127 đạt; verify 1449 test; digest 1c57dbae…;
        - sai lệch: thêm một dòng vào danh mục route trong sharing-matrix.
-     - Đang chạy: WP4-T01-FREEZE (committer).
+     - WP4-T01-FREEZE đã commit và push thành a1dc01b (50 đường dẫn; digest 1c57dbae…;
+       mọi kiểm tra trả về 0).
+     - WP4-T02 đã xong (tác giả tự báo):
+       - migration 0007 thêm `via_share_id`, kèm trigger kiểm tra chiều chủ → người thao
+         tác;
+       - mọi thao tác ghi qua chia sẻ và audit tải PDF đều ghi dấu này;
+       - request HEAD không còn ghi audit; các dòng cũ vẫn dùng cách suy luận như trước;
+       - test: 23 đỏ → 136 xanh; 4 đột biến đều bị test phát hiện;
+       - verify: 1469 test; digest d6f223a7….
+
+       Sai lệch: worker sửa thêm `http/auth.ts` và `routes/api.ts`. docs/03 nên nhắc tới
+       dấu mới này; việc đó chuyển sang WP4-DEC.
+     - WP4-T02-FREEZE lần 1 không tạo commit. Điều phối viên viết brief WP4-T03 giữa lúc
+       committer đang chạy và nhờ stage tệp đó; kiểm tra quyền đã từ chối lệnh `git add`
+       gộp. Lệnh đó không được thử lại.
+     - Đang chạy: WP4-T02-FREEZE lần 2 (cùng committer). Lần này commit đúng bộ tệp ban
+       đầu; `WP4-T03.md` vẫn để chưa track cho tới lần đóng băng kế tiếp.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -557,7 +571,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T01-FREEZE.
+- Process còn sống: chỉ WP4-T02-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

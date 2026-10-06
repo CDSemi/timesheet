@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canonicalHash } from '../../src/domain/canonical.ts';
 import type { SessionUser } from '../../src/server/auth/sessions.ts';
 import { FileStore } from '../../src/server/files/fileStore.ts';
+import { recordAudit } from '../../src/server/services/audit.ts';
 import { buildReviewPayload } from '../../src/server/services/reviewPayload.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { createUser } from '../../src/server/services/users.ts';
@@ -141,6 +142,24 @@ describe('the owner Review lists the days a grantee changed last (WP3-C-01)', ()
     // The server names the grantee, never identifies the account.
     expect(JSON.stringify(body.grantee_changes)).not.toContain(grantee.id);
     expect(JSON.stringify(body.grantee_changes)).not.toContain('@example.invalid');
+  });
+
+  it('WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee', async () => {
+    // Only the recorded marker can attribute an act: the migration is pinned before every event.
+    t.db.prepare("UPDATE schema_migrations SET applied_at = '2026-09-01T00:00:00Z' WHERE version = 7").run();
+    await share('grantee@example.invalid');
+    t.clock.advanceSeconds(60);
+    await granteeDay(grantee, DAY_A, 'through the share');
+    // A write of the same shape outside /api/shared (the second account as actor, no marker) is not a share act.
+    recordAudit(t.db, t.clock, {
+      actorUserId: second.id,
+      ownerUserId: t.userIds.employee,
+      operation: 'day_entry.update',
+      entityType: 'day_entry',
+      entityId: 'synthetic-unshared-entity',
+      after: { work_date: DAY_B },
+    });
+    expect((await review()).grantee_changes).toEqual([{ display_name: GRANTEE_NAME, days: 1, work_dates: [DAY_A] }]);
   });
 
   it('is empty when only the owner changed the period, and for a share that changed nothing', async () => {

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import { FileStore } from '../../src/server/files/fileStore.ts';
 import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
 import { runJobsOnce } from '../../src/server/jobs/runner.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
+import { createUser } from '../../src/server/services/users.ts';
 import { makePng } from '../support/pdfText.ts';
 import { createTestContext, la, LA, ORIGIN, type TestContext } from '../support/testApp.ts';
 
@@ -220,5 +221,78 @@ describe('integrity of the stored file', () => {
     expect(response.status).toBe(500);
     expect(response.bytes.includes(Buffer.from('tampered'))).toBe(false);
     expect(readFileSync(join(dataDir, 'files', stored.key)).includes(Buffer.from('tampered'))).toBe(true);
+  });
+});
+
+/*
+ * WP4-T02 (FR-17, AC-16; WP3_REVIEW_C R1): a grantee's GET of the shared PDF writes one `share.pdf_download`
+ * audit event that records the share it was made under, and a `HEAD` on the same route returns the headers
+ * but writes none (Hono serves HEAD through the GET handler, so the handler must tell them apart).
+ */
+describe('shared PDF download audit', () => {
+  let granteeCookie: string;
+  let shareId: string;
+
+  async function share(items: { timesheets: string; ot_read: boolean; pdf_download: boolean }) {
+    const password = randomBytes(18).toString('base64url');
+    await createUser(
+      t.db,
+      t.clock,
+      { email: 'grantee@example.invalid', displayName: 'Synthetic Grantee', role: 'employee', password, calendarId: t.calendarId },
+      t.userIds.admin,
+    );
+    const login = await t.request('POST', '/api/auth/login', { body: { email: 'grantee@example.invalid', password } });
+    granteeCookie = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const granted = await t.request('POST', '/api/shares', { cookie: employee, body: { grantee_email: 'grantee@example.invalid', items } });
+    expect(granted.status, JSON.stringify(granted.body)).toBe(201);
+    shareId = granted.body.share.id as string;
+  }
+
+  async function sharedRequest(method: 'GET' | 'HEAD', revisionId: string, cookie: string): Promise<Sent> {
+    const response = await app.request(`/api/shared/${t.userIds.employee}/revisions/${revisionId}/pdf`, {
+      method,
+      headers: { origin: ORIGIN, cookie },
+    });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return { status: response.status, headers: response.headers, bytes, json: null };
+  }
+
+  const downloads = () => count("SELECT count(*) FROM audit_events WHERE operation = 'share.pdf_download'");
+
+  it('records one audit event with the share marker for a GET', async () => {
+    const revisionId = await finalized();
+    await share({ timesheets: 'none', ot_read: false, pdf_download: true });
+    const response = await sharedRequest('GET', revisionId, granteeCookie);
+    expect(response.status).toBe(200);
+    expect(response.bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(downloads()).toBe(1);
+    expect(t.db.prepare("SELECT via_share_id FROM audit_events WHERE operation = 'share.pdf_download'").pluck().get()).toBe(shareId);
+  });
+
+  it('returns the headers for a HEAD and writes no audit event', async () => {
+    const revisionId = await finalized();
+    await share({ timesheets: 'none', ot_read: false, pdf_download: true });
+    const total = count('SELECT count(*) FROM audit_events');
+    const head = await sharedRequest('HEAD', revisionId, granteeCookie);
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-type')).toBe('application/pdf');
+    expect(head.headers.get('cache-control')).toBe('no-store');
+    expect(head.bytes.length).toBe(0);
+    expect(downloads()).toBe(0);
+    expect(count('SELECT count(*) FROM audit_events')).toBe(total);
+    // The GET after it is still audited exactly once.
+    expect((await sharedRequest('GET', revisionId, granteeCookie)).status).toBe(200);
+    expect(downloads()).toBe(1);
+  });
+
+  it('refuses a HEAD without the PDF item, from a stranger and after revocation, and audits none of them', async () => {
+    const revisionId = await finalized();
+    await share({ timesheets: 'view', ot_read: false, pdf_download: false });
+    expect((await sharedRequest('HEAD', revisionId, granteeCookie)).status).toBe(403);
+    expect((await sharedRequest('HEAD', revisionId, admin)).status).toBe(404);
+    const revoked = await t.request('POST', `/api/shares/${shareId}/revoke`, { cookie: employee, body: {} });
+    expect(revoked.status).toBe(200);
+    expect((await sharedRequest('HEAD', revisionId, granteeCookie)).status).toBe(404);
+    expect(downloads()).toBe(0);
   });
 });

@@ -6,6 +6,7 @@ import { migration0003 } from './migrations/0003_day_entry_source.ts';
 import { migration0004 } from './migrations/0004_submission.ts';
 import { migration0005 } from './migrations/0005_automatic_presentation.ts';
 import { migration0006 } from './migrations/0006_timesheet_shares.ts';
+import { migration0007 } from './migrations/0007_audit_access.ts';
 
 export interface Migration {
   version: number;
@@ -21,6 +22,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration0004,
   migration0005,
   migration0006,
+  migration0007,
 ];
 
 export class MigrationError extends Error {

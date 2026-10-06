@@ -1,0 +1,148 @@
+Same files after the change (verbose). Command: node.exe node_modules/vitest/vitest.mjs run --reporter=verbose <the seven files>
+Result: exit 0, 7 files, 136 tests passed. Migration checks (fresh 1 to 7, populated v6 upgrade with identical legacy attribution, integrity_check ok, foreign_key_check empty, rerun applies nothing) are the two 'migration 0007 audit access marker' tests and the extended 0002-0007 upgrade tests.
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 51ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 123ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 130ms
+ ✓ tests/integration/actor-subject.test.ts > the request context carries actor and subject > sets actor = subject = the session user on every personal route 342ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 109ms
+ ✓ tests/integration/history.test.ts > GET /api/history > returns the caller’s audit events newest first with parsed before/after snapshots 414ms
+ ✓ tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > does not attribute a day or session event written outside /api/shared (the marker is NULL after the migration) 503ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 111ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 24ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 1 (initial): its checksum stays pinned 11ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 2 (ot_ledger): its checksum stays pinned 15ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 3 (day_entry_source): its checksum stays pinned 11ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 4 (submission): its checksum stays pinned 10ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > names the grantee and counts the days whose last change was made through the share 608ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 5 (automatic_presentation): its checksum stays pinned 15ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 6 (timesheet_shares): its checksum stays pinned 14ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 7 (audit_access): its checksum stays pinned 16ms
+ ✓ tests/integration/actor-subject.test.ts > the request context carries actor and subject > keeps the production mounts: an anonymous caller is refused and the session user is both principals 296ms
+ ✓ tests/integration/pdf-download.test.ts > owner download of a ready PDF > sends the stored bytes with no-store, an attachment disposition and a sanitized filename 565ms
+ ✓ tests/integration/history.test.ts > GET /api/history > includes the policy and calendar versions of the caller 356ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > registers exactly the matrix routes under /api/shared, each behind its guard 2ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > keeps every self-only /api route unchanged and adds only the reviewed sharing routes 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > covers the 11 valid item sets 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 0 > answers every matrix route by item for timesheets=none ot=false pdf=true 36ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 0 > never reaches the owner-only routes for timesheets=none ot=false pdf=true 9ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 1 > answers every matrix route by item for timesheets=none ot=true pdf=false 20ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 1 > never reaches the owner-only routes for timesheets=none ot=true pdf=false 7ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 2 > answers every matrix route by item for timesheets=none ot=true pdf=true 23ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 2 > never reaches the owner-only routes for timesheets=none ot=true pdf=true 8ms
+ ✓ tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > attributes an event that records the marker, and names the grantee in the history and the Review hint 350ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0007, keeps every WP1 row unchanged and leaves a consistent, usable schema 224ms
+ ✓ tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > writes the subject own rows and attributes the audit event to the actor (api.ts) 254ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false 21ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 3 > never reaches the owner-only routes for timesheets=view ot=false pdf=false 8ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 4 > answers every matrix route by item for timesheets=view ot=false pdf=true 20ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 4 > never reaches the owner-only routes for timesheets=view ot=false pdf=true 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 5 > answers every matrix route by item for timesheets=view ot=true pdf=false 19ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 5 > never reaches the owner-only routes for timesheets=view ot=true pdf=false 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 6 > answers every matrix route by item for timesheets=view ot=true pdf=true 33ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows 199ms
+ ✓ tests/integration/pdf-download.test.ts > owner download of a ready PDF > puts no id, storage key or address into any header 415ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 6 > never reaches the owner-only routes for timesheets=view ot=true pdf=true 3ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 7 > answers every matrix route by item for timesheets=edit ot=false pdf=false 17ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 7 > never reaches the owner-only routes for timesheets=edit ot=false pdf=false 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 8 > answers every matrix route by item for timesheets=edit ot=false pdf=true 28ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 8 > never reaches the owner-only routes for timesheets=edit ot=false pdf=true 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 9 > answers every matrix route by item for timesheets=edit ot=true pdf=false 15ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 9 > never reaches the owner-only routes for timesheets=edit ot=true pdf=false 3ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 10 > answers every matrix route by item for timesheets=edit ot=true pdf=true 31ms
+ ✓ tests/integration/history.test.ts > GET /api/history > never shows another user’s events or versions, admin included 345ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 10 > never reaches the owner-only routes for timesheets=edit ot=true pdf=true 4ms
+ ✓ tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > reads the subject OT balance and records leave under the subject with the actor attributed (ot.ts) 245ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee 581ms
+ ✓ tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > lets the marker win over the operation code: a marked share event of any operation is attributed 385ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 258ms
+ ✓ tests/integration/actor-subject.test.ts > the personal routers take the owner from the subject and the audit from the actor > lists the subject revision status and deliveries, not the actor (submission.ts) 279ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003) 295ms
+ ✓ tests/integration/pdf-download.test.ts > owner download of a ready PDF > writes nothing: no row and no audit event 569ms
+ ✓ tests/integration/audit-access.test.ts > rows written before the migration keep the operation-code inference > attributes a NULL-marker row of a grantee-style operation that predates the migration 450ms
+ ✓ tests/integration/actor-subject.test.ts > commands and audit record actor and subject > records actor_user_id = actor and owner_user_id = subject for single commands 284ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 147ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > is empty when only the owner changed the period, and for a share that changed nothing 620ms
+ ✓ tests/integration/actor-subject.test.ts > commands and audit record actor and subject > WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act 162ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 159ms
+ ✓ tests/integration/pdf-download.test.ts > owner download of a ready PDF > is served only by the route, not as a static file under the private directory 335ms
+ ✓ tests/integration/history.test.ts > GET /api/history > ADV-A-04: the page cursor is a per-user ordinal and reveals nothing about other users’ events 834ms
+ ✓ tests/integration/actor-subject.test.ts > commands and audit record actor and subject > records both ids for a committed day batch and writes nothing for a preview 163ms
+ ✓ tests/integration/audit-access.test.ts > rows written before the migration keep the operation-code inference > stops inferring exactly at the migration instant: a NULL-marker row at or after it is not a share act 336ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 216ms
+ ✓ tests/integration/actor-subject.test.ts > commands and audit record actor and subject > defaults the actor to the owner when a caller passes only the subject 223ms
+ ✓ tests/integration/pdf-download.test.ts > ownership and authentication > answers 404 to another user (an administrator included), exactly like a missing revision 423ms
+ ✓ tests/integration/audit-access.test.ts > the marker is recorded honestly > is migration 0007: a nullable column on the audit table, recorded as applied 442ms
+ ✓ tests/integration/actor-subject.test.ts > no personal router or service reads the session user for ownership > keeps c.get(user) out of the personal routers 219ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts a day once even after several grantee changes, and a later owner change clears that day 675ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0007 with unchanged rows and counts, a consistent schema and safe defaults 337ms
+ ✓ tests/integration/history.test.ts > GET /api/history > ADV-A-04: a cursor from the global sequence selects nothing of another user’s events 702ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > creates STRICT tables whose columns hold no secret, credential or image body 255ms
+ ✓ tests/integration/actor-subject.test.ts > no personal router or service reads the session user for ownership > keeps every service free of request-context reads 212ms
+ ✓ tests/integration/pdf-download.test.ts > ownership and authentication > answers 401 to anonymous and forged-session callers, also for a real revision id 423ms
+ ✓ tests/integration/audit-access.test.ts > the marker is recorded honestly > refuses a marker that names a share the actor does not hold from the event owner 417ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps timesheets.imported_unverified a 0/1 flag defaulting to 0 258ms
+ ✓ tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > reports the configured sender and mode with the process environment unset 335ms
+ ✓ tests/integration/history.test.ts > GET /api/history > does not expose shared-calendar audit events that have no owner 378ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > groups by grantee: each day is attributed to whoever changed it last 618ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > refuses UPDATE and DELETE on every immutable table 244ms
+ ✓ tests/integration/pdf-download.test.ts > ownership and authentication > treats a malformed id and path-like ids as not found 436ms
+ ✓ tests/integration/audit-access.test.ts > the marker is recorded honestly > keeps the audit table append-only after the migration 436ms
+ ✓ tests/integration/history.test.ts > GET /api/history > pages with limit and before, and validates both 358ms
+ ✓ tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > ignores the process environment when a configuration is injected, and never echoes the address 367ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > refuses DELETE on the mutable delivery history and the operations row 314ms
+ ✓ tests/integration/pdf-download.test.ts > a PDF that is not ready > answers 409 pdf_not_ready while the PDF job has not run 408ms
+ ✓ tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > reports an unknown setup when no configuration was provided 316ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > ignores a day outside the reviewed period 677ms
+ ✓ tests/integration/audit-access.test.ts > the marker is recorded honestly > records the marker for every write made through a shared route and for no write made outside it 518ms
+ ✓ tests/integration/actor-subject.test.ts > the admin status reads the injected delivery configuration > keeps process.env out of the operations status service and the admin router 239ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > enforces the unique business keys 318ms
+ ✓ tests/integration/history.test.ts > GET /api/history > names the grantee for events performed under a share and nobody else (WP3-T13B) 536ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > binds every row to one owner through composite foreign keys 212ms
+ ✓ tests/integration/audit-access.test.ts > the marker is recorded honestly > writes the marker through recordAudit only when given, and NULL otherwise 390ms
+ ✓ tests/integration/pdf-download.test.ts > a PDF that is not ready > answers 409 pdf_not_ready after a failed render and 200 once a later run succeeds 494ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > persists every revision ledger outcome, including the R4 pending variants 315ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts only changes since the owner previous finalization of the period 648ms
+ ✓ tests/integration/history.test.ts > GET /api/history > WP3-C-02: a grantee leaving the share is not an act under it and stays unattributed 506ms
+ ✓ tests/integration/pdf-download.test.ts > integrity of the stored file > never sends bytes that no longer match the recorded hash 436ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps revisions, sign-offs and their links consistent 249ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > constrains attachments, revision files and the auto-image authorization 281ms
+ ✓ tests/integration/history.test.ts > GET /api/history > WP3-C-02: an administrator who also holds a share keeps an admin-route revocation as an admin act 562ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > keeps job identity fixed, leases explicit and closed jobs closed 229ms
+ ✓ tests/integration/pdf-download.test.ts > shared PDF download audit > records one audit event with the share marker for a GET 615ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > lists a grantee change made before the period started when the owner has not finalized it (WP3-RBC-02) 850ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > moves delivery attempts only forward and records an uncertain decision once 236ms
+ ✓ tests/integration/history.test.ts > GET /api/history > WP3-C-02: an act in the same second as a later grant to its actor is not attributed retroactively 479ms
+ ✓ tests/integration/migrations.test.ts > migration 0004 submission schema > holds exactly one operations row with automation inactive by default 212ms
+ ✓ tests/integration/pdf-download.test.ts > shared PDF download audit > returns the headers for a HEAD and writes no audit event 541ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > adds the note flag (off) and the note text ("Automatic submission") with safe defaults 168ms
+ ✓ tests/integration/history.test.ts > GET /api/history > WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is 437ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > constrains the flag to 0/1 and the text to 1-120 characters on one line 176ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > counts a change made before the period started only until the owner finalizes the period (WP3-RBC-02) 701ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > keeps settings versions immutable with the new columns 167ms
+ ✓ tests/integration/pdf-download.test.ts > shared PDF download audit > refuses a HEAD without the PDF item, from a stranger and after revocation, and audits none of them 516ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live 208ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > creates one STRICT table with the item columns, the one-active index and the immutability triggers 28ms
+ ✓ tests/integration/history.test.ts > GET /api/history > WP3-RBC-01: every event without an actor is a system event, whatever its operation (the automatic OT credit and debit) 623ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > still lists a change after the share was revoked: the hint comes from the audit, not from the live share 572ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > accepts every valid item set and refuses an empty, self, foreign-created or malformed share 285ms
+ ✓ tests/integration/history.test.ts > GET /api/history > is read-only, immutable and requires a session 306ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > keeps at most one active share per owner and grantee; revoked rows stay as history 264ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > does not count an administrator revocation of a share as a change to a day 529ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > refuses DELETE, any change of identity or items, and a second revocation 252ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 258ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the hint is owner-only and outside the snapshot (WP3-C-01) > never reaches a grantee, a shared view or an administrator response 513ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical 262ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers 29ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the hint is owner-only and outside the snapshot (WP3-C-01) > keeps the hint out of the payload and the hash: the same payload is signed whether or not it is shown 489ms
+ ✓ tests/integration/review-grantee-changes.test.ts > the hint is owner-only and outside the snapshot (WP3-C-01) > writes nothing: reading the Review adds no row and no audit event 472ms
+
+ Test Files  7 passed (7)
+      Tests  136 passed (136)
+   Start at  17:18:46
+   Duration  9.62s (tests 85%, import 10%, transform 5%)
+

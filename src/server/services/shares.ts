@@ -374,12 +374,15 @@ export interface SharedPdfDownload {
 
 /**
  * Records one grantee download of the owner's final PDF, after re-checking the PDF item inside the
- * same IMMEDIATE transaction; a refusal throws before anything is written or sent.
+ * same IMMEDIATE transaction; a refusal throws before anything is written or sent. The event records
+ * the share the download was made under (`via_share_id`). Only a GET is a download: a HEAD on the
+ * route is answered without calling this (routes/shares.ts).
  */
 export function recordSharedPdfDownload(db: Db, clock: Clock, input: SharedPdfDownload): void {
   writeTransaction(db, () => {
-    requireShareAccess(db, input.ownerUserId, input.granteeUserId, 'pdf_download');
+    const share = requireShareAccess(db, input.ownerUserId, input.granteeUserId, 'pdf_download');
     recordAudit(db, clock, {
+      viaShareId: share.id,
       actorUserId: input.granteeUserId,
       ownerUserId: input.ownerUserId,
       operation: 'share.pdf_download',

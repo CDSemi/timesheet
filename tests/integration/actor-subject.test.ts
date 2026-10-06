@@ -12,7 +12,9 @@ import { requireUser } from '../../src/server/http/auth.ts';
 import { apiRoutes } from '../../src/server/routes/api.ts';
 import { otRoutes } from '../../src/server/routes/ot.ts';
 import { submissionRoutes } from '../../src/server/routes/submission.ts';
+import { getHistory } from '../../src/server/services/history.ts';
 import { postCredit } from '../../src/server/services/ledger.ts';
+import { granteeChangesForReview } from '../../src/server/services/sharedActs.ts';
 import { commitDayBatch, previewDayBatch } from '../../src/server/services/dayEntries.ts';
 import { clockIn, createSession, upsertDayEntry } from '../../src/server/services/timesheetCommands.ts';
 import type { AppDeps, AppEnv, DeliveryConfig } from '../../src/server/types.ts';
@@ -241,6 +243,24 @@ describe('commands and audit record actor and subject', () => {
     expect(created.session.id).toBeTruthy();
     // Every row the commands wrote belongs to the subject.
     expect(t.db.prepare('SELECT count(*) FROM work_sessions WHERE user_id = ?').pluck().get(t.userIds.admin)).toBe(0);
+  });
+
+  it('WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act', () => {
+    // The migration is pinned before every audit row here, so only the recorded marker can attribute an act.
+    t.db.prepare("UPDATE schema_migrations SET applied_at = '2026-09-01T00:00:00Z' WHERE version = 7").run();
+    const ctx = { db: t.db, clock: t.clock, user: employee(), actor: admin() };
+    createSession(ctx, '2026-09-21', sessionBody('2026-09-21'));
+    upsertDayEntry(ctx, '2026-09-22', dayBody('Vacation'));
+    const rows = t.db
+      .prepare('SELECT id, actor_user_id, via_share_id FROM audit_events WHERE rowid > ? ORDER BY rowid')
+      .all(seededAuditRows) as Array<{ id: string; actor_user_id: string; via_share_id: string | null }>;
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    for (const row of rows) expect(row, row.id).toMatchObject({ actor_user_id: t.userIds.admin, via_share_id: null });
+    const history = getHistory(t.db, { id: t.userIds.employee, calendarId: t.calendarId }, {});
+    for (const row of rows) {
+      expect(history.audit_events.find((event) => event.id === row.id), row.id).toMatchObject({ via_share: false, actor_display_name: null });
+    }
+    expect(granteeChangesForReview(t.db, { id: t.userIds.employee, calendarId: t.calendarId }, '2026-10-02')).toEqual([]);
   });
 
   it('records both ids for a committed day batch and writes nothing for a preview', () => {

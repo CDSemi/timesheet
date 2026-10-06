@@ -14,9 +14,10 @@ import { sharedActCondition } from './sharedActs.ts';
  * (WP3-RBC-01), with one exception (FR-17, WP3-T13B, WP3-C-02): an event performed through
  * /api/shared under a grant shows the grantee's display name (`via_share`,
  * `actor_display_name`). Whether an event was performed through a grant comes from the event itself
- * (its actor and operation, see `sharedActCondition`), never from the time window in which a share
- * existed: an administrator who also holds a share, an act in the same second as a later grant and a
- * grantee leaving a share all stay unattributed.
+ * (the recorded `via_share_id` marker; for an event written before migration 0007 its actor and
+ * operation, see `sharedActCondition`), never from the time window in which a share existed: an
+ * administrator who also holds a share, an act in the same second as a later grant and a grantee
+ * leaving a share all stay unattributed.
  */
 
 export const DEFAULT_HISTORY_LIMIT = 200;

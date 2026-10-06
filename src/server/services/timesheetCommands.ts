@@ -58,6 +58,8 @@ export interface CommandContext {
   user: SessionUser;
   /** Who performs the command (`actor_user_id` in the audit); absent means the owner acts. */
   actor?: SessionUser;
+  /** The share the actor acts under (`via_share_id` in the audit): set by the /api/shared mount only, absent otherwise. */
+  viaShareId?: string;
 }
 
 /** Manual entries may not describe future work; a small allowance covers clock skew. */
@@ -132,6 +134,7 @@ function audit(
     reason: edit.reason,
     before,
     after,
+    viaShareId: ctx.viaShareId ?? null,
   });
 }
 

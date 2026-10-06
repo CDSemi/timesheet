@@ -118,3 +118,8 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Attempt 1: pre-HEAD 3bdffbe; commit a1dc01b98f3c8be7478384adf73d9c194bf9a105; pushed yes;
+remote SHA a1dc01b98f3c8be7478384adf73d9c194bf9a105; digest matched; staged 50;
+.env.example scan clean (placeholders only); all checks exit 0 (Node v24.21.0); no
+blockers. Evidence: handoff/delivery/evidence/WP4-T01-FREEZE/commit-evidence.txt.

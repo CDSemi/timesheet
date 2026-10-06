@@ -1,0 +1,508 @@
+Red-first run at baseline source (a1dc01b with only the unused, unregistered 0007 file present; new and extended tests, synthetic data).
+Command: node.exe node_modules/vitest/vitest.mjs run tests/integration/{audit-access,actor-subject,history,review-grantee-changes,pdf-download,sharing-matrix,migrations}.test.ts
+Result: exit 1, 23 failed | 113 passed (136). Failures are the new marker, attribution, HEAD and migration expectations.
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/actor-subject.test.ts (15 tests | 1 failed) 3957ms
+   ❯ commands and audit record actor and subject (4)
+     × WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act 171ms
+ ❯ tests/integration/audit-access.test.ts (10 tests | 10 failed) 4399ms
+   ❯ an act by someone other than the owner is not a share act unless it records the marker (3)
+     × does not attribute a day or session event written outside /api/shared (the marker is NULL after the migration) 428ms
+     × attributes an event that records the marker, and names the grantee in the history and the Review hint 377ms
+     × lets the marker win over the operation code: a marked share event of any operation is attributed 438ms
+   ❯ rows written before the migration keep the operation-code inference (2)
+     × attributes a NULL-marker row of a grantee-style operation that predates the migration 454ms
+     × stops inferring exactly at the migration instant: a NULL-marker row at or after it is not a share act 402ms
+   ❯ the marker is recorded honestly (5)
+     × is migration 0007: a nullable column on the audit table, recorded as applied 420ms
+     × refuses a marker that names a share the actor does not hold from the event owner 395ms
+     × keeps the audit table append-only after the migration 492ms
+     × records the marker for every write made through a shared route and for no write made outside it 572ms
+     × writes the marker through recordAudit only when given, and NULL otherwise 420ms
+ ❯ tests/integration/pdf-download.test.ts (13 tests | 2 failed) 6618ms
+   ❯ shared PDF download audit (3)
+     × records one audit event with the share marker for a GET 578ms
+     × returns the headers for a HEAD and writes no audit event 599ms
+ ❯ tests/integration/history.test.ts (14 tests | 1 failed) 7186ms
+   ❯ GET /api/history (14)
+     × WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is 546ms
+ ❯ tests/integration/migrations.test.ts (44 tests | 8 failed) 8332ms
+   ❯ fresh SQLite migrations (6)
+     × applies every migration to an empty file database with the required pragmas 32ms
+   ❯ committed migrations (7)
+     × never edits migration 7 (audit_access): its checksum stays pinned 10ms
+   ❯ upgrade from a populated WP1 (version 1) database (2)
+     × applies 0002-0007, keeps every WP1 row unchanged and leaves a consistent, usable schema 206ms
+     × also upgrades a version 2 database that already holds WP2 ledger rows 206ms
+   ❯ upgrade from a populated version 3 database (accepted WP2 source 5fafeae) (1)
+     × applies 0004-0007 with unchanged rows and counts, a consistent schema and safe defaults 321ms
+   ❯ migration 0006 timesheet shares (5)
+     × upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 269ms
+   ❯ migration 0007 audit access marker (2)
+     × upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical 284ms
+     × adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers 42ms
+ ❯ tests/integration/review-grantee-changes.test.ts (14 tests | 1 failed) 9404ms
+   ❯ the owner Review lists the days a grantee changed last (WP3-C-01) (11)
+     × WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee 722ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 23 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/actor-subject.test.ts > commands and audit record actor and subject > WP4-T02: an actor other than the owner outside /api/shared leaves the share marker NULL and is not a share act
+SqliteError: no such column: via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/actor-subject.test.ts:255:8
+    253|     upsertDayEntry(ctx, '2026-09-22', dayBody('Vacation'));
+    254|     const rows = t.db
+    255|       .prepare('SELECT id, actor_user_id, via_share_id FROM audit_even…
+       |        ^
+    256|       .all(seededAuditRows) as Array<{ id: string; actor_user_id: stri…
+    257|     expect(rows.length).toBeGreaterThanOrEqual(3);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > does not attribute a day or session event written outside /api/shared (the marker is NULL after the migration)
+AssertionError: day_entry.create: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/audit-access.test.ts:88:59
+     86|     for (const operation of ['day_entry.create', 'day_entry.update', '…
+     87|       insertEvent({ id: `plain-${operation}`, occurredAt: AFTER, actor…
+     88|       expect(viaShareOf(`plain-${operation}`), operation).toBe(false);
+       |                                                           ^
+     89|     }
+     90|     expect(granteeChangesForReview(t.db, owner(), PAYROLL)).toEqual([]…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > attributes an event that records the marker, and names the grantee in the history and the Review hint
+SqliteError: table audit_events has no column named via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insertEvent tests/integration/audit-access.test.ts:60:6
+     58|   const marked = options.viaShareId !== undefined && options.viaShareI…
+     59|   t.db
+     60|     .prepare(
+       |      ^
+     61|       `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner…
+     62|        VALUES (?, ?, ?, ?, ?, 'day_entry', ?, NULL, NULL, ?${marked ? …
+ ❯ tests/integration/audit-access.test.ts:94:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > an act by someone other than the owner is not a share act unless it records the marker > lets the marker win over the operation code: a marked share event of any operation is attributed
+SqliteError: table audit_events has no column named via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insertEvent tests/integration/audit-access.test.ts:60:6
+     58|   const marked = options.viaShareId !== undefined && options.viaShareI…
+     59|   t.db
+     60|     .prepare(
+       |      ^
+     61|       `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner…
+     62|        VALUES (?, ?, ?, ?, ?, 'day_entry', ?, NULL, NULL, ?${marked ? …
+ ❯ tests/integration/audit-access.test.ts:101:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > rows written before the migration keep the operation-code inference > attributes a NULL-marker row of a grantee-style operation that predates the migration
+AssertionError: expected [] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "days": 1,
+-     "display_name": "Synthetic Grantee",
+-     "work_dates": [
+-       "2026-09-22",
+-     ],
+-   },
+- ]
++ []
+
+ ❯ tests/integration/audit-access.test.ts:116:61
+    114|     expect(viaShareOf('legacy-owner')).toBe(false);
+    115|     expect(viaShareOf('legacy-system')).toBe(false);
+    116|     expect(granteeChangesForReview(t.db, owner(), PAYROLL)).toEqual([{…
+       |                                                             ^
+    117|   });
+    118|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > rows written before the migration keep the operation-code inference > stops inferring exactly at the migration instant: a NULL-marker row at or after it is not a share act
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/audit-access.test.ts:122:40
+    120|     insertEvent({ id: 'at-migration', occurredAt: MIGRATED_AT, actor: …
+    121|     insertEvent({ id: 'after-migration', occurredAt: AFTER, actor: gra…
+    122|     expect(viaShareOf('at-migration')).toBe(false);
+       |                                        ^
+    123|     expect(viaShareOf('after-migration')).toBe(false);
+    124|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > the marker is recorded honestly > is migration 0007: a nullable column on the audit table, recorded as applied
+AssertionError: expected undefined to be 'audit_access' // Object.is equality
+
+- Expected:
+"audit_access"
+
++ Received:
+undefined
+
+ ❯ tests/integration/audit-access.test.ts:129:96
+    127| describe('the marker is recorded honestly', () => {
+    128|   it('is migration 0007: a nullable column on the audit table, recorde…
+    129|     expect(t.db.prepare('SELECT name FROM schema_migrations WHERE vers…
+       |                                                                                                ^
+    130|     const column = t.db.prepare("SELECT type, \"notnull\" AS required …
+    131|     expect(column).toEqual({ type: 'TEXT', required: 0 });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > the marker is recorded honestly > refuses a marker that names a share the actor does not hold from the event owner
+AssertionError: expected [Function] to throw error matching /audit_via_share_mismatch/ but got 'table audit_events has no column name…'
+
+- Expected:
+/audit_via_share_mismatch/
+
++ Received:
+"table audit_events has no column named via_share_id"
+
+ ❯ tests/integration/audit-access.test.ts:136:139
+    134|   it('refuses a marker that names a share the actor does not hold from…
+    135|     const other = t.userIds.admin;
+    136|     expect(() => insertEvent({ id: 'wrong-actor', occurredAt: AFTER, a…
+       |                                                                                                                                           ^
+    137|       /audit_via_share_mismatch/,
+    138|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > the marker is recorded honestly > keeps the audit table append-only after the migration
+SqliteError: table audit_events has no column named via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ insertEvent tests/integration/audit-access.test.ts:60:6
+     58|   const marked = options.viaShareId !== undefined && options.viaShareI…
+     59|   t.db
+     60|     .prepare(
+       |      ^
+     61|       `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner…
+     62|        VALUES (?, ?, ?, ?, ?, 'day_entry', ?, NULL, NULL, ?${marked ? …
+ ❯ tests/integration/audit-access.test.ts:149:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > the marker is recorded honestly > records the marker for every write made through a shared route and for no write made outside it
+SqliteError: no such column: via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/audit-access.test.ts:166:8
+    164|     expect(ownerSession.status, JSON.stringify(ownerSession.body)).toB…
+    165|     const rows = t.db
+    166|       .prepare("SELECT actor_user_id, via_share_id FROM audit_events W…
+       |        ^
+    167|       .all(t.userIds.employee) as Array<{ actor_user_id: string; via_s…
+    168|     expect(rows.length).toBe(4);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/23]⎯
+
+ FAIL  tests/integration/audit-access.test.ts > the marker is recorded honestly > writes the marker through recordAudit only when given, and NULL otherwise
+SqliteError: no such column: via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/audit-access.test.ts:177:17
+    175|     recordAudit(t.db, t.clock, { actorUserId: granteeId, ownerUserId: …
+    176|     recordAudit(t.db, t.clock, { actorUserId: granteeId, ownerUserId: …
+    177|     expect(t.db.prepare("SELECT via_share_id FROM audit_events WHERE e…
+       |                 ^
+    178|   });
+    179| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/23]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is
+SqliteError: no such column: via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/history.test.ts:369:8
+    367|     // A new shared write route must be added to this test (and to the…
+    368|     const marked = t.db
+    369|       .prepare('SELECT id, operation, via_share_id FROM audit_events W…
+       |        ^
+    370|       .all(t.userIds.employee) as Array<{ id: string; operation: strin…
+    371|     const writtenIds = new Set(written.map((event) => event.id as stri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas
+AssertionError: expected 6 to be 7 // Object.is equality
+
+- Expected
++ Received
+
+- 7
++ 6
+
+ ❯ tests/integration/migrations.test.ts:94:20
+     92| describe('fresh SQLite migrations', () => {
+     93|   it('applies every migration to an empty file database with the requi…
+     94|     expect(LATEST).toBe(7);
+       |                    ^
+     95|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATE…
+     96|     const tables = db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > committed migrations > never edits migration 7 (audit_access): its checksum stays pinned
+Error: migration 7 missing
+ ❯ tests/integration/migrations.test.ts:182:40
+    180|   ])('never edits migration %i (%s): its checksum stays pinned', (vers…
+    181|     const migration = MIGRATIONS.find((item) => item.version === versi…
+    182|     if (migration === undefined) throw new Error(`migration ${version}…
+       |                                        ^
+    183|     expect(migration.name).toBe(name);
+    184|     expect(migrationChecksum(migration)).toBe(checksum);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0007, keeps every WP1 row unchanged and leaves a consistent, usable schema
+AssertionError: expected { applied: [ 2, 3, 4, 5, 6 ], …(1) } to deeply equal { applied: [ 2, 3, 4, 5, 6, 7 ], …(1) }
+
+- Expected
++ Received
+
+@@ -3,9 +3,8 @@
+      2,
+      3,
+      4,
+      5,
+      6,
+-     7,
+    ],
+-   "version": 7,
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:244:71
+    242|     }
+    243|
+    244|     expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).…
+       |                                                                       ^
+    245|
+    246|     const after = snapshot(db);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows
+AssertionError: expected { applied: [ 3, 4, 5, 6 ], version: 6 } to deeply equal { applied: [ 3, 4, 5, 6, 7 ], …(1) }
+
+- Expected
++ Received
+
+@@ -2,9 +2,8 @@
+    "applied": [
+      3,
+      4,
+      5,
+      6,
+-     7,
+    ],
+-   "version": 7,
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:290:37
+    288|       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, wo…
+    289|     );
+    290|     expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7]…
+       |                                     ^
+    291|     expect(getBalance(db, employee).postedMinutes).toBe(45);
+    292|     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0007 with unchanged rows and counts, a consistent schema and safe defaults
+AssertionError: expected { applied: [ 4, 5, 6 ], version: 6 } to deeply equal { applied: [ 4, 5, 6, 7 ], version: 7 }
+
+- Expected
++ Received
+
+  {
+    "applied": [
+      4,
+      5,
+      6,
+-     7,
+    ],
+-   "version": 7,
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:479:71
+    477|     const balances = seed.users.map((user) => getBalance(db, user.id));
+    478|
+    479|     expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).…
+       |                                                                       ^
+    480|
+    481|     expect(snapshotV3(db)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live
+AssertionError: expected { applied: [], version: 6 } to deeply equal { applied: [ 7 ], version: 7 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     7,
+-   ],
+-   "version": 7,
++   "applied": [],
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1500:71
+    1498|     expectSqliteError(() => insert(db, 'timesheet_shares', share('sh-v…
+    1499|     expectSqliteError(() => db.prepare('DELETE FROM timesheet_shares')…
+    1500|     expect(migrate(db, MIGRATIONS, new Date('2026-10-07T18:00:00Z'))).…
+       |                                                                       ^
+    1501|   });
+    1502| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0007 audit access marker > upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical
+AssertionError: expected { applied: [], version: 6 } to deeply equal { applied: [ 7 ], version: 7 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     7,
+-   ],
+-   "version": 7,
++   "applied": [],
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1615:47
+    1613|     expect(hintBefore.length).toBeGreaterThan(0);
+    1614|
+    1615|     expect(migrate(db, MIGRATIONS, MIGRATED)).toEqual({ applied: [7], …
+       |                                               ^
+    1616|
+    1617|     // Stored rows are untouched; the new column reads NULL for every …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/23]⎯
+
+ FAIL  tests/integration/migrations.test.ts > migration 0007 audit access marker > adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers
+AssertionError: expected { applied: [ 1, 2, 3, 4, 5, 6 ], …(1) } to deeply equal { applied: [ 1, 2, 3, 4, 5, 6 ], …(1) }
+
+- Expected
++ Received
+
+@@ -5,7 +5,7 @@
+      3,
+      4,
+      5,
+      6,
+    ],
+-   "version": 7,
++   "version": 6,
+  }
+
+ ❯ tests/integration/migrations.test.ts:1660:25
+    1658|
+    1659|   it('adds one nullable column to a fresh 1 to 7 database and keeps bo…
+    1660|     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: 7 });
+       |                         ^
+    1661|     expect(db.prepare("SELECT type, \"notnull\" AS required FROM pragm…
+    1662|       type: 'TEXT',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/23]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > shared PDF download audit > records one audit event with the share marker for a GET
+SqliteError: no such column: via_share_id
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/pdf-download.test.ts:269:17
+    267|     expect(response.bytes.subarray(0, 5).toString('latin1')).toBe('%PD…
+    268|     expect(downloads()).toBe(1);
+    269|     expect(t.db.prepare("SELECT via_share_id FROM audit_events WHERE o…
+       |                 ^
+    270|   });
+    271|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/23]⎯
+
+ FAIL  tests/integration/pdf-download.test.ts > shared PDF download audit > returns the headers for a HEAD and writes no audit event
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/integration/pdf-download.test.ts:281:25
+    279|     expect(head.headers.get('cache-control')).toBe('no-store');
+    280|     expect(head.bytes.length).toBe(0);
+    281|     expect(downloads()).toBe(0);
+       |                         ^
+    282|     expect(count('SELECT count(*) FROM audit_events')).toBe(total);
+    283|     // The GET after it is still audited exactly once.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/23]⎯
+
+ FAIL  tests/integration/review-grantee-changes.test.ts > the owner Review lists the days a grantee changed last (WP3-C-01) > WP4-T02: lists a day by the recorded marker, not by an actor and operation that merely look like a grantee
+AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+@@ -4,6 +4,13 @@
+      "display_name": "Synthetic Grantee",
+      "work_dates": [
+        "2026-09-22",
+      ],
+    },
++   {
++     "days": 1,
++     "display_name": "Synthetic Second Grantee",
++     "work_dates": [
++       "2026-09-23",
++     ],
++   },
+  ]
+
+ ❯ tests/integration/review-grantee-changes.test.ts:162:46
+    160|       after: { work_date: DAY_B },
+    161|     });
+    162|     expect((await review()).grantee_changes).toEqual([{ display_name: …
+       |                                              ^
+    163|   });
+    164|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/23]⎯
+
+
+ Test Files  6 failed | 1 passed (7)
+      Tests  23 failed | 113 passed (136)
+   Start at  17:10:41
+   Duration  10.54s (tests 85%, import 10%, transform 5%)
+

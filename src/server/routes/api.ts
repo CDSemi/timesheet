@@ -56,12 +56,16 @@ const MAX_PERIOD_RANGE_DAYS = 400;
 export function apiRoutes(deps: AppDeps, options: PersonalRouterOptions = {}) {
   const app = new Hono<AppEnv>();
   const auth = options.access ?? requireUser(deps);
-  const command = (c: Context<AppEnv>): CommandContext => ({
-    db: deps.db,
-    clock: deps.clock,
-    user: c.get('subject'),
-    actor: c.get('actor'),
-  });
+  const command = (c: Context<AppEnv>): CommandContext => {
+    const viaShareId = c.get('viaShareId');
+    return {
+      db: deps.db,
+      clock: deps.clock,
+      user: c.get('subject'),
+      actor: c.get('actor'),
+      ...(viaShareId === undefined ? {} : { viaShareId }),
+    };
+  };
 
   app.get('/calendar', auth, (c) => {
     const scope = loadScope(deps.db, c.get('subject'));

@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type Db, openDatabase } from '../../src/server/db/database.ts';
 import { MIGRATIONS, migrate, MigrationError, migrationChecksum } from '../../src/server/db/migrations.ts';
 import { seedSynthetic } from '../../src/server/seed.ts';
+import { getHistory } from '../../src/server/services/history.ts';
 import { getBalance, postCredit } from '../../src/server/services/ledger.ts';
+import { granteeChangesForReview } from '../../src/server/services/sharedActs.ts';
 import { MutableClock } from '../support/testApp.ts';
 
 const EXPECTED_TABLES = [
@@ -63,6 +65,9 @@ const V3_TABLES = [
 /** Columns of timesheets before migration 0004 adds imported_unverified. */
 const V3_TIMESHEET_COLUMNS = 'id, user_id, pay_period_id, version, finalized_revision_no, created_at, updated_at';
 
+/** Columns of audit_events before migration 0007 adds via_share_id. */
+const V6_AUDIT_COLUMNS = 'id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json';
+
 /** Latest schema version; every migration is applied in order from 1. */
 const LATEST = MIGRATIONS.length;
 const ALL_VERSIONS = MIGRATIONS.map((migration) => migration.version);
@@ -86,7 +91,7 @@ function expectSqliteError(action: () => unknown, pattern: RegExp): void {
 
 describe('fresh SQLite migrations', () => {
   it('applies every migration to an empty file database with the required pragmas', () => {
-    expect(LATEST).toBe(6);
+    expect(LATEST).toBe(7);
     expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: LATEST });
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -114,6 +119,7 @@ describe('fresh SQLite migrations', () => {
       'submission',
       'automatic_presentation',
       'timesheet_shares',
+      'audit_access',
     ]);
     const strictTables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%) STRICT' ORDER BY name")
@@ -169,6 +175,8 @@ describe('committed migrations', () => {
     [3, 'day_entry_source', '773cbb3dd33936b276353f12296cf679729188bd2bebd4b8c8f34e10c0bace06'],
     [4, 'submission', '73563328032f2d909d16f572130dca14f42804b661fd463daca474c45486457c'],
     [5, 'automatic_presentation', 'e21e195ffc60d71b89a6f032bbf3dca62fb873f1919d934fe0b63b873ebfa14d'],
+    [6, 'timesheet_shares', '0a18bceb3d7e3ab05b89c7eed9ef5fe47eba140de9b0d10f30683ecbed5fa261'],
+    [7, 'audit_access', '3a3ba17476499ca3ed4e471695aa503ae8c0672a308861067c57996b491a8cc9'],
   ])('never edits migration %i (%s): its checksum stays pinned', (version, name, checksum) => {
     const migration = MIGRATIONS.find((item) => item.version === version);
     if (migration === undefined) throw new Error(`migration ${version} missing`);
@@ -188,17 +196,17 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
     return Object.fromEntries(
       WP1_TABLES.map((name) => [
         name,
-        // 0003 adds columns to day_entries and 0004 to timesheets; the WP1 columns are compared by name.
+        // 0003 adds columns to day_entries, 0004 to timesheets and 0007 to audit_events; the WP1 columns are compared by name.
         target
           .prepare(
-            `SELECT ${name === 'day_entries' ? WP1_DAY_ENTRY_COLUMNS : name === 'timesheets' ? V3_TIMESHEET_COLUMNS : '*'} FROM ${name} ORDER BY rowid`,
+            `SELECT ${name === 'day_entries' ? WP1_DAY_ENTRY_COLUMNS : name === 'timesheets' ? V3_TIMESHEET_COLUMNS : name === 'audit_events' ? V6_AUDIT_COLUMNS : '*'} FROM ${name} ORDER BY rowid`,
           )
           .all(),
       ]),
     );
   }
 
-  it('applies 0002-0006, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
+  it('applies 0002-0007, keeps every WP1 row unchanged and leaves a consistent, usable schema', async () => {
     const wp1 = MIGRATIONS.filter((migration) => migration.version === 1);
     expect(migrate(db, wp1)).toEqual({ applied: [1], version: 1 });
     const seed = await seedSynthetic(db, new MutableClock(AT), {
@@ -233,7 +241,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect(before[name]?.length, name).toBeGreaterThan(0);
     }
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6], version: 6 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-02T18:00:00Z'))).toEqual({ applied: [2, 3, 4, 5, 6, 7], version: 7 });
 
     const after = snapshot(db);
     // schema_migrations gains exactly one row; WP1 rows (including migration 1's record) are unchanged.
@@ -244,13 +252,14 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       expect.objectContaining({ version: 4, name: 'submission', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 5, name: 'automatic_presentation', applied_at: '2026-10-02T18:00:00Z' }),
       expect.objectContaining({ version: 6, name: 'timesheet_shares', applied_at: '2026-10-02T18:00:00Z' }),
+      expect.objectContaining({ version: 7, name: 'audit_access', applied_at: '2026-10-02T18:00:00Z' }),
     ]);
     expect({ ...after, schema_migrations: [] }).toEqual({ ...before, schema_migrations: [] });
     // WP1 rows are conservatively explicit (an employee may have chosen the label) and carry no leave kind.
     expect(db.prepare('SELECT id, leave_minutes, category_source, leave_kind FROM day_entries').all()).toEqual([
       { id: 'd1', leave_minutes: 120, category_source: 'explicit', leave_kind: null },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    expect(db.pragma('user_version', { simple: true })).toBe(7);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.prepare('SELECT count(*) FROM ot_ledger').pluck().get()).toBe(0);
@@ -262,7 +271,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { userId: employee, sourceKey: 'upgrade-check', minutes: 30, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
     expect(getBalance(db, employee).postedMinutes).toBe(30);
-    expect(migrate(db)).toEqual({ applied: [], version: 6 });
+    expect(migrate(db)).toEqual({ applied: [], version: 7 });
     // The upgraded row stays editable: leave minutes now need a kind, and the row stays usable by work sessions.
     db.prepare("UPDATE day_entries SET leave_kind = 'ot', version = version + 1 WHERE id = 'd1'").run();
     expect(db.prepare("SELECT s.id FROM work_sessions s JOIN day_entries d ON d.user_id = s.user_id AND d.work_date = s.work_date WHERE d.id = 'd1'").pluck().all()).toEqual(['s1']);
@@ -279,7 +288,7 @@ describe('upgrade from a populated WP1 (version 1) database', () => {
       { db, clock: new MutableClock(AT) },
       { userId: employee, sourceKey: 'before-upgrade', minutes: 45, workDate: '2026-09-21', actorUserId: employee, origin: 'manual' },
     );
-    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6], version: 6 });
+    expect(migrate(db, MIGRATIONS)).toEqual({ applied: [3, 4, 5, 6, 7], version: 7 });
     expect(getBalance(db, employee).postedMinutes).toBe(45);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
   });
@@ -443,12 +452,12 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     return Object.fromEntries(
       V3_TABLES.filter((name) => name !== 'schema_migrations').map((name) => [
         name,
-        target.prepare(`SELECT ${name === 'timesheets' ? V3_TIMESHEET_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
+        target.prepare(`SELECT ${name === 'timesheets' ? V3_TIMESHEET_COLUMNS : name === 'audit_events' ? V6_AUDIT_COLUMNS : '*'} FROM ${name} ORDER BY rowid`).all(),
       ]),
     );
   }
 
-  it('applies 0004-0006 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
+  it('applies 0004-0007 with unchanged rows and counts, a consistent schema and safe defaults', async () => {
     // 0001-0003 are byte-identical to 5fafeae (checksums pinned above), so this builds the same schema.
     const v3 = MIGRATIONS.filter((migration) => migration.version <= 3);
     expect(migrate(db, v3)).toEqual({ applied: [1, 2, 3], version: 3 });
@@ -468,13 +477,13 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     }
     const balances = seed.users.map((user) => getBalance(db, user.id));
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6], version: 6 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-04T18:00:00Z'))).toEqual({ applied: [4, 5, 6, 7], version: 7 });
 
     expect(snapshotV3(db)).toEqual(before);
     expect(seed.users.map((user) => getBalance(db, user.id))).toEqual(balances);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    expect(db.pragma('user_version', { simple: true })).toBe(7);
     // Existing timesheets are not imported history; automation stays inactive until the owner records it.
     expect(db.prepare('SELECT DISTINCT imported_unverified FROM timesheets').pluck().all()).toEqual([0]);
     expect(db.prepare('SELECT * FROM operations_state').all()).toEqual([
@@ -490,7 +499,7 @@ describe('upgrade from a populated version 3 database (accepted WP2 source 5fafe
     for (const name of EXPECTED_TABLES.filter((table) => !V3_TABLES.includes(table) && table !== 'operations_state')) {
       expect(db.prepare(`SELECT count(*) FROM ${name}`).pluck().get(), name).toBe(0);
     }
-    expect(migrate(db)).toEqual({ applied: [], version: 6 });
+    expect(migrate(db)).toEqual({ applied: [], version: 7 });
   });
 });
 
@@ -1448,7 +1457,7 @@ describe('migration 0006 timesheet shares', () => {
     const recorded = db.prepare('SELECT * FROM schema_migrations ORDER BY version').all();
     const balance = getBalance(db, ids.owner);
 
-    expect(migrate(db, MIGRATIONS, new Date('2026-10-06T18:00:00Z'))).toEqual({ applied: [6], version: 6 });
+    expect(migrate(db, MIGRATIONS.filter((migration) => migration.version <= 6), new Date('2026-10-06T18:00:00Z'))).toEqual({ applied: [6], version: 6 });
 
     expect(rowsOf()).toEqual(before);
     expect(getBalance(db, ids.owner)).toEqual(balance);
@@ -1489,6 +1498,179 @@ describe('migration 0006 timesheet shares', () => {
     insert(db, 'timesheet_shares', share('sh-v6', ids.owner, ids.grantee, { pdf_download: 1 }));
     expectSqliteError(() => insert(db, 'timesheet_shares', share('sh-v6b', ids.owner, ids.grantee)), /UNIQUE constraint failed/);
     expectSqliteError(() => db.prepare('DELETE FROM timesheet_shares').run(), SHARE_ERROR);
-    expect(migrate(db)).toEqual({ applied: [], version: 6 });
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-07T18:00:00Z'))).toEqual({ applied: [7], version: 7 });
+  });
+});
+
+/*
+ * WP4-T02 migration 0007 (FR-14, FR-17, AC-16): the recorded "through a share" marker. The column is added with
+ * ALTER TABLE ADD COLUMN, so no stored audit row is rewritten and the append-only triggers stay; rows written before
+ * the migration keep the operation-code attribution of the earlier releases, so the owner's History and Review hint
+ * read the same for existing data.
+ */
+describe('migration 0007 audit access marker', () => {
+  const AT = '2026-10-04T10:00:00Z';
+  const MIGRATED = new Date('2026-10-06T00:00:00Z');
+  const AFTER_MIGRATION = '2026-10-07T00:00:00Z';
+  const PAYROLL = '2026-10-02';
+
+  /** The attribution rule of a1dc01b (WP3), copied verbatim as the "before" reference; the marker does not exist at version 6. */
+  const OLD_CONDITION = (row: string) =>
+    `(${row}.actor_user_id IS NOT NULL AND ${row}.actor_user_id <> ${row}.owner_user_id AND ${row}.operation IN ('day_entry.create', 'day_entry.update', 'work_session.create', 'work_session.update', 'work_session.delete', 'share.pdf_download'))`;
+
+  interface Ids {
+    owner: string;
+    grantee: string;
+    admin: string;
+    calendar: string;
+  }
+
+  async function seedV6(): Promise<Ids> {
+    expect(migrate(db, MIGRATIONS.filter((migration) => migration.version <= 6))).toEqual({ applied: [1, 2, 3, 4, 5, 6], version: 6 });
+    const result = await seedSynthetic(db, new MutableClock(AT), {
+      passwords: { admin: 'synthetic-admin-pass', employee: 'synthetic-employee-pass', employee2: 'synthetic-employee2-pass' },
+      sampleData: true,
+    });
+    const idOf = (email: string) => result.users.find((user) => user.email === email)?.id ?? '';
+    return {
+      owner: idOf('employee@example.invalid'),
+      grantee: idOf('employee2@example.invalid'),
+      admin: idOf('admin@example.invalid'),
+      calendar: result.calendarId ?? '',
+    };
+  }
+
+  function event(ids: Ids, id: string, actor: string | null, operation: string, entityType: string, workDate: string | null, at: string): void {
+    db.prepare(
+      `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+    ).run(id, at, actor, ids.owner, operation, entityType, `entity-${id}`, workDate === null ? null : JSON.stringify({ work_date: workDate }));
+  }
+
+  /** Legacy-shaped rows of the owner: every combination of actor and operation the old inference distinguished. */
+  function populate(ids: Ids): void {
+    db.prepare(
+      `INSERT INTO timesheet_shares (id, owner_user_id, grantee_user_id, timesheets_scope, ot_read, pdf_download, created_by, created_at)
+       VALUES ('share-v6', ?, ?, 'edit', 0, 1, ?, ?)`,
+    ).run(ids.owner, ids.grantee, ids.owner, AT);
+    event(ids, 'l1-grantee-session', ids.grantee, 'work_session.create', 'work_session', '2026-09-22', '2026-10-04T10:01:00Z');
+    event(ids, 'l2-grantee-day', ids.grantee, 'day_entry.update', 'day_entry', '2026-09-23', '2026-10-04T10:02:00Z');
+    event(ids, 'l3-admin-day', ids.admin, 'day_entry.update', 'day_entry', '2026-09-24', '2026-10-04T10:03:00Z');
+    event(ids, 'l4-owner-session', ids.owner, 'work_session.create', 'work_session', '2026-09-25', '2026-10-04T10:04:00Z');
+    event(ids, 'l5-grantee-other', ids.grantee, 'user.update', 'user', null, '2026-10-04T10:05:00Z');
+    event(ids, 'l6-system-day', null, 'day_entry.create', 'day_entry', '2026-09-26', '2026-10-04T10:06:00Z');
+    event(ids, 'l7-grantee-pdf', ids.grantee, 'share.pdf_download', 'timesheet_revision', null, '2026-10-04T10:07:00Z');
+    event(ids, 'l8-grantee-day-later', ids.grantee, 'day_entry.create', 'day_entry', '2026-09-24', '2026-10-04T10:08:00Z');
+  }
+
+  type Hint = Array<{ display_name: string; days: number; work_dates: string[] }>;
+
+  /** Who last changed each work day of the period, from per-row attribution flags in storage order (the Review hint's rule). */
+  function hintFrom(rows: Array<{ work_date: string | null; shared_actor: string | null }>): Hint {
+    const last = new Map<string, string | null>();
+    for (const row of rows) {
+      if (row.work_date === null || row.work_date < '2026-09-14' || row.work_date > '2026-09-27') continue;
+      last.set(row.work_date, row.shared_actor);
+    }
+    const groups = new Map<string, Hint[number]>();
+    for (const [workDate, who] of [...last].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      if (who === null) continue;
+      const group = groups.get(who) ?? { display_name: who, days: 0, work_dates: [] };
+      group.days += 1;
+      group.work_dates.push(workDate);
+      groups.set(who, group);
+    }
+    return [...groups.values()].sort((a, b) => (a.display_name < b.display_name ? -1 : a.display_name > b.display_name ? 1 : 0));
+  }
+
+  it('upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical', async () => {
+    const ids = await seedV6();
+    populate(ids);
+    const auditRows = () => db.prepare(`SELECT ${V6_AUDIT_COLUMNS} FROM audit_events ORDER BY rowid`).all();
+    const objectsOf = () =>
+      db.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").all() as Array<{ name: string }>;
+    const rowsBefore = auditRows();
+    expect(rowsBefore.length).toBeGreaterThan(8);
+    const objectsBefore = objectsOf();
+    const ownerEvents = `FROM audit_events a WHERE a.owner_user_id = '${ids.owner}'`;
+    // Before: the old inference decides, per row of the owner's history.
+    const flagsBefore = new Map(
+      (db.prepare(`SELECT a.id, CASE WHEN ${OLD_CONDITION('a')} THEN 1 ELSE 0 END AS shared ${ownerEvents}`).all() as Array<{ id: string; shared: number }>).map(
+        (row) => [row.id, row.shared === 1],
+      ),
+    );
+    const hintBefore = hintFrom(
+      db
+        .prepare(
+          `SELECT json_extract(COALESCE(a.after_json, a.before_json), '$.work_date') AS work_date,
+                  CASE WHEN ${OLD_CONDITION('a')} THEN (SELECT u.display_name FROM users u WHERE u.id = a.actor_user_id) END AS shared_actor
+             ${ownerEvents} AND a.entity_type IN ('day_entry', 'work_session') ORDER BY a.rowid`,
+        )
+        .all() as Array<{ work_date: string | null; shared_actor: string | null }>,
+    );
+    expect([...flagsBefore.values()].filter(Boolean).length).toBeGreaterThanOrEqual(5);
+    expect(flagsBefore.get('l4-owner-session')).toBe(false);
+    expect(flagsBefore.get('l5-grantee-other')).toBe(false);
+    expect(hintBefore.length).toBeGreaterThan(0);
+
+    expect(migrate(db, MIGRATIONS, MIGRATED)).toEqual({ applied: [7], version: 7 });
+
+    // Stored rows are untouched; the new column reads NULL for every one of them.
+    expect(auditRows()).toEqual(rowsBefore);
+    expect(db.prepare('SELECT count(*) FROM audit_events WHERE via_share_id IS NOT NULL').pluck().get()).toBe(0);
+    // Only the audit table definition changed, plus the one insert trigger; every other object, the append-only triggers included, is identical.
+    const objectsAfter = objectsOf();
+    expect(objectsAfter.filter((object) => object.name !== 'audit_events' && object.name !== 'audit_events_via_share_consistent')).toEqual(
+      objectsBefore.filter((object) => object.name !== 'audit_events'),
+    );
+    expect(objectsAfter.map((object) => object.name).filter((name) => !objectsBefore.some((object) => object.name === name))).toEqual([
+      'audit_events_via_share_consistent',
+    ]);
+    expect(() => db.prepare("UPDATE audit_events SET reason = 'x'").run()).toThrow(/immutable_audit_event/);
+    expect(() => db.prepare('DELETE FROM audit_events').run()).toThrow(/immutable_audit_event/);
+    expect(db.prepare('SELECT applied_at FROM schema_migrations WHERE version = 7').pluck().get()).toBe('2026-10-06T00:00:00Z');
+    expect(db.pragma('user_version', { simple: true })).toBe(7);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+
+    // After: the owner's History and Review hint read exactly as before for every legacy row.
+    const owner = { id: ids.owner, calendarId: ids.calendar };
+    const history = getHistory(db, owner, { limit: '500' }).audit_events;
+    expect(history.length).toBe(flagsBefore.size);
+    for (const row of history) expect(row.via_share, row.id).toBe(flagsBefore.get(row.id));
+    expect(granteeChangesForReview(db, owner, PAYROLL)).toEqual(hintBefore);
+
+    // New rows follow the marker only: an unmarked row of the same shape after the migration is not a share act,
+    // a marked one is, and the earlier rows still read as before.
+    event(ids, 'n1-unmarked', ids.grantee, 'work_session.update', 'work_session', '2026-09-22', AFTER_MIGRATION);
+    db.prepare(
+      `INSERT INTO audit_events (id, occurred_at, actor_user_id, owner_user_id, operation, entity_type, entity_id, reason, before_json, after_json, via_share_id)
+       VALUES ('n2-marked', ?, ?, ?, 'work_session.update', 'work_session', 'entity-n2', NULL, NULL, '{"work_date":"2026-09-23"}', 'share-v6')`,
+    ).run(AFTER_MIGRATION, ids.grantee, ids.owner);
+    const later = new Map(getHistory(db, owner, { limit: '500' }).audit_events.map((row) => [row.id, row.via_share]));
+    expect(later.get('n1-unmarked')).toBe(false);
+    expect(later.get('n2-marked')).toBe(true);
+    for (const [id, shared] of flagsBefore) expect(later.get(id), id).toBe(shared);
+
+    expect(migrate(db, MIGRATIONS, new Date('2026-10-08T00:00:00Z'))).toEqual({ applied: [], version: 7 });
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+  });
+
+  it('adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers', () => {
+    expect(migrate(db)).toEqual({ applied: ALL_VERSIONS, version: 7 });
+    expect(db.prepare("SELECT type, \"notnull\" AS required FROM pragma_table_info('audit_events') WHERE name = 'via_share_id'").get()).toEqual({
+      type: 'TEXT',
+      required: 0,
+    });
+    expect(db.prepare("SELECT \"table\", \"to\" FROM pragma_foreign_key_list('audit_events') WHERE \"from\" = 'via_share_id'").get()).toEqual({
+      table: 'timesheet_shares',
+      to: 'id',
+    });
+    const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'audit_events' ORDER BY name").pluck().all();
+    expect(triggers).toEqual(['audit_events_no_delete', 'audit_events_no_update', 'audit_events_via_share_consistent']);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(migrate(db)).toEqual({ applied: [], version: 7 });
   });
 });

@@ -6,18 +6,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = b103923d7f412860b189f692cf23c11ee2915e86 (WP3-ACCEPT). The
-    accepted WP3 source is 49651c8, digest c31c300c…. Earlier WP3 freezes were a1cd566,
-    2f2520e and 2d72d35.
+  - HEAD = origin/main = a1dc01b98f3c8be7478384adf73d9c194bf9a105 (WP4-T01-FREEZE).
+    WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
+    freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
   - Gate digest of record eeb417d3b903b30f1c21fa0a855424da02ab1d6e1d525f2509130f3933a48410
     (WP3-REGATE PASS on 2f2520e). The first WP3 gate digest was 96870f7e… (WP3-GATE on
     a1cd566); the WP2 gate digest was e61fa914… (WP2-GATE4).
-  - Uncommitted:
-    - handoff: the board, STATE, this checkpoint, and the WP3-ACCEPT results and
-      evidence;
-    - the three untracked owner skill files under `.claude/skills/readme-md/`, which
-      GOV-SKILL-FREEZE commits.
+  - Uncommitted (handoff only): the board, this checkpoint, the WP4-T01-FREEZE results
+    and evidence, and the WP4-T02 brief.
 
     The gate digest of record is 0d513fca… (WP3-REGATE2 PASS).
   - No unpushed commits.
@@ -493,7 +490,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - tests: red 23 → green 83; the mutation fails 2 tests;
        - e2e 127 passed; verify 1449 tests; digest 1c57dbae…;
        - deviation: one line in the sharing-matrix inventory.
-     - Running: WP4-T01-FREEZE (committer).
+     - WP4-T01-FREEZE is committed and pushed as a1dc01b (50 paths; digest 1c57dbae…;
+       all checks 0).
+     - WP4-T02 is done (author-reported):
+       - migration 0007 adds `via_share_id` with an owner-to-actor trigger;
+       - the marker is recorded on every shared write and on the PDF audit;
+       - a HEAD request writes no audit, and legacy rows keep the inference;
+       - tests: red 23 → green 136; 4 mutations are killed;
+       - verify: 1469 tests; digest d6f223a7….
+
+       Deviations: `http/auth.ts` and `routes/api.ts` were also edited. docs/03 should
+       mention the marker; this is carried to WP4-DEC.
+     - WP4-T02-FREEZE attempt 1 made no commit. The coordinator wrote the WP4-T03 brief
+       during the run and asked for it to be staged; a permission check denied that
+       bundled `git add`. The call is not retried.
+     - Running: WP4-T02-FREEZE attempt 2 (same committer). It commits the original set;
+       `WP4-T03.md` stays untracked until the next freeze.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -533,7 +545,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T01-FREEZE only.
+- Live processes: WP4-T02-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

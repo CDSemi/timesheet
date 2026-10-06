@@ -7,20 +7,24 @@ import { notFound } from '../http/errors.ts';
 import { findTimesheet, loadScope } from './timesheets.ts';
 
 /*
- * WP3-C-01/C-02 (FR-17, AC-16): which audit events were written through a grant.
+ * WP3-C-01/C-02, WP4-T02 (FR-14, FR-17, AC-16): which audit events were written through a grant.
  *
- * The audit row records the actor and the owner, not the request path. An actor other than the
- * owner exists on exactly two paths: /api/shared/:ownerId (the grantee acting for the owner, the
- * only place the access guard sets `actor` apart from `subject`) and the administrator and share
- * routes, which write their own operation codes with the owner of the affected account or share
- * (`user.*`, `share.revoke`, whose actor is the administrator or the leaving grantee). An event
- * therefore counts as performed through a grant when its actor is not the owner and its operation is
- * one of the operations a shared route writes. The time window in which a share existed is never
- * used: a share existing at that instant does not make an act a shared one (an administrator who
- * also holds a share, or an act in the same second as a later grant, stays what it was).
+ * Since migration 0007 the audit row records it: `via_share_id` names the share a grantee acted under and is set
+ * by every write made through /api/shared/:ownerId (day entries, sessions, batch edits and the PDF download),
+ * and by nothing else. An event is performed through a grant exactly when it carries the marker. The database
+ * refuses a marker whose share does not run from the event's owner to its actor.
  *
- * SHARED_ACT_OPERATIONS must list every operation code the allowlisted /api/shared routes write
- * (SHARED_ROUTES in routes/shares.ts). A test performs every write route and checks each attribution.
+ * Rows written before the migration have no marker and the audit row never recorded the request path. For those
+ * rows only, the old inference stays: an actor other than the owner exists on exactly two paths, /api/shared
+ * (the grantee acting for the owner) and the administrator and share routes, which write their own operation codes
+ * (`user.*`, `share.revoke`), so such a row counted as through a grant when its operation was one the shared routes
+ * write. A legacy row has a NULL marker and an `occurred_at` earlier than the `applied_at` of migration 0007 in
+ * `schema_migrations`; a NULL-marker row at or after that instant is never a share act, whatever its actor and
+ * operation (a later non-shared route, such as an import, is not mistaken for a grantee). The time window in which a
+ * share existed is never used.
+ *
+ * SHARED_ACT_OPERATIONS lists the operation codes the shared routes wrote before the marker existed, for the legacy
+ * inference only; it never grows. A test performs every shared write route and checks that each records the marker.
  */
 
 export const SHARED_ACT_OPERATIONS: readonly string[] = [
@@ -32,11 +36,17 @@ export const SHARED_ACT_OPERATIONS: readonly string[] = [
   'share.pdf_download',
 ];
 
+/** The migration that added the marker (0007_audit_access.ts). */
+const AUDIT_ACCESS_MIGRATION = 7;
+
 const OPERATION_LIST = SHARED_ACT_OPERATIONS.map((operation) => `'${operation}'`).join(', ');
 
-/** The SQL condition "this audit row (alias `row`) was written through a grant". The list is a code constant. */
+/**
+ * The SQL condition "this audit row (alias `row`) was written through a grant": the recorded marker, or, for a row
+ * written before migration 0007, the legacy operation-code inference. The list is a code constant.
+ */
 export function sharedActCondition(row: string): string {
-  return `(${row}.actor_user_id IS NOT NULL AND ${row}.actor_user_id <> ${row}.owner_user_id AND ${row}.operation IN (${OPERATION_LIST}))`;
+  return `(${row}.via_share_id IS NOT NULL OR (${row}.actor_user_id IS NOT NULL AND ${row}.actor_user_id <> ${row}.owner_user_id AND ${row}.operation IN (${OPERATION_LIST}) AND ${row}.occurred_at < (SELECT m.applied_at FROM schema_migrations m WHERE m.version = ${AUDIT_ACCESS_MIGRATION})))`;
 }
 
 /** One grantee's days of a period whose last change was made through a share. */

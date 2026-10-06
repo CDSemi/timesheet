@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T01-FREEZE",
+  "next_task_id": "WP4-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -96,6 +96,10 @@
     },
     {
       "date": "2026-10-05",
+      "observation": "WP4-T02-FREEZE attempt 1: the coordinator wrote a new brief while the committer was running and messaged it to stage that file; a permission check denied the committer's bundled git add. Rule: the coordinator writes no new handoff file while a commit task runs; briefs for the next task are written after the commit result."
+    },
+    {
+      "date": "2026-10-05",
       "observation": "WP3-FIX2: the permission check denied a Bash loop that masked evidence and then ran a variable-expanded rm of raw logs inside the repository. Future briefs must require raw command output to be written only under D:\\timesheet-tmp\\<task> and masked into the evidence directory, so that no unmasked file ever lands in the repository and no deletion inside the repository is needed."
     }
   ],
@@ -129,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "3bdffbec685599b02c41c0a1f85931c8d90242f2",
+    "last_commit": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
     "unpushed": []
   },
   "owner_decisions": [
@@ -8514,9 +8518,108 @@
       "id": "WP4-T01-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "afd52e7c7e9a44ef2",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T01-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T01-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T01-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "3bdffbec685599b02c41c0a1f85931c8d90242f2",
+      "branch": "main",
+      "commit_sha": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
+      "pushed": true,
+      "source_digest": "1c57dbae49f4b69785b4e4df41321019b686f789903b972fb403987b4d4dae60",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 3bdffbe, remote SHA identical; 50 paths, exactly the expected set; digest 1c57dbae matched; .env.example scan 0 secret assignments; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight exit 0; no masking.",
+      "next_action": "None; WP4-T02 on a1dc01b."
+    },
+    {
+      "id": "WP4-T02",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af6614d55e3dd3a2d",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/db/migrations/0007_audit_access.ts",
+        "src/server/db/migrations.ts",
+        "src/server/services/audit.ts",
+        "src/server/services/sharedActs.ts",
+        "src/server/services/shares.ts",
+        "src/server/services/history.ts",
+        "src/server/services/timesheetCommands.ts",
+        "src/server/services/dayEntries.ts",
+        "src/server/routes/shares.ts",
+        "src/server/types.ts",
+        "tests/integration",
+        "handoff/delivery/tasks/WP4-T02.md",
+        "handoff/delivery/evidence/WP4-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T02.md",
+      "report": "handoff/delivery/tasks/WP4-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T02/red-first-at-baseline.txt",
+        "handoff/delivery/evidence/WP4-T02/green-targeted-after-change.txt",
+        "handoff/delivery/evidence/WP4-T02/mutation-proof.txt",
+        "handoff/delivery/evidence/WP4-T02/e2e.txt",
+        "handoff/delivery/evidence/WP4-T02/verify.txt",
+        "handoff/delivery/evidence/WP4-T02/precommit-check.txt",
+        "handoff/delivery/evidence/WP4-T02/digest.txt"
+      ],
+      "baseline_commit": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
+      "source_digest": "d6f223a719e06baf1ee24ef630a90af91301d65b53eb727581eb7b6c3dbdfd06",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: migration 0007 adds a nullable audit_events.via_share_id (FK to timesheet_shares) by ALTER TABLE ADD COLUMN, plus an insert trigger that rejects a marker whose share does not run owner to actor; requireShare, command(), timesheetCommands audit() and the shared PDF audit record the marker; HEAD on the shared PDF writes no audit; sharedActCondition reads the marker, with the legacy inference only for NULL-marker rows before 0007 applied_at; History and the hint share the condition. Tests red 23 failed / 113 passed (136), green 136; four scratch-clone mutations (marker on DELETE session, marker on the PDF audit, the HEAD guard, the migration-time bound) each killed. Migrations fresh 1-7 and a populated v6 upgrade with identical legacy attribution; integrity ok, FK empty, rerun applies nothing. Optional hint bound not done. e2e exit 0 (127 passed, 5 skipped); verify exit 0 (64 files, 1469 tests, 0 deprecation lines); precommit 0; digest d6f223a7. Deviations: src/server/http/auth.ts and src/server/routes/api.ts edited outside the owned paths (needed to carry the marker); docs/03 should mention via_share_id, carried to WP4-DEC.",
+      "next_action": "None; WP4-T02-FREEZE."
+    },
+    {
+      "id": "WP4-T02-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T02"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -8530,25 +8633,28 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a14aa87983b5f3100",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 1,
-      "owned_paths": [
-        "handoff/delivery/tasks/WP4-T01-FREEZE.md",
-        "handoff/delivery/evidence/WP4-T01-FREEZE"
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a14aa87983b5f3100, self-reported claude-sonnet-5-5): no commit. The coordinator wrote tasks/WP4-T03.md during the run and asked the committer to stage it; a permission check denied the bundled command containing that git add; the committer stopped without retrying. 33 paths (the brief's original set) staged; digest d6f223a7 matched; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight 0. Coordinator: WP4-T03.md stays untracked for the next freeze; the denied call is not retried; same committer resumed for attempt 2 to commit the original set. Lesson: never write new files while a committer runs."
       ],
-      "prompt": "handoff/delivery/tasks/WP4-T01-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP4-T01-FREEZE.md",
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T02-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "3bdffbec685599b02c41c0a1f85931c8d90242f2",
+      "baseline_commit": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "1c57dbae49f4b69785b4e4df41321019b686f789903b972fb403987b4d4dae60",
+      "source_digest": "d6f223a719e06baf1ee24ef630a90af91301d65b53eb727581eb7b6c3dbdfd06",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T01 with the GOV-SKILL gate/audit records, the WP4 plan and pending handoff records."
+      "next_action": "Commit and push WP4-T02 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

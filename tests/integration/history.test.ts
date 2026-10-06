@@ -318,9 +318,11 @@ describe('GET /api/history', () => {
   });
 
   it('WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is', async () => {
+    // WP4-T02: the migration is pinned before every event, so only the recorded marker can attribute an act.
+    t.db.prepare("UPDATE schema_migrations SET applied_at = '2026-09-01T00:00:00Z' WHERE version = 7").run();
     const grantee = await addGrantee();
-    await shareWith('grantee@example.invalid', { timesheets: 'edit', ot_read: false, pdf_download: false });
-    await shareWith(t.emails.admin, { timesheets: 'edit', ot_read: false, pdf_download: false });
+    const granteeShare = await shareWith('grantee@example.invalid', { timesheets: 'edit', ot_read: false, pdf_download: false });
+    const adminShare = await shareWith(t.emails.admin, { timesheets: 'edit', ot_read: false, pdf_download: false });
     t.clock.advanceSeconds(60);
     const base = `/api/shared/${t.userIds.employee}`;
     const body = (date: string) => ({ start: la(`${date}T09:00`), end: la(`${date}T17:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true });
@@ -360,6 +362,18 @@ describe('GET /api/history', () => {
     }
     // Everything else by another person (the grant to the grantee is the owner's own act) stays unattributed.
     for (const event of events.filter((row) => !written.includes(row))) expect(event.via_share, event.operation).toBe(false);
+    // WP4-T02 drift guard: every write route a share can reach (PUT day, POST session, PUT session, DELETE session,
+    // POST batch) records the marker with the share the request was admitted under, and nothing else records one.
+    // A new shared write route must be added to this test (and to the inventory in sharing-matrix.test.ts).
+    const marked = t.db
+      .prepare('SELECT id, operation, via_share_id FROM audit_events WHERE owner_user_id = ? ORDER BY rowid')
+      .all(t.userIds.employee) as Array<{ id: string; operation: string; via_share_id: string | null }>;
+    const writtenIds = new Set(written.map((event) => event.id as string));
+    expect(marked.filter((row) => writtenIds.has(row.id))).toHaveLength(6);
+    for (const row of marked) {
+      expect(row.via_share_id, `${row.operation} ${row.id}`).toBe(writtenIds.has(row.id) ? granteeShare : null);
+      expect(row.via_share_id, row.operation).not.toBe(adminShare);
+    }
   });
 
   it('WP3-RBC-01: every event without an actor is a system event, whatever its operation (the automatic OT credit and debit)', async () => {
