@@ -126,4 +126,11 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+Self-reported model: claude-sonnet-5-5.
+
+- Node: v24.21.0 (portable). Pre-HEAD = origin/main = 0f989e4; post-HEAD = e5576de27fb3185f22720f989e386a44b1d90488.
+- Pushed: yes; remote SHA e5576de27fb3185f22720f989e386a44b1d90488 (main).
+- Digest 65247d70f5569f09dda4d328b455a4e39836223f81de5227a3f19a83bd64c23c (matches); staged count 18.
+- Scope: no changes under src/, tests/, scripts/, reference/, .claude/, package.json; readme-md skill present.
+- Exit codes: node --version 0, digest 0, git add 0, precommit 0, diff --check 0, JSON parse 0, validate_orchestration 0, check_recovery 0, validate_package --preflight 0.
+- No fixes applied, no unstaged extras, no blockers.

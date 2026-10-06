@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 0f989e4499867ed05c0da5f73cb39db80634c663 (WP4-T12A-FREEZE).
+  - HEAD = origin/main = e5576de27fb3185f22720f989e386a44b1d90488 (WP4-DEC-FREEZE).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -611,7 +611,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - No contradiction; parity holds; preflight 0. Digest: 65247d70….
        - Deviation: the worker launched `npm run digest` through cmd.exe. It hung, and
          the coordinator stopped it.
-     - Running: WP4-DEC-FREEZE.
+     - WP4-DEC-FREEZE committed and pushed e5576de (18 paths; all checks 0).
+     - GOV-SKILL-REMOVE is done (author-reported).
+       - The three skill files and their two empty folders are deleted.
+       - No reference remains outside handoff/; preflight 0.
+       - The digest could not be computed while the index still lists the deleted
+         files. The committer stages the deletions first, then computes it.
+     - Running: GOV-SKILL-REMOVE-FREEZE. A verifier gate and a fresh audit follow.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -625,8 +631,8 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-DEC-FREEZE. Then run the GOV-SKILL-REMOVE cycle (worker removal, freeze,
-     verifier gate, fresh audit).
+  1. Record GOV-SKILL-REMOVE-FREEZE. Then run the GOV gate and a fresh audit on that
+     commit.
   2. Then, in this order:
      - WP4-T07B (F-3 flag, F-4 retention, and F-5 pruning, possibly split);
      - T09, T10, T11;
@@ -651,7 +657,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-DEC-FREEZE (attempt 1) only.
+- Live processes: GOV-SKILL-REMOVE-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

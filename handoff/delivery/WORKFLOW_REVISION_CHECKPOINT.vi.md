@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 0f989e4499867ed05c0da5f73cb39db80634c663 (WP4-T12A-FREEZE).
+  - HEAD = origin/main = e5576de27fb3185f22720f989e386a44b1d90488 (WP4-DEC-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -652,7 +652,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          65247d70….
        - Sai lệch: worker chạy `npm run digest` qua cmd.exe. Lệnh bị treo, và
          coordinator đã dừng nó.
-     - Đang chạy: WP4-DEC-FREEZE.
+     - WP4-DEC-FREEZE đã commit và push thành e5576de (18 đường dẫn; mọi kiểm tra trả về
+       0).
+     - GOV-SKILL-REMOVE đã xong (tác giả tự báo).
+       - Đã xóa 3 tệp của skill và hai thư mục rỗng.
+       - Ngoài handoff/ không còn chỗ nào nhắc tới skill; preflight trả về 0.
+       - Chưa tính được digest, vì index vẫn còn ghi các tệp đã xóa. Committer sẽ stage
+         việc xóa trước, rồi mới tính digest.
+     - Đang chạy: GOV-SKILL-REMOVE-FREEZE. Sau đó là gate do verifier chạy và một audit
+       mới.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -666,8 +674,8 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-DEC-FREEZE. Sau đó chạy vòng GOV-SKILL-REMOVE (worker gỡ skill,
-     commit đóng băng, gate do verifier chạy, audit mới).
+  1. Ghi kết quả GOV-SKILL-REMOVE-FREEZE. Sau đó chạy gate GOV và một audit mới trên
+     commit đó.
   2. Sau đó làm theo thứ tự:
      - WP4-T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5; có thể tách);
      - T09, T10, T11;
@@ -693,7 +701,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-DEC-FREEZE (lần 1).
+- Process còn sống: chỉ GOV-SKILL-REMOVE-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.
