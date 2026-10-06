@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 546cddaf6747aef85e8b6d9b7712de9e28f138bf (WP4-FIXB4-FREEZE, the WP4 round-4 fix freeze).
+  - HEAD = origin/main = e7fe5144dc62f5047c79dd5ef69d973f60dfd14d (WP4-ACCEPT, the WP4 acceptance records; accepted source 546cdda, digest 26fcc969).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -898,8 +898,51 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - WP4-ACCEPT attempt 1 stopped correctly, with no commit. The validator found
          WP4-REGATE4 and WP4-RECHECK-B4 still at `running`. The coordinator had
          recorded their results without changing the status, and has now fixed it.
-       - Running: WP4-ACCEPT attempt 2, with the same committer. Then the board
-         switches to WP5.
+       - WP4-ACCEPT attempt 2 committed and pushed e7fe514 (163 handoff paths; all
+         checks 0). **WP4 accepted.**
+       - The board and STATE now have WP5 active.
+       - WP5-PLAN is done (planner, opus; read-only).
+         - No new gate before the assessment: WP4-REGATE4 passed on the same freeze.
+         - Two parallel fresh opus audits on 546cdda: A (integrated workflow,
+           submission and privacy) and B (reproducible release, verified restore and
+           operations).
+         - It outlines the pilot packet, sets owner decisions D-1..D-15, and lists the
+           provisional tasks: fixes, REL, GATE, PILOT, FINAL-AUDIT, ACCREC, ACCEPT and
+           GOV-RECOVERY.
+       - The owner was asked D-1..D-15 (board `pending_owner_question`; it supersedes
+         WP4-I-1..I-5).
+       - WP5-ASSESS-A: **PASS** on 546cdda (digest 26fcc969 before and after), no
+         findings.
+         - The AC-13 integrated run passed 77/77 and the fault run 12/12.
+         - verify 1,758, e2e 145/5 skipped, targeted suites 747.
+         - Risks R-WA1..R-WA8; R-WA1..R-WA3 and R-WA8 go to the owner and the packet.
+       - WP5-ASSESS-B: **FIX REQUIRED** on 546cdda (digest 26fcc969).
+         - The release reproduces: dist byte-identical, and the image dist equals the
+           local build. The image is non-root, with 0 forbidden files.
+         - Drill: 208 PASS. The extra restore (finalized period, correction, OT
+           reservation and partial use) matched.
+         - Findings: WP5-B-01 (Medium), the runbook's Compose variables and `<image>`
+           are undefined, so the restored and rollback instances have no binding;
+           WP5-B-02 (Low), no protected env-file copy and no release identity are kept
+           with the off-device backup.
+         - Risks R-B5-1..R-B5-7.
+       - WP5-FIXB is done (worker, sonnet; author-reported).
+         - It changed docs/11 EN and VI, the `.env.example` header and one
+           `compose.example.yaml` comment.
+         - `docker compose config` exits 0 for the live, restored and rollback
+           forms. verify 1,758; precommit 0; preflight 0.
+         - Digest ed604d0c (775 files); the board's current digest is updated.
+       - WP5-ASSESS-A moved to attempt 2, pending: a digest-bound area-A delta recheck
+         on a later WP5 freeze. Attempt 1 is kept in its history.
+       - Running: WP5-FIXB-FREEZE (committer).
+       - Then:
+         - WP5-AC13, a committed integrated test (worker-high, sonnet), and its
+           freeze;
+         - WP5-REL, the release and setup notes plus the runbook activation,
+           deactivation and rollback card; its freeze is the package-final freeze;
+         - WP5-GATE;
+         - WP5-PILOT;
+         - the final audit, which covers the area-B recheck and the area-A delta.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
      - Owner questions still open: WP4-I-1..I-5 (safe defaults in force), and R-A3
        (rollback approach) before the WP5 pilot.
@@ -914,11 +957,10 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-ACCREC, then dispatch WP4-ACCEPT (committer; brief ready; STATE marks
-     WP4 passed and NEXT_ACTION points to WP5).
-  2. Then switch the board to WP5 and follow WP5_IMPLEMENT: it starts with an
-     independent acceptance, then a concrete pilot packet. The real pilot stays
-     owner-controlled.
+  1. Record WP5-ASSESS-A and WP5-ASSESS-B. Then plan fixes for any findings, plus
+     owner fixes for answers to D-1..D-15 that differ from the defaults.
+  2. Then fixes, an independent recheck, release and setup notes, and the concrete
+     pilot packet for owner review. The real pilot stays owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its

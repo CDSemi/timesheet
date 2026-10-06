@@ -16,7 +16,18 @@ Không có giá trị thật nào trong sổ tay này. Hãy thay các chỗ gi�
 - `<data-dir>`: thư mục cục bộ trên máy chủ được mount thành `/data`; `<env-file>`: file môi trường được bảo vệ (quyền 600).
 - `<backup-dir>`: thư mục máy chủ chứa các backup (`<data-dir>/backups`); `<backup-name>`: một thư mục backup, tên dạng `timesheet-backup-<UTC>-<8 hex>`.
 - `<restore-dir>`: thư mục mới, rỗng trên máy chủ cho một lần restore; `<proxy-ip>`: địa chỉ mà ứng dụng thấy là peer kết nối của proxy.
-- `<compose>` thay cho `docker compose --project-name <project> --file <project-dir>/compose.example.yaml`.
+- `<image>`: tag image của release `timesheet:<release-commit>`, mỗi release một tag (không bao giờ `latest`, không bao giờ dùng lại một tag cho lần build lại); `<previous-image>`: tag của release ngay trước đó.
+- `<compose>` thay cho `docker compose --project-name <project> --file <project-dir>/compose.example.yaml`. Compose đọc bốn biến dưới đây từ `<project-dir>/.env` (quyền 600; file không chứa bí mật, chỉ có đường dẫn và một tag), nên mọi lệnh `<compose>` gắn đúng file môi trường, thư mục dữ liệu và image đã ghi. Nếu thiếu file đó, Compose lùi về `./timesheet.env`, `./data` và `timesheet:local`, điều này sai trên NAS.
+
+  ~~~bash
+  TIMESHEET_ENV_FILE=<env-file>
+  TIMESHEET_DATA_DIR=<data-dir>
+  TIMESHEET_IMAGE=<image>
+  TIMESHEET_PORT=3000
+  ~~~
+
+- `<compose-restored>` thay cho `TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml` (mục 6). Biến đặt trong shell thắng `<project-dir>/.env`, nên instance đã restore gắn `<restore-dir>` và có tên dự án Compose riêng; nó không bao giờ dùng chung dữ liệu hay dự án với bản đang chạy.
+- `<compose-previous>` thay cho `TIMESHEET_IMAGE=<previous-image> TIMESHEET_DATA_DIR=<restore-dir> TIMESHEET_ENV_FILE=<rollback-env-file> docker compose --project-name <project>-rollback --file <project-dir>/compose.example.yaml` (mục 8); `<rollback-env-file>` là bản sao quyền 600 của `<env-file>` có thêm `JOB_RUNNER=off`.
 - `<cli>` thay cho `node dist/server/cli.js` (công cụ dòng lệnh bên trong image).
 
 ## Các stage của drill
@@ -36,7 +47,7 @@ Drill là `npm run drill:container -- --work <thư mục rỗng> --project <tên
    ~~~
 
 4. Volume dữ liệu là một thư mục cục bộ trên máy chủ, mount thành `/data`: CSDL `/data/timesheet.db`, file riêng tư `/data/private-data` (PDF, chữ ký, nguồn nhập, capture) và backup `/data/backups`. Phải là volume cục bộ của NAS, không bao giờ là chia sẻ SMB hay NFS từ xa và không bao giờ là thư mục đồng bộ. **[Drill stage 1]** cho việc mount; hệ thống file của NAS **[owner NAS step, unverified]**.
-5. Sao chép `.env.example` thành `<env-file>`, quyền 600, và đặt tối thiểu `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` và `TRUSTED_PROXY_ADDRESSES`. Production từ chối khởi động nếu thiếu `DATA_DIR` và `DATABASE_PATH` tuyệt đối tường minh, `APP_ORIGINS` và `PUBLIC_BASE_URL`. Giữ `OUTBOUND_MODE=capture` và không bao giờ đặt `PRODUCTION_SENDING_ENABLED`: gửi thật thuộc pilot WP5, sau khi chủ sở hữu cho phép. Ứng dụng không cần session secret; thông tin đăng nhập SMTP là bí mật duy nhất nó có thể giữ. **[Drill stage 1]** (drill ghi một file env tổng hợp).
+5. Sao chép `.env.example` thành `<env-file>`, quyền 600, và đặt tối thiểu `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` và `TRUSTED_PROXY_ADDRESSES`. Production từ chối khởi động nếu thiếu `DATA_DIR` và `DATABASE_PATH` tuyệt đối tường minh, `APP_ORIGINS` và `PUBLIC_BASE_URL`. Giữ `OUTBOUND_MODE=capture` và không bao giờ đặt `PRODUCTION_SENDING_ENABLED`: gửi thật thuộc pilot WP5, sau khi chủ sở hữu cho phép. Ứng dụng không cần session secret; thông tin đăng nhập SMTP là bí mật duy nhất nó có thể giữ. Sau đó tạo `<project-dir>/.env` với bốn biến ở "Chỗ giữ chỗ và quy ước" (phần đầu `.env.example` chỉ gợi ý một đường dẫn: `<env-file>` là nơi `TIMESHEET_ENV_FILE` trỏ tới). **[Drill stage 1]** (drill ghi một file env tổng hợp và đặt bốn biến).
 6. Mạng: ví dụ Compose chỉ publish cổng trên loopback (`127.0.0.1:3000`). Đặt reverse proxy của Synology phía trước với HTTPS và chuyển tiếp tới cổng đó; không bao giờ publish cổng ra internet. Đặt `TRUSTED_PROXY_ADDRESSES` đúng địa chỉ IP của proxy như ứng dụng thấy được là peer kết nối (không CIDR, không tên máy), ví dụ gateway của cầu Docker. Nếu để trống, mọi header chuyển tiếp bị bỏ qua và mọi client dùng chung giới hạn đăng nhập của địa chỉ proxy. **[owner NAS step, unverified]**
 7. Thời gian: bật NTP trong DSM để hạn nộp, backup và thời điểm hết hạn đúng **[owner NAS step, unverified]**.
 8. Khởi động và kiểm tra:
@@ -45,9 +56,10 @@ Drill là `npm run drill:container -- --work <thư mục rỗng> --project <tên
    <compose> up --detach --build
    <compose> ps
    <compose> logs --no-color timesheet
+   docker image inspect --format '{{.Id}}' <image>
    ~~~
 
-   Dịch vụ phải trở thành healthy (health check gọi `/api/ready`). **[Drill stage 1]**
+   Dịch vụ phải trở thành healthy (health check gọi `/api/ready`). Ghi lại ID image mà lệnh cuối in ra ngay lúc build, cùng commit release và digest nguồn: nó định danh release (build lại cùng mã nguồn có thể cho ID khác). **[Drill stage 1]**
 
 ## 2. Danh sách kiểm tra NAS
 
@@ -63,6 +75,7 @@ Drill là `npm run drill:container -- --work <thư mục rỗng> --project <tên
 - [ ] NTP đang bật và đồng hồ NAS đúng.
 - [ ] Một bản nộp tổng hợp render được PDF (font nằm trong image) và mail của nó rơi vào capture, không ra mạng.
 - [ ] Backup, restore cô lập và các bước đối soát (mục 4, 6 và 7) chạy được trên NAS với dữ liệu tổng hợp, và bản sao trên thiết bị riêng tồn tại.
+- [ ] Một bản sao được bảo vệ của `<env-file>` (quyền 600) được giữ cùng bản sao backup trên thiết bị riêng, kèm commit release, digest nguồn và ID image (mục 4 bước 3).
 - [ ] Trạng thái quản trị hiển thị backup, dung lượng đĩa trống và chế độ gửi ra ngoài (mục 12).
 - [ ] Cảnh báo độc lập từ máy chủ (mục 11) kêu khi thử.
 
@@ -102,7 +115,7 @@ Mục tiêu (cần kiểm tra, không phải cam kết): backup hằng đêm, đ
    <compose> exec -T timesheet <cli> backup --to /data/backups --prune
    ~~~
 
-3. Backup trên cùng volume không bảo vệ khi mất đĩa. Sau mỗi backup, sao chép `<backup-dir>` sang một thiết bị riêng (Synology Hyper Backup hoặc đĩa USB). Đây là bước cài đặt của chủ sở hữu, không phải code ứng dụng (quyết định F-5 của chủ sở hữu). Backup chứa dữ liệu cá nhân, PDF và chữ ký: bảo vệ như dữ liệu đang chạy. **[owner NAS step, unverified]**
+3. Backup trên cùng volume không bảo vệ khi mất đĩa. Sau mỗi backup, sao chép `<backup-dir>` sang một thiết bị riêng (Synology Hyper Backup hoặc đĩa USB). Đây là bước cài đặt của chủ sở hữu, không phải code ứng dụng (quyết định F-5 của chủ sở hữu). Backup chứa dữ liệu cá nhân, PDF và chữ ký: bảo vệ như dữ liệu đang chạy. Backup không chứa cấu hình, nên hãy giữ một bản sao được bảo vệ của `<env-file>` (quyền 600, không bao giờ đưa vào git hay chat) cùng bản sao trên thiết bị riêng, và commit release, digest nguồn cùng ID image của release đã ghi dữ liệu. Thiếu chúng thì instance đã restore không khởi động được (`APP_ORIGINS`, `PUBLIC_BASE_URL`, `MAIL_FROM`, `TRUSTED_PROXY_ADDRESSES` và về sau là thông tin đăng nhập SMTP). **[owner NAS step, unverified]**
 4. Kiểm tra kết quả: dòng in ra có `"outcome":"succeeded"` và trạng thái quản trị hiển thị lần thành công gần nhất cùng tuổi của nó (mục 12).
 
 ## 5. Chính sách giữ lại
@@ -130,13 +143,20 @@ Restore vào một thư mục mới rỗng, không bao giờ ghi đè lên dữ 
      <image> <cli> restore --from /backups/<backup-name> --to /restore
    ~~~
 
-3. Kết quả là `<restore-dir>/timesheet.db` và `<restore-dir>/private-data`. Để kiểm tra, dừng instance đang chạy trước (không bao giờ chạy hai hàng đợi trên cùng dữ liệu, và không bao giờ để hàng đợi production cũ và hàng đợi đã restore chạy cùng lúc), rồi khởi động instance thứ hai có `/data` là `<restore-dir>`, ở chế độ capture, dưới tên dự án Compose riêng. **[Drill stage 3]** (drill dừng nguồn rồi mới khởi động instance đã restore)
+3. Kết quả là `<restore-dir>/timesheet.db` và `<restore-dir>/private-data`. Để kiểm tra, dừng instance đang chạy trước (không bao giờ chạy hai hàng đợi trên cùng dữ liệu, và không bao giờ để hàng đợi production cũ và hàng đợi đã restore chạy cùng lúc), rồi khởi động instance thứ hai có `/data` là `<restore-dir>`, ở chế độ capture, dưới tên dự án Compose riêng. Dùng `<compose-restored>` (mục "Chỗ giữ chỗ và quy ước"); image phải có sẵn, nên không build. **[Drill stage 3]** (drill dừng nguồn rồi mới khởi động instance đã restore)
+
+   ~~~bash
+   <compose-restored> up --detach --no-build
+   <compose-restored> ps
+   ~~~
+
+   Dừng nó bằng `<compose-restored> down` khi kiểm tra xong.
 4. Kiểm tra kết quả toàn vẹn, người dùng, số dư OT tiêu biểu, số revision, các file cùng hash và một PDF. Instance đã restore ghi log `Outbound delivery PAUSED since <UTC instant> (reason: restored)` khi khởi động và hiển thị biểu ngữ tạm dừng trong trạng thái quản trị. Không có gì được gửi cho đến khi hoàn tất mục 7. **[Drill stage 3]**
 5. Nguồn nhập được restore cùng hash, nên các lần nhập đã restore vẫn còn file nguồn. **[Drill stage 3]**
 
 ## 7. Đối soát sau restore
 
-Restore giữ lại mọi job `send_email` và `send_reminder` đang xếp hàng hoặc đang được thuê của backup, và đánh dấu mọi lần gửi bị gián đoạn là không chắc chắn. Mail mà nguồn có thể đã gửi không bao giờ được gửi lại. Job tạo sau restore không bị giữ; chúng chỉ chờ lệnh resume. Mỗi bước dưới đây đều được ghi nhật ký kiểm toán như sự kiện hệ thống.
+Restore giữ lại mọi job `send_email` và `send_reminder` đang xếp hàng hoặc đang được thuê của backup, và đánh dấu mọi lần gửi bị gián đoạn là không chắc chắn. Mail mà nguồn có thể đã gửi không bao giờ được gửi lại. Job tạo sau restore không bị giữ; chúng chỉ chờ lệnh resume. Mỗi bước dưới đây đều được ghi nhật ký kiểm toán như sự kiện hệ thống. Chạy các lệnh trên instance đã restore: viết `<compose-restored>` ở chỗ chúng ghi `<compose>`.
 
 1. Liệt kê những gì đang bị giữ. Không có `--confirm`, lệnh chỉ in id job, loại, số lần thử và điều chặn, và thoát với mã 2. **[Drill stage 3]**
 
@@ -165,12 +185,14 @@ Restore giữ lại mọi job `send_email` và `send_reminder` đang xếp hàng
    <compose> exec -T timesheet <cli> outbound drop --job <job-id> --confirm
    ~~~
 
+Khi đối soát xong, hãy tạo một backup (mục 4): instance đã restore báo backup là `never` cho đến backup đầu tiên của chính nó.
+
 ## 8. Nâng cấp và rollback
 
 ### Nâng cấp
 
-1. Trước hết tạo và kiểm tra một backup, ghi lại tên thư mục của nó: đó là backup ghép đôi trước nâng cấp cho rollback. Ghi lại cả tag image đang chạy. **[Drill stage 4]** (drill tạo backup ghép đôi của schema cũ bằng công cụ mới)
-2. Build image mới từ bản export release mới và khởi động. Migration chạy một lần khi khởi động, dưới khóa độc quyền, trong một transaction; khởi động lại không áp dụng gì thêm. **[Drill stage 4]**
+1. Trước hết tạo và kiểm tra một backup, ghi lại tên thư mục của nó: đó là backup ghép đôi trước nâng cấp cho rollback. Ghi lại cả tag image đang chạy và ID image của nó (`docker image inspect --format '{{.Id}}' <image>`): tag vẫn gắn với image đó, nên nó là đích rollback. **[Drill stage 4]** (drill tạo backup ghép đôi của schema cũ bằng công cụ mới)
+2. Build image mới từ bản export release mới dưới một tag mới, mỗi release một tag: đặt `TIMESHEET_IMAGE=timesheet:<new-release-commit>` trong `<project-dir>/.env` (tag cũ trở thành `<previous-image>`), rồi build và khởi động, và ghi ID image mới như ở mục 1 bước 8. Không bao giờ build lại dưới tag cũ: làm vậy thay mất image mà rollback cần. Migration chạy một lần khi khởi động, dưới khóa độc quyền, trong một transaction; khởi động lại không áp dụng gì thêm. **[Drill stage 4]**
 
    ~~~bash
    <compose> up --detach --build
@@ -191,7 +213,7 @@ Bản build cũ từ chối CSDL của schema mới hơn, nên không bao giờ 
      <image> <cli> restore --from /backups/<paired-backup-name> --to /restore --keep-schema --confirm
    ~~~
 
-3. Khởi động image trước đó trên `<restore-dir>` với `JOB_RUNNER=off` trong môi trường. Schema cũ đã restore không có tạm dừng gửi ra ngoài, nên job tạo sau rollback không bị giữ: giữ bộ chạy tắt cho đến khi đối soát xong. Drill chỉ chứng minh bản build trước, khi bật bộ chạy, không gửi gì từ các job bị giữ (`JOB_RUNNER=off` là quy tắc đã ghi, không phải bước của drill).
+3. Khởi động image trước đó (tag `<previous-image>`, không bao giờ là bản build lại cùng tag) trên `<restore-dir>` với `JOB_RUNNER=off` trong môi trường, bằng `<compose-previous> up --detach --no-build` (nó dùng file env rollback). Schema cũ đã restore không có tạm dừng gửi ra ngoài, nên job tạo sau rollback không bị giữ: giữ bộ chạy tắt cho đến khi đối soát xong. Drill chỉ chứng minh bản build trước, khi bật bộ chạy, không gửi gì từ các job bị giữ (`JOB_RUNNER=off` là quy tắc đã ghi, không phải bước của drill).
 4. Đối soát. Bản build trước không có lệnh `outbound`: việc đối soát diễn ra sau khi nâng cấp lại, làm migrate dữ liệu đã restore và cung cấp công cụ tạm dừng và giải phóng. Thay đổi thực hiện sau backup ghép đôi không có trong bản đã restore.
 5. Nếu từ backup chưa có migration nào được áp dụng (schema tương thích), image trước đó có thể khởi động trên dữ liệu đang chạy. Đường này chưa được diễn tập. **[owner NAS step, unverified]**
 
@@ -206,7 +228,7 @@ Làm mới image nền khi có bản vá bảo mật, và luôn làm cùng nhau:
    ~~~
 
 2. Sửa `ARG NODE_IMAGE_DIGEST` và tag được nêu trong chú thích của Dockerfile cùng nhau (và `.nvmrc` khi đổi phiên bản Node). Không bao giờ dùng `latest`.
-3. Build lại không dùng cache và chạy drill trước khi triển khai; drill build image từ Dockerfile. **[Drill stage 1]**
+3. Đặt trước một tag `TIMESHEET_IMAGE` mới (mục 8 bước 2), rồi build lại không dùng cache và chạy drill trước khi triển khai; drill build image từ Dockerfile. Build lại dưới tag đang chạy sẽ thay mất image đó. **[Drill stage 1]**
 
    ~~~bash
    <compose> build --no-cache

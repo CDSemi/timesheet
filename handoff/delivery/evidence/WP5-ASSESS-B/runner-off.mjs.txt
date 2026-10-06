@@ -1,0 +1,96 @@
+// WP5-ASSESS-B probe: docs/11 section 8 step 3, "start the previous image on <restore-dir> with JOB_RUNNER=off". The
+// paired pre-upgrade backup the drill left (schema of the previous build) is restored with the CURRENT build's
+// `cli.js restore --keep-schema --confirm` into a new folder; then the PREVIOUS build (the WP3 source, host process,
+// port 47724) is started on it with JOB_RUNNER=off. Over a 25-second window no job may change state, no PDF may be
+// rendered and no delivery attempt may appear; the server must still answer /api/health. Stopped through its own handle.
+// Usage: node runner-off.mjs <current build dir> <previous build dir> <paired backup folder> <work dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join, resolve } from 'node:path';
+
+const [currentArg, previousArg, backupArg, workArg] = process.argv.slice(2);
+const CURRENT = resolve(currentArg);
+const PREVIOUS = resolve(previousArg);
+const BACKUP = resolve(backupArg);
+const WORK = resolve(workArg);
+if (existsSync(WORK) && readdirSync(WORK).length > 0) {
+  console.error('work dir must be new or empty');
+  process.exit(2);
+}
+mkdirSync(WORK, { recursive: true });
+const Database = createRequire(join(CURRENT, 'package.json'))('better-sqlite3');
+const PORT = 47724;
+let passes = 0;
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail === '' ? '' : `  ${detail}`}`);
+  if (condition) passes += 1;
+  else failures += 1;
+}
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const target = join(WORK, 'rollback');
+const liveEnv = { ...process.env, DATABASE_PATH: join(WORK, 'live', 'timesheet.db'), DATA_DIR: join(WORK, 'live', 'private-data') };
+for (const key of ['NODE_ENV', 'PRODUCTION_SENDING_ENABLED', 'JOB_RUNNER']) delete liveEnv[key];
+
+const restore = spawnSync(process.execPath, ['dist/server/cli.js', 'restore', '--from', BACKUP, '--to', target, '--keep-schema', '--confirm'], { cwd: CURRENT, env: liveEnv, encoding: 'utf8' });
+check('current build: restore --keep-schema --confirm of the paired backup exits 0 and warns about JOB_RUNNER=off', restore.status === 0 && restore.stderr.includes('JOB_RUNNER=off'), (restore.stdout ?? '').trim());
+
+function snapshot() {
+  const db = new Database(join(target, 'timesheet.db'), { readonly: true, fileMustExist: true });
+  try {
+    return {
+      schema: db.prepare('SELECT max(version) FROM schema_migrations').pluck().get(),
+      jobs: db.prepare('SELECT id, kind, state, attempts, updated_at FROM jobs ORDER BY id').all(),
+      attempts: db.prepare('SELECT count(*) FROM delivery_attempts').pluck().get(),
+      pdfFiles: db.prepare("SELECT count(*) FROM attachments WHERE kind = 'pdf'").pluck().get(),
+      heartbeat: (() => {
+        try {
+          return db.prepare('SELECT * FROM runner_heartbeat').all();
+        } catch {
+          return 'no runner_heartbeat table';
+        }
+      })(),
+    };
+  } finally {
+    db.close();
+  }
+}
+const before = snapshot();
+console.log(`INFO  before: schema ${before.schema}, jobs ${JSON.stringify(before.jobs.map((job) => [job.kind, job.state]))}, attempts ${before.attempts}, pdf files ${before.pdfFiles}`);
+
+const env = { ...process.env, DATABASE_PATH: join(target, 'timesheet.db'), DATA_DIR: join(target, 'private-data'), PORT: String(PORT), HOST: '127.0.0.1', OUTBOUND_MODE: 'capture', MAIL_FROM: 'timesheet@example.invalid', JOB_RUNNER: 'off' };
+for (const key of ['NODE_ENV', 'PRODUCTION_SENDING_ENABLED', 'APP_ORIGINS', 'PUBLIC_BASE_URL']) delete env[key];
+const out = [];
+const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: PREVIOUS, env, stdio: ['ignore', 'pipe', 'pipe'] });
+child.stdout.on('data', (chunk) => out.push(String(chunk)));
+child.stderr.on('data', (chunk) => out.push(String(chunk)));
+const exited = new Promise((done) => child.once('exit', (code, signal) => done({ code, signal })));
+try {
+  let health = null;
+  for (let index = 0; index < 60 && health !== 200; index += 1) {
+    await sleep(500);
+    try {
+      health = (await fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(5000) })).status;
+    } catch {
+      // not yet
+    }
+  }
+  check('previous build with JOB_RUNNER=off starts and answers /api/health', health === 200, `status ${health}`);
+  await sleep(25_000);
+  const after = snapshot();
+  check('no job changed state or attempts in 25 s (runner off)', JSON.stringify(after.jobs) === JSON.stringify(before.jobs), `${after.jobs.length} jobs`);
+  check('no delivery attempt and no new PDF appeared', after.attempts === before.attempts && after.pdfFiles === before.pdfFiles, `attempts ${after.attempts}, pdf files ${after.pdfFiles}`);
+  check('the schema stayed at the previous build (no migration)', after.schema === before.schema, `schema ${after.schema}`);
+  console.log(`INFO  heartbeat rows: ${JSON.stringify(after.heartbeat)}`);
+  console.log(`INFO  previous build log: ${out.join('').replaceAll(WORK, '<work>').trim().split('\n').join(' | ')}`);
+} catch (error) {
+  failures += 1;
+  console.log(`FAIL  probe stopped: ${error instanceof Error ? error.stack : String(error)}`);
+} finally {
+  child.kill();
+  console.log(`INFO  previous build stopped through its own handle: ${JSON.stringify(await exited)}`);
+  writeFileSync(join(WORK, 'previous-build.log'), out.join(''));
+}
+console.log(`SUMMARY ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

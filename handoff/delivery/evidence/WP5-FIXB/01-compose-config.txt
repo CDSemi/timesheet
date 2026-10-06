@@ -1,0 +1,143 @@
+# docker compose config of the three documented forms (live, restored, rollback); synthetic values; no container started; <task> = task folder
+== live
+name: ts-wp5-fixb-live
+services:
+  timesheet:
+    build:
+      context: <task>\pd
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    environment:
+      APP_ORIGINS: https://timesheet.example.invalid
+      DATA_DIR: /data/private-data
+      DATABASE_PATH: /data/timesheet.db
+      HOST: 0.0.0.0
+      MAIL_FROM: timesheet@example.invalid
+      NODE_ENV: production
+      OUTBOUND_MODE: capture
+      PORT: "3000"
+      PUBLIC_BASE_URL: https://timesheet.example.invalid
+      TRUSTED_PROXY_ADDRESSES: ""
+    image: timesheet:aaaa111
+    init: true
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: <task>/data
+        target: /data
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: ts-wp5-fixb-live_default
+exit=0
+== restored
+name: ts-wp5-fixb-live-restored
+services:
+  timesheet:
+    build:
+      context: <task>\pd
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    environment:
+      APP_ORIGINS: https://timesheet.example.invalid
+      DATA_DIR: /data/private-data
+      DATABASE_PATH: /data/timesheet.db
+      HOST: 0.0.0.0
+      MAIL_FROM: timesheet@example.invalid
+      NODE_ENV: production
+      OUTBOUND_MODE: capture
+      PORT: "3000"
+      PUBLIC_BASE_URL: https://timesheet.example.invalid
+      TRUSTED_PROXY_ADDRESSES: ""
+    image: timesheet:aaaa111
+    init: true
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: <task>/restore
+        target: /data
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: ts-wp5-fixb-live-restored_default
+exit=0
+== rollback
+name: ts-wp5-fixb-live-rollback
+services:
+  timesheet:
+    build:
+      context: <task>\pd
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    environment:
+      APP_ORIGINS: https://timesheet.example.invalid
+      DATA_DIR: /data/private-data
+      DATABASE_PATH: /data/timesheet.db
+      HOST: 0.0.0.0
+      JOB_RUNNER: "off"
+      MAIL_FROM: timesheet@example.invalid
+      NODE_ENV: production
+      OUTBOUND_MODE: capture
+      PORT: "3000"
+      PUBLIC_BASE_URL: https://timesheet.example.invalid
+      TRUSTED_PROXY_ADDRESSES: ""
+    image: timesheet:bbbb000
+    init: true
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: <task>/restore
+        target: /data
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: ts-wp5-fixb-live-rollback_default
+exit=0

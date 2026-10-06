@@ -1,0 +1,327 @@
+run dir <task>\runs\ac13-12; node v24.21.0; real now 2026-10-06T20:56:47Z (LA {"date":"2026-10-06","hour":13,"minute":56})
+cli bootstrap --config <run>/bootstrap-config.json -> exit 0: Company calendar and default policy created (4 holiday dates). | Setup token (shown once, valid until 2026-10-06T21:56:47Z; only its hash is stored): |  |   EN5PH-4ZKKV-4LCBP-QM5EJ-LMSAT-PZB5E-DJFN7-FY36B |  | Open the application and enter it on the Setup screen to create the first administrator. | Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+PASS  [BOOT-1] cli bootstrap creates the calendar and prints a setup token once  exit 0
+server ac13 start #1 healthy on port 47702
+admin POST /api/auth/bootstrap -> 201
+PASS  [BOOT-2] first administrator created from the setup token  status 201
+anon POST /api/auth/bootstrap -> 403 {"error":{"code":"setup_unavailable","message":"Setup is not available"}}
+PASS  [BOOT-3] a replayed setup token is refused (403)  status 403
+admin login -> 200
+admin GET /api/calendar -> 200
+admin POST /api/admin/users -> 201
+A login -> 200
+A POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+B login -> 200
+B POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+C login -> 200
+C POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+D login -> 200
+D POST /api/policies -> 201
+admin POST /api/admin/users -> 201
+F login -> 200
+F POST /api/policies -> 201
+A GET /api/periods/current -> 200
+PASS  [SETUP-1] current period is payroll 2026-10-09 (period 2026-09-23..2026-10-06, due 2026-10-09T00:00:00Z)  {"payroll_date":"2026-10-09","nominal_payroll_date":"2026-10-09","period_start":"2026-09-23","period_end":"2026-10-06","due_local_date":"2026-10-08","due_local_time":"17:00","due_at_utc":"2026-10-09T00:00:00Z","is_exception":false}
+A POST /api/settings/submission -> 201
+B POST /api/settings/submission -> 201
+C POST /api/settings/submission -> 201
+F POST /api/settings/submission -> 201
+A POST /api/signatures -> 201
+B POST /api/signatures -> 201
+C POST /api/signatures?authorize_auto_image=true -> 201
+F POST /api/signatures -> 201
+admin GET /api/admin/users -> 200
+PASS  [SETUP-2] admin list flags only Dave (never saved settings) as not set up  {"alice.synthetic@example.invalid":false,"bob.synthetic@example.invalid":false,"carol.synthetic@example.invalid":false,"dave.synthetic@example.invalid":true,"frank.synthetic@example.invalid":false,"pilot-admin@example.invalid":true}
+A POST /api/ot/opening-balance -> 201
+PASS  [OT-0] Alice records an explicit opening balance of +90 (F-3)  status 201 posted 90
+A POST /api/days/2026-09-23/sessions -> 201
+A POST /api/days/2026-09-24/sessions -> 201
+A POST /api/days/2026-09-25/sessions -> 201
+A POST /api/days/2026-09-27/sessions -> 201
+A POST /api/days/2026-09-28/sessions -> 201
+A POST /api/days/2026-09-29/sessions -> 201
+A POST /api/days/2026-10-01/sessions -> 201
+A POST /api/days/2026-10-02/sessions -> 201
+A POST /api/days/2026-10-02/sessions -> 201
+A POST /api/days/2026-10-04/sessions -> 201
+A POST /api/days/2026-10-05/sessions -> 201
+A POST /api/days/2026-10-06/sessions -> 201
+A GET /api/days/2026-10-01 -> 200
+A PUT /api/days/2026-10-01 -> 200
+PASS  [E-1] 4 h work + 4 h leave entry saved without a reason (current period)  status 200
+A POST /api/clock/in -> 201
+A POST /api/clock/out -> 200
+PASS  [E-2] Clock in / Clock out records a clock-source session on today (2026-10-06)  201/200 2026-10-06
+A GET /api/timesheets/2026-10-09 -> 200
+PASS  [AC02-1] per-day credits: N boundary 30/31/45/46 -> 0/30/30/60, Sundays 120 and 16->30, overnight Fri 240, 4h+4h 0  all match
+PASS  [AC02-2] overnight Friday 22:00-02:00 splits R=600 (Fri incl. day shift), O=120 (Sat) and stays on Friday  R 600 O 120
+PASS  [AC02-3] holiday 2026-09-30 is non-working with its long label; 4h+4h day has no deficit; 10-05 deficit 60  holiday nonworking/Ngày hội công ty tổng kết năm và họp mặt khách hàng (synthetic long holiday label), 10-01 deficit 0, 10-05 deficit 60
+PASS  [AC02-4] today (unknown breaks + clock session) is incomplete, not zero  status incomplete_breaks
+A GET /api/timesheets/2026-10-09/review -> 200
+A GET /api/timesheets/2026-10-09/review -> 200
+A GET /api/timesheets/2026-10-09/finalization -> 200
+A GET /api/revisions -> 200
+A GET /api/deliveries -> 200
+A GET /api/history -> 200
+A GET /api/timesheets/2026-10-09 -> 200
+A GET /api/ot/summary -> 200
+PASS  [AC09-1] review/finalization/history GETs and HEAD write nothing (data_version and every table count unchanged)  200,200,200,200,200,200,200,200 HEAD 200
+A GET /api/timesheets/2026-10-09/signoff -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+PASS  [AC09-2] GET on the sign-off path does not sign (404/405, nothing written)  status 404
+A GET /api/timesheets/2026-10-09/review -> 200
+PASS  [AC13-1] review payload: 14 dates, credited total 510 (8:30), one 60-minute choose-mode deficit on 10-05, today unresolved  days 14 total 510 deficits [["2026-10-05",60,"choose_at_signoff","pending"]] unresolved [{"work_date":"2026-10-06","reason":"unconfirmed_breaks","detail":null}]
+PASS  [AC14-0] review lists the exact recipients and the frozen email content  ["payroll-a@example.invalid"]["manager-a@example.invalid"]
+A POST /api/timesheets/2026-10-09/signoff -> 422 {"error":{"code":"signer_name_required","message":"Sign-off requires the employee name"}}
+A POST /api/timesheets/2026-10-09/signoff -> 422 {"error":{"code":"acknowledgement_required","message":"Acknowledge the incomplete evidence before signing off","details":{"unresolved":1}}}
+A POST /api/timesheets/2026-10-09/signoff -> 422 {"error":{"code":"deficit_choice_required","message":"Choose to deduct or waive each deficit before signing off","details":{"work_dates":["2026-10-05"]}}}
+A POST /api/timesheets/2026-10-09/signoff -> 409 {"error":{"code":"stale_review","message":"The reviewed content changed; review it again","details":{"fresh_review_required":true}}}
+A POST /api/timesheets/2026-10-09/signoff -> 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+A POST /api/timesheets/2026-10-09/signoff -> 403 {"error":{"code":"origin_rejected","message":"Request origin is not allowed"}}
+PASS  [AC06-1] sign-off refusals: no name 422, no acknowledgement 422, no deficit choice 422, stale hash 409, foreign/missing Origin 403; nothing written  422 signer_name_required/422 acknowledgement_required/422 deficit_choice_required/409/403/403
+A POST /api/timesheets/2026-10-09/signoff -> 201
+A POST /api/timesheets/2026-10-09/signoff -> 200
+A POST /api/timesheets/2026-10-09/signoff -> 200
+PASS  [AC06-2] concurrent identical sign-offs: exactly one 201 revision 1; identical retry replays (200)  statuses 200/201 retry 200 replayed
+A GET /api/ot/ledger -> 200
+PASS  [AC03-1] ledger after sign-off: opening 90, six credits once (30,120,30,60,240,30), one debit -60 on 10-05; posted 540  posted 540 credits [["2026-09-25",30],["2026-09-27",120],["2026-09-28",30],["2026-09-29",60],["2026-10-02",240],["2026-10-04",30]] debits [["2026-10-05",-60,"deficit_debit"]]
+PASS  [AC06-3] the real sign-off is recorded with signed_at now (UTC) and the reviewed hash  {"signed_at":"2026-10-06T20:56:51Z"}
+server ac13 stopped (own child handle), exit SIGTERM
+server ac13 start #2 healthy on port 47702
+PASS  [AC08-1] restart before the PDF keeps the queued PDF and send jobs  queued 2
+cli run-jobs 2026-10-06T20:56:57Z first pass (pdf) -> exit 0: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0}
+server ac13 stopped (own child handle), exit SIGTERM
+server ac13 start #3 healthy on port 47702
+PASS  [AC08-2] restart after the PDF: PDF ready persisted across the restart  pdf ready, attempts after first pass 1, summary {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T20:58:57Z alice r1 send -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:00:57Z alice r1 send -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:08:57Z alice r1 send -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=9412221b-cef6-4650-9bc4-dbf9f43dc3b3 -> 200
+PASS  [AC08-3] the send completes exactly once after the restarts (one accepted attempt)  [[1,"accepted"]]
+PASS  [AC14-1] capture of r1: exactly the configured To/Cc, the sender, no Bcc, the frozen subject/body, and the PDF equal to the download  {"from":"timesheet-pilot-sender@example.invalid","to":["payroll-a@example.invalid","manager-a@example.invalid"]}
+PASS  [AC14-2] capture of r1: from = MAIL_FROM, PDF sha256 = downloaded PDF = metadata, no Bcc header  pdf b6a622eae2b3d461 headers {"From":"timesheet-pilot-sender@example.invalid","To":"payroll-a@example.invalid","Cc":"manager-a@example.invalid","Message-ID":"<fa816a74-ea13-4bf7-a14f-46cacb489350@timesheet.invalid>","Date":"Tue, 06 Oct 2026 20:56:57 +0000","MIME-Version":"1.0"}
+PASS  [AC14-3] email subject/body equal the reviewed frozen content  subject Timesheet 2026-09-23 to 2026-10-06 - Nguyễn Thị Alice Synthetic - Submitted
+PASS  [AC10-1] r1 PDF: credited OT total 8:30, Alice Unicode name, long holiday label, sign date 2026-10-06, revision/submission id, signature image  pages 1 images 1
+A PUT /api/sessions/e6e0eb98-40a1-401c-b8eb-5757b1dc8aa7 -> 422 {"error":{"code":"reason_required","message":"Editing an old or finalized period requires a reason","details":{"period_relation":"current","finalized":true,"payroll_date":"2026-10-09"}}}
+A PUT /api/sessions/e6e0eb98-40a1-401c-b8eb-5757b1dc8aa7 -> 200
+PASS  [AC04-1] editing a finalized period: no reason 422, with reason 200  422 reason_required / 200
+cli run-jobs 2026-10-06T21:16:57Z after edit -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  [AC04-2] editing does not send: no new job, attempt or capture  jobs 4->4 attempts 1 captures 1
+A GET /api/timesheets/2026-10-09/review -> 200
+A POST /api/timesheets/2026-10-09/revisions -> 422 {"error":{"code":"reason_required","message":"A correction requires a reason"}}
+A POST /api/timesheets/2026-10-09/revisions -> 201
+PASS  [AC04-3] correction revision needs a reason (422) and then creates revision 2 superseding r1, total 540 (9:00)  422 reason_required / 201 r2 total 540
+A GET /api/ot/ledger -> 200
+PASS  [AC04-4] only the difference posts: one new +30 entry correcting the 10-04 credit; posted 570  [["correction",30,"2026-10-04",true]]
+cli run-jobs 2026-10-06T21:18:57Z r2 pdf -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:20:57Z r2 pdf 2 -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/revisions -> 200
+PASS  [AC04-5] original r1 snapshot, PDF (same sha256) and sign-off kept; r2 with send_email=false sent nothing  r1 sha same true; revisions [[2,"correction","ready",null],[1,"original","ready","accepted"]]
+PASS  [AC10-2] r2 PDF shows the corrected total 9:00  pages 1
+A POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 201
+cli run-jobs 2026-10-06T21:22:57Z resend r2 -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:24:57Z resend r2 b -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=d7478ef0-1160-4629-b0d4-44aa08b3d756 -> 200
+A GET /api/ot/ledger -> 200
+PASS  [AC04-6] explicit resend of the unchanged PDF: new attempt accepted, same PDF, ledger unchanged  201 ["accepted"] ledger 9->9
+A POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 201
+failure injection: created empty capture folder for attempt a747158c-892a-4cf9-b3e6-598a5c656fa9
+cli run-jobs 2026-10-06T21:26:57Z uncertain -> exit 0: {"claimed":1,"succeeded":0,"retried":0,"intervention":1,"lost":0}
+cli run-jobs 2026-10-06T21:28:57Z uncertain again -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:36:57Z uncertain again 2 -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=d7478ef0-1160-4629-b0d4-44aa08b3d756 -> 200
+A POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 409 {"error":{"code":"delivery_uncertain","message":"A delivery attempt is uncertain; record a decision before resending"}}
+PASS  [AC08-4] uncertain outcome is not blindly retried: state uncertain, no new attempt or capture over later runs, resend refused until a decision  uncertain attempts 2 resend 409 delivery_uncertain
+A POST /api/deliveries/a747158c-892a-4cf9-b3e6-598a5c656fa9/decision -> 201
+cli run-jobs 2026-10-06T21:38:57Z decided resend -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:40:57Z decided resend b -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=d7478ef0-1160-4629-b0d4-44aa08b3d756 -> 200
+PASS  [AC08-5] explicit owner decision "resend" creates exactly one new accepted attempt  201 [[1,"accepted",null],[1,"uncertain","resend"],[1,"accepted",null]]
+A POST /api/settings/submission -> 201
+A POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 409 {"error":{"code":"envelope_changed","message":"The recipients or template differ from this revision; create a new revision instead","details":{"new_revision_required":true,"fields":["to"]}}}
+A POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 201
+cli run-jobs 2026-10-06T21:42:57Z frozen resend -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:44:57Z frozen resend b -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  [AC14-6] after a recipient change in settings: resend echoing the new To is 409 envelope_changed; a plain resend goes to the frozen recipients only  201/409 envelope_changed/201 [["payroll-a@example.invalid","manager-a@example.invalid"]]
+A POST /api/ot/leave -> 201
+A POST /api/ot/leave -> 200
+PASS  [OT-1] reserve 240 with recorded permission: posted 570, reserved 240, available 330; same key replays  201/200 {"posted_minutes":570,"reserved_minutes":240,"available_minutes":330,"negative":false,"reconciliation_required":false}
+A POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/consume -> 200
+A POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/consume -> 200
+PASS  [OT-2] partial record use 180: posted 390, reserved 60, available 330; the same use key does not spend twice  200/200 {"posted_minutes":390,"reserved_minutes":60,"available_minutes":330,"negative":false,"reconciliation_required":false} {"posted_minutes":390,"reserved_minutes":60,"available_minutes":330,"negative":false,"reconciliation_required":false}
+A POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/cancel -> 200
+PASS  [OT-3] cancel releases the unused 60: reserved 0, available 390  200 {"posted_minutes":390,"reserved_minutes":0,"available_minutes":390,"negative":false,"reconciliation_required":false} released 60
+A POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/reverse -> 200
+PASS  [OT-4] reversal of 30 used minutes compensates: posted 420  200 {"posted_minutes":420,"reserved_minutes":0,"available_minutes":420,"negative":false,"reconciliation_required":false}
+A POST /api/ot/leave -> 201
+A POST /api/ot/leave -> 409 {"error":{"code":"insufficient_balance","message":"The available OT balance does not cover this leave","details":{"available_minutes":120,"requested_minutes":300}}}
+A GET /api/ot/summary -> 200
+PASS  [OT-5] concurrent reservations of 300+300 against 420 available: exactly one succeeds, no overdraft  201 /409 insufficient_balance {"posted_minutes":420,"reserved_minutes":300,"available_minutes":120,"negative":false,"reconciliation_required":false,"provisional_minutes":0,"provisional_periods":[]}
+A POST /api/ot/leave/cfcf762a-645f-4756-b51f-53fa2c4169f0/cancel -> 200
+A POST /api/ot/leave -> 201
+A POST /api/ot/leave/cda1cca4-465a-4e5a-9235-97ef82cdc876/consume -> 200
+A POST /api/ot/leave/cda1cca4-465a-4e5a-9235-97ef82cdc876/consume -> 409 {"error":{"code":"stale_version","message":"This record changed since it was loaded; reload and review it again"}}
+A GET /api/ot/leave -> 200
+PASS  [OT-6] concurrent record-use 80+80 on a 100 reservation: one succeeds, consumed 80, no double spend  200/409 consumed 80 posted 340
+A GET /api/ot/summary -> 200
+A GET /api/days/2026-10-06 -> 200
+A PUT /api/days/2026-10-06 -> 200
+A GET /api/days/2026-10-06 -> 200
+A GET /api/ot/summary -> 200
+PASS  [OT-7] a day ot-kind leave of 240 vs 150 consumed (180-30) warns (mismatch) and moves no balance  200 {"kind_minutes":240,"consumed_minutes":180,"reversed_minutes":30,"mismatch":true} posted 340->340
+A POST /api/days/2026-09-15/sessions -> 422 {"error":{"code":"reason_required","message":"Editing an old or finalized period requires a reason","details":{"period_relation":"old","finalized":false,"payroll_date":"2026-09-25"}}}
+A POST /api/days/2026-09-15/sessions -> 201
+A GET /api/timesheets/2026-09-25/review -> 200
+A POST /api/timesheets/2026-09-25/signoff -> 201
+A GET /api/ot/ledger -> 200
+PASS  [AC04-7] old period: an edit without a reason is 422, with a reason 201; a late manual sign-off of the old period posts its credit (60) once  422 reason_required/201/201  credit [60]
+cli run-jobs 2026-10-06T21:46:57Z p0 jobs -> exit 0: {"claimed":2,"succeeded":1,"retried":1,"intervention":0,"lost":0}
+cli run-jobs 2026-10-06T21:48:57Z p0 jobs b -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+A GET /api/deliveries?revision_id=b06bf01b-e37c-4aad-9712-5430f235c43f -> 200
+PASS  [AC04-8] the old period's PDF and send complete once  ["accepted"]
+A POST /api/imports -> 201
+A GET /api/settings/submission/versions -> 200
+B GET /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+B PUT /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+B DELETE /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+B GET /api/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 404 {"error":{"code":"not_found","message":"Revision not found"}}
+B POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 404 {"error":{"code":"not_found","message":"Revision not found"}}
+B POST /api/deliveries/e2bdafd3-795d-4ee7-8057-24284a6071de/decision -> 404 {"error":{"code":"not_found","message":"Delivery attempt not found"}}
+B GET /api/signatures/b79bedce-31dd-4738-aebb-0f7b23a525fc -> 404 {"error":{"code":"not_found","message":"Signature not found"}}
+B POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/cancel -> 404 {"error":{"code":"not_found","message":"OT leave request not found"}}
+B POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/consume -> 404 {"error":{"code":"not_found","message":"OT leave request not found"}}
+B GET /api/imports/85078bf4-3198-40f9-a20d-23f90f73e6af -> 404 {"error":{"code":"not_found","message":"Import not found"}}
+B POST /api/imports/85078bf4-3198-40f9-a20d-23f90f73e6af/commit -> 404 {"error":{"code":"not_found","message":"Import not found"}}
+B GET /api/settings/submission/versions/ac0ea013-6e9b-41e1-99c4-9ca5d3b7f7da -> 404 {"error":{"code":"not_found","message":"Settings version not found"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/timesheets/2026-10-09 -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+admin GET /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+admin PUT /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+admin DELETE /api/sessions/42d2c3f2-6434-4c52-9d96-ec34e7a65e68 -> 404 {"error":{"code":"not_found","message":"Work session not found"}}
+admin GET /api/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 404 {"error":{"code":"not_found","message":"Revision not found"}}
+admin POST /api/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 404 {"error":{"code":"not_found","message":"Revision not found"}}
+admin POST /api/deliveries/e2bdafd3-795d-4ee7-8057-24284a6071de/decision -> 404 {"error":{"code":"not_found","message":"Delivery attempt not found"}}
+admin GET /api/signatures/b79bedce-31dd-4738-aebb-0f7b23a525fc -> 404 {"error":{"code":"not_found","message":"Signature not found"}}
+admin POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/cancel -> 404 {"error":{"code":"not_found","message":"OT leave request not found"}}
+admin POST /api/ot/leave/6d65e6f4-24b9-4196-98bd-72f21e1d16bd/consume -> 404 {"error":{"code":"not_found","message":"OT leave request not found"}}
+admin GET /api/imports/85078bf4-3198-40f9-a20d-23f90f73e6af -> 404 {"error":{"code":"not_found","message":"Import not found"}}
+admin POST /api/imports/85078bf4-3198-40f9-a20d-23f90f73e6af/commit -> 404 {"error":{"code":"not_found","message":"Import not found"}}
+admin GET /api/settings/submission/versions/ac0ea013-6e9b-41e1-99c4-9ca5d3b7f7da -> 404 {"error":{"code":"not_found","message":"Settings version not found"}}
+admin GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/timesheets/2026-10-09 -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+admin GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+PASS  [AC01-1] Bob and the admin get 404/403 on every swapped id of Alice (sessions, PDF, resend, decision, signature, leave, import, settings, shared routes)  28 refusals; import 201
+B GET /api/deliveries?revision_id=9412221b-cef6-4650-9bc4-dbf9f43dc3b3 -> 200
+B GET /api/ot/opening-balance -> 200
+B GET /api/ot/ledger -> 200
+admin GET /api/timesheets/2026-10-09 -> 200
+PASS  [AC01-2] Bob sees no Alice delivery, opening balance or ledger; the admin timesheet route shows only the admin (no Alice sessions)  200/200/200/200
+admin GET /api/admin/submissions -> 200
+admin GET /api/admin/operations -> 200
+PASS  [AC01-3] admin status views carry no timesheet details (no sessions, minutes, notes, signer, body or subject)  200/200
+PASS  [AC01-4] Alice data unchanged by the refused swaps  row counts compared
+A POST /api/shares -> 201
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/timesheets/2026-10-09 -> 200
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/ot/summary -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B PUT /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/days/2026-10-07 -> 403 {"error":{"code":"grant_scope","message":"This share does not include this action"}}
+B POST /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/timesheets/2026-10-09/signoff -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/signatures/b79bedce-31dd-4738-aebb-0f7b23a525fc -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/revisions/d7478ef0-1160-4629-b0d4-44aa08b3d756/resend -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/settings/submission -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/ot/leave -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+B POST /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/shares -> 404 {"error":{"code":"not_found","message":"Endpoint not found"}}
+PASS  [AC16-1] view-only share: timesheet 200; OT, PDF, edit refused; sign-off, signature image, resend, settings, leave and re-sharing never reachable  grant 201 view 200 ot 403 pdf 403 edit 403 sign 404 sig 404 resend 404 settings 404 leave 404 reshare 404
+A PUT /api/shares/e282f74f-a7ec-4a7c-a49f-3201a351e484 -> 200
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/ot/summary -> 200
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/days/2026-10-07 -> 200
+B PUT /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/days/2026-10-07 -> 200
+PASS  [AC16-2] after the change applies on the next request: OT 200, PDF 200 (same bytes, audited), edit 200 attributed to Bob  change 200 ot 200 pdf 200 edit 200  audit {"actor_user_id":"e3522bc9-a03b-44e8-b40a-6bdd71a2bd5d","owner_user_id":"ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d"} pdfAudit 1
+PASS  [AC16-2b] a change replaces the grant with a new id (the old row is revoked)  new id
+A POST /api/shares/e282f74f-a7ec-4a7c-a49f-3201a351e484/revoke -> 404 {"error":{"code":"not_found","message":"Share not found"}}
+A POST /api/shares/fb204d20-4649-47cc-9d7e-4458115ad4ee/revoke -> 200
+revoke of the replaced (already revoked) row -> 404
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/timesheets/2026-10-09 -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+B GET /api/shared/ce47d17e-b9c7-4eb1-9e9c-dd02be8e2b6d/revisions/9412221b-cef6-4650-9bc4-dbf9f43dc3b3/pdf -> 404 {"error":{"code":"not_found","message":"Shared timesheet not found"}}
+PASS  [AC16-3] revocation applies on the next request (404)  revoke 200 view 404 pdf 404
+admin POST /api/admin/users/e3522bc9-a03b-44e8-b40a-6bdd71a2bd5d/deactivate -> 200
+B GET /api/auth/me -> 401 {"error":{"code":"unauthenticated","message":"Sign in required"}}
+admin POST /api/admin/users/e3522bc9-a03b-44e8-b40a-6bdd71a2bd5d/reactivate -> 200
+B login -> 200
+PASS  [AC16-4] deactivation applies on the next request (401), reactivation restores sign-in  200/401/200
+C POST /api/days/2026-09-29/sessions -> 201
+C POST /api/days/2026-10-05/sessions -> 201
+B POST /api/days/2026-09-28/sessions -> 201
+B POST /api/days/2026-09-29/sessions -> 201
+B GET /api/days/2026-09-29 -> 200
+PASS  [ZONE-1] Bob enters 22:00-07:00 in Asia/Ho_Chi_Minh: stored 15:00Z-00:00Z on LA work date 2026-09-29, R=540, credit 60  201 2026-09-29T15:00:00Z-2026-09-30T00:00:00Z R 540 credit 60
+A GET /api/calendar -> 200
+PASS  [E12-1] from 1 October the calendar warns that next year's company dates are missing (E-12)  [{"code":"next_year_calendar_missing","year":2027,"warn_from":"2026-10-01","message":"No company holiday or closure dates are set for 2027; import them before the first affected period."}]
+D POST /api/days/2026-09-28/sessions -> 201
+F POST /api/days/2026-09-28/sessions -> 201
+admin PUT /api/admin/automation/activation -> 200
+admin PUT /api/admin/automation/activation -> 422 {"error":{"code":"activation_in_past","message":"The activation instant cannot be before the current time"}}
+PASS  [AC07-0] activation recorded; an instant in the past is refused (activation_in_past)  200/422 activation_in_past
+cli run-jobs 2026-10-09T00:30:00Z P1 due, activation later -> exit 0: {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-09T00:32:00Z P1 due, activation later -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-09T00:34:00Z P1 due, activation later -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+PASS  [AC07-1] a deadline before the activation instant is never finalized or recorded overdue  automatic 0 overdue 0
+cli run-jobs 2026-10-22T00:30:00Z P2 24h reminder window -> exit 0: {"claimed":10,"succeeded":10,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T00:32:00Z P2 24h reminder window -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T00:34:00Z P2 24h reminder window -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T22:30:00Z P2 2h reminder window -> exit 0: {"claimed":8,"succeeded":8,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T22:32:00Z P2 2h reminder window -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T22:34:00Z P2 2h reminder window -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T23:00:00Z P2 reminder dedupe -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-10-22T23:10:00Z P2 reminder dedupe b -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  [REM-1] before-due reminders for P2: Alice, Bob, Carol and Frank get one 24 h and one 2 h reminder each, each to the person's own address only; no duplicate on later passes  {"A":2,"B":2,"C":2,"D":2,"F":2} total 12 after windows 12; subjects Timesheet due in about 24 hours: payroll 2026-10-23 | Timesheet due in about 2 hours: payroll 2026-10-23
+observation (carried WP3 R8): never-configured accounts received before-due reminders for P2: ["pilot-admin@example.invalid","pilot-admin@example.invalid","dave.synthetic@example.invalid","dave.synthetic@example.invalid"]
+admin PUT /api/admin/automation/activation -> 200
+state injection: users.created_at of Frank set to 2026-10-10T00:00:00Z (account created after the P1 deadline)
+cli run-jobs 2026-11-07T00:00:00Z downtime recovery -> exit 0: {"claimed":14,"succeeded":12,"retried":2,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:02:00Z downtime recovery -> exit 0: {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:04:00Z downtime recovery -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:10:00Z downtime recovery -> exit 0: {"claimed":12,"succeeded":12,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:12:00Z downtime recovery -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:14:00Z downtime recovery -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T00:20:00Z downtime recovery -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  [AC07-2] activation moved to now (200)  200
+PASS  [AC07-3] recovery after downtime: Carol P1,P2,P3 and Frank P2,P3 finalized automatically, oldest deadline first; Frank P1 (before the account) never  C:2026-10-09 F:2026-10-23 C:2026-10-23 F:2026-11-06 C:2026-11-06
+PASS  [AC07-4] switch off: Bob P1-P3 and Alice P2-P3 recorded overdue once each; Dave (never saved settings) nothing; Alice P1 already finalized untouched  B:2026-10-09 A:2026-10-23 B:2026-10-23 A:2026-11-06 B:2026-11-06; Alice revisions (P1 r1, r2 and P0 r1) 3
+PASS  [AC07-5] switch off and never-configured: no revision, PDF or send for Bob or Dave  revisions/attempts 0
+C GET /api/timesheets/2026-10-09/finalization -> fetch error ECONNRESET after 3097 ms without HTTP traffic
+C GET /api/timesheets/2026-10-09/finalization -> 200
+PASS  [AC07-6] Carol P1 record: origin deadline, review pending, no sign-off (signed_at empty); OT 60 posted; choose-mode deficit pending, no debit  [["2026-09-29","credit",60,"posted"],["2026-10-05","deficit_debit",-60,"pending_choice"]]
+C GET /api/revisions -> 200
+C GET /api/timesheets/2026-10-23/finalization -> 200
+PASS  [AC07-7] Carol P2 (no saved entries) submitted with default labels, no OT and no deficit  []
+PASS  [AC07-8] automatic sends captured: Carol 3 (to payroll-c only), Frank 2 (to payroll-f only)  carol 3 frank 2
+PASS  [AC07-9] Carol automatic P1 email/PDF: no automatic indicator, status "Submitted", no note line, authorized signature image present, date of the automatic submission (2026-11-06 LA)  images 1 subject Timesheet 2026-09-23 to 2026-10-06 - Carol Synthetic - Submitted
+PASS  [AC07-10] Frank automatic P2 (note on, image not authorized): note text in email status and PDF, no signature image  images 0
+PASS  [AC07-11] outcome notice to Carol states review pending; overdue warning to Bob; Dave receives no overdue warning  carol 5 bob 5 dave 2: Timesheet due in about 24 hours: payroll 2026-10-23 | Timesheet submitted automatically: payroll 2026-10-23 | Timesheet submitted automatically: payroll 2026-10-09 | Timesheet submitted automatically: payroll 2026-11-06 | Timesheet due in about 2 hours: payroll 2026-10-23 / Timesheet overdue: payroll 2026-10-23 | Timesheet overdue: payroll 2026-11-06 | Timesheet due in about 2 hours: payroll 2026-10-23 | Timesheet due in about 24 hours: payroll 2026-10-23 | Timesheet overdue: payroll 2026-10-09 / Timesheet due in about 2 hours: payroll 2026-10-23 | Timesheet due in about 24 hours: payroll 2026-10-23
+C GET /api/ot/ledger -> 200
+C GET /api/timesheets/2026-10-09/review -> 200
+C POST /api/timesheets/2026-10-09/late-review -> 201
+C GET /api/ot/ledger -> 200
+PASS  [AC07-12] late review of the automatic revision: new signed revision 2 (kind late_review), zero ledger movement, no send job  201  [{"id":"68a902d1-d3a7-43e0-94c0-91ef743a475e","kind":"render_pdf","state":"queued"}]
+C GET /api/timesheets/2026-10-09/review -> 200
+C POST /api/timesheets/2026-10-09/signoff -> 409 {"error":{"code":"already_finalized","message":"This period is already finalized; load it again to review its current state","details":{"fresh_review_required":true}}}
+PASS  [AC07-13] a sign-off of an already finalized period is 409 (no duplicate revision or posting)  409 already_finalized
+cli run-jobs 2026-11-07T02:00:00Z idempotent rescan -> exit 0: {"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T02:02:00Z idempotent rescan -> exit 0: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T02:10:00Z idempotent rescan -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-07T02:20:00Z idempotent rescan -> exit 0: {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+PASS  [AC03-2] later scans and runs add no revision, ledger row, attempt, sign-off or PDF send (revisions, ledger, attempts, sign-offs, PDF captures)  [9,14,11,4,10] -> [9,14,11,4,10] [{"claimed":3,"succeeded":3,"retried":0,"intervention":0,"lost":0},{"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0},{"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0},{"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}]
+admin PUT /api/admin/automation/activation -> 200
+cli run-jobs 2026-11-21T00:00:00Z activation cleared -> exit 0: Job retention: deleted_scan_jobs=4 | {"claimed":2,"succeeded":2,"retried":0,"intervention":0,"lost":0}
+cli run-jobs 2026-11-21T00:02:00Z activation cleared -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  [AC07-14] with the activation cleared, a passed deadline is not finalized or recorded overdue (not_active)  200 audit 10->10
+A GET /api/history -> 200
+anon GET /api/health -> 200
+anon GET /api/ready -> 200
+PASS  [AC14-4] health/ready expose no personal data or path  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  [AC14-5] server log and CLI outputs contain no password, session cookie or setup token (token only in the bootstrap terminal output)  leaked 0; server log lines 7
+server ac13 stopped (own child handle), exit SIGTERM
+PASS  [NET-1] every client fetch error was a keep-alive reset (ECONNRESET) on an idempotent read after an idle gap, retried once successfully  [{"who":"C","method":"GET","path":"/api/timesheets/2026-10-09/finalization","code":"ECONNRESET","idle":3097}]
+SUMMARY pass=77 fail=0 total=77

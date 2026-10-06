@@ -1,0 +1,64 @@
+PASS  cli.js seed exits 0 and prints no password  exit 0
+INFO  seed stdout  Created synthetic seed data: | admin    admin@example.invalid | employee employee@example.invalid | employee employee2@example.invalid | sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes | submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for employee2@example.invalid | capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured
+PASS  source instance answers /api/ready
+PASS  employee2 and the administrator sign in
+INFO  periods/current  {"today_local":"2026-10-06","current":"2026-10-16","in_progress":"2026-10-16"}
+PASS  weekday session in the old period (540 worked minutes)  status 201 
+PASS  Saturday session in the old period (240 off-calendar minutes)  status 201 
+PASS  sign-off of the old period (finalized revision 1)  status 201 
+PASS  revision 1: PDF ready and its send finished (capture)
+INFO  ledger after sign-off  {"posted_minutes":900,"reserved_minutes":240,"available_minutes":660,"negative":false,"reconciliation_required":false}
+PASS  edit of the finalized period with a reason (correction draft)  status 200 
+PASS  correction revision finalized (revision 2)  status 201 
+PASS  revision 2: PDF ready
+PASS  OT leave request reserved (120 minutes)  status 201 
+PASS  partial record use (60 of 120 minutes)  status 200 
+INFO  source balance  {"posted_minutes":870,"reserved_minutes":300,"available_minutes":570,"negative":false,"reconciliation_required":false}
+INFO  source ledger entries  [{"type":"credit","delta":600,"work_date":"2026-10-01"},{"type":"credit","delta":60,"work_date":"2026-09-15"},{"type":"credit","delta":240,"work_date":"2026-09-19"},{"type":"correction","delta":30,"work_date":"2026-09-15"},{"type":"leave_consumption","delta":-60,"work_date":"2026-09-30"}]
+INFO  source leave  [{"reserved":60,"consumed":60,"released":0},{"reserved":240,"consumed":0,"released":0}]
+INFO  source revisions  [{"no":2,"kind":"correction","review":"signed","pdf":"ready","delivery":null},{"no":1,"kind":"original","review":"signed","pdf":"ready","delivery":null}]
+INFO  source PDF sha256  ["a15c8a9b3abb39c1f8aae06d2891aa75045c7f173b884b55ec2503bac797d9d7","07c8d6b8c0a8c8c9c7af7998bfe7e9321b2d8ab42096809838375a2eb238ad46"]
+PASS  /api/health and /api/ready carry no private data  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  administrator operations JSON carries no timesheet detail, path or name (recipient addresses are allowed by docs/07)  status 200
+PASS  cli.js backup while the source runs exits 0 and prints counts only  {"outcome":"succeeded","backup":"timesheet-backup-20261006T203500Z-a8815869","schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824,"duration_ms":81,"status_recorded":true}
+INFO  manifest  {"schema":13,"app_version":"0.1.0","files":3,"kinds":["signature","pdf","pdf"]}
+FAIL  a session written after the backup (must not be in the restore)  status 422 {"error":{"code":"overlapping_user_intervals","message":"This session overlaps another of your sessions","details":{"conflicting_session_id":"59930dbc-6599-468a-b2d8-612dcf3f2f39"}}}
+INFO  source server stopped through its own handle  {"code":null,"signal":"SIGTERM"}
+PASS  restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)  Restore refused (target_inside_data_dir): The restore target must be outside the live private data directory (DATA_DIR)
+PASS  restore into a non-empty folder is refused (exit 2, target_not_empty)  Restore refused (target_not_empty): The restore target must be an empty or new directory
+PASS  cli.js restore exits 0, verified, paused (restored), counts only  {"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":2,"ledger_entries":5,"attachments":3}}
+INFO  tables  29
+INFO  tables that differ between the backup copy and the restored copy  [{"name":"audit_events","backup":33,"restored":34},{"name":"jobs","backup":5,"restored":5},{"name":"operations_state","backup":1,"restored":1}]
+PASS  only the restore bookkeeping differs (operations_state pause, one audit event, held outbound jobs)  audit_events,jobs,operations_state
+PASS  restored schema equals the backup copy  13
+PASS  restored integrity equals the backup copy  "ok"
+PASS  restored fk equals the backup copy  0
+PASS  restored ledger_per_user equals the backup copy  [{"user_id":"1c76c771-a76d-4527-8cd0-c7a540a4401e","entries":5,"minutes":870}]
+PASS  restored ledger_kinds equals the backup copy  [{"entry_type":"correction","n":1,"minutes":30},{"entry_type":"credit","n":3,"minutes":900},{"entry_type":"leave_consumption","n":1,"minutes":-60}]
+PASS  restored revisions equals the backup copy  2 rows
+PASS  restored signoffs equals the backup copy  2
+PASS  restored leave equals the backup copy  2 rows
+PASS  restored attachments equals the backup copy  3 rows
+PASS  restored work_sessions equals the backup copy  5
+FAIL  point in time: the live database has one more session than the restored copy  5 vs 5
+PASS  restored ledger, revisions, sign-offs and leave equal the live database (nothing else moved them after the backup)
+INFO  restored jobs and attempts  {"jobs":[{"kind":"job_retention","state":"succeeded","n":1},{"kind":"orphan_sweep","state":"succeeded","n":1},{"kind":"render_pdf","state":"succeeded","n":2},{"kind":"send_email","state":"intervention","n":1}],"attempts":[]}
+PASS  every restored file hashes to its manifest entry and to the live file  3 files
+PASS  the restored database file hashes differently from the backup copy only because of the reconciliation write (manifest database hash verified by the CLI)
+PASS  restored instance answers /api/ready
+PASS  restored instance logs the outbound pause at start  Outbound delivery PAUSED since 2026-10-06T20:35:01Z (reason: restored); 0 delivery attempt(s) await a decision, 0 send job(s) wait, 1 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+PASS  restored API: balance (posted, reserved, available) equals the source  {"posted_minutes":870,"reserved_minutes":300,"available_minutes":570,"negative":false,"reconciliation_required":false}
+PASS  restored API: every ledger entry equals the source  5 entries
+PASS  restored API: leave requests (reserved, consumed, released) equal the source  2 requests
+PASS  restored API: revisions (numbers, kinds, review, PDF and delivery state) equal the source  2 revisions
+PASS  restored API: every PDF has the same SHA-256 as on the source  ["a15c8a9b3abb39c1f8aae06d2891aa75045c7f173b884b55ec2503bac797d9d7","07c8d6b8c0a8c8c9c7af7998bfe7e9321b2d8ab42096809838375a2eb238ad46"]
+PASS  restored API: the finalized timesheet view equals the source
+PASS  restored /api/admin/operations reports the pause with reason restored  {"paused":true,"paused_at":"2026-10-06T20:35:01Z","reason":"restored","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":1}
+PASS  restored administrator operations JSON carries no timesheet detail, path or name
+PASS  restored /api/health and /api/ready carry no private data  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  outbound release preview on the restored copy exits 2 and prints ids, kinds and counts only  {"outcome":"confirmation_required","held":1,"releasable":1,"blocked":{},"jobs":[{"id":"b67583c2-93a3-4bab-ace1-c5f85c6e14ad","kind":"send_email","attempts":1,"created_at":"2026-10-06T20:34:28Z","blocker":null}]}
+PASS  outbound resume preview exits 2 and still shows the pause  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":1}
+PASS  restored instance log carries no password, address or name  3 lines
+INFO  restored instance log  Timesheet listening on http://127.0.0.1:47722 (schema v13) | Outbound delivery PAUSED since 2026-10-06T20:35:01Z (reason: restored); 0 delivery attempt(s) await a decision, 0 send job(s) wait, 1 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+SUMMARY 46 PASS, 2 FAIL
+exit=1

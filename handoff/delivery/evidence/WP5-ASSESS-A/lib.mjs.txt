@@ -1,0 +1,298 @@
+/ WP5-ASSESS-A probe helpers (masked evidence copy)
+// WP5-ASSESS-A probe helpers (auditor-owned; synthetic data, local capture only).
+// Starts only its own child servers and stops them through their own handles.
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+export const T = '<task>';
+export const SRC = join(T, 'src');
+export const requireSrc = createRequire(pathToFileURL(join(SRC, 'package.json')).href);
+export const Database = requireSrc('better-sqlite3');
+export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+export const secret = () => randomBytes(18).toString('base64url');
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One run folder per probe execution (nothing is deleted; the task folder keeps every run). */
+export function newRunDir(name) {
+  const base = join(T, 'runs');
+  mkdirSync(base, { recursive: true });
+  let n = 1;
+  while (existsSync(join(base, `${name}-${n}`))) n += 1;
+  const dir = join(base, `${name}-${n}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export class Recorder {
+  constructor(dir) {
+    this.dir = dir;
+    this.results = [];
+    this.logPath = join(dir, 'probe-log.txt');
+    this.secrets = new Set();
+  }
+  addSecret(value) {
+    if (typeof value === 'string' && value.length >= 6) this.secrets.add(value);
+  }
+  mask(text) {
+    let out = String(text);
+    for (const value of this.secrets) out = out.split(value).join('<secret>');
+    out = out.split(T).join('<task>').split(T.replaceAll('\\', '\\\\')).join('<task>').split(T.replaceAll('\\', '/')).join('<task>');
+    return out;
+  }
+  log(line) {
+    appendFileSync(this.logPath, `${this.mask(line)}\n`);
+  }
+  check(id, label, condition, detail = '') {
+    const ok = Boolean(condition);
+    this.results.push({ id, label, ok, detail: this.mask(typeof detail === 'string' ? detail : JSON.stringify(detail)) });
+    this.log(`${ok ? 'PASS' : 'FAIL'}  [${id}] ${label}${detail === '' ? '' : `  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`);
+    return ok;
+  }
+  write() {
+    const pass = this.results.filter((r) => r.ok).length;
+    const fail = this.results.length - pass;
+    writeFileSync(join(this.dir, 'probe-results.json'), `${JSON.stringify({ pass, fail, results: this.results }, null, 2)}\n`);
+    this.log(`SUMMARY pass=${pass} fail=${fail} total=${this.results.length}`);
+    return { pass, fail };
+  }
+}
+
+/** A child server of this probe only; stopped through its own handle. */
+export class Server {
+  constructor(name, env, rec, port) {
+    this.name = name;
+    this.env = env;
+    this.rec = rec;
+    this.port = port;
+    this.child = null;
+    this.output = '';
+    this.starts = 0;
+  }
+  async start() {
+    this.starts += 1;
+    const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: SRC, env: this.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    this.child = child;
+    child.stdout.on('data', (chunk) => (this.output += String(chunk)));
+    child.stderr.on('data', (chunk) => (this.output += String(chunk)));
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (child.exitCode !== null) throw new Error(`${this.name} exited early (${child.exitCode})`);
+      try {
+        const response = await fetch(`http://127.0.0.1:${this.port}/api/health`, { signal: AbortSignal.timeout(2000) });
+        if (response.ok && child.exitCode === null) {
+          this.rec.log(`server ${this.name} start #${this.starts} healthy on port ${this.port}`);
+          return;
+        }
+      } catch {
+        // not listening yet
+      }
+      await sleep(150);
+    }
+    throw new Error(`${this.name} did not become healthy`);
+  }
+  async stop() {
+    const child = this.child;
+    // A child ended by a signal has exitCode null and signalCode set: it is already stopped.
+    if (child === null || child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await exited;
+    this.rec.log(`server ${this.name} stopped (own child handle), exit ${child.exitCode ?? child.signalCode}`);
+  }
+}
+
+export function runCli(rec, env, args, label) {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { cwd: SRC, env, encoding: 'utf8' });
+  const out = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  rec.log(`cli ${label ?? args.join(' ')} -> exit ${result.status}: ${out.split('\n').join(' | ')}`);
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '', out };
+}
+
+export class Client {
+  static lastRequestAt = null;
+  static fetchErrors = [];
+  constructor(base, origin, rec, who) {
+    this.base = base;
+    this.origin = origin;
+    this.rec = rec;
+    this.who = who;
+    this.cookie = '';
+  }
+  async raw(method, path, { body, headers = {}, withOrigin = true, origin } = {}) {
+    const h = { ...headers };
+    if (withOrigin) h.origin = origin ?? this.origin;
+    if (this.cookie !== '') h.cookie = this.cookie;
+    let payload;
+    if (body !== undefined && !(body instanceof Uint8Array)) {
+      h['content-type'] = 'application/json';
+      payload = JSON.stringify(body);
+    } else if (body instanceof Uint8Array) {
+      payload = body;
+    }
+    const idle = Date.now() - (Client.lastRequestAt ?? Date.now());
+    let response;
+    try {
+      response = await fetch(`${this.base}${path}`, { method, headers: h, body: payload });
+    } catch (error) {
+      const code = error?.cause?.code ?? error?.code ?? 'unknown';
+      this.rec.log(`${this.who} ${method} ${path} -> fetch error ${code} after ${idle} ms without HTTP traffic`);
+      Client.fetchErrors.push({ who: this.who, method, path, code, idle });
+      // A pooled keep-alive socket closed by the server at its idle timeout: retry an idempotent read once on a new socket.
+      if ((method !== 'GET' && method !== 'HEAD') || code !== 'ECONNRESET') throw error;
+      response = await fetch(`${this.base}${path}`, { method, headers: h, body: payload });
+    } finally {
+      Client.lastRequestAt = Date.now();
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    let json = null;
+    try {
+      json = JSON.parse(buffer.toString('utf8'));
+    } catch {
+      json = null;
+    }
+    return { status: response.status, headers: response.headers, json, buffer, text: buffer.toString('utf8') };
+  }
+  async call(method, path, body, opts = {}) {
+    const r = await this.raw(method, path, { ...opts, body });
+    this.rec.log(`${this.who} ${method} ${path} -> ${r.status}${r.status >= 400 ? ` ${r.text.slice(0, 300)}` : ''}`);
+    return r;
+  }
+  async login(email, password) {
+    const r = await this.raw('POST', '/api/auth/login', { body: { email, password } });
+    this.cookie = (r.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    this.rec.addSecret(this.cookie.split('=')[1]);
+    this.rec.log(`${this.who} login -> ${r.status}`);
+    return r;
+  }
+}
+
+/** Every capture folder of a data directory with its decoded content (private test data, synthetic only). */
+export function listCaptures(dataDir) {
+  const root = join(dataDir, 'mail-capture');
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.tmp-'))
+    .map((entry) => {
+      const folder = join(root, entry.name);
+      const files = readdirSync(folder).sort();
+      const metadata = files.includes('metadata.json') ? JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8')) : null;
+      const eml = files.includes('message.eml') ? readFileSync(join(folder, 'message.eml'), 'utf8') : '';
+      const pdf = files.includes('attachment.pdf') ? readFileSync(join(folder, 'attachment.pdf')) : null;
+      return { id: entry.name, files, metadata, eml, pdf, pdfSha256: pdf === null ? null : sha256(pdf) };
+    });
+}
+
+/** Decodes the text/plain part of a captured message (quoted-printable or base64). */
+export function plainBody(eml) {
+  const header = eml.split(/\r?\n\r?\n/)[0] ?? '';
+  const subjectLine = (header.match(/^Subject: (.*(?:\r?\n[ \t].*)*)/m)?.[1] ?? '').replace(/\r?\n[ \t]/g, ' ');
+  // RFC 2047: whitespace between adjacent encoded words is not part of the text, so join them before decoding.
+  const joined = subjectLine.replace(/\?=\s+=\?UTF-8\?([BQ])\?/gi, (_m, enc) => `?==?UTF-8?${enc}?`).replace(/\?==\?UTF-8\?Q\?/gi, '');
+  const decodeQ = (data) => {
+    const bytes = [];
+    const text = data.replace(/_/g, ' ');
+    for (let i = 0; i < text.length; i += 1) {
+      if (text[i] === '=' && /^[0-9A-F]{2}$/i.test(text.slice(i + 1, i + 3))) {
+        bytes.push(parseInt(text.slice(i + 1, i + 3), 16));
+        i += 2;
+      } else bytes.push(...Buffer.from(text[i], 'utf8'));
+    }
+    return Buffer.from(bytes).toString('utf8');
+  };
+  const subject = joined.replace(/=\?UTF-8\?([BQ])\?([^?]*)\?=/gi, (_, enc, data) => (enc.toUpperCase() === 'B' ? Buffer.from(data, 'base64').toString('utf8') : decodeQ(data)));
+  const parts = eml.split(/\r?\n--/);
+  let text = '';
+  for (const part of parts) {
+    if (!/Content-Type: text\/plain/i.test(part)) continue;
+    const [head, ...rest] = part.split(/\r?\n\r?\n/);
+    const bodyRaw = rest.join('\n\n');
+    if (/Content-Transfer-Encoding: base64/i.test(head)) text = Buffer.from(bodyRaw.replace(/\s+/g, ''), 'base64').toString('utf8');
+    else if (/Content-Transfer-Encoding: quoted-printable/i.test(head)) {
+      const soft = bodyRaw.replace(/=\r?\n/g, '');
+      const bytes = [];
+      for (let i = 0; i < soft.length; i += 1) {
+        if (soft[i] === '=' && /^[0-9A-F]{2}$/i.test(soft.slice(i + 1, i + 3))) {
+          bytes.push(parseInt(soft.slice(i + 1, i + 3), 16));
+          i += 2;
+        } else bytes.push(...Buffer.from(soft[i], 'utf8'));
+      }
+      text = Buffer.from(bytes).toString('utf8');
+    } else text = bodyRaw;
+    break;
+  }
+  const headers = {};
+  for (const name of ['From', 'To', 'Cc', 'Bcc', 'Message-ID', 'Date', 'MIME-Version']) {
+    const value = header.match(new RegExp(`^${name}: (.*)$`, 'mi'))?.[1];
+    if (value !== undefined) headers[name] = value.trim();
+  }
+  return { subject, text: text.trim(), headers };
+}
+
+/** Text of every page of a PDF (pdfjs-dist from the export). */
+export async function pdfText(bytes) {
+  const pdfjs = await import(pathToFileURL(requireSrc.resolve('pdfjs-dist/legacy/build/pdf.mjs')).href);
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, isEvalSupported: false });
+  const doc = await task.promise;
+  const pages = [];
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    const page = await doc.getPage(n);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((item) => item.str).join(' '));
+  }
+  const imageCount = await countImages(pdfjs, doc);
+  await task.destroy();
+  return { pages, numPages: pages.length, imageCount };
+}
+
+async function countImages(pdfjs, doc) {
+  let count = 0;
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    const page = await doc.getPage(n);
+    const ops = await page.getOperatorList();
+    for (const fn of ops.fnArray) if (fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject) count += 1;
+  }
+  return count;
+}
+
+/** Renders every page to <outDir>/<name>-p<n>-synthetic.png. */
+export async function renderPdf(bytes, outDir, name) {
+  const pdfjs = await import(pathToFileURL(requireSrc.resolve('pdfjs-dist/legacy/build/pdf.mjs')).href);
+  const { createCanvas } = requireSrc('@napi-rs/canvas');
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false });
+  const doc = await task.promise;
+  const written = [];
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    const page = await doc.getPage(n);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    await page.render({ canvas, viewport }).promise;
+    const file = join(outDir, `${name}-p${n}-synthetic.png`);
+    writeFileSync(file, canvas.toBuffer('image/png'));
+    written.push(file);
+  }
+  await task.destroy();
+  return written;
+}
+
+/** h:mm of whole minutes. */
+export const hm = (minutes) => `${Math.trunc(minutes / 60)}:${String(Math.abs(minutes % 60)).padStart(2, '0')}`;
+
+/** LA wall clock parts of an instant. */
+export function laParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')), minute: Number(get('minute')) };
+}
+
+export const utc = (date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z');

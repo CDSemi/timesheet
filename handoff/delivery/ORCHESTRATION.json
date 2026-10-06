@@ -13,8 +13,8 @@
     "real_sending",
     "production_activation"
   ],
-  "active_package": "WP4",
-  "phase": "wp4-implementation",
+  "active_package": "WP5",
+  "phase": "wp5-fix",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -25,10 +25,10 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+  "current_source_digest": "ed604d0c33b144e7fb214d05d4060494542fb21a9e69cd5b61c40097685f692a",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-ACCEPT",
+  "next_task_id": "WP5-FIXB-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -125,11 +125,18 @@
   ],
   "pending_owner_question_2": null,
   "pending_owner_question": {
+    "id": "WP5-D-1..D-15",
+    "asked": "2026-10-06",
+    "source": "WP5-PLAN section D (handoff/delivery/tasks/WP5-PLAN.md). D-2..D-6 restate WP4-I-1..I-5 (kept below for reference); D-1 is R-A3.",
+    "question": "Decide before the pilot; recommendations in brackets. D-1 (R-A3) rollback residual: [a] keep JOB_RUNNER=off until reconciliation, or b restore --keep-schema --confirm also clears the activation instant. D-2 (I-1) imported days into a draft app period: [a] never. D-3 (I-2) 'Off day (overtime used)': [b] import as Off with no ledger effect if history is imported before the pilot, otherwise keep a (skip). D-4 (I-3) import an unended period: [a] no. D-5 (I-4) correct a mistaken opening balance to net 0: [a] yes, by a reasoned offsetting correction, if an opening balance is recorded. D-6 (I-5) preview quota: [a] at most 20 uncommitted per person, post-pilot for an owner-only pilot. D-7 reminder after a crash on real SMTP: [a] accept at-least-once. D-8 TLS certificate failure: [b] treat as a permanent configuration fault shown at once (subject to the assessment), else keep a and document. D-9 pilot cohort/passwords: [a] owner-only pilot, temporary password set out of band; a change-password route before others join. D-10 opening balance/history: [a] one evidence-backed opening balance or zero; skip the historical import for the pilot. D-11 real pilot values: [a] tracked packet with placeholders, real values in a private owner copy outside git. D-12 staged activation: [a] first period manual sign-off with the first real send to the owner's own address, auto-submit off, no activation instant; automation from the next period. D-13 pilot host: [a] the NAS after runbook sections 1, 2, 4 and 6 (NOT VERIFIED until the owner ticks the checklist). D-14 first release declaration: [a] at the owner's pilot authorization. D-15 (F-Q6) holiday-preview privacy: [a] keep.",
+    "blocking": "Nothing in the assessment. D-1, D-7, D-8 and D-13 must be answered before activation; an answer that differs from the current default for D-3, D-5, D-6 or D-8 becomes a WP5-OWNFIX before the package-final freeze.",
+    "superseded_wp4_question": {
     "id": "WP4-I-1..I-5",
     "asked": "2026-10-06",
     "source": "WP4-T09 result, 'Open owner choices' (handoff/delivery/tasks/WP4-T09.md)",
     "question": "I-1 may a draft app period receive imported days: (a, recommended, current) never; (b) merge only into days without app rows, period stays signable and unflagged; (c) flag the whole draft period imported_unverified and read-only. I-2 'Off day (overtime used)': (a) skip only (current); (b, recommended) import as Off, label kept in the private source and the audit, no ledger effect; (c) Worked with OT-kind leave minutes. I-3 may an unended (current) period be imported: (a, recommended, current) no. I-4 (added 2026-10-06 from WP4-T10) may a mistaken opening balance be corrected to a net 0: (a, recommended) yes, by a reasoned correction with evidence that offsets it (the original entry stays); (b, current) no, a correction must leave a non-zero balance. I-5 (added 2026-10-06 from WP4-AUDIT-B R4) uncommitted import previews are kept forever with no quota: (a, recommended) at most 20 uncommitted previews per person, further uploads refused until one is committed; (b) keep all, no limit. Note for I-3: the WP4 fix round makes the safe default stricter (an ended period whose payroll due instant has not passed is also skip-only, WP4-AUDIT-B R3).",
     "blocking": "nothing now; safe defaults stand (reversible). An answer other than the current default becomes a small follow-up before WP4-GATE."
+    }
   },
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
@@ -148,7 +155,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "546cddaf6747aef85e8b6d9b7712de9e28f138bf",
+    "last_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -11813,7 +11820,7 @@
       "id": "WP4-ACCEPT",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-ACCREC"
       ],
@@ -11826,8 +11833,8 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "ad6bec0244fdcb844",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
@@ -11841,16 +11848,277 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-ACCEPT.md",
       "report": "handoff/delivery/tasks/WP4-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-ACCEPT/commit-message.txt"
+      ],
       "baseline_commit": "546cddaf6747aef85e8b6d9b7712de9e28f138bf",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
+      "pushed": true,
       "source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2), the WP4 acceptance records with no source change: parent 546cdda, fast-forward, remote SHA identical; working-tree and ls-tree digests 26fcc969 (775 files); 163 handoff paths (150 new, 13 modified); precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0. The brief asked for a checks.txt log; only commit-message.txt was saved, and the exit codes are in the brief's results.",
+      "next_action": "None; WP4 accepted; WP5 starts."
+    },
+    {
+      "id": "WP5-PLAN",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [
+        "WP4-ACCEPT"
+      ],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae818c8d94994af65",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-PLAN.md",
+        "handoff/delivery/evidence/WP5-PLAN"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-PLAN.md",
+      "report": "handoff/delivery/tasks/WP5-PLAN.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-PLAN/01-baseline.txt",
+        "handoff/delivery/evidence/WP5-PLAN/02-digest.txt",
+        "handoff/delivery/evidence/WP5-PLAN/03-end-state.txt"
+      ],
+      "baseline_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
+      "source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "done (read-only plan): HEAD e7fe514 and digest 26fcc969 observed as expected. Scope: AC-13 integrated run, AC-14/AC-15 parts, reproducible release, verified restore, release notes and the pilot packet are open; AC-01..12 and AC-16 regression only. No new gate before the assessment (WP4-REGATE4 passed on the same freeze and digest); WP5-GATE gates the package-final freeze later. Two parallel fresh opus/xhigh audits on 546cdda: WP5-ASSESS-A (integrated workflow, submission, privacy; no Docker; ports 47700-47719) and WP5-ASSESS-B (reproducible release, verified restore, operations; Compose ts-wp5-assess-b; ports 47720-47739). Pilot packet outline (WP5_PILOT_PACKET.md, placeholders only). Owner decisions D-1..D-15. Provisional list: fix slots, optional WP5-AC13 test, WP5-REL, WP5-GATE, WP5-PILOT, WP5-FINAL-AUDIT, ACCREC, ACCEPT, GOV-RECOVERY. Carry triage: pilot-blocking items are decisions D-1, D-7, D-8 and the NAS check (D-13).",
+      "next_action": "None; WP5-ASSESS-A and WP5-ASSESS-B in parallel; owner asked D-1..D-15."
+    },
+    {
+      "id": "WP5-ASSESS-A",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "pending",
+      "reviewed_commit": null,
+      "depends_on": [
+        "WP4-REGATE4",
+        "WP5-FIXB-FREEZE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent a72a6550bd47db0ff, self-reported claude-opus-5-5): PASS on reviewed_commit 546cdda, digest 26fcc969; no findings; AC-13 77/77, faults 12/12, verify 1758, e2e 145/5, targeted 747; risks R-WA1..R-WA8; report handoff/delivery/WP5_REVIEW_A.md; evidence handoff/delivery/evidence/WP5-ASSESS-A/. Superseded for digest binding because WP5-FIXB changed docs (digest ed604d0c); attempt 2 is a digest-bound area-A delta recheck on a later WP5 freeze by a different fresh auditor (it may be folded into the WP5 final audit pass)."
+      ],
+      "owned_paths": [
+        "handoff/delivery/WP5_REVIEW_A2.md",
+        "handoff/delivery/WP5_REVIEW_A2.vi.md",
+        "handoff/delivery/tasks/WP5-ASSESS-A.md",
+        "handoff/delivery/evidence/WP5-ASSESS-A2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-ASSESS-A.md",
+      "report": "handoff/delivery/tasks/WP5-ASSESS-A.md",
+      "evidence": [
+        "handoff/delivery/WP5_REVIEW_A.md",
+        "handoff/delivery/evidence/WP5-ASSESS-A/00-README.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/00-baseline.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/02-verify.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/03-e2e.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/04-targeted.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/10-ac13-probe-log.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/11-faults-probe-log.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/12-capture-listing.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/98-process-listing.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-A/99-digest-after.txt"
+      ],
+      "baseline_commit": null,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the WP4 acceptance records (no source change) after WP4-ACCREC."
+      "findings_attempt_1": [],
+      "notes": [
+        "Attempt 1 notes. Clean export of 546cdda, Node 24.21.0: npm ci exit 0, no deprecation line; verify 76 files / 1758 tests, smoke 41; e2e 145 passed / 5 skipped; targeted suites 28 files / 747 tests. AC-13 probe (production-mode server, https example.invalid origin, capture, five synthetic users) 77 PASS / 0 FAIL: the two-week period with confirmed and unknown breaks, flexible start, N boundaries 30/31/45/46, both Sundays, Friday overnight, holiday, 4 h + 4 h leave, deficit choose-mode, review and sign-off (total 8:30, ledger posted once), restarts before and after the PDF with one send, correction (reason, r2, +30 only, r1 kept, no send on edit), resend, injected uncertain outcome with no blind resend, partial OT use with concurrent refusals, 28 swapped-id refusals, shares and revocation, deadline runs (activation boundary, downtime recovery oldest first, never-configured and before-account periods untouched, overdue once, automatic presentation options). Fault probe 12 PASS / 0 FAIL: sender and recipient faults visible and never 'sent'; no secret in logs, health, readiness or CLI output. PDFs rendered and viewed.",
+        "Risks (not defects): R-WA1 Low outcome-notice wording after downtime recovery; R-WA2 Low partial leave not visible on the PDF; R-WA3 Low (WP3 R8 extended) never-configured accounts, including the bootstrap administrator, get before-due reminders after activation; R-WA4 Info a share change issues a new id; R-WA5 Info probe-side keep-alive reset; R-WA6 Info long holiday label ellipsis (WP3 R1); R-WA7 Info the live runner path is covered by e2e and suites, not by the CLI-driven probe; R-WA8 Info days without records print 'Worked' on automatic PDFs (owner decision).",
+        "Digest 26fcc969 (775 files) before and after in the repo, ls-tree forms and the export; no listener on 47700-47719 and no task process left at the end."
+      ],
+      "next_action": "Attempt 2: digest-bound area-A delta recheck on a later WP5 freeze (after WP5-FIXB and any further WP5 writer), by a fresh auditor that is not a72a6550bd47db0ff, the WP5-ASSESS-B auditor or a WP5 author. At dispatch, replace the placeholder gate dependency WP4-REGATE4 with the gate of the reviewed freeze (its freeze_commit must equal reviewed_commit). R-WA1..R-WA3 and R-WA8 go to the owner and the pilot packet."
+    },
+    {
+      "id": "WP5-ASSESS-B",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "546cddaf6747aef85e8b6d9b7712de9e28f138bf",
+      "depends_on": [
+        "WP4-REGATE4",
+        "WP5-PLAN"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": "size_risk",
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a76dbe4b854f423f7",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_REVIEW_B.md",
+        "handoff/delivery/WP5_REVIEW_B.vi.md",
+        "handoff/delivery/tasks/WP5-ASSESS-B.md",
+        "handoff/delivery/evidence/WP5-ASSESS-B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-ASSESS-B.md",
+      "report": "handoff/delivery/tasks/WP5-ASSESS-B.md",
+      "evidence": [
+        "handoff/delivery/WP5_REVIEW_B.md",
+        "handoff/delivery/evidence/WP5-ASSESS-B/00-README.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/00-digest-before.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/04-dist-compare.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/07-drill-summary.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/08-image-forbidden-scan.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/11-container-restore.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/12-runbook-compose-config.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/16-image-dist-compare.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/20-verify.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/98-docker-final.txt",
+        "handoff/delivery/evidence/WP5-ASSESS-B/99-digest-after.txt"
+      ],
+      "baseline_commit": "546cddaf6747aef85e8b6d9b7712de9e28f138bf",
+      "source_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+      "reviewed_digest": "26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-B-01 (Medium, docs/11 EN/VI 'Placeholders and conventions', section 1 steps 5 and 8, section 6 steps 2-3, section 8 upgrade 1-2 and rollback 3; with compose.example.yaml and the .env.example header): the runbook never names the TIMESHEET_ENV_FILE/TIMESHEET_DATA_DIR/TIMESHEET_IMAGE/TIMESHEET_PORT Compose variables or defines <image>; the verbatim <compose> fails when the env file is at <env-file>, or binds <project-dir>/data, tags timesheet:local and publishes 3000; the restored instance (section 6 step 3) and the rollback to the previous image have no documented way to set /data or the image; a same-tag rebuild loses the previous image. AC-11, AC-15, docs/07. Bounded docs fix: define <image> and the four variables, section 6 step 3 with TIMESHEET_DATA_DIR=<restore-dir> under its own project, one tag per release with the image ID recorded, rollback starts the previous tag, align the .env.example path; recheck with docker compose config of each documented form.",
+        "WP5-B-02 (Low, docs/11 EN/VI section 4 step 3 and the section 2 checklist): no step keeps a protected copy of the env file and the release identity with the separate-device backup copy, so a restored instance after NAS loss lacks APP_ORIGINS, PUBLIC_BASE_URL, MAIL_FROM, TRUSTED_PROXY_ADDRESSES and SMTP settings. docs/07 'Backup, restore and upgrades', AC-15. Bounded docs fix: section 4 step 3 keeps a mode-600 copy of <env-file> (never in git or chat) and the release commit, digest and image ID; add a section 2 checklist line."
+      ],
+      "notes": [
+        "Held: two clean exports, npm ci with the lockfile unchanged; 230 dist files byte-identical; no-cache image /app/dist equals the local build; forbidden-file scan 0; image runs as UID 10001; verify 1758 tests, smoke 41; drill --wp3 exit 0, 208 PASS (33/31/57/35/27/23); extra restore of a finalized period with a correction, an OT reservation and partial use: balances, ledger, revisions and PDF SHA-256 match, point-in-time and paused; uncertain send delivered exactly once; the image restored the same backup identically; operations privacy held.",
+        "Risks R-B5-1..R-B5-7: image ID not stable per build and no revision label (record the NAS-built image ID); base image pin one Debian rebuild behind the tag (decide the section 9 refresh before the pilot build); dev-only source-map-js advisory; restored instance reports backup 'never' until its first backup; R-RA2 reconfirmed; Git Bash path conversion for a Windows operator; migrate prints the absolute DATABASE_PATH. NAS NOT VERIFIED; outbound drop not executed directly (covered by restore.test.ts).",
+        "Digest 26fcc969 (775 files) before and after in the repo, ls-tree form and three exports; Docker listing empty and image removed at the end; nothing left running."
+      ],
+      "next_action": "Docs fix for WP5-B-01 and WP5-B-02 (addresses_audit WP5-ASSESS-B), then a freeze, a gate and an independent recheck of area B on the new digest."
+    },
+    {
+      "id": "WP5-FIXB",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-ASSESS-B",
+      "depends_on": [],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3cf18ba6a0fc134b",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "docs/11_OPERATIONS_RUNBOOK.md",
+        "docs/11_OPERATIONS_RUNBOOK.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        ".env.example",
+        "compose.example.yaml",
+        "handoff/delivery/tasks/WP5-FIXB.md",
+        "handoff/delivery/evidence/WP5-FIXB"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-FIXB.md",
+      "report": "handoff/delivery/tasks/WP5-FIXB.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-FIXB/00-README.txt",
+        "handoff/delivery/evidence/WP5-FIXB/01-compose-config.txt",
+        "handoff/delivery/evidence/WP5-FIXB/02-verify.txt",
+        "handoff/delivery/evidence/WP5-FIXB/03-precommit-preflight.txt"
+      ],
+      "baseline_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
+      "source_digest": "ed604d0c33b144e7fb214d05d4060494542fb21a9e69cd5b61c40097685f692a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (worker): docs and examples only. Changed docs/11_OPERATIONS_RUNBOOK.md and .vi.md (WP5-B-01: Compose variables and <image> defined, restored instance bound to the restore folder under its own project, per-release image tags with the image ID recorded, rollback to the previous tag; WP5-B-02: protected env-file copy and release identity with the separate-device backup, checklist line; R-B5-4 note), the .env.example header and one compose.example.yaml comment; docs/07 unchanged. docker compose config of the live, restored (/data = restore folder) and rollback (previous tag, JOB_RUNNER=off) forms all exit 0, no container started. EN/VI parity identical counts. verify 0 (76 files, 1758 tests, smoke passed); precommit 0; preflight 0. Digest ed604d0c (775 files), computed last.",
+      "next_action": "None; WP5-FIXB-FREEZE."
+    },
+    {
+      "id": "WP5-FIXB-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-FIXB"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": "ac4d9c61acb7d00cf",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 3,
+      "history": [
+        "attempt 2 (agent ac4d9c61acb7d00cf): no commit; HEAD e7fe514, digest ed604d0c, 105 paths staged; precommit, diff --check and JSON 0; validate_orchestration 1 ('Audit needs a gate dependency or gate_included: WP5-ASSESS-A') because the pending area-A recheck named no gate. Board fixed (placeholder gate WP4-REGATE4, reviewed_commit null); attempt 3 resumes the same committer.",
+        "attempt 1 (agent ac4d9c61acb7d00cf, self-reported claude-sonnet-5-5): no commit; HEAD = origin/main = e7fe514; digest ed604d0c matched; 105 paths staged; 4 synthetic PNGs viewed; scope clean; precommit, diff --check and JSON 0; validate_orchestration 1 ('Override reason without override: WP5-ASSESS-A') because the coordinator left model_override_reason size_risk on the pending audit while opus is the auditor profile's own model. Board fixed; attempt 2 resumes the same committer."
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-FIXB-FREEZE.md",
+        "handoff/delivery/evidence/WP5-FIXB-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-FIXB-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-FIXB-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "e7fe5144dc62f5047c79dd5ef69d973f60dfd14d",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "ed604d0c33b144e7fb214d05d4060494542fb21a9e69cd5b61c40097685f692a",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Commit and push the WP5 runbook fix with the WP5 plan, both assessment reports and the WP4-ACCEPT results."
     },
     {
       "id": "WP4-RECHECK-B4",

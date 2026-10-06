@@ -1,0 +1,155 @@
+== before: image id of ts-wp5-assess-b-timesheet:drill (drill build, all layers CACHED)
+sha256:75f50c10942c25e68313c8b21b3572c9d22e1acf0dcb12f0785a091c8b99914d created=2026-10-06T19:14:21.317496901Z
+== docs/11 section 9 step 3: <compose> build --no-cache  (project ts-wp5-assess-b, --file <src2>/compose.example.yaml, TIMESHEET_IMAGE=ts-wp5-assess-b-timesheet:drill); start 2026-10-06T20:44:59Z
+--progress is a global compose flag, better use `docker compose --progress xx build ...
+#1 [internal] load local bake definitions
+#1 reading from stdin 604B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.17kB done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#3 ...
+
+#4 [auth] library/node:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#3 DONE 0.9s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 563B done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 ...
+
+#7 [base 1/2] FROM docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#7 resolve docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe 0.1s done
+#7 DONE 0.1s
+
+#8 [base 2/2] WORKDIR /app
+#8 CACHED
+
+#6 [internal] load build context
+#6 transferring context: 1.73MB 0.2s done
+#6 DONE 0.3s
+
+#9 [runtime 1/4] RUN groupadd --gid 10001 timesheet     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin timesheet     && install --directory --owner 10001 --group 10001 --mode 0700 /data
+#9 ...
+
+#10 [build 1/5] COPY package.json package-lock.json .npmrc ./
+#10 DONE 0.1s
+
+#9 [runtime 1/4] RUN groupadd --gid 10001 timesheet     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin timesheet     && install --directory --owner 10001 --group 10001 --mode 0700 /data
+#9 DONE 0.5s
+
+#11 [build 2/5] RUN npm ci
+#11 ...
+
+#12 [prod-deps 2/2] RUN npm ci --omit=dev --ignore-scripts
+#12 4.591 
+#12 4.591 added 16 packages, and audited 17 packages in 4s
+#12 4.591 
+#12 4.591 1 package is looking for funding
+#12 4.591   run `npm fund` for details
+#12 4.592 
+#12 4.592 found 0 vulnerabilities
+#12 DONE 4.8s
+
+#11 [build 2/5] RUN npm ci
+#11 ...
+
+#13 [runtime 2/4] COPY --from=prod-deps /app/node_modules ./node_modules
+#13 DONE 0.4s
+
+#11 [build 2/5] RUN npm ci
+#11 6.189 
+#11 6.189 added 161 packages, and audited 162 packages in 6s
+#11 6.189 
+#11 6.189 42 packages are looking for funding
+#11 6.189   run `npm fund` for details
+#11 6.191 
+#11 6.191 1 high severity vulnerability
+#11 6.191 
+#11 6.191 To address all issues, run:
+#11 6.191   npm audit fix
+#11 6.191 
+#11 6.191 Run `npm audit` for details.
+#11 DONE 6.3s
+
+#14 [build 3/5] COPY tsconfig*.json vite.config.ts ./
+#14 DONE 0.1s
+
+#15 [build 4/5] COPY src ./src
+#15 DONE 0.1s
+
+#16 [build 5/5] RUN npm run build:server -- --sourceMap false     && BUILD_SOURCEMAPS=off npm run build:client
+#16 0.320 
+#16 0.320 > timesheet@0.1.0 build:server
+#16 0.320 > tsc -p tsconfig.server.json --sourceMap false
+#16 0.320 
+#16 2.246 
+#16 2.246 > timesheet@0.1.0 build:client
+#16 2.246 > vite build
+#16 2.246 
+#16 2.377 vite v8.3.1 building client environment for production...
+#16 2.384 transforming...
+#16 2.439 ✓ 107 modules transformed.
+#16 2.510 rendering chunks...
+#16 2.553 computing gzip size...
+#16 2.557 dist/client/index.html                   0.39 kB │ gzip:   0.25 kB
+#16 2.557 dist/client/assets/index-B8sNpoCz.css   21.92 kB │ gzip:   4.61 kB
+#16 2.557 dist/client/assets/index-DH2TBHE1.js   454.21 kB │ gzip: 128.63 kB
+#16 2.557 
+#16 2.558 ✓ built in 179ms
+#16 DONE 2.6s
+
+#17 [runtime 3/4] COPY --from=build /app/dist ./dist
+#17 DONE 0.1s
+
+#18 [runtime 4/4] COPY package.json ./
+#18 DONE 0.1s
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 1.8s done
+#19 exporting manifest sha256:12f65fe610aa6010a07d7a1669418ff0290df2f132c499e8e77320bb33c74095 0.0s done
+#19 exporting config sha256:062b5def4dcca382a2d2af74dbfa51aba398980023801440ef0d92adf796d30f 0.0s done
+#19 exporting attestation manifest sha256:073f0cad4087539bdfc2175ff08628a3b99d92f7fa3750c17bad0750370a8695 0.0s done
+#19 exporting manifest list sha256:62fb1101dd1cbbbdb71f012d450901786d3f50f591e62b8982a1f41b7a278b93
+#19 exporting manifest list sha256:62fb1101dd1cbbbdb71f012d450901786d3f50f591e62b8982a1f41b7a278b93 0.0s done
+#19 naming to docker.io/library/ts-wp5-assess-b-timesheet:drill done
+#19 unpacking to docker.io/library/ts-wp5-assess-b-timesheet:drill
+#19 unpacking to docker.io/library/ts-wp5-assess-b-timesheet:drill 0.8s done
+#19 DONE 2.8s
+
+#20 resolving provenance for metadata file
+#20 DONE 0.0s
+ ts-wp5-assess-b-timesheet:drill  Built
+exit=0 end 2026-10-06T20:45:14Z
+== after: image id
+sha256:62fb1101dd1cbbbdb71f012d450901786d3f50f591e62b8982a1f41b7a278b93 created=2026-10-06T20:45:10.835255552Z size=110002192 user=10001:10001
+["sha256:a6dc765193a52cbaede3c93a9ff48b9540948dd0774bbe7031fcb5847606f9ac","sha256:5a1870e6a29e704665d7b28a66e7bbfb703d60820f0f7cd0a337d8b3217c94aa","sha256:132e432d13dc5ca66ec66e27e54d587041d95abd4027fac540cf6c2d0dbd019e","sha256:a7f6e5a01f4d08aa0700ee0dec2dc01efc409045b8cac34ca6edffacac578e87","sha256:467f06bac59846d314589697fc7edb98805230d7ee61ed9bcc670c0f9ff710a3","sha256:158631e1ce85489fa0effaaf847e700c34f672db6cdcf2e46af20999fbdc1278","sha256:387194cc92d8e8efc73c2f57532724009f24df1b8d52d278a7a629660ee18325","sha256:f12ca204351a01760214327c05ce28cc0828bbeb362c301014d1df8d49f7a368","sha256:4ff588d60fa26337c891fc45ecde63925f257e510f7982556c4ab9138de8d1db","sha256:1f0f9988c93d3fb422b7574118069cf086c45d8bbc02844c8632e9dae8173d77"]
+== images with prefix and dangling
+REPOSITORY                  TAG       IMAGE ID       CREATED         SIZE
+ts-wp5-assess-b-timesheet   drill     62fb1101dd1c   4 seconds ago   458MB
+== is the previous image (drill build) still addressable?
+
+Error response from daemon: No such image: sha256:75f50c10942c25e68313c8b21b3572c9d22e1acf0dcb12f0785a091c8b99914d
+exit=1
+== layers new vs drill image
+7,10c7,11
+< sha256:8d399f3cbb0697c36a95cc7322b3524d94e30200327a4f765624cfd03b1d51e5
+< sha256:a68c50d2fd094d47ab2d5418465eca81238171f914844c36d959878720097eb1
+< sha256:6fac1aee4105b4c02cddfbe388ffdb3511e56f57faf97b9a835460b415905741
+< sha256:e7455594a39fe577d00e3cf8bf77fa1cbea5c5d7811bb256d7ac0d204c203d3e
+---
+> sha256:387194cc92d8e8efc73c2f57532724009f24df1b8d52d278a7a629660ee18325
+> sha256:f12ca204351a01760214327c05ce28cc0828bbeb362c301014d1df8d49f7a368
+> sha256:4ff588d60fa26337c891fc45ecde63925f257e510f7982556c4ab9138de8d1db
+> sha256:1f0f9988c93d3fb422b7574118069cf086c45d8bbc02844c8632e9dae8173d77
+> 
+diff exit=1

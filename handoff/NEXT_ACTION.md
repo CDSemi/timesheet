@@ -37,11 +37,11 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **WP4 acceptance record.** WP4-ACCREC fills the
-   [WP4 handoff](delivery/WP4_HANDOFF.md) acceptance record, and the WP4-ACCEPT commit
-   records it. No source changes.
-2. **WP5.** Follow [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.md): WP5 starts with
-   independent acceptance, then the concrete pilot packet. Fresh auditors use
+1. **WP4 acceptance record: done.** The [WP4 handoff](delivery/WP4_HANDOFF.md)
+   acceptance record was committed at e7fe514, with no source change.
+2. **WP5 (active).** Follow [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.md). WP5-PLAN
+   designs the steps. WP5 starts with independent acceptance, then the concrete pilot
+   packet. Fresh auditors use
    [WP5_REVIEW](prompts/WP5_REVIEW.md). The real pilot, real sending and deployment
    remain owner-controlled.
 3. **Owner items:** WP4-I-1..I-5, and the R-A3 rollback choice before the pilot.

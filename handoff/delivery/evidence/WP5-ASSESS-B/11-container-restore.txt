@@ -1,0 +1,36 @@
+backup=timesheet-backup-20261006T204019Z-d58f5f73
+== host restore (host build, live env of x1d)
+{"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":1,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":1},"counts":{"users":3,"revisions":2,"ledger_entries":5,"attachments":3}}
+exit=0
+== container restore (docs/11 section 6 step 2 form, image ts-wp5-assess-b-timesheet:drill)
+Restore failed (backup_unreadable): The backup folder or its manifest cannot be read
+exit=1
+== containers left with prefix
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+== container restore attempt 2 with MSYS_NO_PATHCONV=1 (attempt 1 failed: Git Bash rewrote the /backups and /restore arguments into Windows paths)
+{"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":1,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":1},"counts":{"users":3,"revisions":2,"ledger_entries":5,"attachments":3}}
+exit=0
+== containers left with prefix
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+== compare host restore and container restore
+INFO  tables 29; integrity ok/ok; fk 0/0; schema 13/13
+FAIL  host restore and container restore are equal in every table (restore instants normalized in operations_state, audit_events, jobs and delivery_attempts; audit ids normalized)  audit_events 35/35
+PASS  both restored copies pass integrity_check and foreign_key_check at the same schema
+PASS  every manifest file restored by the container hashes to its manifest entry  3 files, 0 bad
+SUMMARY 2 PASS, 1 FAIL
+exit=1
+== compare rerun with row detail
+INFO  tables 29; integrity ok/ok; fk 0/0; schema 13/13
+FAIL  host restore and container restore are equal in every table (restore instants normalized in operations_state, audit_events, jobs and delivery_attempts; audit ids normalized)  audit_events 35/35
+INFO  audit_events row 35 differs in id,occurred_at,after_json: id: A=<uuid> B=<uuid> ; occurred_at: A=<instant> B=<instant> ; after_json: A={"outbound_paused_at":"<instant>","outbound_paused_reason":"restored","outbound_pause_supported":true,"backup_created_at":"<instant>","backup_schema_version":13,"attempts_marked_uncertain":1,"send_jobs_held":1} B={"outbound_paused_at":"<instant>","outbound_paused_reason":"restored","outbound_pause_supported":true,"backup_created_at":"<instant>","backup_schema_version":13,"attempts_marked_uncertain":1,"send_jobs_held":1}
+PASS  both restored copies pass integrity_check and foreign_key_check at the same schema
+PASS  every manifest file restored by the container hashes to its manifest entry  3 files, 0 bad
+SUMMARY 2 PASS, 1 FAIL
+exit=1
+== compare rerun, instants inside audit JSON also masked
+INFO  tables 29; integrity ok/ok; fk 0/0; schema 13/13
+PASS  host restore and container restore are equal in every table (restore instants normalized in operations_state, audit_events, jobs and delivery_attempts; audit ids normalized)
+PASS  both restored copies pass integrity_check and foreign_key_check at the same schema
+PASS  every manifest file restored by the container hashes to its manifest entry  3 files, 0 bad
+SUMMARY 3 PASS, 0 FAIL
+exit=0

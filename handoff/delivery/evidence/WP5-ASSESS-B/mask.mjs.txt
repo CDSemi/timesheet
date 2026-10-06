@@ -1,0 +1,42 @@
+// WP5-ASSESS-B evidence masker: copies raw task files into the evidence folder as LF text with the task folder, the
+// project checkout and the user-profile segment masked and ANSI codes stripped. Reports any e-mail address that is
+// not on an .invalid domain (those would need manual review) and refuses to overwrite nothing silently.
+// Usage: node mask.mjs <task dir> <evidence dir> <source file> <target name> [<source file> <target name> ...]
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [task, evidence, ...pairs] = process.argv.slice(2);
+if (!task || !evidence || pairs.length === 0 || pairs.length % 2 !== 0) {
+  console.error('usage: node mask.mjs <task dir> <evidence dir> <source> <target> [...]');
+  process.exit(2);
+}
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const taskWin = '<task>';
+const variants = [
+  taskWin.replaceAll('\\', '\\\\'),
+  taskWin,
+  '<task>',
+  '<task>',
+];
+const project = ['D:\\\\Dropbox\\\\Work.CDSemi\\\\timesheet', '<project>', '<project>', '<project>'];
+let flagged = 0;
+for (let index = 0; index < pairs.length; index += 2) {
+  const source = pairs[index];
+  const target = pairs[index + 1];
+  let text = readFileSync(source, 'utf8');
+  text = text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (const variant of variants) text = text.replace(new RegExp(escape(variant), 'gi'), '<task>');
+  for (const variant of project) text = text.replace(new RegExp(escape(variant), 'gi'), '<project>');
+  text = text.replace(/((?:[A-Za-z]:[\\/]+|\/(?:mnt\/)?[a-z]\/)Users[\\/]+)[^\\/\s"'`,;)]+/gi, '$1<user>');
+  const account = process.env.USERNAME ?? '';
+  if (account !== '') text = text.replace(new RegExp(`\\b${escape(account)}\\b`, 'gi'), '<user>');
+  const emails = (text.match(/[\w.%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,})\b/gi) ?? []).filter((address) => !/\.invalid$/i.test(address));
+  if (emails.length > 0) {
+    flagged += emails.length;
+    console.log(`FLAG ${target}: ${[...new Set(emails)].join(' ')}`);
+  }
+  if (!text.endsWith('\n')) text += '\n';
+  writeFileSync(join(evidence, target), text);
+  console.log(`wrote ${target} (${text.length} chars)`);
+}
+console.log(flagged === 0 ? 'no non-.invalid address found' : `${flagged} address(es) flagged`);

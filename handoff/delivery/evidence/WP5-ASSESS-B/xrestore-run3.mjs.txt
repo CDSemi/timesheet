@@ -1,0 +1,513 @@
+// WP5-ASSESS-B independent restore probe (host route, ports 47721-47722; synthetic data, capture mode only).
+// 1. Seeds a fresh development instance (example.invalid accounts; employee2 has a 600-minute setup credit, a 240-minute
+//    OT reservation, submission settings with example.invalid recipients and a generated signature).
+// 2. Starts the built server (its own child process) and, as employee2, finalizes the past period 2026-10-02 (a weekday
+//    with 60 eligible minutes and a Saturday with 240), waits for its PDF and captured send, then edits the finalized
+//    period with a reason and finalizes a correction revision (+30 minutes), records a second OT leave request with a past
+//    leave date and records a partial use of it (60 of 120 minutes).
+// 3. Reads the API facts (balance, ledger, leave requests, revisions, the PDFs' SHA-256), takes `cli.js backup` while
+//    the server runs, writes one more session after the backup, then stops the server through its own handle.
+// 4. Checks the restore refusals, restores with `cli.js restore` into a new folder, compares the restored database with
+//    the backup copy table by table and the files with the manifest and the live files, then starts the restored
+//    instance, checks the pause line, the API facts and PDF bytes against step 3, the operations JSON, health and
+//    readiness, the `outbound release` and `outbound resume` previews, and stops it through its own handle.
+// Usage: node xrestore.mjs <built export dir> <work dir>
+// Passwords are random per run and never printed. Output: JSON lines and PASS/FAIL lines on stdout.
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join, resolve } from 'node:path';
+
+const [srcArg, workArg, modeArg] = process.argv.slice(2);
+const MODE = modeArg ?? 'plain';
+if (!srcArg || !workArg) {
+  console.error('usage: node xrestore.mjs <built export dir> <work dir>');
+  process.exit(2);
+}
+const SRC = resolve(srcArg);
+const WORK = resolve(workArg);
+if (existsSync(WORK) && readdirSync(WORK).length > 0) {
+  console.error('work dir must be new or empty');
+  process.exit(2);
+}
+const require = createRequire(join(SRC, 'package.json'));
+const Database = require('better-sqlite3');
+
+const LIVE = join(WORK, 'live');
+const LIVE_DB = join(LIVE, 'timesheet.db');
+const LIVE_DATA = join(LIVE, 'private-data');
+const BACKUPS = join(WORK, 'backups');
+const RESTORE = join(WORK, 'restore');
+const SOURCE_PORT = 47721;
+const RESTORED_PORT = 47722;
+mkdirSync(LIVE, { recursive: true });
+
+let passes = 0;
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail === '' ? '' : `  ${detail}`}`);
+  if (condition) passes += 1;
+  else failures += 1;
+}
+const info = (label, value) => console.log(`INFO  ${label}  ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const SECRETS = Object.values(passwords);
+
+function baseEnv(databasePath, dataDir, port) {
+  const env = { ...process.env };
+  for (const key of ['NODE_ENV', 'APP_ORIGINS', 'PUBLIC_BASE_URL', 'PRODUCTION_SENDING_ENABLED', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'JOB_RUNNER', 'TRUSTED_PROXY_ADDRESSES', 'STATIC_DIR']) delete env[key];
+  return { ...env, DATABASE_PATH: databasePath, DATA_DIR: dataDir, PORT: String(port), HOST: '127.0.0.1', OUTBOUND_MODE: 'capture', MAIL_FROM: 'timesheet@example.invalid' };
+}
+
+function cli(args, env) {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { cwd: SRC, env, encoding: 'utf8' });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+}
+
+function startServer(name, env) {
+  const out = [];
+  const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: SRC, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.on('data', (chunk) => out.push(String(chunk)));
+  child.stderr.on('data', (chunk) => out.push(String(chunk)));
+  const exited = new Promise((done) => child.once('exit', (code, signal) => done({ code, signal })));
+  return {
+    name,
+    log: () => out.join(''),
+    async stop() {
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      const result = await exited;
+      writeFileSync(join(WORK, `${name}.log`), out.join(''));
+      return result;
+    },
+  };
+}
+
+let base = '';
+let origin = '';
+async function call(method, path, { cookie, body, raw = false } = {}) {
+  const headers = { origin };
+  if (cookie) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+  if (raw) return { status: response.status, bytes: Buffer.from(await response.arrayBuffer()), headers: response.headers };
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // not JSON
+  }
+  const cookies = response.headers.getSetCookie().map((line) => line.split(';')[0]);
+  return { status: response.status, json, text, cookie: cookies.find((item) => item.includes('=')) };
+}
+
+async function waitUntil(predicate, timeoutMs, stepMs = 500) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (await predicate()) return true;
+    await sleep(stepMs);
+  }
+  return false;
+}
+
+async function waitReady() {
+  return waitUntil(async () => {
+    try {
+      return (await call('GET', '/api/ready')).status === 200;
+    } catch {
+      return false;
+    }
+  }, 30_000);
+}
+
+const login = async (email, password) => (await call('POST', '/api/auth/login', { body: { email, password } })).cookie;
+const local = (date, time) => ({ local: `${date}T${time}`, zone: 'America/Los_Angeles' });
+const PAYROLL = '2026-10-02';
+const SIGNER = 'Example Employee Two';
+const PRIVATE = /@|Example|example\.invalid|[A-Za-z]:\\|\/Users\/|private-data|timesheet\.db/;
+
+/** The API facts of employee2 that a restore must preserve. */
+async function facts(cookie) {
+  const summary = await call('GET', '/api/ot/summary', { cookie });
+  const ledger = await call('GET', '/api/ot/ledger', { cookie });
+  const leave = await call('GET', '/api/ot/leave', { cookie });
+  const revisions = await call('GET', '/api/revisions', { cookie });
+  const timesheet = await call('GET', `/api/timesheets/${PAYROLL}`, { cookie });
+  const list = revisions.json?.revisions ?? [];
+  const pdfs = {};
+  for (const revision of list) {
+    const pdf = await call('GET', `/api/revisions/${revision.id}/pdf`, { cookie, raw: true });
+    pdfs[revision.id] = pdf.status === 200 ? sha256(pdf.bytes) : `status ${pdf.status}`;
+  }
+  return {
+    status: [summary.status, ledger.status, leave.status, revisions.status, timesheet.status],
+    balance: ledger.json?.balance ?? null,
+    summary: summary.json === null ? null : { ...summary.json },
+    ledger: ledger.json?.entries ?? null,
+    leave: leave.json?.requests ?? null,
+    revisions: list,
+    pdfs,
+    timesheet: timesheet.json,
+  };
+}
+
+/** Every user table of a database as a map name -> { rows, sha256 of the JSON rows ordered by rowid }. */
+function tableDigests(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    const names = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+    const out = {};
+    for (const name of names) {
+      let rows;
+      try {
+        rows = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all();
+      } catch {
+        rows = db.prepare(`SELECT * FROM "${name}"`).all();
+      }
+      const text = JSON.stringify(rows, (_key, value) => (Buffer.isBuffer(value) ? `hex:${value.toString('hex')}` : typeof value === 'bigint' ? String(value) : value));
+      out[name] = { rows: rows.length, sha256: sha256(text) };
+    }
+    return out;
+  } finally {
+    db.close();
+  }
+}
+
+function business(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    const one = (sql, ...params) => db.prepare(sql).get(...params);
+    const all = (sql, ...params) => db.prepare(sql).all(...params);
+    return {
+      schema: one('SELECT max(version) AS v FROM schema_migrations').v,
+      integrity: db.pragma('integrity_check', { simple: true }),
+      fk: db.pragma('foreign_key_check').length,
+      ledger_per_user: all('SELECT user_id, count(*) AS entries, sum(delta_minutes) AS minutes FROM ot_ledger GROUP BY user_id ORDER BY user_id'),
+      ledger_kinds: all('SELECT entry_type, count(*) AS n, sum(delta_minutes) AS minutes FROM ot_ledger GROUP BY entry_type ORDER BY entry_type'),
+      revisions: all('SELECT id, revision_no, revision_kind, origin, review_state, payload_sha256, reviewed_sha256, supersedes_revision_id FROM timesheet_revisions ORDER BY id'),
+      signoffs: one('SELECT count(*) AS n FROM signoffs').n,
+      leave: all('SELECT id, version, reserved_minutes, consumed_minutes, released_minutes, reversed_minutes FROM ot_leave_requests ORDER BY id'),
+      attachments: all('SELECT storage_key, kind, sha256, size_bytes FROM attachments ORDER BY storage_key'),
+      work_sessions: one('SELECT count(*) AS n FROM work_sessions').n,
+      jobs: all('SELECT kind, state, count(*) AS n FROM jobs GROUP BY kind, state ORDER BY kind, state'),
+      attempts: all('SELECT state, count(*) AS n FROM delivery_attempts GROUP BY state ORDER BY state'),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function filesOnDisk(dataDir, keys) {
+  const out = {};
+  for (const key of keys) {
+    const path = join(dataDir, 'files', key);
+    out[key] = existsSync(path) ? sha256(readFileSync(path)) : 'missing';
+  }
+  return out;
+}
+
+const servers = [];
+try {
+  // 1. Seed (development mode, synthetic only).
+  const liveEnv = baseEnv(LIVE_DB, LIVE_DATA, SOURCE_PORT);
+  const seed = cli(['seed'], { ...liveEnv, SEED_ADMIN_PASSWORD: passwords.admin, SEED_EMPLOYEE_PASSWORD: passwords.employee, SEED_EMPLOYEE2_PASSWORD: passwords.employee2 });
+  check('cli.js seed exits 0 and prints no password', seed.status === 0 && !SECRETS.some((secret) => seed.stdout.includes(secret)), `exit ${seed.status}`);
+  info('seed stdout', seed.stdout.trim().split('\n').map((line) => line.trim()).join(' | '));
+
+  // 2. Source instance.
+  base = `http://127.0.0.1:${SOURCE_PORT}`;
+  origin = base;
+  let source = startServer('source-server', liveEnv);
+  servers.push(source);
+  check('source instance answers /api/ready', await waitReady());
+  const e2 = await login('employee2@example.invalid', passwords.employee2);
+  const admin = await login('admin@example.invalid', passwords.admin);
+  check('employee2 and the administrator sign in', e2 !== undefined && admin !== undefined);
+  const current = await call('GET', '/api/periods/current', { cookie: e2 });
+  info('periods/current', { today_local: current.json?.today_local, current: current.json?.current?.payroll_date, in_progress: current.json?.in_progress?.payroll_date });
+
+  const weekday = await call('POST', '/api/days/2026-09-15/sessions', {
+    cookie: e2,
+    body: {
+      start: local('2026-09-15', '08:00'),
+      end: local('2026-09-15', '18:00'),
+      input_zone: 'America/Los_Angeles',
+      breaks_confirmed: true,
+      reason: 'Synthetic WP5-ASSESS-B record in an old period',
+      breaks: [
+        { start: local('2026-09-15', '10:00'), end: local('2026-09-15', '10:15'), counts_as_work: false },
+        { start: local('2026-09-15', '12:00'), end: local('2026-09-15', '12:30'), counts_as_work: false },
+        { start: local('2026-09-15', '14:30'), end: local('2026-09-15', '14:45'), counts_as_work: false },
+      ],
+    },
+  });
+  check('weekday session in the old period (540 worked minutes)', weekday.status === 201, `status ${weekday.status} ${weekday.status === 201 ? '' : weekday.text.slice(0, 200)}`);
+  const saturday = await call('POST', '/api/days/2026-09-19/sessions', {
+    cookie: e2,
+    body: { start: local('2026-09-19', '09:00'), end: local('2026-09-19', '13:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, reason: 'Synthetic WP5-ASSESS-B Saturday record', breaks: [] },
+  });
+  check('Saturday session in the old period (240 off-calendar minutes)', saturday.status === 201, `status ${saturday.status} ${saturday.status === 201 ? '' : saturday.text.slice(0, 200)}`);
+
+  const review1 = await call('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: e2 });
+  const signoff = await call('POST', `/api/timesheets/${PAYROLL}/signoff`, {
+    cookie: e2,
+    body: { expected_version: review1.json?.expected_version, reviewed_hash: review1.json?.payload_hash, signer_name: SIGNER, incomplete_evidence_acknowledged: true },
+  });
+  check('sign-off of the old period (finalized revision 1)', signoff.status === 201, `status ${signoff.status} ${signoff.status === 201 ? '' : signoff.text.slice(0, 300)}`);
+  const delivered = async (count) =>
+    waitUntil(async () => {
+      const list = (await call('GET', '/api/revisions', { cookie: e2 })).json?.revisions ?? [];
+      return (
+        list.length >= count &&
+        list.every((item) => item.pdf_state === 'ready') &&
+        list.filter((item) => item.revision_no === 1).every((item) => item.delivery_state === 'accepted')
+      );
+    }, 180_000);
+  check('revision 1: PDF ready and its send accepted (capture)', await delivered(1));
+  const afterSignoff = await call('GET', '/api/ot/ledger', { cookie: e2 });
+  info('ledger after sign-off', afterSignoff.json?.balance);
+
+  // Correction of the finalized period: edit with a reason, then a correction revision (no email).
+  const sessionId = weekday.json?.session?.id;
+  const edit = await call('PUT', `/api/sessions/${sessionId}`, {
+    cookie: e2,
+    body: {
+      start: local('2026-09-15', '08:00'),
+      end: local('2026-09-15', '18:30'),
+      input_zone: 'America/Los_Angeles',
+      breaks_confirmed: true,
+      expected_version: weekday.json?.session?.version,
+      reason: 'Synthetic correction: the day ended 30 minutes later',
+      breaks: [
+        { start: local('2026-09-15', '10:00'), end: local('2026-09-15', '10:15'), counts_as_work: false },
+        { start: local('2026-09-15', '12:00'), end: local('2026-09-15', '12:30'), counts_as_work: false },
+        { start: local('2026-09-15', '14:30'), end: local('2026-09-15', '14:45'), counts_as_work: false },
+      ],
+    },
+  });
+  check('edit of the finalized period with a reason (correction draft)', edit.status === 200, `status ${edit.status} ${edit.status === 200 ? '' : edit.text.slice(0, 300)}`);
+  const review2 = await call('GET', `/api/timesheets/${PAYROLL}/review`, { cookie: e2 });
+  const correction = await call('POST', `/api/timesheets/${PAYROLL}/revisions`, {
+    cookie: e2,
+    body: {
+      expected_version: review2.json?.expected_version,
+      reviewed_hash: review2.json?.payload_hash,
+      signer_name: SIGNER,
+      incomplete_evidence_acknowledged: true,
+      reason: 'Synthetic correction revision (WP5-ASSESS-B)',
+      send_email: false,
+    },
+  });
+  check('correction revision finalized (revision 2)', correction.status === 201, `status ${correction.status} ${correction.status === 201 ? '' : correction.text.slice(0, 300)}`);
+  check('revision 2: PDF ready', await delivered(2));
+
+  // OT leave: a second request with a past leave date, then a partial record use.
+  const leave = await call('POST', '/api/ot/leave', {
+    cookie: e2,
+    body: {
+      request_key: 'wp5-assess-b-leave-1',
+      leave_date: '2026-09-30',
+      requested_minutes: 120,
+      permission: { approver_name: 'Example Manager', approval_date: '2026-09-25', evidence_ref: 'Synthetic permission reference (WP5-ASSESS-B)' },
+      note: 'Synthetic leave for the restore probe',
+    },
+  });
+  check('OT leave request reserved (120 minutes)', leave.status === 201, `status ${leave.status} ${leave.status === 201 ? '' : leave.text.slice(0, 300)}`);
+  const use = await call('POST', `/api/ot/leave/${leave.json?.request?.id}/consume`, {
+    cookie: e2,
+    body: { use_key: 'wp5-assess-b-use-1', minutes: 60, expected_version: leave.json?.request?.version ?? 1 },
+  });
+  check('partial record use (60 of 120 minutes)', use.status === 200, `status ${use.status} ${use.status === 200 ? '' : use.text.slice(0, 300)}`);
+
+  let resendInfo = null;
+  if (MODE === 'uncertain') {
+    // Phase 2: the source runs with its job runner off and the owner resends the current revision, so the backup holds
+    // a queued send job with a `preparing` attempt (a send the source may have been in the middle of).
+    await source.stop();
+    servers.splice(servers.indexOf(source), 1);
+    source = startServer('source-server-runner-off', { ...liveEnv, JOB_RUNNER: 'off' });
+    servers.push(source);
+    check('source restarted with JOB_RUNNER=off', await waitReady());
+    const list = (await call('GET', '/api/revisions', { cookie: e2 })).json?.revisions ?? [];
+    const currentRevision = list.find((item) => item.revision_no === 2);
+    const resend = await call('POST', `/api/revisions/${currentRevision?.id}/resend`, { cookie: e2, body: {} });
+    check('explicit resend of the current revision: a queued send with a preparing attempt (runner off)', resend.status === 201 && resend.json?.attempt?.state === 'preparing', `status ${resend.status} ${resend.text.slice(0, 200)}`);
+    resendInfo = { revisionId: currentRevision?.id, attemptId: resend.json?.attempt?.id, jobId: resend.json?.job?.id };
+  }
+
+  // 3. Facts, backup while running, one more write, stop.
+  await sleep(1500);
+  const before = await facts(e2);
+  info('source balance', before.balance);
+  info('source ledger entries', before.ledger?.map((entry) => ({ type: entry.entry_type ?? entry.type, delta: entry.delta_minutes, work_date: entry.work_date })));
+  info('source leave', before.leave?.map((request) => ({ reserved: request.reserved_minutes, consumed: request.consumed_minutes, released: request.released_minutes })));
+  info('source revisions', before.revisions.map((revision) => ({ no: revision.revision_no, kind: revision.revision_kind, review: revision.review_state, pdf: revision.pdf_state, delivery: revision.delivery_state })));
+  info('source PDF sha256', Object.values(before.pdfs));
+  const operationsBefore = await call('GET', '/api/admin/operations', { cookie: admin });
+  const health = await call('GET', '/api/health');
+  const ready = await call('GET', '/api/ready');
+  check('/api/health and /api/ready carry no private data', health.status === 200 && ready.status === 200 && !PRIVATE.test(health.text) && !PRIVATE.test(ready.text), `${health.text} ${ready.text}`);
+  check('administrator operations JSON carries no timesheet detail, path or name (recipient addresses are allowed by docs/07)', operationsBefore.status === 200 && !/Example|[A-Za-z]:\\|private-data|timesheet\.db|2026-09-15|signer/.test(operationsBefore.text), `status ${operationsBefore.status}`);
+  writeFileSync(join(WORK, 'operations-source.json'), operationsBefore.text);
+
+  const backup = cli(['backup', '--to', BACKUPS], liveEnv);
+  const backupJson = (() => {
+    try {
+      return JSON.parse(backup.stdout.trim().split('\n').at(-1) ?? '');
+    } catch {
+      return null;
+    }
+  })();
+  check('cli.js backup while the source runs exits 0 and prints counts only', backup.status === 0 && backupJson?.outcome === 'succeeded' && !PRIVATE.test(backup.stdout), backup.stdout.trim());
+  const backupDir = join(BACKUPS, backupJson?.backup ?? 'none');
+  const manifest = JSON.parse(readFileSync(join(backupDir, 'manifest.json'), 'utf8'));
+  info('manifest', { schema: manifest.schema_version, app_version: manifest.app_version, files: manifest.files.length, kinds: manifest.files.map((file) => file.kind) });
+
+  const later = await call('POST', '/api/days/2026-09-29/sessions', {
+    cookie: e2,
+    body: { start: local('2026-09-29', '09:00'), end: local('2026-09-29', '10:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, breaks: [] },
+  });
+  check('a session written after the backup (must not be in the restore)', later.status === 201, `status ${later.status} ${later.status === 201 ? '' : later.text.slice(0, 200)}`);
+  const stopped = await source.stop();
+  servers.splice(servers.indexOf(source), 1);
+  info('source server stopped through its own handle', stopped);
+
+  // 4. Refusals, restore, comparisons.
+  const insideLive = cli(['restore', '--from', backupDir, '--to', join(LIVE_DATA, 'restore-here')], liveEnv);
+  check('restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)', insideLive.status === 2 && /target_inside_data_dir/.test(insideLive.stderr), insideLive.stderr.trim());
+  mkdirSync(join(WORK, 'not-empty'), { recursive: true });
+  writeFileSync(join(WORK, 'not-empty', 'x.txt'), 'x');
+  const notEmpty = cli(['restore', '--from', backupDir, '--to', join(WORK, 'not-empty')], liveEnv);
+  check('restore into a non-empty folder is refused (exit 2, target_not_empty)', notEmpty.status === 2 && /target_not_empty/.test(notEmpty.stderr), notEmpty.stderr.trim());
+  const restored = cli(['restore', '--from', backupDir, '--to', RESTORE], liveEnv);
+  const restoredJson = (() => {
+    try {
+      return JSON.parse(restored.stdout.trim());
+    } catch {
+      return null;
+    }
+  })();
+  check('cli.js restore exits 0, verified, paused (restored), counts only', restored.status === 0 && restoredJson?.manifest?.verified === true && restoredJson?.outbound?.paused === true && restoredJson?.outbound?.reason === 'restored' && !PRIVATE.test(restored.stdout), restored.stdout.trim());
+
+  const backupDb = join(backupDir, 'timesheet.db');
+  const restoredDb = join(RESTORE, 'timesheet.db');
+  const tBackup = tableDigests(backupDb);
+  const tRestored = tableDigests(restoredDb);
+  const differing = Object.keys({ ...tBackup, ...tRestored }).filter((name) => JSON.stringify(tBackup[name]) !== JSON.stringify(tRestored[name]));
+  info('tables', Object.keys(tBackup).length);
+  info('tables that differ between the backup copy and the restored copy', differing.map((name) => ({ name, backup: tBackup[name]?.rows, restored: tRestored[name]?.rows })));
+  check('only the restore bookkeeping differs (operations_state pause, one audit event, held outbound jobs)', differing.every((name) => ['operations_state', 'audit_events', 'jobs'].includes(name)), differing.join(','));
+  const bBackup = business(backupDb);
+  const bRestored = business(restoredDb);
+  const bLiveEnd = business(LIVE_DB);
+  for (const key of ['schema', 'integrity', 'fk', 'ledger_per_user', 'ledger_kinds', 'revisions', 'signoffs', 'leave', 'attachments', 'work_sessions']) {
+    check(`restored ${key} equals the backup copy`, JSON.stringify(bBackup[key]) === JSON.stringify(bRestored[key]), key === 'revisions' || key === 'attachments' || key === 'leave' ? `${bRestored[key].length} rows` : JSON.stringify(bRestored[key]));
+  }
+  check('point in time: the live database has one more session than the restored copy', bLiveEnd.work_sessions === bRestored.work_sessions + 1, `${bLiveEnd.work_sessions} vs ${bRestored.work_sessions}`);
+  check('restored ledger, revisions, sign-offs and leave equal the live database (nothing else moved them after the backup)', ['ledger_per_user', 'revisions', 'signoffs', 'leave', 'attachments'].every((key) => JSON.stringify(bLiveEnd[key]) === JSON.stringify(bRestored[key])));
+  info('restored jobs and attempts', { jobs: bRestored.jobs, attempts: bRestored.attempts });
+  const keys = manifest.files.map((file) => file.storage_key);
+  const restoredFiles = filesOnDisk(join(RESTORE, 'private-data'), keys);
+  const liveFiles = filesOnDisk(LIVE_DATA, keys);
+  check('every restored file hashes to its manifest entry and to the live file', manifest.files.every((file) => restoredFiles[file.storage_key] === file.sha256 && liveFiles[file.storage_key] === file.sha256), `${keys.length} files`);
+  check('the restored database file hashes differently from the backup copy only because of the reconciliation write (manifest database hash verified by the CLI)', sha256(readFileSync(backupDb)) === manifest.database.sha256);
+
+  // 5. Restored instance.
+  base = `http://127.0.0.1:${RESTORED_PORT}`;
+  origin = base;
+  const restoredEnv = baseEnv(restoredDb, join(RESTORE, 'private-data'), RESTORED_PORT);
+  const second = startServer('restored-server', restoredEnv);
+  servers.push(second);
+  check('restored instance answers /api/ready', await waitReady());
+  await sleep(1000);
+  check('restored instance logs the outbound pause at start', /Outbound delivery PAUSED since \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z \(reason: restored\)/.test(second.log()), second.log().split('\n').filter((line) => /PAUSED|paused/.test(line)).join(' | '));
+  const e2b = await login('employee2@example.invalid', passwords.employee2);
+  const adminb = await login('admin@example.invalid', passwords.admin);
+  const after = await facts(e2b);
+  check('restored API: balance (posted, reserved, available) equals the source', JSON.stringify(after.balance) === JSON.stringify(before.balance), JSON.stringify(after.balance));
+  check('restored API: every ledger entry equals the source', JSON.stringify(after.ledger) === JSON.stringify(before.ledger), `${after.ledger?.length} entries`);
+  check('restored API: leave requests (reserved, consumed, released) equal the source', JSON.stringify(after.leave) === JSON.stringify(before.leave), `${after.leave?.length} requests`);
+  check('restored API: revisions (numbers, kinds, review, PDF and delivery state) equal the source', JSON.stringify(after.revisions) === JSON.stringify(before.revisions), `${after.revisions.length} revisions`);
+  check('restored API: every PDF has the same SHA-256 as on the source', Object.keys(before.pdfs).length >= 2 && JSON.stringify(after.pdfs) === JSON.stringify(before.pdfs), JSON.stringify(Object.values(after.pdfs)));
+  check('restored API: the finalized timesheet view equals the source', JSON.stringify(after.timesheet) === JSON.stringify(before.timesheet));
+  const operations = await call('GET', '/api/admin/operations', { cookie: adminb });
+  writeFileSync(join(WORK, 'operations-restored.json'), operations.text);
+  check('restored /api/admin/operations reports the pause with reason restored', operations.status === 200 && operations.json?.operations?.outbound?.paused === true && operations.json?.operations?.outbound?.reason === 'restored', JSON.stringify(operations.json?.operations?.outbound ?? null));
+  check('restored administrator operations JSON carries no timesheet detail, path or name', !/Example|[A-Za-z]:\\|private-data|timesheet\.db|2026-09-15|signer/.test(operations.text));
+  const health2 = await call('GET', '/api/health');
+  const ready2 = await call('GET', '/api/ready');
+  check('restored /api/health and /api/ready carry no private data', health2.status === 200 && ready2.status === 200 && !PRIVATE.test(health2.text) && !PRIVATE.test(ready2.text), `${health2.text} ${ready2.text}`);
+  const releasePreview = cli(['outbound', 'release'], restoredEnv);
+  check('outbound release preview on the restored copy exits 2 and prints ids, kinds and counts only', releasePreview.status === 2 && !PRIVATE.test(releasePreview.stdout), releasePreview.stdout.trim().slice(0, 300));
+  const resumePreview = cli(['outbound', 'resume'], restoredEnv);
+  check('outbound resume preview exits 2 and still shows the pause', resumePreview.status === 2 && /"paused":true/.test(resumePreview.stdout), resumePreview.stdout.trim());
+  // Reconciliation (docs/11 section 7), then exactly-once delivery into the restored copy's capture folder.
+  const captureDir = join(RESTORE, 'private-data', 'mail-capture');
+  const captured = () => (existsSync(captureDir) ? readdirSync(captureDir).filter((name) => !name.startsWith('.')) : []);
+  const capturedPdf = () => {
+    const folder = join(captureDir, captured()[0] ?? 'none');
+    const names = existsSync(folder) ? readdirSync(folder) : [];
+    const pdfName = names.find((name) => name.endsWith('.pdf'));
+    const metaName = names.find((name) => name.endsWith('.json'));
+    const recipients = metaName === undefined ? [] : (readFileSync(join(folder, metaName), 'utf8').match(/[\w.+-]+@[\w.-]+/g) ?? []);
+    return { names, pdf: pdfName === undefined ? null : sha256(readFileSync(join(folder, pdfName))), recipients: [...new Set(recipients)] };
+  };
+  if (MODE === 'uncertain') {
+    check('restore marked the preparing attempt uncertain and held its send (awaiting one decision)', restoredJson?.reconciliation?.attempts_marked_uncertain === 1 && restoredJson?.reconciliation?.send_jobs_held === 1 && restoredJson?.reconciliation?.awaiting_decision === 1, JSON.stringify(restoredJson?.reconciliation));
+    check('the pause line counts one attempt awaiting a decision', /1 delivery attempt\(s\) await a decision/.test(second.log()));
+    const refusedResume = cli(['outbound', 'resume', '--confirm'], restoredEnv);
+    check('outbound resume --confirm is refused while an attempt awaits a decision (exit 1)', refusedResume.status === 1 && /"outcome":"refused"/.test(refusedResume.stdout), refusedResume.stdout.trim());
+    const refusedRelease = cli(['outbound', 'release', '--all', '--confirm'], restoredEnv);
+    check('outbound release --all leaves the uncertain send held (attempt_uncertain)', /"released":0/.test(refusedRelease.stdout) && /attempt_uncertain/.test(refusedRelease.stdout), refusedRelease.stdout.trim());
+    const deliveries = await call('GET', '/api/deliveries', { cookie: e2b });
+    const uncertain = (deliveries.json?.deliveries ?? []).find((item) => item.state === 'uncertain');
+    check('the owner sees the uncertain attempt with a decision required', uncertain?.decision_required === true && uncertain?.id === resendInfo?.attemptId, JSON.stringify({ state: uncertain?.state, decision_required: uncertain?.decision_required, provider_response: uncertain?.provider_response }));
+    const decision = await call('POST', `/api/deliveries/${uncertain?.id}/decision`, { cookie: e2b, body: { decision: 'resend' } });
+    check('the owner records the decision "resend" (201, a new attempt on the same revision)', decision.status === 201 && decision.json?.resend?.attempt?.state === 'preparing', `status ${decision.status} ${decision.text.slice(0, 200)}`);
+    await sleep(4000);
+    check('while still paused, the decided resend is not sent', captured().length === 0, `${captured().length} captured`);
+    const resumed = cli(['outbound', 'resume', '--confirm'], restoredEnv);
+    check('outbound resume --confirm now clears the pause (exit 0)', resumed.status === 0 && /"outcome":"resumed"/.test(resumed.stdout), resumed.stdout.trim());
+    const sent = await waitUntil(async () => captured().length >= 1, 180_000, 1000);
+    await sleep(4000);
+    const capture = capturedPdf();
+    check('the decided resend is captured exactly once', sent && captured().length === 1, `${captured().length} capture folder(s)`);
+    check('the captured PDF is revision 2 of the restored copy (same SHA-256) and the recipients are example.invalid', capture.pdf === after.pdfs[resendInfo?.revisionId] && capture.recipients.length > 0 && capture.recipients.every((address) => address.endsWith('example.invalid')), `${capture.pdf} ${capture.recipients.join(',')}`);
+    const stillHeld = cli(['outbound', 'release', '--job', resendInfo?.jobId ?? 'none', '--confirm'], restoredEnv);
+    check('the original held send can never be released (exit 1, attempt_uncertain)', stillHeld.status === 1 && /attempt_uncertain/.test(stillHeld.stdout), stillHeld.stdout.trim());
+    const finalAttempts = business(restoredDb).attempts;
+    check('attempts: the uncertain one (decided) plus exactly one accepted resend', JSON.stringify(finalAttempts) === JSON.stringify([{ state: 'accepted', n: 1 }, { state: 'uncertain', n: 1 }]), JSON.stringify(finalAttempts));
+    const ledgerAfter = await call('GET', '/api/ot/ledger', { cookie: e2b });
+    check('the resend moved no ledger minute', JSON.stringify(ledgerAfter.json?.balance) === JSON.stringify(before.balance) && (ledgerAfter.json?.entries ?? []).length === before.ledger.length, JSON.stringify(ledgerAfter.json?.balance));
+  } else {
+    const heldBefore = (() => {
+      try {
+        return JSON.parse(releasePreview.stdout.trim());
+      } catch {
+        return null;
+      }
+    })();
+    const resumed = cli(['outbound', 'resume', '--confirm'], restoredEnv);
+    check('outbound resume --confirm clears the pause (exit 0)', resumed.status === 0 && /"outcome":"resumed"/.test(resumed.stdout), resumed.stdout.trim());
+    await sleep(4000);
+    check('after the resume nothing from the backup went out', captured().length === 0, `${captured().length} captured`);
+    info('held after restore', heldBefore?.held ?? null);
+  }
+  const restoredLog = second.log();
+  check('restored instance log carries no password, address or name', !SECRETS.some((secret) => restoredLog.includes(secret)) && !/@|Example/.test(restoredLog), restoredLog.split('\n').length + ' lines');
+  info('restored instance log', restoredLog.trim().split('\n').map((line) => line.replaceAll(WORK, '<work>')).join(' | '));
+  await second.stop();
+  servers.splice(servers.indexOf(second), 1);
+  writeFileSync(join(WORK, 'facts.json'), JSON.stringify({ before: { ...before, timesheet: undefined }, after: { ...after, timesheet: undefined }, bBackup, bRestored, bLiveEnd, differing }, null, 2));
+} catch (error) {
+  failures += 1;
+  console.log(`FAIL  probe stopped: ${error instanceof Error ? error.stack : String(error)}`);
+} finally {
+  for (const server of [...servers]) await server.stop();
+}
+console.log(`SUMMARY ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

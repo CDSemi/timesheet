@@ -36,11 +36,11 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Biên bản nghiệm thu WP4.** WP4-ACCREC điền biên bản nghiệm thu trong
-   [WP4 handoff](delivery/WP4_HANDOFF.vi.md), và commit WP4-ACCEPT ghi lại nó. Không đổi
-   source.
-2. **WP5.** Làm theo [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.vi.md): WP5 bắt đầu bằng
-   nghiệm thu độc lập, sau đó là pilot packet cụ thể. Auditor mới dùng
+1. **Biên bản nghiệm thu WP4: đã xong.** Biên bản nghiệm thu trong
+   [WP4 handoff](delivery/WP4_HANDOFF.vi.md) đã được commit ở e7fe514, không đổi source.
+2. **WP5 (đang làm).** Làm theo [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.vi.md). WP5-PLAN
+   thiết kế các bước. WP5 bắt đầu bằng nghiệm thu độc lập, sau đó là pilot packet cụ
+   thể. Auditor mới dùng
    [WP5_REVIEW](prompts/WP5_REVIEW.vi.md). Pilot thật, gửi thật và triển khai thật do
    chủ dự án quyết định.
 3. **Việc của chủ dự án:** WP4-I-1..I-5, và chọn cách rollback R-A3 trước pilot.

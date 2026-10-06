@@ -1,0 +1,38 @@
+// WP5-ASSESS-B probe: source digest of a clean export, computed independently of git.
+// For every regular file named in the tar listing (handoff/ excluded) it computes the git blob ID of the raw bytes
+// (sha1 of "blob <size>\0" + content, the same as `git hash-object --no-filters`), then the SHA-256 of the sorted
+// "<path> <blob>\n" lines, the same form as scripts/source-digest.mjs and the `git ls-tree` form.
+// Usage: node export-digest.mjs <export dir> <tar listing file> [<lines output file>]
+import { createHash } from 'node:crypto';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, listingFile, linesOut] = process.argv.slice(2);
+if (!root || !listingFile) {
+  console.error('usage: node export-digest.mjs <export dir> <tar listing> [<lines out>]');
+  process.exit(2);
+}
+const names = readFileSync(listingFile, 'utf8')
+  .split('\n')
+  .map((line) => line.replace(/\r$/, ''))
+  .filter((line) => line !== '' && !line.endsWith('/') && !line.startsWith('handoff/') && line !== 'pax_global_header');
+const files = [...new Set(names)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+let missing = 0;
+const lines = files
+  .map((path) => {
+    const full = join(root, path);
+    let bytes;
+    try {
+      if (!statSync(full).isFile()) return null;
+      bytes = readFileSync(full);
+    } catch {
+      missing += 1;
+      return null;
+    }
+    const blob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+    return `${path} ${blob}\n`;
+  })
+  .filter((line) => line !== null);
+const text = lines.join('');
+if (linesOut) writeFileSync(linesOut, text);
+console.log(`${createHash('sha256').update(text).digest('hex')}  (${lines.length} files, handoff/ excluded, missing ${missing})`);

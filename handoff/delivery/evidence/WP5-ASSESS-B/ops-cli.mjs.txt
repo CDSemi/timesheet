@@ -1,0 +1,152 @@
+// WP5-ASSESS-B probe: runbook commands the container drill does not execute, run on the host build in production mode
+// (synthetic data, capture mode, port 47723). Covers docs/11 section 3 step 4 (`bootstrap --new-token`), section 4 step 2
+// (`backup --to <dir> --prune`), the production refusals of `seed` and `run-jobs`, and the output privacy of `migrate`,
+// `/api/health` and `/api/ready`. Setup tokens and passwords are never printed: tokens are masked as <token>.
+// Usage: node ops-cli.mjs <built export dir> <work dir>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const [srcArg, workArg] = process.argv.slice(2);
+const SRC = resolve(srcArg);
+const WORK = resolve(workArg);
+if (existsSync(WORK) && readdirSync(WORK).length > 0) {
+  console.error('work dir must be new or empty');
+  process.exit(2);
+}
+mkdirSync(WORK, { recursive: true });
+const PORT = 47723;
+const ORIGIN = 'https://timesheet.example.invalid';
+const TOKEN = /[A-Z2-7]{5}(?:-[A-Z2-7]{5}){7}/g;
+const mask = (text) => text.replace(TOKEN, '<token>').replaceAll(WORK, '<work>');
+
+let passes = 0;
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail === '' ? '' : `  ${mask(detail)}`}`);
+  if (condition) passes += 1;
+  else failures += 1;
+}
+
+const env = { ...process.env };
+for (const key of ['PRODUCTION_SENDING_ENABLED', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'JOB_RUNNER', 'TRUSTED_PROXY_ADDRESSES', 'STATIC_DIR']) delete env[key];
+Object.assign(env, {
+  NODE_ENV: 'production',
+  APP_ORIGINS: ORIGIN,
+  PUBLIC_BASE_URL: ORIGIN,
+  DATABASE_PATH: join(WORK, 'timesheet.db'),
+  DATA_DIR: join(WORK, 'private-data'),
+  MAIL_FROM: 'timesheet@example.invalid',
+  OUTBOUND_MODE: 'capture',
+  HOST: '127.0.0.1',
+  PORT: String(PORT),
+});
+const cli = (args, extra = {}) => {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', ...args], { cwd: SRC, env: { ...env, ...extra }, encoding: 'utf8' });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+};
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+async function call(method, path, body) {
+  const response = await fetch(`http://127.0.0.1:${PORT}${path}`, {
+    method,
+    headers: { origin: ORIGIN, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  });
+  return { status: response.status, text: await response.text(), setCookie: response.headers.getSetCookie() };
+}
+
+writeFileSync(
+  join(WORK, 'bootstrap.json'),
+  JSON.stringify({
+    schema_version: 1,
+    calendar: { name: 'Synthetic probe calendar', reporting_zone: 'America/Los_Angeles', normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+    holidays: [{ date: '2026-01-01', name: 'Synthetic holiday' }],
+    policy: {
+      effective_from: '2026-01-01',
+      required_minutes: 480,
+      threshold_minutes: 30,
+      rounding_step_minutes: 30,
+      reference_start: '08:00',
+      reference_end: '17:00',
+      breaks: [
+        { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+        { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+        { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+      ],
+      deficit_mode: 'ignore',
+    },
+    payroll: { anchor_payroll_date: '2026-10-02', cycle_days: 14, period_start_offset_days: -18, period_end_offset_days: -5, due_offset_days: -3, due_local_time: '17:00' },
+  }),
+);
+
+let server;
+try {
+  const migrate = cli(['migrate']);
+  check('cli.js migrate (production) exits 0', migrate.status === 0, migrate.stdout.trim());
+  console.log(`INFO  migrate prints the database path: ${/"database":/.test(migrate.stdout)}`);
+  const boot = cli(['bootstrap', '--config', join(WORK, 'bootstrap.json')]);
+  const first = boot.stdout.match(TOKEN)?.[0];
+  check('bootstrap --config prints one setup token', boot.status === 0 && first !== undefined, boot.stdout.trim().split('\n').join(' | '));
+  const again = cli(['bootstrap', '--config', join(WORK, 'bootstrap.json')]);
+  check('a second bootstrap --config is refused', again.status !== 0, `exit ${again.status} ${again.stderr.trim()}`);
+  const renewed = cli(['bootstrap', '--new-token']);
+  const second = renewed.stdout.match(TOKEN)?.[0];
+  check('bootstrap --new-token prints a fresh token while no administrator exists (docs/11 section 3 step 4)', renewed.status === 0 && second !== undefined && second !== first, `exit ${renewed.status}`);
+  const seed = cli(['seed']);
+  check('seed is refused in production', seed.status !== 0 && /Refusing to seed/.test(seed.stderr), `exit ${seed.status}`);
+  const jobs = cli(['run-jobs', '--once', '--now', '2026-10-06T00:00:00Z']);
+  check('run-jobs is refused in production', jobs.status === 1 && /Refusing to run jobs/.test(jobs.stderr), `exit ${jobs.status}`);
+
+  const out = [];
+  server = spawn(process.execPath, ['dist/server/index.js'], { cwd: SRC, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  server.stdout.on('data', (chunk) => out.push(String(chunk)));
+  server.stderr.on('data', (chunk) => out.push(String(chunk)));
+  const exited = new Promise((done) => server.once('exit', (code, signal) => done({ code, signal })));
+  let ready = null;
+  for (let index = 0; index < 60 && ready?.status !== 200; index += 1) {
+    await sleep(500);
+    try {
+      ready = await call('GET', '/api/ready');
+    } catch {
+      // not yet
+    }
+  }
+  check('production server answers /api/ready', ready?.status === 200, ready?.text ?? '');
+  const health = await call('GET', '/api/health');
+  check('/api/health and /api/ready hold no path, address or name', !/@|[A-Za-z]:\\|private-data|timesheet\.db|Synthetic/.test(`${health.text}${ready?.text}`), `${health.text} ${ready?.text}`);
+  const password = randomBytes(18).toString('base64url');
+  const old = await call('POST', '/api/auth/bootstrap', { token: first ?? '', email: 'admin@example.invalid', display_name: 'Probe Admin', password });
+  check('the replaced first token is refused (403)', old.status === 403, `status ${old.status}`);
+  const created = await call('POST', '/api/auth/bootstrap', { token: second ?? '', email: 'admin@example.invalid', display_name: 'Probe Admin', password });
+  check('the renewed token creates the first administrator (201; the setup sets no cookie)', created.status === 201 && created.setCookie.length === 0, `status ${created.status}`);
+  const login = await call('POST', '/api/auth/login', { email: 'admin@example.invalid', password });
+  check('the administrator signs in; production sets a Secure, HttpOnly, SameSite=Strict session cookie', login.status === 200 && login.setCookie.some((line) => /;\s*Secure/i.test(line) && /HttpOnly/i.test(line) && /SameSite=Strict/i.test(line)), `status ${login.status}`);
+  const after = cli(['bootstrap', '--new-token']);
+  check('bootstrap --new-token is refused once an administrator exists', after.status !== 0 && after.stdout.match(TOKEN) === null, `exit ${after.status} ${after.stderr.trim()}`);
+
+  const backups = join(WORK, 'backups');
+  const b1 = cli(['backup', '--to', backups, '--prune']);
+  check('backup --to <dir> --prune exits 0 and prints counts only (first backup)', b1.status === 0 && !/@|[A-Za-z]:\\/.test(b1.stdout), b1.stdout.trim().split('\n').join(' | '));
+  await sleep(1200);
+  const b2 = cli(['backup', '--to', backups, '--prune']);
+  check('a second same-day backup --prune exits 0 and keeps one backup for the day (R-RA2: the earlier same-day folder is removed)', b2.status === 0 && /"outcome":"pruned"/.test(b2.stdout), b2.stdout.trim().split('\n').join(' | '));
+  const folders = readdirSync(backups);
+  console.log(`INFO  backup folders after two --prune runs: ${folders.length} (${folders.map((name) => name.replace(/[0-9a-f]{8}$/, '<hex>')).join(', ')})`);
+  const dry = cli(['backup', 'prune', '--in', backups, '--dry-run']);
+  check('backup prune --dry-run prints counts only', dry.status === 0 && /"outcome":"dry_run"/.test(dry.stdout), dry.stdout.trim());
+  const log = out.join('');
+  check('the production server log holds no token, password or address', !TOKEN.test(log) && !log.includes(password) && !/@/.test(log), `${log.split('\n').length} lines`);
+  console.log(`INFO  server log: ${mask(log).trim().split('\n').join(' | ')}`);
+  server.kill();
+  console.log(`INFO  server stopped through its own handle: ${JSON.stringify(await exited)}`);
+  server = undefined;
+} catch (error) {
+  failures += 1;
+  console.log(`FAIL  probe stopped: ${error instanceof Error ? error.stack : String(error)}`);
+} finally {
+  if (server !== undefined) server.kill();
+}
+console.log(`SUMMARY ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

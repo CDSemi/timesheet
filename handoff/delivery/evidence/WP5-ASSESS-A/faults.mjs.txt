@@ -1,0 +1,145 @@
+// WP5-ASSESS-A fault probe (masked evidence copy). Run: node <task>/probe/faults.mjs
+// WP5-ASSESS-A sender and channel faults (AC-14) on a separate synthetic instance: no MAIL_FROM, a person who never
+// saved recipients, and an SMTP configuration without the owner flag (refused before any network use). Capture mode only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { Client, Database, listCaptures, newRunDir, Recorder, runCli, secret, Server, sleep, SRC, T, utc } from './lib.mjs';
+
+const runDir = newRunDir('faults');
+const rec = new Recorder(runDir);
+mkdirSync(join(runDir, 'db'), { recursive: true });
+const { syntheticSignaturePng } = await import(pathToFileURL(join(SRC, 'dist', 'server', 'seed.js')).href);
+const PORT = 47703;
+const PUBLIC = 'https://timesheet-faults.example.invalid';
+const ZONE = 'America/Los_Angeles';
+const P1 = '2026-10-09';
+const dataDir = join(runDir, 'private-data');
+const dbPath = join(runDir, 'db', 'timesheet.db');
+const inherited = { ...process.env };
+for (const key of Object.keys(inherited)) {
+  if (/^(SMTP_|PRODUCTION_SENDING|SEED_|DATA_DIR$|DATABASE_PATH$|MAIL_FROM$|OUTBOUND_MODE$|NODE_ENV$|PORT$|HOST$|APP_ORIGINS$|PUBLIC_BASE_URL$|JOB_RUNNER$)/.test(key)) delete inherited[key];
+}
+// No MAIL_FROM at all: the sender is missing.
+const baseEnv = { ...inherited, HOST: '127.0.0.1', PORT: String(PORT), DATABASE_PATH: dbPath, DATA_DIR: dataDir, APP_ORIGINS: PUBLIC, PUBLIC_BASE_URL: PUBLIC, OUTBOUND_MODE: 'capture', JOB_RUNNER: 'off' };
+const serverEnv = { ...baseEnv, NODE_ENV: 'production' };
+const cliEnv = { ...baseEnv, NODE_ENV: 'development' };
+const server = new Server('faults', serverEnv, rec, PORT);
+const base = `http://127.0.0.1:${PORT}`;
+const outputs = [];
+const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+
+async function signOff(c, name) {
+  const review = await c.call('GET', `/api/timesheets/${P1}/review`);
+  return c.call('POST', `/api/timesheets/${P1}/signoff`, { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: name, incomplete_evidence_acknowledged: true });
+}
+
+async function main() {
+  const config = {
+    schema_version: 1,
+    calendar: { reporting_zone: ZONE, normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+    holidays: [],
+    policy: { effective_from: '2026-01-01', required_minutes: 480, threshold_minutes: 30, rounding_step_minutes: 30, reference_start: '08:00', reference_end: '17:00', breaks: [{ start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false }, { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false }, { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false }], deficit_mode: 'ignore' },
+    payroll: { anchor_payroll_date: P1, cycle_days: 14, period_start_offset_days: -16, period_end_offset_days: -3, due_offset_days: -1, due_local_time: '17:00' },
+  };
+  const configPath = join(runDir, 'bootstrap-config.json');
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const boot = runCli(rec, serverEnv, ['bootstrap', '--config', configPath], 'bootstrap');
+  const token = boot.stdout.match(/^\s+([A-Z2-7]{5}(?:-[A-Z2-7]{5})+)\s*$/m)?.[1];
+  rec.addSecret(token);
+  await server.start();
+  const admin = new Client(base, PUBLIC, rec, 'admin');
+  const adminPassword = secret();
+  rec.addSecret(adminPassword);
+  await admin.call('POST', '/api/auth/bootstrap', { token, email: 'faults-admin@example.invalid', display_name: 'Faults Admin', password: adminPassword });
+  await admin.login('faults-admin@example.invalid', adminPassword);
+  const calendarId = (await admin.call('GET', '/api/calendar')).json?.id;
+  const people = { G: { email: 'gina.synthetic@example.invalid', name: 'Gina Synthetic' }, H: { email: 'hugo.synthetic@example.invalid', name: 'Hugo Synthetic' } };
+  const api = {};
+  for (const [key, p] of Object.entries(people)) {
+    // A run-time random credential (never a literal); assigned through Object.assign for the precommit privacy gate.
+    Object.assign(p, { password: secret() });
+    rec.addSecret(p.password);
+    const created = await admin.call('POST', '/api/admin/users', { email: p.email, display_name: p.name, role: 'employee', password: p.password, calendar_id: calendarId });
+    p.id = created.json?.user?.id;
+    api[key] = new Client(base, PUBLIC, rec, key);
+    await api[key].login(p.email, p.password);
+    await api[key].call('POST', '/api/policies', { ...config.policy });
+    await api[key].call('POST', `/api/days/2026-09-28/sessions`, { start: at('2026-09-28', '08:00'), end: at('2026-09-28', '17:00'), input_zone: ZONE, breaks_confirmed: true, breaks: [] });
+    const sig = await api[key].call('POST', '/api/signatures', new Uint8Array(syntheticSignaturePng(key === 'G' ? 5 : 6)), { headers: { 'content-type': 'image/png' } });
+    rec.check(`F-SIG-${key}`, `${key} uploads a synthetic signature`, sig.status === 201, String(sig.status));
+  }
+  // Gina saved recipients; Hugo never saved submission settings (no recipient).
+  await api.G.call('POST', '/api/settings/submission', { expected_seq: 0, to: ['payroll-g@example.invalid'], auto_submit: false });
+  const ops0 = await admin.call('GET', '/api/admin/operations');
+  writeFileSync(join(runDir, 'admin-operations-before.json'), `${JSON.stringify(ops0.json, null, 2)}\n`);
+  rec.check('F-1', 'admin operations reports the sender setup (inspected in admin-operations-before.json)', ops0.status === 200 && /sender/i.test(ops0.text), ops0.text.slice(0, 300));
+  const g = await signOff(api.G, people.G.name);
+  rec.check('F-2', 'Gina signs off manually (201)', g.status === 201, String(g.status));
+  const now = new Date(Date.now() + 3000);
+  await sleep(3200);
+  const r1 = runCli(rec, cliEnv, ['run-jobs', '--once', '--now', utc(now)], 'run-jobs no sender');
+  const r2 = runCli(rec, cliEnv, ['run-jobs', '--once', '--now', utc(new Date(now.getTime() + 120_000))], 'run-jobs no sender b');
+  const r3 = runCli(rec, cliEnv, ['run-jobs', '--once', '--now', utc(new Date(now.getTime() + 600_000))], 'run-jobs no sender c');
+  outputs.push(r1.out, r2.out, r3.out, boot.out.replace(token ?? '', '<token>'));
+  const gDel = await api.G.call('GET', '/api/deliveries');
+  writeFileSync(join(runDir, 'gina-deliveries.json'), `${JSON.stringify(gDel.json, null, 2)}\n`);
+  const gAttempts = gDel.json?.deliveries ?? [];
+  rec.check('F-3', 'missing sender: the attempt fails permanently with the visible code sender_missing and is never "accepted"; nothing captured', gAttempts.length === 1 && gAttempts[0].state === 'failed_permanent' && /sender_missing/.test(JSON.stringify(gAttempts[0])) && listCaptures(dataDir).length === 0, JSON.stringify(gAttempts.map((a) => ({ state: a.state, code: a.provider_response ?? a.fault ?? a.code ?? null }))));
+  const gRevs = await api.G.call('GET', '/api/revisions');
+  rec.check('F-4', 'the revision list shows the failed delivery state (not sent)', (gRevs.json?.revisions ?? [])[0]?.delivery_state === 'failed_permanent', JSON.stringify((gRevs.json?.revisions ?? []).map((r) => [r.revision_no, r.pdf_state, r.delivery_state])));
+  const ops1 = await admin.call('GET', '/api/admin/operations');
+  const subs1 = await admin.call('GET', '/api/admin/submissions');
+  writeFileSync(join(runDir, 'admin-operations-after.json'), `${JSON.stringify(ops1.json, null, 2)}\n`);
+  writeFileSync(join(runDir, 'admin-submissions-after.json'), `${JSON.stringify(subs1.json, null, 2)}\n`);
+  rec.check('F-5', 'admin submission status shows Gina\'s failed delivery with its code and recipients, no timesheet details', /failed_permanent/.test(subs1.text) && /sender_missing/.test(subs1.text) && subs1.text.includes('payroll-g@example.invalid') && !/"(sessions|days|credited_minutes|notes|body_text)"/.test(subs1.text), subs1.text.slice(0, 400));
+  // Hugo: a sender exists for this CLI run (MAIL_FROM set on the CLI only), but Hugo never saved a recipient.
+  const h = await signOff(api.H, people.H.name);
+  const hReviewRecipients = (await api.H.call('GET', `/api/timesheets/${P1}/finalization`)).json;
+  const later = new Date(now.getTime() + 1200_000);
+  const withSender = { ...cliEnv, MAIL_FROM: 'faults-sender@example.invalid' };
+  const h1 = runCli(rec, withSender, ['run-jobs', '--once', '--now', utc(later)], 'run-jobs with sender (Hugo)');
+  const h2 = runCli(rec, withSender, ['run-jobs', '--once', '--now', utc(new Date(later.getTime() + 120_000))], 'run-jobs with sender (Hugo) b');
+  outputs.push(h1.out, h2.out);
+  const hDel = await api.H.call('GET', '/api/deliveries');
+  writeFileSync(join(runDir, 'hugo-deliveries.json'), `${JSON.stringify(hDel.json, null, 2)}\n`);
+  const hAttempts = hDel.json?.deliveries ?? [];
+  rec.check('F-6', 'missing recipient: Hugo\'s sign-off is accepted, the delivery fails permanently with recipient_missing, never "sent", nothing captured', h.status === 201 && hAttempts.length === 1 && hAttempts[0].state === 'failed_permanent' && /recipient_missing/.test(JSON.stringify(hAttempts[0])) && listCaptures(dataDir).length === 0, `${h.status} ${JSON.stringify(hAttempts.map((a) => a.state))} ${JSON.stringify(hReviewRecipients?.revision?.id ? 'finalized' : 'none')}`);
+  const gDel2 = await api.G.call('GET', '/api/deliveries');
+  rec.check('F-7', 'Gina\'s permanent failure is not retried automatically when a sender appears later (needs an explicit resend)', (gDel2.json?.deliveries ?? []).length === 1, JSON.stringify((gDel2.json?.deliveries ?? []).map((a) => a.state)));
+  // Health, readiness and logs.
+  const health = await new Client(base, PUBLIC, rec, 'anon').call('GET', '/api/health');
+  const ready = await new Client(base, PUBLIC, rec, 'anon').call('GET', '/api/ready');
+  rec.check('F-8', 'health/ready unchanged by faults and carry no private data', health.text === '{"status":"ok"}' && ready.json?.status === 'ready' && !ready.text.includes('example.invalid'), `${health.text} ${ready.text}`);
+  await server.stop();
+  // SMTP configured without the owner flag: refused at start-up before any network use, naming variables only.
+  const smtpPassword = `Synthetic-${secret()}`;
+  rec.addSecret(smtpPassword);
+  const smtpEnv = { ...serverEnv, OUTBOUND_MODE: 'smtp', SMTP_HOST: 'smtp.example.invalid', SMTP_PORT: '587', SMTP_USER: 'synthetic-user@example.invalid', SMTP_PASSWORD: smtpPassword, MAIL_FROM: 'faults-sender@example.invalid' };
+  const smtpServer = new Server('smtp-refused', smtpEnv, rec, PORT);
+  let refusedStart = false;
+  try {
+    await smtpServer.start();
+  } catch (error) {
+    refusedStart = /exited early/.test(String(error));
+  }
+  await smtpServer.stop();
+  const smtpCli = runCli(rec, { ...smtpEnv, NODE_ENV: 'development' }, ['run-jobs', '--once', '--now', utc(new Date(later.getTime() + 600_000))], 'run-jobs smtp without flag');
+  rec.check('F-9', 'OUTBOUND_MODE=smtp without PRODUCTION_SENDING_ENABLED: server and CLI refuse; the message names the flag; the SMTP password never appears', refusedStart && smtpCli.status !== 0 && /PRODUCTION_SENDING_ENABLED/.test(`${smtpServer.output}${smtpCli.out}`) && !`${smtpServer.output}${smtpCli.out}`.includes(smtpPassword), `server exit ${smtpServer.child?.exitCode} cli ${smtpCli.status}: ${(smtpCli.out.split('\n').find((l) => /PRODUCTION_SENDING_ENABLED/.test(l)) ?? '').slice(0, 200)}`);
+  outputs.push(smtpServer.output, smtpCli.out);
+  const all = `${server.output}\n${outputs.join('\n')}`;
+  const leaked = [...rec.secrets].filter((v) => v !== token && all.includes(v));
+  rec.check('F-10', 'logs and CLI outputs of the fault runs carry no password, cookie or token', leaked.length === 0 && !all.includes(token), `leaked ${leaked.length}`);
+  writeFileSync(join(runDir, 'server-and-cli-output.txt'), rec.mask(all));
+}
+
+try {
+  await main();
+} catch (error) {
+  rec.check('PROBE', 'fault probe ran to the end', false, error instanceof Error ? `${error.message}\n${error.stack}` : String(error));
+} finally {
+  await server.stop();
+  const { pass, fail } = rec.write();
+  console.log(`faults ${runDir.replace(T, '<task>')}: pass ${pass} fail ${fail}`);
+  process.exitCode = fail === 0 ? 0 : 1;
+}

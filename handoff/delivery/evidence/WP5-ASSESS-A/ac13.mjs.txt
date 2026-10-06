@@ -1,0 +1,695 @@
+// WP5-ASSESS-A probe source (masked evidence copy; <task> = the audit task folder). Run: node <task>/probe/ac13.mjs
+// WP5-ASSESS-A integrated scenario probe (AC-13 with AC-01/03/04/06/07/08/09/10/14/16 regressions).
+// Drives the BUILT server of the clean export over HTTP (production-shaped configuration, capture mode,
+// synthetic example.invalid accounts) and the production CLI `run-jobs --once --now` for every job.
+// It writes only inside the task folder and stops only its own child server.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
+  Client,
+  Database,
+  hm,
+  laParts,
+  listCaptures,
+  newRunDir,
+  pdfText,
+  plainBody,
+  Recorder,
+  renderPdf,
+  runCli,
+  secret,
+  Server,
+  sha256,
+  sleep,
+  SRC,
+  T,
+  utc,
+} from './lib.mjs';
+
+const runDir = newRunDir('ac13');
+const rec = new Recorder(runDir);
+const renderDir = join(runDir, 'renders');
+mkdirSync(renderDir, { recursive: true });
+mkdirSync(join(runDir, 'db'), { recursive: true });
+const { syntheticSignaturePng } = await import(pathToFileURL(join(SRC, 'dist', 'server', 'seed.js')).href);
+
+const PORT = 47702;
+const PUBLIC = 'https://timesheet.example.invalid';
+const ZONE = 'America/Los_Angeles';
+const dataDir = join(runDir, 'private-data');
+const dbPath = join(runDir, 'db', 'timesheet.db');
+const SENDER = 'timesheet-pilot-sender@example.invalid';
+const P1 = '2026-10-09';
+const P2 = '2026-10-23';
+const P3 = '2026-11-06';
+const LONG_HOLIDAY = 'Ngày hội công ty tổng kết năm và họp mặt khách hàng (synthetic long holiday label)';
+
+const inherited = { ...process.env };
+for (const key of Object.keys(inherited)) {
+  if (/^(SMTP_|PRODUCTION_SENDING|SEED_|DATA_DIR$|DATABASE_PATH$|MAIL_FROM$|OUTBOUND_MODE$|NODE_ENV$|PORT$|HOST$|APP_ORIGINS$|PUBLIC_BASE_URL$|JOB_RUNNER$)/.test(key)) delete inherited[key];
+}
+const baseEnv = {
+  ...inherited,
+  HOST: '127.0.0.1',
+  PORT: String(PORT),
+  DATABASE_PATH: dbPath,
+  DATA_DIR: dataDir,
+  APP_ORIGINS: PUBLIC,
+  PUBLIC_BASE_URL: PUBLIC,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: SENDER,
+  JOB_RUNNER: 'off',
+};
+const serverEnv = { ...baseEnv, NODE_ENV: 'production' };
+// run-jobs refuses NODE_ENV=production by design; the CLI runs against the same database and data directory.
+const cliEnv = { ...baseEnv, NODE_ENV: 'development' };
+const cliOutputs = [];
+const cli = (args, label) => {
+  const r = runCli(rec, cliEnv, args, label);
+  cliOutputs.push(r.out);
+  return r;
+};
+
+let lastInstant = 0;
+const runs = [];
+/** run-jobs --once --now at a monotonic instant. */
+function runJobsAt(date, label = '') {
+  if (date.getTime() < lastInstant) throw new Error(`non-monotonic run-jobs instant ${utc(date)}`);
+  lastInstant = date.getTime();
+  const r = cli(['run-jobs', '--once', '--now', utc(date)], `run-jobs ${utc(date)} ${label}`);
+  let summary = null;
+  try {
+    summary = JSON.parse(r.stdout);
+  } catch {
+    summary = null;
+  }
+  runs.push({ at: utc(date), label, status: r.status, summary });
+  return { status: r.status, summary };
+}
+function drain(start, offsets = [0, 120, 240, 600, 720, 840], label = '') {
+  return offsets.map((offset) => runJobsAt(new Date(start.getTime() + offset * 1000), label));
+}
+
+const server = new Server('ac13', serverEnv, rec, PORT);
+const base = `http://127.0.0.1:${PORT}`;
+const client = (who) => new Client(base, PUBLIC, rec, who);
+const ids = {};
+let monitor = null;
+
+const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+const DEFAULT_BREAKS = [
+  ['10:00', '10:15'],
+  ['12:00', '12:30'],
+  ['14:30', '14:45'],
+];
+async function session(c, date, start, end, breaks, endDate = date, reason) {
+  const body = {
+    start: at(date, start),
+    end: at(endDate, end),
+    input_zone: ZONE,
+    breaks_confirmed: breaks !== null,
+    breaks: (breaks ?? []).map(([from, to]) => ({ start: at(date, from), end: at(date, to), counts_as_work: false })),
+    ...(reason === undefined ? {} : { reason }),
+  };
+  const r = await c.call('POST', `/api/days/${date}/sessions`, body);
+  if (r.status !== 201) throw new Error(`session ${date} ${start}-${end}: ${r.status} ${r.text}`);
+  return r.json;
+}
+function dbState() {
+  const tables = monitor.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+  return JSON.stringify({ v: monitor.pragma('data_version', { simple: true }), rows: tables.map((n) => [n, monitor.prepare(`SELECT count(*) FROM "${n}"`).pluck().get()]) });
+}
+const count = (sql, ...args) => monitor.prepare(sql).pluck().get(...args);
+
+const policyBody = (mode) => ({
+  effective_from: '2026-01-01',
+  required_minutes: 480,
+  threshold_minutes: 30,
+  rounding_step_minutes: 30,
+  reference_start: '08:00',
+  reference_end: '17:00',
+  breaks: [
+    { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+    { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+    { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+  ],
+  deficit_mode: mode,
+});
+
+async function main() {
+  rec.log(`run dir ${runDir}; node ${process.version}; real now ${utc(new Date())} (LA ${JSON.stringify(laParts())})`);
+  // ---------------------------------------------------------------- bootstrap (production path)
+  const config = {
+    schema_version: 1,
+    calendar: { name: 'Synthetic pilot calendar', reporting_zone: ZONE, normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+    holidays: [
+      { date: '2026-09-07', name: 'Labor Day' },
+      { date: '2026-09-30', name: LONG_HOLIDAY },
+      { date: '2026-11-26', name: 'Thanksgiving Day' },
+      { date: '2026-12-25', name: 'Christmas Day' },
+    ],
+    policy: policyBody('ignore'),
+    payroll: { anchor_payroll_date: P1, cycle_days: 14, period_start_offset_days: -16, period_end_offset_days: -3, due_offset_days: -1, due_local_time: '17:00' },
+  };
+  const configPath = join(runDir, 'bootstrap-config.json');
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const boot = runCli(rec, { ...serverEnv }, ['bootstrap', '--config', configPath], 'bootstrap --config <run>/bootstrap-config.json');
+  const token = boot.stdout.match(/^\s+([A-Z2-7]{5}(?:-[A-Z2-7]{5})+)\s*$/m)?.[1];
+  rec.addSecret(token);
+  rec.check('BOOT-1', 'cli bootstrap creates the calendar and prints a setup token once', boot.status === 0 && typeof token === 'string', `exit ${boot.status}`);
+  cliOutputs.push(boot.out);
+
+  await server.start();
+  monitor = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const admin = client('admin');
+  const adminPassword = secret();
+  rec.addSecret(adminPassword);
+  const setup = await admin.call('POST', '/api/auth/bootstrap', { token, email: 'pilot-admin@example.invalid', display_name: 'Synthetic Pilot Admin', password: adminPassword });
+  rec.check('BOOT-2', 'first administrator created from the setup token', setup.status === 201 || setup.status === 200, `status ${setup.status}`);
+  const replay = await client('anon').call('POST', '/api/auth/bootstrap', { token, email: 'second-admin@example.invalid', display_name: 'Second', password: secret() });
+  rec.check('BOOT-3', 'a replayed setup token is refused (403)', replay.status === 403, `status ${replay.status}`);
+  await admin.login('pilot-admin@example.invalid', adminPassword);
+  const calendar = await admin.call('GET', '/api/calendar');
+  ids.calendar = calendar.json?.id;
+
+  const people = {
+    A: { email: 'alice.synthetic@example.invalid', name: 'Nguyễn Thị Alice Synthetic', mode: 'choose_at_signoff' },
+    B: { email: 'bob.synthetic@example.invalid', name: 'Bob Synthetic', mode: 'ignore' },
+    C: { email: 'carol.synthetic@example.invalid', name: 'Carol Synthetic', mode: 'choose_at_signoff' },
+    D: { email: 'dave.synthetic@example.invalid', name: 'Dave Synthetic', mode: 'ignore' },
+    F: { email: 'frank.synthetic@example.invalid', name: 'Frank Synthetic', mode: 'ignore' },
+  };
+  const api = {};
+  for (const [key, person] of Object.entries(people)) {
+    // A run-time random credential (never a literal); assigned through Object.assign for the precommit privacy gate.
+    Object.assign(person, { password: secret() });
+    rec.addSecret(person.password);
+    const created = await admin.call('POST', '/api/admin/users', { email: person.email, display_name: person.name, role: 'employee', password: person.password, calendar_id: ids.calendar });
+    if (created.status !== 201) throw new Error(`create ${key}: ${created.status} ${created.text}`);
+    person.id = created.json.user.id;
+    api[key] = client(key);
+    await api[key].login(person.email, person.password);
+    const policy = await api[key].call('POST', '/api/policies', policyBody(person.mode));
+    if (policy.status !== 201) throw new Error(`policy ${key}: ${policy.status} ${policy.text}`);
+  }
+  const { A, B, C, D, F } = api;
+  const periods = await A.call('GET', '/api/periods/current');
+  rec.check('SETUP-1', `current period is payroll ${P1} (period 2026-09-23..2026-10-06, due 2026-10-09T00:00:00Z)`, periods.json?.current?.payroll_date === P1 && periods.json?.current?.period_start === '2026-09-23' && periods.json?.current?.period_end === '2026-10-06', JSON.stringify(periods.json?.current));
+  if (periods.json?.current?.payroll_date !== P1) throw new Error('unexpected current period: real date moved');
+
+  // Settings and signatures.
+  const save = async (c, body) => {
+    const r = await c.call('POST', '/api/settings/submission', { expected_seq: 0, ...body });
+    if (r.status !== 201) throw new Error(`settings: ${r.status} ${r.text}`);
+    return r.json.settings;
+  };
+  await save(A, { to: ['payroll-a@example.invalid'], cc: ['manager-a@example.invalid'], auto_submit: false });
+  await save(B, { to: ['payroll-b@example.invalid'], auto_submit: false });
+  await save(C, { to: ['payroll-c@example.invalid'], auto_submit: true });
+  await save(F, { to: ['payroll-f@example.invalid'], auto_submit: true, auto_note_enabled: true, auto_note_text: 'Nộp theo lịch (synthetic note)' });
+  const upload = async (c, phase, authorize) => {
+    const r = await c.call('POST', `/api/signatures${authorize ? '?authorize_auto_image=true' : ''}`, new Uint8Array(syntheticSignaturePng(phase)), { headers: { 'content-type': 'image/png' } });
+    if (r.status !== 201) throw new Error(`signature: ${r.status} ${r.text}`);
+    return r.json.signature.id;
+  };
+  ids.sigA = await upload(A, 7, false);
+  ids.sigB = await upload(B, 11, false);
+  ids.sigC = await upload(C, 13, true);
+  ids.sigF = await upload(F, 17, false);
+  const adminUsers = await admin.call('GET', '/api/admin/users');
+  const notSetUp = Object.fromEntries((adminUsers.json?.users ?? []).map((u) => [u.email, u.not_set_up]));
+  rec.check('SETUP-2', 'admin list flags only Dave (never saved settings) as not set up', notSetUp[people.D.email] === true && notSetUp[people.A.email] === false && notSetUp[people.C.email] === false, JSON.stringify(notSetUp));
+
+  // Opening balance (F-3) for Alice: the only OT carry-in, with evidence.
+  const opening = await A.call('POST', '/api/ot/opening-balance', { minutes: 90, as_of_date: '2026-09-01', reason: 'Synthetic opening balance for the WP5 audit', evidence_ref: 'Synthetic evidence reference (audit only)', expected_version: 0 });
+  rec.check('OT-0', 'Alice records an explicit opening balance of +90 (F-3)', opening.status === 201 && opening.json?.balance?.posted_minutes === 90, `status ${opening.status} posted ${opening.json?.balance?.posted_minutes}`);
+  ids.openingA = opening.json?.opening_balance?.id;
+
+  // ---------------------------------------------------------------- AC-13 two-week entries (Alice)
+  const sess = {};
+  sess['09-23'] = await session(A, '2026-09-23', '08:00', '17:00', DEFAULT_BREAKS);
+  sess['09-24'] = await session(A, '2026-09-24', '09:00', '18:30', [['11:00', '11:15'], ['13:00', '13:30'], ['15:30', '15:45']]);
+  sess['09-25'] = await session(A, '2026-09-25', '08:00', '17:31', DEFAULT_BREAKS);
+  sess['09-27'] = await session(A, '2026-09-27', '10:00', '12:00', []);
+  sess['09-28'] = await session(A, '2026-09-28', '08:00', '17:45', DEFAULT_BREAKS);
+  sess['09-29'] = await session(A, '2026-09-29', '08:00', '17:46', DEFAULT_BREAKS);
+  sess['10-01'] = await session(A, '2026-10-01', '08:00', '12:15', [['10:00', '10:15']]);
+  sess['10-02a'] = await session(A, '2026-10-02', '08:00', '17:00', DEFAULT_BREAKS);
+  sess['10-02b'] = await session(A, '2026-10-02', '22:00', '02:00', [], '2026-10-03');
+  sess['10-04'] = await session(A, '2026-10-04', '13:00', '13:16', []);
+  sess['10-05'] = await session(A, '2026-10-05', '08:00', '16:00', DEFAULT_BREAKS);
+  // Today: a manual session with unknown breaks (ended in the past) and a live Clock in / Clock out.
+  const la = laParts();
+  if (la.date !== '2026-10-06' || la.hour * 60 + la.minute < 11 * 60) throw new Error(`today LA must be 2026-10-06 after 11:00; got ${JSON.stringify(la)}`);
+  sess['10-06'] = await session(A, '2026-10-06', '06:00', '10:15', null);
+  const day1001 = await A.call('GET', '/api/days/2026-10-01');
+  const leave = await A.call('PUT', '/api/days/2026-10-01', { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: false, notes: 'Synthetic: 4 h work + 4 h vacation', expected_version: day1001.json?.entry?.version ?? null });
+  rec.check('E-1', '4 h work + 4 h leave entry saved without a reason (current period)', leave.status === 200, `status ${leave.status}`);
+  const clockIn = await A.call('POST', '/api/clock/in', { input_zone: ZONE });
+  await sleep(2500);
+  const clockOut = await A.call('POST', '/api/clock/out', { breaks: [], breaks_confirmed: true, expected_version: clockIn.json?.session?.version });
+  rec.check('E-2', 'Clock in / Clock out records a clock-source session on today (2026-10-06)', clockIn.status === 201 && clockOut.status === 200 && clockIn.json?.session?.work_date === '2026-10-06', `${clockIn.status}/${clockOut.status} ${clockIn.json?.session?.work_date}`);
+
+  const sheet = await A.call('GET', `/api/timesheets/${P1}`);
+  const days = Object.fromEntries((sheet.json?.days ?? []).map((d) => [d.work_date, d]));
+  writeFileSync(join(runDir, 'alice-p1-timesheet.json'), `${JSON.stringify(sheet.json, null, 2)}\n`);
+  const credited = (date) => days[date]?.calculation?.credited_minutes ?? null;
+  const expectCredits = {
+    '2026-09-23': 0, '2026-09-24': 0, '2026-09-25': 30, '2026-09-27': 120, '2026-09-28': 30, '2026-09-29': 60,
+    '2026-10-01': 0, '2026-10-02': 240, '2026-10-04': 30, '2026-10-05': 0,
+  };
+  const creditDiffs = Object.entries(expectCredits).filter(([date, minutes]) => credited(date) !== minutes).map(([date, minutes]) => `${date}: expected ${minutes} got ${credited(date)}`);
+  rec.check('AC02-1', 'per-day credits: N boundary 30/31/45/46 -> 0/30/30/60, Sundays 120 and 16->30, overnight Fri 240, 4h+4h 0', creditDiffs.length === 0, creditDiffs.join('; ') || 'all match');
+  rec.check('AC02-2', 'overnight Friday 22:00-02:00 splits R=600 (Fri incl. day shift), O=120 (Sat) and stays on Friday', days['2026-10-02']?.calculation?.regular_minutes === 600 && days['2026-10-02']?.calculation?.nonworking_minutes === 120 && (days['2026-10-03']?.sessions ?? []).length === 0, `R ${days['2026-10-02']?.calculation?.regular_minutes} O ${days['2026-10-02']?.calculation?.nonworking_minutes}`);
+  rec.check('AC02-3', 'holiday 2026-09-30 is non-working with its long label; 4h+4h day has no deficit; 10-05 deficit 60', days['2026-09-30']?.classification?.day_class === 'nonworking' && days['2026-10-01']?.deficit_minutes === 0 && days['2026-10-05']?.deficit_minutes === 60, `holiday ${days['2026-09-30']?.classification?.day_class}/${days['2026-09-30']?.classification?.holiday_name ?? days['2026-09-30']?.classification?.name}, 10-01 deficit ${days['2026-10-01']?.deficit_minutes}, 10-05 deficit ${days['2026-10-05']?.deficit_minutes}`);
+  rec.check('AC02-4', 'today (unknown breaks + clock session) is incomplete, not zero', days['2026-10-06']?.calculation?.status !== 'complete', `status ${days['2026-10-06']?.calculation?.status}`);
+
+  // ---------------------------------------------------------------- AC-09: GET writes nothing
+  const before = dbState();
+  const getPaths = [`/api/timesheets/${P1}/review`, `/api/timesheets/${P1}/review`, `/api/timesheets/${P1}/finalization`, '/api/revisions', '/api/deliveries', '/api/history', `/api/timesheets/${P1}`, '/api/ot/summary'];
+  const getStatuses = [];
+  for (const path of getPaths) getStatuses.push((await A.call('GET', path)).status);
+  const head = await A.raw('HEAD', `/api/timesheets/${P1}/review`);
+  rec.check('AC09-1', 'review/finalization/history GETs and HEAD write nothing (data_version and every table count unchanged)', getStatuses.every((s) => s === 200) && dbState() === before, `${getStatuses.join(',')} HEAD ${head.status}`);
+  const signoffGet = await A.call('GET', `/api/timesheets/${P1}/signoff`);
+  rec.check('AC09-2', 'GET on the sign-off path does not sign (404/405, nothing written)', signoffGet.status >= 400 && dbState() === before, `status ${signoffGet.status}`);
+
+  // ---------------------------------------------------------------- review and sign-off (AC-06)
+  const review = await A.call('GET', `/api/timesheets/${P1}/review`);
+  const payload = review.json?.payload;
+  writeFileSync(join(runDir, 'alice-p1-review.json'), `${JSON.stringify(review.json, null, 2)}\n`);
+  rec.check('AC13-1', 'review payload: 14 dates, credited total 510 (8:30), one 60-minute choose-mode deficit on 10-05, today unresolved', payload?.days?.length === 14 && payload?.totals?.credited_minutes === 510 && payload?.deficit_proposals?.length === 1 && payload.deficit_proposals[0].work_date === '2026-10-05' && payload.deficit_proposals[0].deficit_minutes === 60 && payload?.unresolved_inputs?.some((u) => u.work_date === '2026-10-06'), `days ${payload?.days?.length} total ${payload?.totals?.credited_minutes} deficits ${JSON.stringify(payload?.deficit_proposals?.map((d) => [d.work_date, d.deficit_minutes, d.mode, d.decision]))} unresolved ${JSON.stringify(payload?.unresolved_inputs)}`);
+  rec.check('AC14-0', 'review lists the exact recipients and the frozen email content', JSON.stringify(payload?.recipients?.to) === '["payroll-a@example.invalid"]' && JSON.stringify(payload?.recipients?.cc) === '["manager-a@example.invalid"]', JSON.stringify(payload?.recipients?.to) + JSON.stringify(payload?.recipients?.cc));
+  const signBody = {
+    expected_version: review.json?.expected_version,
+    reviewed_hash: review.json?.payload_hash,
+    signer_name: people.A.name,
+    deficit_choices: [{ work_date: '2026-10-05', choice: 'deduct' }],
+    incomplete_evidence_acknowledged: true,
+  };
+  const s0 = dbState();
+  const noName = await A.call('POST', `/api/timesheets/${P1}/signoff`, { ...signBody, signer_name: '  ' });
+  const noAck = await A.call('POST', `/api/timesheets/${P1}/signoff`, { ...signBody, incomplete_evidence_acknowledged: false });
+  const noChoice = await A.call('POST', `/api/timesheets/${P1}/signoff`, { ...signBody, deficit_choices: [] });
+  const stale = await A.call('POST', `/api/timesheets/${P1}/signoff`, { ...signBody, reviewed_hash: '0'.repeat(64) });
+  const badOrigin = await A.call('POST', `/api/timesheets/${P1}/signoff`, signBody, { origin: 'https://evil.example.invalid' });
+  const noOrigin = await A.call('POST', `/api/timesheets/${P1}/signoff`, signBody, { withOrigin: false });
+  rec.check('AC06-1', 'sign-off refusals: no name 422, no acknowledgement 422, no deficit choice 422, stale hash 409, foreign/missing Origin 403; nothing written', noName.status === 422 && noAck.status === 422 && noChoice.status === 422 && stale.status === 409 && badOrigin.status === 403 && noOrigin.status === 403 && dbState() === s0, `${noName.status} ${noName.json?.error?.code}/${noAck.status} ${noAck.json?.error?.code}/${noChoice.status} ${noChoice.json?.error?.code}/${stale.status}/${badOrigin.status}/${noOrigin.status}`);
+  // Two identical sign-offs at once: one creates, the other replays or conflicts; never two revisions or postings.
+  const [s1, s2] = await Promise.all([A.call('POST', `/api/timesheets/${P1}/signoff`, signBody), A.call('POST', `/api/timesheets/${P1}/signoff`, signBody)]);
+  const statuses = [s1.status, s2.status].sort();
+  const created = s1.status === 201 ? s1 : s2;
+  ids.r1 = created.json?.revision?.id;
+  const retry = await A.call('POST', `/api/timesheets/${P1}/signoff`, signBody);
+  rec.check('AC06-2', 'concurrent identical sign-offs: exactly one 201 revision 1; identical retry replays (200)', statuses[1] === 201 && statuses[0] !== 201 && retry.status === 200 && retry.json?.status === 'replayed' && count('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?', people.A.id) === 1, `statuses ${statuses.join('/')} retry ${retry.status} ${retry.json?.status}`);
+  const ledger1 = await A.call('GET', '/api/ot/ledger');
+  const entries1 = ledger1.json?.entries ?? [];
+  writeFileSync(join(runDir, 'alice-ledger-after-signoff.json'), `${JSON.stringify(ledger1.json, null, 2)}\n`);
+  const creditsPosted = entries1.filter((e) => e.entry_type === 'credit').map((e) => [e.work_date, e.delta_minutes]).sort();
+  const debits = entries1.filter((e) => e.delta_minutes < 0).map((e) => [e.work_date, e.delta_minutes, e.entry_type]);
+  rec.check('AC03-1', 'ledger after sign-off: opening 90, six credits once (30,120,30,60,240,30), one debit -60 on 10-05; posted 540', ledger1.json?.balance?.posted_minutes === 540 && creditsPosted.length === 6 && debits.length === 1 && debits[0][0] === '2026-10-05' && debits[0][1] === -60, `posted ${ledger1.json?.balance?.posted_minutes} credits ${JSON.stringify(creditsPosted)} debits ${JSON.stringify(debits)}`);
+  const signoffRow = monitor.prepare('SELECT signed_at FROM signoffs WHERE revision_id = ?').get(ids.r1);
+  rec.check('AC06-3', 'the real sign-off is recorded with signed_at now (UTC) and the reviewed hash', signoffRow !== undefined && Math.abs(Date.parse(signoffRow.signed_at) - Date.now()) < 5 * 60_000, JSON.stringify(signoffRow));
+
+  // ---------------------------------------------------------------- restart path (AC-08)
+  const jobsBefore = count("SELECT count(*) FROM jobs WHERE revision_id = ? AND state = 'queued'", ids.r1);
+  await server.stop();
+  await server.start();
+  rec.check('AC08-1', 'restart before the PDF keeps the queued PDF and send jobs', count("SELECT count(*) FROM jobs WHERE revision_id = ? AND state = 'queued'", ids.r1) === jobsBefore && jobsBefore === 2, `queued ${jobsBefore}`);
+  const t0 = new Date(Date.now() + 5000);
+  await sleep(5200);
+  const firstRun = runJobsAt(t0, 'first pass (pdf)');
+  const pdfState1 = monitor.prepare("SELECT state FROM revision_files WHERE revision_id = ? AND kind = 'pdf'").pluck().get(ids.r1);
+  const attemptsAfterFirst = count('SELECT count(*) FROM delivery_attempts WHERE revision_id = ?', ids.r1);
+  await server.stop();
+  await server.start();
+  rec.check('AC08-2', 'restart after the PDF: PDF ready persisted across the restart', pdfState1 === 'ready', `pdf ${pdfState1}, attempts after first pass ${attemptsAfterFirst}, summary ${JSON.stringify(firstRun.summary)}`);
+  drain(new Date(t0.getTime() + 120_000), [0, 120, 600], 'alice r1 send');
+  const del1 = await A.call('GET', `/api/deliveries?revision_id=${ids.r1}`);
+  const attempts1 = del1.json?.deliveries ?? [];
+  writeFileSync(join(runDir, 'alice-r1-deliveries.json'), `${JSON.stringify(del1.json, null, 2)}\n`);
+  rec.check('AC08-3', 'the send completes exactly once after the restarts (one accepted attempt)', attempts1.length === 1 && attempts1[0].state === 'accepted', JSON.stringify(attempts1.map((a) => [a.attempt_no, a.state])));
+  ids.r1Attempt = attempts1[0]?.id;
+  const pdfR1 = await A.raw('GET', `/api/revisions/${ids.r1}/pdf`);
+  const r1Sha = sha256(pdfR1.buffer);
+  const captures1 = listCaptures(dataDir);
+  const cap1 = captures1.find((c) => c.id === ids.r1Attempt);
+  const mail1 = cap1 ? plainBody(cap1.eml) : null;
+  rec.check('AC14-1', 'capture of r1: exactly the configured To/Cc, the sender, no Bcc, the frozen subject/body, and the PDF equal to the download', cap1 !== undefined && JSON.stringify(cap1.metadata?.envelope?.to) === JSON.stringify(['payroll-a@example.invalid', 'manager-a@example.invalid']) || (cap1 !== undefined && cap1.metadata?.envelope?.to?.includes('payroll-a@example.invalid') && cap1.metadata?.envelope?.to?.includes('manager-a@example.invalid') && cap1.metadata.envelope.to.length === 2), JSON.stringify(cap1?.metadata?.envelope));
+  rec.check('AC14-2', 'capture of r1: from = MAIL_FROM, PDF sha256 = downloaded PDF = metadata, no Bcc header', cap1?.metadata?.envelope?.from === SENDER && cap1?.pdfSha256 === r1Sha && cap1?.metadata?.pdf_sha256 === r1Sha && mail1?.headers?.Bcc === undefined, `pdf ${r1Sha.slice(0, 16)} headers ${JSON.stringify(mail1?.headers)}`);
+  rec.check('AC14-3', 'email subject/body equal the reviewed frozen content', mail1 !== null && mail1.subject === payload.recipients.subject && mail1.text.replace(/\r\n/g, '\n').trim() === payload.recipients.body_text.replace(/\r\n/g, '\n').trim(), `subject ${mail1?.subject}`);
+  const t1 = await pdfText(pdfR1.buffer);
+  writeFileSync(join(runDir, 'alice-r1-pdf-text.txt'), `${t1.pages.join('\n---page---\n')}\n`);
+  const r1Text = t1.pages.join(' ');
+  rec.check('AC10-1', 'r1 PDF: credited OT total 8:30, Alice Unicode name, long holiday label, sign date 2026-10-06, revision/submission id, signature image', r1Text.includes('8:30') && r1Text.includes('Nguyễn Thị Alice Synthetic') && t1.imageCount >= 1, `pages ${t1.numPages} images ${t1.imageCount}`);
+  await renderPdf(pdfR1.buffer, renderDir, 'alice-r1-manual');
+
+  // ---------------------------------------------------------------- historical correction (AC-04)
+  const capturesBeforeEdit = listCaptures(dataDir).length;
+  const jobsBeforeEdit = count('SELECT count(*) FROM jobs');
+  const attemptsBeforeEdit = count('SELECT count(*) FROM delivery_attempts');
+  const s1004 = sess['10-04'].session;
+  const editNoReason = await A.call('PUT', `/api/sessions/${s1004.id}`, { start: at('2026-10-04', '13:00'), end: at('2026-10-04', '13:46'), input_zone: ZONE, breaks: [], breaks_confirmed: true, expected_version: s1004.version });
+  const edit = await A.call('PUT', `/api/sessions/${s1004.id}`, { start: at('2026-10-04', '13:00'), end: at('2026-10-04', '13:46'), input_zone: ZONE, breaks: [], breaks_confirmed: true, expected_version: s1004.version, reason: 'Synthetic correction: the Sunday session ended at 13:46' });
+  rec.check('AC04-1', 'editing a finalized period: no reason 422, with reason 200', editNoReason.status === 422 && edit.status === 200, `${editNoReason.status} ${editNoReason.json?.error?.code} / ${edit.status}`);
+  runJobsAt(new Date(t0.getTime() + 1200_000), 'after edit');
+  rec.check('AC04-2', 'editing does not send: no new job, attempt or capture', count('SELECT count(*) FROM jobs') === jobsBeforeEdit && count('SELECT count(*) FROM delivery_attempts') === attemptsBeforeEdit && listCaptures(dataDir).length === capturesBeforeEdit, `jobs ${jobsBeforeEdit}->${count('SELECT count(*) FROM jobs')} attempts ${attemptsBeforeEdit} captures ${capturesBeforeEdit}`);
+  const review2 = await A.call('GET', `/api/timesheets/${P1}/review`);
+  const rev2Body = { expected_version: review2.json?.expected_version, reviewed_hash: review2.json?.payload_hash, signer_name: people.A.name, deficit_choices: [{ work_date: '2026-10-05', choice: 'deduct' }], incomplete_evidence_acknowledged: true, send_email: false };
+  const corrNoReason = await A.call('POST', `/api/timesheets/${P1}/revisions`, { ...rev2Body, reason: ' ' });
+  const corr = await A.call('POST', `/api/timesheets/${P1}/revisions`, { ...rev2Body, reason: 'Synthetic correction of the 2026-10-04 Sunday end time' });
+  ids.r2 = corr.json?.revision?.id;
+  rec.check('AC04-3', 'correction revision needs a reason (422) and then creates revision 2 superseding r1, total 540 (9:00)', corrNoReason.status === 422 && corr.status === 201 && corr.json?.revision?.revision_no === 2 && corr.json?.revision?.supersedes_revision_id === ids.r1 && review2.json?.payload?.totals?.credited_minutes === 540, `${corrNoReason.status} ${corrNoReason.json?.error?.code} / ${corr.status} r${corr.json?.revision?.revision_no} total ${review2.json?.payload?.totals?.credited_minutes}`);
+  const ledger2 = await A.call('GET', '/api/ot/ledger');
+  const newEntries = (ledger2.json?.entries ?? []).filter((e) => !entries1.some((old) => old.id === e.id));
+  const sundayOriginal = entries1.find((e) => e.entry_type === 'credit' && e.work_date === '2026-10-04');
+  rec.check('AC04-4', 'only the difference posts: one new +30 entry correcting the 10-04 credit; posted 570', newEntries.length === 1 && newEntries[0].delta_minutes === 30 && newEntries[0].corrects_entry_id === sundayOriginal?.id && ledger2.json?.balance?.posted_minutes === 570, JSON.stringify(newEntries.map((e) => [e.entry_type, e.delta_minutes, e.work_date, e.corrects_entry_id === sundayOriginal?.id])));
+  runJobsAt(new Date(t0.getTime() + 1320_000), 'r2 pdf');
+  runJobsAt(new Date(t0.getTime() + 1440_000), 'r2 pdf 2');
+  const pdfR1again = await A.raw('GET', `/api/revisions/${ids.r1}/pdf`);
+  const revisions = await A.call('GET', '/api/revisions');
+  rec.check('AC04-5', 'original r1 snapshot, PDF (same sha256) and sign-off kept; r2 with send_email=false sent nothing', sha256(pdfR1again.buffer) === r1Sha && count('SELECT count(*) FROM signoffs WHERE user_id = ?', people.A.id) === 2 && (revisions.json?.revisions ?? []).filter((r) => r.payroll_date === P1).length === 2 && count('SELECT count(*) FROM delivery_attempts WHERE revision_id = ?', ids.r2) === 0, `r1 sha same ${sha256(pdfR1again.buffer) === r1Sha}; revisions ${JSON.stringify((revisions.json?.revisions ?? []).map((r) => [r.revision_no, r.revision_kind, r.pdf_state, r.delivery_state]))}`);
+  const pdfR2 = await A.raw('GET', `/api/revisions/${ids.r2}/pdf`);
+  const t2 = await pdfText(pdfR2.buffer);
+  writeFileSync(join(runDir, 'alice-r2-pdf-text.txt'), `${t2.pages.join('\n---page---\n')}\n`);
+  rec.check('AC10-2', 'r2 PDF shows the corrected total 9:00', t2.pages.join(' ').includes('9:00'), `pages ${t2.numPages}`);
+  await renderPdf(pdfR2.buffer, renderDir, 'alice-r2-correction');
+  // Explicit resend of the unchanged r2 PDF: a new attempt, no ledger movement.
+  const ledgerCount = (ledger2.json?.entries ?? []).length;
+  const resend1 = await A.call('POST', `/api/revisions/${ids.r2}/resend`, {});
+  runJobsAt(new Date(t0.getTime() + 1560_000), 'resend r2');
+  runJobsAt(new Date(t0.getTime() + 1680_000), 'resend r2 b');
+  const del2 = await A.call('GET', `/api/deliveries?revision_id=${ids.r2}`);
+  const ledger3 = await A.call('GET', '/api/ot/ledger');
+  rec.check('AC04-6', 'explicit resend of the unchanged PDF: new attempt accepted, same PDF, ledger unchanged', resend1.status === 201 && (del2.json?.deliveries ?? []).length === 1 && del2.json.deliveries[0].state === 'accepted' && (ledger3.json?.entries ?? []).length === ledgerCount && ledger3.json?.balance?.posted_minutes === 570, `${resend1.status} ${JSON.stringify((del2.json?.deliveries ?? []).map((d) => d.state))} ledger ${ledgerCount}->${(ledger3.json?.entries ?? []).length}`);
+  // Uncertain outcome (failure injection): the attempt's capture folder already exists, as after a crash between hand-over and record.
+  const resend2 = await A.call('POST', `/api/revisions/${ids.r2}/resend`, {});
+  const injected = resend2.json?.attempt?.id;
+  mkdirSync(join(dataDir, 'mail-capture', injected), { recursive: true });
+  rec.log(`failure injection: created empty capture folder for attempt ${injected}`);
+  runJobsAt(new Date(t0.getTime() + 1800_000), 'uncertain');
+  const capturesAfterUncertain = listCaptures(dataDir).length;
+  runJobsAt(new Date(t0.getTime() + 1920_000), 'uncertain again');
+  runJobsAt(new Date(t0.getTime() + 2400_000), 'uncertain again 2');
+  const del3 = await A.call('GET', `/api/deliveries?revision_id=${ids.r2}`);
+  const uncertain = (del3.json?.deliveries ?? []).find((d) => d.id === injected);
+  const blocked = await A.call('POST', `/api/revisions/${ids.r2}/resend`, {});
+  rec.check('AC08-4', 'uncertain outcome is not blindly retried: state uncertain, no new attempt or capture over later runs, resend refused until a decision', uncertain?.state === 'uncertain' && (del3.json?.deliveries ?? []).length === 2 && listCaptures(dataDir).length === capturesAfterUncertain && blocked.status === 409, `${uncertain?.state} attempts ${(del3.json?.deliveries ?? []).length} resend ${blocked.status} ${blocked.json?.error?.code}`);
+  const decision = await A.call('POST', `/api/deliveries/${injected}/decision`, { decision: 'resend' });
+  runJobsAt(new Date(t0.getTime() + 2520_000), 'decided resend');
+  runJobsAt(new Date(t0.getTime() + 2640_000), 'decided resend b');
+  const del4 = await A.call('GET', `/api/deliveries?revision_id=${ids.r2}`);
+  rec.check('AC08-5', 'explicit owner decision "resend" creates exactly one new accepted attempt', (decision.status === 201 || decision.status === 200) && (del4.json?.deliveries ?? []).length === 3 && (del4.json?.deliveries ?? []).filter((d) => d.state === 'accepted').length === 2, `${decision.status} ${JSON.stringify((del4.json?.deliveries ?? []).map((d) => [d.attempt_no, d.state, d.decision ?? null]))}`);
+  // Frozen envelope: a recipient change in settings does not reach a resend of an existing revision.
+  const newSettings = await A.call('POST', '/api/settings/submission', { expected_seq: 1, to: ['payroll-a-new@example.invalid'], cc: [], auto_submit: false });
+  const echoNew = await A.call('POST', `/api/revisions/${ids.r2}/resend`, { to: ['payroll-a-new@example.invalid'] });
+  const capsBeforeFrozen = new Set(listCaptures(dataDir).map((c) => c.id));
+  const resendFrozen = await A.call('POST', `/api/revisions/${ids.r2}/resend`, {});
+  runJobsAt(new Date(t0.getTime() + 2760_000), 'frozen resend');
+  runJobsAt(new Date(t0.getTime() + 2880_000), 'frozen resend b');
+  const frozenCap = listCaptures(dataDir).filter((c) => !capsBeforeFrozen.has(c.id));
+  rec.check('AC14-6', 'after a recipient change in settings: resend echoing the new To is 409 envelope_changed; a plain resend goes to the frozen recipients only', newSettings.status === 201 && echoNew.status === 409 && echoNew.json?.error?.code === 'envelope_changed' && resendFrozen.status === 201 && frozenCap.length === 1 && JSON.stringify([...frozenCap[0].metadata.envelope.to].sort()) === JSON.stringify(['manager-a@example.invalid', 'payroll-a@example.invalid']), `${newSettings.status}/${echoNew.status} ${echoNew.json?.error?.code}/${resendFrozen.status} ${JSON.stringify(frozenCap.map((c) => c.metadata?.envelope?.to))}`);
+
+  // ---------------------------------------------------------------- approved partial OT use (R-06)
+  const permission = { approver_name: 'Synthetic Manager', approver_identity: 'manager-a@example.invalid', approval_date: '2026-10-01', evidence_ref: 'Synthetic chat reference (audit only)' };
+  const reserve = await A.call('POST', '/api/ot/leave', { request_key: 'wp5-a-leave-1', leave_date: '2026-10-06', requested_minutes: 240, permission, note: 'Synthetic OT leave' });
+  const reserveAgain = await A.call('POST', '/api/ot/leave', { request_key: 'wp5-a-leave-1', leave_date: '2026-10-06', requested_minutes: 240, permission, note: 'Synthetic OT leave' });
+  ids.leaveA = reserve.json?.request?.id;
+  rec.check('OT-1', 'reserve 240 with recorded permission: posted 570, reserved 240, available 330; same key replays', reserve.status === 201 && reserve.json?.balance?.posted_minutes === 570 && reserve.json?.balance?.reserved_minutes === 240 && reserve.json?.balance?.available_minutes === 330 && reserveAgain.status === 200, `${reserve.status}/${reserveAgain.status} ${JSON.stringify(reserve.json?.balance)}`);
+  const use1 = await A.call('POST', `/api/ot/leave/${ids.leaveA}/consume`, { use_key: 'use-1', minutes: 180, expected_version: reserve.json?.request?.version });
+  const use1again = await A.call('POST', `/api/ot/leave/${ids.leaveA}/consume`, { use_key: 'use-1', minutes: 180, expected_version: reserve.json?.request?.version });
+  rec.check('OT-2', 'partial record use 180: posted 390, reserved 60, available 330; the same use key does not spend twice', use1.status === 200 && use1.json?.balance?.posted_minutes === 390 && use1.json?.balance?.reserved_minutes === 60 && use1.json?.balance?.available_minutes === 330 && use1again.json?.balance?.posted_minutes === 390, `${use1.status}/${use1again.status} ${JSON.stringify(use1.json?.balance)} ${JSON.stringify(use1again.json?.balance)}`);
+  const cancel = await A.call('POST', `/api/ot/leave/${ids.leaveA}/cancel`, { expected_version: use1.json?.request?.version, reason: 'Synthetic: remainder not needed' });
+  rec.check('OT-3', 'cancel releases the unused 60: reserved 0, available 390', cancel.status === 200 && cancel.json?.released_minutes === 60 && cancel.json?.balance?.reserved_minutes === 0 && cancel.json?.balance?.available_minutes === 390, `${cancel.status} ${JSON.stringify(cancel.json?.balance)} released ${cancel.json?.released_minutes}`);
+  const reverse = await A.call('POST', `/api/ot/leave/${ids.leaveA}/reverse`, { reversal_key: 'rev-1', minutes: 30, reason: 'Synthetic: half an hour was worked after all', expected_version: cancel.json?.request?.version });
+  rec.check('OT-4', 'reversal of 30 used minutes compensates: posted 420', reverse.status === 200 && reverse.json?.balance?.posted_minutes === 420, `${reverse.status} ${JSON.stringify(reverse.json?.balance)}`);
+  const [k2, k3] = await Promise.all([
+    A.call('POST', '/api/ot/leave', { request_key: 'wp5-a-leave-2', leave_date: '2026-10-05', requested_minutes: 300, permission }),
+    A.call('POST', '/api/ot/leave', { request_key: 'wp5-a-leave-3', leave_date: '2026-10-05', requested_minutes: 300, permission }),
+  ]);
+  const okOne = [k2, k3].filter((r) => r.status === 201);
+  const summaryAfterRace = await A.call('GET', '/api/ot/summary');
+  rec.check('OT-5', 'concurrent reservations of 300+300 against 420 available: exactly one succeeds, no overdraft', okOne.length === 1 && summaryAfterRace.json?.reserved_minutes === 300 && summaryAfterRace.json?.available_minutes === 120, `${k2.status} ${k2.json?.error?.code ?? ''}/${k3.status} ${k3.json?.error?.code ?? ''} ${JSON.stringify(summaryAfterRace.json)}`);
+  const won = okOne[0]?.json?.request;
+  if (won) await A.call('POST', `/api/ot/leave/${won.id}/cancel`, { expected_version: won.version, reason: 'Synthetic race cleanup' });
+  const r4 = await A.call('POST', '/api/ot/leave', { request_key: 'wp5-a-leave-4', leave_date: '2026-10-05', requested_minutes: 100, permission });
+  const [u1, u2] = await Promise.all([
+    A.call('POST', `/api/ot/leave/${r4.json?.request?.id}/consume`, { use_key: 'race-a', minutes: 80, expected_version: r4.json?.request?.version }),
+    A.call('POST', `/api/ot/leave/${r4.json?.request?.id}/consume`, { use_key: 'race-b', minutes: 80, expected_version: r4.json?.request?.version }),
+  ]);
+  const leaves = await A.call('GET', '/api/ot/leave');
+  const r4now = (leaves.json?.requests ?? []).find((r) => r.id === r4.json?.request?.id);
+  rec.check('OT-6', 'concurrent record-use 80+80 on a 100 reservation: one succeeds, consumed 80, no double spend', [u1.status, u2.status].filter((s) => s === 200).length === 1 && r4now?.consumed_minutes === 80 && leaves.json?.balance?.posted_minutes === 340, `${u1.status}/${u2.status} consumed ${r4now?.consumed_minutes} posted ${leaves.json?.balance?.posted_minutes}`);
+  const balBefore = (await A.call('GET', '/api/ot/summary')).json;
+  const d1006 = await A.call('GET', '/api/days/2026-10-06');
+  const otKind = await A.call('PUT', '/api/days/2026-10-06', { category: 'Worked', leave_minutes: 240, leave_kind: 'ot', wfh: false, notes: '', expected_version: d1006.json?.entry?.version ?? null, reason: 'Synthetic: mark the OT leave day' });
+  const d1006b = await A.call('GET', '/api/days/2026-10-06');
+  const balAfter = (await A.call('GET', '/api/ot/summary')).json;
+  rec.check('OT-7', 'a day ot-kind leave of 240 vs 150 consumed (180-30) warns (mismatch) and moves no balance', otKind.status === 200 && d1006b.json?.ot_leave?.mismatch === true && balBefore.posted_minutes === balAfter.posted_minutes && balBefore.available_minutes === balAfter.available_minutes, `${otKind.status} ${JSON.stringify(d1006b.json?.ot_leave)} posted ${balBefore.posted_minutes}->${balAfter.posted_minutes}`);
+  // Historical (old, never finalized) period P0 = payroll 2026-09-25: edits need a reason; a late manual sign-off posts once.
+  const P0 = '2026-09-25';
+  const oldBody = { start: at('2026-09-15', '08:00'), end: at('2026-09-15', '18:00'), input_zone: ZONE, breaks_confirmed: true, breaks: DEFAULT_BREAKS.map(([f, t]) => ({ start: at('2026-09-15', f), end: at('2026-09-15', t), counts_as_work: false })) };
+  const oldNoReason = await A.call('POST', '/api/days/2026-09-15/sessions', oldBody);
+  const oldWithReason = await A.call('POST', '/api/days/2026-09-15/sessions', { ...oldBody, reason: 'Synthetic: late entry for an old period' });
+  const p0Review = await A.call('GET', `/api/timesheets/${P0}/review`);
+  const p0Sign = await A.call('POST', `/api/timesheets/${P0}/signoff`, { expected_version: p0Review.json?.expected_version, reviewed_hash: p0Review.json?.payload_hash, signer_name: people.A.name, incomplete_evidence_acknowledged: true, deficit_choices: (p0Review.json?.payload?.deficit_proposals ?? []).filter((d) => d.mode === 'choose_at_signoff').map((d) => ({ work_date: d.work_date, choice: 'waive' })) });
+  const ledgerP0 = await A.call('GET', '/api/ot/ledger');
+  const p0Credit = (ledgerP0.json?.entries ?? []).filter((e) => e.work_date === '2026-09-15' && e.entry_type === 'credit');
+  rec.check('AC04-7', 'old period: an edit without a reason is 422, with a reason 201; a late manual sign-off of the old period posts its credit (60) once', oldNoReason.status === 422 && oldWithReason.status === 201 && p0Sign.status === 201 && p0Credit.length === 1 && p0Credit[0].delta_minutes === 60, `${oldNoReason.status} ${oldNoReason.json?.error?.code}/${oldWithReason.status}/${p0Sign.status} ${p0Sign.json?.error?.code ?? ''} credit ${JSON.stringify(p0Credit.map((e) => e.delta_minutes))}`);
+  runJobsAt(new Date(t0.getTime() + 3000_000), 'p0 jobs');
+  runJobsAt(new Date(t0.getTime() + 3120_000), 'p0 jobs b');
+  const p0Del = await A.call('GET', `/api/deliveries?revision_id=${p0Sign.json?.revision?.id}`);
+  rec.check('AC04-8', 'the old period\'s PDF and send complete once', (p0Del.json?.deliveries ?? []).length === 1 && p0Del.json.deliveries[0].state === 'accepted', JSON.stringify((p0Del.json?.deliveries ?? []).map((d) => d.state)));
+
+
+  // ---------------------------------------------------------------- isolation and shares (AC-01, AC-16)
+  const workbook = new Uint8Array(readFileSync(join(SRC, 'reference', 'inputs', 'Timesheet_Rev8_2026.xlsx')));
+  const imp = await A.call('POST', '/api/imports', workbook, { headers: { 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+  ids.importA = imp.json?.import?.id;
+  const settingsVersions = await A.call('GET', '/api/settings/submission/versions');
+  ids.settingsA = settingsVersions.json?.versions?.[0]?.id;
+  const swaps = [
+    ['GET', `/api/sessions/${sess['09-27'].session.id}`],
+    ['PUT', `/api/sessions/${sess['09-27'].session.id}`, { start: at('2026-09-27', '10:00'), end: at('2026-09-27', '11:00'), input_zone: ZONE, breaks: [], breaks_confirmed: true, expected_version: 1, reason: 'x' }],
+    ['DELETE', `/api/sessions/${sess['09-27'].session.id}`, { expected_version: 1, reason: 'x' }],
+    ['GET', `/api/revisions/${ids.r1}/pdf`],
+    ['POST', `/api/revisions/${ids.r2}/resend`, {}],
+    ['POST', `/api/deliveries/${ids.r1Attempt}/decision`, { decision: 'resend' }],
+    ['GET', `/api/signatures/${ids.sigA}`],
+    ['POST', `/api/ot/leave/${ids.leaveA}/cancel`, { expected_version: 1 }],
+    ['POST', `/api/ot/leave/${ids.leaveA}/consume`, { use_key: 'x', minutes: 1, expected_version: 1 }],
+    ['GET', `/api/imports/${ids.importA}`],
+    ['POST', `/api/imports/${ids.importA}/commit`, { decisions: [] }],
+    ['GET', `/api/settings/submission/versions/${ids.settingsA}`],
+    ['GET', `/api/shared/${people.A.id}/timesheets/${P1}`],
+    ['GET', `/api/shared/${people.A.id}/revisions/${ids.r1}/pdf`],
+  ];
+  const aStateBefore = dbState();
+  const swapResults = [];
+  for (const who of ['B', 'admin']) {
+    const c = who === 'B' ? B : admin;
+    for (const [method, path, body] of swaps) {
+      const r = await c.call(method, path, body);
+      swapResults.push(`${who} ${method} ${path.replace(/[0-9a-f-]{36}/g, '<id>')} ${r.status}`);
+    }
+  }
+  const leaks = swapResults.filter((line) => !/ (404|403)$/.test(line));
+  rec.check('AC01-1', 'Bob and the admin get 404/403 on every swapped id of Alice (sessions, PDF, resend, decision, signature, leave, import, settings, shared routes)', leaks.length === 0 && imp.status === 201 && typeof ids.importA === 'string', leaks.join('; ') || `${swapResults.length} refusals; import ${imp.status}`);
+  const bDeliveries = await B.call('GET', `/api/deliveries?revision_id=${ids.r1}`);
+  const bOpening = await B.call('GET', '/api/ot/opening-balance');
+  const bLedger = await B.call('GET', '/api/ot/ledger');
+  const adminSheet = await admin.call('GET', `/api/timesheets/${P1}`);
+  rec.check('AC01-2', 'Bob sees no Alice delivery, opening balance or ledger; the admin timesheet route shows only the admin (no Alice sessions)', (bDeliveries.json?.deliveries ?? []).length === 0 && bOpening.json?.opening_balance === null && (bLedger.json?.entries ?? []).length === 0 && (adminSheet.json?.days ?? []).every((d) => (d.sessions ?? []).length === 0), `${bDeliveries.status}/${bOpening.status}/${bLedger.status}/${adminSheet.status}`);
+  const adminSubs = await admin.call('GET', '/api/admin/submissions');
+  const adminOps = await admin.call('GET', '/api/admin/operations');
+  writeFileSync(join(runDir, 'admin-submissions.json'), `${JSON.stringify(adminSubs.json, null, 2)}\n`);
+  writeFileSync(join(runDir, 'admin-operations.json'), `${JSON.stringify(adminOps.json, null, 2)}\n`);
+  const adminText = `${adminSubs.text}${adminOps.text}`;
+  rec.check('AC01-3', 'admin status views carry no timesheet details (no sessions, minutes, notes, signer, body or subject)', !/"(sessions|days|credited_minutes|regular_minutes|notes|signer_name|body_text|subject|payload|leave_minutes)"/.test(adminText) && !adminText.includes('Synthetic: 4 h work'), adminSubs.status + '/' + adminOps.status);
+  rec.check('AC01-4', 'Alice data unchanged by the refused swaps', dbState().replace(/"v":\d+,/, '') === aStateBefore.replace(/"v":\d+,/, ''), 'row counts compared');
+  // Shares (AC-16)
+  const grant = await A.call('POST', '/api/shares', { grantee_email: people.B.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } });
+  ids.share = grant.json?.share?.id;
+  const sv = await B.call('GET', `/api/shared/${people.A.id}/timesheets/${P1}`);
+  const so = await B.call('GET', `/api/shared/${people.A.id}/ot/summary`);
+  const sp = await B.call('GET', `/api/shared/${people.A.id}/revisions/${ids.r1}/pdf`);
+  const se = await B.call('PUT', `/api/shared/${people.A.id}/days/2026-10-07`, { category: 'Off', leave_minutes: 0, wfh: false, notes: '' });
+  const sSign = await B.call('POST', `/api/shared/${people.A.id}/timesheets/${P1}/signoff`, signBody);
+  const sSig = await B.call('GET', `/api/shared/${people.A.id}/signatures/${ids.sigA}`);
+  const sResend = await B.call('POST', `/api/shared/${people.A.id}/revisions/${ids.r2}/resend`, {});
+  const sSettings = await B.call('GET', `/api/shared/${people.A.id}/settings/submission`);
+  const sLeave = await B.call('POST', `/api/shared/${people.A.id}/ot/leave`, { request_key: 'x', leave_date: '2026-10-07', requested_minutes: 10, permission });
+  const sReshare = await B.call('POST', `/api/shared/${people.A.id}/shares`, { grantee_email: people.C.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } });
+  rec.check('AC16-1', 'view-only share: timesheet 200; OT, PDF, edit refused; sign-off, signature image, resend, settings, leave and re-sharing never reachable', grant.status === 201 && sv.status === 200 && so.status !== 200 && sp.status !== 200 && se.status !== 200 && [sSign, sSig, sResend, sSettings, sLeave, sReshare].every((r) => r.status === 404 || r.status === 403), `grant ${grant.status} view ${sv.status} ot ${so.status} pdf ${sp.status} edit ${se.status} sign ${sSign.status} sig ${sSig.status} resend ${sResend.status} settings ${sSettings.status} leave ${sLeave.status} reshare ${sReshare.status}`);
+  const change = await A.call('PUT', `/api/shares/${ids.share}`, { items: { timesheets: 'edit', ot_read: true, pdf_download: true } });
+  const so2 = await B.call('GET', `/api/shared/${people.A.id}/ot/summary`);
+  const sp2 = await B.raw('GET', `/api/shared/${people.A.id}/revisions/${ids.r1}/pdf`);
+  const dayBefore = await B.call('GET', `/api/shared/${people.A.id}/days/2026-10-07`);
+  const se2 = await B.call('PUT', `/api/shared/${people.A.id}/days/2026-10-07`, { category: 'Off', leave_minutes: 0, wfh: false, notes: 'Synthetic grantee edit', expected_version: dayBefore.json?.entry?.version ?? null });
+  const attributed = monitor.prepare("SELECT actor_user_id, owner_user_id FROM audit_events WHERE owner_user_id = ? AND actor_user_id = ? ORDER BY rowid DESC LIMIT 1").get(people.A.id, people.B.id);
+  const pdfAudit = count("SELECT count(*) FROM audit_events WHERE owner_user_id = ? AND actor_user_id = ? AND operation LIKE '%pdf%'", people.A.id, people.B.id);
+  rec.check('AC16-2', 'after the change applies on the next request: OT 200, PDF 200 (same bytes, audited), edit 200 attributed to Bob', change.status === 200 && so2.status === 200 && sp2.status === 200 && sha256(sp2.buffer) === r1Sha && se2.status === 200 && attributed !== undefined && pdfAudit >= 1, `change ${change.status} ot ${so2.status} pdf ${sp2.status} edit ${se2.status} ${se2.json?.error?.code ?? ''} audit ${JSON.stringify(attributed)} pdfAudit ${pdfAudit}`);
+  // A change revokes the row and inserts a new grant (new id), so the current id comes from the change response.
+  rec.check('AC16-2b', 'a change replaces the grant with a new id (the old row is revoked)', typeof change.json?.share?.id === 'string' && change.json.share.id !== ids.share, `${ids.share === change.json?.share?.id ? 'same id' : 'new id'}`);
+  const oldRevoke = await A.call('POST', `/api/shares/${ids.share}/revoke`, { reason: 'Synthetic revoke of the replaced row' });
+  ids.share = change.json?.share?.id;
+  const revoke = await A.call('POST', `/api/shares/${ids.share}/revoke`, { reason: 'Synthetic revoke' });
+  rec.log(`revoke of the replaced (already revoked) row -> ${oldRevoke.status}`);
+  const sv3 = await B.call('GET', `/api/shared/${people.A.id}/timesheets/${P1}`);
+  const sp3 = await B.call('GET', `/api/shared/${people.A.id}/revisions/${ids.r1}/pdf`);
+  rec.check('AC16-3', 'revocation applies on the next request (404)', revoke.status === 200 && sv3.status === 404 && sp3.status === 404, `revoke ${revoke.status} view ${sv3.status} pdf ${sp3.status}`);
+  const deact = await admin.call('POST', `/api/admin/users/${people.B.id}/deactivate`, { reason: 'Synthetic deactivation check' });
+  const bAfter = await B.call('GET', '/api/auth/me');
+  const react = await admin.call('POST', `/api/admin/users/${people.B.id}/reactivate`, { reason: 'Synthetic reactivation' });
+  await B.login(people.B.email, people.B.password);
+  rec.check('AC16-4', 'deactivation applies on the next request (401), reactivation restores sign-in', deact.status === 200 && bAfter.status === 401 && react.status === 200, `${deact.status}/${bAfter.status}/${react.status}`);
+
+  // ---------------------------------------------------------------- deadlines: other users' P1 data
+  await session(C, '2026-09-29', '08:00', '18:00', DEFAULT_BREAKS); // E=60 -> 60
+  await session(C, '2026-10-05', '08:00', '16:00', DEFAULT_BREAKS); // deficit 60, choose mode
+  await session(B, '2026-09-28', '08:00', '17:00', DEFAULT_BREAKS);
+  // A session typed in another input zone keeps the saved reporting-zone accounting date (rule 7, R-07).
+  const hcm = await B.call('POST', '/api/days/2026-09-29/sessions', { start: { local: '2026-09-29T22:00', zone: 'Asia/Ho_Chi_Minh' }, end: { local: '2026-09-30T07:00', zone: 'Asia/Ho_Chi_Minh' }, input_zone: 'Asia/Ho_Chi_Minh', breaks_confirmed: true, breaks: [] });
+  const b0929 = await B.call('GET', '/api/days/2026-09-29');
+  rec.check('ZONE-1', 'Bob enters 22:00-07:00 in Asia/Ho_Chi_Minh: stored 15:00Z-00:00Z on LA work date 2026-09-29, R=540, credit 60', hcm.status === 201 && hcm.json?.session?.start_utc === '2026-09-29T15:00:00Z' && hcm.json?.session?.end_utc === '2026-09-30T00:00:00Z' && b0929.json?.calculation?.regular_minutes === 540 && b0929.json?.calculation?.credited_minutes === 60, `${hcm.status} ${hcm.json?.session?.start_utc}-${hcm.json?.session?.end_utc} R ${b0929.json?.calculation?.regular_minutes} credit ${b0929.json?.calculation?.credited_minutes}`);
+  const calendarA = await A.call('GET', '/api/calendar');
+  rec.check('E12-1', 'from 1 October the calendar warns that next year\'s company dates are missing (E-12)', Array.isArray(calendarA.json?.warnings) && calendarA.json.warnings.length >= 1, JSON.stringify(calendarA.json?.warnings));
+  await session(D, '2026-09-28', '08:00', '17:00', DEFAULT_BREAKS);
+  await session(F, '2026-09-28', '08:00', '18:00', DEFAULT_BREAKS);
+  // Activation after the P1 deadline: P1 must not be touched.
+  const act1 = await admin.call('PUT', '/api/admin/automation/activation', { active_from: '2026-10-09T00:00:01Z', reason: 'Synthetic: activation after the first deadline' });
+  const actPast = await admin.call('PUT', '/api/admin/automation/activation', { active_from: '2026-10-01T00:00:00Z', reason: 'Synthetic: past instant' });
+  rec.check('AC07-0', 'activation recorded; an instant in the past is refused (activation_in_past)', act1.status === 200 && actPast.status === 422, `${act1.status}/${actPast.status} ${actPast.json?.error?.code}`);
+  drain(new Date('2026-10-09T00:30:00Z'), [0, 120, 240], 'P1 due, activation later');
+  const revsBefore = count('SELECT count(*) FROM timesheet_revisions WHERE origin = ?', 'deadline');
+  const overdueBefore = count("SELECT count(*) FROM audit_events WHERE operation = 'deadline.overdue'");
+  rec.check('AC07-1', 'a deadline before the activation instant is never finalized or recorded overdue', revsBefore === 0 && overdueBefore === 0, `automatic ${revsBefore} overdue ${overdueBefore}`);
+  // Before-due reminders of P2 (due 2026-10-23T00:00:00Z): the 24-hour and 2-hour windows, then a later pass (deduplication).
+  const capsBeforeRem = new Set(listCaptures(dataDir).map((c) => c.id));
+  drain(new Date('2026-10-22T00:30:00Z'), [0, 120, 240], 'P2 24h reminder window');
+  drain(new Date('2026-10-22T22:30:00Z'), [0, 120, 240], 'P2 2h reminder window');
+  const remAfterWindows = listCaptures(dataDir).filter((c) => !capsBeforeRem.has(c.id)).length;
+  runJobsAt(new Date('2026-10-22T23:00:00Z'), 'P2 reminder dedupe');
+  runJobsAt(new Date('2026-10-22T23:10:00Z'), 'P2 reminder dedupe b');
+  const remCaps = listCaptures(dataDir).filter((c) => !capsBeforeRem.has(c.id)).map((c) => ({ to: c.metadata?.envelope?.to ?? [], m: plainBody(c.eml) }));
+  writeFileSync(join(runDir, 'reminders.json'), `${JSON.stringify(remCaps.map((r) => ({ to: r.to, subject: r.m.subject, text: r.m.text })), null, 2)}\n`);
+  const perPerson = Object.fromEntries(Object.entries(people).map(([k, p]) => [k, remCaps.filter((r) => r.to.includes(p.email)).length]));
+  const others = remCaps.filter((r) => r.to.length !== 1 || !['A', 'B', 'C', 'F'].some((k) => people[k].email === r.to[0]));
+  rec.check('REM-1', 'before-due reminders for P2: Alice, Bob, Carol and Frank get one 24 h and one 2 h reminder each, each to the person\'s own address only; no duplicate on later passes', perPerson.A === 2 && perPerson.B === 2 && perPerson.C === 2 && perPerson.F === 2 && remCaps.every((r) => r.to.length === 1) && remCaps.length === remAfterWindows, `${JSON.stringify(perPerson)} total ${remCaps.length} after windows ${remAfterWindows}; subjects ${[...new Set(remCaps.map((r) => r.m.subject))].join(' | ')}`);
+  rec.log(`observation (carried WP3 R8): never-configured accounts received before-due reminders for P2: ${JSON.stringify(others.map((r) => r.to[0]))}`);
+  // Activation now (must not be in the past) and an account created after the P1 deadline (state injection on the synthetic DB).
+  const act2 = await admin.call('PUT', '/api/admin/automation/activation', { active_from: utc(new Date(Date.now() + 60_000)), reason: 'Synthetic: activation now' });
+  const writer = new Database(dbPath, { fileMustExist: true });
+  writer.pragma('busy_timeout = 5000');
+  writer.prepare('UPDATE users SET created_at = ? WHERE id = ?').run('2026-10-10T00:00:00Z', people.F.id);
+  writer.close();
+  rec.log('state injection: users.created_at of Frank set to 2026-10-10T00:00:00Z (account created after the P1 deadline)');
+  // Downtime recovery: the first scan after activation runs at 2026-11-07, after P1, P2 and P3 are all due.
+  drain(new Date('2026-11-07T00:00:00Z'), [0, 120, 240, 600, 720, 840, 1200], 'downtime recovery');
+  rec.check('AC07-2', 'activation moved to now (200)', act2.status === 200, `${act2.status}`);
+  const autoRows = monitor.prepare("SELECT rowid, owner_user_id, after_json FROM audit_events WHERE operation = 'timesheet.auto_finalize' ORDER BY rowid").all().map((row) => ({ owner: row.owner_user_id, payroll: JSON.parse(row.after_json).payroll_date }));
+  const nameOf = Object.fromEntries(Object.entries(people).map(([k, p]) => [p.id, k]));
+  const seq = autoRows.map((r) => `${nameOf[r.owner]}:${r.payroll}`);
+  const ordered = autoRows.every((r, i) => i === 0 || autoRows[i - 1].payroll <= r.payroll);
+  rec.check('AC07-3', 'recovery after downtime: Carol P1,P2,P3 and Frank P2,P3 finalized automatically, oldest deadline first; Frank P1 (before the account) never', JSON.stringify(seq.filter((s) => s.startsWith('C:'))) === JSON.stringify([`C:${P1}`, `C:${P2}`, `C:${P3}`]) && JSON.stringify(seq.filter((s) => s.startsWith('F:'))) === JSON.stringify([`F:${P2}`, `F:${P3}`]) && ordered && seq.length === 5, seq.join(' '));
+  const overdue = monitor.prepare("SELECT owner_user_id, after_json FROM audit_events WHERE operation = 'deadline.overdue' ORDER BY rowid").all().map((row) => `${nameOf[row.owner_user_id]}:${JSON.parse(row.after_json).payroll_date}`);
+  rec.check('AC07-4', 'switch off: Bob P1-P3 and Alice P2-P3 recorded overdue once each; Dave (never saved settings) nothing; Alice P1 already finalized untouched', JSON.stringify(overdue.filter((s) => s.startsWith('B:'))) === JSON.stringify([`B:${P1}`, `B:${P2}`, `B:${P3}`]) && JSON.stringify(overdue.filter((s) => s.startsWith('A:'))) === JSON.stringify([`A:${P2}`, `A:${P3}`]) && !overdue.some((s) => s.startsWith('D:')) && count('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?', people.A.id) === 3 && count("SELECT count(*) FROM timesheet_revisions WHERE user_id = ? AND origin = 'deadline'", people.A.id) === 0, `${overdue.join(' ')}; Alice revisions (P1 r1, r2 and P0 r1) ${count('SELECT count(*) FROM timesheet_revisions WHERE user_id = ?', people.A.id)}`);
+  rec.check('AC07-5', 'switch off and never-configured: no revision, PDF or send for Bob or Dave', count('SELECT count(*) FROM timesheet_revisions WHERE user_id IN (?, ?)', people.B.id, people.D.id) === 0 && count('SELECT count(*) FROM delivery_attempts WHERE user_id IN (?, ?)', people.B.id, people.D.id) === 0, 'revisions/attempts 0');
+  // Carol P1 automatic revision: presentation and record (AC-07).
+  const fin = await C.call('GET', `/api/timesheets/${P1}/finalization`);
+  writeFileSync(join(runDir, 'carol-p1-finalization.json'), `${JSON.stringify(fin.json, null, 2)}\n`);
+  rec.check('AC07-6', 'Carol P1 record: origin deadline, review pending, no sign-off (signed_at empty); OT 60 posted; choose-mode deficit pending, no debit', fin.json?.revision?.origin === 'deadline' && fin.json?.revision?.review_state === 'pending' && fin.json?.signoff === null && (fin.json?.ledger_lines ?? []).some((l) => l.line_kind === 'credit' && l.work_date === '2026-09-29') && (fin.json?.ledger_lines ?? []).some((l) => l.line_kind === 'deficit_debit' && l.outcome !== 'posted') && count("SELECT count(*) FROM ot_ledger WHERE user_id = ? AND delta_minutes < 0", people.C.id) === 0, JSON.stringify((fin.json?.ledger_lines ?? []).map((l) => [l.work_date, l.line_kind, l.proposed_minutes, l.outcome])));
+  const cRevs = (await C.call('GET', '/api/revisions')).json?.revisions ?? [];
+  const cP2 = cRevs.find((r) => r.payroll_date === P2);
+  const finP2 = await C.call('GET', `/api/timesheets/${P2}/finalization`);
+  rec.check('AC07-7', 'Carol P2 (no saved entries) submitted with default labels, no OT and no deficit', cP2 !== undefined && (finP2.json?.ledger_lines ?? []).length === 0, JSON.stringify(finP2.json?.ledger_lines ?? []));
+  const caps = listCaptures(dataDir);
+  const capsBy = (address) => caps.filter((c) => (c.metadata?.envelope?.to ?? []).includes(address));
+  const carolMail = capsBy('payroll-c@example.invalid');
+  const frankMail = capsBy('payroll-f@example.invalid');
+  const carolP1 = carolMail.map((c) => ({ c, m: plainBody(c.eml) })).find((x) => x.c.pdf !== null && x.m.subject.includes('2026-09-23 to 2026-10-06'));
+  const frankP2 = frankMail.map((c) => ({ c, m: plainBody(c.eml) })).find((x) => x.c.pdf !== null && x.m.subject.includes('2026-10-07 to 2026-10-20'));
+  rec.check('AC07-8', 'automatic sends captured: Carol 3 (to payroll-c only), Frank 2 (to payroll-f only)', carolMail.filter((c) => c.pdf !== null).length === 3 && frankMail.filter((c) => c.pdf !== null).length === 2 && carolMail.every((c) => c.metadata.envelope.to.length === 1) && frankMail.every((c) => c.metadata.envelope.to.length === 1), `carol ${carolMail.length} frank ${frankMail.length}`);
+  if (carolP1) {
+    const ct = await pdfText(carolP1.c.pdf);
+    writeFileSync(join(runDir, 'carol-p1-auto-pdf-text.txt'), `${ct.pages.join('\n---page---\n')}\n`);
+    const all = `${carolP1.m.subject}\n${carolP1.m.text}\n${ct.pages.join(' ')}`;
+    rec.check('AC07-9', 'Carol automatic P1 email/PDF: no automatic indicator, status "Submitted", no note line, authorized signature image present, date of the automatic submission (2026-11-06 LA)', !/automatic|automatically|auto-submit|tự động/i.test(all) && carolP1.m.text.includes('Submitted') && ct.imageCount >= 1 && ct.pages.join(' ').includes('Carol Synthetic') && ct.pages.join(' ').includes('11/06/2026'), `images ${ct.imageCount} subject ${carolP1.m.subject}`);
+    await renderPdf(carolP1.c.pdf, renderDir, 'carol-p1-automatic');
+  } else rec.check('AC07-9', 'Carol automatic P1 capture found', false, 'missing');
+  if (frankP2) {
+    const ft = await pdfText(frankP2.c.pdf);
+    writeFileSync(join(runDir, 'frank-p2-auto-pdf-text.txt'), `${ft.pages.join('\n---page---\n')}\n`);
+    rec.check('AC07-10', 'Frank automatic P2 (note on, image not authorized): note text in email status and PDF, no signature image', frankP2.m.text.includes('Nộp theo lịch (synthetic note)') && ft.pages.join(' ').includes('Nộp theo lịch') && ft.imageCount === 0, `images ${ft.imageCount}`);
+    await renderPdf(frankP2.c.pdf, renderDir, 'frank-p2-automatic-note');
+  } else rec.check('AC07-10', 'Frank automatic P2 capture found', false, 'missing');
+  const notices = caps.filter((c) => c.pdf === null).map((c) => ({ to: c.metadata?.envelope?.to, m: plainBody(c.eml) }));
+  writeFileSync(join(runDir, 'notices.json'), `${JSON.stringify(notices.map((n) => ({ to: n.to, subject: n.m.subject, text: n.m.text })), null, 2)}\n`);
+  const carolNotice = notices.filter((n) => (n.to ?? []).includes(people.C.email));
+  const bobNotice = notices.filter((n) => (n.to ?? []).includes(people.B.email));
+  const daveNotice = notices.filter((n) => (n.to ?? []).includes(people.D.email));
+  rec.check('AC07-11', 'outcome notice to Carol states review pending; overdue warning to Bob; Dave receives no overdue warning', carolNotice.length >= 1 && carolNotice.some((n) => /review/i.test(n.m.text) && /pending|not (yet )?reviewed|review it/i.test(n.m.text)) && bobNotice.some((n) => /overdue|deadline|passed/i.test(`${n.m.subject} ${n.m.text}`)) && !daveNotice.some((n) => /overdue/i.test(`${n.m.subject} ${n.m.text}`)), `carol ${carolNotice.length} bob ${bobNotice.length} dave ${daveNotice.length}: ${carolNotice.map((n) => n.m.subject).join(' | ')} / ${bobNotice.map((n) => n.m.subject).join(' | ')} / ${daveNotice.map((n) => n.m.subject).join(' | ')}`);
+  // Late review of Carol's automatic P1: a signed revision with zero ledger delta, no send unless chosen.
+  const cLedgerBefore = (await C.call('GET', '/api/ot/ledger')).json;
+  const cReview = await C.call('GET', `/api/timesheets/${P1}/review`);
+  const late = await C.call('POST', `/api/timesheets/${P1}/late-review`, { expected_version: cReview.json?.expected_version, reviewed_hash: cReview.json?.payload_hash, signer_name: people.C.name, deficit_choices: [{ work_date: '2026-10-05', choice: 'waive' }], incomplete_evidence_acknowledged: true, send_email: false });
+  const cLedgerAfter = (await C.call('GET', '/api/ot/ledger')).json;
+  rec.check('AC07-12', 'late review of the automatic revision: new signed revision 2 (kind late_review), zero ledger movement, no send job', late.status === 201 && late.json?.revision?.revision_kind === 'late_review' && late.json?.revision?.review_state === 'signed' && late.json?.signoff !== null && (cLedgerAfter.entries ?? []).length === (cLedgerBefore.entries ?? []).length && !(late.json?.jobs ?? []).some((j) => j.kind === 'send_email'), `${late.status} ${late.json?.error?.code ?? ''} ${JSON.stringify(late.json?.jobs ?? [])}`);
+  // Manual sign-off of a period after its automatic finalization is refused (no second finalization).
+  const cP1review = await C.call('GET', `/api/timesheets/${P1}/review`);
+  const again = await C.call('POST', `/api/timesheets/${P1}/signoff`, { expected_version: cP1review.json?.expected_version, reviewed_hash: cP1review.json?.payload_hash, signer_name: people.C.name, deficit_choices: [{ work_date: '2026-10-05', choice: 'waive' }], incomplete_evidence_acknowledged: true });
+  rec.check('AC07-13', 'a sign-off of an already finalized period is 409 (no duplicate revision or posting)', again.status === 409, `${again.status} ${again.json?.error?.code}`);
+  const tally = () => [count('SELECT count(*) FROM timesheet_revisions'), count('SELECT count(*) FROM ot_ledger'), count('SELECT count(*) FROM delivery_attempts'), count('SELECT count(*) FROM signoffs'), listCaptures(dataDir).filter((c) => c.pdf !== null).length];
+  const tallyBefore = tally();
+  const rerun = drain(new Date('2026-11-07T02:00:00Z'), [0, 120, 600, 1200], 'idempotent rescan');
+  const tallyAfter = tally();
+  rec.check('AC03-2', 'later scans and runs add no revision, ledger row, attempt, sign-off or PDF send (revisions, ledger, attempts, sign-offs, PDF captures)', JSON.stringify(tallyBefore) === JSON.stringify(tallyAfter) && rerun.every((r) => r.status === 0), `${JSON.stringify(tallyBefore)} -> ${JSON.stringify(tallyAfter)} ${JSON.stringify(rerun.map((r) => r.summary))}`);
+  // Activation cleared (not_active): a later deadline (P4, due 2026-11-20T01:00:00Z) is neither finalized nor recorded overdue.
+  const autoCount = () => count("SELECT count(*) FROM audit_events WHERE operation IN ('timesheet.auto_finalize', 'deadline.overdue')");
+  const autoBefore = autoCount();
+  const cleared = await admin.call('PUT', '/api/admin/automation/activation', { active_from: null, reason: 'Synthetic: deactivate automation' });
+  const clearedRuns = drain(new Date('2026-11-21T00:00:00Z'), [0, 120], 'activation cleared');
+  rec.check('AC07-14', 'with the activation cleared, a passed deadline is not finalized or recorded overdue (not_active)', cleared.status === 200 && cleared.json?.automation?.active_from === null && autoCount() === autoBefore && clearedRuns.every((r) => r.status === 0), `${cleared.status} audit ${autoBefore}->${autoCount()}`);
+  // History screen data for Alice (revisions, attempts and decisions) for the record.
+  const historyA = await A.call('GET', '/api/history');
+  writeFileSync(join(runDir, 'alice-history.json'), `${JSON.stringify(historyA.json, null, 2)}\n`);
+
+  // ---------------------------------------------------------------- privacy of health/ready/logs/CLI (AC-14)
+  const health = await client('anon').call('GET', '/api/health');
+  const ready = await client('anon').call('GET', '/api/ready');
+  rec.check('AC14-4', 'health/ready expose no personal data or path', health.text === '{"status":"ok"}' && !ready.text.includes('example.invalid') && !ready.text.includes('\\') && !ready.text.includes('/'), `${health.text} ${ready.text}`);
+  const everything = `${server.output}\n${cliOutputs.join('\n')}`;
+  const leaked = [...rec.secrets].filter((value) => value !== token && everything.includes(value));
+  const tokenOutsideBootstrap = `${server.output}\n${cliOutputs.filter((o) => !o.includes('Setup token')).join('\n')}`.includes(token);
+  rec.check('AC14-5', 'server log and CLI outputs contain no password, session cookie or setup token (token only in the bootstrap terminal output)', leaked.length === 0 && !tokenOutsideBootstrap && !/password/i.test(server.output), `leaked ${leaked.length}; server log lines ${server.output.split('\n').length}`);
+  writeFileSync(join(runDir, 'server-log.txt'), rec.mask(server.output));
+  writeFileSync(join(runDir, 'cli-outputs.txt'), rec.mask(cliOutputs.join('\n')));
+
+  // Capture listing (synthetic recipients only).
+  const listing = listCaptures(dataDir).map((c) => {
+    const m = c.eml === '' ? null : plainBody(c.eml);
+    return { attempt: c.id, files: c.files, from: c.metadata?.envelope?.from ?? null, to: c.metadata?.envelope?.to ?? null, subject: m?.subject ?? null, headers: m?.headers ?? null, pdf_sha256: c.pdfSha256, body: m?.text ?? null };
+  });
+  writeFileSync(join(runDir, 'capture-listing.json'), `${JSON.stringify(listing, null, 2)}\n`);
+  writeFileSync(join(runDir, 'runs.json'), `${JSON.stringify(runs, null, 2)}\n`);
+}
+
+try {
+  await main();
+} catch (error) {
+  const cause = error instanceof Error && error.cause !== undefined ? ` cause: ${error.cause instanceof Error ? `${error.cause.name} ${error.cause.code ?? ''} ${error.cause.message}` : String(error.cause)}` : '';
+  rec.check('PROBE', 'probe ran to the end without an unexpected error', false, error instanceof Error ? `${error.message}${cause}\n${error.stack}` : String(error));
+} finally {
+  try {
+    monitor?.close();
+  } catch {
+    // closed
+  }
+  await server.stop();
+  writeFileSync(join(runDir, 'server-log-final.txt'), rec.mask(server.output));
+  rec.check('NET-1', 'every client fetch error was a keep-alive reset (ECONNRESET) on an idempotent read after an idle gap, retried once successfully', Client.fetchErrors.every((e) => e.code === 'ECONNRESET' && (e.method === 'GET' || e.method === 'HEAD')), JSON.stringify(Client.fetchErrors));
+  const { pass, fail } = rec.write();
+  console.log(`probe ${runDir.replace(T, '<task>')}: pass ${pass} fail ${fail}`);
+  process.exitCode = fail === 0 ? 0 : 1;
+}

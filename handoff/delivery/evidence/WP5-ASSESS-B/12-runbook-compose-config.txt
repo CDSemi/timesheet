@@ -1,0 +1,64 @@
+== project-dir <pd> holds compose.example.yaml from the export (byte copy); no TIMESHEET_* variable set; env file kept at <env-file> = <task>/c1/timesheet.env
+0
+== case 1: docs/11 <compose> verbatim: docker compose --project-name ts-wp5-assess-b --file <pd>/compose.example.yaml config
+env file <task>\scratch\pd\timesheet.env not found: CreateFile <task>\scratch\pd\timesheet.env: The system cannot find the file specified.
+exit=1
+== case 2: same command after placing the env file next to the compose file as ./timesheet.env (the compose comments' layout)
+name: ts-wp5-assess-b
+services:
+  timesheet:
+    build:
+      context: <task>\scratch\pd
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    environment:
+      APP_ORIGINS: https://timesheet.example.invalid
+      MAIL_FROM: timesheet@example.invalid
+      PUBLIC_BASE_URL: https://timesheet.example.invalid
+    image: timesheet:local
+    init: true
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: <task>\scratch\pd\data
+        target: /data
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: ts-wp5-assess-b_default
+exit=0
+== case 2 images
+timesheet:local
+== case 4 (feasibility of a docs-only fix): the four variables in <project-dir>/.env (Compose's own interpolation file), same verbatim <compose> config
+timesheet:546cdda
+    image: timesheet:546cdda
+    init: true
+    networks:
+      default: null
+--
+        published: "47732"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+--
+        source: <task>/c1/container-restore
+        target: /data
+        bind:
+          create_host_path: true
+exit=0

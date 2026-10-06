@@ -1,0 +1,76 @@
+// WP5-ASSESS-B probe: compares two restored copies of the same backup (A: restored on the Windows host by the host build,
+// B: restored inside the image by the runbook's one-off container) table by table, and checks every manifest file in
+// B against its SHA-256. Rows that a restore itself writes (operations_state, the restore audit event) are compared
+// without their instants and ids. Usage: node compare-restores.mjs <build dir> <restore A dir> <restore B dir> <backup dir>
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join, resolve } from 'node:path';
+
+const [buildArg, aArg, bArg, backupArg] = process.argv.slice(2);
+const Database = createRequire(join(resolve(buildArg), 'package.json'))('better-sqlite3');
+const A = resolve(aArg);
+const B = resolve(bArg);
+const BACKUP = resolve(backupArg);
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+let passes = 0;
+let failures = 0;
+function check(label, condition, detail = '') {
+  console.log(`${condition ? 'PASS' : 'FAIL'}  ${label}${detail === '' ? '' : `  ${detail}`}`);
+  if (condition) passes += 1;
+  else failures += 1;
+}
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function tables(dir, normalize) {
+  const db = new Database(join(dir, 'timesheet.db'), { readonly: true, fileMustExist: true });
+  try {
+    const out = {};
+    for (const name of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all()) {
+      const rows = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all();
+      const text = JSON.stringify(rows, (_key, value) => (Buffer.isBuffer(value) ? `hex:${value.toString('hex')}` : typeof value === 'string' && ((normalize.has(name) && INSTANT.test(value)) || (name === 'audit_events' && UUID.test(value))) ? '<volatile>' : typeof value === 'string' && name === 'audit_events' ? value.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, '<instant>') : value));
+      out[name] = { rows: rows.length, sha256: sha256(text) };
+    }
+    out.__integrity = db.pragma('integrity_check', { simple: true });
+    out.__fk = db.pragma('foreign_key_check').length;
+    out.__schema = db.prepare('SELECT max(version) FROM schema_migrations').pluck().get();
+    return out;
+  } finally {
+    db.close();
+  }
+}
+const normalize = new Set(['operations_state', 'audit_events', 'jobs', 'delivery_attempts']);
+const ta = tables(A, normalize);
+const tb = tables(B, normalize);
+const names = Object.keys({ ...ta, ...tb }).filter((name) => !name.startsWith('__'));
+const differing = names.filter((name) => JSON.stringify(ta[name]) !== JSON.stringify(tb[name]));
+console.log(`INFO  tables ${names.length}; integrity ${ta.__integrity}/${tb.__integrity}; fk ${ta.__fk}/${tb.__fk}; schema ${ta.__schema}/${tb.__schema}`);
+check('host restore and container restore are equal in every table (restore instants normalized in operations_state, audit_events, jobs and delivery_attempts; audit ids normalized)', differing.length === 0, differing.map((name) => `${name} ${ta[name]?.rows}/${tb[name]?.rows}`).join(', '));
+for (const name of differing) {
+  const rowsOf = (dir) => {
+    const db = new Database(join(dir, 'timesheet.db'), { readonly: true, fileMustExist: true });
+    try {
+      return db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all();
+    } finally {
+      db.close();
+    }
+  };
+  const ra = rowsOf(A);
+  const rb = rowsOf(B);
+  ra.forEach((row, index) => {
+    const other = rb[index];
+    if (JSON.stringify(row) === JSON.stringify(other)) return;
+    const keys = Object.keys(row).filter((key) => JSON.stringify(row[key]) !== JSON.stringify(other?.[key]));
+    const mask = (value) => String(value).replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, '<instant>').replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>');
+    console.log(`INFO  ${name} row ${index + 1} differs in ${keys.join(',')}: ${keys.map((key) => `${key}: A=${mask(row[key])} B=${mask(other?.[key])}`).join(' ; ')}`);
+  });
+}
+check('both restored copies pass integrity_check and foreign_key_check at the same schema', ta.__integrity === 'ok' && tb.__integrity === 'ok' && ta.__fk === 0 && tb.__fk === 0 && ta.__schema === tb.__schema);
+const manifest = JSON.parse(readFileSync(join(BACKUP, 'manifest.json'), 'utf8'));
+const bad = manifest.files.filter((file) => {
+  const path = join(B, 'private-data', 'files', file.storage_key);
+  return !existsSync(path) || sha256(readFileSync(path)) !== file.sha256;
+});
+check('every manifest file restored by the container hashes to its manifest entry', bad.length === 0, `${manifest.files.length} files, ${bad.length} bad`);
+console.log(`SUMMARY ${passes} PASS, ${failures} FAIL`);
+process.exit(failures === 0 ? 0 : 1);

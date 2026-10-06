@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 546cddaf6747aef85e8b6d9b7712de9e28f138bf (WP4-FIXB4-FREEZE, commit đóng băng vòng sửa 4 của WP4).
+  - HEAD = origin/main = e7fe5144dc62f5047c79dd5ef69d973f60dfd14d (WP4-ACCEPT, hồ sơ nghiệm thu WP4; source được nghiệm thu là 546cdda, digest 26fcc969).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -952,7 +952,53 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - WP4-ACCEPT lần 1 dừng đúng quy tắc, không có commit. Validator thấy
          WP4-REGATE4 và WP4-RECHECK-B4 vẫn ở trạng thái `running`. Coordinator đã ghi kết
          quả của chúng nhưng quên đổi trạng thái, và nay đã sửa.
-       - Đang chạy: WP4-ACCEPT lần 2, cùng committer. Sau đó board chuyển sang WP5.
+       - WP4-ACCEPT lần 2 đã commit và push e7fe514 (163 đường dẫn handoff; mọi kiểm
+         tra trả 0). **WP4 đã được nghiệm thu.**
+       - Board và STATE đã chuyển sang WP5.
+       - WP5-PLAN đã xong (planner, opus; chỉ đọc).
+         - Không chạy gate mới trước đợt đánh giá: WP4-REGATE4 đã đạt trên cùng commit
+           đóng băng.
+         - Hai auditor opus mới chạy song song trên 546cdda: A (quy trình tích hợp, nộp
+           bảng công và quyền riêng tư) và B (bản phát hành dựng lại được, khôi phục đã
+           kiểm chứng và vận hành).
+         - Nó phác khung pilot packet, đặt các quyết định D-1..D-15 cho chủ dự án, và
+           liệt kê các task tạm thời: sửa lỗi, REL, GATE, PILOT, FINAL-AUDIT, ACCREC,
+           ACCEPT và GOV-RECOVERY.
+       - Đã hỏi chủ dự án D-1..D-15 (`pending_owner_question` trên board; thay cho
+         WP4-I-1..I-5).
+       - WP5-ASSESS-A: **PASS** trên 546cdda (digest 26fcc969 trước và sau), không có
+         phát hiện.
+         - Kịch bản tích hợp AC-13 đạt 77/77, kịch bản lỗi gửi đạt 12/12.
+         - verify 1.758, e2e 145/bỏ qua 5, các bộ test chọn lọc 747.
+         - Rủi ro R-WA1..R-WA8; R-WA1..R-WA3 và R-WA8 chuyển cho chủ dự án và pilot
+           packet.
+       - WP5-ASSESS-B: **FIX REQUIRED** trên 546cdda (digest 26fcc969).
+         - Bản phát hành dựng lại được: dist giống hệt từng byte, và dist trong image
+           khớp bản dựng tại máy. Image không chạy bằng root, 0 file bị cấm.
+         - Drill: 208 PASS. Lần khôi phục thêm (kỳ đã chốt, chỉnh sửa, OT đặt trước và
+           dùng một phần) khớp hoàn toàn.
+         - Phát hiện: WP5-B-01 (Medium), runbook chưa định nghĩa các biến Compose và
+           `<image>`, nên bản khôi phục và bản rollback không có cách gắn đúng;
+           WP5-B-02 (Low), không giữ bản sao file env được bảo vệ và thông tin phiên
+           bản cùng với bản backup ở thiết bị khác.
+         - Rủi ro R-B5-1..R-B5-7.
+       - WP5-FIXB đã xong (worker, sonnet; tác giả tự báo).
+         - Nó sửa docs/11 EN và VI, phần đầu `.env.example` và một dòng chú thích trong
+           `compose.example.yaml`.
+         - `docker compose config` trả 0 cho bản đang chạy, bản khôi phục và bản
+           rollback. verify 1.758; precommit 0; preflight 0.
+         - Digest ed604d0c (775 tệp); digest hiện tại trên board đã cập nhật.
+       - WP5-ASSESS-A chuyển sang lần 2, trạng thái pending: kiểm phần chênh mảng A gắn
+         digest trên một commit đóng băng WP5 sau này. Lần 1 được giữ trong lịch sử.
+       - Đang chạy: WP5-FIXB-FREEZE (committer).
+       - Sau đó:
+         - WP5-AC13, một test tích hợp được commit (worker-high, sonnet), và commit
+           đóng băng của nó;
+         - WP5-REL, ghi chú phát hành và cài đặt, cùng phần bật, tắt và rollback trong
+           runbook; commit đóng băng của nó là commit đóng băng cuối của package;
+         - WP5-GATE;
+         - WP5-PILOT;
+         - đợt audit cuối, gồm kiểm tra lại mảng B và kiểm phần chênh của mảng A.
      - Backlog: R-A2, R-A6, R-A8, B-R2.
      - Câu hỏi còn mở cho chủ dự án: WP4-I-1..I-5 (đang áp dụng mặc định an toàn), và
        R-A3 (cách rollback) trước pilot WP5.
@@ -967,10 +1013,10 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-ACCREC, rồi giao WP4-ACCEPT (committer; brief đã sẵn; STATE ghi WP4
-     đã đạt và NEXT_ACTION trỏ sang WP5).
-  2. Sau đó chuyển board sang WP5 và làm theo WP5_IMPLEMENT: bắt đầu bằng nghiệm thu
-     độc lập, rồi đến pilot packet cụ thể. Pilot thật do chủ dự án quyết.
+  1. Ghi kết quả WP5-ASSESS-A và WP5-ASSESS-B. Sau đó lên kế hoạch sửa các phát hiện,
+     cùng các sửa đổi theo câu trả lời D-1..D-15 nào khác mặc định.
+  2. Sau đó là sửa lỗi, kiểm tra lại độc lập, ghi chú phát hành và cài đặt, và pilot
+     packet cụ thể để chủ dự án duyệt. Pilot thật do chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động

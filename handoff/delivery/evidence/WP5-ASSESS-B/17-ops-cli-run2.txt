@@ -1,0 +1,22 @@
+PASS  cli.js migrate (production) exits 0  {"database":"<task>\\x2b\\timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13],"version":13}
+INFO  migrate prints the database path: true
+PASS  bootstrap --config prints one setup token  Company calendar and default policy created (1 holiday dates). | Setup token (shown once, valid until 2026-10-06T21:46:23Z; only its hash is stored): |  |   <token> |  | Open the application and enter it on the Setup screen to create the first administrator. | Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+PASS  a second bootstrap --config is refused  exit 1 This database is already bootstrapped; the company calendar is created only once
+PASS  bootstrap --new-token prints a fresh token while no administrator exists (docs/11 section 3 step 4)  exit 0
+PASS  seed is refused in production  exit 1
+PASS  run-jobs is refused in production  exit 1
+PASS  production server answers /api/ready  {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  /api/health and /api/ready hold no path, address or name  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  the replaced first token is refused (403)  status 403
+PASS  the renewed token creates the first administrator (201; the setup sets no cookie)  status 201
+PASS  the administrator signs in; production sets a Secure, HttpOnly, SameSite=Strict session cookie  status 200
+PASS  bootstrap --new-token is refused once an administrator exists  exit 1 An administrator already exists; the setup is closed
+PASS  backup --to <dir> --prune exits 0 and prints counts only (first backup)  {"outcome":"succeeded","backup":"timesheet-backup-20261006T204625Z-a99b98ce","schema_version":13,"files":0,"signatures":0,"pdfs":0,"database_bytes":552960,"duration_ms":36,"status_recorded":true} | {"outcome":"pruned","candidates":1,"kept":1,"removed":0,"ignored":0}
+PASS  a second same-day backup --prune exits 0 and keeps one backup for the day (R-RA2: the earlier same-day folder is removed)  {"outcome":"succeeded","backup":"timesheet-backup-20261006T204627Z-b1ce72a1","schema_version":13,"files":0,"signatures":0,"pdfs":0,"database_bytes":552960,"duration_ms":43,"status_recorded":true} | {"outcome":"pruned","candidates":2,"kept":1,"removed":1,"ignored":0}
+INFO  backup folders after two --prune runs: 1 (timesheet-backup-20261006T204627Z-<hex>)
+PASS  backup prune --dry-run prints counts only  {"outcome":"dry_run","candidates":1,"keep":1,"remove":0,"ignored":0}
+PASS  the production server log holds no token, password or address  3 lines
+INFO  server log: Timesheet listening on http://127.0.0.1:47723 (schema v13) | Outbound delivery active
+INFO  server stopped through its own handle: {"code":null,"signal":"SIGTERM"}
+SUMMARY 16 PASS, 0 FAIL
+exit=0

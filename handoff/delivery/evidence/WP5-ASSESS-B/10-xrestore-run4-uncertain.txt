@@ -1,0 +1,79 @@
+PASS  cli.js seed exits 0 and prints no password  exit 0
+INFO  seed stdout  Created synthetic seed data: | admin    admin@example.invalid | employee employee@example.invalid | employee employee2@example.invalid | sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes | submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for employee2@example.invalid | capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured
+PASS  source instance answers /api/ready
+PASS  employee2 and the administrator sign in
+INFO  periods/current  {"today_local":"2026-10-06","current":"2026-10-16","in_progress":"2026-10-16"}
+PASS  weekday session in the old period (540 worked minutes)  status 201 
+PASS  Saturday session in the old period (240 off-calendar minutes)  status 201 
+PASS  sign-off of the old period (finalized revision 1)  status 201 
+PASS  revision 1: PDF ready and its send accepted (capture)
+INFO  ledger after sign-off  {"posted_minutes":900,"reserved_minutes":240,"available_minutes":660,"negative":false,"reconciliation_required":false}
+PASS  edit of the finalized period with a reason (correction draft)  status 200 
+PASS  correction revision finalized (revision 2)  status 201 
+PASS  revision 2: PDF ready
+PASS  OT leave request reserved (120 minutes)  status 201 
+PASS  partial record use (60 of 120 minutes)  status 200 
+PASS  source restarted with JOB_RUNNER=off
+PASS  explicit resend of the current revision: a queued send with a preparing attempt (runner off)  status 201 {"revision_id":"eb68fe8a-2cc1-4bf7-bdce-81e368ff2e60","job":{"id":"aa794048-530e-4f59-b622-d39267ac466f","kind":"send_email","state":"queued"},"attempt":{"id":"c9262ed1-9870-4578-a961-0d483787a408","a
+INFO  source balance  {"posted_minutes":870,"reserved_minutes":300,"available_minutes":570,"negative":false,"reconciliation_required":false}
+INFO  source ledger entries  [{"type":"credit","delta":600,"work_date":"2026-10-01"},{"type":"credit","delta":60,"work_date":"2026-09-15"},{"type":"credit","delta":240,"work_date":"2026-09-19"},{"type":"correction","delta":30,"work_date":"2026-09-15"},{"type":"leave_consumption","delta":-60,"work_date":"2026-09-30"}]
+INFO  source leave  [{"reserved":60,"consumed":60,"released":0},{"reserved":240,"consumed":0,"released":0}]
+INFO  source revisions  [{"no":2,"kind":"correction","review":"signed","pdf":"ready","delivery":"preparing"},{"no":1,"kind":"original","review":"signed","pdf":"ready","delivery":"accepted"}]
+INFO  source PDF sha256  ["f6ac186d0857911689e2a8def177e2a4244e9425adf6a0ec2982212a855f5bd8","0f390ee45840aa2f51c991f5e559c766083ed7e6de1595efe8639ecc984344e4"]
+PASS  /api/health and /api/ready carry no private data  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  administrator operations JSON carries no timesheet detail, path or name (recipient addresses are allowed by docs/07)  status 200
+PASS  cli.js backup while the source runs exits 0 and prints counts only  {"outcome":"succeeded","backup":"timesheet-backup-20261006T204019Z-d58f5f73","schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824,"duration_ms":68,"status_recorded":true}
+INFO  manifest  {"schema":13,"app_version":"0.1.0","files":3,"kinds":["signature","pdf","pdf"]}
+PASS  a session written after the backup (must not be in the restore)  status 201 
+INFO  source server stopped through its own handle  {"code":null,"signal":"SIGTERM"}
+PASS  restore into the live DATA_DIR is refused (exit 2, target_inside_data_dir)  Restore refused (target_inside_data_dir): The restore target must be outside the live private data directory (DATA_DIR)
+PASS  restore into a non-empty folder is refused (exit 2, target_not_empty)  Restore refused (target_not_empty): The restore target must be an empty or new directory
+PASS  cli.js restore exits 0, verified, paused (restored), counts only  {"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":3,"signatures":1,"pdfs":2,"database_bytes":589824},"schema":{"backup":13,"restored":13,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":1,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":1},"counts":{"users":3,"revisions":2,"ledger_entries":5,"attachments":3}}
+INFO  tables  29
+INFO  tables that differ between the backup copy and the restored copy  [{"name":"audit_events","backup":34,"restored":35},{"name":"delivery_attempts","backup":2,"restored":2},{"name":"jobs","backup":6,"restored":6},{"name":"operations_state","backup":1,"restored":1}]
+PASS  only the restore bookkeeping differs (operations_state pause, one audit event, held outbound jobs; in uncertain mode the preparing attempt marked uncertain)  audit_events,delivery_attempts,jobs,operations_state
+PASS  restored schema equals the backup copy  13
+PASS  restored integrity equals the backup copy  "ok"
+PASS  restored fk equals the backup copy  0
+PASS  restored ledger_per_user equals the backup copy  [{"user_id":"bd9b7dee-82cc-485e-b0d9-409ce2e592e3","entries":5,"minutes":870}]
+PASS  restored ledger_kinds equals the backup copy  [{"entry_type":"correction","n":1,"minutes":30},{"entry_type":"credit","n":3,"minutes":900},{"entry_type":"leave_consumption","n":1,"minutes":-60}]
+PASS  restored revisions equals the backup copy  2 rows
+PASS  restored signoffs equals the backup copy  2
+PASS  restored leave equals the backup copy  2 rows
+PASS  restored attachments equals the backup copy  3 rows
+PASS  restored work_sessions equals the backup copy  5
+PASS  point in time: the live database has one more session than the restored copy  6 vs 5
+PASS  restored ledger, revisions, sign-offs and leave equal the live database (nothing else moved them after the backup)
+INFO  restored jobs and attempts  {"jobs":[{"kind":"job_retention","state":"succeeded","n":1},{"kind":"orphan_sweep","state":"succeeded","n":1},{"kind":"render_pdf","state":"succeeded","n":2},{"kind":"send_email","state":"intervention","n":1},{"kind":"send_email","state":"succeeded","n":1}],"attempts":[{"state":"accepted","n":1},{"state":"uncertain","n":1}]}
+PASS  every restored file hashes to its manifest entry and to the live file  3 files
+PASS  the restored database file hashes differently from the backup copy only because of the reconciliation write (manifest database hash verified by the CLI)
+PASS  restored instance answers /api/ready
+PASS  restored instance logs the outbound pause at start  Outbound delivery PAUSED since 2026-10-06T20:40:20Z (reason: restored); 1 delivery attempt(s) await a decision, 0 send job(s) wait, 1 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+PASS  restored API: balance (posted, reserved, available) equals the source  {"posted_minutes":870,"reserved_minutes":300,"available_minutes":570,"negative":false,"reconciliation_required":false}
+PASS  restored API: every ledger entry equals the source  5 entries
+PASS  restored API: leave requests (reserved, consumed, released) equal the source  2 requests
+PASS  restored API: revisions (numbers, kinds, review, PDF and delivery state) equal the source (uncertain mode: the preparing delivery reads uncertain)  2 revisions
+PASS  restored API: every PDF has the same SHA-256 as on the source  ["f6ac186d0857911689e2a8def177e2a4244e9425adf6a0ec2982212a855f5bd8","0f390ee45840aa2f51c991f5e559c766083ed7e6de1595efe8639ecc984344e4"]
+PASS  restored API: the finalized timesheet view equals the source
+PASS  restored /api/admin/operations reports the pause with reason restored  {"paused":true,"paused_at":"2026-10-06T20:40:20Z","reason":"restored","awaiting_decision":1,"queued_send_jobs":0,"held_send_jobs":1}
+PASS  restored administrator operations JSON carries no timesheet detail, path or name
+PASS  restored /api/health and /api/ready carry no private data  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  outbound release preview on the restored copy exits 2 and prints ids, kinds and counts only  {"outcome":"confirmation_required","held":1,"releasable":0,"blocked":{"attempt_uncertain":1},"jobs":[{"id":"aa794048-530e-4f59-b622-d39267ac466f","kind":"send_email","attempts":0,"created_at":"2026-10-06T20:40:17Z","blocker":"attempt_uncertain"}]}
+PASS  outbound resume preview exits 2 and still shows the pause  {"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":1,"queued_send_jobs":0,"held_send_jobs":1}
+PASS  restore marked the preparing attempt uncertain and held its send (awaiting one decision)  {"attempts_marked_uncertain":1,"send_jobs_held":1,"queued_send_jobs":0,"awaiting_decision":1}
+PASS  the pause line counts one attempt awaiting a decision
+PASS  outbound resume --confirm is refused while an attempt awaits a decision (exit 1)  {"outcome":"refused","awaiting_decision":1,"queued_send_jobs":0,"held_send_jobs":1}
+PASS  outbound release --all leaves the uncertain send held (attempt_uncertain)  {"outcome":"released","released":0,"refused":{"attempt_uncertain":1}}
+PASS  the owner sees the uncertain attempt with a decision required  {"state":"uncertain","decision_required":true,"provider_response":"reconcile_after_restore"}
+PASS  the owner records the decision "resend" (201, a new attempt on the same revision)  status 201 {"attempt":{"id":"c9262ed1-9870-4578-a961-0d483787a408","job_id":"aa794048-530e-4f59-b622-d39267ac466f","revision_id":"eb68fe8a-2cc1-4bf7-bdce-81e368ff2e60","revision_no":2,"payroll_date":"2026-10-02"
+PASS  while still paused, the decided resend is not sent  0 captured
+PASS  outbound resume --confirm now clears the pause (exit 0)  {"outcome":"resumed","awaiting_decision":0,"queued_send_jobs":1,"held_send_jobs":1}
+PASS  the decided resend is captured exactly once  1 capture folder(s)
+PASS  the captured PDF is revision 2 of the restored copy (same SHA-256) and the recipients are example.invalid  f6ac186d0857911689e2a8def177e2a4244e9425adf6a0ec2982212a855f5bd8 timesheet@example.invalid,payroll@example.invalid,manager@example.invalid
+PASS  the original held send can never be released (exit 1, attempt_uncertain)  {"outcome":"refused","code":"attempt_uncertain"}
+PASS  attempts: the decided uncertain one stays, and exactly one new accepted attempt (the resend) beyond those restored  restored [{"state":"accepted","n":1},{"state":"uncertain","n":1}] -> [{"state":"accepted","n":2},{"state":"uncertain","n":1}]
+PASS  the resend moved no ledger minute  {"posted_minutes":870,"reserved_minutes":300,"available_minutes":570,"negative":false,"reconciliation_required":false}
+PASS  restored instance log carries no password, address or name  3 lines
+INFO  restored instance log  Timesheet listening on http://127.0.0.1:47722 (schema v13) | Outbound delivery PAUSED since 2026-10-06T20:40:20Z (reason: restored); 1 delivery attempt(s) await a decision, 0 send job(s) wait, 1 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+SUMMARY 63 PASS, 0 FAIL
+exit=0

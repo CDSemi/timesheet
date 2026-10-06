@@ -150,3 +150,13 @@ Committer (claude-sonnet-5-5), attempt 1: NO COMMIT, stopped on a failed check.
   (validate_orchestration.py line 309; a dependency task is not status done on the board).
 - check_recovery.py and validate_package.py --preflight not run (stopped).
 - Blocker: coordinator must fix the board status of WP4-RECHECK-A, then redispatch.
+
+### Attempt 2 results
+
+- Pre-HEAD = origin/main = 546cdda; commit e7fe5144dc62f5047c79dd5ef69d973f60dfd14d; pushed
+  yes (fast-forward); remote SHA e7fe5144dc62f5047c79dd5ef69d973f60dfd14d.
+- Digests (working tree and ls-tree) 26fcc969 (775 files); staged 163 (150 new, 13
+  modified); Node v24.21.0.
+- Exit codes: precommit 0, diff --check 0, JSON 0, validate_orchestration 0,
+  check_recovery 0, validate_package --preflight 0, commit 0, push 0.
+- This results text and evidence/WP4-ACCEPT/ are not in the commit. No blockers.

@@ -1,0 +1,67 @@
+// WP5-ASSESS-B probe: SHA-256 of every file under <a>/dist and <b>/dist, compared path by path.
+// Prints one summary per tree (file count, total bytes, SHA-256 of the sorted "<path> <sha256> <size>" lines), then every
+// difference (only in a, only in b, or different content). Writes the per-file listings next to the output if asked.
+// Usage: node dist-hash.mjs <export a> <export b> [<listing a out> <listing b out>]
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+const [a, b, outA, outB] = process.argv.slice(2);
+if (!a || !b) {
+  console.error('usage: node dist-hash.mjs <export a> <export b> [<listing a> <listing b>]');
+  process.exit(2);
+}
+
+function walk(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(full));
+    else if (entry.isFile()) out.push(full);
+  }
+  return out;
+}
+
+function table(root) {
+  const dist = join(root, 'dist');
+  const map = new Map();
+  for (const full of walk(dist)) {
+    const bytes = readFileSync(full);
+    const path = relative(dist, full).replaceAll('\\', '/');
+    map.set(path, { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length });
+  }
+  return map;
+}
+
+function summary(name, map, out) {
+  const lines = [...map.keys()]
+    .sort((x, y) => (x < y ? -1 : x > y ? 1 : 0))
+    .map((path) => `${path} ${map.get(path).sha256} ${map.get(path).size}\n`)
+    .join('');
+  if (out) writeFileSync(out, lines);
+  const bytes = [...map.values()].reduce((sum, item) => sum + item.size, 0);
+  console.log(`${name}: ${map.size} files, ${bytes} bytes, tree sha256 ${createHash('sha256').update(lines).digest('hex')}`);
+}
+
+const ta = table(a);
+const tb = table(b);
+summary('A', ta, outA);
+summary('B', tb, outB);
+let differences = 0;
+for (const path of [...new Set([...ta.keys(), ...tb.keys()])].sort()) {
+  const x = ta.get(path);
+  const y = tb.get(path);
+  if (!x) {
+    differences += 1;
+    console.log(`ONLY-B  ${path}`);
+  } else if (!y) {
+    differences += 1;
+    console.log(`ONLY-A  ${path}`);
+  } else if (x.sha256 !== y.sha256) {
+    differences += 1;
+    console.log(`DIFF    ${path}  ${x.size} vs ${y.size}`);
+  }
+}
+const maps = [...ta.keys()].filter((path) => path.endsWith('.map')).length;
+console.log(`source maps in A: ${maps}`);
+console.log(differences === 0 ? 'RESULT identical: every dist/ file has the same SHA-256 in both exports' : `RESULT ${differences} difference(s)`);

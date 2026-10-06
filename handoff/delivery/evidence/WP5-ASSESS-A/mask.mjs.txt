@@ -1,0 +1,29 @@
+/ WP5-ASSESS-A evidence masking script (masked evidence copy)
+// Masked LF copies for the evidence folder. Usage: node mask.mjs <in> <out> [<in> <out> ...] [--header "<text>"]
+// Masks the task folder as <task>, the repository as <project>, profile segments as <user>, ANSI colour codes, and any
+// email address that is not on example.invalid as <email>.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+let header = '';
+const pairs = [];
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === '--header') header = args[++i] ?? '';
+  else pairs.push([args[i], args[++i]]);
+}
+const variants = (path) => [path, path.replaceAll('\\', '/'), path.replaceAll('\\', '\\\\'), path.replace(/^([A-Za-z]):/, (_m, d) => `/${d.toLowerCase()}`).replaceAll('\\', '/')];
+const task = '<task>';
+const repo = '<project>';
+function mask(text) {
+  let out = text.replace(/\u001b\[[0-9;]*m/g, '').replace(/\r\n?/g, '\n');
+  for (const value of variants(task)) out = out.split(value).join('<task>');
+  for (const value of variants(repo)) out = out.split(value).join('<project>');
+  out = out.replace(/([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"'`,;)]+/gi, '$1<user>').replace(/(\/[a-z]\/Users\/)[^\\/\s"'`,;)]+/gi, '$1<user>');
+  out = out.replace(/[\w.%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,})\b/gi, (match, domain) => (/\.invalid$/i.test(domain) ? match : '<email>'));
+  return out.endsWith('\n') ? out : `${out}\n`;
+}
+for (const [input, output] of pairs) {
+  const text = readFileSync(input, 'utf8');
+  writeFileSync(output, `${header === '' ? '' : `${header}\n`}${mask(text)}`);
+  console.log(`masked ${output.split(/[\\/]/).pop()}`);
+}

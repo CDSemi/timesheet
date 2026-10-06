@@ -1,0 +1,40 @@
+== case 3: docs/11 section 6 step 3 with the four variables the drill sets (TIMESHEET_IMAGE, TIMESHEET_ENV_FILE, TIMESHEET_DATA_DIR=<restore-dir>, TIMESHEET_PORT=47730)
+ Network ts-wp5-assess-b_default  Creating
+ Network ts-wp5-assess-b_default  Created
+ Container ts-wp5-assess-b-timesheet-1  Creating
+ Container ts-wp5-assess-b-timesheet-1  Created
+ Container ts-wp5-assess-b-timesheet-1  Starting
+ Container ts-wp5-assess-b-timesheet-1  Started
+exit=0
+== health status: running healthy
+== <compose> ps
+NAME                          IMAGE                             COMMAND                  SERVICE     CREATED          STATUS                    PORTS
+ts-wp5-assess-b-timesheet-1   ts-wp5-assess-b-timesheet:drill   "docker-entrypoint.s…"   timesheet   14 seconds ago   Up 13 seconds (healthy)   127.0.0.1:47730->3000/tcp
+== <compose> logs --no-color timesheet
+timesheet-1  | Timesheet listening on http://0.0.0.0:3000 (schema v13)
+timesheet-1  | Outbound delivery PAUSED since 2026-10-06T20:43:22Z (reason: restored); 1 delivery attempt(s) await a decision, 0 send job(s) wait, 1 held for reconciliation (cli.js outbound release). Nothing is sent until: node dist/server/cli.js outbound resume --confirm
+== /api/ready and /api/health
+{"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+{"status":"ok"}
+== <compose> exec -T timesheet <cli> outbound release (preview)
+{"outcome":"confirmation_required","held":1,"releasable":0,"blocked":{"attempt_uncertain":1},"jobs":[{"id":"aa794048-530e-4f59-b622-d39267ac466f","kind":"send_email","attempts":0,"created_at":"2026-10-06T20:40:17Z","blocker":"attempt_uncertain"}]}
+exit=2
+== <compose> exec -T timesheet <cli> outbound resume (preview)
+{"outcome":"confirmation_required","paused":true,"reason":"restored","awaiting_decision":1,"queued_send_jobs":0,"held_send_jobs":1}
+exit=2
+== <compose> exec -T timesheet <cli> outbound resume --confirm (must be refused: 1 attempt awaits a decision)
+{"outcome":"refused","awaiting_decision":1,"queued_send_jobs":0,"held_send_jobs":1}
+Outbound delivery stays paused: record a decision on every uncertain delivery attempt first
+exit=1
+== process user in the container
+uid=10001(timesheet) gid=10001(timesheet) groups=10001(timesheet)
+== down by project name
+ Container ts-wp5-assess-b-timesheet-1  Stopping
+ Container ts-wp5-assess-b-timesheet-1  Stopped
+ Container ts-wp5-assess-b-timesheet-1  Removing
+ Container ts-wp5-assess-b-timesheet-1  Removed
+ Network ts-wp5-assess-b_default  Removing
+ Network ts-wp5-assess-b_default  Removed
+exit=0
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+NETWORK ID   NAME      DRIVER    SCOPE

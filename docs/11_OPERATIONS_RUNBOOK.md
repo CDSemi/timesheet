@@ -16,7 +16,18 @@ Nothing in this runbook is a real value. Replace the placeholders on the NAS and
 - `<data-dir>`: the host-local folder mounted as `/data`; `<env-file>`: the protected environment file (mode 600).
 - `<backup-dir>`: the host folder with the backups (`<data-dir>/backups`); `<backup-name>`: one backup folder, named `timesheet-backup-<UTC>-<8 hex>`.
 - `<restore-dir>`: a new, empty host folder for a restore; `<proxy-ip>`: the address the application sees as the proxy's connection peer.
-- `<compose>` stands for `docker compose --project-name <project> --file <project-dir>/compose.example.yaml`.
+- `<image>`: the release image tag `timesheet:<release-commit>`, one tag per release (never `latest`, never a tag reused for a rebuild); `<previous-image>`: the tag of the release before it.
+- `<compose>` stands for `docker compose --project-name <project> --file <project-dir>/compose.example.yaml`. Compose reads the four variables below from `<project-dir>/.env` (mode 600; it holds no secret, only paths and a tag), so every `<compose>` command binds the documented env file, data folder and image. Without that file Compose falls back to `./timesheet.env`, `./data` and `timesheet:local`, which is wrong on the NAS.
+
+  ~~~bash
+  TIMESHEET_ENV_FILE=<env-file>
+  TIMESHEET_DATA_DIR=<data-dir>
+  TIMESHEET_IMAGE=<image>
+  TIMESHEET_PORT=3000
+  ~~~
+
+- `<compose-restored>` stands for `TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml` (section 6). A variable set in the shell wins over `<project-dir>/.env`, so the restored instance binds `<restore-dir>` and has its own Compose project name; it never shares the live data or project.
+- `<compose-previous>` stands for `TIMESHEET_IMAGE=<previous-image> TIMESHEET_DATA_DIR=<restore-dir> TIMESHEET_ENV_FILE=<rollback-env-file> docker compose --project-name <project>-rollback --file <project-dir>/compose.example.yaml` (section 8); `<rollback-env-file>` is a mode 600 copy of `<env-file>` with `JOB_RUNNER=off` added.
 - `<cli>` stands for `node dist/server/cli.js` (the command line tool inside the image).
 
 ## Drill stages
@@ -36,7 +47,7 @@ The drill is `npm run drill:container -- --work <empty folder> --project <name> 
    ~~~
 
 4. The data volume is one host-local folder mounted as `/data`: the database `/data/timesheet.db`, private files `/data/private-data` (PDFs, signatures, import sources, capture) and backups `/data/backups`. It must be a local volume of the NAS, never a remote SMB or NFS share and never a synchronized folder. **[Drill stage 1]** for the mount; the NAS file system **[owner NAS step, unverified]**.
-5. Copy `.env.example` to `<env-file>`, mode 600, and set at least `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` and `TRUSTED_PROXY_ADDRESSES`. Production refuses to start without an explicit absolute `DATA_DIR` and `DATABASE_PATH`, `APP_ORIGINS` and `PUBLIC_BASE_URL`. Leave `OUTBOUND_MODE=capture` and never set `PRODUCTION_SENDING_ENABLED`: real sending belongs to the WP5 pilot, after the owner's authorization. The application needs no session secret; SMTP credentials are the only secret it can hold. **[Drill stage 1]** (the drill writes a synthetic env file).
+5. Copy `.env.example` to `<env-file>`, mode 600, and set at least `APP_ORIGINS`, `PUBLIC_BASE_URL` (https), `MAIL_FROM` and `TRUSTED_PROXY_ADDRESSES`. Production refuses to start without an explicit absolute `DATA_DIR` and `DATABASE_PATH`, `APP_ORIGINS` and `PUBLIC_BASE_URL`. Leave `OUTBOUND_MODE=capture` and never set `PRODUCTION_SENDING_ENABLED`: real sending belongs to the WP5 pilot, after the owner's authorization. The application needs no session secret; SMTP credentials are the only secret it can hold. Then create `<project-dir>/.env` with the four variables of "Placeholders and conventions" (the `.env.example` header only suggests a path: `<env-file>` is wherever `TIMESHEET_ENV_FILE` points). **[Drill stage 1]** (the drill writes a synthetic env file and sets the four variables).
 6. Network: the Compose example publishes the port on loopback only (`127.0.0.1:3000`). Put the Synology reverse proxy in front with HTTPS and forward to that port; never publish the port to the internet. Set `TRUSTED_PROXY_ADDRESSES` to the exact IP address of the proxy as the application sees it as the connection peer (no CIDR, no host names), for example the Docker bridge gateway. Left empty, every forwarded header is ignored and all clients share the sign-in rate limit of the proxy's address. **[owner NAS step, unverified]**
 7. Time: enable NTP in DSM so that deadlines, backups and expiry instants are right **[owner NAS step, unverified]**.
 8. Start and check:
@@ -45,9 +56,10 @@ The drill is `npm run drill:container -- --work <empty folder> --project <name> 
    <compose> up --detach --build
    <compose> ps
    <compose> logs --no-color timesheet
+   docker image inspect --format '{{.Id}}' <image>
    ~~~
 
-   The service must become healthy (the health check calls `/api/ready`). **[Drill stage 1]**
+   The service must become healthy (the health check calls `/api/ready`). Record the image ID that the last command prints at build time, with the release commit and the source digest: it identifies the release (a rebuild of the same source can give another ID). **[Drill stage 1]**
 
 ## 2. NAS verification checklist
 
@@ -63,6 +75,7 @@ Tick each item on the NAS and record the date; until then the NAS is NOT VERIFIE
 - [ ] NTP is on and the NAS clock is correct.
 - [ ] A synthetic submission renders its PDF (fonts are in the image) and its mail lands in capture, not on the network.
 - [ ] A backup, an isolated restore and the reconciliation steps (sections 4, 6 and 7) work on the NAS with synthetic data, and the separate-device copy exists.
+- [ ] A protected copy of `<env-file>` (mode 600) is kept with the separate-device backup copy, together with the release commit, source digest and image ID (section 4 step 3).
 - [ ] The administrator status shows the backup, the free disk space and the outbound mode (section 12).
 - [ ] The independent host alert (section 11) fires on a test.
 
@@ -102,7 +115,7 @@ Targets (to be tested, not guarantees): a nightly backup, a 24-hour recovery poi
    <compose> exec -T timesheet <cli> backup --to /data/backups --prune
    ~~~
 
-3. A backup on the same volume does not protect against losing the disk. Copy `<backup-dir>` to a separate device (Synology Hyper Backup or a USB disk) after each backup. This is an owner setup step, not application code (owner decision F-5). Backups hold personal data, PDFs and signatures: protect them like the live data. **[owner NAS step, unverified]**
+3. A backup on the same volume does not protect against losing the disk. Copy `<backup-dir>` to a separate device (Synology Hyper Backup or a USB disk) after each backup. This is an owner setup step, not application code (owner decision F-5). Backups hold personal data, PDFs and signatures: protect them like the live data. A backup holds no configuration, so keep a protected copy of `<env-file>` (mode 600, never in git or chat) with the separate-device copy, and the release commit, source digest and image ID of the release that wrote the data. Without them a restored instance cannot start (`APP_ORIGINS`, `PUBLIC_BASE_URL`, `MAIL_FROM`, `TRUSTED_PROXY_ADDRESSES` and, later, the SMTP credentials). **[owner NAS step, unverified]**
 4. Check the result: the printed line has `"outcome":"succeeded"`, and the administrator status shows the last success and its age (section 12).
 
 ## 5. Retention
@@ -130,13 +143,20 @@ Restore into a new empty folder, never over the live data. The tool refuses a ta
      <image> <cli> restore --from /backups/<backup-name> --to /restore
    ~~~
 
-3. The result is `<restore-dir>/timesheet.db` and `<restore-dir>/private-data`. To inspect it, stop the live instance first (never run two queues on the same data, and never let the old and the restored production queues run together), then start a second instance whose `/data` is `<restore-dir>`, in capture mode, under its own Compose project name. **[Drill stage 3]** (the drill stops the source, then starts the restored instance)
+3. The result is `<restore-dir>/timesheet.db` and `<restore-dir>/private-data`. To inspect it, stop the live instance first (never run two queues on the same data, and never let the old and the restored production queues run together), then start a second instance whose `/data` is `<restore-dir>`, in capture mode, under its own Compose project name. Use `<compose-restored>` (section "Placeholders and conventions"); the image must already exist, so do not build. **[Drill stage 3]** (the drill stops the source, then starts the restored instance)
+
+   ~~~bash
+   <compose-restored> up --detach --no-build
+   <compose-restored> ps
+   ~~~
+
+   Stop it with `<compose-restored> down` when the inspection is over.
 4. Check the integrity result, the users, representative OT balances, revision counts, the files with their hashes and one PDF. The restored instance logs `Outbound delivery PAUSED since <UTC instant> (reason: restored)` at start and shows the pause banner in the administrator status. Nothing is sent until section 7 is done. **[Drill stage 3]**
 5. Import sources are restored with their hashes, so restored imports still have their source files. **[Drill stage 3]**
 
 ## 7. Reconciliation after a restore
 
-A restore holds every queued or leased `send_email` and `send_reminder` job of the backup, and marks every interrupted send as uncertain. Mail the source may already have sent must never go out again. Jobs created after the restore are not held; they wait only for the resume. Every step below is audited as a system event.
+A restore holds every queued or leased `send_email` and `send_reminder` job of the backup, and marks every interrupted send as uncertain. Mail the source may already have sent must never go out again. Jobs created after the restore are not held; they wait only for the resume. Every step below is audited as a system event. Run the commands against the restored instance: write `<compose-restored>` where they say `<compose>`.
 
 1. List what is held. Without `--confirm` the command only prints job ids, kinds, attempts and blockers, and exits 2. **[Drill stage 3]**
 
@@ -165,12 +185,14 @@ A restore holds every queued or leased `send_email` and `send_reminder` job of t
    <compose> exec -T timesheet <cli> outbound drop --job <job-id> --confirm
    ~~~
 
+When the reconciliation is done, take a backup (section 4): a restored instance reports the backup as `never` until its own first backup.
+
 ## 8. Upgrade and rollback
 
 ### Upgrade
 
-1. Take and check a backup first, and note its folder name: it is the paired pre-upgrade backup for a rollback. Note the running image tag too. **[Drill stage 4]** (the drill takes the paired backup of the older schema with the new tool)
-2. Build the new image from the new release export and start it. The migrations run once at start, under an exclusive lock, in one transaction; a restart applies nothing. **[Drill stage 4]**
+1. Take and check a backup first, and note its folder name: it is the paired pre-upgrade backup for a rollback. Note the running image tag and its image ID too (`docker image inspect --format '{{.Id}}' <image>`): the tag stays on that image, so it is the rollback target. **[Drill stage 4]** (the drill takes the paired backup of the older schema with the new tool)
+2. Build the new image from the new release export under a new tag, one tag per release: set `TIMESHEET_IMAGE=timesheet:<new-release-commit>` in `<project-dir>/.env` (the old tag becomes `<previous-image>`), then build and start it, and record the new image ID as in section 1 step 8. Never rebuild under the old tag: that replaces the image a rollback needs. The migrations run once at start, under an exclusive lock, in one transaction; a restart applies nothing. **[Drill stage 4]**
 
    ~~~bash
    <compose> up --detach --build
@@ -191,7 +213,7 @@ An older build refuses a database from a newer schema, so never just start the o
      <image> <cli> restore --from /backups/<paired-backup-name> --to /restore --keep-schema --confirm
    ~~~
 
-3. Start the previous image on `<restore-dir>` with `JOB_RUNNER=off` in its environment. A restored older schema has no outbound pause, so jobs created after the rollback are not held: keep the runner off until reconciliation is done. The drill proved only that the previous build with its runner on sent nothing from the held jobs (`JOB_RUNNER=off` is the documented rule, not a drill step).
+3. Start the previous image (the tag `<previous-image>`, never a same-tag rebuild) on `<restore-dir>` with `JOB_RUNNER=off` in its environment, with `<compose-previous> up --detach --no-build` (it uses the rollback env file). A restored older schema has no outbound pause, so jobs created after the rollback are not held: keep the runner off until reconciliation is done. The drill proved only that the previous build with its runner on sent nothing from the held jobs (`JOB_RUNNER=off` is the documented rule, not a drill step).
 4. Reconcile. The previous build has no `outbound` command: reconciliation happens after upgrading again, which migrates the restored data and gives the pause and the release tools. Changes made after the paired backup are not in the restored copy.
 5. If no migration was applied since the backup (a compatible schema), the previous image can start on the live data. This path is not drilled. **[owner NAS step, unverified]**
 
@@ -206,7 +228,7 @@ Refresh the base image when a security fix is published, and always together: th
    ~~~
 
 2. Edit `ARG NODE_IMAGE_DIGEST` and the tag named in the Dockerfile comment together (and `.nvmrc` when the Node version changes). Never use `latest`.
-3. Rebuild without cache and run the drill before deploying; the drill builds the image from the Dockerfile. **[Drill stage 1]**
+3. Set a new `TIMESHEET_IMAGE` tag first (section 8 step 2), then rebuild without cache and run the drill before deploying; the drill builds the image from the Dockerfile. A rebuild under the running tag replaces that image. **[Drill stage 1]**
 
    ~~~bash
    <compose> build --no-cache

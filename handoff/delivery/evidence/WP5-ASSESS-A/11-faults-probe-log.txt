@@ -1,0 +1,64 @@
+cli bootstrap -> exit 0: Company calendar and default policy created (0 holiday dates). | Setup token (shown once, valid until 2026-10-06T21:57:15Z; only its hash is stored): |  |   7KGG2-AHRLO-PWVVL-OENVO-WQGNR-KRLVU-7IATI-XFXM2 |  | Open the application and enter it on the Setup screen to create the first administrator. | Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token
+server faults start #1 healthy on port 47703
+admin POST /api/auth/bootstrap -> 201
+admin login -> 200
+admin GET /api/calendar -> 200
+admin POST /api/admin/users -> 201
+G login -> 200
+G POST /api/policies -> 201
+G POST /api/days/2026-09-28/sessions -> 201
+G POST /api/signatures -> 201
+PASS  [F-SIG-G] G uploads a synthetic signature  201
+admin POST /api/admin/users -> 201
+H login -> 200
+H POST /api/policies -> 201
+H POST /api/days/2026-09-28/sessions -> 201
+H POST /api/signatures -> 201
+PASS  [F-SIG-H] H uploads a synthetic signature  201
+G POST /api/settings/submission -> 201
+admin GET /api/admin/operations -> 200
+PASS  [F-1] admin operations reports the sender setup (inspected in admin-operations-before.json)  {"operations":{"sender":{"configured":false,"outbound_mode":"capture"},"runner":{"heartbeat_at":null,"state":"never"},"activation":{"active_from":null,"recorded_at":null,"recorded_by":null},"backup":{"outcome":"never","last_attempt_at":null,"last_success_at":null,"fault_code":null,"age_seconds":null
+G GET /api/timesheets/2026-10-09/review -> 200
+G POST /api/timesheets/2026-10-09/signoff -> 201
+PASS  [F-2] Gina signs off manually (201)  201
+cli run-jobs no sender -> exit 0: {"claimed":4,"succeeded":3,"retried":1,"intervention":0,"lost":0}
+cli run-jobs no sender b -> exit 0: {"claimed":1,"succeeded":0,"retried":0,"intervention":1,"lost":0}
+cli run-jobs no sender c -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+G GET /api/deliveries -> 200
+PASS  [F-3] missing sender: the attempt fails permanently with the visible code sender_missing and is never "accepted"; nothing captured  [{"state":"failed_permanent","code":"sender_missing"}]
+G GET /api/revisions -> 200
+PASS  [F-4] the revision list shows the failed delivery state (not sent)  [[1,"ready","failed_permanent"]]
+admin GET /api/admin/operations -> 200
+admin GET /api/admin/submissions -> 200
+PASS  [F-5] admin submission status shows Gina's failed delivery with its code and recipients, no timesheet details  {"submissions":[{"user_id":"fcf89c8f-478c-4e2d-bbe9-344c1ee06586","display_name":"Gina Synthetic","period":{"payroll_date":"2026-10-09","period_start":"2026-09-23","period_end":"2026-10-06","due_at":"2026-10-09T00:00:00Z"},"revision":{"no":1,"origin":"employee","review_state":"signed","finalized_at":"2026-10-06T20:57:15Z","send_requested":true},"pdf":{"state":"ready","fault_code":null},"delivery":
+H GET /api/timesheets/2026-10-09/review -> 200
+H POST /api/timesheets/2026-10-09/signoff -> 201
+H GET /api/timesheets/2026-10-09/finalization -> 200
+cli run-jobs with sender (Hugo) -> exit 0: {"claimed":2,"succeeded":1,"retried":0,"intervention":1,"lost":0}
+cli run-jobs with sender (Hugo) b -> exit 0: {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+H GET /api/deliveries -> 200
+PASS  [F-6] missing recipient: Hugo's sign-off is accepted, the delivery fails permanently with recipient_missing, never "sent", nothing captured  201 ["failed_permanent"] "finalized"
+G GET /api/deliveries -> 200
+PASS  [F-7] Gina's permanent failure is not retried automatically when a sender appears later (needs an explicit resend)  ["failed_permanent"]
+anon GET /api/health -> 200
+anon GET /api/ready -> 200
+PASS  [F-8] health/ready unchanged by faults and carry no private data  {"status":"ok"} {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+server faults stopped (own child handle), exit SIGTERM
+cli run-jobs smtp without flag -> exit 1: file:///<task>/src/dist/server/config.js:162
+ |         throw new Error('OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag');
+ |               ^
+ | 
+ | Error: OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag
+ |     at parseOutbound (file:///<task>/src/dist/server/config.js:162:15)
+ |     at loadDeliveryConfig (file:///<task>/src/dist/server/config.js:175:19)
+ |     at runJobs (file:///<task>/src/dist/server/cli.js:85:22)
+ |     at main (file:///<task>/src/dist/server/cli.js:411:16)
+ |     at file:///<task>/src/dist/server/cli.js:466:26
+ |     at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+ |     at async node:internal/modules/esm/loader:647:26
+ |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+ | 
+ | Node.js v24.21.0
+PASS  [F-9] OUTBOUND_MODE=smtp without PRODUCTION_SENDING_ENABLED: server and CLI refuse; the message names the flag; the SMTP password never appears  server exit 1 cli 1:         throw new Error('OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag');
+PASS  [F-10] logs and CLI outputs of the fault runs carry no password, cookie or token  leaked 0
+SUMMARY pass=12 fail=0 total=12

@@ -1,0 +1,61 @@
+// WP5-ASSESS-B probe: an independent forbidden-file scan of an image file list (one absolute path per line, as written by
+// `find / -xdev -not -path '/proc/*' -print` inside the image). It applies its own rule set, wider than the drill's,
+// and prints the count per rule, every offender (at most 20 per rule) and the package list under /app/node_modules
+// compared with the production dependency tree of package-lock.json (packages without "dev": true).
+// Usage: node image-scan.mjs <image file list> <package-lock.json>
+import { readFileSync } from 'node:fs';
+
+const [listFile, lockFile] = process.argv.slice(2);
+const paths = readFileSync(listFile, 'utf8').split('\n').map((line) => line.replace(/\r$/, '')).filter((line) => line !== '');
+const app = paths.filter((path) => path === '/app' || path.startsWith('/app/'));
+const ownApp = app.filter((path) => !path.startsWith('/app/node_modules/'));
+const rules = {
+  workbook: (p) => /\.(xlsx|xlsm|xls)$/i.test(p),
+  'source map in /app/dist': (p) => p.startsWith('/app/dist/') && /\.map$/i.test(p),
+  'sourceMappingURL-bearing build output is checked separately': () => false,
+  'env file': (p) => /(^|\/)\.env(\.|$)/.test(p),
+  'handoff/.claude/.agents/.git anywhere': (p) => /(^|\/)(handoff|\.claude|\.agents|\.git)(\/|$)/.test(p),
+  'tests/docs/reference/scripts/src under /app': (p) => /^\/app\/(tests|docs|reference|scripts|src)(\/|$)/.test(p),
+  'TypeScript source under /app/dist': (p) => p.startsWith('/app/dist/') && /\.(ts|tsx)$/.test(p) && !/\.d\.ts$/.test(p),
+  'database file outside /data': (p) => /\.(db|sqlite\d*)(-wal|-shm|-journal)?$/i.test(p) && !p.startsWith('/data/'),
+  'PDF or image outside node_modules and dist assets': (p) => /\.(pdf|png|jpe?g|gif|webp)$/i.test(p) && !p.startsWith('/app/node_modules/') && !p.startsWith('/usr/') && !p.startsWith('/app/dist/client/'),
+  'private key or certificate under /app': (p) => p.startsWith('/app/') && /\.(pem|key|p12|pfx)$/i.test(p) && !p.startsWith('/app/node_modules/'),
+  'markdown docs under /app outside node_modules': (p) => /^\/app\/[^/]+\.md$/i.test(p),
+  'anything under /data in the image': (p) => p.startsWith('/data/'),
+};
+let total = 0;
+for (const [name, test] of Object.entries(rules)) {
+  const hits = paths.filter(test);
+  total += hits.length;
+  console.log(`RULE ${name}: ${hits.length}`);
+  for (const hit of hits.slice(0, 20)) console.log(`  ${hit}`);
+}
+console.log(`paths ${paths.length}; under /app ${app.length}; under /app outside node_modules ${ownApp.length}`);
+console.log(`top level of /app: ${app.filter((p) => /^\/app\/[^/]+$/.test(p)).join(' ')}`);
+console.log(`third-party source maps under /app/node_modules: ${app.filter((p) => p.startsWith('/app/node_modules/') && /\.map$/.test(p)).length}`);
+
+const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
+const prodPackages = Object.entries(lock.packages)
+  .filter(([key, meta]) => key.startsWith('node_modules/') && meta.dev !== true)
+  .map(([key]) => key.slice('node_modules/'.length))
+  .filter((name) => !name.includes('/node_modules/'))
+  .sort();
+const devPackages = Object.entries(lock.packages)
+  .filter(([key, meta]) => key.startsWith('node_modules/') && meta.dev === true)
+  .map(([key]) => key.slice('node_modules/'.length))
+  .filter((name) => !name.includes('/node_modules/'));
+const inImage = new Set(
+  app
+    .filter((p) => p.startsWith('/app/node_modules/'))
+    .map((p) => p.slice('/app/node_modules/'.length).split('/'))
+    .map((parts) => (parts[0]?.startsWith('@') ? `${parts[0]}/${parts[1] ?? ''}` : parts[0]))
+    .filter((name) => name !== undefined && name !== '' && !name.startsWith('.') && !name.endsWith('/')),
+);
+const missing = prodPackages.filter((name) => !inImage.has(name));
+const devInImage = devPackages.filter((name) => inImage.has(name) && !prodPackages.includes(name));
+const extra = [...inImage].filter((name) => !prodPackages.includes(name));
+console.log(`lockfile production packages (top-level hoisted): ${prodPackages.length}; in image: ${inImage.size}`);
+console.log(`production packages missing from the image: ${missing.length} ${missing.join(' ')}`);
+console.log(`dev-only packages present in the image: ${devInImage.length} ${devInImage.join(' ')}`);
+console.log(`image packages not in the production tree: ${extra.length} ${extra.join(' ')}`);
+console.log(`FORBIDDEN TOTAL ${total}`);
