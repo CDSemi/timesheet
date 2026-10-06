@@ -1,0 +1,60 @@
+# WP4-T09 mutation checks (scratch clone only; the repository was never mutated)
+# Each block: the mutated line (diff against the repository file), the import test run, then a byte-for-byte restore (cmp).
+
+Scratch clone of main 6fecd88 plus the WP4-T09 working-tree files; each mutation is applied, the import tests run, then the file is restored byte for byte.
+=== M1 commit idempotency (committed replay) check removed (src/server/services/workbookImport.ts)
+571c571
+<     if (row.state === 'committed') {
+---
+>     if (false && row.state === 'committed') {
+vitest exit=1
+     × red-first: an identical re-import changes no row count and returns the first batch 237ms
+     × red-first: two concurrent identical commits produce one committed batch 388ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 19 passed (21)
+restored src/server/services/workbookImport.ts (cmp identical)
+=== M2 preview idempotency lookups removed (src/server/services/workbookImport.ts)
+455c455
+<   if (known !== undefined) return { created: false, batch: batchJson(db, clock, user, known) };
+---
+>   if (false && known !== undefined) return { created: false, batch: batchJson(db, clock, user, known) };
+473c473
+<       if (raced !== undefined) return { created: false, row: raced };
+---
+>       if (false && raced !== undefined) return { created: false, row: raced };
+vitest exit=1
+     × returns the existing batch for the same upload and stores nothing new 267ms
+     × red-first: an identical re-import changes no row count and returns the first batch 261ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 19 passed (21)
+restored src/server/services/workbookImport.ts (cmp identical)
+=== M3 finalized-period check removed (src/server/services/workbookImport.ts)
+327c327
+<   if (timesheet?.finalized_revision_no != null) state = 'finalized';
+---
+>   if (false) state = 'finalized';
+vitest exit=1
+     × red-first: never overwrites a finalized period 254ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 20 passed (21)
+restored src/server/services/workbookImport.ts (cmp identical)
+=== M4 F-2 day and session edit guard removed (src/server/services/timesheetCommands.ts)
+83c83
+<   if (timesheet !== undefined && isImportedTimesheet(ctx.db, ctx.user.id, timesheet.id)) throw importedPeriodError();
+---
+>   if (false && isImportedTimesheet(ctx.db, ctx.user.id, timesheet.id)) throw importedPeriodError();
+vitest exit=1
+     × red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event 235ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 20 passed (21)
+restored src/server/services/timesheetCommands.ts (cmp identical)
+=== M5 sweep ignores imports.storage_key (src/server/jobs/sweepJob.ts)
+61c61
+<       isReferenced: (storageKey) => referenced.get(storageKey, storageKey) !== undefined,
+---
+>       isReferenced: (storageKey) => referenced.get(storageKey, '') !== undefined,
+vitest exit=1
+     × keeps the stored source through the orphan sweep 274ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 20 passed (21)
+restored src/server/jobs/sweepJob.ts (cmp identical)

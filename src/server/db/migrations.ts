@@ -11,6 +11,7 @@ import { migration0008 } from './migrations/0008_bootstrap.ts';
 import { migration0009 } from './migrations/0009_operations_backup.ts';
 import { migration0010 } from './migrations/0010_outbound_pause.ts';
 import { migration0011 } from './migrations/0011_job_retention.ts';
+import { migration0012 } from './migrations/0012_imports.ts';
 
 export interface Migration {
   version: number;
@@ -31,6 +32,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration0009,
   migration0010,
   migration0011,
+  migration0012,
 ];
 
 export class MigrationError extends Error {

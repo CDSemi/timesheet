@@ -554,6 +554,10 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/shared/:ownerId/days/batch',
         'PUT /api/shared/:ownerId/days/:workDate',
         'PUT /api/shared/:ownerId/sessions/:id',
+        // The owner's own workbook import (WP4-T09, F-1/F-2): preview stores a private source and a report; commit
+        // writes imported_unverified timesheets and explicit day entries only, never a ledger entry.
+        'POST /api/imports',
+        'POST /api/imports/:id/commit',
       ].sort(),
     );
     for (const route of appRoutes()) {

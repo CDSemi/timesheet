@@ -1,0 +1,236 @@
+# WP4-T09 green run (repository working tree, after the implementation)
+# Command: node node_modules/vitest/vitest.mjs run --reporter=verbose tests/integration/{workbook-import,migrations,job-retention,ot-api,sharing-matrix,deadline,reminders,jobs-sweep}.test.ts
+# Exit: 0
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 55ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 52ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 50ms
+ ✓ tests/integration/deadline.test.ts > deadlines are computed with the production zone functions (season independent) > matches the expected UTC instants on both sides of the autumn change 246ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 75ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 68ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > registers the scan and send handlers and queues no scan while the activation instant is null 260ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > deletes a succeeded scan job older than 30 days and keeps one 29 days old 265ms
+ ✓ tests/integration/jobs-sweep.test.ts > the sweep job > removes an unreferenced old file and an old temporary file, and never a referenced file 299ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > starts at zero 352ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 68ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 1 (initial): its checksum stays pinned 72ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 2 (ot_ledger): its checksum stays pinned 55ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 3 (day_entry_source): its checksum stays pinned 57ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 4 (submission): its checksum stays pinned 22ms
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > is the latest migration and runs on a fresh database from 1 to 12 475ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > queues at most one scan job per five-minute bucket once activated 324ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > treats exactly 30 days as not yet more than 30 days 323ms
+ ✓ tests/integration/deadline.test.ts > deadlines are computed with the production zone functions (season independent) > finalizes exactly at the deadline instant in daylight time and in standard time 325ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 5 (automatic_presentation): its checksum stays pinned 30ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 6 (timesheet_shares): its checksum stays pinned 37ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 7 (audit_access): its checksum stays pinned 63ms
+ ✓ tests/integration/jobs-sweep.test.ts > the sweep job > keeps every referenced file even when it is older than any grace 338ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 8 (bootstrap): its checksum stays pinned 13ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > keeps posted, provisional (E-6), reserved and available apart 477ms
+ ✓ tests/integration/deadline.test.ts > a payroll exception that moves the deadline > uses the exception deadline, computed in the reporting zone, and the moved payroll date 352ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > takes the cut-off from the injected clock, not the wall clock 348ms
+ ✓ tests/integration/jobs-sweep.test.ts > the sweep job > uses a grace of one day: a file just under it stays, a file at it goes 303ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > registers exactly the matrix routes under /api/shared, each behind its guard 2ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > keeps every self-only /api route unchanged and adds only the reviewed sharing routes 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > route inventory > covers the 11 valid item sets 0ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 0 > answers every matrix route by item for timesheets=none ot=false pdf=true 49ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 0 > never reaches the owner-only routes for timesheets=none ot=false pdf=true 9ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 1 > answers every matrix route by item for timesheets=none ot=true pdf=false 30ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 1 > never reaches the owner-only routes for timesheets=none ot=true pdf=false 8ms
+ ✓ tests/integration/reminders.test.ts > registration and activation (F-4) > sends the reminder through the registered runner jobs end to end 436ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0009, keeps every WP1 row unchanged and leaves a consistent, usable schema 348ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 2 > answers every matrix route by item for timesheets=none ot=true pdf=true 20ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 2 > never reaches the owner-only routes for timesheets=none ot=true pdf=true 6ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 3 > answers every matrix route by item for timesheets=view ot=false pdf=false 27ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 3 > never reaches the owner-only routes for timesheets=view ot=false pdf=false 8ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 4 > answers every matrix route by item for timesheets=view ot=false pdf=true 21ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 4 > never reaches the owner-only routes for timesheets=view ot=false pdf=true 9ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 5 > answers every matrix route by item for timesheets=view ot=true pdf=false 19ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > finalizes nothing while the activation instant is null, even for an account whose auto-submit is on 233ms
+ ✓ tests/integration/jobs-sweep.test.ts > the sweep job > reports counts only: no key, path, name or hash leaves the handler 218ms
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > upgrades a populated schema 11 database to 12 without touching existing rows 587ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 5 > never reaches the owner-only routes for timesheets=view ot=true pdf=false 5ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 6 > answers every matrix route by item for timesheets=view ot=true pdf=true 19ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 6 > never reaches the owner-only routes for timesheets=view ot=true pdf=true 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 7 > answers every matrix route by item for timesheets=edit ot=false pdf=false 22ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 7 > never reaches the owner-only routes for timesheets=edit ot=false pdf=false 5ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 8 > answers every matrix route by item for timesheets=edit ot=false pdf=true 44ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 8 > never reaches the owner-only routes for timesheets=edit ot=false pdf=true 8ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > never deletes a failed, cancelled or queued scan job, or any other kind, however old 239ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 9 > answers every matrix route by item for timesheets=edit ot=true pdf=false 17ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 9 > never reaches the owner-only routes for timesheets=edit ot=true pdf=false 4ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 10 > answers every matrix route by item for timesheets=edit ot=true pdf=true 22ms
+ ✓ tests/integration/sharing-matrix.test.ts > item set 10 > never reaches the owner-only routes for timesheets=edit ot=true pdf=true 6ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > raises the negative flag for a truthful correction below zero (LG-08) 445ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows 229ms
+ ✓ tests/integration/jobs-sweep.test.ts > the schedule > enqueues one job per UTC day with a day business key and creates nothing twice 203ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go back (autumn) 364ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > does not touch a period due before the activation instant and finalizes the next one 229ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > keeps a scan job another table refers to and still succeeds 215ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 193ms
+ ✓ tests/integration/jobs-sweep.test.ts > the schedule > is scheduled by the runner pass: many passes and runners in one day run it once, the next day once more 201ms
+ ✓ tests/integration/workbook-import.test.ts > migration 0012 (imports) > keeps a committed batch immutable and never deletes a batch 315ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/summary > requires a session 318ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > treats a period due exactly at the activation instant as eligible 234ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > is idempotent per UTC day: a day has one job and a closed job never runs again 252ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003) 183ms
+ ✓ tests/integration/reminders.test.ts > 24 h and 2 h reminders in a week with a DST change (production zone functions) > fires at exactly 24 h and 2 h of elapsed time before the deadline: clocks go forward (spring) 299ms
+ ✓ tests/integration/jobs-sweep.test.ts > the schedule > is registered among the production handlers 166ms
+ ✓ tests/integration/workbook-import.test.ts > preview > stores the source privately and reports the mapped days with their source cells, findings and plan 271ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > respects the user’s own effective instant: a period due before it is not auto-submitted 197ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 191ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > is not scheduled by a runner without the handler, and is not an outbound job 195ms
+ ✓ tests/integration/jobs-sweep.test.ts > the schedule > is not scheduled by a runner that has no sweep handler 202ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > lists only the caller’s entries in posting order, with the balance 362ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > is registered among the production handlers 215ms
+ ✓ tests/integration/workbook-import.test.ts > preview > returns the existing batch for the same upload and stores nothing new 307ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > records one decision per occurrence and a rerun sends nothing new 362ms
+ ✓ tests/integration/deadline.test.ts > activation boundary (F-4) > applies the switch that governed each period when the switch changed in between 253ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 217ms
+ ✓ tests/integration/jobs-sweep.test.ts > the schedule > is not an outbound job, so the outbound pause never holds it back 262ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never submits a period whose deadline passed before the account existed, even with the explicit overdue choice 201ms
+ ✓ tests/integration/job-retention.test.ts > the retention job (F-4 (a)) > records counts only: the run time and the number deleted, and closes the window 221ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 220ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > dedupes per user: two employees each get their own single reminder 324ms
+ ✓ tests/integration/ot-api.test.ts > GET /api/ot/ledger > ignores a client-supplied owner parameter 408ms
+ ✓ tests/integration/workbook-import.test.ts > preview > never serves the stored source: no source route, and nothing under the static root 318ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > refuses a direct DELETE of an eligible-looking row while the window is closed 205ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > still automates the first deadline after the account was created, with the default labels (F-1) 323ms
+ ✓ tests/integration/reminders.test.ts > dedupe by user, period and occurrence > rolls back the job when the occurrence cannot be recorded, so nothing half-queued remains 291ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0009 with unchanged rows and counts, a consistent schema and safe defaults 383ms
+ ✓ tests/integration/workbook-import.test.ts > commit > writes only imported_unverified timesheets, explicit day entries and owner audit rows 384ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the permission and reserves 1:1 minutes (201), then lists it 414ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > refuses every other delete even while the window is open 321ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > automates the period in which the account was created when its deadline is still ahead 227ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > creates STRICT tables whose columns hold no secret, credential or image body 212ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > sends no 2 h reminder to an employee who signed off after the 24 h reminder 271ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > refuses a scan job a reminder occurrence refers to even while the window is open 181ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: an identical re-import changes no row count and returns the first batch 283ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > is idempotent per request key (200 duplicate) and refuses a changed payload (409) 299ms
+ ✓ tests/integration/deadline.test.ts > account creation bound (WP3-B-01, docs/05 "Deadline and recovery", F-4) > never puts the auto-submit effective instant of saved settings before the account existed 202ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps timesheets.imported_unverified a 0/1 flag defaulting to 0 199ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > sends nothing for a reminder that was queued before the period was finalized 219ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > allows an eligible row only while the window is open, with the cut-off computed from its instant 189ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > never automates an account that never saved its submission settings, at and after every deadline 273ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > refuses UPDATE and DELETE on every immutable table 221ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > keeps the other job guards: identity and closed rows still refuse UPDATE 182ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > rejects insufficient balance with 409 and creates nothing (E-5) 308ms
+ ✓ tests/integration/reminders.test.ts > stop after finalization > keeps reminding an employee whose other period is unfinalized (per-period scope) 251ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > automates only the deadlines after the settings were saved with auto-submit on, when the account saves them mid-period 201ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: two concurrent identical commits produce one committed batch 442ms
+ ✓ tests/integration/job-retention.test.ts > the jobs_no_delete trigger after migration 0011 > keeps the window a single row that cannot be deleted or added to 178ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > refuses DELETE on the mutable delivery history and the operations row 218ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > warns about an overdue period only when auto-submit is off, once, to the employee only 303ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > needs the recorded permission and rejects owner or unknown fields 321ms
+ ✓ tests/integration/job-retention.test.ts > migration 0011 > is the next migration, named and checksummed like the others 185ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: a conflicting day without a decision refuses the commit and writes nothing 324ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces the unique business keys 285ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > keeps the explicit apply-to-overdue choice: it submits the overdue periods, still clamped by the account creation 316ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > stops the overdue warning once the employee signs off the overdue period 219ms
+ ✓ tests/integration/job-retention.test.ts > migration 0011 > applies on a fresh database from 1 to the latest (12) 256ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > without the overdue choice a first save never reaches periods that fell due before it 196ms
+ ✓ tests/integration/ot-api.test.ts > POST/GET /api/ot/leave > records the session user as both actor and owner 314ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every row to one owner through composite foreign keys 233ms
+ ✓ tests/integration/workbook-import.test.ts > commit > red-first: never overwrites a finalized period 344ms
+ ✓ tests/integration/job-retention.test.ts > migration 0011 > upgrades a populated version 10 database, keeping every job row, and the exception then applies 289ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice to the employee only: submitted automatically, review pending, login-required link 323ms
+ ✓ tests/integration/deadline.test.ts > setup bound (owner decision H-Q1 (a), 2026-10-05, docs/05 "Deadline and recovery", D-09) > still records the overdue period for an account that saved auto-submit off, and nothing for one that never saved 275ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > posts a partial linked debit and keeps the remainder reserved 319ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > persists every revision ledger outcome, including the R4 pending variants 297ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > creates an automatic, pending, unsigned revision with credits, jobs and an audit event 263ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps revisions, sign-offs and their links consistent 310ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/consume (record use, E-3) > refuses stale versions, over-use and use before the leave date 353ms
+ ✓ tests/integration/workbook-import.test.ts > commit > never overwrites an imported period from another workbook 405ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > records a choose-mode deficit as pending_choice and posts no debit 238ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > runs end to end in the production runner: the submission goes to payroll, the outcome notice only to the employee 583ms
+ ✓ tests/integration/workbook-import.test.ts > commit > asks for a decision on unclear days: skip only, or skip or import for non-authoritative labels 311ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains attachments, revision files and the auto-image authorization 220ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > posts an auto-deduct debit through the ledger with the automatic origin 192ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel releases the unused reservation and retries are unchanged 331ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends the outcome notice once per automatic revision and none for a manual sign-off 277ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps job identity fixed, leases explicit and closed jobs closed 216ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > keeps an auto-deduct debit pending when the balance cannot cover it 273ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: another user cannot read or commit someone else's preview (404) 403ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > cancel with a stale version is refused while minutes are still reserved 305ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > moves delivery attempts only forward and records an uncertain decision once 239ms
+ ✓ tests/integration/reminders.test.ts > overdue warning (auto-submit off) and outcome notice (auto-submit on) > sends no outcome notice once the employee already reviewed the automatic revision (late review) 248ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > posts nothing for an incomplete day and still submits the period 178ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > holds exactly one operations row with automation inactive by default 190ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: an administrator gets 404 for another person's import and has no route to import for anyone else 321ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends only the 2 h notice and records the 24 h one as collapsed when the runner was down for both 245ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > adds the note flag (off) and the note text ("Automatic submission") with safe defaults 183ms
+ ✓ tests/integration/ot-api.test.ts > POST /api/ot/leave/:id/cancel and /reverse > reverse gives used minutes back with a reason and a linked positive delta 293ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends the 24 h notice with the real time left when only that reminder was missed 240ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > constrains the flag to 0/1 and the text to 1-120 characters on one line 175ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > returns 404 for another user’s request on consume, cancel and reverse, also for admins 308ms
+ ✓ tests/integration/reminders.test.ts > missed notices collapse into one current notice after downtime > sends no pre-deadline notice for a deadline that already passed during the downtime 200ms
+ ✓ tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: a share grantee cannot import for, read or commit the owner's imports 427ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > keeps settings versions immutable with the new columns 172ms
+ ✓ tests/integration/deadline.test.ts > switch on: automatic finalization (R-05, R-06, F-1) > carries the signature image only when the user authorized it, and never writes a sign-off 707ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live 231ms
+ ✓ tests/integration/ot-api.test.ts > two-user ID swap on every OT route (AC-01) > shows an admin only the admin’s own summary, ledger and requests 279ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing while the clock is before the activation instant, then one current notice at it 225ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > creates one STRICT table with the item columns, the one-active index and the immutability triggers 33ms
+ ✓ tests/integration/deadline.test.ts > the automatic entry point (finalizeAutomatically) > honors the in-transaction authorization: a refusal writes nothing, and a second call after success is skipped 224ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing for a period whose deadline is before the activation instant 175ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event 411ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave rejects a missing, foreign or cross-site origin and non-JSON bodies 275ms
+ ✓ tests/integration/deadline.test.ts > the automatic entry point (finalizeAutomatically) > refuses a payroll date that is not one of the owner’s own and creates nothing 221ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing 271ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends no reminder for an imported (unverified) period and no outcome notice 268ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > accepts every valid item set and refuses an empty, self, foreign-created or malformed share 413ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/consume rejects a missing, foreign or cross-site origin and non-JSON bodies 283ms
+ ✓ tests/integration/reminders.test.ts > nothing before activation or for imported periods > sends nothing to a deactivated account 179ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the global 64 KiB JSON limit for every other route, including the commit 232ms
+ ✓ tests/integration/deadline.test.ts > an eligible period with no saved entries is still submitted (F-1) > creates the timesheet with the default labels, zero OT, no deficit and one revision 387ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > keeps at most one active share per owner and grantee; revoked rows stay as history 277ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/cancel rejects a missing, foreign or cross-site origin and non-JSON bodies 283ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > uses the offsets saved in the submission settings 223ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > records the overdue period once and exports nothing 188ms
+ ✓ tests/integration/workbook-import.test.ts > upload validation > keeps the stored source through the orphan sweep 263ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > refuses DELETE, any change of identity or items, and a second revocation 231ms
+ ✓ tests/integration/reminders.test.ts > per-user reminder offsets > sends no pre-deadline notice when the offsets list is empty 184ms
+ ✓ tests/integration/ot-api.test.ts > CSRF and origin checks on every OT POST > /api/ot/leave/00000000-0000-4000-8000-000000000001/reverse rejects a missing, foreign or cross-site origin and non-JSON bodies 284ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > submits the overdue period after the user explicitly applies the switch to overdue drafts 189ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 266ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > exposes exactly the reviewed OT, history and evidence routes 273ms
+ ✓ tests/integration/deadline.test.ts > switch off: overdue state and notice record, nothing finalized > never records or finalizes a deactivated user 266ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > uses login-required deep links with the payroll date only, never a token or personal data 357ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > never auto-submits an imported_unverified timesheet of an account whose auto-submit is on, and records no overdue state 194ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical 387ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers 44ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > has no state-changing route outside the reviewed allowlist and none that names a posting 277ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > addresses every captured message to the employee’s own address only 328ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > does not mark an imported_unverified timesheet overdue when auto-submit was saved off before the deadline 222ms
+ ✓ tests/integration/ot-api.test.ts > route inventory: no route posts a credit or debit > never imports a ledger posting function into an HTTP router 299ms
+ ✓ tests/integration/reminders.test.ts > links and recipients (AC-09) > keeps the job payload to routing identifiers only 224ms
+ ✓ tests/integration/workbook-import.test.ts > imported periods are never automated (F-2, docs/05 imported history) > red-first: no reminder, overdue record, deadline finalization or send across simulated deadlines 1263ms
+ ✓ tests/integration/deadline.test.ts > imported and already finalized periods > leaves a manually signed period alone: one revision, one ledger set and the existing jobs continue 387ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > retries a temporary failure and does not send twice after acceptance 215ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips the later periods of an account deactivated while the scan runs (inactive_user) 179ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > needs intervention for a permanent failure and never resends an uncertain outcome 242ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period that falls before an activation instant moved forward while the scan runs (before_activation) 166ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > blocks with a visible fault, never a send, when the sender is missing 166ms
+ ✓ tests/integration/deadline.test.ts > the scan re-assesses every period just before acting (guard sweep, WP3-FIX3) > skips a period whose deadline is still ahead of the clock when it is acted on (not_due) 151ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > treats an already captured message as sent when the same job runs again after a crash 175ms
+ ✓ tests/integration/deadline.test.ts > a manual sign-off after the automatic submission > is refused as already finalized and changes nothing (the late review is a separate flow) 184ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job whose occurrence does not exist and sends nothing 182ms
+ ✓ tests/integration/deadline.test.ts > recovery after downtime > processes missed deadlines chronologically in bounded batches 172ms
+ ✓ tests/integration/reminders.test.ts > delivery outcomes of the reminder send job > refuses a job that borrows another employee’s decision (owner scoping) 195ms
+ ✓ tests/integration/deadline.test.ts > recovery after downtime > orders several owners by deadline first and never starves an older period behind a newer one 165ms
+ ✓ tests/integration/deadline.test.ts > the runner registration > queues no scan job while the activation instant is null, and one per minute afterwards 172ms
+ ✓ tests/integration/deadline.test.ts > the runner registration > runs the scan, the PDF job and the send job through the runner and sends once 270ms
+ ✓ tests/integration/deadline.test.ts > a failure rolls the automatic finalization back (transaction rollback) > leaves no row behind, records the failure once and finalizes after the cause is gone 169ms
+ ✓ tests/integration/deadline.test.ts > activation instant service > records, replays and clears the instant with an audit event that carries no timesheet detail 140ms
+ ✓ tests/integration/deadline.test.ts > activation instant service > refuses an instant in the past, a malformed instant and a blank reason 153ms
+ ✓ tests/integration/deadline.test.ts > admin activation route > is admin only, strict, audited and returns no timesheet detail 283ms
+
+ Test Files  8 passed (8)
+      Tests  223 passed (223)
+   Start at  01:20:10
+   Duration  11.83s (tests 85%, import 10%, transform 5%)
+

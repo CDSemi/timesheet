@@ -42,6 +42,7 @@ import {
   type TimesheetRow,
   type UserScope,
 } from './timesheets.ts';
+import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
 
 /*
  * Write side of a user's timesheet. Each command runs in one short IMMEDIATE
@@ -78,6 +79,8 @@ interface EditScope {
 function prepareEdit(ctx: CommandContext, scope: UserScope, workDate: CivilDate, reasonInput: string | undefined): EditScope {
   const period = periodForDate(scope, workDate);
   const timesheet = findTimesheet(ctx.db, scope, period);
+  // F-2 (owner decision 2026-10-05): an imported period is read-only history for day and session edits.
+  if (timesheet !== undefined && isImportedTimesheet(ctx.db, ctx.user.id, timesheet.id)) throw importedPeriodError();
   const requirement = editRequirementFor(ctx.clock, scope, period, timesheet);
   const reason = normalizeReason(reasonInput);
   if (requirement.reasonRequired && reason === null) {

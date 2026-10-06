@@ -342,3 +342,14 @@ export const resendBody = z.strictObject({
   template_version: z.number().int().min(1).optional(),
 });
 export type ResendBody = z.infer<typeof resendBody>;
+
+/*
+ * Workbook import commit (WP4-T09). The owner and the batch come from the session and the path; the body holds only
+ * the owner's explicit decision for each listed day. A workbook has at most 64 sheets of 14 days.
+ */
+export const importCommitBody = z.strictObject({
+  decisions: z
+    .array(z.strictObject({ work_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), action: z.enum(['skip', 'import']) }))
+    .max(1000),
+});
+export type ImportCommitBody = z.infer<typeof importCommitBody>;

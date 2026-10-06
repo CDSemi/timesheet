@@ -73,6 +73,11 @@ const NEVER: ReadonlyArray<readonly [method: string, path: string]> = [
   ['POST', '/settings/submission/auto-image/revoke'],
   ['GET', '/signatures/current'],
   ['POST', '/signatures'],
+  // The owner's own workbook import (WP4-T09, F-1): no share item ever reaches it.
+  ['GET', '/imports'],
+  ['POST', '/imports'],
+  ['GET', '/imports/:revision'],
+  ['POST', '/imports/:revision/commit'],
   ['GET', '/ot/leave'],
   ['POST', '/ot/leave'],
   ['POST', '/ot/leave/x/consume'],
@@ -167,6 +172,9 @@ const SHARING_ADDED = [
   'POST /api/shares/:id/revoke 2',
   'PUT /api/shares/:id 2',
 ];
+
+/** The owner's own workbook import (WP4-T09, F-1): self-only routes, never reachable under /api/shared. */
+const IMPORTS_ADDED = ['GET /api/imports 2', 'GET /api/imports/:id 2', 'POST /api/imports 4', 'POST /api/imports/:id/commit 2'];
 
 const ITEM_SETS: ItemSet[] = (['none', 'view', 'edit'] as const).flatMap((timesheets) =>
   [false, true].flatMap((otRead) =>
@@ -297,7 +305,7 @@ describe('route inventory', () => {
 
   it('keeps every self-only /api route unchanged and adds only the reviewed sharing routes', () => {
     const outside = inventory().filter((route) => !route.includes(' /api/shared/'));
-    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED].sort());
+    expect(outside).toEqual([...SELF_ONLY_BEFORE, ...SHARING_ADDED, ...IMPORTS_ADDED].sort());
   });
 
   it('WP4-T02 drift guard: the shared write routes are exactly the five that record the audit marker', () => {

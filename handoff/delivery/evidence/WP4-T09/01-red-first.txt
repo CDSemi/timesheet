@@ -1,0 +1,353 @@
+# WP4-T09 red-first run (scratch clone of main 6fecd88, pre-change source)
+# Clone: git clone --no-hardlinks <repo> <scratch>/red; npm ci (exit 0)
+# Added only: tests/integration/workbook-import.test.ts (final version) and a stub src/server/services/workbookImport.ts whose functions throw (no migration, no route).
+# Command: node node_modules/vitest/vitest.mjs run tests/integration/workbook-import.test.ts   (exit 1)
+# Expected: every behaviour test fails; the one pass is the pre-existing global 64 KiB JSON limit.
+
+
+ RUN  v5.0.2 D:/.claude-tmp/timesheet/WP4-T09/red
+
+ ❯ tests/integration/workbook-import.test.ts (21 tests | 20 failed) 4556ms
+   ❯ migration 0012 (imports) (3)
+     × is the latest migration and runs on a fresh database from 1 to 12 239ms
+     × upgrades a populated schema 11 database to 12 without touching existing rows 380ms
+     × keeps a committed batch immutable and never deletes a batch 214ms
+   ❯ preview (3)
+     × stores the source privately and reports the mapped days with their source cells, findings and plan 225ms
+     × returns the existing batch for the same upload and stores nothing new 211ms
+     × never serves the stored source: no source route, and nothing under the static root 209ms
+   ❯ commit (7)
+     × writes only imported_unverified timesheets, explicit day entries and owner audit rows 203ms
+     × red-first: an identical re-import changes no row count and returns the first batch 198ms
+     × red-first: two concurrent identical commits produce one committed batch 191ms
+     × red-first: a conflicting day without a decision refuses the commit and writes nothing 204ms
+     × red-first: never overwrites a finalized period 222ms
+     × never overwrites an imported period from another workbook 189ms
+     × asks for a decision on unclear days: skip only, or skip or import for non-authoritative labels 194ms
+   ❯ ownership (F-1): only the owner previews, reads and commits (3)
+     × red-first: another user cannot read or commit someone else's preview (404) 185ms
+     × red-first: an administrator gets 404 for another person's import and has no route to import for anyone else 192ms
+     × red-first: a share grantee cannot import for, read or commit the owner's imports 191ms
+   ❯ imported periods are read-only history (F-2) (1)
+     × red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event 196ms
+   ❯ upload validation (3)
+     × red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing 190ms
+     × keeps the stored source through the orphan sweep 191ms
+   ❯ imported periods are never automated (F-2, docs/05 imported history) (1)
+     × red-first: no reminder, overdue record, deadline finalization or send across simulated deadlines 342ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 20 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > migration 0012 (imports) > is the latest migration and runs on a fresh database from 1 to 12
+AssertionError: expected { version: 11, …(2) } to match object { version: 12, name: 'imports' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "name": "imports",
+-   "version": 12,
++   "name": "job_retention",
++   "version": 11,
+  }
+
+ ❯ tests/integration/workbook-import.test.ts:156:31
+    154| describe('migration 0012 (imports)', () => {
+    155|   it('is the latest migration and runs on a fresh database from 1 to 1…
+    156|     expect(MIGRATIONS.at(-1)).toMatchObject({ version: 12, name: 'impo…
+       |                               ^
+    157|     const dir = mkdtempSync(join(tmpdir(), 'timesheet-import-migration…
+    158|     const db = openDatabase(join(dir, 'fresh.db'));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > migration 0012 (imports) > upgrades a populated schema 11 database to 12 without touching existing rows
+AssertionError: expected 0 to be greater than 0
+ ❯ tests/integration/workbook-import.test.ts:194:25
+    192|         db.prepare(`SELECT count(*) FROM ${table}`).pluck().get(),
+    193|       );
+    194|       expect(before[3]).toBeGreaterThan(0);
+       |                         ^
+    195|       expect(migrate(db, MIGRATIONS, new Date('2026-10-20T12:00:00Z'))…
+    196|       const after = ['users', 'timesheets', 'day_entries', 'work_sessi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > migration 0012 (imports) > keeps a committed batch immutable and never deletes a batch
+AssertionError: {"error":{"code":"unsupported_media_type","message":"Send request bodies as application/json"}}: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ importPeriods tests/integration/workbook-import.test.ts:133:56
+    131| async function importPeriods(periods: readonly SyntheticPeriod[], deci…
+    132|   const preview = await upload(workbook(periods));
+    133|   expect(preview.status, JSON.stringify(preview.body)).toBe(201);
+       |                                                        ^
+    134|   const committed = await commit(preview.body.import.id, decisions);
+    135|   expect(committed.status, JSON.stringify(committed.body)).toBe(200);
+ ❯ tests/integration/workbook-import.test.ts:209:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > preview > stores the source privately and reports the mapped days with their source cells, findings and plan
+AssertionError: {"error":{"code":"unsupported_media_type","message":"Send request bodies as application/json"}}: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ tests/integration/workbook-import.test.ts:221:60
+    219|     const bytes = workbook([{ payrollDate: PB, employee: 'Test Person …
+    220|     const response = await upload(bytes);
+    221|     expect(response.status, JSON.stringify(response.body)).toBe(201);
+       |                                                            ^
+    222|     const batch = response.body.import;
+    223|     expect(batch).toMatchObject({ state: 'preview', source_sha256: sha…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > preview > returns the existing batch for the same upload and stores nothing new
+AssertionError: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ tests/integration/workbook-import.test.ts:267:26
+    265|     const bytes = workbook([{ payrollDate: PB }]);
+    266|     const first = await upload(bytes);
+    267|     expect(first.status).toBe(201);
+       |                          ^
+    268|     const again = await upload(bytes);
+    269|     expect(again.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > preview > never serves the stored source: no source route, and nothing under the static root
+SqliteError: no such table: imports
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/workbook-import.test.ts:278:23
+    276|   it('never serves the stored source: no source route, and nothing und…
+    277|     const response = await upload(workbook([{ payrollDate: PB }]));
+    278|     const key = (t.db.prepare('SELECT storage_key FROM imports WHERE i…
+       |                       ^
+    279|     expect((await raw('GET', `/api/imports/${response.body.import.id}/…
+    280|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > writes only imported_unverified timesheets, explicit day entries and owner audit rows
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:305:55
+    303|     const before = rowCounts();
+    304|     const auditBefore = count('SELECT count(*) FROM audit_events');
+    305|     const response = await commit(preview.body.import.id, []);
+       |                                                       ^
+    306|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+    307|     expect(response.body.status).toBe('committed');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > red-first: an identical re-import changes no row count and returns the first batch
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:346:52
+    344|     const bytes = workbook([{ payrollDate: PA }, { payrollDate: PB }]);
+    345|     const preview = await upload(bytes);
+    346|     const first = await commit(preview.body.import.id, []);
+       |                                                    ^
+    347|     expect(first.status, JSON.stringify(first.body)).toBe(200);
+    348|     const counts = rowCounts();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > red-first: two concurrent identical commits produce one committed batch
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:373:60
+    371|     const preview = await upload(workbook([{ payrollDate: PA }, { payr…
+    372|     const before = rowCounts();
+    373|     const outcomes = await raceCommits(preview.body.import.id, 2);
+       |                                                            ^
+    374|     expect(outcomes.map((outcome) => outcome.error ?? null)).toEqual([…
+    375|     expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > red-first: a conflicting day without a decision refuses the commit and writes nothing
+TypeError: Cannot read properties of undefined (reading 'plan')
+ ❯ tests/integration/workbook-import.test.ts:390:38
+    388|     expect(session.status, JSON.stringify(session.body)).toBe(201);
+    389|     const preview = await upload(workbook([{ payrollDate: PB }, { payr…
+    390|     const plan = preview.body.import.plan;
+       |                                      ^
+    391|     expect(plan.periods.find((period: { payroll_date: string }) => per…
+    392|       state: 'existing_app_rows',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > red-first: never overwrites a finalized period
+TypeError: Cannot read properties of undefined (reading 'plan')
+ ❯ tests/integration/workbook-import.test.ts:448:32
+    446|
+    447|     const preview = await upload(workbook([{ payrollDate: PC, days: { …
+    448|     expect(preview.body.import.plan.periods[0]).toMatchObject({ payrol…
+       |                                ^
+    449|     const items = preview.body.import.plan.decisions_required as Array…
+    450|     expect(items).toHaveLength(10);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > never overwrites an imported period from another workbook
+AssertionError: {"error":{"code":"unsupported_media_type","message":"Send request bodies as application/json"}}: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ importPeriods tests/integration/workbook-import.test.ts:133:56
+    131| async function importPeriods(periods: readonly SyntheticPeriod[], deci…
+    132|   const preview = await upload(workbook(periods));
+    133|   expect(preview.status, JSON.stringify(preview.body)).toBe(201);
+       |                                                        ^
+    134|   const committed = await commit(preview.body.import.id, decisions);
+    135|   expect(committed.status, JSON.stringify(committed.body)).toBe(200);
+ ❯ tests/integration/workbook-import.test.ts:464:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > commit > asks for a decision on unclear days: skip only, or skip or import for non-authoritative labels
+AssertionError: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ tests/integration/workbook-import.test.ts:488:28
+    486|     ]);
+    487|     const preview = await upload(floating);
+    488|     expect(preview.status).toBe(201);
+       |                            ^
+    489|     const plan = preview.body.import.plan;
+    490|     const state = (payroll: string) => plan.periods.find((period: { pa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: another user cannot read or commit someone else's preview (404)
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:530:36
+    528|   it('red-first: another user cannot read or commit someone else\'s pr…
+    529|     const preview = await upload(workbook([{ payrollDate: PB }]));
+    530|     const id = preview.body.import.id;
+       |                                    ^
+    531|     const stranger = await account('stranger@example.invalid', 'Synthe…
+    532|     expect((await t.request('GET', `/api/imports/${id}`, { cookie: str…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: an administrator gets 404 for another person's import and has no route to import for anyone else
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:546:36
+    544|   it('red-first: an administrator gets 404 for another person\'s impor…
+    545|     const preview = await upload(workbook([{ payrollDate: PB }]));
+    546|     const id = preview.body.import.id;
+       |                                    ^
+    547|     const admin = await t.login('admin');
+    548|     expect((await t.request('GET', `/api/imports/${id}`, { cookie: adm…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > ownership (F-1): only the owner previews, reads and commits > red-first: a share grantee cannot import for, read or commit the owner's imports
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/workbook-import.test.ts:561:36
+    559|   it('red-first: a share grantee cannot import for, read or commit the…
+    560|     const preview = await upload(workbook([{ payrollDate: PB }]));
+    561|     const id = preview.body.import.id;
+       |                                    ^
+    562|     const grantee = await account('grantee@example.invalid', 'Syntheti…
+    563|     grantShare(t.db, t.clock, { ownerUserId: t.userIds.employee, grant…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > imported periods are read-only history (F-2) > red-first: sign, submit and day or session edits answer 409 imported_period and post no ledger event
+AssertionError: {"error":{"code":"unsupported_media_type","message":"Send request bodies as application/json"}}: expected 415 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 415
+
+ ❯ importPeriods tests/integration/workbook-import.test.ts:133:56
+    131| async function importPeriods(periods: readonly SyntheticPeriod[], deci…
+    132|   const preview = await upload(workbook(periods));
+    133|   expect(preview.status, JSON.stringify(preview.body)).toBe(201);
+       |                                                        ^
+    134|   const committed = await commit(preview.body.import.id, decisions);
+    135|   expect(committed.status, JSON.stringify(committed.body)).toBe(200);
+ ❯ tests/integration/workbook-import.test.ts:585:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > upload validation > red-first: refuses oversized, macro-bearing and entity-bearing uploads and stores nothing
+AssertionError: expected 415 to be 413 // Object.is equality
+
+- Expected
++ Received
+
+- 413
++ 415
+
+ ❯ tests/integration/workbook-import.test.ts:637:29
+    635|     const bytes = workbook([{ payrollDate: PB }]);
+    636|     const tooLarge = await raw('POST', '/api/imports', { cookie: owner…
+    637|     expect(tooLarge.status).toBe(413);
+       |                             ^
+    638|     expect(tooLarge.body.error.code).toBe('payload_too_large');
+    639|     const overDefault = await upload(new Uint8Array(8 * 1024 * 1024 + …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > upload validation > keeps the stored source through the orphan sweep
+SqliteError: no such table: imports
+ ❯ Database.prepare node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ tests/integration/workbook-import.test.ts:670:23
+    668|   it('keeps the stored source through the orphan sweep', async () => {
+    669|     const preview = await upload(workbook([{ payrollDate: PB }]));
+    670|     const key = (t.db.prepare('SELECT storage_key FROM imports WHERE i…
+       |                       ^
+    671|     const old = new Date(t.clock.now().getTime() - 30 * 86_400_000);
+    672|     utimesSync(files.pathOf(key), old, old);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/20]⎯
+
+ FAIL  tests/integration/workbook-import.test.ts > imported periods are never automated (F-2, docs/05 imported history) > red-first: no reminder, overdue record, deadline finalization or send across simulated deadlines
+Error: not implemented (red-first stub)
+ ❯ previewImport src/server/services/workbookImport.ts:4:9
+      2| export const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officed…
+      3| export function previewImport(..._args: unknown[]): { created: boolean…
+      4|   throw new Error('not implemented (red-first stub)');
+       |         ^
+      5| }
+      6| export function commitImport(..._args: unknown[]): { status: string; b…
+ ❯ tests/integration/workbook-import.test.ts:790:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/20]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  20 failed | 1 passed (21)
+   Start at  01:12:50
+   Duration  10.52s (tests 45%, import 41%, transform 14%)
+

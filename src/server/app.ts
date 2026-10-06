@@ -1,7 +1,7 @@
 import { accessSync, constants, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { MIGRATIONS } from './db/migrations.ts';
@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.ts';
 import { apiRoutes } from './routes/api.ts';
 import { authRoutes } from './routes/auth.ts';
 import { historyRoutes } from './routes/history.ts';
+import { DEFAULT_IMPORT_MAX_BYTES, importRoutes, isWorkbookUpload } from './routes/imports.ts';
 import { otRoutes } from './routes/ot.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { sharedRoutes, sharesRoutes } from './routes/shares.ts';
@@ -27,7 +28,12 @@ export interface AppOptions {
   dataDir?: string;
   /** Route-scoped size limit of the signature upload (bytes); default 256 KiB. */
   signatureMaxBytes?: number;
+  /** Route-scoped size limit of the workbook import upload (bytes); default 8 MiB, the reader's package limit. */
+  importMaxBytes?: number;
 }
+
+/** The only requests exempt from the global JSON body rules; each predicate is an exact method-and-path match. */
+const isRawUpload = (c: Context): boolean => isSignatureUpload(c) || isWorkbookUpload(c);
 
 const GLOBAL_JSON_LIMIT_BYTES = 64 * 1024;
 
@@ -91,17 +97,18 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.use(
     '/api/*',
     noStore,
-    // The signature upload is the only exception: it has its own 256 KiB limit and image
-    // content types in its router. Everything else stays JSON-only with a 64 KiB limit.
+    // The two raw uploads are the only exceptions: the signature image (256 KiB, image types) and
+    // the owner's workbook (8 MiB, .xlsx only) each have their own limit and content type in their
+    // router. Everything else stays JSON-only with a 64 KiB limit.
     unless(
-      isSignatureUpload,
+      isRawUpload,
       bodyLimit({
         maxSize: GLOBAL_JSON_LIMIT_BYTES,
         onError: (c) => c.json(errorBody('payload_too_large', 'Request body is too large'), 413),
       }),
     ),
     requireAllowedOrigin(deps.config.allowedOrigins),
-    unless(isSignatureUpload, requireJsonContentType),
+    unless(isRawUpload, requireJsonContentType),
   );
 
   // Liveness: the process answers and the database opens. No personal data.
@@ -126,6 +133,8 @@ export function createApp(deps: AppDeps, options: AppOptions = {}) {
   app.route('/api/history', historyRoutes(deps));
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/signatures', signatureRoutes(deps, files, options.signatureMaxBytes ?? DEFAULT_SIGNATURE_MAX_BYTES));
+  // The owner's own workbook import (F-1): self-only, never under /api/shared.
+  app.route('/api/imports', importRoutes(deps, files, options.importMaxBytes ?? DEFAULT_IMPORT_MAX_BYTES));
   // Sharing (FR-17): the caller's own grants, and delegated access only under an explicit owner path
   // through an allowlist; every other /api route stays self-only.
   app.route('/api/shares', sharesRoutes(deps));

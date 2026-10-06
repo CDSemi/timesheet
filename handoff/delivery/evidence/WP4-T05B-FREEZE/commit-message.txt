@@ -1,0 +1,17 @@
+Add backup pruning with the 7 daily, 4 weekly and 6 monthly policy
+
+- feat(ops): `backup --to <dir> --prune` prunes only after a verified backup,
+  and `backup prune --in <dir> --dry-run` shows the counts.
+  - A backup is kept if it is the newest of one of the last 7 UTC days,
+    4 ISO weeks or 6 UTC months, and the newest overall is always kept.
+  - Only real direct-child folders with the tool name and a matching tool
+    manifest are candidates. Everything else is counted, never removed.
+  - Any target escape refuses the whole run. Output is counts only.
+- test(ops): 21 tests written red-first. The mutation that drops the
+  manifest check fails a test.
+- docs(handoff): WP4-T05B records, the WP4-T09 brief, the WP4-T07B freeze
+  result, board and checkpoint (+ vi).
+
+Task: WP4-T05B-FREEZE
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

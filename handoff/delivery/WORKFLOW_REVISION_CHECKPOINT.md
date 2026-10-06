@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 641ca109d9c9fca9bba020ae45e6f089c3f4c6ee (WP4-T07B-FREEZE).
+  - HEAD = origin/main = 6fecd88e0328bab3603470ec35b8e9050528fbbc (WP4-T05B-FREEZE).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -650,8 +650,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          refuses the whole run.
        - Tests: 21; the mutation fails 1. Verify: 1625 tests. Digest: 57be8442….
        - The prune status is not recorded, because that would need a migration.
-     - The WP4-T09 brief is ready (opus, override novelty).
-     - Running: WP4-T05B-FREEZE.
+     - WP4-T05B-FREEZE committed and pushed 6fecd88 (20 paths; all checks 0). The
+       board's current source digest is 57be8442….
+     - WP4-T09 is done (author-reported, opus).
+       - Migration 0012 adds `imports`.
+       - Import is owner only, with an idempotent preview and commit.
+       - Only new, ended, in-calendar periods are importable. Every listed day needs a
+         decision.
+       - Imported periods answer 409 for sign-off, correction and edits, and are never
+         automated.
+       - Tests: 21; 5 mutations caught. Verify: 1646 tests. Digest: 65f38459….
+       - Open owner choices I-1..I-3 are asked; the safe defaults stand.
+       - Follow-ups:
+         - WP4-T09B: backups do not include import sources yet;
+         - WP4-T10: refuse OT leave use in imported periods;
+         - WP4-T11: expose `imported_unverified` to the client.
+     - Running: WP4-T09-FREEZE.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -665,9 +679,9 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-T05B-FREEZE, then dispatch WP4-T09.
+  1. Record WP4-T09-FREEZE, then dispatch WP4-T09B (brief ready).
   2. Then, in this order:
-     - T09, T10, T11;
+     - T10 (brief ready), T11;
      - T12 (stage 6 and a full drill rerun);
      - T13;
      - WP4-GATE;
@@ -689,7 +703,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T05B-FREEZE (attempt 1) only.
+- Live processes: WP4-T09-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

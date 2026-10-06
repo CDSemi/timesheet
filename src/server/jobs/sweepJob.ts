@@ -52,10 +52,13 @@ export function sweepLine(counts: OrphanSweepCounts): string {
 
 export function createSweepJobHandler(deps: SweepJobDeps): JobHandler {
   const { db, clock, files } = deps;
-  const referenced = db.prepare<[string], { found: number }>('SELECT 1 AS found FROM attachments WHERE storage_key = ?');
+  // A stored workbook import source (WP4-T09, `imports.storage_key`) is referenced exactly like an attachment.
+  const referenced = db.prepare<[string, string], { found: number }>(
+    'SELECT 1 AS found FROM attachments WHERE storage_key = ? UNION ALL SELECT 1 FROM imports WHERE storage_key = ?',
+  );
   return () => {
     const counts = files.sweep({
-      isReferenced: (storageKey) => referenced.get(storageKey) !== undefined,
+      isReferenced: (storageKey) => referenced.get(storageKey, storageKey) !== undefined,
       minAgeMs: ORPHAN_GRACE_MS,
       now: clock.now(),
     });

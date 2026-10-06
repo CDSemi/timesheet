@@ -38,6 +38,7 @@ import {
 } from './revisionLedger.ts';
 import { currentSignature } from './signatures.ts';
 import { findTimesheet, loadScope, type TimesheetRow, type UserScope } from './timesheets.ts';
+import { importedPeriodError, isImportedTimesheet } from './workbookImport.ts';
 
 /*
  * Manual sign-off finalization (docs/05 "Manual path", docs/03 "Atomicity and snapshots",
@@ -446,6 +447,8 @@ export function signOffTimesheet(ctx: FinalizationContext, payrollDate: string, 
     const scope = loadScope(db, user);
     const period = resolvePeriod(scope, review.payload.period.payroll_date);
     const existing = findTimesheet(db, scope, period);
+    // F-2: an imported period is read-only history; it is never signed or submitted.
+    if (existing !== undefined && isImportedTimesheet(db, user.id, existing.id)) throw importedPeriodError();
     if (existing !== undefined && existing.finalized_revision_no !== null) {
       const loaded = loadFinalization(db, user.id, existing);
       if (loaded !== null && isIdenticalRetry(loaded, input, signer, choices)) {
@@ -677,6 +680,8 @@ export function finalizeAutomatically(ctx: AutomaticFinalizationContext, input: 
     const scope = loadScope(db, owner);
     const period = resolvePeriod(scope, review.payload.period.payroll_date);
     const existing = findTimesheet(db, scope, period);
+    // F-2, defense in depth: the deadline scan already skips imported periods before it gets here.
+    if (existing !== undefined && isImportedTimesheet(db, owner.id, existing.id)) return { status: 'skipped', reason: 'imported' };
     if (existing !== undefined && existing.finalized_revision_no !== null) return { status: 'skipped', reason: 'already_finalized' };
     const payload = review.payload;
     const revisionNo = 1;
@@ -951,6 +956,8 @@ export function reviseTimesheet(ctx: FinalizationContext, payrollDate: string, i
     const scope = loadScope(db, user);
     const period = resolvePeriod(scope, review.payload.period.payroll_date);
     const existing = findTimesheet(db, scope, period);
+    // F-2: an imported period is never re-submitted either (it has no revision to correct or review).
+    if (existing !== undefined && isImportedTimesheet(db, user.id, existing.id)) throw importedPeriodError();
     if (existing === undefined || existing.finalized_revision_no === null) {
       throw new ApiError(409, 'not_finalized', 'This period is not finalized yet; sign it off first');
     }
