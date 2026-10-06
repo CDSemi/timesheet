@@ -541,7 +541,17 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
        Việc còn lại: cập nhật docs/07, docs/03 và DEVELOPMENT.md, chuyển sang WP4-DEC và
        T13.
-     - Đang chạy: WP4-T03-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
+     - WP4-T03-FREEZE đã commit và push thành 199e792 (35 đường dẫn; mọi kiểm tra trả về
+       0; ảnh chụp sạch, quét token không thấy gì).
+     - WP4-T04 đã xong (tác giả tự báo).
+       - Image: node:24.21.0-trixie-slim ghim theo digest; 105 MiB; UID 10001.
+       - Drill bước 1: lên trạng thái healthy sau 5,4 giây, schema 8/8, root chỉ đọc; dữ
+         liệu còn nguyên sau khi khởi động lại.
+       - Kiểm tra: 0 tệp bị cấm; 0 dòng cảnh báo deprecation; verify 1494 test.
+       - Digest: 6ec6549d….
+       - Còn 2 image cục bộ (`:drill`, `:arm64-emulated`) để nguyên. Bản build arm64 chỉ
+         chạy qua giả lập.
+     - Đang chạy: WP4-T04-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
        commit.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
@@ -582,7 +592,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T03-FREEZE.
+- Process còn sống: chỉ WP4-T04-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

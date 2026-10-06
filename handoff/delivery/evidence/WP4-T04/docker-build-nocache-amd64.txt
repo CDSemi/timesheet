@@ -1,0 +1,109 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.88kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 563B done
+#3 DONE 0.0s
+
+#4 [base 1/2] FROM docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+#4 resolve docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe 0.1s done
+#4 DONE 0.1s
+
+#5 [base 2/2] WORKDIR /app
+#5 CACHED
+
+#6 [internal] load build context
+#6 transferring context: 9.72kB 0.1s done
+#6 DONE 0.1s
+
+#7 [build 1/5] COPY package.json package-lock.json .npmrc ./
+#7 DONE 0.1s
+
+#8 [runtime 1/4] RUN groupadd --gid 10001 timesheet     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin timesheet     && install --directory --owner 10001 --group 10001 --mode 0700 /data
+#8 DONE 0.5s
+
+#9 [build 2/5] RUN npm ci
+#9 ...
+
+#10 [prod-deps 2/2] RUN npm ci --omit=dev --ignore-scripts
+#10 4.045 
+#10 4.045 added 16 packages, and audited 17 packages in 4s
+#10 4.045 
+#10 4.045 1 package is looking for funding
+#10 4.045   run `npm fund` for details
+#10 4.046 
+#10 4.046 found 0 vulnerabilities
+#10 DONE 4.2s
+
+#9 [build 2/5] RUN npm ci
+#9 ...
+
+#11 [runtime 2/4] COPY --from=prod-deps /app/node_modules ./node_modules
+#11 DONE 0.6s
+
+#9 [build 2/5] RUN npm ci
+#9 6.013 
+#9 6.013 added 160 packages, and audited 161 packages in 6s
+#9 6.013 
+#9 6.013 42 packages are looking for funding
+#9 6.013   run `npm fund` for details
+#9 6.014 
+#9 6.014 found 0 vulnerabilities
+#9 DONE 6.2s
+
+#12 [build 3/5] COPY tsconfig*.json vite.config.ts ./
+#12 DONE 0.1s
+
+#13 [build 4/5] COPY src ./src
+#13 DONE 0.1s
+
+#14 [build 5/5] RUN npm run build
+#14 0.323 
+#14 0.323 > timesheet@0.1.0 build
+#14 0.323 > npm run build:server && npm run build:client
+#14 0.323 
+#14 0.387 
+#14 0.387 > timesheet@0.1.0 build:server
+#14 0.387 > tsc -p tsconfig.server.json
+#14 0.387 
+#14 2.318 
+#14 2.318 > timesheet@0.1.0 build:client
+#14 2.318 > vite build
+#14 2.318 
+#14 2.465 vite v8.3.1 building client environment for production...
+#14 2.477 transforming...
+#14 2.539 ✓ 99 modules transformed.
+#14 2.619 rendering chunks...
+#14 2.675 computing gzip size...
+#14 2.679 dist/client/index.html                   0.39 kB │ gzip:   0.25 kB
+#14 2.679 dist/client/assets/index-D1Z8YEGu.css   20.64 kB │ gzip:   4.46 kB
+#14 2.679 dist/client/assets/index-D6pqsMdD.js   418.07 kB │ gzip: 119.78 kB │ map: 1,772.42 kB
+#14 2.679 
+#14 2.679 ✓ built in 214ms
+#14 DONE 2.7s
+
+#15 [runtime 3/4] COPY --from=build /app/dist ./dist
+#15 DONE 0.1s
+
+#16 [runtime 4/4] COPY package.json ./
+#16 DONE 0.1s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 1.9s done
+#17 exporting manifest sha256:a005272044cd3b70f0afa818b1ea7a0dab5279dec614cc61a920a3b207b66464 0.0s done
+#17 exporting config sha256:68abde0ade99379ae0230bf947b5803ec966e5de1d50a47add143473ee7c9238 0.0s done
+#17 exporting attestation manifest sha256:2b14c0a1cb6b245a2e9540061cc8859925546352995015921a834fbbd07db5a8 0.0s done
+#17 exporting manifest list sha256:db9c82e1cb481d51e69b5400ab6cf25c1c6861d52319b6ba6e813b6645f68265 0.0s done
+#17 naming to docker.io/library/ts-wp4-t04-timesheet:drill done
+#17 unpacking to docker.io/library/ts-wp4-t04-timesheet:drill
+#17 unpacking to docker.io/library/ts-wp4-t04-timesheet:drill 0.8s done
+#17 DONE 2.9s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2cdgw7cic90uxk5t3bs4tr1o2

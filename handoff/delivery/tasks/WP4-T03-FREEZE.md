@@ -128,3 +128,9 @@ Return at most 150 words.
 ## Results
 
 (Committer appends here.)
+
+Committer results (attempt 1): pre-HEAD 37f1be2; commit 199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa
+pushed to origin main (remote SHA identical). Digest matches; 35 staged files. All checks
+exit 0 (digest, precommit, diff --check, JSON, validator, check_recovery, preflight).
+Screenshots synthetic, no token; token scan clean. No blockers. Details in
+evidence/WP4-T03-FREEZE/commit-evidence.txt.

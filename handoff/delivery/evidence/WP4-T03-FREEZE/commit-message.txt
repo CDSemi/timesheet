@@ -1,0 +1,20 @@
+Add production bootstrap with an expiring one-time admin setup
+
+- feat(bootstrap): migration 0008 and a bootstrap service; the CLI
+  `bootstrap --config` creates the company calendar and default policy
+  once and issues a single-use setup token. The token is stored only as
+  a hash, expires after 60 minutes and is printed once to the operator.
+  `--new-token` replaces an expired, unused token.
+- feat(auth): GET /api/auth/setup reports whether setup is open and never
+  consumes the token. POST /api/auth/bootstrap creates the first
+  administrator, answers every refusal with one generic 403, and is
+  closed for good once an administrator exists. It is audited as a
+  system event.
+- feat(client): Setup screen behind an App gate (E-8 tokens), with
+  synthetic desktop and mobile screenshots.
+- docs(handoff): WP4-T02 freeze result, WP4-T03 brief and records, board
+  and checkpoint (+ vi).
+
+Task: WP4-T03-FREEZE
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

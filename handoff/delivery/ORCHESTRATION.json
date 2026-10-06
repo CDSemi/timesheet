@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T03-FREEZE",
+  "next_task_id": "WP4-T04-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
+    "last_commit": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
     "unpushed": []
   },
   "owner_decisions": [
@@ -8727,7 +8727,7 @@
       "id": "WP4-T03-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T03"
       ],
@@ -8740,10 +8740,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ae360ac331b520872",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -8752,16 +8752,111 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-T03-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-T03-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T03-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T03-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
+      "pushed": true,
       "source_digest": "8a316cc074f67b3a48aa6fc9443e8c7add5a02b26f1672879699784b8d92043f",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent 37f1be2, remote SHA identical; 35 paths, no unexpected path; digest 8a316cc0 matched; both screenshots are empty synthetic forms with no token; the token-literal scan of staged tests/ and evidence/ found nothing; precommit (0 findings), diff --cached --check, JSON parse, validator, check_recovery and preflight 0.",
+      "next_action": "None; WP4-T04 on 199e792."
+    },
+    {
+      "id": "WP4-T04",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T03-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0ece82c520ef241f",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "Dockerfile",
+        ".dockerignore",
+        "compose.example.yaml",
+        "scripts/container-drill.mjs",
+        "package.json",
+        ".gitignore",
+        "handoff/delivery/tasks/WP4-T04.md",
+        "handoff/delivery/evidence/WP4-T04"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T04.md",
+      "report": "handoff/delivery/tasks/WP4-T04.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T04/base-image-index.txt",
+        "handoff/delivery/evidence/WP4-T04/docker-build-nocache-amd64.txt",
+        "handoff/delivery/evidence/WP4-T04/drill-stage1-first-run-failures-before-fixes.txt",
+        "handoff/delivery/evidence/WP4-T04/drill-stage1-final.txt",
+        "handoff/delivery/evidence/WP4-T04/image-app-top-level.txt",
+        "handoff/delivery/evidence/WP4-T04/docker-build-arm64-emulated.txt",
+        "handoff/delivery/evidence/WP4-T04/arm64-binding-load.txt",
+        "handoff/delivery/evidence/WP4-T04/verify-tail.txt"
+      ],
+      "baseline_commit": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
+      "source_digest": "6ec6549daeb7dd835f44898429e6ef239902e529b144f5b34e8688d880c29870",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: base node:24.21.0-trixie-slim pinned by the index digest sha256:8ec5d755…20cffe (no bookworm fallback); image 105.3 MiB linux/amd64, Config.User and process 10001:10001. Drill stage 1 exit 0: healthy in 5.4 s, /api/ready schema 8 of 8, read-only root with a /tmp tmpfs, bootstrap/admin/synthetic session work, admin 404 on the employee session, restart healthy in 5.4 s with the session JSON byte-identical, cleanup by project name. Forbidden-file scan 0 hits in 10,413 paths, no devDependencies in the image. 0 deprecation lines in the --no-cache build log and the container log. verify exit 0 (65 files, 1494 tests, smoke passed); precommit 13 files 0 findings; secret grep no match; digest 6ec6549d (738 files). Deviations: two local images remain (tags :drill and :arm64-emulated; left in place, may be removed later by exact tag); Compose paths and the image tag are variables with defaults; the arm64 build under emulation passed (emulation only, not NAS evidence).",
+      "next_action": "None; WP4-T04-FREEZE."
+    },
+    {
+      "id": "WP4-T04-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T04"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T04-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T04-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "199e792c7dc401b5e7b3969a5d3dcdbf2c2c59fa",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "6ec6549daeb7dd835f44898429e6ef239902e529b144f5b34e8688d880c29870",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T03 with the WP4-T03 brief and pending handoff records."
+      "next_action": "Commit and push WP4-T04 with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",
