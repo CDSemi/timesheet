@@ -271,7 +271,7 @@ Các route API đứng sau những màn hình này, đều chỉ dành cho chủ
 
 Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy chi tiết timesheet (docs/03). Màn hình đọc `GET /api/admin/operations`, và danh sách tài khoản có cờ "Not set up" cho tài khoản chưa từng lưu cài đặt nộp. Route trả về nhiều hơn một chút so với màn hình hiển thị: lần chạy giữ lại (bên dưới) chỉ có trong JSON.
 
-- Nhịp của bộ chạy, thời điểm kích hoạt tự động, chế độ và cờ của bộ gửi, và tổng số job và lần gửi.
+- Nhịp của bộ chạy, thời điểm kích hoạt tự động, việc đã cấu hình địa chỉ người gửi hay chưa ("Sender address") và chế độ gửi ra ngoài ("Outbound mode"; không bao giờ là cờ gửi, cờ chỉ nằm trong `<env-file>`), và tổng số job và lần gửi.
 - Backup: kết quả gần nhất, thời điểm lần thử và lần thành công gần nhất, mã lỗi và tuổi tính từ lần thành công gần nhất (cảnh báo sau 26 giờ, báo lỗi khi lần thử mới nhất thất bại).
 - Đĩa: số byte trống và tổng của volume dữ liệu (không bao giờ là đường dẫn).
 - Gửi ra ngoài: có đang tạm dừng không, từ khi nào và vì sao (`restored`), số lần gửi đang chờ quyết định, và số job gửi đang xếp hàng và đang bị giữ.

@@ -139,4 +139,13 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 74d5bfec6700126da4105b5d97f5efe943f896f5; nothing was staged beforehand.
+- Commit 9bcdd88faf782be4f16c139e29d07d279d2609e3; pushed yes; remote SHA the same;
+  post-HEAD the same.
+- Digest 1b8ceae4...6af7 (779 files); staged 197 files.
+- PNGs viewed: 4, all synthetic. Secrets Grep: 0 unmasked values.
+- Scope: only the two docs/11 files changed outside handoff/; no nul, raw, xlsx, pdf,
+  eml, csv, map, db or evidence .md files.
+- Exit codes: all 0 (precommit, diff --check, JSON, orchestration, recovery, preflight,
+  fetch, dry-run, push). Node v24.21.0. No blockers.
+- Evidence: handoff/delivery/evidence/WP5-FIXD-FREEZE/ (unstaged).

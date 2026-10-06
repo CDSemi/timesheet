@@ -271,7 +271,7 @@ The application cannot report its own failure over its own mail: broken SMTP can
 
 An administrator sees operations and delivery, never timesheet details (docs/03). The screen reads `GET /api/admin/operations`, and the account list shows a "Not set up" flag for an account that never saved its submission settings. The route returns a little more than the screen shows: the retention run (below) is in the JSON only.
 
-- Runner heartbeat, the automation activation instant, the sender mode and flag, and job and delivery totals.
+- Runner heartbeat, the automation activation instant, whether a sender address is configured ("Sender address") and the outbound mode ("Outbound mode"; never the sending flag, which lives only in `<env-file>`), and job and delivery totals.
 - Backup: the last outcome, the last attempt and last success instants, the fault code and the age since the last success (a warning after 26 hours, an error when the latest attempt failed).
 - Disk: free and total bytes of the data volume (never a path).
 - Outbound: whether sending is paused, since when and why (`restored`), the number of deliveries that await a decision, and the queued and held send jobs.

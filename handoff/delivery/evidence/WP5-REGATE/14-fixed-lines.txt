@@ -1,0 +1,33 @@
+## (a) flag claims
+docs/11_OPERATIONS_RUNBOOK.md:272:An administrator sees operations and delivery, never timesheet details (docs/03). The screen reads `GET /api/admin/operations`, and the account list shows a "Not set up" flag for an account that never saved its submission sett
+docs/11_OPERATIONS_RUNBOOK.md:274:- Runner heartbeat, the automation activation instant, the sender mode and flag, and job and delivery totals.
+docs/11_OPERATIONS_RUNBOOK.md:294:   - The administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated". The status has no field for the sending flag: check it in the file, `grep -c '^PRODUCTION_SENDIN
+docs/11_OPERATIONS_RUNBOOK.md:310:   - In SMTP mode without the flag the server refuses to start, and so do the CLI commands that read the mail settings (`backup`, `restore`); other commands do not. The message names the flag, never a value. A restart alone do
+docs/11_OPERATIONS_RUNBOOK.md:379:5. Restore only if the data are damaged or wrong, never over the live data. Check `sha256sum <backup-dir>/<backup-name>/manifest.json` against `<manifest-sha256>`, then restore `<backup-name>` in isolation (section 6) into a n
+docs/11_OPERATIONS_RUNBOOK.md:389:5. Save the submission settings before activation (WP3 R8, R-WA3). Once automation is active, an account that never saved them gets before-due reminders, including the bootstrap administrator account. Use the administrator acc
+docs/11_OPERATIONS_RUNBOOK.md:415:| Deactivation: clear the instant, `OUTBOUND_MODE=capture`, flag unset, recreate | Owner NAS step, unverified |
+handoff/delivery/WP5_PILOT_PACKET.md:53:| Real-sending flag | `PRODUCTION_SENDING_ENABLED` | `<env-file>` | Exactly `true`, only at activation (runbook section 13 step 4). Leave unset until then. |
+handoff/delivery/WP5_PILOT_PACKET.md:65:- [ ] `OUTBOUND_MODE=capture` and `PRODUCTION_SENDING_ENABLED` unset; the administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated", and `grep -c '^PRODUCTION
+## (b) grep -c PSE
+docs/11_OPERATIONS_RUNBOOK.md:294:   - The administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated". The status has no field for the send
+docs/11_OPERATIONS_RUNBOOK.md:318:   - The administrator status now shows "Outbound mode: SMTP (real sending)", and `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` prints `1`. The activation 
+docs/11_OPERATIONS_RUNBOOK.md:356:   The administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated". Then check the file: `grep -c '^PRODUC
+docs/11_OPERATIONS_RUNBOOK.vi.md:294:   - Trạng thái quản trị cho thấy "Outbound mode: Capture only (nothing leaves the server)" và kích hoạt "Not activated". Trạng thái không có tr�
+docs/11_OPERATIONS_RUNBOOK.vi.md:318:   - Trạng thái quản trị giờ cho thấy "Outbound mode: SMTP (real sending)", và `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` in ra `1`. Th�
+docs/11_OPERATIONS_RUNBOOK.vi.md:356:   Trạng thái quản trị cho thấy "Outbound mode: Capture only (nothing leaves the server)" và kích hoạt "Not activated". Rồi kiểm tra file: `grep -
+handoff/delivery/WP5_PILOT_PACKET.md:65:- [ ] `OUTBOUND_MODE=capture` and `PRODUCTION_SENDING_ENABLED` unset; the administrator status shows "Outbound mode: Capture only (nothing leaves the server)" a
+handoff/delivery/WP5_PILOT_PACKET.md:219:1. Deactivate: if the activation instant was set, clear it first (the console call with `active_from: null` and a reason); wait until no send is queued or leas
+handoff/delivery/WP5_PILOT_PACKET.vi.md:65:- [ ] `OUTBOUND_MODE=capture` và `PRODUCTION_SENDING_ENABLED` chưa đặt; trạng thái quản trị hiện "Outbound mode: Capture only (nothing leaves t
+handoff/delivery/WP5_PILOT_PACKET.vi.md:219:1. Hủy kích hoạt: nếu đã đặt activation instant thì xóa nó trước (lệnh console với `active_from: null` và một lý do); chờ đến
+## (c) refusal
+109:1. A backup is consistent while the server keeps writing: it uses SQLite's online backup, copies the private files the copy refers to, checks each hash, and writes `manifest.json` into a new folder `<backup-name>` under `<backup-dir>`. The target must be outside `DATA_DIR` (`/data/private-data`); `/data/backups` is accepted. It prints counts only and exits 0 (succeeded), 1 (failed, recorded) o
+310:   - In SMTP mode without the flag the server refuses to start, and so do the CLI commands that read the mail settings (`backup`, `restore`); other commands do not. The message names the flag, never a value. A restart alone does not reread `<env-file>`, so recreate the container:
+## (d) deep-link
+docs/11_OPERATIONS_RUNBOOK.md:296:   - Check `PUBLIC_BASE_URL` and `APP_ORIGINS`: open `https://<nas-host>/#/review/<payroll-date>` (the form of every reminder link); it must ask for sign-in and then open the review. A captured submission holds no link, and no
+docs/11_OPERATIONS_RUNBOOK.md:335:   - The link: once the activation instant is set (step 5), open the link of the first reminder that arrives. It must be `https://<nas-host>/#/review/<payroll-date>`, ask for sign-in and then open the review.
+docs/11_OPERATIONS_RUNBOOK.vi.md:296:   - Kiểm tra `PUBLIC_BASE_URL` và `APP_ORIGINS`: mở `https://<nas-host>/#/review/<payroll-date>` (dạng của mọi link nhắc nhở); nó phải yêu cầu đăng nhập rồi mở màn hình review. Một bản n�
+docs/11_OPERATIONS_RUNBOOK.vi.md:335:   - Link: khi đã đặt thời điểm kích hoạt (bước 5), mở link của lời nhắc đầu tiên đến. Nó phải là `https://<nas-host>/#/review/<payroll-date>`, yêu cầu đăng nhập rồi mở màn hì
+handoff/delivery/WP5_PILOT_PACKET.md:42:- [ ] Deep link: open `https://<nas-host>/#/review/<payroll-date>` (the form of every reminder link, as in the samples of section 3); it asks for sign-in and then opens the review screen. A captured submission holds no l
+handoff/delivery/WP5_PILOT_PACKET.vi.md:42:- [ ] Deep link: mở `https://<nas-host>/#/review/<payroll-date>` (dạng của mọi liên kết nhắc nhở, như các mẫu ở mục 3); nó yêu cầu đăng nhập rồi mở màn hình review. Một bản n�
+## (e) section 8 packet
+handoff/delivery/WP5_PILOT_PACKET.md:250:All fifteen are still pending: none is answered in the board's `owner_decisions`. Source: [WP5-PLAN](tasks/WP5-PLAN.md) section D. D-1, D-7, D-8 and D-13 must be answered before activation. An answer that differs from the current default for D-3, D-5, D-6 or 

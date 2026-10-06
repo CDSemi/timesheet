@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 74d5bfec6700126da4105b5d97f5efe943f896f5 (WP5-REL-FREEZE, commit đóng băng cuối của WP5; digest 0a64a75f).
+  - HEAD = origin/main = 9bcdd88faf782be4f16c139e29d07d279d2609e3 (WP5-FIXD-FREEZE, commit đóng băng bản sửa tài liệu WP5; digest 1b8ceae4).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1057,8 +1057,20 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
            R-F6.
          - Ngoài handoff/ chỉ docs/11 EN và VI thay đổi, cộng thêm packet.
          - Parity và Grep đều sạch; verify trả 0. Digest 1b8ceae4 (779 tệp).
-       - Đang chạy: WP5-FIXD-FREEZE (committer), có Grep tìm bí mật trong evidence của
-         các audit.
+       - WP5-FIXD-FREEZE đã commit và push 9bcdd88 (197 đường dẫn; Grep bí mật ra 0;
+         mọi kiểm tra trả 0).
+       - WP5-REGATE: **PASS** trên 9bcdd88 (digest 1b8ceae4).
+         - verify 1.759; e2e 145/bỏ qua 5; drill 208.
+         - AC-13 đạt dưới múi giờ thật Asia/Tokyo và America/New_York, theo đúng múi giờ
+           mà tiến trình tự báo.
+         - Image `bd17d061…`.
+         - Các dòng đã sửa đều giữ đúng.
+         - Ghi nhận (Low): docs/11 mục 11, dòng 274, vẫn nói màn hình hiện "cờ" gửi.
+       - WP5-FIXD2 đã xong. Chỉ câu đó (EN và VI) bị trúng, và đã được sửa. Rà docs/05,
+         07, 12, README và packet đều sạch. Digest 150420e7.
+       - Đang chạy: WP5-FIXD2-FREEZE (committer).
+       - Sau đó: commit đóng băng, chạy lại gate cho phần docs thay đổi, WP5-PKTID,
+         WP5-RECHECK (auditor opus mới), ACCREC và ACCEPT.
        - Sau đó:
          - commit đóng băng;
          - chạy lại gate, đặt TZ ngay trong tiến trình (R-A2-3);

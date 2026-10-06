@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 74d5bfec6700126da4105b5d97f5efe943f896f5 (WP5-REL-FREEZE, the WP5 package-final freeze; digest 0a64a75f).
+  - HEAD = origin/main = 9bcdd88faf782be4f16c139e29d07d279d2609e3 (WP5-FIXD-FREEZE, the WP5 documentation fix freeze; digest 1b8ceae4).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -1001,8 +1001,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
            R-F4, R-F5 and R-F6.
          - Only docs/11 EN and VI changed outside handoff/, plus the packet.
          - Parity and Grep are clean; verify 0. Digest 1b8ceae4 (779 files).
-       - Running: WP5-FIXD-FREEZE (committer). It includes a secrets Grep over the
-         audit evidence.
+       - WP5-FIXD-FREEZE committed and pushed 9bcdd88 (197 paths; secrets Grep 0;
+         all checks 0).
+       - WP5-REGATE: **PASS** on 9bcdd88 (digest 1b8ceae4).
+         - verify 1,759; e2e 145/5 skipped; drill 208.
+         - AC-13 passed under real Asia/Tokyo and America/New_York zones, as the
+           process itself reported.
+         - Image `bd17d061…`.
+         - The fixed lines hold.
+         - Observation (Low): docs/11 section 11, line 274, still says the screen
+           shows a sending "flag".
+       - WP5-FIXD2 is done. The only hit was that sentence (EN and VI), and it is
+         fixed. The sweep of docs/05, 07, 12, README and the packet is clean. Digest
+         150420e7.
+       - Running: WP5-FIXD2-FREEZE (committer).
+       - Then: a freeze, a docs-delta regate, WP5-PKTID, WP5-RECHECK (fresh opus),
+         ACCREC and ACCEPT.
        - Then:
          - a freeze;
          - a regate, which applies TZ inside the process (R-A2-3);
