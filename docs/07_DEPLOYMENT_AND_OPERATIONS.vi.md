@@ -6,7 +6,7 @@ Reverse proxy Synology → một container app → /data bền vững cục bộ
 
 Kiểm CPU NAS thật và khả năng Docker/Container Manager; không giả định mọi NAS đều hỗ trợ. Test SQLite native và font trên đích đã chọn. WP4 giao Dockerfile nhiều stage có ghim phiên bản, ví dụ Compose, .env.example không secret, migration, bootstrap admin một lần có hạn, seed giả, health, script backup/restore và runbook song ngữ.
 
-Chạy non-root. Lưu DB, PDF, chữ ký, bằng chứng riêng tư. Không đưa workbook, file dev hay secret vào image. Cấu hình HTTPS URL, proxy tin cậy, data path, bí mật session/token, múi giờ báo cáo, outbound và SMTP TLS/credential. Người nhận/template từng user ở settings, không dùng một recipient chung trong env.
+Chạy non-root. Lưu DB, PDF, chữ ký, bằng chứng riêng tư. Không đưa workbook, file dev hay secret vào image. Cấu hình HTTPS URL, proxy tin cậy, data path, múi giờ báo cáo, outbound và SMTP TLS/credential. Không có bí mật session của ứng dụng; chỉ có credential SMTP. Người nhận/template từng user ở settings, không dùng một recipient chung trong env.
 
 Dùng file secret/env được bảo vệ trên host; không đưa credential vào git, chat, ảnh hay log. Có HTTPS, cookie an toàn, hạn chế truy cập nội bộ và đồng bộ giờ host.
 
@@ -23,13 +23,13 @@ Chuẩn bị cài đặt không phải triển khai thật hay gửi email. Thi�
 
 ## Backup, restore và nâng cấp
 
-Mục tiêu ban đầu: backup mỗi đêm, điểm khôi phục 24 giờ và restore trong một giờ khi đủ điều kiện. Đây là mục tiêu cần test, chưa là bảo đảm đo được. Gợi ý giữ 7 ngày, 4 tuần, 6 tháng, có bản trên thiết bị khác được bảo vệ.
+Mục tiêu ban đầu: backup mỗi đêm, điểm khôi phục 24 giờ và restore trong một giờ khi đủ điều kiện. Đây là mục tiêu cần test, chưa là bảo đảm đo được. Giữ backup (quyết định của chủ F-5, 2026-10-05): việc dọn giữ 7 bản ngày, 4 tuần, 6 tháng và chỉ tác động lên thư mục do công cụ backup tạo. Bản được bảo vệ trên thiết bị khác là bước setup của chủ (Synology Hyper Backup hoặc USB), không phải code ứng dụng.
 
 Không chỉ copy file SQLite chính đang chạy mà bỏ WAL. Dùng online backup API hoặc cách nhất quán có tài liệu. Tạm dừng chốt/ghi file ngắn, chụp DB và manifest file bất biến được tham chiếu, copy file, tiếp tục. Có phiên bản app/schema, thời điểm, kiểm toàn vẹn và hash; giữ cấu hình bí mật cần thiết an toàn, không in ra.
 
 Restore thư mục riêng, tắt gửi. Kiểm toàn vẹn/schema, user, số dư mẫu, revision, file/hash và PDF. Đối chiếu job chờ/chưa rõ trước khi bật. Không chạy đồng thời queue production cũ và đã restore.
 
-Trước nâng cấp, kiểm backup và chạy migration có phiên bản một lần. Chỉ hạ binary khi schema tương thích; nếu không restore cặp DB/file. Đối chiếu gửi bên ngoài sau restore—thư đã chấp nhận không tự gửi lại.
+Trước nâng cấp, kiểm backup và chạy migration có phiên bản một lần. Chỉ hạ binary khi schema tương thích; nếu không restore cặp DB/file. Đối chiếu gửi bên ngoài sau restore—thư đã chấp nhận không tự gửi lại. Restore giữ lại mọi job gửi và nhắc đang xếp hàng hoặc đang giữ lease từ backup cho đến khi có thao tác thả hoặc bỏ có ghi audit. Khi rollback restore một backup có schema chưa có tạm dừng gửi, bản build cũ phải chạy với job runner tắt (`JOB_RUNNER=off`) cho đến khi đối chiếu xong.
 
 ## Bảo trì
 
@@ -43,6 +43,6 @@ Preview/commit rõ, không tự nhập lúc startup. Đọc cell như dữ liệ
 
 Nguồn gốc có 11 sheet (8 kỳ có ngày và 3 sheet hỗ trợ/mẫu); mẫu trong repo giữ 3 sheet hỗ trợ/mẫu với lễ linh hoạt, công thức 8,5 giờ, tổng thiếu Chủ nhật và ngày ký TODAY. Các ô clock đã xem trong bản gốc đều trống. Không suy ra đã gửi, ngày ký thật hay số dư OT đầu bằng không. Nhập imported_unverified với SHA-256 nguồn/phiên bản ánh xạ và khóa đợt chống trùng.
 
-Số dư đầu cần phút, ngày, lý do và bằng chứng rõ; không suy từ công thức lỗi. Lặp nguồn/sự kiện mở đầu không ghi lại. Lịch sử nhập không khởi động nhắc/tự gửi. WP4 preview mẫu trong repo được điền các sheet có ngày giả; không còn giữ workbook lịch sử cá nhân nào, và test thường dùng bản giả.
+Mỗi người chỉ nhập workbook của chính mình (quyết định của chủ F-1, 2026-10-05); admin không thể nhập thay ai. Kỳ đã nhập không ghi sự kiện sổ, không thể ký hay nộp (409 `imported_period`) và là lịch sử chỉ đọc (F-2). Số dư đầu cần phút có dấu khác không, ngày, lý do và bằng chứng rõ, mỗi user một khoản, chỉ đổi bằng sửa có lý do và lưu thành loại dòng sổ mới (F-3); đó là nguồn OT mang sang duy nhất. Không suy từ công thức lỗi. Lặp nguồn/sự kiện mở đầu không ghi lại. Lịch sử nhập không khởi động nhắc/tự gửi. WP4 preview mẫu trong repo được điền các sheet có ngày giả; không còn giữ workbook lịch sử cá nhân nào, và test thường dùng bản giả.
 
 Bản dịch của [07_DEPLOYMENT_AND_OPERATIONS.md](07_DEPLOYMENT_AND_OPERATIONS.md); tiếng Anh là nguồn chuẩn.

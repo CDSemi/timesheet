@@ -140,3 +140,21 @@ Nguồn: các câu trả lời trực tiếp của chủ ghi trong bảng task, 
 Nguồn: câu trả lời trực tiếp của chủ ghi trong bảng task, 2026-10-05.
 
 - H-Q1 (a): tự nộp chỉ áp dụng cho tài khoản đã lưu setting nộp bài với tự nộp bật. Tài khoản chưa từng lưu thì không bao giờ được tự chốt và không có lần gửi nào. Mặc định, kỳ có hạn đã qua trước khi lưu setting không được tự nộp, cùng loại giới hạn với giới hạn lúc tạo tài khoản (docs/05 "Đến hạn và phục hồi"). Lựa chọn áp dụng cho kỳ quá hạn mà user chọn rõ khi lưu setting giữ nguyên như đã cài: đó là việc của chính user và vẫn bị chặn bởi lúc tạo tài khoản. Tắt tự nộp giữ nguyên hành vi. Điều này hiểu D-09 "Bật tùy chọn tự nộp sau setup" là: không tự động trước khi setup.
+
+## Quyết định của chủ — 2026-10-05 (F-1..F-6 của WP4-PLAN)
+
+Nguồn: câu trả lời trực tiếp trong chat của chủ ngày 2026-10-05, ghi nguyên văn trong bảng task (`F-1:a`, `F-2:a`, `F-3:a`, `F-4:a`, `F-5:OK`, `F-6:OK`). Mỗi câu trả lời chấp nhận đề xuất ở mục F của WP4-PLAN. Các quy tắc là yêu cầu; code cho chúng sẽ có ở các task WP4 sau.
+
+- F-1 (a): mỗi người chỉ nhập workbook của chính mình, nên người thực hiện là chủ; admin không thể nhập thay ai. Điều này giải quyết "users/import" của tài liệu 03 với quy tắc riêng tư của admin. Quy tắc ở tài liệu 03 và 07.
+- F-2 (a): kỳ đã nhập không ghi sự kiện sổ, không thể ký hay nộp (409 `imported_period`) và là lịch sử chỉ đọc; số dư đầu rõ ràng là nguồn OT mang sang duy nhất.
+- F-3 (a): số dư đầu là phút có dấu khác không, mỗi user một khoản, chỉ đổi bằng sửa có lý do và lưu thành loại dòng sổ mới. Tài khoản chưa từng cấu hình hiện cho admin cờ "chưa thiết lập" và nhân viên không nhận cảnh báo quá hạn; khớp với quy tắc H-Q1 (a) ở tài liệu 05.
+- F-4 (a): chỉ xóa dòng job `deadline_scan` và `reminder_scan` đã thành công và cũ hơn 30 ngày, qua ngoại lệ gắn với migration cho trigger; không bao giờ xóa dòng gửi, PDF hay delivery.
+- F-5: việc dọn backup giữ 7 bản ngày, 4 tuần, 6 tháng và chỉ tác động lên thư mục do công cụ tạo; bản trên thiết bị khác (Synology Hyper Backup hoặc USB) là bước setup của chủ.
+- F-6: tài liệu 07 ghi "không có bí mật session của ứng dụng; chỉ có credential SMTP".
+
+## Quyết định của coordinator — restore và rollback của WP4 (2026-10-05, đảo ngược được; chủ có thể phủ quyết)
+
+Không quyết định nào đổi yêu cầu đã chốt.
+
+- Giữ job gửi sau restore (WP4-T06): restore giữ mọi job `send_email` và `send_reminder` đang xếp hàng hoặc giữ lease từ backup. Mỗi job chỉ được thả hoặc bỏ bằng thao tác rõ ràng của người vận hành, có ghi audit; job tạo sau restore không bị giữ. Lý do: thư chưa rõ kết quả hoặc đã được chấp nhận không được gửi lại sau khi tiếp tục.
+- Chế độ rollback restore (WP4-T12A): `--keep-schema --confirm` restore backup vào schema mới hơn. Giới hạn còn lại: schema đã restore không có tạm dừng gửi nên không chặn được job tạo sau đó, vì vậy bản build cũ chạy với `JOB_RUNNER=off` cho đến khi đối chiếu. Chỉ bản build hiện tại mới thả được job bị giữ, nên rollback dài cần nâng cấp lần hai để đối chiếu. Lựa chọn của chủ: xóa giờ kích hoạt tự động khi `--confirm` (thay đổi trạng thái nghiệp vụ có audit, chưa làm) hoặc chấp nhận quy tắc `JOB_RUNNER=off`.

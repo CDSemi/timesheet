@@ -124,4 +124,4 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+See evidence/WP4-T12A-FREEZE/results.txt: commit 0f989e4499867ed05c0da5f73cb39db80634c663 on main, pushed, remote SHA equal; pre-HEAD dd1422f; digest e6bb47fd... match; 25 staged; all checks exit 0; no blockers.

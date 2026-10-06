@@ -41,9 +41,17 @@ Finalization atomically creates the immutable revision, real sign-off if any, le
 
 Canonical serialization uses stable object keys/array order, integer minutes, ISO dates and UTC strings. Snapshot calculations, policy/calendar IDs, employee/report data, recipients, subject/body, signature authorization and template version. Referenced signature/file content must be immutable; later profile edits cannot alter archived reports. Do not snapshot credentials.
 
+## Imports, opening balance and retention (owner decisions 2026-10-05, requirements)
+
+- Who imports (F-1): each person previews and commits only their own workbook, so the actor is the owner. An administrator cannot import, preview or read an import for another person; another user's batch answers 404.
+- Imported periods (F-2): an imported period (`imported_unverified`) posts no ledger events, cannot be signed or submitted (409 `imported_period`) and is read-only history. The explicit opening balance is the only OT carry-in, so nothing is counted twice.
+- Opening balance (F-3): signed, non-zero minutes with an as-of date, reason and evidence; one per user; changed only by a reasoned correction; stored as a new ledger entry type.
+- Never-configured accounts (F-3): an account that never saved its submission settings shows an administrator a "not set up" flag in the operational status, and the employee gets no overdue warning. This matches the H-Q1 (a) rule in document 05 (no automation before setup).
+- Job-row retention (F-4): only succeeded `deadline_scan` and `reminder_scan` job rows older than 30 days may be deleted, through a migration-scoped exception to the job-delete trigger. Delivery, PDF and send rows are never deleted.
+
 ## API and hosting boundary
 
-Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users/import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review.
+Group routes under /api for auth, personal settings, calendars, periods/day edits, OT/leave, review/finalize/status, correction/resend, private files, sharing (grants and delegated access under an explicit owner path), users (administration), the owner's own workbook import and health. Distinguish validation, auth, ownership, stale version and delivery errors. Review/finalize requires expected_version and reviewed hash; conflicts require fresh review.
 
 Use secure cookie sessions, CSRF/origin protection, login/token rate limits, validated upload types/sizes and private file retrieval. Do not serve PDFs/signatures from public static paths. Health contains no personal data.
 

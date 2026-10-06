@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T12A-FREEZE",
+  "next_task_id": "WP4-DEC-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -101,22 +101,14 @@
     {
       "date": "2026-10-05",
       "observation": "WP3-FIX2: the permission check denied a Bash loop that masked evidence and then ran a variable-expanded rm of raw logs inside the repository. Future briefs must require raw command output to be written only under D:\\timesheet-tmp\\<task> and masked into the evidence directory, so that no unmasked file ever lands in the repository and no deletion inside the repository is needed."
+    },
+    {
+      "date": "2026-10-05",
+      "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": {
-    "id": "GOV-SKILL Q1-Q4 (+ N1)",
-    "asked": "2026-10-05",
-    "source": "GOV-SKILL-AUDIT FIX REQUIRED (handoff/delivery/GOV_SKILL_REVIEW.md)",
-    "question": "Q1 may SKILL.md:267 be restored to 'write README.md in the target directory'? Q2 may markdown.md:142 '../../../../docs' be restored to 'docs/'? Q3 is readme-md taken from LisaHQ/lisa-skills, and under which licence, or do you hold the rights; record it in skills-lock.json or in the skill, or correct README.md:35 and .vi.md:35. Q4 drop the centered <div align=\"center\"> pattern, or record an exception. N1 (optional) add one AGENTS.md 'Agent skills' line on README language and privacy. The owner may edit the skill directly, or authorize a worker to do it.",
-    "blocking": "a GOV fix cycle for the skill; not WP4-T01..T06"
-  },
-  "pending_owner_question": {
-    "id": "WP4-F-1..F-6",
-    "asked": "2026-10-05",
-    "source": "WP4-PLAN section F (handoff/delivery/tasks/WP4-PLAN.md:580-619)",
-    "question": "F-1 who imports whose workbook: (a, recommended) each person imports only their own workbook; administrators cannot import for others, or (b) admin or operator import for another person, with a privacy exception. F-2 what an imported period is: (a, recommended) it posts no ledger events, cannot be signed or submitted, and is read-only history; the explicit opening balance is the only OT carry-in. F-3 opening balance: (a, recommended) signed non-zero minutes, one per user, changed only by a reasoned correction, stored as a new ledger entry type; plus never-configured accounts: (a, recommended) an admin 'not set up' flag and no employee overdue warning. F-4 job-row retention: (a, recommended) delete only succeeded deadline_scan and reminder_scan rows older than 30 days, never delivery, PDF or send rows, or (b) keep everything and monitor disk. F-5 backup retention: (recommended) keep 7 daily, 4 weekly and 6 monthly backups in tool-created folders; the copy on a separate device is an owner setup step. F-6 docs/07:9: (recommended) amend it to 'no application session secret; SMTP credentials only' (EN and VI). F-7, for WP5 and awareness only: at-most-once reminders on real SMTP, TLS errors treated as permanent, and E-11 temporary passwords with no change route.",
-    "blocking": "WP4-DEC and T09/T10 (F-1..F-3); T07 (F-3 flag, F-4); not T01-T06"
-  },
+  "pending_owner_question_2": null,
+  "pending_owner_question": null,
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
@@ -129,11 +121,11 @@
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
   "wp3_plan": "handoff/delivery/tasks/WP3-PLAN.md",
   "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
-  "updated_at": "2026-10-04",
+  "updated_at": "2026-10-05",
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
+    "last_commit": "0f989e4499867ed05c0da5f73cb39db80634c663",
     "unpushed": []
   },
   "owner_decisions": [
@@ -224,6 +216,18 @@
       "source": "owner chat, direct reply typed by the owner to pending question H-Q3",
       "verbatim": "H-Q3: (a)",
       "decision": "H-Q3 (a): keep the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) in the repository; it goes through a GOV cycle (freeze, verifier gate, fresh audit) as a governance-path change."
+    },
+    {
+      "date": "2026-10-05",
+      "source": "owner chat, direct reply typed by the owner",
+      "verbatim": "* F-1:a\n* F-2:a\n* F-3:a\n* F-4:a\n* F-5:OK\n* F-6:OK",
+      "decision": "WP4-F answers, all as recommended in WP4-PLAN section F. F-1 (a): each person imports only their own workbook (actor = owner); administrators cannot import for others. F-2 (a): imported periods post no ledger events, cannot be signed or submitted (409 imported_period) and are read-only history; the explicit opening balance is the only OT carry-in. F-3 (a): opening balance = signed non-zero minutes, one per user, changed only by a reasoned correction, stored as a new ledger entry type (table rebuild); never-configured accounts get an admin 'not set up' flag and no employee overdue warning. F-4 (a): delete only succeeded deadline_scan and reminder_scan job rows older than 30 days through a migration-scoped trigger exception; never delivery, PDF or send rows. F-5: backup pruning 7 daily / 4 weekly / 6 monthly, limited to tool-created folders; the separate-device copy is an owner setup step. F-6: amend docs/07:9 (EN and VI) to 'no application session secret; SMTP credentials only'."
+    },
+    {
+      "date": "2026-10-05",
+      "source": "owner chat, direct reply typed by the owner to the readme-md clarification (A = fix with defaults, B = remove)",
+      "verbatim": "B",
+      "decision": "Option B, reverses H-Q3 (a): remove the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) from the repository instead of fixing it. GOV-SKILL-AUDIT findings GOV-SKILL-01..04 and note N1 are resolved by removal. The removal is a governance-path change and goes through a GOV cycle (removal, freeze, verifier gate, fresh audit)."
     }
   ],
   "coordinator_decisions": [
@@ -9358,7 +9362,7 @@
       "id": "WP4-T12A-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T12A"
       ],
@@ -9371,10 +9375,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a8eaa7bf3c4f0add8",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -9383,16 +9387,107 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-T12A-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-T12A-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T12A-FREEZE/commit-message.txt",
+        "handoff/delivery/evidence/WP4-T12A-FREEZE/results.txt"
+      ],
       "baseline_commit": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "0f989e4499867ed05c0da5f73cb39db80634c663",
+      "pushed": true,
       "source_digest": "e6bb47fde0ad7960b9bf7fab5a02fc169f399224eb38a61d6b9ce7866d746bdd",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 1): parent dd1422f, remote SHA identical; 25 paths staged, no extras; digest e6bb47fd matched; Node v24.21.0; nothing under reference/, .claude/, docs/ or src/client/, no migration, package.json or lock change; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight all 0; no fixes needed.",
+      "next_action": "None; remaining WP4 tasks wait for the owner's F-1..F-6 answers (T07B, DEC, T09, T10) or follow them (T11, T12, T13)."
+    },
+    {
+      "id": "WP4-DEC",
+      "package": "WP4",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP4-T12A-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae1774040731ded38",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "docs/03_ARCHITECTURE_AND_DATA.md",
+        "docs/03_ARCHITECTURE_AND_DATA.vi.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.md",
+        "docs/07_DEPLOYMENT_AND_OPERATIONS.vi.md",
+        "docs/10_DECISIONS_AND_SOURCES.md",
+        "docs/10_DECISIONS_AND_SOURCES.vi.md",
+        "handoff/delivery/tasks/WP4-DEC.md",
+        "handoff/delivery/evidence/WP4-DEC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-DEC.md",
+      "report": "handoff/delivery/tasks/WP4-DEC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-DEC/checks.txt"
+      ],
+      "baseline_commit": "0f989e4499867ed05c0da5f73cb39db80634c663",
+      "source_digest": "65247d70f5569f09dda4d328b455a4e39836223f81de5227a3f19a83bd64c23c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "history": [
+        "attempt 1: the worker's first hand-back claimed results were appended, but its background shell command (which also launched 'npm run digest' through cmd.exe /c, forbidden) had not appended them; the coordinator stopped that background task (bhh08zj9u) and resumed the same worker, which appended the results with the Edit tool only and listed the deviations."
+      ],
+      "decision": "Author-reported: docs/03 new section 'Imports, opening balance and retention' before 'API and hosting boundary' (F-1 own import only; F-2 no ledger events, 409 imported_period, read-only; F-3 opening balance shape plus never-configured 'not set up' flag and no overdue warning; F-4 30-day succeeded scan-row deletion); docs/03 API route list now reads 'users (administration), the owner's own workbook import'. docs/07: line 9 (F-6), line 26 (F-5), line 32 (held sends and JOB_RUNNER=off rollback rule), line 46 (F-1..F-3). docs/10: owner decisions F-1..F-6 and coordinator decisions (T06 held sends, T12A rollback restore) appended. No contradiction; F-3 matches docs/05 H-Q1 (a) lines 26 and 31. EN/VI heading and list counts equal; preflight 0; precommit PASS; digest 65247d70 (753 files, source-digest.mjs under Node 24). Deviations: cmd.exe /c launch of npm run digest (hung, stopped by the coordinator); a 2>/dev/null redirect; digest run directly.",
+      "next_action": "None; WP4-DEC-FREEZE."
+    },
+    {
+      "id": "WP4-DEC-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-DEC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-DEC-FREEZE.md",
+        "handoff/delivery/evidence/WP4-DEC-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-DEC-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-DEC-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "0f989e4499867ed05c0da5f73cb39db80634c663",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "65247d70f5569f09dda4d328b455a4e39836223f81de5227a3f19a83bd64c23c",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T12A with pending handoff records."
+      "next_action": "Commit and push WP4-DEC with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

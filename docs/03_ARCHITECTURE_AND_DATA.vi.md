@@ -41,9 +41,17 @@ Chốt tạo revision bất biến, sign-off thật nếu có, sự kiện sổ 
 
 Serialization chuẩn có thứ tự key/array ổn định, phút nguyên, ngày ISO và UTC. Snapshot phép tính, ID quy tắc/lịch, dữ liệu nhân viên/báo cáo, người nhận, tiêu đề/nội dung, phép dùng ảnh ký và phiên bản mẫu. Nội dung ảnh/file tham chiếu phải bất biến; sửa profile không đổi báo cáo cũ. Không snapshot credential.
 
+## Nhập, số dư đầu và lưu giữ (quyết định của chủ 2026-10-05, là yêu cầu)
+
+- Ai nhập (F-1): mỗi người chỉ preview và commit workbook của chính mình, nên người thực hiện là chủ. Admin không thể nhập, preview hay đọc bản nhập cho người khác; đợt nhập của user khác trả 404.
+- Kỳ đã nhập (F-2): kỳ nhập (`imported_unverified`) không ghi sự kiện sổ, không thể ký hay nộp (409 `imported_period`) và là lịch sử chỉ đọc. Số dư đầu rõ ràng là nguồn OT mang sang duy nhất, nên không tính hai lần.
+- Số dư đầu (F-3): phút có dấu, khác không, kèm ngày hiệu lực, lý do và bằng chứng; mỗi user một khoản; chỉ đổi bằng sửa có lý do; lưu thành một loại dòng sổ mới.
+- Tài khoản chưa từng cấu hình (F-3): tài khoản chưa từng lưu setting nộp hiện cho admin cờ "chưa thiết lập" trong trạng thái vận hành, và nhân viên không nhận cảnh báo quá hạn. Khớp với quy tắc H-Q1 (a) ở tài liệu 05 (không tự động trước khi setup).
+- Giữ dòng job (F-4): chỉ được xóa dòng job `deadline_scan` và `reminder_scan` đã thành công và cũ hơn 30 ngày, qua ngoại lệ gắn với migration cho trigger cấm xóa job. Không bao giờ xóa dòng gửi, PDF hay delivery.
+
 ## API và ranh giới hosting
 
-Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, chia sẻ (cấp quyền và truy cập ủy quyền dưới path chủ rõ ràng), user/import và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại.
+Nhóm route dưới /api cho auth, settings cá nhân, lịch, kỳ/sửa ngày, OT/phép, review/chốt/trạng thái, sửa/gửi lại, file riêng, chia sẻ (cấp quyền và truy cập ủy quyền dưới path chủ rõ ràng), user (quản trị), nhập workbook của chính chủ và health. Tách lỗi dữ liệu, auth, chủ sở hữu, phiên bản cũ và gửi. Review/chốt cần expected_version và hash đã xem; xung đột phải xem lại.
 
 Dùng cookie session an toàn, CSRF/origin, rate limit login/token, kiểm loại/kích thước upload và tải file có quyền. Không phục vụ PDF/chữ ký từ path public. Health không có dữ liệu cá nhân.
 

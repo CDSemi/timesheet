@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = dd1422fbd8de53791e6fa9d6b8d8741f1f484488 (WP4-T08-FREEZE).
+  - HEAD = origin/main = 0f989e4499867ed05c0da5f73cb39db80634c663 (WP4-T12A-FREEZE).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -595,7 +595,23 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - Residual limit, carried to the T13 runbook and the audit: after a rollback the
          old schema cannot hold jobs created later, so the old build must run with
          `JOB_RUNNER=off` until reconciliation.
-     - Running: WP4-T12A-FREEZE.
+     - WP4-T12A-FREEZE committed and pushed 0f989e4 (25 paths; all checks 0).
+     - Every WP4 task that does not depend on F-1..F-6 is now done and committed.
+     - The owner answered F-1..F-6, all as recommended, on 2026-10-05; the answers are in
+       the board's `owner_decisions`.
+     - The owner asked why the readme-md skill fix appears here. The coordinator
+       explained where it comes from (H-Q3 (a) and GOV-SKILL-AUDIT). The owner then
+       chose B: remove the skill from the repository, which reverses H-Q3 (a). The
+       GOV-SKILL-REMOVE cycle follows WP4-DEC-FREEZE.
+     - WP4-DEC is done (author-reported).
+       - docs/03 has a new section for F-1..F-4.
+       - docs/07 lines 9, 26, 32 and 46 cover F-6, F-5, the held sends and
+         `JOB_RUNNER=off`, and F-1..F-3.
+       - docs/10 records the owner and coordinator decisions.
+       - No contradiction; parity holds; preflight 0. Digest: 65247d70….
+       - Deviation: the worker launched `npm run digest` through cmd.exe. It hung, and
+         the coordinator stopped it.
+     - Running: WP4-DEC-FREEZE.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -609,17 +625,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP4-T12A-FREEZE.
-  2. After the owner's answers, in this order:
-     - WP4-T07B and WP4-DEC;
+  1. Record WP4-DEC-FREEZE. Then run the GOV-SKILL-REMOVE cycle (worker removal, freeze,
+     verifier gate, fresh audit).
+  2. Then, in this order:
+     - WP4-T07B (F-3 flag, F-4 retention, and F-5 pruning, possibly split);
      - T09, T10, T11;
      - T12 (stage 6 and a full drill rerun);
      - T13;
      - WP4-GATE;
      - two fresh audits;
      - acceptance.
-  3. GOV-SKILL fix cycle after Q1–Q4.
-  4. Then WP5 (it starts with an independent acceptance) and a concrete pilot packet.
+  3. Then WP5 (it starts with an independent acceptance) and a concrete pilot packet.
      The real pilot stays owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
@@ -635,7 +651,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T12A-FREEZE (attempt 1) only.
+- Live processes: WP4-DEC-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

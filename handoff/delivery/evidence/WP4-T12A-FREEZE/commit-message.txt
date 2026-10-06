@@ -1,0 +1,26 @@
+Add upgrade and rollback drill stages, a rollback restore mode and an upgrade test
+
+- feat(ops): drill stage 4 builds a schema-6 database with the accepted WP3 build
+  (`--wp3 <dir>`).
+  - It takes the paired backup with the unchanged backup tool, then upgrades in the
+    current image to the latest schema, read from `/api/ready`.
+  - The migrations apply once; a restart and `migrate` apply nothing.
+  - Integrity, FKs, rows, balances and revisions are unchanged.
+- feat(ops): drill stage 5 covers the rollback.
+  - The WP3 build's `migrate` refuses the upgraded DB.
+  - `cli.js restore --keep-schema` restores the paired backup without migrating. It
+    refuses without `--confirm` on a schema that has no outbound pause.
+  - It holds queued and leased sends and marks sending attempts uncertain, writes an
+    audit event, and warns to start the old build with `JOB_RUNNER=off`.
+  - The WP3 server on the restored data makes no send attempt; a control copy without
+    the hold does send.
+- test(ops): upgrade.test.ts (10 tests) and 6 restore tests, written red-first. Three
+  mutations are killed. A shared schema-6 fixture is added.
+- docs(handoff): WP4-T08 freeze result, WP4-T12A records, board and checkpoint (+ vi).
+
+Task: WP4-T12A-FREEZE
+Gate: digest e6bb47fde0ad7960b9bf7fab5a02fc169f399224eb38a61d6b9ce7866d746bdd
+Audit: none for this commit task
+Digest: e6bb47fde0ad7960b9bf7fab5a02fc169f399224eb38a61d6b9ce7866d746bdd
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

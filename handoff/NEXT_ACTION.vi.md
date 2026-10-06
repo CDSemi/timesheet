@@ -5,7 +5,8 @@
 - WP2 đã nghiệm thu (5fafeae, digest e61fa914).
 - WP3 đã nghiệm thu: WP3-REGATE3 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
-- Tiếp theo: vòng GOV-SKILL cho skill `readme-md` của chủ dự án, rồi WP4.
+- WP4 đang làm: các task T01–T08 và T12A đã commit, và các quyết định F-1..F-6 của chủ
+  dự án đã ghi vào docs (WP4-DEC). Board ghi task kế tiếp.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
@@ -33,18 +34,17 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Vòng GOV-SKILL.** Sau commit nghiệm thu WP3, skill `.claude/skills/readme-md/` của
-   chủ dự án đi qua commit đóng băng, gate do verifier chạy, và một audit mới (quyết
-   định H-Q3 (a)).
-2. **Lập kế hoạch WP4.** Sau đó board chuyển sang WP4. Planner Opus chia WP4 từ
-   [lộ trình](../docs/09_IMPLEMENTATION_ROADMAP.vi.md) và
-   [WP4_IMPLEMENT](prompts/WP4_IMPLEMENT.vi.md) thành các task có giới hạn. Các task này
-   gồm cả những việc chuyển tiếp trong [WP3_HANDOFF](delivery/WP3_HANDOFF.vi.md), nhất là
-   dấu ghi nhận "thao tác qua chia sẻ" cần có trước khi chức năng nhập dữ liệu ghi dòng
-   của người khác.
-3. **Thực hiện WP4.** Worker implement, committer đóng băng từng task, verifier chạy gate
-   cuối package WP4, và auditor mới chạy [WP4_REVIEW](prompts/WP4_REVIEW.vi.md).
-4. **WP5.** WP5 bắt đầu bằng nghiệm thu độc lập. Pilot thật do chủ dự án quyết định.
+1. **Gỡ skill GOV-SKILL.** Chủ dự án chọn gỡ skill `.claude/skills/readme-md/` thay vì
+   sửa (2026-10-05, đảo lại H-Q3 (a)). Việc gỡ đi qua một vòng GOV: gỡ, commit đóng
+   băng, gate do verifier chạy, và một audit mới.
+2. **Thực hiện WP4.** Làm theo [kế hoạch WP4](delivery/tasks/WP4-PLAN.md):
+   - T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5);
+   - T09–T11 (nhập workbook và số dư OT đầu kỳ);
+   - T12 (bước 6 và chạy lại toàn bộ diễn tập) và T13 (runbook và bàn giao).
+
+   Worker implement, và committer đóng băng từng task. Sau đó verifier chạy gate cuối
+   package WP4, và auditor mới chạy [WP4_REVIEW](prompts/WP4_REVIEW.vi.md).
+3. **WP5.** WP5 bắt đầu bằng nghiệm thu độc lập. Pilot thật do chủ dự án quyết định.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
 `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới

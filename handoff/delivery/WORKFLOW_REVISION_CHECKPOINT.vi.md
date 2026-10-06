@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = dd1422fbd8de53791e6fa9d6b8d8741f1f484488 (WP4-T08-FREEZE).
+  - HEAD = origin/main = 0f989e4499867ed05c0da5f73cb39db80634c663 (WP4-T12A-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -634,7 +634,25 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        - Giới hạn còn lại, chuyển cho runbook T13 và audit: sau rollback, schema cũ không
          giữ được các job tạo về sau, nên bản cũ phải chạy với `JOB_RUNNER=off` cho đến
          khi đối soát xong.
-     - Đang chạy: WP4-T12A-FREEZE.
+     - WP4-T12A-FREEZE đã commit và push thành 0f989e4 (25 đường dẫn; mọi kiểm tra trả về
+       0).
+     - Mọi task WP4 không phụ thuộc F-1..F-6 đã xong và đã commit.
+     - Ngày 2026-10-05 chủ dự án đã trả lời F-1..F-6, tất cả theo khuyến nghị; câu trả lời
+       nằm trong `owner_decisions` của board.
+     - Chủ dự án hỏi vì sao lại có việc sửa skill readme-md ở đây. Coordinator đã giải
+       thích nguồn gốc (H-Q3 (a) và GOV-SKILL-AUDIT). Sau đó chủ dự án chọn B: gỡ skill
+       khỏi repo, tức là đảo lại H-Q3 (a). Vòng GOV-SKILL-REMOVE làm sau
+       WP4-DEC-FREEZE.
+     - WP4-DEC đã xong (tác giả tự báo).
+       - docs/03 có mục mới cho F-1..F-4.
+       - docs/07 dòng 9, 26, 32 và 46 ghi F-6, F-5, việc giữ lại lượt gửi và
+         `JOB_RUNNER=off`, và F-1..F-3.
+       - docs/10 ghi các quyết định của chủ dự án và của coordinator.
+       - Không có mâu thuẫn; các cặp dịch khớp nhau; preflight trả về 0. Digest:
+         65247d70….
+       - Sai lệch: worker chạy `npm run digest` qua cmd.exe. Lệnh bị treo, và
+         coordinator đã dừng nó.
+     - Đang chạy: WP4-DEC-FREEZE.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -648,17 +666,17 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-T12A-FREEZE.
-  2. Sau khi chủ dự án trả lời, làm theo thứ tự:
-     - WP4-T07B và WP4-DEC;
+  1. Ghi kết quả WP4-DEC-FREEZE. Sau đó chạy vòng GOV-SKILL-REMOVE (worker gỡ skill,
+     commit đóng băng, gate do verifier chạy, audit mới).
+  2. Sau đó làm theo thứ tự:
+     - WP4-T07B (cờ F-3, việc giữ job F-4 và việc xóa bớt bản sao lưu F-5; có thể tách);
      - T09, T10, T11;
      - T12 (bước 6 và chạy lại toàn bộ diễn tập);
      - T13;
      - WP4-GATE;
      - hai audit mới;
      - nghiệm thu.
-  3. Vòng sửa GOV-SKILL sau khi có câu trả lời Q1–Q4.
-  4. Sau đó WP5 (bắt đầu bằng nghiệm thu độc lập) và pilot packet cụ thể. Pilot thật do
+  3. Sau đó WP5 (bắt đầu bằng nghiệm thu độc lập) và pilot packet cụ thể. Pilot thật do
      chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
@@ -675,7 +693,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T12A-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-DEC-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

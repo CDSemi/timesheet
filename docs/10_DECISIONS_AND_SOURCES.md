@@ -139,3 +139,21 @@ Source: the owner's direct replies recorded in the task board, 2026-10-04.
 Source: the owner's direct reply recorded in the task board, 2026-10-05.
 
 - H-Q1 (a): automatic submission applies only to accounts that saved their submission settings with auto-submit on. An account that never saved them is never auto-finalized and no delivery is attempted for it. By default, periods whose deadline passed before the settings were saved are not submitted automatically, the same kind of bound as the account-creation bound (docs/05 "Deadline and recovery"). The explicit apply-to-overdue choice a user makes when saving settings stays as implemented: it is the user's own act and is still clamped by the account creation. Turning auto-submit off keeps its behaviour. This reads D-09 "Auto-submit preference enabled after setup" as: no automation before setup.
+
+## Owner decisions — 2026-10-05 (WP4-PLAN F-1..F-6)
+
+Source: the owner's direct chat reply of 2026-10-05, recorded verbatim in the task board (`F-1:a`, `F-2:a`, `F-3:a`, `F-4:a`, `F-5:OK`, `F-6:OK`). Each answer adopts the WP4-PLAN section F recommendation. The rules are requirements; the code for them comes in later WP4 tasks.
+
+- F-1 (a): each person imports only their own workbook, so the actor is the owner; administrators cannot import for anyone else. This resolves document 03 "users/import" against the administrator privacy rule. Rule in documents 03 and 07.
+- F-2 (a): an imported period posts no ledger events, cannot be signed or submitted (409 `imported_period`) and is read-only history; the explicit opening balance is the only OT carry-in.
+- F-3 (a): the opening balance is signed, non-zero minutes, one per user, changed only by a reasoned correction and stored as a new ledger entry type. An account that was never configured shows an administrator "not set up" flag and gets no employee overdue warning; this matches the H-Q1 (a) rule in document 05.
+- F-4 (a): only succeeded `deadline_scan` and `reminder_scan` job rows older than 30 days are deleted, through a migration-scoped trigger exception; delivery, PDF and send rows are never deleted.
+- F-5: backup pruning keeps 7 daily, 4 weekly and 6 monthly backups and acts only on folders the tool created; the separate-device copy (Synology Hyper Backup or USB) is an owner setup step.
+- F-6: document 07 states "no application session secret; SMTP credentials only".
+
+## Coordinator decisions — WP4 restore and rollback (2026-10-05, reversible; the owner may veto)
+
+None changes a confirmed requirement.
+
+- Held sends after a restore (WP4-T06): a restore holds every queued or leased `send_email` and `send_reminder` job from the backup. Each is released or dropped only by an explicit, audited operator action; jobs created after the restore are not held. Reason: an uncertain or already-accepted email must not go out again after the resume.
+- Rollback restore mode (WP4-T12A): `--keep-schema --confirm` restores a backup into a newer schema. Residual limit: a restored schema with no outbound pause cannot block jobs created later, so the older build runs with `JOB_RUNNER=off` until reconciliation. Held jobs can be released only by the current build, so a long rollback needs a second upgrade to reconcile. Owner options: clear the automation activation instant on `--confirm` (an audited business-state change, not done), or accept the `JOB_RUNNER=off` rule.
