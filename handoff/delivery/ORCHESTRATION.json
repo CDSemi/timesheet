@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T02-FREEZE",
+  "next_task_id": "WP4-T03-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
+    "last_commit": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
     "unpushed": []
   },
   "owner_decisions": [
@@ -8617,7 +8617,7 @@
       "id": "WP4-T02-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T02"
       ],
@@ -8630,8 +8630,8 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
       "agent_id": "a14aa87983b5f3100",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
@@ -8645,16 +8645,123 @@
       ],
       "prompt": "handoff/delivery/tasks/WP4-T02-FREEZE.md",
       "report": "handoff/delivery/tasks/WP4-T02-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T02-FREEZE/commit-evidence.txt",
+        "handoff/delivery/evidence/WP4-T02-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "a1dc01b98f3c8be7478384adf73d9c194bf9a105",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
+      "pushed": true,
       "source_digest": "d6f223a719e06baf1ee24ef630a90af91301d65b53eb727581eb7b6c3dbdfd06",
       "reviewed_digest": null,
       "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): parent a1dc01b, remote SHA identical; 33 paths (the original set; WP4-T03.md left untracked for the next freeze); digest d6f223a7 matched; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight 0.",
+      "next_action": "None; WP4-T03 on 37f1be2."
+    },
+    {
+      "id": "WP4-T03",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T02-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": true
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a276a8d2ed8f172ba",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "src/server/db/migrations/0008_bootstrap.ts",
+        "src/server/db/migrations.ts",
+        "src/server/services/bootstrap.ts",
+        "src/server/cli.ts",
+        "src/server/routes/auth.ts",
+        "src/server/http/schemas.ts",
+        "src/client/SetupScreen.tsx",
+        "src/client/App.tsx",
+        "src/client/api.ts",
+        "src/client/styles.css",
+        "tests/integration/bootstrap.test.ts",
+        "tests/integration/sharing-matrix.test.ts",
+        "tests/e2e/setup.spec.ts",
+        "handoff/delivery/tasks/WP4-T03.md",
+        "handoff/delivery/evidence/WP4-T03"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T03.md",
+      "report": "handoff/delivery/tasks/WP4-T03.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T03/red-note.txt",
+        "handoff/delivery/evidence/WP4-T03/red-vitest.txt",
+        "handoff/delivery/evidence/WP4-T03/red-e2e.txt",
+        "handoff/delivery/evidence/WP4-T03/mutation-note.txt",
+        "handoff/delivery/evidence/WP4-T03/mutation-baseline-vitest.txt",
+        "handoff/delivery/evidence/WP4-T03/mutation-vitest.txt",
+        "handoff/delivery/evidence/WP4-T03/migration-checks.txt",
+        "handoff/delivery/evidence/WP4-T03/e2e-final.txt",
+        "handoff/delivery/evidence/WP4-T03/verify-final.txt",
+        "handoff/delivery/evidence/WP4-T03/precommit-check.txt",
+        "handoff/delivery/evidence/WP4-T03/digest.txt",
+        "handoff/delivery/evidence/WP4-T03/setup-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP4-T03/setup-mobile-synthetic.png"
+      ],
+      "baseline_commit": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
+      "source_digest": "8a316cc074f67b3a48aa6fc9443e8c7add5a02b26f1672879699784b8d92043f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: migration 0008 (bootstrap_state table); services/bootstrap.ts; CLI bootstrap --config and --new-token; GET /api/auth/setup; POST /api/auth/bootstrap with one generic 403 for every refusal; SetupScreen.tsx behind an App.tsx gate. Tests: 24 integration tests plus an e2e spec; red 22 failed against a throwing stub, e2e red in a scratch clone; green 24/24; mutation (admin guard skipped, scratch clone) 1 failed, file restored byte for byte. Migrations fresh 1-8 and upgrade from v7 ok; integrity ok, FK empty, rerun applies nothing. Screenshots setup-desktop/mobile-synthetic.png viewed. e2e exit 0 (129 passed, 5 skipped); verify exit 0 (65 files, 1494 tests); precommit PASS (26 files); digest 8a316cc0 (734 files). Deviations: tests/integration/migrations.test.ts and ot-api.test.ts edited (they hard-code migration 7 or the route list); added bootstrap --new-token (otherwise an expired unused token leaves no way to set up); docs/07, docs/03 and DEVELOPMENT.md need a follow-up, carried to WP4-DEC and WP4-T13.",
+      "next_action": "None; WP4-T03-FREEZE."
+    },
+    {
+      "id": "WP4-T03-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T03"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T03-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T03-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "37f1be240f6f8931105cb9af0ae6fa56f2dfb333",
+      "branch": "main",
+      "commit_sha": null,
+      "pushed": false,
+      "source_digest": "8a316cc074f67b3a48aa6fc9443e8c7add5a02b26f1672879699784b8d92043f",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T02 with pending handoff records."
+      "next_action": "Commit and push WP4-T03 with the WP4-T03 brief and pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

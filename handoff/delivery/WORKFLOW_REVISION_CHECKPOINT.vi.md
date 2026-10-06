@@ -530,8 +530,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
      - WP4-T02-FREEZE lần 1 không tạo commit. Điều phối viên viết brief WP4-T03 giữa lúc
        committer đang chạy và nhờ stage tệp đó; kiểm tra quyền đã từ chối lệnh `git add`
        gộp. Lệnh đó không được thử lại.
-     - Đang chạy: WP4-T02-FREEZE lần 2 (cùng committer). Lần này commit đúng bộ tệp ban
-       đầu; `WP4-T03.md` vẫn để chưa track cho tới lần đóng băng kế tiếp.
+     - WP4-T02-FREEZE đã commit và push thành 37f1be2 (lần 2; 33 đường dẫn; mọi kiểm tra
+       trả về 0; `WP4-T03.md` để chưa track, chờ lần đóng băng kế tiếp).
+     - WP4-T03 đã xong (tác giả tự báo):
+       - thay đổi: migration 0008, service bootstrap, lệnh CLI `bootstrap` kèm
+         `--new-token`, setup GET và POST (mọi lần từ chối đều trả cùng một mã 403),
+         màn hình Setup;
+       - test: 24 test, đỏ rồi xanh; đột biến bị phát hiện; migration lên v8;
+       - e2e 129 đạt; verify 1494 test; digest 8a316cc0….
+
+       Việc còn lại: cập nhật docs/07, docs/03 và DEVELOPMENT.md, chuyển sang WP4-DEC và
+       T13.
+     - Đang chạy: WP4-T03-FREEZE (committer). Điều phối viên không ghi tệp nào trong lúc
+       commit.
      - Đã soạn sẵn để dùng khi cả hai PASS: brief WP3-ACCREC (biên bản nghiệm thu trong
        HANDOFF) và brief WP4-PLAN. Brief commit WP3-ACCEPT, STATE và NEXT_ACTION sẽ làm
        sau khi WP3-ACCREC xong.
@@ -571,7 +582,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T02-FREEZE.
+- Process còn sống: chỉ WP4-T03-FREEZE.
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

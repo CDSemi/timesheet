@@ -31,6 +31,17 @@ export const loginBody = z.strictObject({
   password: z.string().max(256),
 });
 
+/**
+ * The first administrator's setup (WP4-T03): the setup token typed from the operator's terminal, and the account.
+ * The role is not an input and neither is the calendar: both come from the bootstrap itself.
+ */
+export const bootstrapBody = z.strictObject({
+  token: z.string().max(128),
+  email: z.string().max(254),
+  display_name: z.string().max(200),
+  password: z.string().max(256),
+});
+
 export const sessionBody = z.strictObject({
   start: instantInput,
   end: instantInput.nullable(),

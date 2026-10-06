@@ -1,0 +1,78 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > applies every migration to an empty file database with the required pragmas 33ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > is idempotent: a second run applies nothing 28ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database whose applied migration checksum changed 30ms
+ ✓ tests/integration/bootstrap.test.ts > company configuration (the owner file) > creates the company calendar, its version with the holidays, and keeps the default policy, once 54ms
+ ✓ tests/integration/bootstrap.test.ts > company configuration (the owner file) > refuses a second calendar bootstrap and leaves every table as it was 34ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade) 29ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > rolls back a failing migration completely 23ms
+ ✓ tests/integration/migrations.test.ts > fresh SQLite migrations > also migrates an in-memory database 15ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 1 (initial): its checksum stays pinned 9ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 2 (ot_ledger): its checksum stays pinned 12ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 3 (day_entry_source): its checksum stays pinned 10ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 4 (submission): its checksum stays pinned 12ms
+ ✓ tests/integration/bootstrap.test.ts > company configuration (the owner file) > refuses to bootstrap a database that already has a user 77ms
+ ✓ tests/integration/bootstrap.test.ts > company configuration (the owner file) > rolls everything back when the file is invalid and names no value from it 33ms
+ ✓ tests/integration/bootstrap.test.ts > company configuration (the owner file) > rejects a file with a person in it or a field it does not know 35ms
+ ✓ tests/integration/bootstrap.test.ts > the setup token > stores only its hash, lives 60 minutes and is found nowhere in the database 43ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 5 (automatic_presentation): its checksum stays pinned 13ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 6 (timesheet_shares): its checksum stays pinned 11ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 7 (audit_access): its checksum stays pinned 11ms
+ ✓ tests/integration/migrations.test.ts > committed migrations > never edits migration 8 (bootstrap): its checksum stays pinned 13ms
+ ✓ tests/integration/bootstrap.test.ts > the setup token > issues a new token only while no administrator exists, and the new one replaces the old 88ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > applies 0002-0008, keeps every WP1 row unchanged and leaves a consistent, usable schema 167ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > creates the first administrator once, with the default policy, an audit event and no session 127ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated WP1 (version 1) database > also upgrades a version 2 database that already holds WP2 ledger rows 125ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > refuses an expired, a replayed and a wrong token alike and says nothing about why 83ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > creates exactly one administrator when two requests race with the same token 78ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces STRICT column types (no fractional minutes) 129ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > is refused for good once an administrator exists, even with a still valid token 81ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > is refused when the instance was never configured for setup 24ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > validates the body strictly and checks the password policy only for a valid token 85ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains the day-entry category source and leave kind (migration 0003) 138ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > answers many wrong tokens with 429 and then refuses even the right one for a while 111ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps policy/calendar versions, audit events and the payroll rhythm immutable 146ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > never consumes the token on a GET, whatever the query 85ms
+ ✓ tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > keeps the token out of logs, responses and audit payloads, and the password too 84ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every day entry, session and break to one owner through composite foreign keys 136ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > is the eighth migration and a fresh 1 to 8 database is consistent and a rerun applies nothing 59ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > rejects overlapping sessions of the same user in the database, even across work dates 155ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > upgrades a populated version 7 database without touching its rows 117ms
+ ✓ tests/integration/migrations.test.ts > upgrade from a populated version 3 database (accepted WP2 source 5fafeae) > applies 0004-0008 with unchanged rows and counts, a consistent schema and safe defaults 221ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > creates STRICT tables whose columns hold no secret, credential or image body 165ms
+ ✓ tests/integration/bootstrap.test.ts > migration 0008 > keeps the state row a single, undeletable row whose token cannot return once an administrator exists 94ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps timesheets.imported_unverified a 0/1 flag defaulting to 0 162ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > refuses UPDATE and DELETE on every immutable table 214ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > refuses DELETE on the mutable delivery history and the operations row 193ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > enforces the unique business keys 202ms
+ ✓ tests/integration/bootstrap.test.ts > CLI bootstrap --config > configures the instance, prints one token to the terminal and stores only its hash 433ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > binds every row to one owner through composite foreign keys 201ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > persists every revision ledger outcome, including the R4 pending variants 184ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps revisions, sign-offs and their links consistent 166ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > constrains attachments, revision files and the auto-image authorization 195ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > keeps job identity fixed, leases explicit and closed jobs closed 180ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > moves delivery attempts only forward and records an uncertain decision once 200ms
+ ✓ tests/integration/migrations.test.ts > schema invariants > holds exactly one operations row with automation inactive by default 163ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > adds the note flag (off) and the note text ("Automatic submission") with safe defaults 136ms
+ ✓ tests/integration/bootstrap.test.ts > CLI bootstrap --config > refuses a second run and prints no token 790ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > constrains the flag to 0/1 and the text to 1-120 characters on one line 146ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > keeps settings versions immutable with the new columns 150ms
+ ✓ tests/integration/migrations.test.ts > migration 0005 automatic presentation > upgrades a populated version 4 database: every row unchanged, new columns defaulted, constraints and triggers live 176ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > creates one STRICT table with the item columns, the one-active index and the immutability triggers 29ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > accepts every valid item set and refuses an empty, self, foreign-created or malformed share 264ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > keeps at most one active share per owner and grantee; revoked rows stay as history 245ms
+ ✓ tests/integration/bootstrap.test.ts > CLI bootstrap --config > rejects a bad file with exit 1 and writes nothing 1368ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > refuses DELETE, any change of identity or items, and a second revocation 266ms
+ ✓ tests/integration/migrations.test.ts > migration 0006 timesheet shares > upgrades a populated version 5 database: rows, triggers and unique keys unchanged, the new table empty and live 234ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > upgrades a populated version 6 database: rows unchanged, triggers kept, legacy attribution and the Review hint identical 243ms
+ ✓ tests/integration/migrations.test.ts > migration 0007 audit access marker > adds one nullable column to a fresh 1 to 7 database and keeps both append-only triggers 29ms
+ ✓ tests/integration/bootstrap.test.ts > CLI bootstrap --config > issues a fresh token with --new-token while no administrator exists 1124ms
+ ✓ tests/integration/bootstrap.test.ts > CLI bootstrap --config > runs in production while the development seed stays refused there 740ms
+
+ Test Files  2 passed (2)
+      Tests  69 passed (69)
+   Start at  17:35:41
+   Duration  6.95s (tests 85%, import 10%, transform 5%)
+

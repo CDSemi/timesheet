@@ -135,3 +135,8 @@ If any call is denied, stop and report.
 ## Results
 
 (Committer appends here.)
+
+Attempt 2 results: pre-HEAD a1dc01b; commit 37f1be240f6f8931105cb9af0ae6fa56f2dfb333;
+pushed to origin main, remote SHA 37f1be2 (same). Digest d6f223a7...dfd06; staged 33;
+WP4-T03.md left untracked. Exit codes: precommit 0, diff --check 0, JSON 0, validator 0,
+check_recovery 0, preflight 0. Blockers: none. Evidence: evidence/WP4-T02-FREEZE/.

@@ -35,6 +35,11 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   return data as T;
 }
 
+/** GET /api/auth/setup: whether the first-time Setup screen is on offer (configured, no administrator yet). */
+export interface SetupStatus {
+  available: boolean;
+}
+
 export interface User {
   id: string;
   email: string;

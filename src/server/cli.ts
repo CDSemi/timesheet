@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from 'node:fs';
 import { parseUtcInstant } from '../domain/instants.ts';
 import { systemClock } from './clock.ts';
 import { loadConfig, loadDeliveryConfig } from './config.ts';
@@ -6,6 +7,7 @@ import { migrate } from './db/migrations.ts';
 import { FileStore } from './files/fileStore.ts';
 import { createJobHandlers, runJobsOnce } from './jobs/runner.ts';
 import { seedSynthetic } from './seed.ts';
+import { applyBootstrapConfig, BootstrapError, type IssuedSetupToken, issueSetupToken, parseBootstrapConfig } from './services/bootstrap.ts';
 
 /*
  * Maintenance commands:
@@ -14,6 +16,11 @@ import { seedSynthetic } from './seed.ts';
  *   run-jobs --once --now <UTC instant>
  *            migrate, then run every due job once at the given instant (deterministic
  *            end-to-end tests; never in production, where the server's runner runs jobs)
+ *   bootstrap --config <file>
+ *            production bootstrap (WP4-T03): validate the owner's calendar/policy/payroll file, create the
+ *            company calendar once, then print a single-use setup token (60 minutes) to this terminal
+ *   bootstrap --new-token
+ *            print a fresh setup token for an instance that is configured but has no administrator yet
  */
 
 const RUN_JOBS_USAGE = 'Usage: cli.js run-jobs --once --now <YYYY-MM-DDTHH:MM:SSZ>';
@@ -63,8 +70,80 @@ async function runJobs(args: readonly string[]): Promise<number> {
   }
 }
 
+const BOOTSTRAP_USAGE = 'Usage: cli.js bootstrap --config <file> | cli.js bootstrap --new-token';
+const MAX_CONFIG_BYTES = 256 * 1024;
+
+/** `--config <file>` or `--new-token`, nothing else; null for any other argument list. */
+function parseBootstrapArgs(args: readonly string[]): { config: string } | { newToken: true } | null {
+  if (args.length === 2 && args[0] === '--config' && args[1] !== undefined && args[1] !== '') return { config: args[1] };
+  if (args.length === 1 && args[0] === '--new-token') return { newToken: true };
+  return null;
+}
+
+/** The one place the setup token is shown: this terminal (stdout), once. It is not stored, logged or audited. */
+function printSetupToken(issued: IssuedSetupToken): void {
+  console.log(`Setup token (shown once, valid until ${issued.expiresAt}; only its hash is stored):`);
+  console.log('');
+  console.log(`  ${issued.token}`);
+  console.log('');
+  console.log('Open the application and enter it on the Setup screen to create the first administrator.');
+  console.log('Do not paste it into a chat, ticket or log. If it expires unused: cli.js bootstrap --new-token');
+}
+
+/**
+ * Production bootstrap. Runs in production (unlike `seed`). The file is read and validated before any database
+ * file is opened, so a bad argument or file writes nothing; a refusal prints a reason that quotes no file value.
+ */
+async function bootstrap(args: readonly string[]): Promise<number> {
+  const parsed = parseBootstrapArgs(args);
+  if (parsed === null) {
+    console.error(BOOTSTRAP_USAGE);
+    return 2;
+  }
+  try {
+    const config = 'config' in parsed ? parseBootstrapConfig(readConfigFile(parsed.config)) : null;
+    const appConfig = loadConfig();
+    const db = openDatabase(appConfig.databasePath);
+    try {
+      migrate(db);
+      if (config !== null) {
+        const result = applyBootstrapConfig(db, systemClock, config);
+        // Counts only: no names, no dates from the file.
+        console.log(`Company calendar and default policy created (${result.holidays} holiday dates).`);
+      }
+      printSetupToken(issueSetupToken(db, systemClock));
+      return 0;
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    if (error instanceof BootstrapError) {
+      console.error(error.message);
+      return 1;
+    }
+    throw error;
+  }
+}
+
+function readConfigFile(path: string): unknown {
+  let text: string;
+  try {
+    if (statSync(path).size > MAX_CONFIG_BYTES) throw new BootstrapError('The configuration file is larger than 256 KiB');
+    text = readFileSync(path, 'utf8');
+  } catch (error) {
+    if (error instanceof BootstrapError) throw error;
+    throw new BootstrapError('The configuration file cannot be read');
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new BootstrapError('The configuration file is not valid JSON');
+  }
+}
+
 async function main(command: string | undefined, args: readonly string[]): Promise<number> {
   if (command === 'run-jobs') return runJobs(args);
+  if (command === 'bootstrap') return bootstrap(args);
   const config = loadConfig();
   const db = openDatabase(config.databasePath);
   try {
@@ -106,7 +185,7 @@ async function main(command: string | undefined, args: readonly string[]): Promi
         return 0;
       }
       default:
-        console.error('Usage: cli.js <migrate|seed|run-jobs>');
+        console.error('Usage: cli.js <migrate|seed|run-jobs|bootstrap>');
         return 2;
     }
   } finally {

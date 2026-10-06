@@ -1,0 +1,414 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/bootstrap.test.ts (23 tests | 22 failed) 2541ms
+   ❯ company configuration (the owner file) (5)
+     × creates the company calendar, its version with the holidays, and keeps the default policy, once 36ms
+     × refuses a second calendar bootstrap and leaves every table as it was 25ms
+     × refuses to bootstrap a database that already has a user 81ms
+     × rolls everything back when the file is invalid and names no value from it 28ms
+   ❯ the setup token (2)
+     × stores only its hash, lives 60 minutes and is found nowhere in the database 26ms
+     × issues a new token only while no administrator exists, and the new one replaces the old 26ms
+   ❯ POST /api/auth/bootstrap (8)
+     × creates the first administrator once, with the default policy, an audit event and no session 26ms
+     × refuses an expired, a replayed and a wrong token alike and says nothing about why 27ms
+     × is refused for good once an administrator exists, even with a still valid token 26ms
+     × is refused when the instance was never configured for setup 50ms
+     × validates the body strictly and checks the password policy only for a valid token 34ms
+     × answers many wrong tokens with 429 and then refuses even the right one for a while 25ms
+     × never consumes the token on a GET, whatever the query 32ms
+     × keeps the token out of logs, responses and audit payloads, and the password too 27ms
+   ❯ migration 0008 (3)
+     × is the eighth migration and a fresh 1 to 8 database is consistent and a rerun applies nothing 26ms
+     × upgrades a populated version 7 database without touching its rows 107ms
+     × keeps the state row a single, undeletable row whose token cannot return once an administrator exists 24ms
+   ❯ CLI bootstrap --config (5)
+     × configures the instance, prints one token to the terminal and stores only its hash 342ms
+     × refuses a second run and prints no token 357ms
+     × rejects a bad file with exit 1 and writes nothing 360ms
+     × issues a fresh token with --new-token while no administrator exists 380ms
+     × runs in production while the development seed stays refused there 449ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 22 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > company configuration (the owner file) > creates the company calendar, its version with the holidays, and keeps the default policy, once
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ tests/integration/bootstrap.test.ts:146:52
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > company configuration (the owner file) > refuses a second calendar bootstrap and leaves every table as it was
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ tests/integration/bootstrap.test.ts:170:37
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > company configuration (the owner file) > refuses to bootstrap a database that already has a user
+AssertionError: expected [Function] to throw error matching /already bootstrapped/ but got 'not implemented'
+
+- Expected:
+/already bootstrapped/
+
++ Received:
+"not implemented"
+
+ ❯ tests/integration/bootstrap.test.ts:181:85
+    179|     ).run();
+    180|     await createUser(db, clock, { email: '<email>', di…
+    181|     expect(() => applyBootstrapConfig(db, clock, parseBootstrapConfig(…
+       |                                                                                     ^
+    182|     expect(count('calendars')).toBe(1);
+    183|     expect(count('bootstrap_state')).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > company configuration (the owner file) > rolls everything back when the file is invalid and names no value from it
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/bootstrap.test.ts:192:108
+    190|     expect(count('calendar_versions')).toBe(0);
+    191|     expect(count('audit_events')).toBe(0);
+    192|     expect(db.prepare('SELECT count(*) FROM sqlite_master WHERE name =…
+       |                                                                                                            ^
+    193|     expect(count('bootstrap_state')).toBe(0);
+    194|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > the setup token > stores only its hash, lives 60 minutes and is found nowhere in the database
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ tests/integration/bootstrap.test.ts:205:37
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > the setup token > issues a new token only while no administrator exists, and the new one replaces the old
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:218:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > creates the first administrator once, with the default policy, an audit event and no session
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:230:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > refuses an expired, a replayed and a wrong token alike and says nothing about why
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:255:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > is refused for good once an administrator exists, even with a still valid token
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:278:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > is refused when the instance was never configured for setup
+AssertionError: expected { error: { code: 'not_found', …(1) } } to deeply equal { available: false }
+
+- Expected
++ Received
+
+  {
+-   "available": false,
++   "error": {
++     "code": "not_found",
++     "message": "Endpoint not found",
++   },
+  }
+
+ ❯ tests/integration/bootstrap.test.ts:296:57
+    294|
+    295|   it('is refused when the instance was never configured for setup', as…
+    296|     expect((await call('GET', '/api/auth/setup')).body).toEqual({ avai…
+       |                                                         ^
+    297|     const response = await call('POST', '/api/auth/bootstrap', setupBo…
+    298|     expect(response.status).toBe(403);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > validates the body strictly and checks the password policy only for a valid token
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:304:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > answers many wrong tokens with 429 and then refuses even the right one for a while
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:318:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > never consumes the token on a GET, whatever the query
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:332:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > POST /api/auth/bootstrap > keeps the token out of logs, responses and audit payloads, and the password too
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:345:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > migration 0008 > is the eighth migration and a fresh 1 to 8 database is consistent and a rerun applies nothing
+AssertionError: expected [ 1, 2, 3, 4, 5, 6, 7 ] to deeply equal [ 1, 2, 3, 4, 5, 6, 7, 8 ]
+
+- Expected
++ Received
+
+@@ -4,7 +4,6 @@
+    3,
+    4,
+    5,
+    6,
+    7,
+-   8,
+  ]
+
+ ❯ tests/integration/bootstrap.test.ts:383:62
+    381|
+    382|   it('is the eighth migration and a fresh 1 to 8 database is consisten…
+    383|     expect(MIGRATIONS.map((migration) => migration.version)).toEqual([…
+       |                                                              ^
+    384|     const target = fresh();
+    385|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > migration 0008 > upgrades a populated version 7 database without touching its rows
+AssertionError: expected { applied: [], version: 7 } to deeply equal { applied: [ 8 ], version: 8 }
+
+- Expected
++ Received
+
+  {
+-   "applied": [
+-     8,
+-   ],
+-   "version": 8,
++   "applied": [],
++   "version": 7,
+  }
+
+ ❯ tests/integration/bootstrap.test.ts:411:77
+    409|       await createUser(target, clock, { email: '<email>…
+    410|       const before = JSON.stringify(target.prepare('SELECT * FROM user…
+    411|       expect(migrate(target, MIGRATIONS, new Date('2026-10-05T19:00:00…
+       |                                                                             ^
+    412|       expect(JSON.stringify(target.prepare('SELECT * FROM users').all(…
+    413|       expect(target.pragma('integrity_check', { simple: true })).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > migration 0008 > keeps the state row a single, undeletable row whose token cannot return once an administrator exists
+Error: not implemented
+ ❯ parseBootstrapConfig src/server/services/bootstrap.ts:4:9
+      2| export const SETUP_TOKEN_TTL_SECONDS = 3600;
+      3| export function parseBootstrapConfig(_input: unknown): never {
+      4|   throw new Error('not implemented');
+       |         ^
+      5| }
+      6| export function applyBootstrapConfig(..._args: unknown[]): never {
+ ❯ configure tests/integration/bootstrap.test.ts:124:35
+ ❯ tests/integration/bootstrap.test.ts:423:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > configures the instance, prints one token to the terminal and stores only its hash
+AssertionError: Usage: cli.js <migrate|seed|run-jobs>
+: expected 2 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/integration/bootstrap.test.ts:453:40
+    451|   it('configures the instance, prints one token to the terminal and st…
+    452|     const result = run(['bootstrap', '--config', ownerFile()]);
+    453|     expect(result.code, result.stderr).toBe(0);
+       |                                        ^
+    454|     const tokens = result.stdout.match(/\b[A-Z2-7]{5}(?:-[A-Z2-7]{5}){…
+    455|     expect(tokens).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > refuses a second run and prints no token
+AssertionError: expected 2 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/integration/bootstrap.test.ts:474:55
+    472|   it('refuses a second run and prints no token', () => {
+    473|     const file = ownerFile();
+    474|     expect(run(['bootstrap', '--config', file]).code).toBe(0);
+       |                                                       ^
+    475|     const second = run(['bootstrap', '--config', file]);
+    476|     expect(second.code).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > rejects a bad file with exit 1 and writes nothing
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/integration/bootstrap.test.ts:483:25
+    481|   it('rejects a bad file with exit 1 and writes nothing', () => {
+    482|     const result = run(['bootstrap', '--config', ownerFile({ ...OWNER_…
+    483|     expect(result.code).toBe(1);
+       |                         ^
+    484|     expect(run(['bootstrap']).code).toBe(2);
+    485|     expect(run(['bootstrap', '--config']).code).toBe(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > issues a fresh token with --new-token while no administrator exists
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/integration/bootstrap.test.ts:495:52
+    493|
+    494|   it('issues a fresh token with --new-token while no administrator exi…
+    495|     expect(run(['bootstrap', '--new-token']).code).toBe(1);
+       |                                                    ^
+    496|     const file = ownerFile();
+    497|     const first = run(['bootstrap', '--config', file]).stdout.match(/[…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/22]⎯
+
+ FAIL  tests/integration/bootstrap.test.ts > CLI bootstrap --config > runs in production while the development seed stays refused there
+AssertionError: Usage: cli.js <migrate|seed|run-jobs>
+: expected 2 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/integration/bootstrap.test.ts:508:40
+    506|     const production = { NODE_ENV: 'production', APP_ORIGINS: 'https:/…
+    507|     const result = run(['bootstrap', '--config', ownerFile()], product…
+    508|     expect(result.code, result.stderr).toBe(0);
+       |                                        ^
+    509|     const seed = run(['seed'], { ...production, DATABASE_PATH: join(di…
+    510|     expect(seed.code).not.toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/22]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  22 failed | 1 passed (23)
+   Start at  17:28:22
+   Duration  4.03s (tests 65%, import 22%, transform 13%)
+

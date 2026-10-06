@@ -1,5 +1,5 @@
 import { type SubmitEvent, useCallback, useEffect, useState } from 'react';
-import { api, ApiRequestError, type ReceivedShare, type SharesResponse, type User } from './api.ts';
+import { api, ApiRequestError, type ReceivedShare, type SetupStatus, type SharesResponse, type User } from './api.ts';
 import { AdminScreen } from './AdminScreen.tsx';
 import { AppShell, useHashRoute } from './components/AppShell.tsx';
 import { shareEndedMessage } from './components/sharingModel.ts';
@@ -7,12 +7,19 @@ import { HistoryScreen } from './HistoryScreen.tsx';
 import { OtScreen } from './OtScreen.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
+import { SetupScreen } from './SetupScreen.tsx';
 import { SharedTimesheetScreen } from './SharedTimesheetScreen.tsx';
 import { TimesheetScreen } from './TimesheetScreen.tsx';
 
-/** Auth gate: the sign-in form, or the shell with its hash-routed screens. */
+/**
+ * Auth gate: the first-time Setup screen (only while the server says the instance is configured and has no
+ * administrator), the sign-in form, or the shell with its hash-routed screens.
+ */
 export function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  // 'unknown' until the server has answered; an unreadable answer reads as closed, so the sign-in form shows.
+  const [setup, setSetup] = useState<'unknown' | 'open' | 'closed'>('unknown');
+  const [justCreated, setJustCreated] = useState(false);
 
   useEffect(() => {
     api<{ user: User }>('GET', '/api/auth/me')
@@ -20,8 +27,37 @@ export function App() {
       .catch(() => setUser(null));
   }, []);
 
+  // Asked only while signed out, and again after a sign-out. A read: it never uses or shows the setup token.
+  useEffect(() => {
+    if (user !== null) return;
+    api<SetupStatus>('GET', '/api/auth/setup')
+      .then((status) => setSetup(status.available ? 'open' : 'closed'))
+      .catch(() => setSetup('closed'));
+  }, [user]);
+
   if (user === undefined) return <p className="muted page">Loading…</p>;
-  if (user === null) return <LoginForm onSignedIn={setUser} />;
+  if (user === null) {
+    if (setup === 'unknown') return <p className="muted page">Loading…</p>;
+    if (setup === 'open') {
+      return (
+        <SetupScreen
+          onCreated={() => {
+            setJustCreated(true);
+            setSetup('closed');
+          }}
+        />
+      );
+    }
+    return (
+      <LoginForm
+        created={justCreated}
+        onSignedIn={(signedIn) => {
+          setJustCreated(false);
+          setUser(signedIn);
+        }}
+      />
+    );
+  }
   return <SignedIn user={user} onSignedOut={() => setUser(null)} />;
 }
 
@@ -98,7 +134,7 @@ function SignedIn({ user, onSignedOut }: { user: User; onSignedOut: () => void }
   );
 }
 
-function LoginForm({ onSignedIn }: { onSignedIn: (user: User) => void }) {
+function LoginForm({ onSignedIn, created }: { onSignedIn: (user: User) => void; created: boolean }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +157,11 @@ function LoginForm({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   return (
     <main className="page narrow">
       <h1>Timesheet</h1>
+      {created && (
+        <p className="notice-ok" role="status">
+          Administrator created. Sign in with the new account.
+        </p>
+      )}
       <form className="card stack" onSubmit={submit}>
         <label>
           Email

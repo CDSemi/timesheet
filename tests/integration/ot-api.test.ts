@@ -509,6 +509,8 @@ describe('route inventory: no route posts a credit or debit', () => {
         'POST /api/admin/calendar/import/commit',
         'POST /api/admin/calendar/import/preview',
         'POST /api/admin/payroll-exceptions',
+        // The first administrator from the one-time setup token (WP4-T03): creates one account and its default policy, posts nothing.
+        'POST /api/auth/bootstrap',
         'POST /api/auth/login',
         'POST /api/auth/logout',
         'POST /api/clock/in',

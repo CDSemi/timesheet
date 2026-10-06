@@ -504,8 +504,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
      - WP4-T02-FREEZE attempt 1 made no commit. The coordinator wrote the WP4-T03 brief
        during the run and asked for it to be staged; a permission check denied that
        bundled `git add`. The call is not retried.
-     - Running: WP4-T02-FREEZE attempt 2 (same committer). It commits the original set;
-       `WP4-T03.md` stays untracked until the next freeze.
+     - WP4-T02-FREEZE is committed and pushed as 37f1be2 (attempt 2; 33 paths; all checks
+       0; `WP4-T03.md` left untracked for the next freeze).
+     - WP4-T03 is done (author-reported):
+       - changes: migration 0008, the bootstrap service, CLI `bootstrap` plus
+         `--new-token`, setup GET and POST (a generic 403 for every refusal), Setup
+         screen;
+       - tests: 24 tests, red then green; the mutation is killed; migrations to v8;
+       - e2e 129 passed; verify 1494 tests; digest 8a316cc0….
+
+       Follow-ups: docs/07, docs/03 and DEVELOPMENT.md, carried to WP4-DEC and T13.
+     - Running: WP4-T03-FREEZE (committer). The coordinator writes no file during the
+       commit.
      - Drafted for use after both PASS: the WP3-ACCREC brief (HANDOFF acceptance record)
        and the WP4-PLAN brief. The WP3-ACCEPT committer brief, STATE and NEXT_ACTION
        follow once WP3-ACCREC is done.
@@ -545,7 +555,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T02-FREEZE only.
+- Live processes: WP4-T03-FREEZE only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.
