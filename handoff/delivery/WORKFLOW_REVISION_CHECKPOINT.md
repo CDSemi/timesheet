@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = a1dc01b98f3c8be7478384adf73d9c194bf9a105 (WP4-T01-FREEZE).
+  - HEAD = origin/main = dd1422fbd8de53791e6fa9d6b8d8741f1f484488 (WP4-T08-FREEZE).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -579,7 +579,23 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        committer may not fix.
      - WP4-T08 attempt 2 removed the one EOF blank line; verify passes 1573 tests and
        the new digest is d70a03c2….
-     - Running: WP4-T08-FREEZE attempt 2 (same committer).
+     - WP4-T08-FREEZE attempt 2 committed and pushed dd1422f (25 paths; all checks 0).
+     - Coordinator decision: split WP4-T12.
+       - WP4-T12A runs now: drill stages 4–5 (upgrade of a WP3 v6 DB, old-binary
+         refusal, paired rollback restore with no automatic resend) and the upgrade test.
+       - Stage 6 (import no-op) and a full drill rerun stay in WP4-T12 after T09–T11.
+     - WP4-T12A is done (author-reported).
+       - Stage 4 upgrades a WP3 schema-6 DB to the latest schema once.
+       - Stage 5: the old binary refuses the upgraded DB. A new
+         `restore --keep-schema --confirm` restores the paired backup and holds the sends
+         it contains. The old server then makes 0 send attempts; a control copy without
+         the hold does send.
+       - Tests: 10 + 6, red-first; 3 mutations killed.
+       - Drill stages 1–5: 165 PASS. Verify: 1589 tests. Digest: e6bb47fd….
+       - Residual limit, carried to the T13 runbook and the audit: after a rollback the
+         old schema cannot hold jobs created later, so the old build must run with
+         `JOB_RUNNER=off` until reconciliation.
+     - Running: WP4-T12A-FREEZE.
      - Waiting on the owner:
        - F-1..F-3 for T09 and T10;
        - F-3, F-4, F-5 and F-6 for T07B and WP4-DEC;
@@ -593,22 +609,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP3-FIX2. It covers:
-     - WP3-RBC-01 and WP3-RBC-02;
-     - the sending-branch test;
-     - the docs/05 creation and setup bounds;
-     - the docs/10 H-Q1 decision;
-     - the WP4 carry item.
-  2. Then WP3-FIX2-FREEZE (its brief is written after FIX2) and WP3-REGATE2. The
-     briefs for WP3-REGATE2, WP3-RECHECK-BC2 and the WP3-RECHECK-A attempt 2 note are
-     ready.
-  3. Then two parallel rechecks: WP3-RECHECK-BC2, plus WP3-RECHECK-A attempt 2 as an
-     area-A delta.
-  4. Then the WP3 acceptance.
-  2. Then the WP3 acceptance record and the accept commit after the rechecks pass.
-  2. Then WP3 tasks with freezes, the package-final gate and fresh audits; WP4; WP5
-     (starts with independent acceptance); a concrete pilot packet. The real pilot stays
-     owner-controlled.
+  1. Record WP4-T12A-FREEZE.
+  2. After the owner's answers, in this order:
+     - WP4-T07B and WP4-DEC;
+     - T09, T10, T11;
+     - T12 (stage 6 and a full drill rerun);
+     - T13;
+     - WP4-GATE;
+     - two fresh audits;
+     - acceptance.
+  3. GOV-SKILL fix cycle after Q1–Q4.
+  4. Then WP5 (it starts with an independent acceptance) and a concrete pilot packet.
+     The real pilot stays owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its
@@ -623,7 +635,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). The last committed board is the
   recovery copy; the full WP2 history (tasks, attempts, decisions) is there and in git.
-- Live processes: WP4-T08-FREEZE (attempt 2) only.
+- Live processes: WP4-T12A-FREEZE (attempt 1) only.
 - Temporary work folder (owner, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`, outside
   Dropbox. Records before that date name `D:\timesheet-tmp\<task>`.
 - Usage/reset: not observable.

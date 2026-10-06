@@ -1,0 +1,64 @@
+
+ RUN  v5.0.2 <task-tmp>/scratch
+
+ ❯ tests/integration/upgrade.test.ts (10 tests | 2 failed) 895ms
+   ❯ upgrade of a populated schema 6 database to the latest schema (AC-11) (8)
+     × refuses a binary older than the database and changes nothing 11ms
+   ❯ a database at a schema newer than the binary (docs/07: an older binary never runs on a newer schema) (1)
+     × is refused before anything is applied or written 41ms
+ ❯ tests/integration/migrations.test.ts (45 tests | 1 failed) 6115ms
+   ❯ fresh SQLite migrations (6)
+     × refuses a database newer than the application (no silent downgrade) 47ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/migrations.test.ts > fresh SQLite migrations > refuses a database newer than the application (no silent downgrade)
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/integration/migrations.test.ts:152:31
+    150|     migrate(db);
+    151|     db.prepare("INSERT INTO schema_migrations VALUES (?, 'future', 'x'…
+    152|     expect(() => migrate(db)).toThrow(/newer than this application/);
+       |                               ^
+    153|   });
+    154|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/upgrade.test.ts > upgrade of a populated schema 6 database to the latest schema (AC-11) > refuses a binary older than the database and changes nothing
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/integration/upgrade.test.ts:170:47
+    168|   it('refuses a binary older than the database and changes nothing', (…
+    169|     const everything = capture(db);
+    170|     expect(() => migrate(db, WP3_MIGRATIONS)).toThrow(MigrationError);
+       |                                               ^
+    171|     expect(() => migrate(db, WP3_MIGRATIONS)).toThrow(/newer than this…
+    172|     expect(version(db)).toBe(LATEST);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/upgrade.test.ts > a database at a schema newer than the binary (docs/07: an older binary never runs on a newer schema) > is refused before anything is applied or written
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/integration/upgrade.test.ts:186:39
+    184|       database.prepare("INSERT INTO schema_migrations (version, name, …
+    185|       const everything = capture(database);
+    186|       expect(() => migrate(database)).toThrow(MigrationError);
+       |                                       ^
+    187|       expect(() => migrate(database)).toThrow(/newer than this applica…
+    188|       expect(capture(database, everything.shapes)).toEqual(everything);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 52 passed (55)
+   Start at  20:41:26
+   Duration  10.13s (tests 47%, import 40%, transform 13%)
+
+exit 1

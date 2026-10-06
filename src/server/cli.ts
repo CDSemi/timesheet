@@ -43,6 +43,10 @@ import { getOutboundStatus } from './services/operationsStatus.ts';
  *            isolated restore (WP4-T06): verify the manifest hashes, integrity and schema, copy the database and files
  *            into the new directory (<dir>/timesheet.db and <dir>/private-data), pause outbound delivery there and mark
  *            interrupted sends for explicit reconciliation; never writes the live DATABASE_PATH or DATA_DIR
+ *   restore --from <backup folder> --to <empty directory> --keep-schema [--confirm]
+ *            rollback restore (WP4-T12A): the same, but the schema is kept as the backup has it (no migration), so the
+ *            previous build can run on it. A schema older than the outbound pause cannot hold a pause: it is refused
+ *            (exit 2) without --confirm, and with it the backed-up send jobs are held and a warning is printed
  *   outbound resume [--confirm]
  *            without --confirm: print what a resume would release and exit 2; with --confirm: clear the outbound pause
  *            of DATABASE_PATH when no delivery attempt awaits its decision (audited system event), otherwise exit 1
@@ -211,27 +215,37 @@ async function backup(args: readonly string[]): Promise<number> {
   }
 }
 
-const RESTORE_USAGE = 'Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR>';
+const RESTORE_USAGE =
+  'Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR> [--keep-schema [--confirm]]';
 
-/** `--from <backup> --to <dir>` in either order, nothing else; null for any other argument list. */
-function parseRestoreArgs(args: readonly string[]): { from: string; to: string } | null {
-  if (args.length !== 4) return null;
+/**
+ * `--from <backup> --to <dir>` in either order, then optionally `--keep-schema` and, only with it, `--confirm`; null for
+ * any other argument list (`--confirm` alone is not a way to skip a check).
+ */
+function parseRestoreArgs(args: readonly string[]): { from: string; to: string; keepSchema: boolean; confirm: boolean } | null {
+  const flags = args.filter((arg) => arg === '--keep-schema' || arg === '--confirm');
+  const keepSchema = flags.includes('--keep-schema');
+  const confirm = flags.includes('--confirm');
+  if (flags.length !== new Set(flags).size || (confirm && !keepSchema)) return null;
+  const pairs = args.filter((arg) => arg !== '--keep-schema' && arg !== '--confirm');
+  if (pairs.length !== 4) return null;
   const values = new Map<string, string>();
-  for (let index = 0; index < args.length; index += 2) {
-    const flag = args[index];
-    const value = args[index + 1];
+  for (let index = 0; index < pairs.length; index += 2) {
+    const flag = pairs[index];
+    const value = pairs[index + 1];
     if ((flag !== '--from' && flag !== '--to') || values.has(flag) || value === undefined || value === '' || value.startsWith('--')) return null;
     values.set(flag, value);
   }
   const from = values.get('--from');
   const to = values.get('--to');
-  return from === undefined || to === undefined ? null : { from, to };
+  return from === undefined || to === undefined ? null : { from, to, keepSchema, confirm };
 }
 
 /**
  * Isolated restore (WP4-T06). Allowed in production: it reads the live configuration only to refuse a target inside
  * the live DATA_DIR or holding the live database, and never opens either. Prints counts and the manifest check only; a
  * refused target exits 2, a backup that fails a check (or a failed copy) exits 1 and leaves nothing behind.
+ * `--keep-schema` (WP4-T12A) restores for a rollback without migrating; see restore.ts.
  */
 async function restore(args: readonly string[]): Promise<number> {
   const parsed = parseRestoreArgs(args);
@@ -248,8 +262,17 @@ async function restore(args: readonly string[]): Promise<number> {
       liveDataDir: delivery.dataDir,
       liveDatabasePath: config.databasePath,
       clock: systemClock,
+      keepSchema: parsed.keepSchema,
+      confirmUnpaused: parsed.confirm,
     });
     console.log(JSON.stringify(restoreSummaryJson(result)));
+    if (result.pause === null) {
+      // stderr, so the JSON on stdout stays machine-readable.
+      console.error(
+        'WARNING: this schema predates the outbound pause, so the restored copy is NOT paused. Its backed-up send jobs are held and its interrupted sends await a decision, ' +
+          'but jobs created later are not held: start the previous build on it with JOB_RUNNER=off until the reconciliation is done.',
+      );
+    }
     return 0;
   } catch (error) {
     if (error instanceof RestoreError) {

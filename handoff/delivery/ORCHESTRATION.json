@@ -28,7 +28,7 @@
   "current_source_digest": "aab8b32cd69a8ba598dc91929290ec198107664e5bc42fb2616c7eb6da0a705d",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP4-T08-FREEZE",
+  "next_task_id": "WP4-T12A-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-02",
@@ -133,7 +133,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
+    "last_commit": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
     "unpushed": []
   },
   "owner_decisions": [
@@ -227,6 +227,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-05",
+      "basis": "WP4-PLAN T12 drill stages 4-5 (upgrade of a v6 DB from the accepted WP3 build 49651c8, old-binary refusal, paired pre-upgrade restore) depend only on T04-T07 (done); stage 6 (import no-op) needs T09, which waits for F-1..F-3; the single-writer chain should not idle while the owner answers are pending",
+      "decision": "Split WP4-T12: WP4-T12A runs now on dd1422f (drill stages 4-5, the upgrade test, and any minimal change needed for a safe paired rollback restore); the remaining WP4-T12 adds stage 6 after T09-T11 and reruns the whole drill, so later migrations (T07B, T09, T10) are covered. The upgrade target is the current latest schema, never a pinned number."
+    },
     {
       "date": "2026-10-05",
       "basis": "WP4-PLAN T08 content (reader, mapping, synthetic generator) does not depend on owner decisions F-1..F-3, which govern T09 (who imports, imported-period semantics) and T10 (opening balance); owner answers still pending",
@@ -9248,9 +9253,114 @@
       "id": "WP4-T08-FREEZE",
       "package": "WP4",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP4-T08"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aacd57ad0fa132aa7",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent aacd57ad0fa132aa7, self-reported claude-sonnet-5-5): no commit; digest 6fcd692d matched; 23 paths staged; precommit 0; git diff --cached --check rc=2 on a blank line at EOF in src/server/import/xlsxReader.ts:553 (source file, not an allowed fix); stopped correctly. Waiting for WP4-T08 attempt 2.",
+        "attempt 2 (same agent): committed and pushed dd1422f; the staged brief already contained the attempt-1 result note because it had been appended before the retry (harmless deviation)."
+      ],
+      "owned_paths": [
+        "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T08-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T08-FREEZE/01-stop.txt",
+        "handoff/delivery/evidence/WP4-T08-FREEZE/02-attempt2.txt",
+        "handoff/delivery/evidence/WP4-T08-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
+      "branch": "main",
+      "commit_sha": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
+      "pushed": true,
+      "source_digest": "d70a03c27dac714707b86d74c5fe28c2973622ea17ab979f563cd5cf9d86ad0b",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed (attempt 2): parent e1d97bd, remote SHA identical; 25 paths staged; digest d70a03c2 matched; Node v24.21.0; reference/, .claude/ and docs/ unchanged, no .xlsx staged, package.json diff adds only the two dependencies; precommit, diff --cached --check, JSON parse, validator, check_recovery and preflight all 0.",
+      "next_action": "None; WP4-T12A (upgrade/rollback drill, independent of F-1..F-6) on dd1422f."
+    },
+    {
+      "id": "WP4-T12A",
+      "package": "WP4",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP4-T08-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5160360becc27a13",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "scripts/container-drill.mjs",
+        "package.json",
+        "tests/integration/upgrade.test.ts",
+        "tests/support/schemaV6.ts",
+        "src/server/ops/backup.ts",
+        "src/server/ops/restore.ts",
+        "src/server/cli.ts",
+        "tests/integration/restore.test.ts",
+        "tests/integration/backup.test.ts",
+        "handoff/delivery/tasks/WP4-T12A.md",
+        "handoff/delivery/evidence/WP4-T12A"
+      ],
+      "prompt": "handoff/delivery/tasks/WP4-T12A.md",
+      "report": "handoff/delivery/tasks/WP4-T12A.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP4-T12A/01-red-upgrade-test-stub-fixture.txt",
+        "handoff/delivery/evidence/WP4-T12A/02-red-rollback-restore-tests-before-change.txt",
+        "handoff/delivery/evidence/WP4-T12A/03-green-upgrade-restore-backup-migrations-tests.txt",
+        "handoff/delivery/evidence/WP4-T12A/04-mutation-migrate-accepts-newer-schema.txt",
+        "handoff/delivery/evidence/WP4-T12A/05-mutation-restore-confirmation-check-removed.txt",
+        "handoff/delivery/evidence/WP4-T12A/06-mutation-restore-job-hold-removed.txt",
+        "handoff/delivery/evidence/WP4-T12A/07-drill-stages-1-5.txt",
+        "handoff/delivery/evidence/WP4-T12A/08-verify.txt",
+        "handoff/delivery/evidence/WP4-T12A/09-digest.txt",
+        "handoff/delivery/evidence/WP4-T12A/10-precommit-check.txt"
+      ],
+      "baseline_commit": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
+      "source_digest": "e6bb47fde0ad7960b9bf7fab5a02fc169f399224eb38a61d6b9ce7866d746bdd",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported: drill stage 4 builds schema 6 with the WP3 build (git archive 49651c8, flag --wp3; stages 4-5 skipped with an INFO line without it), takes the paired backup with the unchanged backup tool, mounts it in the current image, upgrades to the latest schema read from /api/ready (6 -> 10, 4 migrations in one transaction); restart and migrate apply nothing; integrity ok, FK empty, rows of 26 tables, balances and revisions equal. Stage 5: the WP3 migrate refuses (exit 1); new 'cli.js restore --keep-schema' skips migration and refuses (exit 2, unpaused_schema_unconfirmed) without --confirm; with --confirm it moves queued/leased outbound jobs to intervention (reconcile_after_restore), sending attempts to uncertain, writes a system audit event and warns to start the old build with JOB_RUNNER=off; WP3 server with runner ON in capture: 0 attempts, nothing captured; a control copy without the hold sends at once. Tests: upgrade.test.ts 10 (red against a stub fixture, green), restore.test.ts +6 (red 3, green); mutations kill 3, 2 and 5 tests. Drill stages 1-5: 165 PASS, 0 FAIL; project ts-wp4-t12a removed by name. verify exit 0 (70 files, 1589 tests, 0 deprecation lines); digest e6bb47fd (753 files); precommit over evidence 01-07 PASS. Deviations: new tests/support/schemaV6.ts; restore.ts exports schemaHasOutboundPause, restoreSummaryJson outbound.paused is now a boolean and RestoreResult.pause may be null (rollback mode only); CLI strings English-only. Residual limit (carried to T13 runbook and the audit): after a rollback the old schema cannot hold jobs created later (scans or operator actions); options (a) --confirm also clears the automation activation (business-state change, not done) or (b) keep JOB_RUNNER=off until reconciled (printed warning); held jobs can be released only by a current build, so a long rollback needs a later upgrade to reconcile.",
+      "next_action": "None; WP4-T12A-FREEZE."
+    },
+    {
+      "id": "WP4-T12A-FREEZE",
+      "package": "WP4",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP4-T12A"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -9264,28 +9374,25 @@
       "actual_model": null,
       "actual_source": null,
       "actual_effort": null,
-      "agent_id": "aacd57ad0fa132aa7",
+      "agent_id": null,
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
-      "attempt": 2,
-      "history": [
-        "attempt 1 (agent aacd57ad0fa132aa7, self-reported claude-sonnet-5-5): no commit; digest 6fcd692d matched; 23 paths staged; precommit 0; git diff --cached --check rc=2 on a blank line at EOF in src/server/import/xlsxReader.ts:553 (source file, not an allowed fix); stopped correctly. Waiting for WP4-T08 attempt 2."
-      ],
+      "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP4-T08-FREEZE.md",
-        "handoff/delivery/evidence/WP4-T08-FREEZE"
+        "handoff/delivery/tasks/WP4-T12A-FREEZE.md",
+        "handoff/delivery/evidence/WP4-T12A-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP4-T08-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP4-T12A-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP4-T12A-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "e1d97bd298949020d2c7aadb9733a1a8acc98ebb",
+      "baseline_commit": "dd1422fbd8de53791e6fa9d6b8d8741f1f484488",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
-      "source_digest": "d70a03c27dac714707b86d74c5fe28c2973622ea17ab979f563cd5cf9d86ad0b",
+      "source_digest": "e6bb47fde0ad7960b9bf7fab5a02fc169f399224eb38a61d6b9ce7866d746bdd",
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push WP4-T08 with pending handoff records."
+      "next_action": "Commit and push WP4-T12A with pending handoff records."
     },
     {
       "id": "WP3-RECFIX",

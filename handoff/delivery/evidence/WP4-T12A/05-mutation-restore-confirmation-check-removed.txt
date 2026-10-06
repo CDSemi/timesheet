@@ -1,0 +1,48 @@
+
+ RUN  v5.0.2 <task-tmp>/scratch
+
+ ❯ tests/integration/restore.test.ts (27 tests | 2 failed | 21 skipped) 1470ms
+   ❯ restore of a pre-pause backup without upgrading it (rollback) (6)
+     × refuses without the operator confirmation, writing nothing 50ms
+     × cli.js restore --keep-schema needs --confirm, warns on stderr, and prints counts only 517ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > refuses without the operator confirmation, writing nothing
+AssertionError: expected null to be an instance of RestoreError
+ ❯ tests/integration/restore.test.ts:980:19
+    978|       (caught: unknown) => caught,
+    979|     );
+    980|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    981|     expect((error as RestoreError).code).toBe('unpaused_schema_unconfi…
+    982|     expect((error as RestoreError).refusal).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > cli.js restore --keep-schema needs --confirm, warns on stderr, and prints counts only
+AssertionError: expected +0 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/integration/restore.test.ts:1078:28
+    1076|     const to = join(dir, 'cli-restored');
+    1077|     const refused = run(['restore', '--from', backupDir, '--to', to, '…
+    1078|     expect(refused.status).toBe(2);
+       |                            ^
+    1079|     expect(refused.stderr).toMatch(/unpaused_schema_unconfirmed/);
+    1080|     expect(refused.stdout).toBe('');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed | 21 skipped (27)
+   Start at  20:41:44
+   Duration  3.69s (tests 41%, import 38%, transform 21%)
+
+exit 1

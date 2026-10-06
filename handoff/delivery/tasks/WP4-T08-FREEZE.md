@@ -150,3 +150,8 @@ For attempt 2:
 
 - STOPPED, no commit. Pre-HEAD e1d97bd (= origin/main). Digest matched, 23 staged, scope checks OK, precommit rc=0.
 - git diff --cached --check rc=2: src/server/import/xlsxReader.ts:553 blank line at EOF (source file; not an allowed fix). Files remain staged.
+
+### Committer attempt 2 result
+
+- Pre-HEAD e1d97bd, post-HEAD dd1422f (commit dd1422fbd8de53791e6fa9d6b8d8741f1f484488), pushed to origin main, remote SHA identical.
+- Digest d70a03c2... match; 25 staged; scope checks OK; all checks rc=0. No blockers.

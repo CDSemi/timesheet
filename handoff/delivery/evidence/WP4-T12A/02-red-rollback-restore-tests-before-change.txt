@@ -1,0 +1,72 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/restore.test.ts (27 tests | 3 failed | 21 skipped) 1074ms
+   ❯ restore of a pre-pause backup without upgrading it (rollback) (6)
+     × refuses without the operator confirmation, writing nothing 44ms
+     × with the confirmation keeps schema 6, holds every backed-up outbound job and marks the interrupted send for a decision 45ms
+     × cli.js restore --keep-schema needs --confirm, warns on stderr, and prints counts only 394ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > refuses without the operator confirmation, writing nothing
+AssertionError: expected null to be an instance of RestoreError
+ ❯ tests/integration/restore.test.ts:980:19
+    978|       (caught: unknown) => caught,
+    979|     );
+    980|     expect(error).toBeInstanceOf(RestoreError);
+       |                   ^
+    981|     expect((error as RestoreError).code).toBe('unpaused_schema_unconfi…
+    982|     expect((error as RestoreError).refusal).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > with the confirmation keeps schema 6, holds every backed-up outbound job and marks the interrupted send for a decision
+AssertionError: expected { …(2) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "pausedAt": "2026-09-29T21:00:00Z",
+  "reason": "restored",
+}
+
+ ❯ tests/integration/restore.test.ts:989:26
+    987|     const to = join(dir, 'restored');
+    988|     const result = await restoreBackup(request(to, { keepSchema: true,…
+    989|     expect(result.pause).toBeNull();
+       |                          ^
+    990|     expect(result.schema).toEqual({ backup: WP3_SCHEMA_VERSION, restor…
+    991|     const restored = openDatabase(join(to, RESTORED_DATABASE_NAME));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > cli.js restore --keep-schema needs --confirm, warns on stderr, and prints counts only
+AssertionError: expected 'Usage: cli.js restore --from <backup …' to match /unpaused_schema_unconfirmed/
+
+- Expected:
+/unpaused_schema_unconfirmed/
+
++ Received:
+"Usage: cli.js restore --from <backup folder> --to <empty directory outside DATA_DIR>
+"
+
+ ❯ tests/integration/restore.test.ts:1079:28
+    1077|     const refused = run(['restore', '--from', backupDir, '--to', to, '…
+    1078|     expect(refused.status).toBe(2);
+    1079|     expect(refused.stderr).toMatch(/unpaused_schema_unconfirmed/);
+       |                            ^
+    1080|     expect(refused.stdout).toBe('');
+    1081|     expect(existsSync(to)).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 3 passed | 21 skipped (27)
+   Start at  20:34:44
+   Duration  2.87s (import 40%, tests 39%, transform 21%)
+
+exit 1 (expected: red)

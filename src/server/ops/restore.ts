@@ -63,6 +63,17 @@ import {
  * A failure removes exactly the files and folders this attempt created. Results carry counts only: no path, name,
  * address, storage key or hash is returned for printing (`restoreSummaryJson`).
  *
+ * Rollback mode (WP4-T12A, `keepSchema`): the copy is NOT migrated, so the previous build can run on it after an upgrade
+ * went wrong (docs/07: "Downgrade binaries only with compatible schema; otherwise restore the paired DB/files"). A schema
+ * older than the outbound pause (migration 10) has no pause columns, so the pause cannot be recorded, and the old state
+ * flow has no `preparing` -> `uncertain` transition. The restore then refuses unless the operator confirms
+ * (`confirmUnpaused`), and does what that schema allows: every queued or leased outbound job moves to intervention (the
+ * previous build's runner never claims it) and every `sending` attempt becomes `uncertain` for the owner's decision; a
+ * `preparing` attempt stays as it is, its job being held. Mail that went out after the snapshot is therefore never sent
+ * again by the restored copy. Jobs created later (by the scans or by an operator) are not held: the operator starts the
+ * previous build with JOB_RUNNER=off until reconciliation is done (printed as a warning by `cli.js restore`). A backup
+ * that has the pause behaves exactly as without the mode.
+ *
  * `resumeOutbound` clears the pause only while no attempt awaits its decision (uncertain without a decision), and
  * records a system audit event. Never run the source and the restored instance's queues at the same time (runbook).
  *
@@ -85,7 +96,13 @@ export const RESTORED_DATA_DIR = 'private-data';
 export const PAUSE_REASON_RESTORED = 'restored';
 
 /** A refusal of the target (exit 2): nothing was read from the backup or written. */
-export type RestoreRefusalCode = 'target_not_empty' | 'target_inside_data_dir' | 'target_is_live' | 'target_inside_backup' | 'target_unusable';
+export type RestoreRefusalCode =
+  | 'target_not_empty'
+  | 'target_inside_data_dir'
+  | 'target_is_live'
+  | 'target_inside_backup'
+  | 'target_unusable'
+  | 'unpaused_schema_unconfirmed';
 
 /** A backup that failed a check, or a copy that could not be completed (exit 1); nothing remains in the target. */
 export type RestoreFaultCode =
@@ -108,6 +125,8 @@ const MESSAGES: Record<RestoreRefusalCode | RestoreFaultCode, string> = {
   target_is_live: 'The restore target must not hold the live database or the live private data directory',
   target_inside_backup: 'The restore target must be outside the backup folder',
   target_unusable: 'The restore target cannot be created or is not a directory',
+  unpaused_schema_unconfirmed:
+    'The backup schema predates the outbound pause, so the restored copy cannot be paused; its backed-up send jobs are held, but confirm that the previous build will be started with JOB_RUNNER=off until reconciliation',
   backup_unreadable: 'The backup folder or its manifest cannot be read',
   manifest_invalid: 'The backup manifest is not a valid timesheet backup manifest',
   schema_newer: 'The backup has a newer database schema than this application',
@@ -122,7 +141,14 @@ const MESSAGES: Record<RestoreRefusalCode | RestoreFaultCode, string> = {
   write_failed: 'The restore could not be written to the target',
 };
 
-const REFUSALS: ReadonlySet<string> = new Set<RestoreRefusalCode>(['target_not_empty', 'target_inside_data_dir', 'target_is_live', 'target_inside_backup', 'target_unusable']);
+const REFUSALS: ReadonlySet<string> = new Set<RestoreRefusalCode>([
+  'target_not_empty',
+  'target_inside_data_dir',
+  'target_is_live',
+  'target_inside_backup',
+  'target_unusable',
+  'unpaused_schema_unconfirmed',
+]);
 
 export class RestoreError extends Error {
   readonly code: RestoreRefusalCode | RestoreFaultCode;
@@ -149,6 +175,10 @@ export interface RestoreRequest {
   /** The live database (DATABASE_PATH of the running configuration); never opened or written. */
   liveDatabasePath: string;
   clock: Clock;
+  /** Rollback mode: restore the schema as the backup has it (no migration); see the module comment. */
+  keepSchema?: boolean;
+  /** Required with `keepSchema` when the backup's schema has no outbound pause: the operator accepts the limits. */
+  confirmUnpaused?: boolean;
 }
 
 export interface RestoreReconciliation {
@@ -162,7 +192,8 @@ export interface RestoreResult {
   dataDir: string;
   manifest: BackupManifest;
   schema: { backup: number; restored: number; applied: number[] };
-  pause: { pausedAt: string; reason: string };
+  /** Null only in rollback mode on a schema without the outbound pause. */
+  pause: { pausedAt: string; reason: string } | null;
   reconciliation: RestoreReconciliation;
   outbound: OutboundCounts;
   counts: { users: number; revisions: number; ledgerEntries: number; attachments: number };
@@ -357,17 +388,38 @@ function fsyncFile(path: string): void {
 
 /* ------------------------------------------------------------------------------ reconciliation ---- */
 
+/** The schema version that introduced the outbound pause (found by its migration name, not pinned). */
+const OUTBOUND_PAUSE_SCHEMA_VERSION = MIGRATIONS.find((migration) => migration.name === 'outbound_pause')?.version ?? 0;
+
+/** True when a database at `schemaVersion` has the outbound pause columns and the matching attempt state flow. */
+export const schemaHasOutboundPause = (schemaVersion: number): boolean => OUTBOUND_PAUSE_SCHEMA_VERSION > 0 && schemaVersion >= OUTBOUND_PAUSE_SCHEMA_VERSION;
+
+/** The counts of getOutboundStatus that do not need the pause columns (a schema older than the pause has none). */
+function outboundCountsWithoutPause(db: Db): OutboundCounts {
+  const kindList = OUTBOUND_JOB_KINDS.map(() => '?').join(', ');
+  const jobs = (state: string, extra: string, ...params: string[]): number =>
+    Number(db.prepare(`SELECT count(*) FROM jobs WHERE kind IN (${kindList}) AND state = '${state}'${extra}`).pluck().get(...OUTBOUND_JOB_KINDS, ...params));
+  return {
+    awaitingDecision: Number(db.prepare("SELECT count(*) FROM delivery_attempts WHERE state = 'uncertain' AND decision IS NULL").pluck().get()),
+    queuedSendJobs: jobs('queued', ''),
+    heldSendJobs: jobs('intervention', ' AND last_error = ?', RECONCILE_AFTER_RESTORE),
+  };
+}
+
 /**
  * Sets the outbound pause and marks what a restored copy cannot know the outcome of (see the module comment, step 5).
  * One IMMEDIATE transaction; audited as a system event with counts only.
  */
 export function reconcileRestoredCopy(db: Db, clock: Clock, backup: { createdAt: string; schemaVersion: number }): RestoreReconciliation {
+  // A schema older than the pause (rollback mode, never migrated) has no pause columns and no preparing -> uncertain
+  // transition. The copy's own version decides: a default restore has been migrated before it gets here.
+  const pauseSupported = schemaHasOutboundPause(Number(db.prepare('SELECT coalesce(max(version), 0) FROM schema_migrations').pluck().get()));
   return writeTransaction(db, (): RestoreReconciliation => {
     const now = nowUtc(clock);
-    const before = getOutboundPause(db);
+    const before = pauseSupported ? getOutboundPause(db) : null;
     const open = db
       .prepare<[], { id: string; job_id: string; state: 'preparing' | 'sending' }>(
-        "SELECT id, job_id, state FROM delivery_attempts WHERE state IN ('preparing', 'sending') ORDER BY started_at, id",
+        `SELECT id, job_id, state FROM delivery_attempts WHERE state IN (${pauseSupported ? "'preparing', 'sending'" : "'sending'"}) ORDER BY started_at, id`,
       )
       .all();
     const markAttempt = db.prepare("UPDATE delivery_attempts SET state = 'uncertain', provider_response = ?, updated_at = ? WHERE id = ? AND state = ?");
@@ -379,7 +431,8 @@ export function reconcileRestoredCopy(db: Db, clock: Clock, backup: { createdAt:
       `UPDATE jobs SET state = 'intervention', lease_owner = NULL, lease_expires_at = NULL, last_error = ?, updated_at = ?
         WHERE id = ? AND state IN ('queued', 'leased')`,
     );
-    // Every queued or leased outbound job of the backup, which includes the jobs of the attempts marked above.
+    // Every queued or leased outbound job of the backup, which includes the jobs of the attempts marked above (on a
+    // schema without the pause, a `preparing` attempt keeps its state while its job is held below).
     const toHold = new Set<string>(open.map((attempt) => attempt.job_id));
     for (const job of db
       .prepare<string[], { id: string }>(`SELECT id FROM jobs WHERE state IN ('queued', 'leased') AND kind IN (${kindList})`)
@@ -389,7 +442,9 @@ export function reconcileRestoredCopy(db: Db, clock: Clock, backup: { createdAt:
     let sendJobsHeld = 0;
     for (const jobId of [...toHold].sort()) sendJobsHeld += holdJob.run(RECONCILE_AFTER_RESTORE, now, jobId).changes;
 
-    db.prepare('UPDATE operations_state SET outbound_paused_at = ?, outbound_paused_reason = ? WHERE id = 1').run(now, PAUSE_REASON_RESTORED);
+    if (pauseSupported) {
+      db.prepare('UPDATE operations_state SET outbound_paused_at = ?, outbound_paused_reason = ? WHERE id = 1').run(now, PAUSE_REASON_RESTORED);
+    }
     recordAudit(db, clock, {
       actorUserId: null,
       ownerUserId: null,
@@ -398,8 +453,9 @@ export function reconcileRestoredCopy(db: Db, clock: Clock, backup: { createdAt:
       entityId: '1',
       before: { outbound_paused_at: before?.pausedAt ?? null, outbound_paused_reason: before?.reason ?? null },
       after: {
-        outbound_paused_at: now,
-        outbound_paused_reason: PAUSE_REASON_RESTORED,
+        outbound_paused_at: pauseSupported ? now : null,
+        outbound_paused_reason: pauseSupported ? PAUSE_REASON_RESTORED : null,
+        outbound_pause_supported: pauseSupported,
         backup_created_at: backup.createdAt,
         backup_schema_version: backup.schemaVersion,
         attempts_marked_uncertain: attemptsMarkedUncertain,
@@ -670,6 +726,10 @@ export async function restoreBackup(request: RestoreRequest): Promise<RestoreRes
   // 2. Verify the backup in place (read only).
   const manifest = readManifest(backup);
   if (manifest.schema_version > MIGRATIONS.length) throw new RestoreError('schema_newer');
+  // Rollback mode keeps the schema; without the pause columns that needs the operator's confirmation, before any write.
+  const keepSchema = request.keepSchema === true;
+  const pauseSupported = !keepSchema || schemaHasOutboundPause(manifest.schema_version);
+  if (!pauseSupported && request.confirmUnpaused !== true) throw new RestoreError('unpaused_schema_unconfirmed');
   await verifyFile(join(backup, BACKUP_DATABASE_NAME), manifest.database, DATABASE_CODES);
   for (const file of manifest.files) await verifyFile(join(backup, BACKUP_FILES_DIR, file.storage_key), file, FILE_CODES);
 
@@ -711,18 +771,20 @@ export async function restoreBackup(request: RestoreRequest): Promise<RestoreRes
 
     inspectCopy(databasePath, manifest);
     db = openDatabase(databasePath);
-    let applied: number[];
-    try {
-      applied = migrate(db, MIGRATIONS, request.clock.now()).applied;
-    } catch (error) {
-      throw new RestoreError('schema_mismatch', { cause: error });
+    let applied: number[] = [];
+    if (!keepSchema) {
+      try {
+        applied = migrate(db, MIGRATIONS, request.clock.now()).applied;
+      } catch (error) {
+        throw new RestoreError('schema_mismatch', { cause: error });
+      }
     }
     const reconciliation = reconcileRestoredCopy(db, request.clock, { createdAt: manifest.created_at, schemaVersion: manifest.schema_version });
     if (db.pragma('integrity_check', { simple: true }) !== 'ok') throw new RestoreError('integrity_check_failed');
     if ((db.pragma('foreign_key_check') as unknown[]).length > 0) throw new RestoreError('foreign_key_violation');
-    const pause = getOutboundPause(db);
-    if (pause === null) throw new RestoreError('write_failed');
-    const status = getOutboundStatus(db);
+    const pause = pauseSupported ? getOutboundPause(db) : null;
+    if (pauseSupported && pause === null) throw new RestoreError('write_failed');
+    const status = pauseSupported ? getOutboundStatus(db) : outboundCountsWithoutPause(db);
     const result: RestoreResult = {
       databasePath,
       dataDir,
@@ -755,7 +817,7 @@ export function restoreSummaryJson(result: RestoreResult) {
     outcome: 'restored' as const,
     manifest: { verified: true as const, ...manifestSummary(result.manifest) },
     schema: { backup: result.schema.backup, restored: result.schema.restored, applied: result.schema.applied },
-    outbound: { paused: true as const, reason: result.pause.reason },
+    outbound: { paused: result.pause !== null, reason: result.pause?.reason ?? null },
     reconciliation: {
       attempts_marked_uncertain: result.reconciliation.attemptsMarkedUncertain,
       send_jobs_held: result.reconciliation.sendJobsHeld,

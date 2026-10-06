@@ -42,6 +42,7 @@ import { getBalance } from '../../src/server/services/ledger.ts';
 import { getOutboundStatus, outboundStatusJson } from '../../src/server/services/operationsStatus.ts';
 import { saveSignature } from '../../src/server/services/signatures.ts';
 import { makePng } from '../support/pdfText.ts';
+import { buildSchemaV6, type SchemaV6Fixture, WP3_SCHEMA_VERSION } from '../support/schemaV6.ts';
 import { createTestContext, la, LA, MutableClock, type TestContext } from '../support/testApp.ts';
 
 /*
@@ -924,5 +925,170 @@ describe('cli.js restore and cli.js outbound resume', () => {
     } finally {
       check.close();
     }
+  });
+});
+
+/*
+ * WP4-T12A: restore of a backup whose schema predates the outbound pause (migration 10), without upgrading it, so that the
+ * previous build can run on it (rollback after an upgrade; docs/07 "Downgrade binaries only with compatible schema;
+ * otherwise restore the paired DB/files ... accepted mail must not be automatically sent again").
+ *
+ * A schema without the pause columns cannot hold a persistent pause. The restore therefore refuses unless the operator
+ * confirms that, and then does everything the schema allows: it never migrates the copy, holds every queued or leased
+ * outbound job of the backup (the previous build never claims a job in intervention) and marks every `sending` attempt
+ * uncertain for the owner's explicit decision (AC-08). Counts and the manifest check are printed, never a path or person.
+ */
+describe('restore of a pre-pause backup without upgrading it (rollback)', () => {
+  let dir: string;
+  let fixture: SchemaV6Fixture;
+  let backupDir: string;
+  let source: Db;
+  const clock = new MutableClock(LATER);
+
+  beforeAll(async () => {
+    dir = scratch('timesheet-t12a-rollback-');
+    fixture = await buildSchemaV6(dir);
+    backupDir = (await createBackup({ databasePath: fixture.databasePath, dataDir: fixture.dataDir, targetDir: join(dir, 'backups'), clock: new MutableClock(NOW) })).directory;
+    source = openDatabase(fixture.databasePath);
+  });
+
+  afterAll(() => {
+    source.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const request = (toDir: string, options: { keepSchema?: boolean; confirmUnpaused?: boolean } = {}) => ({
+    fromDir: backupDir,
+    toDir,
+    liveDataDir: fixture.dataDir,
+    liveDatabasePath: fixture.databasePath,
+    clock,
+    ...options,
+  });
+
+  it('backs up the old schema read-only (version 6 in the manifest, source untouched)', () => {
+    expect(JSON.parse(readFileSync(join(backupDir, MANIFEST_FILE_NAME), 'utf8')).schema_version).toBe(WP3_SCHEMA_VERSION);
+    expect(source.prepare('SELECT max(version) FROM schema_migrations').pluck().get()).toBe(WP3_SCHEMA_VERSION);
+  });
+
+  it('refuses without the operator confirmation, writing nothing', async () => {
+    const to = join(dir, 'unconfirmed');
+    const error = await restoreBackup(request(to, { keepSchema: true })).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(RestoreError);
+    expect((error as RestoreError).code).toBe('unpaused_schema_unconfirmed');
+    expect((error as RestoreError).refusal).toBe(true);
+    expect(existsSync(to)).toBe(false);
+  });
+
+  it('with the confirmation keeps schema 6, holds every backed-up outbound job and marks the interrupted send for a decision', async () => {
+    const to = join(dir, 'restored');
+    const result = await restoreBackup(request(to, { keepSchema: true, confirmUnpaused: true }));
+    expect(result.pause).toBeNull();
+    expect(result.schema).toEqual({ backup: WP3_SCHEMA_VERSION, restored: WP3_SCHEMA_VERSION, applied: [] });
+    const restored = openDatabase(join(to, RESTORED_DATABASE_NAME));
+    try {
+      expect(restored.prepare('SELECT max(version) FROM schema_migrations').pluck().get()).toBe(WP3_SCHEMA_VERSION);
+      expect(restored.pragma('user_version', { simple: true })).toBe(WP3_SCHEMA_VERSION);
+      expect(restored.pragma('integrity_check', { simple: true })).toBe('ok');
+      expect(restored.pragma('foreign_key_check')).toEqual([]);
+      // No column of a later migration appeared: the previous build runs on it unchanged.
+      expect(restored.prepare("SELECT count(*) FROM pragma_table_info('operations_state') WHERE name LIKE 'outbound_paused%'").pluck().get()).toBe(0);
+      expect(businessState(restored)).toEqual(businessState(source));
+      expect(count(restored, 'SELECT count(*) FROM timesheet_revisions')).toBe(2);
+
+      const sends = restored
+        .prepare<[], { revision_id: string | null; business_key: string; kind: string; state: string; attempts: number; last_error: string | null }>(
+          "SELECT revision_id, business_key, kind, state, attempts, last_error FROM jobs WHERE kind IN ('send_email', 'send_reminder') ORDER BY created_at, id",
+        )
+        .all();
+      expect(Object.fromEntries(sends.map((job) => [job.revision_id ?? job.business_key, [job.state, job.attempts, job.last_error]]))).toEqual({
+        [fixture.revisions.sending]: ['intervention', 1, RECONCILE_AFTER_RESTORE],
+        [fixture.revisions.queued]: ['intervention', 0, RECONCILE_AFTER_RESTORE],
+        [fixture.reminderBusinessKey]: ['intervention', 0, RECONCILE_AFTER_RESTORE],
+      });
+      // Nothing is claimable by the previous build's runner: no outbound job is queued or leased.
+      expect(count(restored, "SELECT count(*) FROM jobs WHERE kind IN ('send_email', 'send_reminder') AND state IN ('queued', 'leased')")).toBe(0);
+      // Non-outbound work is untouched: the PDF jobs stay queued.
+      expect(count(restored, "SELECT count(*) FROM jobs WHERE kind = 'render_pdf' AND state = 'queued'")).toBe(2);
+      expect(attemptsOf(restored).map((attempt) => [attempt.revision_id, attempt.state, attempt.decision, attempt.provider_response])).toEqual([
+        [fixture.revisions.sending, 'uncertain', null, RECONCILE_AFTER_RESTORE],
+      ]);
+      expect(count(restored, "SELECT count(*) FROM audit_events WHERE operation = 'operations.restore' AND actor_user_id IS NULL")).toBe(1);
+      // The source is untouched.
+      expect(sendJobs(source).map((job) => job.state).sort()).toEqual(['leased', 'queued', 'queued']);
+      expect(attemptsOf(source).map((attempt) => attempt.state)).toEqual(['sending']);
+    } finally {
+      restored.close();
+    }
+
+    const summary = restoreSummaryJson(result);
+    expect(summary).toEqual({
+      outcome: 'restored',
+      manifest: { verified: true, schema_version: WP3_SCHEMA_VERSION, files: 1, signatures: 1, pdfs: 0, database_bytes: expect.any(Number) },
+      schema: { backup: WP3_SCHEMA_VERSION, restored: WP3_SCHEMA_VERSION, applied: [] },
+      outbound: { paused: false, reason: null },
+      reconciliation: { attempts_marked_uncertain: 1, send_jobs_held: 3, queued_send_jobs: 0, awaiting_decision: 1 },
+      counts: { users: 3, revisions: 2, ledger_entries: count(source, 'SELECT count(*) FROM ot_ledger'), attachments: 1 },
+    });
+    const text = JSON.stringify(summary);
+    for (const value of ['@', to, backupDir, 'Example']) expect(text.includes(value), value).toBe(false);
+  });
+
+  it('is the same as a normal restore when the backup already has the pause: paused, no confirmation needed', async () => {
+    const t = await createTestContext(NOW);
+    try {
+      const backup = await createBackup({ databasePath: t.config.databasePath, dataDir: dataDirOf(t), targetDir: join(dir, 'current-backups'), clock: t.clock });
+      const to = join(dir, 'restored-current');
+      const result = await restoreBackup({ fromDir: backup.directory, toDir: to, liveDataDir: dataDirOf(t), liveDatabasePath: t.config.databasePath, clock, keepSchema: true });
+      expect(result.pause).toEqual({ pausedAt: LATER, reason: 'restored' });
+      expect(restoreSummaryJson(result).outbound).toEqual({ paused: true, reason: 'restored' });
+    } finally {
+      t.close();
+    }
+  });
+
+  it('a normal restore of the same backup still upgrades it and pauses (the default is unchanged)', async () => {
+    const result = await restoreBackup(request(join(dir, 'restored-upgraded')));
+    expect(result.schema).toEqual({
+      backup: WP3_SCHEMA_VERSION,
+      restored: LATEST,
+      applied: MIGRATIONS.filter((migration) => migration.version > WP3_SCHEMA_VERSION).map((migration) => migration.version),
+    });
+    expect(result.pause).toEqual({ pausedAt: LATER, reason: 'restored' });
+  });
+
+  it('cli.js restore --keep-schema needs --confirm, warns on stderr, and prints counts only', () => {
+    const env = {
+      ...process.env,
+      NODE_ENV: 'production',
+      APP_ORIGINS: 'https://timesheet.example.invalid',
+      PUBLIC_BASE_URL: 'https://timesheet.example.invalid',
+      DATABASE_PATH: fixture.databasePath,
+      DATA_DIR: fixture.dataDir,
+    };
+    const run = (args: string[]) => {
+      const result = spawnSync(process.execPath, ['src/server/cli.ts', ...args], { cwd: repo, encoding: 'utf8', env });
+      return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+    };
+    const to = join(dir, 'cli-restored');
+    const refused = run(['restore', '--from', backupDir, '--to', to, '--keep-schema']);
+    expect(refused.status).toBe(2);
+    expect(refused.stderr).toMatch(/unpaused_schema_unconfirmed/);
+    expect(refused.stdout).toBe('');
+    expect(existsSync(to)).toBe(false);
+    // --confirm alone is a usage error, not a way to skip a check.
+    expect(run(['restore', '--from', backupDir, '--to', to, '--confirm']).status).toBe(2);
+    expect(existsSync(to)).toBe(false);
+    const ok = run(['restore', '--from', backupDir, '--to', to, '--keep-schema', '--confirm']);
+    expect(ok.status).toBe(0);
+    expect(ok.stderr).toMatch(/WARNING/);
+    expect(ok.stderr).toMatch(/JOB_RUNNER=off/);
+    const printed = JSON.parse(ok.stdout) as Record<string, unknown>;
+    expect(Object.keys(printed).sort()).toEqual(['counts', 'manifest', 'outbound', 'outcome', 'reconciliation', 'schema']);
+    expect(printed).toMatchObject({ outcome: 'restored', schema: { backup: WP3_SCHEMA_VERSION, restored: WP3_SCHEMA_VERSION, applied: [] }, outbound: { paused: false, reason: null } });
+    for (const value of [to, backupDir, fixture.dataDir, '@']) expect(`${ok.stdout}${ok.stderr}`.includes(value), value).toBe(false);
   });
 });

@@ -16,9 +16,26 @@
 // releases only a job created after the restore, nothing from the backup goes out, and only
 // `cli.js outbound release --job <id>` and `--all` (with `--confirm`) send the held jobs, each exactly once.
 //
-// Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--keep]
+// Stage 4 (WP4-T12A, upgrade): with the previous build (the accepted WP3 source, prepared by the operator, see --wp3) a
+// schema-N database is built on the host (`cli.js migrate`, `cli.js seed`, synthetic sessions, a second signature file,
+// two signed-off periods with queued PDF and send jobs). The CURRENT build's backup tool takes the paired pre-upgrade
+// backup of that older schema without migrating it, and the backup is verified on the host. The old data is mounted into
+// the current image: the migrations run once, up to the image's own latest schema (read from /api/ready, never pinned), a
+// restart applies nothing, and integrity_check, foreign_key_check, every old row, the OT balances and the revision counts
+// equal the pre-upgrade values (the upgraded runner then captures the queued mail, as a real upgraded instance would).
+// Stage 5 (WP4-T12A, rollback): the previous build's `cli.js migrate` on the upgraded database refuses (exit code recorded);
+// the paired backup is restored with `cli.js restore --keep-schema` into an empty host directory (refused without
+// --confirm, because a schema older than the outbound pause cannot hold a pause; with it every queued send job is held and
+// the schema is not migrated); the previous build starts on the restored data with its runner ON in capture mode, and no
+// send attempt appears (balances, counts and health checked). A control copy of the same backup without the hold shows that
+// the previous build would otherwise send the queued mail.
+//
+// Usage: npm run drill:container -- --work <empty host directory outside the repository> [--project <name>] [--wp3 <dir>] [--keep]
 //   --work     host directory for the drill data, the env file and the raw logs (created if missing; nothing in it is deleted)
 //   --project  Compose project name; every container, volume and network of the drill carries it (default timesheet-drill)
+//   --wp3      the previous build for stages 4 and 5, prepared outside the repository and outside --work's data directories:
+//              `git archive 49651c8 | tar -x -C <dir>`, then `npm ci` and `npm run build:server` inside <dir> (git is only read).
+//              Without it the drill runs stages 1-3 only and says so.
 //   --keep     leave the container running (default: `docker compose down -v` by project name at the end)
 // Needs Docker and a free loopback port. Everything is synthetic (example.invalid, random per-run passwords); the
 // published port is loopback only; nothing is pushed to or pulled from any registry except the pinned base image.
@@ -46,11 +63,25 @@ function option(name, fallback) {
 const keep = args.includes('--keep');
 const workOption = option('work', undefined);
 if (workOption === undefined) {
-  console.error('Usage: npm run drill:container -- --work <host directory outside the repository> [--project <name>] [--keep]');
+  console.error('Usage: npm run drill:container -- --work <host directory outside the repository> [--project <name>] [--wp3 <previous build directory>] [--keep]');
   process.exit(2);
 }
 const work = resolve(workOption);
 const project = option('project', 'timesheet-drill');
+const wp3Option = option('wp3', undefined);
+const previousBuild = wp3Option === undefined ? null : resolve(wp3Option);
+if (previousBuild !== null) {
+  if (previousBuild.toLowerCase().startsWith(resolve(repo).toLowerCase())) {
+    console.error('--wp3 must be outside the repository');
+    process.exit(2);
+  }
+  for (const needed of [join('dist', 'server', 'cli.js'), join('dist', 'server', 'index.js'), join('node_modules', 'better-sqlite3')]) {
+    if (!existsSync(join(previousBuild, needed))) {
+      console.error(`--wp3 is not a prepared build (missing ${needed}): git archive the accepted source, then npm ci and npm run build:server there`);
+      process.exit(2);
+    }
+  }
+}
 if (!/^[a-z0-9][a-z0-9_-]*$/.test(project)) {
   console.error('--project must be a lower-case Compose project name');
   process.exit(2);
@@ -677,6 +708,425 @@ async function stageThree({ backupName, cookie, adminPassword }) {
   check('only the compose service container of the project runs (one-off containers are gone)', leftovers.length === 1);
 }
 
+/* ------------------------------------------------------------------------------------- stages 4 and 5 ---- */
+
+/*
+ * Stage 4 (upgrade) and stage 5 (rollback) need the PREVIOUS build, the accepted WP3 source, prepared outside the
+ * repository: `git archive 49651c8 | tar -x -C <dir>`, then `npm ci` and `npm run build:server` inside <dir>
+ * (git is only read; no other commit is ever checked out). It runs on the host (the host's Node), never in the image.
+ */
+
+/** A copy of the environment with the settings of the previous build replaced; production and runner flags are added by the caller. */
+function previousBuildEnv(databasePath, privateDir, extra = {}) {
+  const env = { ...process.env };
+  for (const name of ['NODE_ENV', 'JOB_RUNNER', 'HOST', 'PORT', 'SEED_ADMIN_PASSWORD', 'SEED_EMPLOYEE_PASSWORD', 'SEED_EMPLOYEE2_PASSWORD']) delete env[name];
+  return {
+    ...env,
+    DATABASE_PATH: databasePath,
+    DATA_DIR: privateDir,
+    MAIL_FROM: 'timesheet@example.invalid',
+    OUTBOUND_MODE: 'capture',
+    APP_ORIGINS: publicOrigin,
+    PUBLIC_BASE_URL: publicOrigin,
+    ...extra,
+  };
+}
+
+function previousCli(args, env) {
+  const result = spawnSync(process.execPath, [join(previousBuild, 'dist', 'server', 'cli.js'), ...args], { cwd: previousBuild, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  if (result.error) throw result.error;
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+const previousServers = new Set();
+
+/** Starts the previous build's server on loopback and waits for /api/health (it has no /api/ready). */
+async function startPreviousServer(name, databasePath, privateDir, { runnerOff = false, production = false } = {}) {
+  const port = await freeLoopbackPort();
+  const env = previousBuildEnv(databasePath, privateDir, {
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    ...(runnerOff ? { JOB_RUNNER: 'off' } : {}),
+    ...(production ? { NODE_ENV: 'production' } : {}),
+  });
+  const child = spawn(process.execPath, [join(previousBuild, 'dist', 'server', 'index.js')], { cwd: previousBuild, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk) => {
+    log += chunk;
+  });
+  child.stderr.setEncoding('utf8').on('data', (chunk) => {
+    log += chunk;
+  });
+  const exited = new Promise((done) => child.once('exit', (code) => done(code)));
+  const server = {
+    base: `http://127.0.0.1:${port}`,
+    log: () => log,
+    /** Terminates the process this script started (its own child handle); on Windows this is an abrupt stop, so the database is read in place afterwards. */
+    async stop() {
+      if (child.exitCode === null) {
+        child.kill();
+        await Promise.race([exited, sleep(15_000)]);
+      }
+      writeFileSync(join(work, `previous-build-${name}.log`), log);
+      previousServers.delete(server);
+    },
+  };
+  previousServers.add(server);
+  const started = Date.now();
+  for (;;) {
+    try {
+      const health = await fetch(`${server.base}/api/health`, { signal: AbortSignal.timeout(2000) });
+      if (health.ok) return server;
+    } catch {
+      // not listening yet
+    }
+    if (Date.now() - started > 30_000 || child.exitCode !== null) {
+      await server.stop();
+      throw new Error(`the previous build did not start (${name})`);
+    }
+    await sleep(300);
+  }
+}
+
+/** Reads every table of a database file (read-only): column list, row count and a digest of all rows in insertion order. */
+function tableSnapshot(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    const names = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
+    const tables = {};
+    for (const name of names) {
+      const columns = db.prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all(name);
+      const rows = db.prepare(`SELECT ${columns.map((column) => `"${column}"`).join(', ')} FROM "${name}" ORDER BY rowid`).all();
+      tables[name] = { columns, rows: rows.length, digest: sha256Of(JSON.stringify(rows)) };
+    }
+    return tables;
+  } finally {
+    db.close();
+  }
+}
+
+/** Tables a running application legitimately writes after a start (heartbeat, sessions, job state) are skipped; the bookkeeping of migrations is checked on its own. */
+const SNAPSHOT_SKIPPED = new Set(['jobs', 'auth_sessions', 'operations_state', 'schema_migrations']);
+/** Tables that only grow: the rows of the earlier snapshot must still be the first rows (a PDF, an attempt or an audit row may be appended). */
+const SNAPSHOT_APPEND_ONLY = new Set(['attachments', 'audit_events', 'delivery_attempts', 'revision_files']);
+
+/**
+ * Compares a database file with an earlier snapshot of the same data, table by table and column by column (the columns of
+ * the snapshot only, so a table that gained a column still compares). Returns the names of the tables that differ.
+ * `strict` compares every table in full, for a source that nothing may have written.
+ */
+function snapshotMismatches(path, snapshot, { strict = false } = {}) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    const mismatched = [];
+    for (const [name, before] of Object.entries(snapshot)) {
+      if (!strict && SNAPSHOT_SKIPPED.has(name)) continue;
+      const exists = db.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(name) === 1;
+      if (!exists) {
+        mismatched.push(name);
+        continue;
+      }
+      const limit = !strict && SNAPSHOT_APPEND_ONLY.has(name) ? ` LIMIT ${before.rows}` : '';
+      const rows = db.prepare(`SELECT ${before.columns.map((column) => `"${column}"`).join(', ')} FROM "${name}" ORDER BY rowid${limit}`).all();
+      if (rows.length !== before.rows || sha256Of(JSON.stringify(rows)) !== before.digest) mismatched.push(name);
+    }
+    return mismatched;
+  } finally {
+    db.close();
+  }
+}
+
+/** Facts that exist at every schema version (no pause columns): schema, integrity, outbound jobs and attempts. */
+function plainFacts(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    return {
+      schema: db.prepare('SELECT max(version) FROM schema_migrations').pluck().get(),
+      migrations: db.prepare('SELECT version, name, checksum, applied_at FROM schema_migrations ORDER BY version').all(),
+      integrity: db.pragma('integrity_check', { simple: true }),
+      foreignKeyViolations: db.pragma('foreign_key_check').length,
+      outboundJobs: db.prepare("SELECT id, kind, state, attempts, last_error FROM jobs WHERE kind IN ('send_email', 'send_reminder') ORDER BY id").all(),
+      attempts: db.prepare('SELECT id, state FROM delivery_attempts ORDER BY id').all(),
+      pauseColumns: db.prepare("SELECT count(*) FROM pragma_table_info('operations_state') WHERE name LIKE 'outbound_paused%'").pluck().get(),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/** What the employee sees through the API: balance, ledger entry count and the identity of every revision. */
+async function apiFacts(cookie) {
+  const ledger = await call('GET', '/api/ot/ledger', { cookie });
+  const revisions = await call('GET', '/api/revisions', { cookie });
+  const list = revisions.json?.revisions ?? [];
+  return {
+    status: [ledger.status, revisions.status],
+    balance: ledger.json?.balance,
+    entries: ledger.json?.entries?.length,
+    revisions: list.map((item) => ({ id: item.id, revision_no: item.revision_no, payroll_date: item.payroll_date, revision_kind: item.revision_kind, review_state: item.review_state })).sort((a, b) => (a.id < b.id ? -1 : 1)),
+    pdfReady: list.filter((item) => item.pdf_state === 'ready').length,
+    accepted: list.filter((item) => item.delivery_state === 'accepted').length,
+  };
+}
+
+const identityOf = (facts) => JSON.stringify({ balance: facts.balance, entries: facts.entries, revisions: facts.revisions });
+
+/** A one-off container of the current image (no network, read-only root), like the restore of stage 3. */
+function runOneOff(name, volumes, cliArgs) {
+  return docker(
+    ['run', '--rm', '--read-only', '--network', 'none', '--tmpfs', '/tmp:size=64m,mode=1777', '--name', `${project}-${name}`, '--env-file', envFile, ...volumes.flatMap((volume) => ['--volume', volume]), image, 'node', 'dist/server/cli.js', ...cliArgs],
+    { allowFailure: true },
+  );
+}
+
+/** The manifest, database and file checks of a backup folder on the host (the stage 2 checks, without the live comparison). */
+function verifyBackupFolder(folder, expectedSchema) {
+  const manifest = JSON.parse(readFileSync(join(folder, 'manifest.json'), 'utf8'));
+  check('paired backup: manifest has exactly the allowed keys and the old schema version', JSON.stringify([...new Set(keyPaths(manifest))].sort()) === JSON.stringify([...MANIFEST_KEY_PATHS].sort()) && manifest.schema_version === expectedSchema, `schema ${manifest.schema_version}`);
+  const dbBytes = readFileSync(join(folder, 'timesheet.db'));
+  check('paired backup: database copy matches the manifest SHA-256 and size', sha256Of(dbBytes) === manifest.database.sha256 && dbBytes.length === manifest.database.size_bytes);
+  const mismatched = manifest.files.filter((file) => {
+    const bytes = readFileSync(join(folder, 'files', file.storage_key));
+    return sha256Of(bytes) !== file.sha256 || bytes.length !== file.size_bytes;
+  });
+  check('paired backup: every file matches its manifest SHA-256 and size', mismatched.length === 0 && manifest.files.length > 0, `${manifest.files.length} files, ${mismatched.length} mismatched`);
+  const facts = plainFacts(join(folder, 'timesheet.db'));
+  check('paired backup: copy passes integrity_check, has no foreign key violation and carries the old schema', facts.integrity === 'ok' && facts.foreignKeyViolations === 0 && facts.schema === expectedSchema);
+  return manifest;
+}
+
+async function stageFour() {
+  const containerBase = base;
+  const upgradeDir = join(work, 'upgrade');
+  const live = join(upgradeDir, 'data');
+  const databasePath = join(live, 'timesheet.db');
+  const privateDir = join(live, 'private-data');
+  mkdirSync(live, { recursive: true });
+  check('upgrade data directory is fresh', readdirSync(live).length === 0);
+  const passwords = { admin: password(), employee: password(), employee2: password() };
+
+  // 1. A database produced by the previous build: migrate, then seed (synthetic data only).
+  const cliEnv = previousBuildEnv(databasePath, privateDir, { SEED_ADMIN_PASSWORD: passwords.admin, SEED_EMPLOYEE_PASSWORD: passwords.employee, SEED_EMPLOYEE2_PASSWORD: passwords.employee2 });
+  const migrated = previousCli(['migrate'], cliEnv);
+  const migratedJson = parseJson(migrated.stdout);
+  const oldVersion = migratedJson?.version;
+  check('previous build: cli.js migrate creates the database', migrated.status === 0 && Array.isArray(migratedJson?.applied) && migratedJson.applied.length === oldVersion, `schema ${oldVersion}`);
+  const seeded = previousCli(['seed'], cliEnv);
+  check('previous build: cli.js seed creates synthetic example.invalid data', seeded.status === 0 && seeded.stdout.includes('employee2@example.invalid'));
+
+  // Sessions, a second signature file and two signed-off periods through the previous build's API (its runner stays off,
+  // so the PDF and send jobs stay queued: the state a pre-upgrade backup holds).
+  const server = await startPreviousServer('seed-data', databasePath, privateDir, { runnerOff: true });
+  base = server.base;
+  let apiBefore;
+  let cookie;
+  try {
+    const login = await call('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: passwords.employee2 } });
+    cookie = login.cookie;
+    check('previous build: synthetic employee signs in', login.status === 200 && cookie !== undefined, `status ${login.status}`);
+    let sessionsOk = true;
+    for (const day of ['2026-03-02', '2026-03-03', '2026-03-16']) {
+      const created = await call('POST', `/api/days/${day}/sessions`, {
+        cookie,
+        body: { start: local(day, '09:00'), end: local(day, '18:00'), input_zone: 'America/Los_Angeles', breaks_confirmed: true, reason: 'Synthetic upgrade drill record', breaks: [{ start: local(day, '13:00'), end: local(day, '13:30'), counts_as_work: false }] },
+      });
+      if (created.status !== 201) sessionsOk = false;
+    }
+    check('previous build: three synthetic work sessions recorded', sessionsOk);
+    check('previous build: a second synthetic signature file is stored', (await uploadSignature(cookie, 90)) === 201);
+    const first = await signOffPeriod(cookie, '2026-03-20');
+    const second = await signOffPeriod(cookie, '2026-04-03');
+    check('previous build: two synthetic periods signed off (revisions, OT ledger, queued PDF and send jobs)', first.status === 201 && second.status === 201, `status ${first.status}/${second.status}`);
+    apiBefore = await apiFacts(cookie);
+  } finally {
+    await server.stop();
+    base = containerBase;
+  }
+  check('pre-upgrade API facts read (ledger and two revisions)', apiBefore.status.join() === '200,200' && apiBefore.revisions.length === 2 && apiBefore.entries >= 1, `${apiBefore.entries} ledger entries, ${apiBefore.revisions.length} revisions`);
+  // A clean close of the old database (checkpoints the write-ahead log): the previous build's migrate applies nothing at its own version.
+  const closed = parseJson(previousCli(['migrate'], cliEnv).stdout);
+  check('previous build: migrate at its own schema applies nothing', closed?.applied?.length === 0 && closed?.version === oldVersion);
+
+  const preSnapshot = tableSnapshot(databasePath);
+  const preFacts = plainFacts(databasePath);
+  const preBusiness = businessFacts(databasePath);
+  const queuedSends = preFacts.outboundJobs.filter((job) => job.state === 'queued' && job.kind === 'send_email').length;
+  check('pre-upgrade state: schema of the previous build, queued send jobs, signatures, revisions and OT credits', preFacts.schema === oldVersion && queuedSends === 2 && preBusiness.attachments >= 2 && preBusiness.signoffs === 2 && preBusiness.ledger_per_user.length >= 1, `schema ${preFacts.schema}, ${queuedSends} queued send jobs, ${preBusiness.attachments} files`);
+  check('pre-upgrade database is consistent', preFacts.integrity === 'ok' && preFacts.foreignKeyViolations === 0);
+
+  // 2. The paired pre-upgrade backup: the CURRENT build's backup tool on the older schema, without migrating the source.
+  const backupsDir = join(upgradeDir, 'backups');
+  mkdirSync(backupsDir);
+  const backupRun = runOneOff('upgrade-backup', [`${forwardSlashes(live)}:/data`, `${forwardSlashes(backupsDir)}:/backups`], ['backup', '--to', '/backups']);
+  const backupSummary = parseJson(backupRun.stdout);
+  check('cli.js backup (current build) of the older schema exits 0 and records no status (the schema has none)', backupRun.status === 0 && backupSummary?.outcome === 'succeeded' && backupSummary?.status_recorded === false, backupRun.status === 0 ? '' : `exit ${backupRun.status}: ${String(backupRun.stderr).trim().slice(0, 300)}`);
+  if (backupSummary === null) throw new Error('no pre-upgrade backup summary');
+  const backupName = String(backupSummary.backup);
+  const pairedFolder = join(backupsDir, backupName);
+  const pairedManifest = verifyBackupFolder(pairedFolder, oldVersion);
+  check('the source database was not migrated or changed by its backup (every table equal, schema unchanged)', snapshotMismatches(databasePath, preSnapshot, { strict: true }).length === 0 && plainFacts(databasePath).schema === oldVersion);
+  console.log(`INFO  paired backup: schema ${pairedManifest.schema_version}, ${pairedManifest.files.length} files, database ${pairedManifest.database.size_bytes} bytes; source: ${preFacts.outboundJobs.length} outbound jobs (${queuedSends} queued send_email), ${preBusiness.revisions_per_user.reduce((sum, value) => sum + value, 0)} revisions, ${preBusiness.ledger_per_user.reduce((sum, row) => sum + row.entries, 0)} ledger entries`);
+
+  // 3. Mount the old data into the current image: the migrations run once, up to the image's latest schema.
+  compose(['stop', '--timeout', '45', 'timesheet']);
+  composeEnv.TIMESHEET_DATA_DIR = forwardSlashes(live);
+  compose(['up', '--detach', '--no-build']);
+  const upgraded = await waitHealthy(180_000);
+  check('current image becomes healthy on the older data', upgraded.ok, `${upgraded.seconds.toFixed(1)} s (${upgraded.state})`);
+  if (!upgraded.ok) throw new Error('upgraded instance not healthy');
+  const ready = await call('GET', '/api/ready');
+  const target = ready.json?.schema?.expected;
+  check('/api/ready: schema is the image latest (derived from the image, not pinned) and newer than the old one', ready.status === 200 && ready.json?.status === 'ready' && ready.json?.schema?.actual === target && target > oldVersion, `schema ${oldVersion} -> ${ready.json?.schema?.actual} of ${target}`);
+
+  // The employee's stored sign-in session (a row of the old database) works, and the balance and revisions are the same.
+  const apiAfter = await apiFacts(cookie);
+  check('stored sign-in session works on the upgraded instance', apiAfter.status.join() === '200,200');
+  check('OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values', identityOf(apiAfter) === identityOf(apiBefore), `${apiAfter.entries} ledger entries, ${apiAfter.revisions.length} revisions`);
+  // The upgraded runner now does the queued work in capture mode: this is the mail that the paired backup still holds as queued.
+  const worked = await waitUntil(async () => {
+    const facts = await apiFacts(cookie);
+    return facts.pdfReady === 2 && facts.accepted === 2;
+  }, 120_000);
+  check('the upgraded runner renders both queued PDFs and captures both queued sends', worked.ok, `${worked.seconds.toFixed(1)} s`);
+  const upgradedLog1 = compose(['logs', '--no-color', 'timesheet']).stdout;
+  check('upgraded instance log has no deprecation warning', !/deprecat/i.test(upgradedLog1));
+
+  // 4. Stop cleanly, then read the database on the host: consistent, every old row kept, migrations applied once.
+  compose(['stop', '--timeout', '45', 'timesheet']);
+  const afterUpgrade = plainFacts(databasePath);
+  check('upgraded database passes integrity_check and has no foreign key violation', afterUpgrade.integrity === 'ok' && afterUpgrade.foreignKeyViolations === 0);
+  check('schema_migrations: contiguous 1..latest, and the old rows are unchanged', afterUpgrade.schema === target && afterUpgrade.migrations.map((row) => row.version).join() === Array.from({ length: target }, (_, index) => index + 1).join() && JSON.stringify(afterUpgrade.migrations.slice(0, oldVersion)) === JSON.stringify(preFacts.migrations));
+  const appliedNow = afterUpgrade.migrations.slice(oldVersion);
+  check('the new migrations ran exactly once, in one transaction (one application instant, one row each)', appliedNow.length === target - oldVersion && new Set(appliedNow.map((row) => row.applied_at)).size === 1, `${appliedNow.length} applied (versions ${appliedNow.map((row) => row.version).join(',')})`);
+  const changed = snapshotMismatches(databasePath, preSnapshot);
+  check('every pre-upgrade row of every table is unchanged (jobs, sessions and heartbeat aside; PDFs, attempts and audit rows may be appended)', changed.length === 0, changed.length === 0 ? `${Object.keys(preSnapshot).length} tables compared` : `differs: ${changed.join(',')}`);
+  const upgradedBusiness = businessFacts(databasePath);
+  check(
+    'representative balances (ledger entries and sums per user), revision counts, sign-offs and sessions equal the pre-upgrade values',
+    JSON.stringify({ ...upgradedBusiness, attachments: 0 }) === JSON.stringify({ ...preBusiness, attachments: 0 }) && upgradedBusiness.attachments >= preBusiness.attachments,
+    `${upgradedBusiness.ledger_per_user.reduce((sum, row) => sum + row.entries, 0)} ledger entries, ${upgradedBusiness.ledger_per_user.reduce((sum, row) => sum + row.minutes, 0)} minutes`,
+  );
+  const migrationsAfterFirstStart = afterUpgrade.migrations;
+  const finishedJobs = plainFacts(databasePath).outboundJobs;
+  check('the upgraded instance finished the queued send jobs (so the paired backup still holds mail that already went out)', finishedJobs.filter((job) => job.kind === 'send_email').every((job) => job.state === 'succeeded'), `${finishedJobs.map((job) => job.state).join(',')}`);
+
+  // 5. A restart applies nothing.
+  compose(['up', '--detach', '--no-build']);
+  const again = await waitHealthy(180_000);
+  const readyAgain = await call('GET', '/api/ready');
+  check('restart of the upgraded instance: healthy, same schema', again.ok && readyAgain.json?.schema?.actual === target, `${again.seconds.toFixed(1)} s`);
+  compose(['stop', '--timeout', '45', 'timesheet']);
+  check('restart applied no migration (schema_migrations identical, application instants included)', JSON.stringify(plainFacts(databasePath).migrations) === JSON.stringify(migrationsAfterFirstStart));
+  const oneOffMigrate = runOneOff('upgrade-migrate', [`${forwardSlashes(live)}:/data`], ['migrate']);
+  const oneOffJson = parseJson(oneOffMigrate.stdout);
+  check('cli.js migrate (current build) on the upgraded database applies nothing', oneOffMigrate.status === 0 && oneOffJson?.applied?.length === 0 && oneOffJson?.version === target);
+  const upgradedLog2 = compose(['logs', '--no-color', 'timesheet']).stdout;
+  check('instance log after the restart has no deprecation warning', !/deprecat/i.test(upgradedLog2));
+  return { oldVersion, target, passwords, databasePath, privateDir, live, backupsDir, backupName, preSnapshot, preFacts, preBusiness, apiBefore, cookie, queuedSends };
+}
+
+async function stageFive(four) {
+  const { oldVersion, target, passwords, databasePath, privateDir, live, backupsDir, backupName, preSnapshot, preFacts, preBusiness, apiBefore } = four;
+  const containerBase = base;
+
+  // 1. The previous build refuses the upgraded database (migrate() refuses an unknown newer schema; O1 of WP4-PLAN).
+  const upgradedSnapshot = tableSnapshot(databasePath);
+  const liveListing = readdirSync(live).sort().join(',');
+  const refusal = previousCli(['migrate'], previousBuildEnv(databasePath, privateDir));
+  check('previous build: cli.js migrate on the upgraded database refuses (non-zero exit, newer than this application)', refusal.status !== 0 && refusal.status !== null && /newer than this application/.test(refusal.stderr), `exit code ${refusal.status}`);
+  console.log(`INFO  refusal recorded: previous build cli.js migrate exit code ${refusal.status}, upgraded database at schema ${target}, previous build at schema ${oldVersion}`);
+  check('the refusal changed nothing (every table equal, schema unchanged)', snapshotMismatches(databasePath, upgradedSnapshot, { strict: true }).length === 0 && plainFacts(databasePath).schema === target);
+
+  // 2. The paired pre-upgrade backup, restored into an empty host directory in rollback mode (never the live data directory).
+  const restoredDir = join(work, 'rollback');
+  mkdirSync(restoredDir);
+  const volumes = [`${forwardSlashes(backupsDir)}:/backups:ro`, `${forwardSlashes(restoredDir)}:/restore`];
+  const restoreArgs = ['restore', '--from', `/backups/${backupName}`, '--to', '/restore'];
+  const unconfirmed = runOneOff('rollback-refuse', volumes, [...restoreArgs, '--keep-schema']);
+  check('rollback restore of the older schema is refused without --confirm (exit 2, unpaused_schema_unconfirmed), writing nothing', unconfirmed.status === 2 && unconfirmed.stderr.includes('unpaused_schema_unconfirmed') && readdirSync(restoredDir).length === 0);
+  const confirmedStart = Date.now();
+  const confirmed = runOneOff('rollback-restore', volumes, [...restoreArgs, '--keep-schema', '--confirm']);
+  const summary = parseJson(confirmed.stdout);
+  check('cli.js restore --keep-schema --confirm exits 0', confirmed.status === 0 && summary?.outcome === 'restored', confirmed.status === 0 ? `${Date.now() - confirmedStart} ms` : `exit ${confirmed.status}: ${String(confirmed.stderr).trim().slice(0, 300)}`);
+  if (summary === null) throw new Error('no rollback restore summary');
+  check('restore output has exactly the allowed keys and no address, name or path', JSON.stringify(Object.keys(summary).sort()) === JSON.stringify(RESTORE_SUMMARY_KEYS) && !PRIVATE_OUTPUT.test(confirmed.stdout));
+  check('the schema is kept as in the backup (no migration) and the manifest is verified', summary.schema?.backup === oldVersion && summary.schema?.restored === oldVersion && summary.schema?.applied?.length === 0 && summary.manifest?.verified === true);
+  check('the restore states that nothing could be paused, held every queued send job and left none queued', summary.outbound?.paused === false && summary.reconciliation?.send_jobs_held === four.queuedSends && summary.reconciliation?.queued_send_jobs === 0, JSON.stringify(summary.reconciliation));
+  check('the restore warns on stderr that the copy is not paused and names JOB_RUNNER=off', /WARNING/.test(confirmed.stderr) && confirmed.stderr.includes('JOB_RUNNER=off'));
+  console.log(`INFO  rollback restore summary: ${JSON.stringify(summary)}`);
+  check('the live (upgraded) data directory was not written by the restore', readdirSync(live).sort().join(',') === liveListing && snapshotMismatches(databasePath, upgradedSnapshot, { strict: true }).length === 0);
+
+  // Host checks on the restored directory (nothing holds it yet).
+  const restoredDb = join(restoredDir, 'timesheet.db');
+  const restoredPrivate = join(restoredDir, 'private-data');
+  check('restored directory holds the database and the private data directory only', readdirSync(restoredDir).sort().join(',') === 'private-data,timesheet.db');
+  const pairedManifest = JSON.parse(readFileSync(join(backupsDir, backupName, 'manifest.json'), 'utf8'));
+  const badFiles = pairedManifest.files.filter((file) => {
+    const path = join(restoredPrivate, 'files', file.storage_key);
+    return !existsSync(path) || sha256Of(readFileSync(path)) !== file.sha256;
+  });
+  check('every restored file matches its manifest SHA-256', badFiles.length === 0 && readdirSync(join(restoredPrivate, 'files')).length === pairedManifest.files.length, `${pairedManifest.files.length} files, ${badFiles.length} mismatched`);
+  const restoredFacts = plainFacts(restoredDb);
+  check('restored database: schema of the previous build (not upgraded), no pause columns, consistent', restoredFacts.schema === oldVersion && restoredFacts.pauseColumns === 0 && restoredFacts.integrity === 'ok' && restoredFacts.foreignKeyViolations === 0, `schema ${restoredFacts.schema}`);
+  check('restored database: no outbound job is queued or leased; every backed-up send job is held; no attempt exists', restoredFacts.outboundJobs.every((job) => job.state !== 'queued' && job.state !== 'leased') && restoredFacts.outboundJobs.filter((job) => job.state === 'intervention' && job.last_error === 'reconcile_after_restore').length === four.queuedSends && restoredFacts.attempts.length === 0, `${restoredFacts.outboundJobs.length} outbound jobs held`);
+  const restoredMismatch = snapshotMismatches(restoredDb, preSnapshot);
+  check('restored rows equal the pre-upgrade rows of every table (jobs, sessions and heartbeat aside)', restoredMismatch.length === 0, restoredMismatch.length === 0 ? `${Object.keys(preSnapshot).length} tables compared` : `differs: ${restoredMismatch.join(',')}`);
+  const restoredBusiness = businessFacts(restoredDb);
+  check('restored balances (ledger entries and sums), revision counts, sign-offs, files and sessions equal the pre-upgrade values', JSON.stringify(restoredBusiness) === JSON.stringify(preBusiness));
+  console.log(`INFO  restored counts (equal to the pre-upgrade values): ${JSON.stringify({ users: restoredBusiness.users, revisions: restoredBusiness.revisions_per_user.reduce((sum, value) => sum + value, 0), ledger_entries: restoredBusiness.ledger_per_user.reduce((sum, row) => sum + row.entries, 0), ledger_minutes: restoredBusiness.ledger_per_user.reduce((sum, row) => sum + row.minutes, 0), signoffs: restoredBusiness.signoffs, attachments: restoredBusiness.attachments, work_sessions: restoredBusiness.work_sessions })}`);
+
+  // 3. Control, NOT a supported procedure: the same backup copied as plain files, without the hold. The previous build sends
+  //    (capture) the queued mail, which is exactly what the hold prevents in the restored copy.
+  const controlDir = join(work, 'rollback-control');
+  mkdirSync(join(controlDir, 'private-data', 'files'), { recursive: true });
+  writeFileSync(join(controlDir, 'timesheet.db'), readFileSync(join(backupsDir, backupName, 'timesheet.db')));
+  for (const file of pairedManifest.files) writeFileSync(join(controlDir, 'private-data', 'files', file.storage_key), readFileSync(join(backupsDir, backupName, 'files', file.storage_key)));
+  const control = await startPreviousServer('control-copy', join(controlDir, 'timesheet.db'), join(controlDir, 'private-data'));
+  let controlAttempts = 0;
+  try {
+    base = control.base;
+    const controlLogin = await call('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: passwords.employee2 } });
+    const sent = await waitUntil(async () => {
+      controlAttempts = (await call('GET', '/api/deliveries', { cookie: controlLogin.cookie })).json?.deliveries?.length ?? 0;
+      return controlAttempts >= 1;
+    }, 120_000);
+    check('control: the previous build on a plain file copy of the backup (no hold) sends the queued mail by itself', sent.ok, `${controlAttempts} delivery attempts after ${sent.seconds.toFixed(1)} s (capture mode)`);
+  } finally {
+    await control.stop();
+    base = containerBase;
+  }
+
+  // 4. Start the previous build on the restored data, with its runner ON in capture mode: the hold must be enough.
+  const server = await startPreviousServer('rollback', restoredDb, restoredPrivate, { production: true });
+  base = server.base;
+  try {
+    const health = await call('GET', '/api/health');
+    check('health endpoint reports ok', health.status === 200 && health.json?.status === 'ok');
+    const login = await call('POST', '/api/auth/login', { body: { email: 'employee2@example.invalid', password: passwords.employee2 } });
+    check('the employee signs in on the previous build (users and password hashes restored)', login.status === 200 && login.cookie !== undefined, `status ${login.status}`);
+    const stored = await apiFacts(four.cookie);
+    check('the employee session stored before the upgrade works on the rolled-back instance', stored.status.join() === '200,200');
+    const rolledBack = await apiFacts(login.cookie);
+    check('OT balance, ledger entry count and revision identities through the API equal the pre-upgrade values', identityOf(rolledBack) === identityOf(apiBefore), `${rolledBack.entries} ledger entries, ${rolledBack.revisions.length} revisions`);
+    const rendered = await waitUntil(async () => (await apiFacts(login.cookie)).pdfReady === 2, 90_000);
+    check('non-outbound work resumes: the previous runner renders both pending PDFs', rendered.ok, `${rendered.seconds.toFixed(1)} s`);
+    await sleep(40_000); // more than two passes of the 15 s runner loop after the PDFs
+    const deliveries = await call('GET', '/api/deliveries', { cookie: login.cookie });
+    check('no send attempt appears after the previous build started (runner on, capture mode)', deliveries.status === 200 && (deliveries.json?.deliveries ?? []).length === 0, `${deliveries.json?.deliveries?.length} delivery attempts`);
+    const final = await apiFacts(login.cookie);
+    check('no revision shows a delivery', final.accepted === 0);
+    check('nothing was captured on the rolled-back instance', !existsSync(join(restoredPrivate, 'mail-capture')));
+    check('previous build log has no deprecation warning and no error', !/deprecat|error/i.test(server.log()));
+  } finally {
+    await server.stop();
+    base = containerBase;
+  }
+  const after = plainFacts(restoredDb);
+  const heldNow = after.outboundJobs.filter((job) => job.state === 'intervention' && job.last_error === 'reconcile_after_restore');
+  check('the held send jobs are untouched (state, attempts), still not queued, no delivery attempt in the database', JSON.stringify(after.outboundJobs) === JSON.stringify(restoredFacts.outboundJobs) && heldNow.length === four.queuedSends && after.attempts.length === 0 && after.schema === oldVersion);
+  check('rolled-back database is still consistent at the previous schema', after.integrity === 'ok' && after.foreignKeyViolations === 0);
+}
+
 mkdirSync(dataDir, { recursive: true });
 let started = false;
 try {
@@ -829,10 +1279,19 @@ try {
 
   // 8. Stage 3 (WP4-T06): isolated restore of that backup, a paused restored instance, then the explicit resume.
   await stageThree({ backupName, cookie: relogin.cookie, adminPassword });
+
+  // 9. Stages 4 and 5 (WP4-T12A): upgrade of an older database, then rollback to it, with the previous build.
+  if (previousBuild === null) {
+    console.log('INFO  stages 4 and 5 (upgrade, rollback) skipped: no --wp3 previous build given');
+  } else {
+    const four = await stageFour();
+    await stageFive(four);
+  }
 } catch (error) {
   failures += 1;
   console.log(`FAIL  drill stopped: ${error instanceof Error ? error.message : String(error)}`);
 } finally {
+  for (const server of [...previousServers]) await server.stop();
   if (started && !keep) {
     const down = compose(['down', '--volumes', '--timeout', '45'], { allowFailure: true });
     check('cleanup by project name (docker compose down -v)', down.status === 0);
@@ -841,5 +1300,6 @@ try {
   if (!keep) check('no container of the project remains', left === '');
 }
 
-console.log(failures === 0 ? 'DRILL STAGES 1-3 PASSED' : `DRILL STAGES 1-3 FAILED (${failures})`);
+const stages = previousBuild === null ? '1-3' : '1-5';
+console.log(failures === 0 ? `DRILL STAGES ${stages} PASSED` : `DRILL STAGES ${stages} FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

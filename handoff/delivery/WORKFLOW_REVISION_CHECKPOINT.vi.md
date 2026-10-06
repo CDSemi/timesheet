@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = a1dc01b98f3c8be7478384adf73d9c194bf9a105 (WP4-T01-FREEZE).
+  - HEAD = origin/main = dd1422fbd8de53791e6fa9d6b8d8741f1f484488 (WP4-T08-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -615,7 +615,26 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
        không được tự sửa.
      - WP4-T08 lần 2 đã xóa dòng trống ở cuối tệp; verify đạt 1573 test; digest mới là
        d70a03c2….
-     - Đang chạy: WP4-T08-FREEZE lần 2 (cùng committer).
+     - WP4-T08-FREEZE lần 2 đã commit và push thành dd1422f (25 đường dẫn; mọi kiểm tra
+       trả về 0).
+     - Quyết định điều phối: tách WP4-T12.
+       - WP4-T12A chạy ngay: diễn tập bước 4–5 (nâng cấp DB v6 của bản WP3, bản cũ từ
+         chối DB mới, khôi phục bản sao lưu đi cặp khi rollback mà không tự gửi lại) và
+         test nâng cấp.
+       - Bước 6 (nhập lại không đổi gì) và chạy lại toàn bộ diễn tập để ở WP4-T12, sau
+         T09–T11.
+     - WP4-T12A đã xong (tác giả tự báo).
+       - Bước 4 nâng cấp một DB schema 6 của bản WP3 lên schema mới nhất, đúng một lần.
+       - Bước 5: bản cũ từ chối DB đã nâng cấp. Lệnh mới
+         `restore --keep-schema --confirm` khôi phục bản sao lưu đi cặp và giữ lại các
+         lượt gửi có sẵn trong đó. Sau đó server cũ không thử gửi lần nào; bản đối chứng
+         không giữ lại thì gửi đi.
+       - Test: 10 + 6, viết trước để thấy đỏ; 3 phép thử đột biến đều bị bắt.
+       - Diễn tập bước 1–5: 165 PASS. Verify: 1589 test. Digest: e6bb47fd….
+       - Giới hạn còn lại, chuyển cho runbook T13 và audit: sau rollback, schema cũ không
+         giữ được các job tạo về sau, nên bản cũ phải chạy với `JOB_RUNNER=off` cho đến
+         khi đối soát xong.
+     - Đang chạy: WP4-T12A-FREEZE.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -629,21 +648,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP3-FIX2. Task này gồm:
-     - WP3-RBC-01 và WP3-RBC-02;
-     - test cho nhánh `sending`;
-     - giới hạn theo ngày tạo tài khoản và theo thời điểm setup trong docs/05;
-     - quyết định H-Q1 trong docs/10;
-     - việc mang sang WP4.
-  2. Sau đó WP3-FIX2-FREEZE (brief viết sau khi FIX2 xong) và WP3-REGATE2. Brief của
-     WP3-REGATE2, WP3-RECHECK-BC2 và ghi chú lần 2 của WP3-RECHECK-A đã sẵn.
-  3. Rồi hai đợt kiểm tra lại song song: WP3-RECHECK-BC2, và WP3-RECHECK-A lần 2 chỉ
-     xét phần thay đổi ở mảng A.
-  4. Rồi nghiệm thu WP3.
-  2. Ghi biên bản nghiệm thu WP3 và commit nghiệm thu sau khi các đợt kiểm tra lại đạt.
-  2. Sau đó các task WP3 kèm commit đóng băng, gate cuối package và audit mới; WP4; WP5
-     (bắt đầu bằng nghiệm thu độc lập); pilot packet cụ thể. Pilot thật do chủ dự án
-     quyết.
+  1. Ghi kết quả WP4-T12A-FREEZE.
+  2. Sau khi chủ dự án trả lời, làm theo thứ tự:
+     - WP4-T07B và WP4-DEC;
+     - T09, T10, T11;
+     - T12 (bước 6 và chạy lại toàn bộ diễn tập);
+     - T13;
+     - WP4-GATE;
+     - hai audit mới;
+     - nghiệm thu.
+  3. Vòng sửa GOV-SKILL sau khi có câu trả lời Q1–Q4.
+  4. Sau đó WP5 (bắt đầu bằng nghiệm thu độc lập) và pilot packet cụ thể. Pilot thật do
+     chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động
@@ -659,7 +675,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T08-FREEZE (lần 2).
+- Process còn sống: chỉ WP4-T12A-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.

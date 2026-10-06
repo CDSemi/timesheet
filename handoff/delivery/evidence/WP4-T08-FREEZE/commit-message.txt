@@ -1,0 +1,26 @@
+Add a safe workbook reader, template mapping v1 and a synthetic workbook generator
+
+- feat(import): xlsxReader enforces package, entry, per-entry, total, sheet and
+  cell limits on real inflated output.
+  - It checks CRC-32 and declared sizes.
+  - It rejects DOCTYPE/ENTITY and macro content, and lists external links
+    without opening them.
+  - It never evaluates formulas, labels cached values as not authoritative, and
+    keeps cell-level provenance.
+- feat(import): template mapping v1 builds a preview model only. It detects the
+  README defects (8.5-hour formula, X24 omitting Sunday, TODAY() in W26),
+  floating holidays, unknown labels, duplicate dates and non-date sheet names.
+- build(deps): fflate 0.8.3 and fast-xml-parser 5.11.2 (exact); no deprecation
+  warnings.
+- test(import): an in-memory synthetic workbook generator clones the template at
+  ZIP level, and the tracked template hash stays unchanged. Includes zip-bomb,
+  entity and macro tests and six mutation checks.
+- docs(handoff): WP4-T07 freeze result, WP4-T08 records, board and checkpoint
+  (+ vi).
+
+Task: WP4-T08-FREEZE
+Gate: WP4-T08 freeze
+Audit: pending independent audit
+Digest: d70a03c27dac714707b86d74c5fe28c2973622ea17ab979f563cd5cf9d86ad0b
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

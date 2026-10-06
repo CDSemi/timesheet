@@ -1,0 +1,199 @@
+
+ RUN  v5.0.2 <task-tmp>/scratch
+
+ ❯ tests/integration/restore.test.ts (27 tests | 5 failed) 11799ms
+   ❯ isolated restore with outbound paused (AC-15, AC-11) (7)
+     × pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job 7ms
+     × reports counts and the manifest check only 2ms
+     × refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08) 15ms
+     × releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs 1ms
+   ❯ restore of a pre-pause backup without upgrading it (rollback) (6)
+     × with the confirmation keeps schema 6, holds every backed-up outbound job and marks the interrupted send for a decision 45ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > pauses outbound delivery with reason restored, marks every interrupted send for an explicit decision and holds every backed-up send job
+AssertionError: expected { …(6) } to deeply equal { …(6) }
+
+- Expected
++ Received
+
+  {
+    "67a2234e-ab19-49b7-9c36-bbdca1e7571f": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "8980d37a-2ea1-42a8-9abb-b68fa00613bc": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+    "c875fa95-0608-4a86-98c0-3fb5869a079c": {
+      "attempts": 1,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "leased",
+    },
+    "cca7f902-d83a-4164-8041-ece887ba55bf": {
+      "attempts": 1,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "leased",
+    },
+    "synthetic:reminder:leased": {
+      "attempts": 1,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "leased",
+    },
+    "synthetic:reminder:queued": {
+      "attempts": 0,
+-     "last_error": "reconcile_after_restore",
+-     "state": "intervention",
++     "last_error": null,
++     "state": "queued",
+    },
+  }
+
+ ❯ tests/integration/restore.test.ts:288:19
+    286|         .map((job) => [job.revision_id ?? job.business_key, { state: j…
+    287|     );
+    288|     expect(sends).toEqual({
+       |                   ^
+    289|       [source.revisions.sending]: { state: 'intervention', attempts: 1…
+    290|       [source.revisions.preparing]: { state: 'intervention', attempts:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > reports counts and the manifest check only
+AssertionError: expected { outcome: 'restored', …(5) } to deeply equal { outcome: 'restored', …(5) }
+
+- Expected
++ Received
+
+@@ -19,12 +19,12 @@
+    },
+    "outcome": "restored",
+    "reconciliation": {
+      "attempts_marked_uncertain": 2,
+      "awaiting_decision": 2,
+-     "queued_send_jobs": 0,
+-     "send_jobs_held": 6,
++     "queued_send_jobs": 3,
++     "send_jobs_held": 0,
+    },
+    "schema": {
+      "applied": [],
+      "backup": 10,
+      "restored": 10,
+
+ ❯ tests/integration/restore.test.ts:314:21
+    312|     const attachments = count(source.t.db, 'SELECT count(*) FROM attac…
+    313|     expect(attachments).toBeGreaterThanOrEqual(4);
+    314|     expect(summary).toEqual({
+       |                     ^
+    315|       outcome: 'restored',
+    316|       manifest: { verified: true, schema_version: LATEST, files: attac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > refuses to resume while attempts await a decision; one explicit decision each, then resume; a resend goes out exactly once (AC-08)
+AssertionError: expected 409 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 409
+
+ ❯ tests/integration/restore.test.ts:368:73
+    366|     expect((await decide(sendingAttempt?.id ?? '', 'mark_delivered')).…
+    367|     expect(resumeOutbound(restored, clock)).toMatchObject({ outcome: '…
+    368|     expect((await decide(preparingAttempt?.id ?? '', 'resend')).status…
+       |                                                                         ^
+    369|
+    370|     // Still paused: the new resend attempt waits, nothing is claimed.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > isolated restore with outbound paused (AC-15, AC-11) > releases a held send only by an explicit, audited operator step; it goes out exactly once; a dropped reminder never runs
+AssertionError: expected [] to deeply equal [ Array(6) ]
+
+- Expected
++ Received
+
+- [
+-   "send_email:attempt_uncertain",
+-   "send_email:attempt_uncertain",
+-   "send_email:releasable",
+-   "send_email:releasable",
+-   "send_reminder:releasable",
+-   "send_reminder:releasable",
+- ]
++ []
+
+ ❯ tests/integration/restore.test.ts:420:86
+    418|     const reminderOf = (key: string) => restored.prepare<[string], { i…
+    419|     const listed = listHeldJobs(restored);
+    420|     expect(listed.map((job) => `${job.kind}:${job.blocker ?? 'releasab…
+       |                                                                                      ^
+    421|       [
+    422|         `${JOB_SEND_EMAIL}:attempt_uncertain`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/integration/restore.test.ts > restore of a pre-pause backup without upgrading it (rollback) > with the confirmation keeps schema 6, holds every backed-up outbound job and marks the interrupted send for a decision
+AssertionError: expected { …(3) } to deeply equal { …(3) }
+
+- Expected
++ Received
+
+  {
+    "314a5aa5-7dd6-4822-ad6e-b677bccd8e8c": [
+-     "intervention",
++     "leased",
+      1,
+-     "reconcile_after_restore",
++     null,
+    ],
+    "dad723b1-ef73-4db4-9332-2e2ed8b6cffa": [
+-     "intervention",
++     "queued",
+      0,
+-     "reconcile_after_restore",
++     null,
+    ],
+    "synthetic:reminder:queued": [
+-     "intervention",
++     "queued",
+      0,
+-     "reconcile_after_restore",
++     null,
+    ],
+  }
+
+ ❯ tests/integration/restore.test.ts:1007:136
+    1005|         )
+    1006|         .all();
+    1007|       expect(Object.fromEntries(sends.map((job) => [job.revision_id ??…
+       |                                                                                                                                        ^
+    1008|         [fixture.revisions.sending]: ['intervention', 1, RECONCILE_AFT…
+    1009|         [fixture.revisions.queued]: ['intervention', 0, RECONCILE_AFTE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 22 passed (27)
+   Start at  20:41:49
+   Duration  13.64s (tests 87%, import 8%, transform 5%)
+
+exit 1
