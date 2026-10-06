@@ -1,0 +1,42 @@
+
+ RUN  v5.0.2 <scratch>/scratch
+
+ ❯ tests/integration/backup-prune.test.ts (12 tests | 1 failed) 4333ms
+   ❯ pruneBackups on disk (4)
+     × removes only expired folders the tool created and leaves everything else alone 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/backup-prune.test.ts > pruneBackups on disk > removes only expired folders the tool created and leaves everything else alone
+AssertionError: expected { candidates: 9, kept: 1, …(3) } to deeply equal { candidates: 4, kept: 1, …(3) }
+
+- Expected
++ Received
+
+  {
+-   "candidates": 4,
++   "candidates": 9,
+    "dryRun": true,
+-   "ignored": 12,
++   "ignored": 7,
+    "kept": 1,
+-   "removed": 3,
++   "removed": 8,
+  }
+
+ ❯ tests/integration/backup-prune.test.ts:193:17
+    191|     const dry = pruneBackups({ targetDir: target, clock: clockAt(NOW),…
+    192|     expect(readdirSync(target).sort()).toEqual(before);
+    193|     expect(dry).toEqual({ candidates: 4, kept: 1, removed: 3, ignored:…
+       |                 ^
+    194|
+    195|     const done = pruneBackups({ targetDir: target, clock: clockAt(NOW)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  00:50:09
+   Duration  6.07s (tests 73%, import 17%, transform 10%)
+

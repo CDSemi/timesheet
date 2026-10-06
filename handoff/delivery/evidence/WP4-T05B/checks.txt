@@ -1,0 +1,12 @@
+WP4-T05B checks (node v24.21.0 portable; TEMP/TMP, scratch and test folders under <scratch>)
+1. Red first: vitest run tests/integration/backup-prune.test.ts before src/server/ops/prune.ts existed
+   -> exit 1, "Cannot find module '../../src/server/ops/prune.ts'" (red-missing-module.txt)
+2. Green: vitest run backup-prune.test.ts backup.test.ts -> exit 0, 2 files, 21 tests (green-prune-and-backup.txt)
+   (an earlier run failed once on a test-data name collision on the case-insensitive Windows file system; fixed in the test)
+3. Mutation in a scratch clone (manifest-instant check dropped in findBackups, any name match is a candidate):
+   vitest run backup-prune.test.ts -> exit 1, 1 failed / 11 passed; the failing test is
+   "removes only expired folders the tool created and leaves everything else alone" (mutation-manifest-check-dropped.txt)
+4. Final, last commands, NODE_OPTIONS='--trace-deprecation --pending-deprecation':
+   npm run verify -> exit 0, 72 files, 1625 tests, SMOKE PASSED, no deprecation output (verify-final.txt)
+   npm run digest -> exit 0 (digest-final.txt)
+5. Status recording: skipped (needs new operations_state columns = a migration, which this task must not add).

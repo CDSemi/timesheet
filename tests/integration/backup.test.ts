@@ -503,6 +503,7 @@ describe('cli.js backup', () => {
     expect(refused.stderr.includes(dataDirOf(t))).toBe(false);
     expect(cli([]).status).toBe(2);
     expect(cli(['--to']).status).toBe(2);
-    expect(cli(['--to', target, '--prune']).status).toBe(2);
+    expect(cli(['--to', target, '--keep-all']).status).toBe(2);
+    expect(cli(['--to', target, '--prune', '--dry-run']).status).toBe(2);
   });
 });

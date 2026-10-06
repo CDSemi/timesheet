@@ -138,4 +138,10 @@ Return at most 150 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD c398cab2ec896999543589c574bd0ac701247a7d; post-HEAD 641ca109d9c9fca9bba020ae45e6f089c3f4c6ee.
+- Commit 641ca109d9c9fca9bba020ae45e6f089c3f4c6ee, pushed yes, remote SHA equals commit.
+- Digest 7fe65713f54a427b290ba3c67895bedeb4dd0c1d596504d6765aa73fc7ebbfb4 (754 files); 41 staged.
+- Scope checks: working tree matched the expected set; no change under .claude, docs, reference,
+  styles.css, package.json, package-lock.json.
+- Check exit codes: all 0 (see evidence/WP4-T07B-FREEZE/checks.txt). No fixes applied, no unstaging.
+- Blockers: none.

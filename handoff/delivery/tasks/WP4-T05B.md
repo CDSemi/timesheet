@@ -22,8 +22,8 @@
     values;
   - `src/server/ops/backup.ts`, `src/server/ops/manifest.ts`, `src/server/cli.ts` and
     `tests/integration/backup.test.ts`.
-- Baseline: the WP4-T07B-FREEZE commit; the coordinator gives the SHA in the dispatch
-  prompt. The working tree differs only in handoff/.
+- Baseline: main at 641ca109d9c9fca9bba020ae45e6f089c3f4c6ee, the WP4-T07B-FREEZE
+  commit (digest 7fe65713…, 754 files). The working tree differs only in handoff/.
 
 ## Runtime
 
@@ -121,4 +121,32 @@ Return at most 140 words, beginning with your self-reported model:
 
 ## Results
 
-(Worker appends here.)
+Self-reported model: claude-sonnet-5-5. Attempt 1, node v24.21.0 portable, no commit.
+
+- Selection (`selectRetention`, pure, `src/server/ops/prune.ts`): from the clock, keep the newest backup of each of the
+  last 7 UTC days, 4 ISO weeks (Mon-Sun; index `floor((day+3)/7)`, no year skip) and 6 UTC months, plus the newest
+  overall. A candidate is a real direct-child folder named exactly `timesheet-backup-<UTC>-<8 hex>` with a
+  `manifest.json` that parses, has the tool's format/version/keys only (MANIFEST_KEY_PATHS) and `created_at` equal to
+  the name instant. Everything else (foreign, `.partial-*`, link, file, bad/missing manifest) is only counted.
+- CLI: `backup --to <dir> --prune` (prune only after createBackup returned; the new backup is `requiredName`, run
+  refused if it is not found); `backup prune --in <dir> --dry-run` (the only standalone prune; without `--dry-run` exit
+  2). Safety: target real path; every removal's real path must be a direct child (relative === name) or the whole run is
+  refused (exit 2) before the first removal; lstat re-check; folder emptied with manifest last. Counts only. Exit 0/1/2.
+  The old `--prune` refusal is removed.
+- Tests (`tests/integration/backup-prune.test.ts`, 12): red first = module missing (exit 1); green 21 tests with
+  backup.test.ts. Calendar Mar-Oct 2026 keeps exactly 13 (month and ISO-week boundary), a 2026-W53/2027-W01 and
+  year-change case, UTC midnight edge, newest always kept, foreign/partial/tampered/missing/extra-key manifest,
+  link and file untouched, outside-target refusal, new-backup-missing refusal, dry run, failed backup prunes nothing.
+- Mutation (scratch clone, manifest check dropped): 1 failed / 11 passed, the on-disk safety test fails.
+- Verify (`--trace-deprecation --pending-deprecation`): exit 0, 72 files, 1625 tests, smoke passed, no deprecation
+  output. Digest: 57be84423792186c4bd8d8de9bcbd7e22d12e41b27e1d983fd90834e3c84b7ed (756 files). Precommit check on a
+  temporary index: PASS, 11 staged files, 0 findings; `git diff --cached --check` exit 0.
+- Item 3 (status): skipped. Recording the last prune result needs new operations_state columns, i.e. a migration;
+  `operationsStatus.ts` is unchanged.
+- Changed paths: src/server/ops/prune.ts (new), src/server/cli.ts, src/server/ops/backup.ts (one comment line),
+  tests/integration/backup-prune.test.ts (new), tests/integration/backup.test.ts (the `--prune` exit-2 assertion
+  replaced by two usage refusals), handoff/delivery/evidence/WP4-T05B/*.txt, this brief.
+- Deviations: none beyond the above; the backup.ts comment edit is inside an owned file. Note: the retention windows
+  are calendar windows from the clock, so after a long gap in backups only the newest one survives.
+
+Commit description: Prune old backups with a 7 daily, 4 weekly, 6 monthly retention rule and a dry run.

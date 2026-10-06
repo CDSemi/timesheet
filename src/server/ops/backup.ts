@@ -51,7 +51,7 @@ import {
  * time are recorded in `operations_state` (migration 0009) of the live database, never inside the snapshot.
  *
  * The target must lie outside the private data directory (DATA_DIR). Nothing here prints or stores a path, a name or
- * an email address; failures carry a fixed code only. Pruning old backups is out of scope until owner decision F-5.
+ * an email address; failures carry a fixed code only. Pruning old backups lives in prune.ts (owner decision F-5).
  */
 
 /** A fault of an attempted backup; recorded in operations_state as the fault code. */

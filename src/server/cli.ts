@@ -8,6 +8,7 @@ import { FileStore } from './files/fileStore.ts';
 import { createJobHandlers, runJobsOnce } from './jobs/runner.ts';
 import { BackupError, createBackup } from './ops/backup.ts';
 import { manifestSummary } from './ops/manifest.ts';
+import { PruneError, type PruneResult, pruneBackups } from './ops/prune.ts';
 import {
   dropHeldReminder,
   heldJobsJson,
@@ -36,9 +37,13 @@ import { getOutboundStatus } from './services/operationsStatus.ts';
  *            company calendar once, then print a single-use setup token (60 minutes) to this terminal
  *   bootstrap --new-token
  *            print a fresh setup token for an instance that is configured but has no administrator yet
- *   backup --to <dir>
+ *   backup --to <dir> [--prune]
  *            consistent backup (WP4-T05) of the live database and its referenced private files into a new folder
- *            under <dir>, which must be outside DATA_DIR; allowed in production while the server runs
+ *            under <dir>, which must be outside DATA_DIR; allowed in production while the server runs. --prune (WP4-T05B,
+ *            owner decision F-5) then removes expired backup folders the tool created in <dir>, keeping 7 daily, 4
+ *            weekly and 6 monthly backups (UTC) and the newest, only after the new backup succeeded and was verified
+ *   backup prune --in <dir> --dry-run
+ *            print the counts a prune of <dir> would keep and remove; removes nothing
  *   restore --from <backup folder> --to <empty directory>
  *            isolated restore (WP4-T06): verify the manifest hashes, integrity and schema, copy the database and files
  *            into the new directory (<dir>/timesheet.db and <dir>/private-data), pause outbound delivery there and mark
@@ -173,44 +178,91 @@ function readConfigFile(path: string): unknown {
   }
 }
 
-const BACKUP_USAGE = 'Usage: cli.js backup --to <directory outside DATA_DIR>';
+const BACKUP_USAGE =
+  'Usage: cli.js backup --to <directory outside DATA_DIR> [--prune] | cli.js backup prune --in <backup directory> --dry-run';
 
-/** `--to <dir>`, nothing else (pruning waits for owner decision F-5); null for any other argument list. */
-function parseBackupArgs(args: readonly string[]): string | null {
-  if (args.length === 2 && args[0] === '--to' && args[1] !== undefined && args[1] !== '' && !args[1].startsWith('--')) return args[1];
+type BackupCommand = { action: 'backup'; to: string; prune: boolean } | { action: 'prune-dry-run'; dir: string };
+
+const isValue = (arg: string | undefined): arg is string => arg !== undefined && arg !== '' && !arg.startsWith('--');
+
+/**
+ * `--to <dir>` with an optional `--prune`, or `prune --in <dir> --dry-run` (the dry run is the only standalone prune: a
+ * real prune happens only right after a new backup succeeded); null for any other argument list.
+ */
+function parseBackupArgs(args: readonly string[]): BackupCommand | null {
+  if ((args.length === 2 || (args.length === 3 && args[2] === '--prune')) && args[0] === '--to' && isValue(args[1])) {
+    return { action: 'backup', to: args[1], prune: args.length === 3 };
+  }
+  if (args.length === 4 && args[0] === 'prune' && args[1] === '--in' && isValue(args[2]) && args[3] === '--dry-run') {
+    return { action: 'prune-dry-run', dir: args[2] };
+  }
   return null;
+}
+
+/** Counts only: no name, key or path. `pruned` is the real run after a backup; `dry_run` reports what a run would do. */
+function pruneJson(result: PruneResult): Record<string, unknown> {
+  return result.dryRun
+    ? { outcome: 'dry_run', candidates: result.candidates, keep: result.kept, remove: result.removed, ignored: result.ignored }
+    : { outcome: 'pruned', candidates: result.candidates, kept: result.kept, removed: result.removed, ignored: result.ignored };
+}
+
+function reportPruneError(error: PruneError): number {
+  console.error(`Prune ${error.refusal ? 'refused' : 'failed'} (${error.code}): ${error.message}`);
+  return error.refusal ? 2 : 1;
 }
 
 /**
  * A consistent backup of the live database and the private files it refers to (WP4-T05). Allowed in production: the
  * server keeps running and writing. Prints counts and the new folder's name only, never a path, key or person; a
  * refusal exits 2, a failed attempt exits 1 after recording its fault code in operations_state.
+ * `--prune` (WP4-T05B, owner decision F-5) then removes expired backup folders of the same target, only after the new
+ * backup succeeded and was verified, and only folders the tool created; `backup prune --in <dir> --dry-run` reports the
+ * counts it would keep and remove without removing anything. The last prune result is not recorded in operations_state:
+ * that needs new columns, which this task does not add.
  */
 async function backup(args: readonly string[]): Promise<number> {
-  const to = parseBackupArgs(args);
-  if (to === null) {
+  const parsed = parseBackupArgs(args);
+  if (parsed === null) {
     console.error(BACKUP_USAGE);
     return 2;
   }
+  if (parsed.action === 'prune-dry-run') {
+    try {
+      console.log(JSON.stringify(pruneJson(pruneBackups({ targetDir: parsed.dir, clock: systemClock, dryRun: true }))));
+      return 0;
+    } catch (error) {
+      if (error instanceof PruneError) return reportPruneError(error);
+      throw error;
+    }
+  }
   const config = loadConfig();
   const delivery = loadDeliveryConfig(process.env, config);
+  let created: Awaited<ReturnType<typeof createBackup>>;
   try {
-    const result = await createBackup({ databasePath: config.databasePath, dataDir: delivery.dataDir, targetDir: to, clock: systemClock });
-    console.log(
-      JSON.stringify({
-        outcome: 'succeeded',
-        backup: result.name,
-        ...manifestSummary(result.manifest),
-        duration_ms: result.durationMs,
-        status_recorded: result.statusRecorded,
-      }),
-    );
-    return 0;
+    created = await createBackup({ databasePath: config.databasePath, dataDir: delivery.dataDir, targetDir: parsed.to, clock: systemClock });
   } catch (error) {
     if (error instanceof BackupError) {
       console.error(`Backup ${error.refusal ? 'refused' : 'failed'} (${error.code}): ${error.message}`);
       return error.refusal ? 2 : 1;
     }
+    throw error;
+  }
+  console.log(
+    JSON.stringify({
+      outcome: 'succeeded',
+      backup: created.name,
+      ...manifestSummary(created.manifest),
+      duration_ms: created.durationMs,
+      status_recorded: created.statusRecorded,
+    }),
+  );
+  if (!parsed.prune) return 0;
+  try {
+    const pruned = pruneBackups({ targetDir: parsed.to, clock: systemClock, dryRun: false, requiredName: created.name });
+    console.log(JSON.stringify(pruneJson(pruned)));
+    return 0;
+  } catch (error) {
+    if (error instanceof PruneError) return reportPruneError(error);
     throw error;
   }
 }

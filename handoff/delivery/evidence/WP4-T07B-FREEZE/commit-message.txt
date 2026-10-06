@@ -1,0 +1,25 @@
+Add the administrator "not set up" flag and 30-day retention of scan job rows
+
+- feat(admin): the account JSON and the user list show `not_set_up`, a boolean.
+  - It reuses the H-Q1 (a) `hasSavedSettings` condition, now exported.
+  - No settings values are exposed.
+  - The UI shows a "Not set up" badge using existing tokens.
+- feat(jobs): migration 0011 rebuilds `jobs_no_delete` with a narrow exception.
+  - Only succeeded `deadline_scan` and `reminder_scan` rows qualify. They must be
+    older than 30 days relative to a single-row retention window that is open only
+    inside the retention job's transaction, and must not be referenced by delivery
+    attempts or reminder occurrences.
+  - A daily `job_retention` job deletes them in chunks and records counts only. The
+    admin operations status reports the last run.
+- test: 18 retention tests, the flag and allowlist tests, and an e2e on desktop and
+  mobile. The mutation that drops the kind condition fails 2 tests. Count and key pins
+  are updated for the new daily job and the new key.
+- docs(handoff): WP4-T07B records, the WP4-T05B brief, the GOV-SKILL-REMOVE-ACCEPT
+  result, board and checkpoint (+ vi).
+
+Task: WP4-T07B-FREEZE
+Gate: WP4-T07B verify, e2e and mutation evidence in handoff/delivery/evidence/WP4-T07B/
+Audit: not applicable to this commit task
+Digest: 7fe65713f54a427b290ba3c67895bedeb4dd0c1d596504d6765aa73fc7ebbfb4 (754 files)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

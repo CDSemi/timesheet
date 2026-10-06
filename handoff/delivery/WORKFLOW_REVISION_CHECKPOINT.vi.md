@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = c398cab2ec896999543589c574bd0ac701247a7d (GOV-SKILL-REMOVE-ACCEPT).
+  - HEAD = origin/main = 641ca109d9c9fca9bba020ae45e6f089c3f4c6ee (WP4-T07B-FREEZE).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -683,7 +683,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          1613 test. Digest: 7fe65713….
        - Sai lệch: sửa các chỗ ghim số lượng và key một cách cơ học. Giới hạn số job
          trong automation.spec được nới (1 lên 2, 2 lên 4); audit sẽ đánh giá việc này.
-     - Đang chạy: WP4-T07B-FREEZE.
+     - WP4-T07B-FREEZE đã commit và push thành 641ca10 (41 đường dẫn; mọi kiểm tra trả
+       về 0). Digest mã nguồn hiện tại trên board là 7fe65713….
+     - WP4-T05B đã xong (tác giả tự báo).
+       - Quy tắc: giữ theo 7 ngày UTC, 4 tuần ISO và 6 tháng UTC, cộng bản sao lưu mới
+         nhất.
+       - Chỉ thư mục do công cụ tạo, có manifest khớp, mới được xét để xóa.
+       - Chỉ xóa sau khi bản sao lưu mới đã được kiểm; có chế độ chạy thử; nếu có thư
+         mục trỏ ra ngoài đích thì từ chối cả lần chạy.
+       - Test: 21; phép thử đột biến làm 1 test fail. Verify: 1625 test. Digest:
+         57be8442….
+       - Không ghi trạng thái lần xóa gần nhất, vì việc đó cần một migration.
+     - Brief WP4-T09 đã sẵn (opus, override novelty).
+     - Đang chạy: WP4-T05B-FREEZE.
      - Đang chờ chủ dự án:
        - F-1..F-3 cho T09 và T10;
        - F-3, F-4, F-5, F-6 cho T07B và WP4-DEC;
@@ -697,9 +709,8 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP4-T07B-FREEZE, rồi giao WP4-T05B (brief đã sẵn).
+  1. Ghi kết quả WP4-T05B-FREEZE, rồi giao WP4-T09.
   2. Sau đó làm theo thứ tự:
-     - WP4-T05B (xóa bớt bản sao lưu F-5);
      - T09, T10, T11;
      - T12 (bước 6 và chạy lại toàn bộ diễn tập);
      - T13;
@@ -723,7 +734,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
 - Board: [ORCHESTRATION.json](ORCHESTRATION.json). Board commit cuối trong git là bản khôi
   phục; toàn bộ lịch sử WP2 (task, các lần chạy, quyết định) nằm ở đó và trong git.
-- Process còn sống: chỉ WP4-T07B-FREEZE (lần 1).
+- Process còn sống: chỉ WP4-T05B-FREEZE (lần 1).
 - Thư mục làm việc tạm (theo chủ dự án, 2026-10-05): `D:\.claude-tmp\timesheet\<task>`,
   nằm ngoài Dropbox. Các bản ghi trước ngày đó dùng `D:\timesheet-tmp\<task>`.
 - Usage/reset: không quan sát được.
