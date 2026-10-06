@@ -1,0 +1,36 @@
+diff --git a/docs/11_OPERATIONS_RUNBOOK.vi.md b/docs/11_OPERATIONS_RUNBOOK.vi.md
+index 6459acc..e16f3f9 100644
+--- a/docs/11_OPERATIONS_RUNBOOK.vi.md
++++ b/docs/11_OPERATIONS_RUNBOOK.vi.md
+@@ -274 +274 @@ Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy ch
+-- Nhịp của bộ chạy, thời điểm kích hoạt tự động, chế độ và cờ của bộ gửi, và tổng số job và lần gửi.
++- Nhịp của bộ chạy, thời điểm kích hoạt tự động, việc đã cấu hình địa chỉ người gửi hay chưa ("Sender address") và chế độ gửi ra ngoài ("Outbound mode"; không bao giờ là cờ gửi, cờ chỉ nằm trong `<env-file>`), và tổng số job và lần gửi.
+@@ -285 +285 @@ Quản trị viên thấy vận hành và gửi thư, không bao giờ thấy ch
+-Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho phép rõ ràng ([06 Nghiệm thu](06_TEST_AND_ACCEPTANCE.vi.md)). Không làm gì trong mục này trước khi có phép đó. Sẵn sàng phần mềm, phép của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận là bốn sự thật tách biệt; ghi từng cái riêng. Các lựa chọn dưới đây là khuyến nghị; owner decision pending (D-1 đến D-15 ở [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) mục D). Các khóa cấu hình chỉ được nêu tên ở đây và giá trị của chúng chỉ nằm trong `<env-file>`.
++Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho phép rõ ràng ([06 Nghiệm thu](06_TEST_AND_ACCEPTANCE.vi.md)). Không làm gì trong mục này trước khi có phép đó. Sẵn sàng phần mềm, phép của chủ sở hữu, nhà cung cấp chấp nhận và người nhận đã nhận là bốn sự thật tách biệt; ghi từng cái riêng. Các lựa chọn dưới đây là khuyến nghị; owner decision pending (D-1 đến D-15 ở [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) mục D). Các khóa cấu hình chỉ được nêu tên ở đây và giá trị của chúng chỉ nằm trong `<env-file>`. Trên DSM, các lệnh dữ liệu, backup và Docker ở mục 13 đến 16 cần quyền root (`sudo -i`): `<data-dir>` có quyền 700 và thuộc UID 10001. Trình duyệt có thể yêu cầu người vận hành gõ "allow pasting" trước khi một dòng dán vào console được chạy.
+@@ -294 +294 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
+-   - Trạng thái quản trị cho thấy chế độ gửi `capture`, cờ tắt và kích hoạt là "Not activated".
++   - Trạng thái quản trị cho thấy "Outbound mode: Capture only (nothing leaves the server)" và kích hoạt "Not activated". Trạng thái không có trường nào cho cờ gửi: kiểm tra trong file, `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` in ra `0` (in ra `1` khi cờ được đặt; lệnh không bao giờ in giá trị).
+@@ -296 +296 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
+-   - Kiểm tra `PUBLIC_BASE_URL` và `APP_ORIGINS`: link sâu trong thư đã capture mở `https://<nas-host>/` và đăng nhập được, và một yêu cầu thay đổi trạng thái từ origin đó được chấp nhận.
++   - Kiểm tra `PUBLIC_BASE_URL` và `APP_ORIGINS`: mở `https://<nas-host>/#/review/<payroll-date>` (dạng của mọi link nhắc nhở); nó phải yêu cầu đăng nhập rồi mở màn hình review. Một bản nộp đã capture không chứa link nào, và không có lời nhắc nào được quyết định trước khi đặt thời điểm kích hoạt. Một yêu cầu thay đổi trạng thái từ origin đó phải được chấp nhận.
+@@ -310 +310 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
+-   - Thiếu cờ thì server và CLI từ chối khởi động và nêu tên cờ, không bao giờ nêu giá trị. Khởi động lại đơn thuần không đọc lại `<env-file>`, nên hãy tạo lại container:
++   - Ở chế độ SMTP mà thiếu cờ thì server từ chối khởi động, và các lệnh CLI đọc cài đặt thư (`backup`, `restore`) cũng vậy; các lệnh khác thì không. Thông báo nêu tên cờ, không bao giờ nêu giá trị. Khởi động lại đơn thuần không đọc lại `<env-file>`, nên hãy tạo lại container:
+@@ -318 +318 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
+-   - Trạng thái quản trị giờ cho thấy chế độ gửi `smtp` và cờ bật. Thời điểm kích hoạt vẫn trống.
++   - Trạng thái quản trị giờ cho thấy "Outbound mode: SMTP (real sending)", và `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` in ra `1`. Thời điểm kích hoạt vẫn trống ("Not activated").
+@@ -327 +327 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
+-   - Lệnh gọi được ghi audit. Kiểm tra trạng thái quản trị hiển thị thời điểm đó.
++   - Lệnh gọi được ghi audit. Kiểm tra trạng thái quản trị hiển thị thời điểm đó. Nó hiển thị theo múi giờ của trình duyệt và không có nhãn múi giờ, nên `2027-01-01T00:00:00Z` hiện thành ngày giờ địa phương của trình duyệt.
+@@ -334,0 +335 @@ Việc gửi thật và thời điểm kích hoạt cần chủ sở hữu cho p
++   - Link: khi đã đặt thời điểm kích hoạt (bước 5), mở link của lời nhắc đầu tiên đến. Nó phải là `https://<nas-host>/#/review/<payroll-date>`, yêu cầu đăng nhập rồi mở màn hình review.
+@@ -346 +347 @@ Hủy kích hoạt khi một lần gửi sai hoặc bất ngờ, nhà cung cấp
+-2. Xem trạng thái quản trị để biết có lần gửi nào đang xếp hàng hay giữ lease không. Job gửi chạy sau bước 4 sẽ ghi vào thư mục capture và được ghi nhận với bộ gửi capture: đó không phải thư thật. Hãy chờ tới khi không còn gì xếp hàng hay giữ lease (runner khỏe tìm thấy việc trong khoảng một phút), hoặc chấp nhận rằng các lần gửi đó chỉ được capture và báo người nhận bằng tay.
++2. Xem trạng thái quản trị để biết có lần gửi nào đang xếp hàng hay giữ lease không. Job gửi chạy sau bước 4 sẽ ghi vào thư mục capture: đó không phải thư thật. Lịch sử của chủ sở hữu hiện nó là "Accepted by the mail server", và chỉ bản ghi API của lần thử mới cho thấy provider response `captured` cùng provider id bắt đầu bằng `capture-`. Hãy chờ tới khi không còn gì xếp hàng hay giữ lease (runner khỏe tìm thấy việc trong khoảng một phút), hoặc chấp nhận rằng các lần gửi đó chỉ được capture và báo người nhận bằng tay.
+@@ -355 +356 @@ Hủy kích hoạt khi một lần gửi sai hoặc bất ngờ, nhà cung cấp
+-   Trạng thái quản trị cho thấy chế độ gửi `capture`, cờ tắt và kích hoạt là "Not activated".
++   Trạng thái quản trị cho thấy "Outbound mode: Capture only (nothing leaves the server)" và kích hoạt "Not activated". Rồi kiểm tra file: `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` phải in ra `0`.
+@@ -378 +379 @@ Pilot là lần cài đặt đầu tiên, nên không có schema hay image produ
+-5. Chỉ restore khi dữ liệu hỏng hoặc sai, không bao giờ đè lên dữ liệu đang chạy. Đối chiếu `sha256sum <backup-dir>/<backup-name>/manifest.json` với `<manifest-sha256>`, rồi restore `<backup-name>` cô lập (mục 6) vào một thư mục thật mới, và đối soát (mục 7). Instance đã restore bị tạm dừng và ở chế độ capture, và các thay đổi sau backup đó không có trong nó. Không bao giờ chạy hai hàng đợi.
++5. Chỉ restore khi dữ liệu hỏng hoặc sai, không bao giờ đè lên dữ liệu đang chạy. Đối chiếu `sha256sum <backup-dir>/<backup-name>/manifest.json` với `<manifest-sha256>`, rồi restore `<backup-name>` cô lập (mục 6) vào một thư mục thật mới, và đối soát (mục 7). Instance đã restore bị tạm dừng, và các thay đổi sau backup đó không có trong nó. Với instance restore chỉ để kiểm tra, trỏ `TIMESHEET_ENV_FILE` tới bản sao được bảo vệ của `<env-file>` ở chế độ capture đã giữ ở mục 13 bước 3; file đang chạy chứa chế độ SMTP và cờ sau khi kích hoạt. Không bao giờ chạy hai hàng đợi.

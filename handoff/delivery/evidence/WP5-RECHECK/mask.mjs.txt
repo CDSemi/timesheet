@@ -1,0 +1,35 @@
+// WP5-RECHECK: masks an evidence file and writes it with LF line ends. ANSI codes are removed; the export, the task
+// folder, the repository and the user profile are replaced in every spelling found in raw output (backslashes,
+// JSON-escaped backslashes, forward slashes, file URLs, Git Bash /d/... paths, either drive-letter case).
+// Usage: node mask.mjs <in> <out>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+if (!input || !output) throw new Error('usage: node mask.mjs <in> <out>');
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function variants(windowsPath) {
+  const parts = windowsPath.split('\\');
+  const drive = parts[0].slice(0, 1);
+  const rest = parts.slice(1);
+  const out = new Set();
+  for (const d of [drive.toUpperCase(), drive.toLowerCase()]) {
+    for (const sep of ['\\', '\\\\', '\\\\\\\\', '/']) out.add([`${d}:`, ...rest].join(sep));
+    out.add(`/${d}/${rest.join('/')}`);
+  }
+  return [...out].sort((a, b) => b.length - a.length);
+}
+const home = process.env.USERPROFILE ?? '';
+const user = home.split('\\').at(-1) ?? '';
+const rules = [
+  ['<export-74d5bfe>', '<export-74d5bfe>'],
+  ['<export>', '<export>'],
+  ['<task>', '<task>'],
+  ['<project>', '<project>'],
+  ...(home === '' ? [] : [[home, '<user-home>']]),
+];
+let text = readFileSync(input, 'utf8').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r\n?/g, '\n');
+for (const [path, label] of rules) {
+  for (const v of variants(path)) text = text.replace(new RegExp(escape(v), 'gi'), label);
+}
+if (user.length >= 3) text = text.replace(new RegExp(`\\b${escape(user)}\\b`, 'gi'), '<user>');
+writeFileSync(output, text.endsWith('\n') ? text : `${text}\n`);

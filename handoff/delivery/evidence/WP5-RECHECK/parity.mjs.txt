@@ -1,0 +1,65 @@
+// WP5-RECHECK: EN/VI structural parity of two Markdown files, per "## " section. For each section it compares the
+// numbered items, bullets, table rows, fences, checkboxes, link targets, code spans and long hex tokens (SHAs and
+// digests). Optional section filter (comma-separated leading numbers or "0"); prints one line per section.
+// Usage: node parity.mjs <en.md> <vi.md> [sections]
+import { readFileSync } from 'node:fs';
+
+const [enPath, viPath, filter] = process.argv.slice(2);
+const wanted = filter ? new Set(filter.split(',')) : null;
+const sections = (path) => {
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+  const out = [];
+  let current = { title: '(preamble)', lines: [] };
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) {
+      out.push(current);
+      current = { title: line.slice(3), lines: [] };
+    } else current.lines.push(line);
+  }
+  out.push(current);
+  return out;
+};
+const facts = (lines) => {
+  const body = lines.join('\n');
+  // Code inside fences counts as fence content, not as spans.
+  const fences = body.match(/^\s*~~~[\s\S]*?^\s*~~~/gm) ?? [];
+  const noFence = fences.reduce((acc, f) => acc.replace(f, ''), body);
+  return {
+    numbered: lines.filter((l) => /^\s*\d+\.\s/.test(l)).length,
+    bullets: lines.filter((l) => /^\s*-\s/.test(l)).length,
+    tableRows: lines.filter((l) => /^\|/.test(l)).length,
+    fences: fences.join('\n'),
+    checkboxes: (body.match(/\[ \]/g) ?? []).length,
+    links: (body.match(/\]\(([^)]+)\)/g) ?? []).map((l) => l.replace(/\.vi\.md/g, '.md')).sort().join(' '),
+    spans: (noFence.match(/`[^`\n]+`/g) ?? []).sort().join(' '),
+    hex: (body.match(/\b[0-9a-f]{7,64}\b/g) ?? []).filter((h) => /[a-f]/.test(h) && /\d/.test(h)).sort().join(' '),
+  };
+};
+const en = sections(enPath);
+const vi = sections(viPath);
+console.log(`files: sections EN ${en.length}, VI ${vi.length}`);
+let differences = 0;
+for (let i = 0; i < Math.max(en.length, vi.length); i += 1) {
+  const e = en[i];
+  const v = vi[i];
+  const num = (e?.title.match(/^(\d+)\./)?.[1]) ?? (i === 0 ? 'pre' : e?.title);
+  if (wanted && !wanted.has(String(num))) continue;
+  if (!e || !v) {
+    console.log(`section ${i}: missing in ${!e ? 'EN' : 'VI'}`);
+    differences += 1;
+    continue;
+  }
+  const fe = facts(e.lines);
+  const fv = facts(v.lines);
+  const diff = Object.keys(fe).filter((k) => fe[k] !== fv[k]);
+  const summary = `numbered ${fe.numbered}/${fv.numbered}, bullets ${fe.bullets}/${fv.bullets}, table rows ${fe.tableRows}/${fv.tableRows}, fences ${fe.fences === fv.fences ? 'identical' : 'DIFFER'}, checkboxes ${fe.checkboxes}/${fv.checkboxes}, links ${fe.links === fv.links ? 'equal' : 'DIFFER'}, code spans ${fe.spans === fv.spans ? 'equal' : 'DIFFER'}, hex tokens ${fe.hex === fv.hex ? 'equal' : 'DIFFER'}`;
+  console.log(`section "${e.title}" / "${v.title}": ${diff.length === 0 ? 'EQUAL' : `DIFF in ${diff.join(', ')}`} (${summary})`);
+  for (const k of diff.filter((key) => key === 'spans' || key === 'links' || key === 'hex')) {
+    const a = new Set(fe[k].split(' '));
+    const b = new Set(fv[k].split(' '));
+    console.log(`    ${k} only in EN: ${[...a].filter((x) => !b.has(x)).join(' ') || '-'}`);
+    console.log(`    ${k} only in VI: ${[...b].filter((x) => !a.has(x)).join(' ') || '-'}`);
+  }
+  if (diff.length > 0) differences += 1;
+}
+console.log(`sections with a difference: ${differences}`);

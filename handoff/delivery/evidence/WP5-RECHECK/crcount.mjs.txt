@@ -1,0 +1,16 @@
+// WP5-RECHECK: counts CR bytes, U+FFFD and ESC bytes in every file of a folder (evidence hygiene check).
+// Usage: node crcount.mjs <folder>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir] = process.argv.slice(2);
+let bad = 0;
+for (const name of readdirSync(dir).sort()) {
+  const data = readFileSync(join(dir, name));
+  const cr = data.filter((b) => b === 13).length;
+  const esc = data.filter((b) => b === 27).length;
+  const fffd = data.toString('utf8').split(String.fromCharCode(0xfffd)).length - 1;
+  if (cr + esc + fffd > 0) bad += 1;
+  console.log(`${name}: bytes ${data.length}, CR ${cr}, ESC ${esc}, U+FFFD ${fffd}`);
+}
+console.log(`files with CR, ESC or U+FFFD: ${bad}`);

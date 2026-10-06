@@ -1,0 +1,29 @@
+// WP5-RECHECK: SHA-256 of every file under <dir>/dist, one "<sha256> <size> <relative path>" line per file, sorted
+// by path in byte order; prints the file count, total bytes and the SHA-256 of the listing.
+// Usage: node dist-hash.mjs <export-dir> <listing-out>
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, out] = process.argv.slice(2);
+if (!root || !out) throw new Error('usage: node dist-hash.mjs <export-dir> <listing-out>');
+const files = [];
+const walk = (dir, rel) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = rel === '' ? entry.name : `${rel}/${entry.name}`;
+    if (entry.isDirectory()) walk(join(dir, entry.name), path);
+    else files.push(path);
+  }
+};
+walk(join(root, 'dist'), '');
+files.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+let bytes = 0;
+const lines = files
+  .map((p) => {
+    const data = readFileSync(join(root, 'dist', p));
+    bytes += data.length;
+    return `${createHash('sha256').update(data).digest('hex')} ${data.length} ${p}\n`;
+  })
+  .join('');
+writeFileSync(out, lines);
+console.log(`dist files ${files.length}, bytes ${bytes}, listing sha256 ${createHash('sha256').update(lines).digest('hex')}`);

@@ -6,14 +6,16 @@
 - WP3 đã nghiệm thu: WP3-REGATE3 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
 - WP4 đã nghiệm thu: WP4-REGATE4 PASS và hai lần kiểm tra lại độc lập cuối cùng,
-  WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969. Các câu
-  hỏi WP4-I-1..I-5 vẫn mở, đang áp dụng mặc định an toàn; R-A3 cần chủ dự án chọn trước
-  pilot WP5.
+  WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969.
+- WP5 đã nghiệm thu (độ sẵn sàng phần mềm): WP5-REGATE và WP5-REGATE2 PASS, và lần kiểm
+  tra lại độc lập cuối WP5-RECHECK PASS tại 014bd47, digest 150420e7.
+- Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án
+  duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),
-[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP4 handoff](delivery/WP4_HANDOFF.vi.md),
-[WP4 recheck A4](delivery/WP4_RECHECK_A4.vi.md) và [WP4 recheck B4](delivery/WP4_RECHECK_B4.vi.md).
+[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), [WP5 handoff](delivery/WP5_HANDOFF.vi.md),
+[WP5 recheck](delivery/WP5_RECHECK.vi.md) và [pilot packet](delivery/WP5_PILOT_PACKET.vi.md).
 
 Mở repo này trong Claude Code bằng đăng nhập subscription. Cấu hình dự án chọn
 coordinator; [tài liệu 08](../docs/08_AI_WORKFLOW_AND_BUDGET.vi.md) quy định định tuyến
@@ -36,14 +38,16 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Biên bản nghiệm thu WP4: đã xong.** Biên bản nghiệm thu trong
-   [WP4 handoff](delivery/WP4_HANDOFF.vi.md) đã được commit ở e7fe514, không đổi source.
-2. **WP5 (đang làm).** Làm theo [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.vi.md). WP5-PLAN
-   thiết kế các bước. WP5 bắt đầu bằng nghiệm thu độc lập, sau đó là pilot packet cụ
-   thể. Auditor mới dùng
-   [WP5_REVIEW](prompts/WP5_REVIEW.vi.md). Pilot thật, gửi thật và triển khai thật do
-   chủ dự án quyết định.
-3. **Việc của chủ dự án:** WP4-I-1..I-5, và chọn cách rollback R-A3 trước pilot.
+1. **Biên bản và commit nghiệm thu WP5.** WP5-ACCREC điền
+   [WP5 handoff](delivery/WP5_HANDOFF.vi.md), và WP5-ACCEPT commit nó, không đổi source.
+2. **GOV-RECOVERY.** Bản sửa quản trị này làm cho các board giả lập của
+   `check_recovery.py` không phụ thuộc vào trạng thái thật của mission. Cần làm xong
+   trước khi board ghi mission là `software_ready`. Nó đi qua sửa, đóng băng, gate và
+   một lần audit GOV mới.
+3. **Chủ dự án duyệt pilot.** Chủ dự án đọc pilot packet và trả lời D-1..D-15. D-1, D-7,
+   D-8 và D-13 cần có trước khi kích hoạt. Câu trả lời nào khác mặc định hiện tại sẽ
+   kéo theo một vòng sửa trước khi kích hoạt. Chỉ gửi thật, triển khai và kích hoạt
+   sau khi chủ dự án cho phép rõ ràng.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
 `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới

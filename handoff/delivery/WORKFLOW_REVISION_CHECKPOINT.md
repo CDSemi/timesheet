@@ -6,7 +6,7 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = 9bcdd88faf782be4f16c139e29d07d279d2609e3 (WP5-FIXD-FREEZE, the WP5 documentation fix freeze; digest 1b8ceae4).
+  - HEAD = origin/main = 014bd47a8d906c944d2781eba4f2b91c5a532419 (WP5-FIXD2-FREEZE, the status wording fix; digest 150420e7).
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -1014,7 +1014,31 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
        - WP5-FIXD2 is done. The only hit was that sentence (EN and VI), and it is
          fixed. The sweep of docs/05, 07, 12, README and the packet is clean. Digest
          150420e7.
-       - Running: WP5-FIXD2-FREEZE (committer).
+       - WP5-FIXD2-FREEZE committed and pushed 014bd47 (46 paths; all checks 0).
+       - WP5-REGATE2: **PASS** on 014bd47 (digest 150420e7, 779 files).
+         - Since 9bcdd88, only docs/11 changed outside handoff/: one line each in EN
+           and VI.
+         - All 230 dist files are identical; verify 1,759; AC-13 passed.
+         - Status-flag claims: 0.
+       - WP5-PKTID is done (attempt 2).
+         - Packet sections 0 and 6 now name 014bd47, 150420e7 and the development
+           image bd17d061 of 9bcdd88.
+         - Sections 3 and 5 are labelled with their 74d5bfe/WP5-GATE source and the
+           documentation-only delta.
+       - WP5-RECHECK: **PASS** on 014bd47 (digest 150420e7), with no findings.
+         - F-01, F-02, A2-01 and A2-02 were each checked against the live app and are
+           resolved.
+         - The small-risk fixes are accurate, and the packet identity is correct.
+         - Risks R-RC-1..6 are optional Info items.
+         - **WP5 software readiness is accepted, and the pilot is pending.**
+       - WP5-ACCREC is done.
+         - The WP5_HANDOFF acceptance record (EN and VI) is filled: 014bd47,
+           150420e7.
+         - O-1 is corrected: B-01 is recorded as Medium.
+         - Parity and preflight pass.
+       - STATE marks WP5 passed. NEXT_ACTION (EN and VI) points to GOV-RECOVERY and
+         the owner's pilot review.
+       - Running: WP5-ACCEPT (committer).
        - Then: a freeze, a docs-delta regate, WP5-PKTID, WP5-RECHECK (fresh opus),
          ACCREC and ACCEPT.
        - Then:
@@ -1045,10 +1069,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP5-ASSESS-A and WP5-ASSESS-B. Then plan fixes for any findings, plus
-     owner fixes for answers to D-1..D-15 that differ from the defaults.
-  2. Then fixes, an independent recheck, release and setup notes, and the concrete
-     pilot packet for owner review. The real pilot stays owner-controlled.
+  1. Record WP5-ACCREC, then dispatch WP5-ACCEPT (its brief is ready).
+  2. Then GOV-RECOVERY: make the check_recovery synthetic boards independent of the
+     live mission status. It goes through a fix, a freeze, a gate and a fresh GOV
+     audit. After that, set the mission status to `software_ready`.
+  3. Then hand the pilot packet to the owner and ask D-1..D-15. The real pilot,
+     sending and activation stay owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its

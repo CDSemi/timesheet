@@ -115,4 +115,8 @@ Return at most 120 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 9bcdd88faf782be4f16c139e29d07d279d2609e3; commit
+  014bd47a8d906c944d2781eba4f2b91c5a532419; pushed true; remote SHA same.
+- Node v24.21.0; digest 150420e7...6533e61 (matches); 46 staged; scope clean.
+- All checks exit 0 (precommit PASS 46, diff --check, JSON, orchestration,
+  recovery, preflight). No blockers. Details: evidence/WP5-FIXD2-FREEZE/checks.txt.

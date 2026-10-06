@@ -15,10 +15,10 @@ This is the concrete packet the owner reviews before authorizing real sending. E
 
 | Field | Value |
 |---|---|
-| Release commit (WP5 package-final freeze) | `74d5bfec6700126da4105b5d97f5efe943f896f5` (= `origin/main` when the packet was made) |
-| Source digest (`npm run digest`, `handoff/` excluded) | `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba`, 779 files; recomputed before and after this task, unchanged |
+| Release commit (WP5 package-final freeze, regated by WP5-REGATE2) | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
+| Source digest (`npm run digest`, `handoff/` excluded; digest of record of WP5-REGATE2) | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61`, 779 files; recomputed before and after this task, unchanged |
 | Version in `package.json` | `0.1.0` (does not identify the release; the commit and digest do) |
-| Reference image ID (WP5-GATE drill build, development workstation, `linux/amd64`, 110,002,055 bytes) | `sha256:0addd2000b422846badb99ea72003d4a883dc418b7b5f8c2c6d53acb66189fd8` |
+| Reference image ID (WP5-REGATE drill build, development workstation, `linux/amd64`, 110,002,055 bytes; built from 9bcdd88, a documentation-only delta to the release commit; WP5-REGATE2 builds no image) | `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49` |
 | Image ID built on the NAS | `<image-id>` (the owner records it at build time, [runbook](../../docs/11_OPERATIONS_RUNBOOK.md) section 1 step 8; a rebuild of the same source gives another ID) |
 | Release declaration | none declared, no tag; recommended at the owner's pilot authorization; owner decision pending (D-14) |
 
@@ -82,6 +82,8 @@ Recommended; owner decision pending (D-12): the first period is signed off by ha
 ## 3. Email and PDF samples
 
 All samples were generated from a clean `git archive` export of commit `74d5bfe` (the gated freeze), built with `npm ci` and `build:server`, with the production services and job handlers, fixed clocks, capture mode and synthetic users at `example.invalid`. `PRODUCTION_SENDING_ENABLED` was never set and nothing was sent. The calendar is the synthetic seed calendar: period 2026-09-14 to 2026-09-27, payroll date 2026-10-02, reporting zone `America/Los_Angeles`. Real dates will differ.
+
+Provenance of these samples: produced at 74d5bfe (WP5-GATE). The delta from 74d5bfe to the release commit 014bd47 is documentation only; the 230 `dist/` files are byte-identical (WP5-REGATE2), and WP5-REGATE passed the drill again on 9bcdd88.
 
 Each message is saved as one `.txt` (subject, raw headers, decoded body, PDF facts), and each PDF page as a `*-synthetic.png` render. Every render was viewed after it was made. Each PDF has one page; its stored hash equals the captured attachment.
 
@@ -161,6 +163,8 @@ Application settings. The "documented default" column is the design default ([04
 
 Source: the container drill of the gate, synthetic data, capture mode, Docker Desktop on a developer workstation (`linux/amd64`), image `sha256:0addd2000b42...9fd8`. `npm run drill:container -- --wp3 <previous build>`: stages 33, 31, 57, 35, 27 and 23 checks = 208 PASS, 0 FAIL (`handoff/delivery/evidence/WP5-GATE/07-drill.txt`).
 
+Provenance of these figures: produced at 74d5bfe (WP5-GATE). The delta from 74d5bfe to the release commit 014bd47 is documentation only; the 230 `dist/` files are byte-identical (WP5-REGATE2), and WP5-REGATE passed the drill again on 9bcdd88.
+
 | Figure | Value |
 |---|---|
 | Backup while writing | exit 0; 432 ms inside the CLI, 1,180 ms through `docker compose exec`; 5, 56 and 27 writes before, during and after, all succeeded |
@@ -206,9 +210,9 @@ The pilot is the first installation, so there is no older production schema or i
 
 | Field | Value |
 |---|---|
-| Release commit | `74d5bfec6700126da4105b5d97f5efe943f896f5` |
-| Source digest | `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba` |
-| Image ID built on the NAS | `<image-id>` (reference build of the gate: `sha256:0addd2000b422846badb99ea72003d4a883dc418b7b5f8c2c6d53acb66189fd8`) |
+| Release commit | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
+| Source digest | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61` |
+| Image ID built on the NAS | `<image-id>` (reference build of the WP5-REGATE drill, development machine, built from 9bcdd88, documentation-only delta to the release commit: `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49`) |
 | Pre-activation backup | `<backup-name>` (taken in runbook section 13 step 3) |
 | Manifest hash of that backup | `<manifest-sha256>` |
 | Separate-device copy of the backup and the capture-mode `<env-file>` | where it is kept (private copy) |

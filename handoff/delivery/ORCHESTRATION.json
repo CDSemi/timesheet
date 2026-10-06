@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "wp5-regate",
+  "phase": "wp5-recheck",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-FIXD2-FREEZE",
+  "next_task_id": "WP5-ACCEPT",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -159,7 +159,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "9bcdd88faf782be4f16c139e29d07d279d2609e3",
+    "last_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
     "unpushed": []
   },
   "owner_decisions": [
@@ -12696,7 +12696,7 @@
       "id": "WP5-FIXD2-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-FIXD2"
       ],
@@ -12709,10 +12709,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a62f9ffc80d391b2c",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -12721,8 +12721,250 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-FIXD2-FREEZE.md",
       "report": "handoff/delivery/tasks/WP5-FIXD2-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-FIXD2-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-FIXD2-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "9bcdd88faf782be4f16c139e29d07d279d2609e3",
+      "branch": "main",
+      "commit_sha": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "pushed": true,
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed, the status wording fix freeze: parent 9bcdd88, remote SHA identical; digest 150420e7 matched; nothing pre-staged; 46 paths staged, scope clean; precommit (46 files, 0 findings), diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0.",
+      "next_action": "None; WP5-REGATE2 on 014bd47."
+    },
+    {
+      "id": "WP5-REGATE2",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "depends_on": [
+        "WP5-FIXD2-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "ae0e7d990828dbba6",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-REGATE2.md",
+        "handoff/delivery/evidence/WP5-REGATE2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-REGATE2.md",
+      "report": "handoff/delivery/tasks/WP5-REGATE2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-REGATE2/digests.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/digest-lstree-form.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/diffstat-nonhandoff.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/dist-new.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/dist-old.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/verify-summary.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/ac13-summary.txt",
+        "handoff/delivery/evidence/WP5-REGATE2/exit-codes.txt"
+      ],
+      "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS on 014bd47 (verifier; self-reported claude-sonnet-5-5), docs-delta gate. Digest of record 150420e7 (779 files) equal in the clean export, ls-tree form and npm run digest. Scope since 9bcdd88 outside handoff/: docs/11 EN and VI, one line each. npm ci x2 (lockfile unchanged, 0 deprecation lines), lint 0, verify 77 files / 1759 tests, smoke passed; all 230 dist files byte-identical between the exports of 014bd47 and 9bcdd88; AC-13 alone pass; status-flag claims 0 across docs/05, 07, 11, 12, README and the packet; WP5-REGATE fixed lines hold; npm audit --omit=dev 0; precommit self-test and the three validators PASS. Drill and e2e not repeated: the delta is two documentation lines and every non-docs file is byte-identical, so the WP5-REGATE drill (208 PASS) and e2e (145 passed) carry over. NAS NOT VERIFIED. Nothing left running.",
+      "next_action": "None; WP5-PKTID, then WP5-RECHECK on 014bd47."
+    },
+    {
+      "id": "WP5-PKTID",
+      "package": "WP5",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP5-REGATE2"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "af32d61fc770be30a",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 2,
+      "history": [
+        "attempt 1 (agent af32d61fc770be30a, self-reported claude-sonnet-5-5): packet sections 0 and 6 (EN/VI) set to commit 014bd47, digest 150420e7 (779 files) and the WP5-REGATE dev image bd17d061 labelled 9bcdd88; parity held; precommit 0 (0 staged files); preflight 0; digest unchanged. Sections 3 and 5 still name 74d5bfe and image 0addd2000 as the source of the samples and restore proof; attempt 2 labels them with the documentation-only delta. The reported drill-source 'conflict' was a misreading (49651c8 is the --wp3 old-version tree)."
+      ],
+      "owned_paths": [
+        "handoff/delivery/WP5_PILOT_PACKET.md",
+        "handoff/delivery/WP5_PILOT_PACKET.vi.md",
+        "handoff/delivery/tasks/WP5-PKTID.md",
+        "handoff/delivery/evidence/WP5-PKTID"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-PKTID.md",
+      "report": "handoff/delivery/tasks/WP5-PKTID.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-PKTID/04-digest-attempt2.txt",
+        "handoff/delivery/evidence/WP5-PKTID/05-precommit-attempt2.txt",
+        "handoff/delivery/evidence/WP5-PKTID/06-preflight-attempt2.txt"
+      ],
+      "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "Author-reported (light), attempt 2: packet sections 3 and 5 (EN/VI) each gained one labelled provenance sentence (facts produced on 74d5bfe / WP5-GATE; delta to 014bd47 documentation only; 230 dist files byte-identical per WP5-REGATE2; WP5-REGATE re-passed the drill on 9bcdd88); sections 0 and 6 unchanged from attempt 1 (014bd47, 150420e7, dev image bd17d061 of 9bcdd88). Parity holds; 74d5bfe and 0addd2000 remain only as labelled history; precommit 0 (inspected 0 files, nothing staged); preflight 0; digest 150420e7 unchanged.",
+      "next_action": "None; WP5-RECHECK on 014bd47."
+    },
+    {
+      "id": "WP5-RECHECK",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "depends_on": [
+        "WP5-REGATE2",
+        "WP5-PKTID"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a0c919348e6a91d64",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_RECHECK.md",
+        "handoff/delivery/WP5_RECHECK.vi.md",
+        "handoff/delivery/tasks/WP5-RECHECK.md",
+        "handoff/delivery/evidence/WP5-RECHECK"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-RECHECK.md",
+      "report": "handoff/delivery/tasks/WP5-RECHECK.md",
+      "evidence": [
+        "handoff/delivery/WP5_RECHECK.md",
+        "handoff/delivery/evidence/WP5-RECHECK/00-README.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/00-baseline.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/01-delta.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/05-verify.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/06-ac13.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/07-dist-compare.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/08-probe-log.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/08-status-screen-text.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/08-refusal-table.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/08-reminder-alice.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/09-grep-flag-check.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/10-parity.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/12-packet-identity.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/98-process-listing.txt",
+        "handoff/delivery/evidence/WP5-RECHECK/99-digest-after.txt"
+      ],
+      "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "findings": [],
+      "notes": [
+        "Digest 150420e7 (779 files) before and after in the repo, ls-tree form and a clean export; HEAD = origin/main = 014bd47. Delta since 74d5bfe: only docs/11 EN/VI; dist of 74d5bfe and 014bd47 byte-identical (230 files); npm ci, verify (1759 tests, smoke) and AC-13 pass.",
+        "WP5-F-01 and WP5-A2-01 resolved: on the live app the admin screen and JSON show only 'Sender address' and 'Outbound mode', no flag; grep -c prints 0 or 1; without the flag the server, backup and restore refuse, other commands do not. WP5-A2-02 resolved: the deep link asks for sign-in then opens the review; the first reminder link matches the reviewLink form. WP5-F-02 resolved: packet section 8 matches the board blocking text. Small-risk fixes R-A2-1, R-A2-2/R-F1, R-F4, R-F5, R-F6 accurate. Packet identity 014bd47 / 150420e7 / dev image bd17d061 with the docs-only note and the NAS image-ID rule; EN/VI parity holds.",
+        "Overall: software ready, pilot pending (NAS NOT VERIFIED, no owner permission, no pilot result). Risks, all optional Info: R-RC-1 the grep -c check matches only the canonical line; R-RC-2 step 6/7 ordering of the first-reminder link check; R-RC-3 packet section 8 names only D-8 as a differing recommendation; R-RC-4 section 6 step 3 still says the restored instance runs in capture mode (residual R-F1); R-RC-5 the root note covers sections 13-16 only; R-RC-6 sections 3 and 5 cite WP5-REGATE2 for dist identity, which compared 9bcdd88 with 014bd47. Preflight and precommit pass; nothing left running."
+      ],
+      "next_action": "None; WP5 accepted on 014bd47. WP5-ACCREC, then WP5-ACCEPT."
+    },
+    {
+      "id": "WP5-ACCREC",
+      "package": "WP5",
+      "kind": "documentation",
+      "status": "done",
+      "depends_on": [
+        "WP5-RECHECK"
+      ],
+      "profile": "timesheet-light",
+      "requested_model": "sonnet",
+      "requested_effort": "low",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7b6cd3080756f5dd",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_HANDOFF.md",
+        "handoff/delivery/WP5_HANDOFF.vi.md",
+        "handoff/delivery/tasks/WP5-ACCREC.md",
+        "handoff/delivery/evidence/WP5-ACCREC"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-ACCREC.md",
+      "report": "handoff/delivery/tasks/WP5-ACCREC.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-ACCREC/00-checks.txt"
+      ],
+      "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "done: WP5_HANDOFF acceptance record filled (EN and VI) and the stale snapshot parts refreshed (title, intro, commits and digest, status, next action, provenance); accepted source 014bd47, digest 150420e7 (779 files); figures from the board and reviews, nothing re-run; O-1 corrected (WP5-B-01 Medium in three places); three outcomes separated (software readiness accepted, NAS NOT VERIFIED; owner permission not requested; no pilot result); the uncommitted WP5-PKTID packet changes noted. EN/VI parity equal; preflight 0; precommit 0 on a private temporary index (4254 files, 0 findings). Not committed.",
+      "next_action": "None; WP5-ACCEPT."
+    },
+    {
+      "id": "WP5-ACCEPT",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-ACCREC"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-ACCEPT.md",
+        "handoff/delivery/evidence/WP5-ACCEPT"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-ACCEPT.md",
+      "report": "handoff/delivery/tasks/WP5-ACCEPT.md",
+      "evidence": [],
+      "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -12730,7 +12972,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the docs/11 status wording fix with the WP5-REGATE results and the closing briefs."
+      "next_action": "Commit and push the WP5 acceptance records (no source change)."
     },
     {
       "id": "WP4-RECHECK-B4",

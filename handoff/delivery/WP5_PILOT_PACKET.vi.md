@@ -15,10 +15,10 @@
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành (đóng băng package-final của WP5) | `74d5bfec6700126da4105b5d97f5efe943f896f5` (= `origin/main` lúc tạo gói) |
-| Source digest (`npm run digest`, không tính `handoff/`) | `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba`, 779 tệp; tính lại trước và sau tác vụ này, không đổi |
+| Commit phát hành (đóng băng package-final của WP5, đã qua gate lại WP5-REGATE2) | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
+| Source digest (`npm run digest`, không tính `handoff/`; digest ghi nhận của WP5-REGATE2) | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61`, 779 tệp; tính lại trước và sau tác vụ này, không đổi |
 | Phiên bản trong `package.json` | `0.1.0` (không định danh bản phát hành; commit và digest mới định danh) |
-| Image ID tham chiếu (bản build drill của WP5-GATE, máy trạm phát triển, `linux/amd64`, 110.002.055 byte) | `sha256:0addd2000b422846badb99ea72003d4a883dc418b7b5f8c2c6d53acb66189fd8` |
+| Image ID tham chiếu (bản build drill của WP5-REGATE, máy trạm phát triển, `linux/amd64`, 110.002.055 byte; build từ 9bcdd88, chênh lệch chỉ về tài liệu so với commit phát hành; WP5-REGATE2 không build image) | `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49` |
 | Image ID build trên NAS | `<image-id>` (chủ sở hữu ghi lại lúc build, [runbook](../../docs/11_OPERATIONS_RUNBOOK.vi.md) mục 1 bước 8; build lại cùng mã nguồn cho ID khác) |
 | Tuyên bố phát hành | chưa tuyên bố, không có tag; khuyến nghị tuyên bố khi chủ sở hữu cho phép pilot; quyết định của chủ sở hữu đang chờ (D-14) |
 
@@ -82,6 +82,8 @@ Khuyến nghị; quyết định của chủ sở hữu đang chờ (D-12): kỳ
 ## 3. Mẫu email và PDF
 
 Mọi mẫu được tạo từ bản export `git archive` sạch của commit `74d5bfe` (bản đóng băng đã qua gate), build bằng `npm ci` và `build:server`, dùng các service và job handler production, đồng hồ cố định, chế độ capture và user tổng hợp ở `example.invalid`. `PRODUCTION_SENDING_ENABLED` chưa bao giờ được đặt và không gửi gì cả. Lịch là lịch seed tổng hợp: kỳ 2026-09-14 đến 2026-09-27, ngày payroll 2026-10-02, múi giờ báo cáo `America/Los_Angeles`. Ngày thật sẽ khác.
+
+Nguồn gốc của các mẫu này: tạo tại 74d5bfe (WP5-GATE). Chênh lệch từ 74d5bfe đến commit phát hành 014bd47 chỉ về tài liệu; 230 tệp `dist/` giống hệt từng byte (WP5-REGATE2), và WP5-REGATE đã chạy lại drill đạt trên 9bcdd88.
 
 Mỗi thư lưu thành một `.txt` (tiêu đề, header thô, nội dung đã giải mã, thông tin PDF), và mỗi trang PDF thành một ảnh `*-synthetic.png`. Mọi ảnh đều đã được xem sau khi tạo. Mỗi PDF có một trang; hash đã lưu khớp tệp đính kèm đã capture.
 
@@ -161,6 +163,8 @@ Cài đặt ứng dụng. Cột "mặc định đã ghi" là mặc định thi�
 
 Nguồn: drill container của gate, dữ liệu tổng hợp, chế độ capture, Docker Desktop trên máy trạm phát triển (`linux/amd64`), image `sha256:0addd2000b42...9fd8`. `npm run drill:container -- --wp3 <bản build trước>`: các giai đoạn 33, 31, 57, 35, 27 và 23 kiểm tra = 208 PASS, 0 FAIL (`handoff/delivery/evidence/WP5-GATE/07-drill.txt`).
 
+Nguồn gốc của các số liệu này: tạo tại 74d5bfe (WP5-GATE). Chênh lệch từ 74d5bfe đến commit phát hành 014bd47 chỉ về tài liệu; 230 tệp `dist/` giống hệt từng byte (WP5-REGATE2), và WP5-REGATE đã chạy lại drill đạt trên 9bcdd88.
+
 | Số liệu | Giá trị |
 |---|---|
 | Backup khi đang ghi | exit 0; 432 ms trong CLI, 1.180 ms qua `docker compose exec`; 5, 56 và 27 lượt ghi trước, trong và sau, tất cả thành công |
@@ -206,9 +210,9 @@ Pilot là lần cài đặt đầu tiên, nên không có schema production hay 
 
 | Trường | Giá trị |
 |---|---|
-| Commit phát hành | `74d5bfec6700126da4105b5d97f5efe943f896f5` |
-| Source digest | `0a64a75f3330cd5138c2787a28f0611c954138ad14ae914b23d966f8a30001ba` |
-| Image ID build trên NAS | `<image-id>` (bản build tham chiếu của gate: `sha256:0addd2000b422846badb99ea72003d4a883dc418b7b5f8c2c6d53acb66189fd8`) |
+| Commit phát hành | `014bd47a8d906c944d2781eba4f2b91c5a532419` |
+| Source digest | `150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61` |
+| Image ID build trên NAS | `<image-id>` (bản build tham chiếu của drill WP5-REGATE, máy phát triển, build từ 9bcdd88, chênh lệch chỉ về tài liệu so với commit phát hành: `sha256:bd17d06185d205fb08bf90ee4de0d25190b7f3bf6b32f01151c9de99b7455f49`) |
 | Backup trước kích hoạt | `<backup-name>` (lấy ở runbook mục 13 bước 3) |
 | Hash manifest của backup đó | `<manifest-sha256>` |
 | Bản sao thiết bị riêng của backup và `<env-file>` chế độ capture | cất ở đâu (bản riêng) |

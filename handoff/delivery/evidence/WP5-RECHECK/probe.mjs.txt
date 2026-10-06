@@ -1,0 +1,495 @@
+// WP5-RECHECK probe. Run: node <task>/probe/probe.mjs <export> <run-dir>
+// The built server of the clean export of the reviewed freeze, production mode, capture mode, synthetic
+// example.invalid accounts only. It rechecks, against the words of docs/11 sections 12 to 15 and packet sections 1, 2
+// and 6: the administrator status screen and GET /api/admin/operations (WP5-F-01, WP5-A2-01), the deep link of the
+// capture self-test and the first-reminder link (WP5-A2-02), the documented console call and the instant display
+// (R-F5), the owner's delivery history wording (R-A2-1), and the refusal sentence against the CLI and the server start.
+// PRODUCTION_SENDING_ENABLED is never set; nothing leaves the machine. Writes only in <run-dir>; stops only the
+// servers it spawned, through their own child handle. No stdin is given to any child (stdio 'ignore').
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [X, RUN] = process.argv.slice(2);
+if (!X || !RUN) throw new Error('usage: node probe.mjs <export> <run-dir>');
+mkdirSync(join(RUN, 'data'), { recursive: true });
+
+const PORT = 47761;
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+const PUBLIC = 'https://timesheet.example.invalid';
+const ZONE = 'America/Los_Angeles';
+const SENDER = 'pilot-sender@example.invalid';
+const ACTIVATION = '2027-01-01T00:00:00Z';
+const dataDir = join(RUN, 'data', 'private-data');
+const dbPath = join(RUN, 'data', 'timesheet.db');
+const backupDir = join(RUN, 'backups');
+const CLI = join(X, 'dist', 'server', 'cli.js');
+const SERVER = join(X, 'dist', 'server', 'index.js');
+const FLAG_MESSAGE = 'OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag';
+
+const require = createRequire(join(X, 'package.json'));
+const Database = require('better-sqlite3');
+const { chromium } = await import(pathToFileURL(join(X, 'node_modules', 'playwright-core', 'index.mjs')).href);
+const { syntheticSignaturePng } = await import(pathToFileURL(join(X, 'dist', 'server', 'seed.js')).href);
+const { reviewLink } = await import(pathToFileURL(join(X, 'dist', 'domain', 'reminders.js')).href);
+
+/* ------------------------------------------------------------------ recorder ---- */
+const secrets = new Set();
+const lines = [];
+let passes = 0;
+let failures = 0;
+const mask = (text) => {
+  let out = String(text);
+  for (const s of secrets) if (s) out = out.split(s).join('<secret>');
+  for (const [from, to] of [[RUN, '<run>'], [X, '<export>']]) out = out.split(from).join(to).split(from.replaceAll('\\', '/')).join(to);
+  return out;
+};
+const log = (text) => {
+  const line = mask(text);
+  lines.push(line);
+  console.log(line);
+};
+const check = (id, label, ok, detail = '') => {
+  if (ok) passes += 1;
+  else failures += 1;
+  log(`${ok ? 'PASS' : 'FAIL'}  ${id}  ${label}${detail === '' ? '' : `  | ${detail}`}`);
+};
+const save = (name, value) => writeFileSync(join(RUN, name), `${mask(typeof value === 'string' ? value : JSON.stringify(value, null, 2))}\n`);
+const secret = () => {
+  const value = `Syn-${randomBytes(12).toString('hex')}`;
+  secrets.add(value);
+  return value;
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sha256 = (data) => createHash('sha256').update(data).digest('hex');
+
+/* --------------------------------------------------------------- environment ---- */
+const inherited = { ...process.env };
+for (const key of Object.keys(inherited)) {
+  if (/^(SMTP_|PRODUCTION_SENDING|SEED_|DATA_DIR$|DATABASE_PATH$|MAIL_FROM$|OUTBOUND_MODE$|NODE_ENV$|PORT$|HOST$|APP_ORIGINS$|PUBLIC_BASE_URL$|JOB_RUNNER$|STATIC_DIR$|COOKIE_SECURE$|TRUSTED_PROXY_ADDRESSES$)/.test(key)) delete inherited[key];
+}
+const base = { ...inherited, HOST: '127.0.0.1', PORT: String(PORT), DATABASE_PATH: dbPath, DATA_DIR: dataDir, APP_ORIGINS: ORIGIN, PUBLIC_BASE_URL: PUBLIC, OUTBOUND_MODE: 'capture', MAIL_FROM: SENDER };
+const prodEnv = { ...base, NODE_ENV: 'production' };
+// run-jobs refuses NODE_ENV=production by design; the CLI then runs against the same database and data directory.
+const devCliEnv = { ...base, NODE_ENV: 'development' };
+const envKeys = (env) => Object.keys(env).filter((k) => /^(NODE_ENV|HOST|PORT|DATABASE_PATH|DATA_DIR|APP_ORIGINS|PUBLIC_BASE_URL|OUTBOUND_MODE|MAIL_FROM|JOB_RUNNER|SMTP_\w+|PRODUCTION_SENDING_ENABLED)$/.test(k)).sort().map((k) => (/^SMTP_(USER|PASSWORD)$/.test(k) ? `${k}=<set>` : `${k}=${env[k]}`)).join(' ');
+
+function cli(env, args, label) {
+  const r = spawnSync(process.execPath, [CLI, ...args], { env, cwd: X, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 });
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  log(`CLI   ${label}: exit ${r.status}`);
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', out };
+}
+
+class Server {
+  constructor(name, env) {
+    this.name = name;
+    this.env = env;
+    this.output = '';
+    this.child = null;
+    this.exit = null;
+  }
+  start(waitListening = true) {
+    this.output = '';
+    this.exit = null;
+    this.child = spawn(process.execPath, [SERVER], { env: this.env, cwd: X, stdio: ['ignore', 'pipe', 'pipe'] });
+    this.child.stdout.on('data', (d) => (this.output += d));
+    this.child.stderr.on('data', (d) => (this.output += d));
+    this.exited = new Promise((resolve) => this.child.on('exit', (code) => resolve((this.exit = code))));
+    if (!waitListening) return this.exited;
+    return (async () => {
+      for (let i = 0; i < 100; i += 1) {
+        if (this.output.includes('listening')) return true;
+        if (this.exit !== null) throw new Error(`server ${this.name} exited ${this.exit}: ${mask(this.output)}`);
+        await sleep(200);
+      }
+      throw new Error(`server ${this.name} did not start`);
+    })();
+  }
+  async stop() {
+    if (this.child === null || this.exit !== null) return this.exit;
+    this.child.kill();
+    const code = await this.exited;
+    log(`INFO  server ${this.name} stopped through its own handle (exit ${code})`);
+    return code;
+  }
+}
+
+class Client {
+  constructor(who) {
+    this.who = who;
+    this.cookie = '';
+  }
+  async raw(method, path, body, headers = {}) {
+    const h = { ...headers, origin: ORIGIN, connection: 'close' };
+    if (this.cookie !== '') h.cookie = this.cookie;
+    let payload;
+    if (body instanceof Uint8Array) payload = body;
+    else if (body !== undefined) {
+      h['content-type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+    const res = await fetch(`${ORIGIN}${path}`, { method, headers: h, body: payload });
+    const buffer = Buffer.from(await res.arrayBuffer());
+    let json = null;
+    try {
+      json = JSON.parse(buffer.toString('utf8'));
+    } catch {
+      json = null;
+    }
+    return { status: res.status, headers: res.headers, json, buffer, text: buffer.toString('utf8') };
+  }
+  async call(method, path, body, headers) {
+    const r = await this.raw(method, path, body, headers);
+    log(`HTTP  ${this.who} ${method} ${path} -> ${r.status}${r.status >= 400 ? ` ${r.text.slice(0, 200)}` : ''}`);
+    return r;
+  }
+  async login(email, password) {
+    const r = await this.raw('POST', '/api/auth/login', { email, password });
+    this.cookie = (r.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    secrets.add(this.cookie.split('=')[1]);
+    log(`HTTP  ${this.who} login -> ${r.status}`);
+    return r;
+  }
+}
+
+/* ------------------------------------------------------------------ captures ---- */
+function captures() {
+  const root = join(dataDir, 'mail-capture');
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.tmp-'))
+    .map((e) => {
+      const folder = join(root, e.name);
+      const files = readdirSync(folder).sort();
+      const eml = files.includes('message.eml') ? readFileSync(join(folder, 'message.eml'), 'utf8') : '';
+      const pdf = files.includes('attachment.pdf') ? readFileSync(join(folder, 'attachment.pdf')) : null;
+      const metadata = files.includes('metadata.json') ? JSON.parse(readFileSync(join(folder, 'metadata.json'), 'utf8')) : null;
+      return { id: e.name, files, eml, pdf, metadata };
+    });
+}
+function decodePart(head, body) {
+  if (/Content-Transfer-Encoding:\s*base64/i.test(head)) return Buffer.from(body.replace(/\s+/g, ''), 'base64').toString('utf8');
+  if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(head)) {
+    const soft = body.replace(/=\r?\n/g, '');
+    const bytes = [];
+    for (let i = 0; i < soft.length; i += 1) {
+      if (soft[i] === '=' && /^[0-9A-F]{2}$/i.test(soft.slice(i + 1, i + 3))) {
+        bytes.push(parseInt(soft.slice(i + 1, i + 3), 16));
+        i += 2;
+      } else bytes.push(...Buffer.from(soft[i], 'utf8'));
+    }
+    return Buffer.from(bytes).toString('utf8');
+  }
+  return body;
+}
+/** Headers of the message and the decoded text of every text/plain and text/html part. */
+function readMessage(eml) {
+  const top = eml.split(/\r?\n\r?\n/)[0] ?? '';
+  const header = (name) => top.match(new RegExp(`^${name}: (.*)$`, 'mi'))?.[1]?.trim() ?? null;
+  const texts = [];
+  for (const part of eml.split(/\r?\n--/)) {
+    const [head, ...rest] = part.split(/\r?\n\r?\n/);
+    if (/Content-Type:\s*text\/(plain|html)/i.test(head ?? '')) texts.push(decodePart(head, rest.join('\n\n')));
+  }
+  if (texts.length === 0) {
+    const [head, ...rest] = eml.split(/\r?\n\r?\n/);
+    texts.push(decodePart(head, rest.join('\n\n')));
+  }
+  return { from: header('From'), to: header('To'), cc: header('Cc'), bcc: header('Bcc'), subject: header('Subject'), autoSubmitted: header('Auto-Submitted'), text: texts.join('\n----\n') };
+}
+const urlsIn = (text) => [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
+
+/* -------------------------------------------------------------- domain data ---- */
+const policy = {
+  effective_from: '2026-01-01',
+  required_minutes: 480,
+  threshold_minutes: 30,
+  rounding_step_minutes: 30,
+  reference_start: '08:00',
+  reference_end: '17:00',
+  breaks: [
+    { start_offset_minutes: 120, duration_minutes: 15, counts_as_work: false },
+    { start_offset_minutes: 240, duration_minutes: 30, counts_as_work: false },
+    { start_offset_minutes: 390, duration_minutes: 15, counts_as_work: false },
+  ],
+  deficit_mode: 'ignore',
+};
+const bootstrapConfig = {
+  schema_version: 1,
+  calendar: { name: 'Synthetic recheck calendar', reporting_zone: ZONE, normal_weekdays_iso: [1, 2, 3, 4, 5], effective_from: '2026-01-01' },
+  holidays: [],
+  policy,
+  payroll: { anchor_payroll_date: '2026-10-09', cycle_days: 14, period_start_offset_days: -16, period_end_offset_days: -3, due_offset_days: -1, due_local_time: '17:00' },
+};
+const at = (date, time) => ({ local: `${date}T${time}`, zone: ZONE });
+const zoneText = (instant, zone) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(instant)).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+};
+
+/* -------------------------------------------------------------- the runbook ---- */
+const runbook = readFileSync(join(X, 'docs', '11_OPERATIONS_RUNBOOK.md'), 'utf8').replace(/\r\n/g, '\n');
+const snippet = /~~~js\n([\s\S]*?)\n\s*~~~/.exec(runbook)?.[1]?.trim();
+if (!snippet) throw new Error('no js fence in the runbook');
+const fill = (instantLiteral, reason) => snippet.replace("'<activation-instant-utc>'", instantLiteral).replace('<reason>', reason);
+const consoleRun = (page, code) => page.evaluate(`(async () => { return ${code}; })()`);
+
+/* -------------------------------------------------------------------- run ---- */
+const server = new Server('live', prodEnv);
+const admin = new Client('admin');
+const A = new Client('alice');
+const adminEmail = 'pilot-admin@example.invalid';
+const alice = { email: 'alice.recheck@example.invalid', name: 'Alice Recheck' };
+const credentials = {};
+let browser = null;
+
+try {
+  log(`INFO  node ${process.version}; real now ${new Date().toISOString()}; server env: ${envKeys(prodEnv)}`);
+  log(`INFO  documented console snippet (verbatim from <export>/docs/11): ${snippet}`);
+
+  // ---------------------------------------------------------------- bootstrap and data
+  writeFileSync(join(RUN, 'bootstrap-config.json'), `${JSON.stringify(bootstrapConfig, null, 2)}\n`);
+  const boot = cli(prodEnv, ['bootstrap', '--config', join(RUN, 'bootstrap-config.json')], 'bootstrap --config <run>/bootstrap-config.json');
+  const token = boot.stdout.match(/^\s+(\S{20,})\s*$/m)?.[1] ?? '';
+  secrets.add(token);
+  check('BOOT', 'production bootstrap prints a setup token once', boot.status === 0 && token !== '', `exit ${boot.status}`);
+  await server.start();
+  log(`INFO  server log so far: ${server.output.trim().replace(/\n/g, ' | ')}`);
+  Object.assign(credentials, { admin: secret(), alice: secret() });
+  const setup = await admin.call('POST', '/api/auth/bootstrap', { token, email: adminEmail, display_name: 'Synthetic Pilot Admin', password: credentials.admin });
+  check('SETUP', 'the first administrator is created from the setup token', setup.status === 201 || setup.status === 200, String(setup.status));
+  await admin.login(adminEmail, credentials.admin);
+  const calendarId = (await admin.call('GET', '/api/calendar')).json?.id;
+  const created = await admin.call('POST', '/api/admin/users', { email: alice.email, display_name: alice.name, role: 'employee', password: credentials.alice, calendar_id: calendarId });
+  await A.login(alice.email, credentials.alice);
+  await A.call('POST', '/api/policies', policy);
+  const current = (await A.call('GET', '/api/periods/current')).json?.current;
+  const P = current?.payroll_date;
+  log(`INFO  current period ${JSON.stringify(current)}`);
+  const saved = await A.call('POST', '/api/settings/submission', { expected_seq: 0, to: ['payroll-a@example.invalid'], cc: ['manager-a@example.invalid'], auto_submit: false });
+  const sig = await A.call('POST', '/api/signatures', new Uint8Array(syntheticSignaturePng(5)), { 'content-type': 'image/png' });
+  const sess = await A.call('POST', `/api/days/${current.period_start}/sessions`, {
+    start: at(current.period_start, '08:00'),
+    end: at(current.period_start, '17:00'),
+    input_zone: ZONE,
+    breaks_confirmed: true,
+    breaks: [['10:00', '10:15'], ['12:00', '12:30'], ['14:30', '14:45']].map(([s, e]) => ({ start: at(current.period_start, s), end: at(current.period_start, e), counts_as_work: false })),
+  });
+  check('DATA', 'synthetic employee created with policy, settings, signature and one work session', created.status === 201 && saved.status === 201 && sig.status === 201 && sess.status === 201, `${created.status}/${saved.status}/${sig.status}/${sess.status}`);
+  const review = await A.call('GET', `/api/timesheets/${P}/review`);
+  const signoff = await A.call('POST', `/api/timesheets/${P}/signoff`, { expected_version: review.json?.expected_version, reviewed_hash: review.json?.payload_hash, signer_name: alice.name, incomplete_evidence_acknowledged: true });
+  const r1 = signoff.json?.revision?.id;
+  check('SIGNOFF', `manual sign-off of payroll ${P} (the capture self-test submission)`, signoff.status === 201 && typeof r1 === 'string', String(signoff.status));
+
+  // ---------------------------------------------------------------- the live runner sends to capture
+  let attempts = [];
+  for (let i = 0; i < 60; i += 1) {
+    attempts = (await A.raw('GET', `/api/deliveries?revision_id=${r1}`)).json?.deliveries ?? [];
+    if (attempts.some((a) => a.state === 'accepted')) break;
+    await sleep(3000);
+  }
+  const accepted = attempts.find((a) => a.state === 'accepted');
+  save('alice-deliveries.json', attempts);
+  check('R-A2-1 api', 'the API record of the captured attempt: provider response "captured", provider id "capture-..."', accepted?.provider_response === 'captured' && /^capture-/.test(accepted?.provider_message_id ?? ''), JSON.stringify({ state: accepted?.state, provider_response: accepted?.provider_response, provider_message_id_prefix: (accepted?.provider_message_id ?? '').slice(0, 8) }));
+  const pdf = await A.raw('GET', `/api/revisions/${r1}/pdf`);
+  const caps1 = captures();
+  const capA = caps1.find((c) => c.id === accepted?.id);
+  const msgA = capA ? readMessage(capA.eml) : null;
+  log(`INFO  capture of the submission: ${JSON.stringify({ files: capA?.files, envelope: capA?.metadata?.envelope, from: msgA?.from, to: msgA?.to, cc: msgA?.cc, bcc: msgA?.bcc, subject: msgA?.subject })}`);
+  check('SELF-2', 'the capture holds exactly the configured recipients, the sender, no Bcc, and a PDF equal to the download', msgA !== null && msgA.to === 'payroll-a@example.invalid' && msgA.cc === 'manager-a@example.invalid' && msgA.bcc === null && (msgA.from ?? '').includes(SENDER) && capA.pdf !== null && sha256(capA.pdf) === sha256(pdf.buffer), `pdf ${capA?.pdf ? sha256(capA.pdf).slice(0, 12) : 'none'} vs download ${sha256(pdf.buffer).slice(0, 12)}`);
+  check('A2-02 text', 'docs/11 s13 step 2: "A captured submission holds no link" (no http(s) URL in the captured message)', capA !== undefined && urlsIn(capA.eml).length === 0 && urlsIn(msgA.text).length === 0, `urls ${JSON.stringify(urlsIn(capA?.eml ?? ''))}`);
+
+  // ---------------------------------------------------------------- GET /api/admin/operations
+  const ops1 = await admin.call('GET', '/api/admin/operations');
+  save('ops-1-capture-not-activated.json', ops1.json);
+  const keyPaths = [];
+  const walk = (value, prefix) => {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) for (const [k, v] of Object.entries(value)) walk(v, prefix === '' ? k : `${prefix}.${k}`);
+    else keyPaths.push(prefix);
+  };
+  walk(ops1.json?.operations ?? {}, '');
+  log(`INFO  operations JSON leaf keys: ${keyPaths.join(', ')}`);
+  check('F-01 json', 'operations.sender is exactly {configured, outbound_mode}; no key names a flag or production sending', JSON.stringify(Object.keys(ops1.json?.operations?.sender ?? {})) === '["configured","outbound_mode"]' && ops1.json.operations.sender.configured === true && ops1.json.operations.sender.outbound_mode === 'capture' && !keyPaths.some((k) => /flag|production|enabled/i.test(k)), JSON.stringify(ops1.json?.operations?.sender));
+  check('S12 json', 'docs/11 s12 items are in the JSON: runner heartbeat, activation, backup outcome/attempt/success/fault/age, disk free/total, outbound pause/reason/awaiting/queued/held, retention, job and delivery totals', ['runner.heartbeat_at', 'activation.active_from', 'backup.outcome', 'backup.last_attempt_at', 'backup.last_success_at', 'backup.fault_code', 'backup.age_seconds', 'disk.free_bytes', 'disk.total_bytes', 'outbound.paused', 'outbound.paused_at', 'outbound.reason', 'outbound.awaiting_decision', 'outbound.queued_send_jobs', 'outbound.held_send_jobs', 'retention.last_run_at', 'retention.last_deleted', 'jobs.queued', 'jobs.leased', 'deliveries.accepted'].every((k) => keyPaths.includes(k)));
+  check('S13-2 json', 'activation empty and no queued send job after the capture send', ops1.json?.operations?.activation?.active_from === null && ops1.json?.operations?.outbound?.queued_send_jobs === 0, JSON.stringify({ activation: ops1.json?.operations?.activation, outbound: ops1.json?.operations?.outbound, jobs: ops1.json?.operations?.jobs }));
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const jobRows = () => db.prepare('SELECT kind, state, count(*) AS n FROM jobs GROUP BY kind, state ORDER BY kind, state').all();
+  log(`INFO  jobs by kind and state (read-only): ${JSON.stringify(jobRows())}`);
+
+  // ---------------------------------------------------------------- the status screen in Edge
+  browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const adminContext = await browser.newContext({ timezoneId: ZONE });
+  const page = await adminContext.newPage();
+  await page.goto(`${ORIGIN}/`);
+  await page.getByLabel('Email').fill(adminEmail);
+  await page.getByLabel('Password').fill(credentials.admin);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForTimeout(1500);
+  const screen = async (p, tag) => {
+    await p.goto(`${ORIGIN}/#/admin`);
+    await p.reload();
+    await p.locator('[data-fact="activation"]').waitFor({ timeout: 15_000 });
+    const panel = p.locator('[data-ops="status"]');
+    const labels = (await panel.locator('dl.facts').first().locator('dt').allInnerTexts()).map((t) => t.trim());
+    const facts = {};
+    for (const name of ['sender', 'mode', 'runner', 'backup', 'disk', 'activation']) facts[name] = (await p.locator(`[data-fact="${name}"]`).innerText()).replace(/\s+/g, ' ').trim();
+    const jobs = {};
+    for (const s of ['queued', 'leased', 'succeeded', 'intervention', 'cancelled']) jobs[s] = (await p.locator(`[data-job-state="${s}"]`).innerText()).trim();
+    const statusText = await p.locator('section[aria-label="Operations status"]').innerText();
+    const flagMentions = (statusText.match(/PRODUCTION_SENDING_ENABLED|sending flag|\bflag\b/gi) ?? []).length;
+    const zone = await p.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    log(`INFO  status screen (${tag}, browser zone ${zone}): labels ${JSON.stringify(labels)} facts ${JSON.stringify(facts)} jobs ${JSON.stringify(jobs)}; flag mentions in the status section: ${flagMentions}`);
+    return { labels, facts, jobs, flagMentions, zone, statusText };
+  };
+  const s1 = await screen(page, 'capture, not activated');
+  save('screen-1-status-text.txt', s1.statusText);
+  check('F-01 screen', 'the screen shows "Sender address", "Outbound mode: Capture only (nothing leaves the server)" and "Not activated"; it shows no sending flag', s1.labels.includes('Sender address') && s1.labels.includes('Outbound mode') && s1.facts.mode === 'Capture only (nothing leaves the server)' && s1.facts.sender === 'Configured' && s1.facts.activation === 'Not activated' && s1.flagMentions === 0, JSON.stringify(s1.facts));
+  check('S13-2 screen', 'the screen shows the job totals the operator reads for "no queued or leased send job" (Queued and Running)', s1.labels.includes('Automatic submission starts') && s1.jobs.queued !== undefined && s1.jobs.leased !== undefined, JSON.stringify(s1.jobs));
+
+  // ---------------------------------------------------------------- the deep link of the self-test
+  const linkContext = await browser.newContext({ timezoneId: ZONE });
+  const lp = await linkContext.newPage();
+  await lp.goto(`${ORIGIN}/#/review/${P}`);
+  await lp.getByLabel('Email').waitFor({ timeout: 15_000 });
+  const beforeHash = await lp.evaluate('window.location.hash');
+  const reviewVisibleBefore = await lp.getByRole('heading', { name: 'Review and sign off' }).count();
+  check('A2-02 sign-in', `opening <origin>/#/review/${P} signed out asks for sign-in (sign-in form, hash kept, no review shown)`, beforeHash === `#/review/${P}` && reviewVisibleBefore === 0 && (await lp.getByRole('button', { name: 'Sign in' }).count()) === 1, `hash ${beforeHash}`);
+  await lp.getByLabel('Email').fill(alice.email);
+  await lp.getByLabel('Password').fill(credentials.alice);
+  await lp.getByRole('button', { name: 'Sign in' }).click();
+  await lp.getByRole('heading', { name: 'Review and sign off' }).waitFor({ timeout: 15_000 });
+  const afterHash = await lp.evaluate('window.location.hash');
+  const reviewText = (await lp.locator('.review-screen header').innerText()).replace(/\s+/g, ' ');
+  check('A2-02 review', 'after sign-in the same address opens the review of that payroll date', afterHash === `#/review/${P}` && reviewText.includes(`payroll date ${P}`), `${afterHash}; ${reviewText.slice(0, 120)}`);
+
+  // ---------------------------------------------------------------- the owner's history wording (R-A2-1)
+  await lp.goto(`${ORIGIN}/#/history`);
+  await lp.reload();
+  await lp.locator('[data-attempt-badge="accepted"]').first().waitFor({ timeout: 15_000 });
+  const badge = (await lp.locator('[data-attempt-badge="accepted"]').first().innerText()).trim();
+  const historyText = await lp.locator('main').innerText();
+  check('R-A2-1 screen', 'the owner\'s history shows the captured attempt as "Accepted by the mail server" and never shows "captured" or a "capture-" id', badge === 'Accepted by the mail server' && !/captur/i.test(historyText), `badge "${badge}"`);
+
+  // ---------------------------------------------------------------- the documented console call (s13 step 5) and R-F5
+  const set = await consoleRun(page, fill(`'${ACTIVATION}'`, 'Synthetic recheck activation'));
+  log(`INFO  console set -> ${JSON.stringify({ active_from: set?.automation?.active_from })}`);
+  check('S13-5 set', 'the verbatim console call records the activation instant', set?.automation?.active_from === ACTIVATION);
+  const storageState = await adminContext.storageState();
+  const shown = {};
+  for (const zone of ['America/Los_Angeles', 'Asia/Tokyo', 'America/New_York']) {
+    const ctx = await browser.newContext({ timezoneId: zone, storageState });
+    const zp = await ctx.newPage();
+    const s = await screen(zp, `activation set, zone ${zone}`);
+    shown[zone] = { text: s.facts.activation, expected: zoneText(ACTIVATION, zone), browserZone: s.zone };
+    await ctx.close();
+  }
+  log(`INFO  activation instant ${ACTIVATION} as shown: ${JSON.stringify(shown)}`);
+  check('R-F5', 'the status shows the instant in the browser\'s zone as "YYYY-MM-DD HH:MM" without a zone label', Object.entries(shown).every(([zone, v]) => v.browserZone === zone && v.text === v.expected && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v.text)) && shown['Asia/Tokyo'].text !== shown['America/New_York'].text);
+  const opsSet = await admin.call('GET', '/api/admin/operations');
+  check('S13-5 json', 'the operations JSON carries the recorded instant', opsSet.json?.operations?.activation?.active_from === ACTIVATION, JSON.stringify(opsSet.json?.operations?.activation));
+
+  // ---------------------------------------------------------------- the first reminder after activation (s13 step 7)
+  await server.stop();
+  const capsBefore = new Set(captures().map((c) => c.id));
+  for (const instant of ['2027-01-01T00:01:00Z', '2027-01-01T00:03:00Z']) {
+    const r = cli(devCliEnv, ['run-jobs', '--once', '--now', instant], `run-jobs --once --now ${instant} (NODE_ENV=development, same database)`);
+    log(`INFO  run-jobs ${instant}: ${r.stdout.trim()}`);
+  }
+  const reminders = captures().filter((c) => !capsBefore.has(c.id)).map((c) => ({ id: c.id, files: c.files, envelopeTo: c.metadata?.envelope?.to, ...readMessage(c.eml) }));
+  const reminderA = reminders.find((m) => (m.envelopeTo ?? []).includes(alice.email));
+  const links = reminderA ? urlsIn(reminderA.text) : [];
+  log(`INFO  new captures after activation: ${JSON.stringify(reminders.map((m) => ({ to: m.envelopeTo, subject: m.subject, autoSubmitted: m.autoSubmitted, pdf: m.files.includes('attachment.pdf'), links: urlsIn(m.text) })))}`);
+  save('reminder-alice.txt', reminderA ? `Subject: ${reminderA.subject}\nTo: ${reminderA.to}\nAuto-Submitted: ${reminderA.autoSubmitted}\n\n${reminderA.text}` : 'none');
+  const occurrences = db.prepare('SELECT kind, occurrence_key, disposition FROM reminder_occurrences ORDER BY kind, occurrence_key').all();
+  log(`INFO  reminder occurrences (read-only): ${JSON.stringify(occurrences)}`);
+  const expectedLink = reviewLink(PUBLIC, '2027-01-01');
+  const runbookForm = /https:\/\/<nas-host>\/#\/review\/<payroll-date>/.test(runbook.split('\n').find((l) => l.includes('The link: once the activation instant is set')) ?? '');
+  check('A2-02 step 7', 'docs/11 s13 step 7 has the first-reminder link check in the form https://<nas-host>/#/review/<payroll-date>', runbookForm);
+  check('A2-02 link', 'the first reminder to the employee carries exactly PUBLIC_BASE_URL + /#/review/<payroll-date> (reviewLink), the runbook form', reminderA !== undefined && links.length === 1 && links[0] === expectedLink && /^https:\/\/[^/]+\/#\/review\/\d{4}-\d{2}-\d{2}$/.test(links[0]) && reminderA.autoSubmitted === 'auto-generated', `links ${JSON.stringify(links)}; expected ${expectedLink}`);
+
+  await server.start();
+  const lc2 = await browser.newContext({ timezoneId: ZONE });
+  const lp2 = await lc2.newPage();
+  const loopbackLink = (links[0] ?? expectedLink).replace(PUBLIC, ORIGIN);
+  await lp2.goto(loopbackLink);
+  await lp2.getByLabel('Email').waitFor({ timeout: 15_000 });
+  const h1 = await lp2.evaluate('window.location.hash');
+  await lp2.getByLabel('Email').fill(alice.email);
+  await lp2.getByLabel('Password').fill(credentials.alice);
+  await lp2.getByRole('button', { name: 'Sign in' }).click();
+  await lp2.getByRole('heading', { name: 'Review and sign off' }).waitFor({ timeout: 15_000 });
+  const h2 = await lp2.evaluate('window.location.hash');
+  const rt2 = (await lp2.locator('main').innerText()).replace(/\s+/g, ' ');
+  check('A2-02 link opens', 'the reminder link (host replaced by the loopback origin) asks for sign-in, then opens the review of that payroll date', h1 === '#/review/2027-01-01' && h2 === '#/review/2027-01-01' && rt2.includes('payroll date 2027-01-01'), `${h1} -> ${h2}; ${rt2.slice(0, 160)}`);
+  await lc2.close();
+
+  // ---------------------------------------------------------------- clear (s14 step 1)
+  const page2 = await adminContext.newPage();
+  await page2.goto(`${ORIGIN}/#/admin`);
+  await page2.locator('[data-fact="activation"]').waitFor({ timeout: 15_000 });
+  const clear = await consoleRun(page2, fill('null', 'Synthetic recheck deactivation'));
+  const s2 = await screen(page2, 'after clear');
+  check('S14-1', 'the same call with active_from: null clears the instant; the screen shows "Not activated" and still "Capture only (nothing leaves the server)"', clear?.automation?.active_from === null && s2.facts.activation === 'Not activated' && s2.facts.mode === 'Capture only (nothing leaves the server)', JSON.stringify(s2.facts));
+  log(`INFO  jobs by kind and state after the 2027 run-jobs passes (time-shifted rows): ${JSON.stringify(jobRows())}`);
+
+  // ---------------------------------------------------------------- pre-activation backup (s13 step 3) in capture mode
+  const backup = cli(prodEnv, ['backup', '--to', backupDir], 'backup --to <run>/backups (capture mode, server running)');
+  const backupName = readdirSync(backupDir).sort().at(-1);
+  log(`INFO  backup: ${backup.stdout.trim()}; ls -1: ${JSON.stringify(readdirSync(backupDir))}; manifest sha256 ${sha256(readFileSync(join(backupDir, backupName, 'manifest.json')))}`);
+  check('S13-3', 'the backup prints "outcome":"succeeded" and the newest folder holds manifest.json', backup.status === 0 && backup.stdout.includes('"outcome":"succeeded"') && existsSync(join(backupDir, backupName, 'manifest.json')));
+  await server.stop();
+  db.close();
+
+  // ---------------------------------------------------------------- the refusal sentence (s13 step 4), SMTP without the flag
+  const smtpUser = secret();
+  const smtpPassword = secret();
+  const smtpEnv = { ...prodEnv, OUTBOUND_MODE: 'smtp', SMTP_HOST: 'smtp.example.invalid', SMTP_PORT: '587', SMTP_SECURITY: 'starttls', SMTP_USER: smtpUser, SMTP_PASSWORD: smtpPassword };
+  log(`INFO  refusal env: ${envKeys(smtpEnv)} (PRODUCTION_SENDING_ENABLED absent)`);
+  const refusal = new Server('smtp-no-flag', smtpEnv);
+  const serverExit = await Promise.race([refusal.start(false), sleep(20_000).then(() => 'timeout')]);
+  if (serverExit === 'timeout') await refusal.stop();
+  const serverOut = refusal.output;
+  const named = (out) => out.includes(FLAG_MESSAGE);
+  const leaks = (out) => out.includes(smtpUser) || out.includes(smtpPassword);
+  check('REFUSE server', 'the server refuses to start in SMTP mode without the flag; the message names the flag, never a value; it never listens', serverExit !== 'timeout' && serverExit !== 0 && named(serverOut) && !leaks(serverOut) && !serverOut.includes('listening'), `exit ${serverExit}; first line naming the flag: ${serverOut.split('\n').find((l) => l.includes('PRODUCTION_SENDING_ENABLED'))?.trim()}`);
+  const restoreTarget = join(RUN, 'restore-refused');
+  const rows = [
+    ['migrate', ['migrate']],
+    ['bootstrap --new-token', ['bootstrap', '--new-token']],
+    ['backup --to <run>/backups', ['backup', '--to', backupDir]],
+    ['backup prune --in <run>/backups --dry-run', ['backup', 'prune', '--in', backupDir, '--dry-run']],
+    ['restore --from <backup> --to <run>/restore-refused', ['restore', '--from', join(backupDir, backupName), '--to', restoreTarget]],
+    ['outbound release', ['outbound', 'release']],
+    ['outbound resume', ['outbound', 'resume']],
+    ['run-jobs --once --now 2027-01-02T00:00:00Z', ['run-jobs', '--once', '--now', '2027-01-02T00:00:00Z']],
+    ['seed', ['seed']],
+  ];
+  const table = [];
+  for (const [label, args] of rows) {
+    const r = cli(smtpEnv, args, `${label} (SMTP mode, no flag)`);
+    const firstErr = r.stderr.split('\n').find((l) => l.trim() !== '' && !/^\s+at /.test(l))?.trim() ?? '';
+    table.push({ command: label, exit: r.status, names_flag: named(r.out), leaks_value: leaks(r.out), stderr_first_line: mask(firstErr).slice(0, 160), stdout: mask(r.stdout.trim()).slice(0, 160) });
+  }
+  save('refusal-table.json', table);
+  for (const row of table) log(`INFO  ${JSON.stringify(row)}`);
+  const byCmd = Object.fromEntries(table.map((row) => [row.command.split(' ')[0] + (row.command.includes('prune') ? '-prune' : '') + (row.command.startsWith('outbound') ? `-${row.command.split(' ')[1]}` : ''), row]));
+  check('REFUSE backup/restore', 'backup --to and restore refuse with the flag message and print no value; restore leaves no target', byCmd.backup?.exit !== 0 && byCmd.backup?.names_flag && byCmd.restore?.exit !== 0 && byCmd.restore?.names_flag && !existsSync(restoreTarget) && table.every((row) => !row.leaks_value), JSON.stringify({ backup: byCmd.backup?.exit, restore: byCmd.restore?.exit }));
+  check('REFUSE others', 'other commands do not refuse for the flag: migrate 0, backup prune --dry-run 0, outbound previews 2, bootstrap/run-jobs/seed refuse for their own reasons', byCmd.migrate?.exit === 0 && !byCmd.migrate?.names_flag && byCmd['backup-prune']?.exit === 0 && !byCmd['backup-prune']?.names_flag && byCmd['outbound-release']?.exit === 2 && byCmd['outbound-resume']?.exit === 2 && !byCmd['outbound-release']?.names_flag && !byCmd.bootstrap?.names_flag && !byCmd['run-jobs']?.names_flag && !byCmd.seed?.names_flag, JSON.stringify(table.map((row) => [row.command, row.exit, row.names_flag])));
+  // Control in capture mode: the same restore runs.
+  const control = cli(prodEnv, ['restore', '--from', join(backupDir, backupName), '--to', join(RUN, 'restore-capture')], 'restore --from <backup> --to <run>/restore-capture (capture mode, control)');
+  check('REFUSE control', 'in capture mode the same restore runs (exit 0)', control.status === 0, control.stdout.trim().slice(0, 160));
+} catch (error) {
+  failures += 1;
+  log(`ERROR ${error instanceof Error ? error.stack : String(error)}`);
+} finally {
+  if (browser !== null) await browser.close();
+  await server.stop();
+  log(`INFO  server output (masked): ${server.output.trim().replace(/\r?\n/g, ' | ')}`);
+  log(`RESULT ${passes} PASS, ${failures} FAIL`);
+  writeFileSync(join(RUN, 'probe-log.txt'), `${lines.join('\n')}\n`);
+}
+process.exitCode = failures === 0 ? 0 : 1;

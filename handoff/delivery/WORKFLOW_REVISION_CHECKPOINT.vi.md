@@ -6,7 +6,7 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = 9bcdd88faf782be4f16c139e29d07d279d2609e3 (WP5-FIXD-FREEZE, commit đóng băng bản sửa tài liệu WP5; digest 1b8ceae4).
+  - HEAD = origin/main = 014bd47a8d906c944d2781eba4f2b91c5a532419 (WP5-FIXD2-FREEZE, bản sửa câu chữ về trạng thái; digest 150420e7).
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1068,7 +1068,30 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Ghi nhận (Low): docs/11 mục 11, dòng 274, vẫn nói màn hình hiện "cờ" gửi.
        - WP5-FIXD2 đã xong. Chỉ câu đó (EN và VI) bị trúng, và đã được sửa. Rà docs/05,
          07, 12, README và packet đều sạch. Digest 150420e7.
-       - Đang chạy: WP5-FIXD2-FREEZE (committer).
+       - WP5-FIXD2-FREEZE đã commit và push 014bd47 (46 đường dẫn; mọi kiểm tra trả 0).
+       - WP5-REGATE2: **PASS** trên 014bd47 (digest 150420e7, 779 tệp).
+         - Kể từ 9bcdd88, ngoài handoff/ chỉ docs/11 thay đổi: mỗi bản EN và VI một
+           dòng.
+         - Cả 230 tệp dist đều giống hệt; verify 1.759; AC-13 đạt.
+         - Câu nói về cờ trạng thái: 0.
+       - WP5-PKTID đã xong (lần 2).
+         - Mục 0 và 6 của packet giờ ghi 014bd47, 150420e7 và image dev bd17d061 của
+           9bcdd88.
+         - Mục 3 và 5 được ghi chú nguồn 74d5bfe/WP5-GATE và việc phần chênh chỉ là tài
+           liệu.
+       - WP5-RECHECK: **PASS** trên 014bd47 (digest 150420e7), không có phát hiện.
+         - F-01, F-02, A2-01 và A2-02 đều được kiểm trên app chạy thật và đã được giải
+           quyết.
+         - Các bản sửa rủi ro nhỏ chính xác, thông tin phiên bản trong packet đúng.
+         - Rủi ro R-RC-1..6 chỉ là mục Info tùy chọn.
+         - **Độ sẵn sàng phần mềm WP5 đã được nghiệm thu; pilot còn chờ.**
+       - WP5-ACCREC đã xong.
+         - Biên bản nghiệm thu trong WP5_HANDOFF (EN và VI) đã điền: 014bd47, 150420e7.
+         - Đã sửa O-1: B-01 được ghi là Medium.
+         - Parity và preflight đều đạt.
+       - STATE ghi WP5 đã đạt. NEXT_ACTION (EN và VI) trỏ tới GOV-RECOVERY và việc chủ
+         dự án duyệt pilot.
+       - Đang chạy: WP5-ACCEPT (committer).
        - Sau đó: commit đóng băng, chạy lại gate cho phần docs thay đổi, WP5-PKTID,
          WP5-RECHECK (auditor opus mới), ACCREC và ACCEPT.
        - Sau đó:
@@ -1099,10 +1122,12 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP5-ASSESS-A và WP5-ASSESS-B. Sau đó lên kế hoạch sửa các phát hiện,
-     cùng các sửa đổi theo câu trả lời D-1..D-15 nào khác mặc định.
-  2. Sau đó là sửa lỗi, kiểm tra lại độc lập, ghi chú phát hành và cài đặt, và pilot
-     packet cụ thể để chủ dự án duyệt. Pilot thật do chủ dự án quyết.
+  1. Ghi kết quả WP5-ACCREC, rồi giao WP5-ACCEPT (brief đã sẵn).
+  2. Sau đó là GOV-RECOVERY: làm cho các board giả lập của check_recovery không phụ thuộc
+     vào trạng thái thật của mission. Nó đi qua sửa, commit đóng băng, gate và một lần
+     audit GOV mới. Xong thì đặt trạng thái mission là `software_ready`.
+  3. Sau đó chuyển pilot packet cho chủ dự án và hỏi D-1..D-15. Pilot thật, gửi thật và
+     kích hoạt do chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động

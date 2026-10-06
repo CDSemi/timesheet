@@ -1,0 +1,94 @@
+date_utc start: 2026-10-06T23:24:33Z
+$ node <task>/probe/probe.mjs <export> <task>/run1
+INFO  node v24.21.0; real now 2026-10-06T23:24:33.502Z; server env: APP_ORIGINS=http://127.0.0.1:47761 DATABASE_PATH=<run>\data\timesheet.db DATA_DIR=<run>\data\private-data HOST=127.0.0.1 MAIL_FROM=pilot-sender@example.invalid NODE_ENV=production OUTBOUND_MODE=capture PORT=47761 PUBLIC_BASE_URL=https://timesheet.example.invalid
+INFO  documented console snippet (verbatim from <export>/docs/11): await (await fetch('/api/admin/automation/activation', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active_from: '<activation-instant-utc>', reason: '<reason>' }) })).json()
+CLI   bootstrap --config <run>/bootstrap-config.json: exit 0
+PASS  BOOT  production bootstrap prints a setup token once  | exit 0
+INFO  server log so far: Timesheet listening on http://127.0.0.1:47761 (schema v13) | Outbound delivery active
+HTTP  admin POST /api/auth/bootstrap -> 201
+PASS  SETUP  the first administrator is created from the setup token  | 201
+HTTP  admin login -> 200
+HTTP  admin GET /api/calendar -> 200
+HTTP  admin POST /api/admin/users -> 201
+HTTP  alice login -> 200
+HTTP  alice POST /api/policies -> 201
+HTTP  alice GET /api/periods/current -> 200
+INFO  current period {"payroll_date":"2026-10-09","nominal_payroll_date":"2026-10-09","period_start":"2026-09-23","period_end":"2026-10-06","due_local_date":"2026-10-08","due_local_time":"17:00","due_at_utc":"2026-10-09T00:00:00Z","is_exception":false}
+HTTP  alice POST /api/settings/submission -> 201
+HTTP  alice POST /api/signatures -> 201
+HTTP  alice POST /api/days/2026-09-23/sessions -> 201
+PASS  DATA  synthetic employee created with policy, settings, signature and one work session  | 201/201/201/201
+HTTP  alice GET /api/timesheets/2026-10-09/review -> 200
+HTTP  alice POST /api/timesheets/2026-10-09/signoff -> 201
+PASS  SIGNOFF  manual sign-off of payroll 2026-10-09 (the capture self-test submission)  | 201
+PASS  R-A2-1 api  the API record of the captured attempt: provider response "captured", provider id "capture-..."  | {"state":"accepted","provider_response":"captured","provider_message_id_prefix":"capture-"}
+INFO  capture of the submission: {"files":["attachment.pdf","message.eml","metadata.json"],"envelope":{"from":"pilot-sender@example.invalid","to":["payroll-a@example.invalid","manager-a@example.invalid"]},"from":"pilot-sender@example.invalid","to":"payroll-a@example.invalid","cc":"manager-a@example.invalid","bcc":null,"subject":"Timesheet 2026-09-23 to 2026-10-06 - Alice Recheck - Submitted"}
+PASS  SELF-2  the capture holds exactly the configured recipients, the sender, no Bcc, and a PDF equal to the download  | pdf c02b58e8ed3d vs download c02b58e8ed3d
+PASS  A2-02 text  docs/11 s13 step 2: "A captured submission holds no link" (no http(s) URL in the captured message)  | urls []
+HTTP  admin GET /api/admin/operations -> 200
+INFO  operations JSON leaf keys: sender.configured, sender.outbound_mode, runner.heartbeat_at, runner.state, activation.active_from, activation.recorded_at, activation.recorded_by, backup.outcome, backup.last_attempt_at, backup.last_success_at, backup.fault_code, backup.age_seconds, disk.free_bytes, disk.total_bytes, outbound.paused, outbound.paused_at, outbound.reason, outbound.awaiting_decision, outbound.queued_send_jobs, outbound.held_send_jobs, retention.last_run_at, retention.last_deleted, jobs.queued, jobs.leased, jobs.succeeded, jobs.intervention, jobs.cancelled, deliveries.preparing, deliveries.sending, deliveries.accepted, deliveries.failed_temporary, deliveries.failed_permanent, deliveries.uncertain
+PASS  F-01 json  operations.sender is exactly {configured, outbound_mode}; no key names a flag or production sending  | {"configured":true,"outbound_mode":"capture"}
+PASS  S12 json  docs/11 s12 items are in the JSON: runner heartbeat, activation, backup outcome/attempt/success/fault/age, disk free/total, outbound pause/reason/awaiting/queued/held, retention, job and delivery totals
+PASS  S13-2 json  activation empty and no queued send job after the capture send  | {"activation":{"active_from":null,"recorded_at":null,"recorded_by":null},"outbound":{"paused":false,"paused_at":null,"reason":null,"awaiting_decision":0,"queued_send_jobs":0,"held_send_jobs":0},"jobs":{"queued":0,"leased":0,"succeeded":4,"intervention":0,"cancelled":0}}
+INFO  jobs by kind and state (read-only): [{"kind":"job_retention","state":"succeeded","n":1},{"kind":"orphan_sweep","state":"succeeded","n":1},{"kind":"render_pdf","state":"succeeded","n":1},{"kind":"send_email","state":"succeeded","n":1}]
+INFO  status screen (capture, not activated, browser zone America/Los_Angeles): labels ["Sender address","Outbound mode","Job runner","Last backup","Data volume","Automatic submission starts"] facts {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 16:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"Not activated"} jobs {"queued":"0","leased":"0","succeeded":"4","intervention":"0","cancelled":"0"}; flag mentions in the status section: 0
+PASS  F-01 screen  the screen shows "Sender address", "Outbound mode: Capture only (nothing leaves the server)" and "Not activated"; it shows no sending flag  | {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 16:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"Not activated"}
+PASS  S13-2 screen  the screen shows the job totals the operator reads for "no queued or leased send job" (Queued and Running)  | {"queued":"0","leased":"0","succeeded":"4","intervention":"0","cancelled":"0"}
+PASS  A2-02 sign-in  opening <origin>/#/review/2026-10-09 signed out asks for sign-in (sign-in form, hash kept, no review shown)  | hash #/review/2026-10-09
+PASS  A2-02 review  after sign-in the same address opens the review of that payroll date  | #/review/2026-10-09; Review and sign off 2026-09-23 to 2026-10-06, payroll date 2026-10-09, submission TS-20261009-8f5d01b384 Submitted manua
+PASS  R-A2-1 screen  the owner's history shows the captured attempt as "Accepted by the mail server" and never shows "captured" or a "capture-" id  | badge "Accepted by the mail server"
+INFO  console set -> {"active_from":"2027-01-01T00:00:00Z"}
+PASS  S13-5 set  the verbatim console call records the activation instant
+INFO  status screen (activation set, zone America/Los_Angeles, browser zone America/Los_Angeles): labels ["Sender address","Outbound mode","Job runner","Last backup","Data volume","Automatic submission starts"] facts {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 16:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"2026-12-31 16:00"} jobs {"queued":"0","leased":"0","succeeded":"4","intervention":"0","cancelled":"0"}; flag mentions in the status section: 0
+INFO  status screen (activation set, zone Asia/Tokyo, browser zone Asia/Tokyo): labels ["Sender address","Outbound mode","Job runner","Last backup","Data volume","Automatic submission starts"] facts {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-07 08:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"2027-01-01 09:00"} jobs {"queued":"0","leased":"0","succeeded":"4","intervention":"0","cancelled":"0"}; flag mentions in the status section: 0
+INFO  status screen (activation set, zone America/New_York, browser zone America/New_York): labels ["Sender address","Outbound mode","Job runner","Last backup","Data volume","Automatic submission starts"] facts {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 19:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"2026-12-31 19:00"} jobs {"queued":"0","leased":"0","succeeded":"4","intervention":"0","cancelled":"0"}; flag mentions in the status section: 0
+INFO  activation instant 2027-01-01T00:00:00Z as shown: {"America/Los_Angeles":{"text":"2026-12-31 16:00","expected":"2026-12-31 16:00","browserZone":"America/Los_Angeles"},"Asia/Tokyo":{"text":"2027-01-01 09:00","expected":"2027-01-01 09:00","browserZone":"Asia/Tokyo"},"America/New_York":{"text":"2026-12-31 19:00","expected":"2026-12-31 19:00","browserZone":"America/New_York"}}
+PASS  R-F5  the status shows the instant in the browser's zone as "YYYY-MM-DD HH:MM" without a zone label
+HTTP  admin GET /api/admin/operations -> 200
+PASS  S13-5 json  the operations JSON carries the recorded instant  | {"active_from":"2027-01-01T00:00:00Z","recorded_at":"2026-10-06T23:24:52Z","recorded_by":"ac08a8a3-e551-48be-aea8-b04250693b86"}
+INFO  server live stopped through its own handle (exit null)
+CLI   run-jobs --once --now 2027-01-01T00:01:00Z (NODE_ENV=development, same database): exit 0
+INFO  run-jobs 2027-01-01T00:01:00Z: {"claimed":6,"succeeded":6,"retried":0,"intervention":0,"lost":0}
+CLI   run-jobs --once --now 2027-01-01T00:03:00Z (NODE_ENV=development, same database): exit 0
+INFO  run-jobs 2027-01-01T00:03:00Z: {"claimed":1,"succeeded":1,"retried":0,"intervention":0,"lost":0}
+INFO  new captures after activation: [{"to":["alice.recheck@example.invalid"],"subject":"Timesheet due in less than an hour: payroll 2027-01-01","autoSubmitted":"auto-generated","pdf":false,"links":["https://timesheet.example.invalid/#/review/2027-01-01"]},{"to":["pilot-admin@example.invalid"],"subject":"Timesheet due in less than an hour: payroll 2027-01-01","autoSubmitted":"auto-generated","pdf":false,"links":["https://timesheet.example.invalid/#/review/2027-01-01"]}]
+INFO  reminder occurrences (read-only): [{"kind":"before_due","occurrence_key":"offset-120","disposition":"enqueued"},{"kind":"before_due","occurrence_key":"offset-120","disposition":"enqueued"},{"kind":"before_due","occurrence_key":"offset-1440","disposition":"collapsed"},{"kind":"before_due","occurrence_key":"offset-1440","disposition":"collapsed"}]
+PASS  A2-02 step 7  docs/11 s13 step 7 has the first-reminder link check in the form https://<nas-host>/#/review/<payroll-date>
+PASS  A2-02 link  the first reminder to the employee carries exactly PUBLIC_BASE_URL + /#/review/<payroll-date> (reviewLink), the runbook form  | links ["https://timesheet.example.invalid/#/review/2027-01-01"]; expected https://timesheet.example.invalid/#/review/2027-01-01
+PASS  A2-02 link opens  the reminder link (host replaced by the loopback origin) asks for sign-in, then opens the review of that payroll date  | #/review/2027-01-01 -> #/review/2027-01-01; Review and sign off 2026-12-16 to 2026-12-29, payroll date 2027-01-01, submission TS-20270101-153856107f Draft Check every day, then sign off. Signing off posts
+INFO  status screen (after clear, browser zone America/Los_Angeles): labels ["Sender address","Outbound mode","Job runner","Last backup","Data volume","Automatic submission starts"] facts {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 16:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"Not activated"} jobs {"queued":"0","leased":"0","succeeded":"13","intervention":"0","cancelled":"0"}; flag mentions in the status section: 0
+PASS  S14-1  the same call with active_from: null clears the instant; the screen shows "Not activated" and still "Capture only (nothing leaves the server)"  | {"sender":"Configured","mode":"Capture only (nothing leaves the server)","runner":"Running 2026-10-06 16:24","backup":"No backup recorded","disk":"1.4 TiB free of 2.0 TiB (66% free)","activation":"Not activated"}
+INFO  jobs by kind and state after the 2027 run-jobs passes (time-shifted rows): [{"kind":"deadline_scan","state":"succeeded","n":3},{"kind":"job_retention","state":"succeeded","n":2},{"kind":"orphan_sweep","state":"succeeded","n":2},{"kind":"reminder_scan","state":"succeeded","n":2},{"kind":"render_pdf","state":"succeeded","n":1},{"kind":"send_email","state":"succeeded","n":1},{"kind":"send_reminder","state":"succeeded","n":2}]
+CLI   backup --to <run>/backups (capture mode, server running): exit 0
+INFO  backup: {"outcome":"succeeded","backup":"timesheet-backup-20261006T232455Z-9876ca7a","schema_version":13,"files":2,"signatures":1,"pdfs":1,"database_bytes":565248,"duration_ms":61,"status_recorded":true}; ls -1: ["timesheet-backup-20261006T232455Z-9876ca7a"]; manifest sha256 f4528a3ab5ebb53355a4b7a4aad06546d97ffdc8bd0cdd939c611433f7d3f493
+PASS  S13-3  the backup prints "outcome":"succeeded" and the newest folder holds manifest.json
+INFO  server live stopped through its own handle (exit null)
+INFO  refusal env: APP_ORIGINS=http://127.0.0.1:47761 DATABASE_PATH=<run>\data\timesheet.db DATA_DIR=<run>\data\private-data HOST=127.0.0.1 MAIL_FROM=pilot-sender@example.invalid NODE_ENV=production OUTBOUND_MODE=smtp PORT=47761 PUBLIC_BASE_URL=https://timesheet.example.invalid SMTP_HOST=smtp.example.invalid SMTP_PASSWORD=<set> SMTP_PORT=587 SMTP_SECURITY=starttls SMTP_USER=<set> (PRODUCTION_SENDING_ENABLED absent)
+PASS  REFUSE server  the server refuses to start in SMTP mode without the flag; the message names the flag, never a value; it never listens  | exit 1; first line naming the flag: throw new Error('OUTBOUND_MODE=smtp requires the owner-only PRODUCTION_SENDING_ENABLED=true flag');
+CLI   migrate (SMTP mode, no flag): exit 0
+CLI   bootstrap --new-token (SMTP mode, no flag): exit 1
+CLI   backup --to <run>/backups (SMTP mode, no flag): exit 1
+CLI   backup prune --in <run>/backups --dry-run (SMTP mode, no flag): exit 0
+CLI   restore --from <backup> --to <run>/restore-refused (SMTP mode, no flag): exit 1
+CLI   outbound release (SMTP mode, no flag): exit 2
+CLI   outbound resume (SMTP mode, no flag): exit 2
+CLI   run-jobs --once --now 2027-01-02T00:00:00Z (SMTP mode, no flag): exit 1
+CLI   seed (SMTP mode, no flag): exit 1
+INFO  {"command":"migrate","exit":0,"names_flag":false,"leaks_value":false,"stderr_first_line":"","stdout":"{\"database\":\"<task>\\\\run1\\\\data\\\\timesheet.db\",\"applied\":[],\"version\":13}"}
+INFO  {"command":"bootstrap --new-token","exit":1,"names_flag":false,"leaks_value":false,"stderr_first_line":"An administrator already exists; the setup is closed","stdout":""}
+INFO  {"command":"backup --to <run>/backups","exit":1,"names_flag":true,"leaks_value":false,"stderr_first_line":"file:///<export>/dist/server/config.js:162","stdout":""}
+INFO  {"command":"backup prune --in <run>/backups --dry-run","exit":0,"names_flag":false,"leaks_value":false,"stderr_first_line":"","stdout":"{\"outcome\":\"dry_run\",\"candidates\":1,\"keep\":1,\"remove\":0,\"ignored\":0}"}
+INFO  {"command":"restore --from <backup> --to <run>/restore-refused","exit":1,"names_flag":true,"leaks_value":false,"stderr_first_line":"file:///<export>/dist/server/config.js:162","stdout":""}
+INFO  {"command":"outbound release","exit":2,"names_flag":false,"leaks_value":false,"stderr_first_line":"","stdout":"{\"outcome\":\"confirmation_required\",\"held\":0,\"releasable\":0,\"blocked\":{},\"jobs\":[]}"}
+INFO  {"command":"outbound resume","exit":2,"names_flag":false,"leaks_value":false,"stderr_first_line":"","stdout":"{\"outcome\":\"confirmation_required\",\"paused\":false,\"reason\":null,\"awaiting_decision\":0,\"queued_send_jobs\":0,\"held_send_jobs\":0}"}
+INFO  {"command":"run-jobs --once --now 2027-01-02T00:00:00Z","exit":1,"names_flag":false,"leaks_value":false,"stderr_first_line":"Refusing to run jobs from the CLI when NODE_ENV=production; the server runs them","stdout":""}
+INFO  {"command":"seed","exit":1,"names_flag":false,"leaks_value":false,"stderr_first_line":"file:///<export>/dist/server/cli.js:431","stdout":""}
+PASS  REFUSE backup/restore  backup --to and restore refuse with the flag message and print no value; restore leaves no target  | {"backup":1,"restore":1}
+PASS  REFUSE others  other commands do not refuse for the flag: migrate 0, backup prune --dry-run 0, outbound previews 2, bootstrap/run-jobs/seed refuse for their own reasons  | [["migrate",0,false],["bootstrap --new-token",1,false],["backup --to <run>/backups",1,true],["backup prune --in <run>/backups --dry-run",0,false],["restore --from <backup> --to <run>/restore-refused",1,true],["outbound release",2,false],["outbound resume",2,false],["run-jobs --once --now 2027-01-02T00:00:00Z",1,false],["seed",1,false]]
+CLI   restore --from <backup> --to <run>/restore-capture (capture mode, control): exit 0
+PASS  REFUSE control  in capture mode the same restore runs (exit 0)  | {"outcome":"restored","manifest":{"verified":true,"schema_version":13,"files":2,"signatures":1,"pdfs":1,"database_bytes":565248},"schema":{"backup":13,"restored
+INFO  server live stopped through its own handle (exit null)
+INFO  server output (masked): Timesheet listening on http://127.0.0.1:47761 (schema v13) | Outbound delivery active
+RESULT 27 PASS, 0 FAIL
+exit: 0
+date_utc end: 2026-10-06T23:25:15Z

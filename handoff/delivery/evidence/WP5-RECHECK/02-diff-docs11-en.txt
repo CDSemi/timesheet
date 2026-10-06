@@ -1,0 +1,36 @@
+diff --git a/docs/11_OPERATIONS_RUNBOOK.md b/docs/11_OPERATIONS_RUNBOOK.md
+index 4c2e4ab..cf3af48 100644
+--- a/docs/11_OPERATIONS_RUNBOOK.md
++++ b/docs/11_OPERATIONS_RUNBOOK.md
+@@ -274 +274 @@ An administrator sees operations and delivery, never timesheet details (docs/03)
+-- Runner heartbeat, the automation activation instant, the sender mode and flag, and job and delivery totals.
++- Runner heartbeat, the automation activation instant, whether a sender address is configured ("Sender address") and the outbound mode ("Outbound mode"; never the sending flag, which lives only in `<env-file>`), and job and delivery totals.
+@@ -285 +285 @@ An administrator sees operations and delivery, never timesheet details (docs/03)
+-Real sending and the activation instant need the owner's explicit authorization ([06 Acceptance](06_TEST_AND_ACCEPTANCE.md)). Do nothing in this section before it. Software readiness, owner permission, provider acceptance and recipient receipt are four separate facts; record each on its own. The choices below are recommended; owner decision pending (D-1 to D-15 in [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) section D). The configuration keys are named here and their values live only in `<env-file>`.
++Real sending and the activation instant need the owner's explicit authorization ([06 Acceptance](06_TEST_AND_ACCEPTANCE.md)). Do nothing in this section before it. Software readiness, owner permission, provider acceptance and recipient receipt are four separate facts; record each on its own. The choices below are recommended; owner decision pending (D-1 to D-15 in [WP5-PLAN](../handoff/delivery/tasks/WP5-PLAN.md) section D). The configuration keys are named here and their values live only in `<env-file>`. On DSM the data, backup and Docker commands in sections 13 to 16 need root (`sudo -i`): `<data-dir>` is mode 700 and owned by UID 10001. A browser may ask the operator to type "allow pasting" before a pasted console line runs.
+@@ -294 +294 @@ Real sending and the activation instant need the owner's explicit authorization
+-   - The administrator status shows the sender mode `capture`, the flag off and the activation as "Not activated".
++   - The administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated". The status has no field for the sending flag: check it in the file, `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` prints `0` (it prints `1` when the flag is set; the command never prints a value).
+@@ -296 +296 @@ Real sending and the activation instant need the owner's explicit authorization
+-   - Check `PUBLIC_BASE_URL` and `APP_ORIGINS`: the deep link in the captured message opens `https://<nas-host>/` and signs in, and a state-changing request from that origin is accepted.
++   - Check `PUBLIC_BASE_URL` and `APP_ORIGINS`: open `https://<nas-host>/#/review/<payroll-date>` (the form of every reminder link); it must ask for sign-in and then open the review. A captured submission holds no link, and nothing decides a reminder before the activation instant is set. A state-changing request from that origin must be accepted.
+@@ -310 +310 @@ Real sending and the activation instant need the owner's explicit authorization
+-   - Without the flag the server and the CLI refuse to start and name the flag, never a value. A restart alone does not reread `<env-file>`, so recreate the container:
++   - In SMTP mode without the flag the server refuses to start, and so do the CLI commands that read the mail settings (`backup`, `restore`); other commands do not. The message names the flag, never a value. A restart alone does not reread `<env-file>`, so recreate the container:
+@@ -318 +318 @@ Real sending and the activation instant need the owner's explicit authorization
+-   - The administrator status now shows the sender mode `smtp` and the flag on. The activation instant is still empty.
++   - The administrator status now shows "Outbound mode: SMTP (real sending)", and `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` prints `1`. The activation instant is still empty ("Not activated").
+@@ -327 +327 @@ Real sending and the activation instant need the owner's explicit authorization
+-   - The call is audited. Check that the administrator status shows the instant.
++   - The call is audited. Check that the administrator status shows the instant. It shows it in the browser's zone without a zone label, so `2027-01-01T00:00:00Z` reads as the local date and time of the browser.
+@@ -334,0 +335 @@ Real sending and the activation instant need the owner's explicit authorization
++   - The link: once the activation instant is set (step 5), open the link of the first reminder that arrives. It must be `https://<nas-host>/#/review/<payroll-date>`, ask for sign-in and then open the review.
+@@ -346 +347 @@ Deactivate when a send is wrong or unexpected, the provider fails, or the owner
+-2. Look at the administrator status for queued or leased sends. A send job that runs after step 4 writes to the capture folder and is recorded with the capture sender: it is not mail. Wait until none is queued or leased (a healthy runner finds work within about a minute), or accept that those sends are captured and tell the recipient by hand.
++2. Look at the administrator status for queued or leased sends. A send job that runs after step 4 writes to the capture folder: it is not mail. The owner's history shows it as "Accepted by the mail server", and only the API record of the attempt shows provider response `captured` and a provider id that starts with `capture-`. Wait until none is queued or leased (a healthy runner finds work within about a minute), or accept that those sends are captured and tell the recipient by hand.
+@@ -355 +356 @@ Deactivate when a send is wrong or unexpected, the provider fails, or the owner
+-   The administrator status shows the sender mode `capture`, the flag off and the activation "Not activated".
++   The administrator status shows "Outbound mode: Capture only (nothing leaves the server)" and the activation "Not activated". Then check the file: `grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>` must print `0`.
+@@ -378 +379 @@ The pilot is the first installation, so there is no older production schema or i
+-5. Restore only if the data are damaged or wrong, never over the live data. Check `sha256sum <backup-dir>/<backup-name>/manifest.json` against `<manifest-sha256>`, then restore `<backup-name>` in isolation (section 6) into a new real folder, and reconcile (section 7). The restored instance is paused and in capture mode, and changes made after that backup are not in it. Never run two queues.
++5. Restore only if the data are damaged or wrong, never over the live data. Check `sha256sum <backup-dir>/<backup-name>/manifest.json` against `<manifest-sha256>`, then restore `<backup-name>` in isolation (section 6) into a new real folder, and reconcile (section 7). The restored instance is paused, and changes made after that backup are not in it. For an inspection-only restored instance, point `TIMESHEET_ENV_FILE` at the protected capture-mode copy of `<env-file>` kept in section 13 step 3; the live file holds the SMTP mode and the flag after activation. Never run two queues.

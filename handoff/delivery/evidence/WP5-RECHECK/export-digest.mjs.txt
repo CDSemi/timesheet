@@ -1,0 +1,30 @@
+// WP5-RECHECK: source digest of an extracted `git archive` export (no .git). For every regular file outside
+// handoff/ (node_modules and dist skipped), the git blob ID of the raw bytes, sorted by path in byte order, then
+// SHA-256 of the "<path> <blob>\n" lines; the same definition as scripts/source-digest.mjs on a clean tree.
+// Usage: node export-digest.mjs <export-dir> [listing-out]
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, listingOut] = process.argv.slice(2);
+if (!root) throw new Error('usage: node export-digest.mjs <export-dir> [listing-out]');
+const files = [];
+const walk = (dir, rel) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = rel === '' ? entry.name : `${rel}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (path === 'node_modules' || path === 'dist' || path === 'test-results' || path === 'playwright-report') continue;
+      walk(join(dir, entry.name), path);
+    } else if (entry.isFile() || entry.isSymbolicLink()) files.push(path);
+  }
+};
+walk(root, '');
+const selected = files.filter((p) => !p.startsWith('handoff/')).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const lines = selected
+  .map((p) => {
+    const data = readFileSync(join(root, p));
+    return `${p} ${createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex')}\n`;
+  })
+  .join('');
+if (listingOut) writeFileSync(listingOut, lines);
+console.log(`${createHash('sha256').update(lines).digest('hex')}  (${selected.length} files, handoff/ excluded)`);

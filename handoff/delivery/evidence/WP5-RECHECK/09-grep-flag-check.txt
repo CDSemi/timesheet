@@ -1,0 +1,29 @@
+# Synthetic env files in <task>/envcheck (grep only; no process ever loads them). Base: <export>/.env.example.
+# The documented check (docs/11 s13 step 2 and step 4, s14 step 4; packet s2 and s6 step 1):
+#   grep -c '^PRODUCTION_SENDING_ENABLED=true$' <env-file>
+capture.env: printed '0' (grep exit 1); lines naming the key: 1; OUTBOUND_MODE line: OUTBOUND_MODE=capture
+deactivated.env: printed '0' (grep exit 1); lines naming the key: 1; OUTBOUND_MODE line: OUTBOUND_MODE=capture
+set-false.env: printed '0' (grep exit 1); lines naming the key: 2; OUTBOUND_MODE line: OUTBOUND_MODE=smtp
+activated.env: printed '1' (grep exit 0); lines naming the key: 2; OUTBOUND_MODE line: OUTBOUND_MODE=smtp
+edge-quoted.env: printed '0' (grep exit 1); lines naming the key: 2; OUTBOUND_MODE line: OUTBOUND_MODE=smtp
+edge-crlf.env: printed '1' (grep exit 0); lines naming the key: 2; OUTBOUND_MODE line: OUTBOUND_MODE=smtp
+# what the line looks like (cat -A, key line only):
+capture.env: # PRODUCTION_SENDING_ENABLED=$
+activated.env: # PRODUCTION_SENDING_ENABLED=$
+PRODUCTION_SENDING_ENABLED=true$
+deactivated.env: # PRODUCTION_SENDING_ENABLED=$
+set-false.env: # PRODUCTION_SENDING_ENABLED=$
+PRODUCTION_SENDING_ENABLED=false$
+edge-quoted.env: # PRODUCTION_SENDING_ENABLED=$
+PRODUCTION_SENDING_ENABLED="true"$
+edge-crlf.env: # PRODUCTION_SENDING_ENABLED=$
+PRODUCTION_SENDING_ENABLED=true$
+# edge-crlf.env rebuilt with printf (sed in Git Bash dropped the CR):
+edge-crlf.env: printed '1' (grep exit 0); key line bytes: 0000000 # P R O D U C T I O N _ S E N 0000020 D I N G _ E N A B L E D = \n P R 0000040 O D U C T I O N _ S E N D I N G 0000060 _ E N A B L E D = t r u e \n 0000076 
+# raw bytes of the last line of edge-crlf.env (od on the file, not through grep):
+179:0005600 x a c t l y " t r u e " ; l
+227:0007240 N G _ E N A B L E D = t r u e \r
+# grep -c with --binary (no CR stripping, Linux-like) and the default build of Git Bash grep:
+default: 1
+--binary: 0
+grep --version: grep (GNU grep) 3.0

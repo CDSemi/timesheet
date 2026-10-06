@@ -6,14 +6,17 @@
 - WP3 accepted: WP3-REGATE3 PASS and final independent rechecks WP3-RECHECK-A
   attempt 3 and WP3-RECHECK-BC3 PASS at 49651c8, digest c31c300c.
 - WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
-  attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969. Owner questions
-  WP4-I-1..I-5 stay open with safe defaults; R-A3 needs an owner choice before the
-  WP5 pilot.
+  attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969.
+- WP5 accepted (software readiness): WP5-REGATE and WP5-REGATE2 PASS, and the closing
+  independent recheck WP5-RECHECK PASS at 014bd47, digest 150420e7.
+- Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
+  review. Owner permission has not been requested, there is no pilot result, and the
+  NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
-[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP4 handoff](delivery/WP4_HANDOFF.md),
-[WP4 recheck A4](delivery/WP4_RECHECK_A4.md) and [WP4 recheck B4](delivery/WP4_RECHECK_B4.md).
+[checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), [WP5 handoff](delivery/WP5_HANDOFF.md),
+[WP5 recheck](delivery/WP5_RECHECK.md) and [pilot packet](delivery/WP5_PILOT_PACKET.md).
 
 Open this repository in Claude Code with subscription sign-in. Project configuration
 selects the coordinator; [document 08](../docs/08_AI_WORKFLOW_AND_BUDGET.md) defines
@@ -37,14 +40,18 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **WP4 acceptance record: done.** The [WP4 handoff](delivery/WP4_HANDOFF.md)
-   acceptance record was committed at e7fe514, with no source change.
-2. **WP5 (active).** Follow [WP5_IMPLEMENT](prompts/WP5_IMPLEMENT.md). WP5-PLAN
-   designs the steps. WP5 starts with independent acceptance, then the concrete pilot
-   packet. Fresh auditors use
-   [WP5_REVIEW](prompts/WP5_REVIEW.md). The real pilot, real sending and deployment
-   remain owner-controlled.
-3. **Owner items:** WP4-I-1..I-5, and the R-A3 rollback choice before the pilot.
+1. **WP5 acceptance record and commit.** WP5-ACCREC fills the
+   [WP5 handoff](delivery/WP5_HANDOFF.md), and WP5-ACCEPT commits it with no source
+   change.
+2. **GOV-RECOVERY.** This governance fix makes the `check_recovery.py` synthetic
+   boards independent of the live mission status. It is needed before the board
+   records the mission as `software_ready`. It goes through fix, freeze, gate and a
+   fresh GOV audit.
+3. **Owner review of the pilot.** The owner reads the pilot packet and answers
+   D-1..D-15. D-1, D-7, D-8 and D-13 are needed before activation. An answer that
+   differs from the current default causes a fix round before activation. Real
+   sending, deployment and activation happen only after the owner's explicit
+   authorization.
 
 After usage reset: Resume/Continue the existing session, for example
 `claude --continue` here or `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`.
