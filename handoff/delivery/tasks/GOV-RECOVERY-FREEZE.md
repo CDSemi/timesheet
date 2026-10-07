@@ -107,4 +107,8 @@ Return at most 120 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Self-reported model: claude-sonnet-5-5.
+- Pre-HEAD dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc; post-HEAD and commit
+  7f750e9e5127eef23b96f18b37d4caee83baa414; pushed to main; remote SHA equal.
+- Digest 150420e7...6533e61 (779 files); staged count 12; probes 87.
+- Exit codes: all checks 0. Node v24.21.0. No blockers, no masking needed.

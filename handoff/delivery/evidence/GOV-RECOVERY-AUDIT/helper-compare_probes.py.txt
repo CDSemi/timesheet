@@ -1,0 +1,58 @@
+"""Compare probe lists and probe bodies of check_recovery.py before (dd0c7d1) and after (7f750e9).
+
+Usage: python compare_probes.py <old.py> <new.py> <old-run.json> <new-run.json>
+"""
+import difflib
+import json
+import re
+import sys
+from pathlib import Path
+
+from common import MARK
+
+old_src, new_src = (Path(item).read_text(encoding="utf-8") for item in sys.argv[1:3])
+old_run, new_run = (json.loads(Path(item).read_text(encoding="utf-8")) for item in sys.argv[3:5])
+old, new = old_run["synthetic_checks"], new_run["synthetic_checks"]
+print(f"old run: status {old_run['status']}, count {old_run['count']} (list length {len(old)})")
+print(f"new run: status {new_run['status']}, count {new_run['count']} (list length {len(new)})")
+removed = [name for name in old if name not in new]
+added = [name for name in new if name not in old]
+iterator = iter(new)
+order_kept = all(name in iterator for name in old)
+print(f"old probes missing from new: {len(removed)} {removed}")
+print(f"old probe order preserved in new (subsequence): {order_kept}")
+print(f"duplicates: old {len(old) - len(set(old))}, new {len(new) - len(set(new))}")
+print(f"probes added: {len(added)}")
+for name in added:
+    print(f"  + {name}")
+print(f"first probe old/new: {old[0]!r} / {new[0]!r}; last probe old/new: {old[-1]!r} / {new[-1]!r}")
+
+
+def suite_body(text):
+    start = text.index("def suite():")
+    return text[start:text.index(MARK)]
+
+
+old_body, new_body = suite_body(old_src), suite_body(new_src)
+prefix = new_body.startswith(old_body.rstrip("\n") + "\n")
+print(f"old suite() body ({len(old_body.splitlines())} lines) is an exact prefix of the new body "
+      f"({len(new_body.splitlines())} lines): {prefix}")
+extra = new_body[len(old_body.rstrip(chr(10))) + 1:]
+print(f"new suite() lines after the old body: {len(extra.splitlines())}; "
+      f"accepts() calls {len(re.findall(r'\baccepts\(', extra))}, rejects() calls "
+      f"{len(re.findall(r'\brejects\(', extra))}")
+for label, pattern in [("accepts(", r"\baccepts\("), ("rejects(", r"\brejects\("),
+                       ("module.validate(", r"module\.validate\(")]:
+    print(f"calls of {label}) in suite(): old {len(re.findall(pattern, old_body))}, "
+          f"new {len(re.findall(pattern, new_body))}")
+print(f"tail after the live acceptance marker identical: {old_src.split(MARK)[1] == new_src.split(MARK)[1]}")
+outside_old = old_src[:old_src.index("def suite():")]
+outside_new = new_src[:new_src.index("def suite():")]
+print("unified diff of the code before suite() (helpers and loading):")
+for line in difflib.unified_diff(outside_old.splitlines(), outside_new.splitlines(), "old", "new", n=0,
+                                 lineterm=""):
+    print(f"  {line}")
+print("live-board/state reads in new source:")
+for number, line in enumerate(new_src.splitlines(), 1):
+    if re.search(r"real_board|live_state", line):
+        print(f"  {number}: {line.strip()}")

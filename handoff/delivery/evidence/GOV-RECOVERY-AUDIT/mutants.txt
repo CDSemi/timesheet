@@ -1,0 +1,13 @@
+$ cd <task> && <workflow-python> mutants.py new_check_recovery.py
+(validator mutants are in-memory text edits; the repository file is not written)
+unmutated baseline: SURVIVED (85 probes)
+V1 software_ready ignores running tasks: KILLED after 81 probes (last passed: software_ready with all tasks closed, no next task and every package passed accepted); AssertionError: software_ready with a running task rejected: unexpected failure: Required tasks remain
+V2 software_ready ignores next_task_id: KILLED after 84 probes (last passed: software_ready with a package lacking its independent audit rejected); AssertionError: software_ready with next_task_id set rejected: invalid workflow accepted
+V3 software_ready skips the every-package audit rule: KILLED after 83 probes (last passed: software_ready with a pending required task rejected); AssertionError: software_ready with a package lacking its independent audit rejected: invalid workflow accepted
+V4 software_ready skips the required-tasks rule: KILLED after 82 probes (last passed: software_ready with a running task rejected); AssertionError: software_ready with a pending required task rejected: invalid workflow accepted
+V5 software_ready always rejected: KILLED after 80 probes (last passed: English-only report without a Vietnamese pair accepted); ValueError: mutant: rejected
+V6 software_ready branch removed: KILLED after 80 probes (last passed: English-only report without a Vietnamese pair accepted); ValueError: Next task invalid
+C1 check_recovery without the explicit synthetic status, live status running: SURVIVED (85 probes)
+C1 check_recovery without the explicit synthetic status, live status software_ready: KILLED after 0 probes (last passed: none); ValueError: Ready mission still has active work
+C1 check_recovery without the explicit synthetic status, full software_ready copy: KILLED after 0 probes (last passed: none); ValueError: Ready mission still has active work
+exit=0

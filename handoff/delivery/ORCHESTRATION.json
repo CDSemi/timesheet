@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "gov-recovery",
+  "phase": "mission-close",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "GOV-RECOVERY-FREEZE",
+  "next_task_id": "GOV-RECOVERY-ACCEPT",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -144,7 +144,7 @@
   },
   "governance_backlog": [
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
-    "GOV-E8-AUDIT R1: make check_recovery synthetic boards independent of the live mission status (needed before status software_ready).",
+    "GOV-E8-AUDIT R1: resolved by GOV-RECOVERY-FIX (frozen 7f750e9, GOV-RECOVERY-GATE PASS, GOV-RECOVERY-AUDIT PASS). Optional follow-ups from GOV_RECOVERY_REVIEW: synthetic boards still inherit coordinator_runtime; no in-suite guard for status independence; override runs not marked in the output.",
     "GOV-E8-AUDIT R2: AGENTS.vi.md UI item 2 lacks 'mobile-first default' and '(clean padding/gap)' (translation gap).",
     "WF-AUDIT3 optional: precommit misses a bare 'pass' key and quoted compose list items.",
     "WP2-ADV-REVIEW ADV-A-05 (Info, not governance): otLeave duplicates the ledger append path; optional consolidation in a later WP2 task.",
@@ -159,7 +159,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
+    "last_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
     "unpushed": []
   },
   "owner_decisions": [
@@ -13022,7 +13022,7 @@
       "id": "GOV-RECOVERY-FREEZE",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "GOV-RECOVERY-FIX"
       ],
@@ -13035,10 +13035,10 @@
         "risk": "M",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "aad53bd6ec961d1b8",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -13047,8 +13047,149 @@
       ],
       "prompt": "handoff/delivery/tasks/GOV-RECOVERY-FREEZE.md",
       "report": "handoff/delivery/tasks/GOV-RECOVERY-FREEZE.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/GOV-RECOVERY-FREEZE/checks.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-FREEZE/commit-message.txt"
+      ],
       "baseline_commit": "dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc",
+      "branch": "main",
+      "commit_sha": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+      "pushed": true,
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed, the check_recovery governance fix freeze: parent dd0c7d1, remote SHA identical; source digest 150420e7 (779 files); nothing pre-staged; 12 paths staged as listed; 87 probes; precommit, diff --cached --check, JSON parse, validate_orchestration, check_recovery and preflight all 0; no tag.",
+      "next_action": "None; GOV-RECOVERY-GATE on 7f750e9."
+    },
+    {
+      "id": "GOV-RECOVERY-GATE",
+      "package": "GOV",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+      "depends_on": [
+        "GOV-RECOVERY-FREEZE"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a4faf94afee4a6524",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-RECOVERY-GATE.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-RECOVERY-GATE.md",
+      "report": "handoff/delivery/tasks/GOV-RECOVERY-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/GOV-RECOVERY-GATE/results.txt"
+      ],
+      "baseline_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "PASS on 7f750e9 (verifier; self-reported claude-sonnet-5-5). Scope dd0c7d1..7f750e9: only non-record path handoff/delivery/check_recovery.py; nothing outside handoff/. check_recovery on the real board exit 0, 87 probes (82 before the fix). software_ready copy via CHECK_RECOVERY_BOARD/CHECK_RECOVERY_STATE: check_recovery exit 0, 87 probes; validate_orchestration --board rejects a non-repo-relative path ('Unsafe path', expected), so validate() was called on the copy through a task-folder script: PASS (263 tasks, 0 active). Real validator, preflight and precommit self-test exit 0. Source digest 150420e7 (779 files) before and after. One accidental pipe into tail on a digest output (harmless).",
+      "next_action": "None; fresh GOV-RECOVERY-AUDIT on 7f750e9."
+    },
+    {
+      "id": "GOV-RECOVERY-AUDIT",
+      "package": "GOV",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+      "depends_on": [
+        "GOV-RECOVERY-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aaeebf597f6453012",
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/GOV_RECOVERY_REVIEW.md",
+        "handoff/delivery/GOV_RECOVERY_REVIEW.vi.md",
+        "handoff/delivery/tasks/GOV-RECOVERY-AUDIT.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-RECOVERY-AUDIT.md",
+      "report": "handoff/delivery/tasks/GOV-RECOVERY-AUDIT.md",
+      "evidence": [
+        "handoff/delivery/GOV_RECOVERY_REVIEW.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/before.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/scope.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/check-recovery-real.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/check-recovery-software-ready.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/check-recovery-old-software-ready.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/probe-compare.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/mutants.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/safe-default.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/validators.txt",
+        "handoff/delivery/evidence/GOV-RECOVERY-AUDIT/after.txt"
+      ],
+      "baseline_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+      "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "reviewed_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "findings": [],
+      "notes": [
+        "PASS on reviewed_commit 7f750e9 (= gate freeze_commit = HEAD = origin/main); source digest 150420e7 (779 files) before and after. R1 closed: synthetic() sets status running itself and every synthetic board derives from it; check_recovery on the real board and on a software_ready copy (env overrides) exit 0 with 87 probes, also with this audit recorded as done in the copy; the old script on the same copy fails at its first probe ('Ready mission still has active work'), reproducing R1; the new suite passes 85/85 for every live status. No weakening: all 82 old probes kept in order (old suite() an exact prefix of the new one); 5 new software_ready probes (1 accepted; running task, pending task, next_task_id set, package not passed rejected); validator mutants V1-V6 killed at the intended probe. Safe default: unset or empty overrides resolve to the real files; nothing sets them. Scope: only handoff/ changed since dd0c7d1; the only governance path is check_recovery.py.",
+        "Optional risks (not defects): R1 synthetic boards still inherit the live coordinator_runtime; R2 no in-suite guard for status independence (mutant C1 survives on a running board); R3 override runs are not marked in the output; R4 information only."
+      ],
+      "next_action": "None; GOV-E8-AUDIT R1 closed. GOV-RECOVERY-ACCEPT commit, then the mission status becomes software_ready."
+    },
+    {
+      "id": "GOV-RECOVERY-ACCEPT",
+      "package": "GOV",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "GOV-RECOVERY-AUDIT"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/GOV-RECOVERY-ACCEPT.md",
+        "handoff/delivery/evidence/GOV-RECOVERY-ACCEPT"
+      ],
+      "prompt": "handoff/delivery/tasks/GOV-RECOVERY-ACCEPT.md",
+      "report": "handoff/delivery/tasks/GOV-RECOVERY-ACCEPT.md",
+      "evidence": [],
+      "baseline_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
       "branch": "main",
       "commit_sha": null,
       "pushed": false,
@@ -13056,7 +13197,7 @@
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Commit and push the check_recovery governance fix with the WP5-ACCEPT results and the GOV-RECOVERY briefs."
+      "next_action": "Commit and push the GOV-RECOVERY gate and audit records and the final STATE, NEXT_ACTION and checkpoint (closing commit of the software-readiness mission)."
     },
     {
       "id": "WP4-RECHECK-B4",

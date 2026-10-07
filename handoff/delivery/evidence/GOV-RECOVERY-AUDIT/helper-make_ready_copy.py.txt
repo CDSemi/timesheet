@@ -1,0 +1,44 @@
+"""Build a software_ready copy of the live board and STATE in the task folder and validate it.
+
+The real board and STATE are only read. Output: board-ready.json and state-ready.json here.
+"""
+import collections
+import copy
+import json
+
+from common import REPO, TASK, load_validator, read_json
+
+board = read_json(REPO / "handoff/delivery/ORCHESTRATION.json")
+state = read_json(REPO / "handoff/delivery/STATE.json")
+print(f"live board: status={board['status']} next_task_id={board['next_task_id']} "
+      f"active_package={board['active_package']} tasks={len(board['tasks'])}")
+print("live task statuses:", dict(sorted(collections.Counter(t["status"] for t in board["tasks"]).items())))
+print("live STATE phases:", {p["id"]: p.get("independent_review") for p in state["phases"]})
+
+ready = copy.deepcopy(board)
+ready.update(status="software_ready", next_task_id=None)
+closed = []
+for task in ready["tasks"]:
+    if task["status"] not in {"done", "cancelled"}:
+        closed.append(f"{task['id']}:{task['status']}->cancelled")
+        task["status"] = "cancelled"
+for lookup in ready.get("auxiliary_lookups", []):
+    if lookup.get("status") == "running":
+        lookup["status"] = "done"
+ready_state = copy.deepcopy(state)
+changed_phases = []
+for phase in ready_state["phases"]:
+    if phase.get("independent_review") != "passed":
+        changed_phases.append(phase["id"])
+        phase["independent_review"] = "passed"
+print("copy changes: status software_ready, next_task_id null; tasks closed:", closed or "none",
+      "; STATE phases set to passed:", changed_phases or "none (all already passed)")
+(TASK / "board-ready.json").write_text(json.dumps(ready, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+(TASK / "state-ready.json").write_text(json.dumps(ready_state, indent=2, ensure_ascii=False) + "\n",
+                                       encoding="utf-8")
+print("copy task statuses:", dict(sorted(collections.Counter(t["status"] for t in ready["tasks"]).items())))
+
+module = load_validator()
+result = module.validate(read_json(TASK / "board-ready.json"), read_json(TASK / "state-ready.json"),
+                         module.profiles())
+print("validate_orchestration.validate(copy):", json.dumps(result))

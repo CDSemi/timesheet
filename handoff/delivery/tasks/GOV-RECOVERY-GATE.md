@@ -49,4 +49,21 @@ Return at most 120 words, beginning with your self-reported model.
 
 ## Results
 
-(Verifier appends here.)
+Verdict: PASS (freeze_commit 7f750e9e5127eef23b96f18b37d4caee83baa414 = HEAD = origin/main).
+
+1. Scope dd0c7d1..7f750e9: only non-record path is `handoff/delivery/check_recovery.py`
+   (unmodified vs HEAD in the working tree); all else is handoff/delivery records; nothing
+   outside handoff/.
+2. `check_recovery.py` real board: exit 0, 87 probes (82 before the fix, 86 after attempt 1,
+   87 after attempt 2).
+3. `software_ready` copy (helper in task folder; CHECK_RECOVERY_BOARD / CHECK_RECOVERY_STATE):
+   `check_recovery.py` exit 0, 87 probes. `validate_orchestration.py --board` accepts only
+   repo-relative paths and reads the real STATE, so the copy path is rejected as "Unsafe
+   path" (exit 1, expected). I instead called its `validate()` on the copy and state copy
+   through a task-folder script: exit 0 PASS (263 tasks, 0 active).
+4. `validate_orchestration.py` real board exit 0; `validate_package.py --preflight` exit 0;
+   `precommit-check.mjs --self-test` exit 0 (35 path, 74 line samples).
+5. Source digest before and after: 150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61
+   (779 files). GOV paths: check_recovery.py plus records only.
+Evidence: handoff/delivery/evidence/GOV-RECOVERY-GATE/results.txt. Note: one `cat | tail`
+pipe was used on a digest output by mistake; harmless.

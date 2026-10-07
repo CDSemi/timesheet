@@ -1,0 +1,15 @@
+$ env | grep -c '^CHECK_RECOVERY_'
+0
+exit=1 (count 0, grep exit 1 = not set)
+$ python safe_default.py new_check_recovery.py
+inherited environment defines CHECK_RECOVERY_BOARD: False / CHECK_RECOVERY_STATE: False
+unset: BOARD_PATH is real file: True; STATE_PATH is real file: True; board status read: running; real_board equals real file: True
+empty strings: BOARD_PATH is real file: True; STATE_PATH is real file: True; board status read: running; real_board equals real file: True
+set to the task-folder copy: BOARD_PATH is real file: False; STATE_PATH is real file: False; board status read: software_ready; real_board equals real file: False
+exit=0
+$ git grep -n CHECK_RECOVERY -- ':!handoff/delivery/ORCHESTRATION.json' ':!handoff/delivery/tasks' ':!handoff/delivery/evidence'
+handoff/delivery/check_recovery.py:19:BOARD_PATH = Path(os.environ.get("CHECK_RECOVERY_BOARD") or ROOT / "handoff/delivery/ORCHESTRATION.json")
+handoff/delivery/check_recovery.py:20:STATE_PATH = Path(os.environ.get("CHECK_RECOVERY_STATE") or ROOT / "handoff/delivery/STATE.json")
+exit=0
+$ git grep -n -i 'check_recovery' -- .claude scripts handoff/prompts handoff/templates package.json AGENTS.md CLAUDE.md
+exit=1 (1 = no invoker in profiles, scripts, prompts, templates)

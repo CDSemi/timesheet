@@ -40,18 +40,20 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-1. **WP5 acceptance record and commit.** WP5-ACCREC fills the
-   [WP5 handoff](delivery/WP5_HANDOFF.md), and WP5-ACCEPT commits it with no source
-   change.
-2. **GOV-RECOVERY.** This governance fix makes the `check_recovery.py` synthetic
-   boards independent of the live mission status. It is needed before the board
-   records the mission as `software_ready`. It goes through fix, freeze, gate and a
-   fresh GOV audit.
-3. **Owner review of the pilot.** The owner reads the pilot packet and answers
-   D-1..D-15. D-1, D-7, D-8 and D-13 are needed before activation. An answer that
-   differs from the current default causes a fix round before activation. Real
-   sending, deployment and activation happen only after the owner's explicit
-   authorization.
+1. **Done: WP5 accepted.** The [WP5 handoff](delivery/WP5_HANDOFF.md) acceptance
+   record was committed at dd0c7d1, with no source change.
+2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
+   status (fix frozen at 7f750e9, gate PASS,
+   [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
+   mission as `software_ready`.
+3. **Next, owner: review the pilot.** Read the
+   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15.
+   - D-1, D-7, D-8 and D-13 are needed before activation.
+   - An answer that differs from the current default causes a fix round (fix, freeze,
+     gate, independent audit) before activation.
+   - Run the owner NAS steps in docs/11 and the target restore form.
+   - Real sending, deployment and activation happen only after the owner's explicit
+     authorization. Then resume the coordinator with the entry prompt above.
 
 After usage reset: Resume/Continue the existing session, for example
 `claude --continue` here or `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`.

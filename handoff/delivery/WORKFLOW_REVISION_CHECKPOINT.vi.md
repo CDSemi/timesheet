@@ -1101,9 +1101,24 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Số probe tăng từ 82 lên 87, và bộ kiểm tra chạy đạt trên bản copy
            `software_ready`.
          - Digest source không đổi.
-       - Đang chạy: GOV-RECOVERY-FREEZE (committer). Sau đó là GOV-RECOVERY-GATE, một
-         lượt GOV-RECOVERY-AUDIT bằng auditor mới, rồi trạng thái mission
-         `software_ready`.
+       - GOV-RECOVERY-FREEZE đã commit và push 7f750e9 (12 đường dẫn; 87 probe; mọi kiểm
+         tra trả 0).
+       - GOV-RECOVERY-GATE: **PASS** trên 7f750e9.
+         - Phạm vi: chỉ check_recovery.py.
+         - 87 probe đều đạt trên board thật và trên bản copy `software_ready`.
+         - validate() chấp nhận bản copy. Các validator, preflight và digest không đổi.
+       - GOV-RECOVERY-AUDIT: **PASS** trên 7f750e9, không có phát hiện. Đã đóng
+         GOV-E8-AUDIT R1.
+         - Bộ kiểm tra cũ fail trên bản copy `software_ready`; bộ mới thì đạt.
+         - Giữ nguyên cả 82 probe cũ, thêm 5 probe mới.
+         - Các đột biến validator V1–V6 đều bị bắt.
+         - Rủi ro tùy chọn R1–R4 chuyển vào backlog quản trị.
+       - Đang chạy: GOV-RECOVERY-ACCEPT (committer), commit chốt.
+       - Sau đó coordinator đặt board sang `software_ready`. Cụ thể:
+         - `next_task_id` để trống và phase là `complete-pilot-pending`;
+         - thay đổi cuối cùng của board chưa được commit cho đến lần commit kế tiếp.
+       - **Trạng thái mission: độ sẵn sàng phần mềm WP1–WP5 đã hoàn tất. Pilot packet cụ
+         thể đang chờ chủ dự án.**
        - Sau đó: commit đóng băng, chạy lại gate cho phần docs thay đổi, WP5-PKTID,
          WP5-RECHECK (auditor opus mới), ACCREC và ACCEPT.
        - Sau đó:
@@ -1134,12 +1149,10 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   Brief đã sẵn: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A và WP3-RECHECK-BC. Brief của
   WP3-FIX-FREEZE sẽ viết sau WP3-FIXC.
 - Bước tiếp:
-  1. Ghi kết quả WP5-ACCREC, rồi giao WP5-ACCEPT (brief đã sẵn).
-  2. Sau đó là GOV-RECOVERY: làm cho các board giả lập của check_recovery không phụ thuộc
-     vào trạng thái thật của mission. Nó đi qua sửa, commit đóng băng, gate và một lần
-     audit GOV mới. Xong thì đặt trạng thái mission là `software_ready`.
-  3. Sau đó chuyển pilot packet cho chủ dự án và hỏi D-1..D-15. Pilot thật, gửi thật và
-     kích hoạt do chủ dự án quyết.
+  1. Chủ dự án: duyệt `handoff/delivery/WP5_PILOT_PACKET.vi.md` và trả lời D-1..D-15.
+     D-1, D-7, D-8 và D-13 cần có trước khi kích hoạt. Làm các bước NAS của chủ dự án.
+  2. Chỉ resume một phiên coordinator khi câu trả lời đòi hỏi một vòng sửa, hoặc cho
+     pilot đã được cho phép. Gửi thật và kích hoạt do chủ dự án quyết.
 - Vướng mắc: hiện không có (ổ B: đã có chỗ cho attempt 2 của T06-FREEZE; có thể đầy lại).
   Rủi ro: bộ phân loại có thể chặn `git add` của committer;
   coordinator không lách qua lệnh chặn mà hỏi chủ dự án (tin nhắn duyệt nêu rõ hành động

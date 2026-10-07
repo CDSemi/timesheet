@@ -1,0 +1,22 @@
+R1 reproduction: the old script with the software_ready copy as live board/STATE:
+$ cd <task> && <workflow-python> run_split.py old_check_recovery.py board-ready.json state-ready.json
+exit observed by the shell: 1
+(line numbers inside the tail are relative to the separately compiled tail; the failing call is
+the first suite() probe 'synthetic pending board', after 'current board is valid' passed)
+Traceback (most recent call last):
+  File "<task>\run_split.py", line 15, in <module>
+    run_tail(source, namespace)
+  File "<task>\common.py", line 38, in run_tail
+    exec(compile(tail, str(source_path), "exec"), namespace)
+  File "<task>/old_check_recovery.py", line 5, in <module>
+    """
+    ^^^^
+  File "<task>/old_check_recovery.py", line 105, in suite
+    accepts("synthetic pending board", synthetic())
+  File "<task>/old_check_recovery.py", line 51, in accepts
+    module.validate(value, expected_state or state, configured)
+  File "<project>\handoff\delivery\validate_orchestration.py", line 340, in validate
+    check(next_id is None and not running, "Ready mission still has active work")
+  File "<project>\handoff\delivery\validate_orchestration.py", line 34, in check
+    raise ValueError(message)
+ValueError: Ready mission still has active work

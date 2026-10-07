@@ -1,0 +1,55 @@
+"""Shared helpers for the GOV-RECOVERY-AUDIT probes.
+
+Runs only from the task folder. Reads the repository; never writes into it.
+"""
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+REPO = Path(r"<project>")
+TASK = Path(__file__).resolve().parent
+# Executed sources get this __file__, so their ROOT (= parents[2]) resolves to the repository.
+SCRIPT_AS = REPO / "handoff" / "delivery" / "check_recovery.py"
+VALIDATOR = REPO / "handoff" / "delivery" / "validate_orchestration.py"
+MARK = "# One acceptance probe validates the live board"
+
+
+def split(source_path):
+    text = Path(source_path).read_text(encoding="utf-8")
+    head, tail = text.split(MARK)
+    return head, MARK + tail
+
+
+def load_head(source_path, replace=None):
+    """Execute everything before the live acceptance probe; returns the namespace."""
+    head, _ = split(source_path)
+    for old, new in replace or []:
+        assert head.count(old) == 1, f"mutation anchor not unique: {old!r}"
+        head = head.replace(old, new)
+    namespace = {"__file__": str(SCRIPT_AS), "__name__": "audit_exec"}
+    exec(compile(head, str(source_path), "exec"), namespace)
+    return namespace
+
+
+def run_tail(source_path, namespace):
+    _, tail = split(source_path)
+    exec(compile(tail, str(source_path), "exec"), namespace)
+
+
+def load_validator(replace=None):
+    """Load validate_orchestration.py, optionally with text mutations (in memory only)."""
+    text = VALIDATOR.read_text(encoding="utf-8")
+    for old, new in replace or []:
+        assert text.count(old) == 1, f"mutation anchor not unique: {old!r}"
+        text = text.replace(old, new)
+    spec = importlib.util.spec_from_loader("mutated_workflow", loader=None)
+    module = importlib.util.module_from_spec(spec)
+    module.__file__ = str(VALIDATOR)
+    exec(compile(text, str(VALIDATOR), "exec"), module.__dict__)
+    return module
+
+
+def read_json(path):
+    return json.loads(Path(path).read_text(encoding="utf-8"))

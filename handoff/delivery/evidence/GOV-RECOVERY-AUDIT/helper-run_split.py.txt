@@ -1,0 +1,15 @@
+"""Run a check_recovery source end to end, optionally with the live board/STATE replaced by copies.
+
+Usage: python run_split.py <source.py> [board.json state.json]
+The source runs as if it were handoff/delivery/check_recovery.py in the repository.
+"""
+import sys
+
+from common import load_head, read_json, run_tail
+
+source = sys.argv[1]
+namespace = load_head(source)
+if len(sys.argv) == 4:
+    namespace["real_board"] = read_json(sys.argv[2])
+    namespace["live_state"] = read_json(sys.argv[3])
+run_tail(source, namespace)

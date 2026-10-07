@@ -1,0 +1,85 @@
+"""Write masked LF .txt evidence from the raw task-folder outputs into the repository evidence folder.
+
+Usage: python mask.py
+Masks the project path (<project>), the task folder (<task>) and the user-profile account (<user>);
+strips ANSI codes; converts CRLF to LF. Helper sources are copied as <name>.py.txt.
+"""
+import re
+
+from common import REPO, TASK
+
+OUT = REPO / "handoff/delivery/evidence/GOV-RECOVERY-AUDIT"
+PY = "<workflow-python> = C:\\Users\\<user>\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe"
+RAW = [
+    ("before.raw.txt", "before.txt", None),
+    ("scope.raw.txt", "scope.txt", None),
+    ("check-recovery-real.raw.txt", "check-recovery-real.txt",
+     f"{PY}\n$ cd <project> && <workflow-python> handoff/delivery/check_recovery.py\n"
+     "(CHECK_RECOVERY_BOARD / CHECK_RECOVERY_STATE not set)\nexit observed by the shell: 0\n"),
+    ("check-recovery-ready.raw.txt", "check-recovery-software-ready.txt",
+     f"{PY}\n$ cd <project> && CHECK_RECOVERY_BOARD=<task>/board-ready.json "
+     "CHECK_RECOVERY_STATE=<task>/state-ready.json <workflow-python> handoff/delivery/check_recovery.py\n"
+     "(copies built by helper-make_ready_copy.py.txt; see software-ready-copy.txt)\n"
+     "exit observed by the shell: 0\n"),
+    ("ready-copy.raw.txt", "software-ready-copy.txt",
+     "$ cd <task> && <workflow-python> make_ready_copy.py\n"),
+    ("ready-copy-done.raw.txt", "software-ready-copy-done.txt",
+     "Variant: this audit task recorded as done/PASS in the copy, then\n"
+     "$ cd <project> && CHECK_RECOVERY_BOARD=<task>/board-ready-done.json "
+     "CHECK_RECOVERY_STATE=<task>/state-ready.json <workflow-python> handoff/delivery/check_recovery.py\n"),
+    ("old-real.json.raw.txt", "check-recovery-old-real.txt",
+     "Old script (git show dd0c7d1:handoff/delivery/check_recovery.py > <task>/old_check_recovery.py),\n"
+     "executed as if at handoff/delivery/check_recovery.py on the real board:\n"
+     "$ cd <task> && <workflow-python> run_split.py old_check_recovery.py\nexit observed by the shell: 0\n"),
+    ("old-ready.raw.txt", "check-recovery-old-software-ready.txt",
+     "R1 reproduction: the old script with the software_ready copy as live board/STATE:\n"
+     "$ cd <task> && <workflow-python> run_split.py old_check_recovery.py board-ready.json state-ready.json\n"
+     "exit observed by the shell: 1\n"
+     "(line numbers inside the tail are relative to the separately compiled tail; the failing call is\n"
+     "the first suite() probe 'synthetic pending board', after 'current board is valid' passed)\n"),
+    ("probe-compare.raw.txt", "probe-compare.txt",
+     "$ cd <task> && <workflow-python> compare_probes.py old_check_recovery.py new_check_recovery.py "
+     "old-real.json.raw.txt check-recovery-real.raw.txt\n"),
+    ("residual-status.raw.txt", "residual-status.txt",
+     "$ cd <task> && <workflow-python> residual_status.py old_check_recovery.py ; "
+     "<workflow-python> residual_status.py new_check_recovery.py\n"
+     "(suite() only: 80 old / 85 new synthetic probes, without the live acceptance probe and the WP3 rerun)\n"),
+    ("mutants.raw.txt", "mutants.txt",
+     "$ cd <task> && <workflow-python> mutants.py new_check_recovery.py\n"
+     "(validator mutants are in-memory text edits; the repository file is not written)\n"),
+    ("safe-default.raw.txt", "safe-default.txt", None),
+    ("validators.raw.txt", "validators.txt", f"{PY}\n(run from <project>)\n"),
+    ("after.raw.txt", "after.txt", None),
+    ("final-checks.raw.txt", "final-checks.txt", f"{PY}\n(run from <project>)\n"),
+]
+HELPERS = ["common.py", "make_ready_copy.py", "make_ready_copy_done.py", "run_split.py", "compare_probes.py",
+           "residual_status.py", "mutants.py", "safe_default.py", "mask.py"]
+
+
+def mask(text):
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text).replace("\r\n", "\n").replace("\r", "\n")
+    for variant in (r"<project>", "<project>",
+                    "<project>"):
+        text = text.replace(variant, "<project>")
+    for variant in (r"<task>", "<task>",
+                    "<task>"):
+        text = text.replace(variant, "<task>")
+    text = re.sub(r"(?i)([\\/]Users[\\/])(?!<user>)[^\\/\s\"']+", r"\1<user>", text)
+    text = re.sub(r"(?i)<user>", "<user>", text)
+    return text if text.endswith("\n") else text + "\n"
+
+
+OUT.mkdir(parents=True, exist_ok=True)
+written = []
+for source, target, header in RAW:
+    body = (TASK / source).read_text(encoding="utf-8")
+    (OUT / target).write_bytes(mask((header or "") + body).encode("utf-8"))
+    written.append(target)
+for name in HELPERS:
+    target = f"helper-{name}.txt"
+    (OUT / target).write_bytes(mask((TASK / name).read_text(encoding="utf-8")).encode("utf-8"))
+    written.append(target)
+for target in written:
+    data = (OUT / target).read_bytes()
+    assert b"\r" not in data and b"<user>" not in data.lower(), target
+print(f"wrote {len(written)} masked LF files: {', '.join(written)}")

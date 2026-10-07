@@ -1,0 +1,48 @@
+"""Does the synthetic suite still depend on the live mission status (GOV-E8-AUDIT R1)?
+
+Usage: python residual_status.py <source.py>
+For each live status the suite (all synthetic probes, without the live acceptance probe) runs with
+base WP1 and WP3. Two extra rows use the full software_ready copy and a live board without a
+coordinator_runtime (an inherited field that R1 also named).
+"""
+import sys
+
+from common import TASK, load_head, read_json
+
+source = sys.argv[1]
+
+
+def run(label, base, adjust):
+    namespace = load_head(source)
+    adjust(namespace)
+    namespace["use_base"](base)
+    try:
+        namespace["suite"]()
+    except Exception as error:  # noqa: BLE001 - report the first failure
+        print(f"{label} base {base}: suite FAIL after {len(namespace['passed'])} probes: "
+              f"{type(error).__name__}: {error}")
+        return
+    print(f"{label} base {base}: suite PASS ({len(namespace['passed'])} probes)")
+
+
+def set_status(status):
+    def adjust(namespace):
+        namespace["real_board"]["status"] = status
+    return adjust
+
+
+def use_copy(namespace):
+    namespace["real_board"] = read_json(TASK / "board-ready.json")
+    namespace["live_state"] = read_json(TASK / "state-ready.json")
+
+
+def no_runtime(namespace):
+    namespace["real_board"]["coordinator_runtime"] = None
+
+
+for status in ["ready", "running", "paused_usage", "blocked", "software_ready", "not-a-status"]:
+    for base in ["WP1", "WP3"]:
+        run(f"live status {status}", base, set_status(status))
+for base in ["WP1", "WP3"]:
+    run("full software_ready copy (board-ready.json, state-ready.json)", base, use_copy)
+run("informational: live coordinator_runtime null", "WP1", no_runtime)

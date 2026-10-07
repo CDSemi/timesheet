@@ -1047,8 +1047,25 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - Environment overrides default to the real files.
          - Probes went from 82 to 87, and the suite passes on a `software_ready` copy.
          - The source digest is unchanged.
-       - Running: GOV-RECOVERY-FREEZE (committer). Then GOV-RECOVERY-GATE, a fresh
-         GOV-RECOVERY-AUDIT, and the mission status `software_ready`.
+       - GOV-RECOVERY-FREEZE committed and pushed 7f750e9 (12 paths; 87 probes; all
+         checks 0).
+       - GOV-RECOVERY-GATE: **PASS** on 7f750e9.
+         - Scope: check_recovery.py only.
+         - 87 probes pass on the real board and on a `software_ready` copy.
+         - validate() accepts the copy. Validators, preflight and the digest are
+           unchanged.
+       - GOV-RECOVERY-AUDIT: **PASS** on 7f750e9, with no findings. GOV-E8-AUDIT R1 is
+         closed.
+         - The old suite fails on a `software_ready` copy; the new one passes.
+         - All 82 old probes are kept, and 5 new ones are added.
+         - Validator mutants V1–V6 are killed.
+         - Optional risks R1–R4 go to the governance backlog.
+       - Running: GOV-RECOVERY-ACCEPT (committer), the closing commit.
+       - After it, the coordinator sets the board to `software_ready`. That means:
+         - `next_task_id` null and the phase `complete-pilot-pending`;
+         - the final board change stays uncommitted until the next commit.
+       - **Mission state: WP1–WP5 software readiness is complete. The concrete pilot
+         packet waits for the owner.**
        - Then: a freeze, a docs-delta regate, WP5-PKTID, WP5-RECHECK (fresh opus),
          ACCREC and ACCEPT.
        - Then:
@@ -1079,12 +1096,10 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   Briefs are ready: WP3-FIXC, WP3-REGATE, WP3-RECHECK-A and WP3-RECHECK-BC. The
   WP3-FIX-FREEZE brief will be written after WP3-FIXC.
 - Next action:
-  1. Record WP5-ACCREC, then dispatch WP5-ACCEPT (its brief is ready).
-  2. Then GOV-RECOVERY: make the check_recovery synthetic boards independent of the
-     live mission status. It goes through a fix, a freeze, a gate and a fresh GOV
-     audit. After that, set the mission status to `software_ready`.
-  3. Then hand the pilot packet to the owner and ask D-1..D-15. The real pilot,
-     sending and activation stay owner-controlled.
+  1. Owner: review `handoff/delivery/WP5_PILOT_PACKET.md` and answer D-1..D-15. D-1,
+     D-7, D-8 and D-13 are needed before activation. Run the owner NAS steps.
+  2. A coordinator session resumes only for a fix round that the answers require, or
+     for the authorized pilot. Real sending and activation stay owner-controlled.
 - Blocker: none now (B: had space again for T06-FREEZE attempt 2; it may fill up again).
   Risk: the classifier may deny a committer `git add`; the coordinator does
   not route around a denial and asks the owner (approval message naming the action and its

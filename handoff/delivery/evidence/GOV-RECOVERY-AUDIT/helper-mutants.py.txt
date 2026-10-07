@@ -1,0 +1,55 @@
+"""Mutation probes for the new software_ready probes and for the explicit synthetic status.
+
+Usage: python mutants.py <new_check_recovery.py>
+Validator mutants are applied in memory to a copy of validate_orchestration.py's text; the
+repository file is never written. A mutant is "killed" when suite() fails.
+"""
+import sys
+
+from common import TASK, load_head, load_validator, read_json
+
+source = sys.argv[1]
+READY = 'check(next_id is None and not running, "Ready mission still has active work")'
+AUDIT = ('check(all(phases[item].get("independent_review") == "passed" for item in PACKAGES),\n'
+         '              "Software readiness requires every package audit")')
+REMAIN = 'check(all(task["status"] in {"done", "cancelled"} for task in tasks), "Required tasks remain")'
+BRANCH = 'if board["status"] == "software_ready":'
+
+VALIDATOR_MUTANTS = [
+    ("V1 software_ready ignores running tasks", [(READY, READY.replace(" and not running", ""))]),
+    ("V2 software_ready ignores next_task_id", [(READY, READY.replace("next_id is None and ", ""))]),
+    ("V3 software_ready skips the every-package audit rule", [(AUDIT, "check(True, 'mutant')")]),
+    ("V4 software_ready skips the required-tasks rule", [(REMAIN, "check(True, 'mutant')")]),
+    ("V5 software_ready always rejected", [(BRANCH, BRANCH + "\n        check(False, 'mutant: rejected')")]),
+    ("V6 software_ready branch removed", [(BRANCH, "if False:")]),
+]
+
+
+def run(label, namespace, base="WP1"):
+    namespace["use_base"](base)
+    try:
+        namespace["suite"]()
+    except Exception as error:  # noqa: BLE001 - report the first failure
+        last = namespace["passed"][-1] if namespace["passed"] else "none"
+        print(f"{label}: KILLED after {len(namespace['passed'])} probes (last passed: {last}); "
+              f"{type(error).__name__}: {error}")
+        return
+    print(f"{label}: SURVIVED ({len(namespace['passed'])} probes)")
+
+
+baseline = load_head(source)
+run("unmutated baseline", baseline)
+for label, replace in VALIDATOR_MUTANTS:
+    namespace = load_head(source)
+    namespace["module"] = load_validator(replace)
+    run(label, namespace)
+
+EXPLICIT = 'value.update(status="running",  # explicit: never inherited from the live board\n                 tasks='
+for status in ["running", "software_ready"]:
+    namespace = load_head(source, [(EXPLICIT, "value.update(tasks=")])
+    namespace["real_board"]["status"] = status
+    run(f"C1 check_recovery without the explicit synthetic status, live status {status}", namespace)
+namespace = load_head(source, [(EXPLICIT, "value.update(tasks=")])
+namespace["real_board"] = read_json(TASK / "board-ready.json")
+namespace["live_state"] = read_json(TASK / "state-ready.json")
+run("C1 check_recovery without the explicit synthetic status, full software_ready copy", namespace)

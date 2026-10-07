@@ -1,0 +1,23 @@
+"""Variant of the software_ready copy closer to the expected final board: this audit task is
+recorded as done with a synthetic PASS instead of cancelled. Task folder only.
+
+Output: board-ready-done.json (STATE copy unchanged: state-ready.json).
+"""
+import json
+
+from common import TASK, load_validator, read_json
+
+board = read_json(TASK / "board-ready.json")
+audit = next(task for task in board["tasks"] if task["id"] == "GOV-RECOVERY-AUDIT")
+digest = "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61"
+audit.update(status="done", decision="PASS", source_digest=digest, reviewed_digest=digest,
+             actual_model="claude-opus-5-5", actual_source="self_reported",
+             evidence=["handoff/delivery/evidence/GOV-RECOVERY-FIX/results.txt"])
+print("GOV-RECOVERY-AUDIT in the copy:", {key: audit[key] for key in
+      ("status", "decision", "reviewed_commit", "agent_id", "actual_model")})
+(TASK / "board-ready-done.json").write_text(json.dumps(board, indent=2, ensure_ascii=False) + "\n",
+                                            encoding="utf-8")
+module = load_validator()
+result = module.validate(read_json(TASK / "board-ready-done.json"), read_json(TASK / "state-ready.json"),
+                         module.profiles())
+print("validate_orchestration.validate(copy):", json.dumps(result))

@@ -1,0 +1,34 @@
+"""Check that the CHECK_RECOVERY_BOARD / CHECK_RECOVERY_STATE overrides default to the real files.
+
+Usage: python safe_default.py <new_check_recovery.py>
+"""
+import os
+import sys
+
+from common import REPO, TASK, load_head, read_json
+
+source = sys.argv[1]
+real_board = REPO / "handoff/delivery/ORCHESTRATION.json"
+real_state = REPO / "handoff/delivery/STATE.json"
+print("inherited environment defines CHECK_RECOVERY_BOARD:", "CHECK_RECOVERY_BOARD" in os.environ,
+      "/ CHECK_RECOVERY_STATE:", "CHECK_RECOVERY_STATE" in os.environ)
+cases = [("unset", None, None), ("empty strings", "", ""),
+         ("set to the task-folder copy", str(TASK / "board-ready.json"), str(TASK / "state-ready.json"))]
+for label, board, state in cases:
+    saved = {key: os.environ.pop(key, None) for key in ("CHECK_RECOVERY_BOARD", "CHECK_RECOVERY_STATE")}
+    if board is not None:
+        os.environ["CHECK_RECOVERY_BOARD"] = board
+        os.environ["CHECK_RECOVERY_STATE"] = state
+    try:
+        namespace = load_head(source)
+    finally:
+        for key in ("CHECK_RECOVERY_BOARD", "CHECK_RECOVERY_STATE"):
+            os.environ.pop(key, None)
+        for key, value in saved.items():
+            if value is not None:
+                os.environ[key] = value
+    board_path, state_path = namespace["BOARD_PATH"], namespace["STATE_PATH"]
+    print(f"{label}: BOARD_PATH is real file: {board_path.resolve() == real_board.resolve()}; "
+          f"STATE_PATH is real file: {state_path.resolve() == real_state.resolve()}; "
+          f"board status read: {namespace['real_board']['status']}; "
+          f"real_board equals real file: {namespace['real_board'] == read_json(real_board)}")

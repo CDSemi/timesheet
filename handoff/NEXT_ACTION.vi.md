@@ -38,16 +38,20 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-1. **Biên bản và commit nghiệm thu WP5.** WP5-ACCREC điền
-   [WP5 handoff](delivery/WP5_HANDOFF.vi.md), và WP5-ACCEPT commit nó, không đổi source.
-2. **GOV-RECOVERY.** Bản sửa quản trị này làm cho các board giả lập của
-   `check_recovery.py` không phụ thuộc vào trạng thái thật của mission. Cần làm xong
-   trước khi board ghi mission là `software_ready`. Nó đi qua sửa, đóng băng, gate và
-   một lần audit GOV mới.
-3. **Chủ dự án duyệt pilot.** Chủ dự án đọc pilot packet và trả lời D-1..D-15. D-1, D-7,
-   D-8 và D-13 cần có trước khi kích hoạt. Câu trả lời nào khác mặc định hiện tại sẽ
-   kéo theo một vòng sửa trước khi kích hoạt. Chỉ gửi thật, triển khai và kích hoạt
-   sau khi chủ dự án cho phép rõ ràng.
+1. **Đã xong: WP5 đã nghiệm thu.** Biên bản nghiệm thu trong
+   [WP5 handoff](delivery/WP5_HANDOFF.vi.md) đã commit ở dd0c7d1, không đổi source.
+2. **Đã xong: GOV-RECOVERY.** `check_recovery.py` không còn lấy trạng thái thật của
+   mission (bản sửa đóng băng ở 7f750e9, gate PASS,
+   [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là
+   `software_ready`.
+3. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
+   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) và trả lời D-1..D-15.
+   - D-1, D-7, D-8 và D-13 cần có trước khi kích hoạt.
+   - Câu trả lời nào khác mặc định hiện tại sẽ kéo theo một vòng sửa (sửa, đóng băng,
+     gate, audit độc lập) trước khi kích hoạt.
+   - Làm các bước NAS của chủ dự án trong docs/11 và mẫu khôi phục trên máy đích.
+   - Chỉ gửi thật, triển khai và kích hoạt sau khi chủ dự án cho phép rõ ràng. Khi đó
+     resume coordinator bằng prompt ở trên.
 
 Sau reset usage: Resume/Continue phiên cũ, ví dụ `claude --continue` tại đây hoặc
 `claude --resume 44e3451e-da20-4a12-94bb-6b94fc5f531e`. Nếu không còn, mở phiên mới
