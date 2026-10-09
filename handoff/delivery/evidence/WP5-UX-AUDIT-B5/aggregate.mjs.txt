@@ -1,0 +1,69 @@
+// WP5-UX-AUDIT-B5: aggregates the rendered ring ratios of the probe walks per control group, project and theme.
+// Usage: node aggregate.mjs <probe-out dir> <tag>
+// Only stops that are at least partly visible (vis > 0) and show a ring are counted; "outer" is the ring colour against
+// the rendered pixel just outside it, "inner" against the pixel just inside it.
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag] = process.argv.slice(2);
+const out = (line) => process.stdout.write(`${line}\n`);
+
+function group(project, name, source) {
+  if (source === 'dialog') return 'dialog buttons (Clock out, label review)';
+  if (source === 'editor') return 'day editor fields and buttons';
+  if (source.startsWith('screen')) return `other screens ${source.slice(7)}`;
+  if (/^(Timesheet|Overtime|History|Settings|Sign out|More)$/.test(name)) return project === 'mobile' ? 'phone tabs' : 'top-bar links and Sign out';
+  if (/^(Previous|Next) period$/.test(name)) return 'period buttons';
+  if (name === 'Clock in') return 'Clock in';
+  if (name === 'Review & sign off') return 'Review link (bar and signature line)';
+  if (/^(Edit|View) \d{4}-\d{2}-\d{2}$/.test(name)) return 'sheet "Edit {date}"';
+  if (/^Label for /.test(name)) return 'label picker trigger';
+  if (/^(Open a day|Show details|Change several days)$/.test(name)) return 'toolbar';
+  if (/^Select |^Category for|^Done$/.test(name)) return 'batch controls';
+  return `other (${name})`;
+}
+
+const groups = new Map();
+function add(project, scheme, source, stops) {
+  for (const stop of stops ?? []) {
+    if (typeof stop.name !== 'string' || stop.ring === null || stop.ring === undefined) continue;
+    const vis = String(stop.vis ?? '');
+    if (vis.startsWith('0/')) continue;
+    if (stop.ring.sidesPresent === 0) {
+      const key = `${project} ${scheme} | NO RING | ${stop.name}`;
+      groups.set(key, { n: (groups.get(key)?.n ?? 0) + 1 });
+      continue;
+    }
+    const key = `${project} ${scheme} | ${group(project, stop.name, source)}`;
+    const entry = groups.get(key) ?? { n: 0, outer: [], inner: [] };
+    entry.n += 1;
+    if (stop.ring.minOuter !== null) entry.outer.push(stop.ring.minOuter);
+    if (stop.ring.minInner !== null) entry.inner.push(stop.ring.minInner);
+    groups.set(key, entry);
+  }
+}
+
+for (const file of readdirSync(dir).filter((name) => name.startsWith(`${tag}-p`) && name.endsWith('.json')).sort()) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  const match = /-(p\d)-(desktop|mobile)(?:-(light|dark))?\.json$/.exec(file);
+  if (match === null) continue;
+  const [, probe, project, scheme = 'n/a'] = match;
+  if (probe === 'p1') {
+    add(project, scheme, 'sheet', data.forward);
+    add(project, scheme, 'sheet', data.batch);
+  } else if (probe === 'p2') {
+    for (const [key, value] of Object.entries(data)) if (key.startsWith('w')) add(project, scheme, 'editor', value.forward);
+  } else if (probe === 'p3') {
+    add(project, scheme, 'sheet', data.trigger);
+    add(project, scheme, 'dialog', data.clockOut.walk);
+    add(project, scheme, 'dialog', data.labelReview.walk);
+  } else if (probe === 'p4') {
+    for (const [hash, value] of Object.entries(data)) add(project, scheme, `screen ${hash}`, value.walk);
+  }
+}
+
+const fmt = (values) => (values.length === 0 ? 'n/a' : `${Math.min(...values).toFixed(2)}..${Math.max(...values).toFixed(2)}`);
+for (const [key, entry] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+  if (entry.outer === undefined) out(`${key}: ${entry.n} stop(s) without a detected ring`);
+  else out(`${key}: ${entry.n} stops, outer ${fmt(entry.outer)}, inner ${fmt(entry.inner)}`);
+}

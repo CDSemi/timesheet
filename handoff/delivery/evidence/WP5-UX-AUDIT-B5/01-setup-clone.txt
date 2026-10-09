@@ -1,0 +1,26 @@
+WP5-UX-AUDIT-B5 - scratch clone and runtime (2026-10-09, UTC)
+
+Runtime: Git Bash; PATH starts with the portable Node 24 bin ($(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin),
+then $(cygpath -u "$APPDATA")/npm; `node --version` -> v24.21.0 (first shell call). TEMP and TMP = <task>; DATA_DIR = <task>\data,
+DATABASE_PATH = <task>\data\ts.sqlite for every npm, CLI, Playwright and server run. Nothing written to %LOCALAPPDATA%\timesheet-dev
+(only the portable node.exe is executed). No Docker.
+
+$ cd <task> && git clone --no-local <project> clone                    -> exit 0
+$ cd <task>/clone && git checkout --detach 5e104e14dad71268a9185920c04ed0ee2a4b31c2   -> exit 0 ("HEAD is now at 5e104e1 Freeze WP5-UX-FIX6 ...")
+$ git rev-parse HEAD                                                   -> 5e104e14dad71268a9185920c04ed0ee2a4b31c2
+$ git status --short                                                   -> (empty, 0 bytes)
+$ node scripts/source-digest.mjs                                       -> exit 0
+  07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635  (790 files, handoff/ excluded)
+  = digest of record (form 3: scratch clone at the reviewed commit)
+$ node <npm-cli.js> ci                                                 -> exit 0 (added 161 packages; 1 high severity advisory, see the report), 01a-npm-ci.txt
+
+Probe folder: <task>/clone/audit-b5/ (b5.probe.ts, probe.config.ts), kept out of git by `.git/info/exclude` ("audit-b5/");
+`git status --short` stays empty. Probe servers: built dist/ of the clone on ports 48200/48201 (run 1) and 48202/48203 (run 2),
+48204/48205 (run 3), each with its own DATABASE_PATH and DATA_DIR under <task>/probe-work, stopped through the child handle.
+
+Second scratch copy for the mutation runs only: <task>/clone-old, cloned the same way at 5e104e1 (`git status --short` empty before
+the mutation), then
+  mutation 1: `git show edaaa85:src/client/styles.css > src/client/styles.css` (the edaaa85 focus tokens), 30-…, 31-…
+  mutation 2: restored (`git checkout -- src/client/styles.css`), then only `.sheet .sheet-date:focus-visible` set to the old
+              `0 0 0 3px rgb(31 95 191 / 0.35)`, 32-…, 33-…
+The reviewed tree (clone) and the working repository were never mutated.

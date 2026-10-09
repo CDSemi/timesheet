@@ -1,0 +1,125 @@
+--- /dev/null
++++ b/tests/client/dayEditorModel.test.ts
++++ b/tests/client/dayModel.test.ts
+-  weekGroups,
+-describe('weekGroups', () => {
+-  it('splits a two-week period into Monday to Sunday groups', () => {
+-    const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
+-    const groups = weekGroups(
+-      dates.map((date) => day(date)),
+-      null,
+-    );
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 7],
+-      ['2026-10-05', 7],
+-    ]);
+-    expect(groups[0]?.days[0]?.weekday).toBe('Mon');
+-    expect(groups[1]?.days[6]?.weekday).toBe('Sun');
+-  });
+-
+-  it('groups a period that starts mid-week into partial weeks', () => {
+-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 2],
+-      ['2026-10-05', 1],
+-    ]);
+-  });
+-
+-  it('returns nothing for no days', () => {
+-    expect(weekGroups([], null)).toEqual([]);
+-  });
+-});
+--- /dev/null
++++ b/tests/client/labelPickerModel.test.ts
+--- /dev/null
++++ b/tests/client/leaveInputModel.test.ts
+--- /dev/null
++++ b/tests/client/periodBarModel.test.ts
++++ b/tests/client/reviewModel.test.ts
++++ b/tests/client/sessionModel.test.ts
+-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
+-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
+-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
+-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
+-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
+-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
+-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
+-    expect(leaveHint('240')).toBe('4h 00m');
+-    expect(leaveHint('')).toBeNull();
+-    expect(leaveHint('1.5')).toBeNull();
+--- /dev/null
++++ b/tests/client/sheetModel.test.ts
++++ b/tests/domain/engine.test.ts
+-import { formatDuration } from '../../src/domain/format.ts';
++++ b/tests/e2e/admin.spec.ts
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
++++ b/tests/e2e/day-editor.spec.ts
+-import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+- * notice; the reason prompt for old periods; and future days shown as upcoming.
+-  await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+-    await fields.getByLabel('Partial leave minutes').fill('240');
+-  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('missing record');
+-  await expect(row).toContainText('upcoming');
+-  await expect(row).not.toContainText('missing record');
+-  await expect(row).not.toContainText('pending OT');
+--- /dev/null
++++ b/tests/e2e/focus-ring.spec.ts
++++ b/tests/e2e/history-settings.spec.ts
+-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
+-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
+-  else await expect(page.locator('table.grid')).toHaveCount(0);
++++ b/tests/e2e/import.spec.ts
+-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
+-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++++ b/tests/e2e/isolation.spec.ts
+-    await expect(row).not.toContainText('complete');
+-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
++++ b/tests/e2e/ot-leave.spec.ts
+-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
++++ b/tests/e2e/review.spec.ts
+-import { formatDuration } from '../../src/domain/format.ts';
+-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+-    for (const [label, minutes] of [
+-      ['Regular', day.calculation?.regular_minutes ?? null],
+-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
+-      ['Credit', day.calculation?.credited_minutes ?? null],
+-      const cell = row.locator(`td[data-label="${label}"]`);
+-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
+-  await expect(completeRow).toContainText('complete');
+-  await expect(pendingRow).toContainText('breaks unconfirmed');
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
++++ b/tests/e2e/setup.spec.ts
+-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
++++ b/tests/e2e/sharing.spec.ts
+-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
+-  // Edit rights show the edit controls, but still no Clock in/out and no review.
++++ b/tests/e2e/shell.spec.ts
+-  await expect(nav.getByRole('link')).toHaveCount(5);
+-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+-  await expect(row).toContainText('complete');
+-  await expect(row).toContainText('8h 00m');
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
++++ b/tests/e2e/timesheet.spec.ts
+- * Two-week grid (desktop), day list (mobile) and batch category edit, on both projects.
+-  const sheet = await employeeSeed.call<{ period: { due_local_date: string; period_start: string } }>(
+-    'GET',
+-    `/api/timesheets/${currentPayrollDate}`,
+-  );
+-  // Exactly one of the grid and the list renders, chosen by the 768px media query.
+-  await expect(page.locator('table.grid')).toHaveCount(isDesktop ? 1 : 0);
+-  await expect(page.locator('.day-list')).toHaveCount(isDesktop ? 0 : 1);
+-  await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
+-  await expect(dayRow(page, sheet.period.period_start)).toContainText(sheet.period.period_start);
+-  // A complete day shows complete and 8h 00m; unconfirmed breaks show pending OT.
+-  await expect(dayRow(page, completeDay)).toContainText('complete');
+-  await expect(dayRow(page, completeDay)).toContainText('8h 00m');
+-  await expect(dayRow(page, completeDay)).not.toContainText('pending OT');
+-  await expect(dayRow(page, pendingDay)).toContainText('confirm breaks');
+-  await expect(dayRow(page, pendingDay)).toContainText('pending OT');
+-  // No em dash or en dash placeholder anywhere on the screen.
+-    const targets = page.locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline');

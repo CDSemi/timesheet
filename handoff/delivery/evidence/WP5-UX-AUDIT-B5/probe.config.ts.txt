@@ -1,0 +1,21 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { defineConfig } from '@playwright/test';
+
+// WP5-UX-AUDIT-B5 probe configuration (auditor-written, outside git tracking): the same browser,
+// viewports and projects as playwright.config.ts. Each project starts its own built server on
+// PROBE_PORT_BASE (desktop) or PROBE_PORT_BASE + 1 (mobile), inside the task port range 48200-48219.
+export default defineConfig({
+  testDir: '.',
+  testMatch: '*.probe.ts',
+  outputDir: join(tmpdir(), 'wp5-ux-audit-b5-probe-output'),
+  workers: 1,
+  reporter: 'list',
+  timeout: 600_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off', locale: 'en-US' },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+});

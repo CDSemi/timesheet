@@ -14,14 +14,16 @@
   NAS is NOT VERIFIED.
 - UI change round (owner request 2026-10-08): the plan and a static mockup are ready
   (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). The owner accepted
-  E-1..E-7 as recommended (2026-10-08). Implementation T01..T06 and fixes FIX1..FIX5 are
-  frozen (last source commit edaaa85, digest b7bbcbc0); WP5-UX-REGATE3 PASS; area A
-  re-audit PASS (WP5-UX-AUDIT-A4). Area B (WP5-UX-AUDIT-B4) still reports B4-01 (focus
-  ring contrast 1.72:1 / 2.46:1, needs 3:1) and B4-02 (ISO date in the zone note).
-  **Owner question WP5-UX-Q1** (board `pending_owner_question_2`): (a, recommended) fix
-  both in WP5-UX-FIX6, then regate and recheck; (b) accept both as carried risks; (c) fix
-  only the focus ring. WP5 re-acceptance and the pilot-packet identity refresh wait for
-  this answer.
+  E-1..E-7 as recommended (2026-10-08) and answered WP5-UX-Q1 with (a) (2026-10-09).
+  Implementation T01..T06 and fixes FIX1..FIX6 are frozen (last source commit 5e104e1,
+  digest 07c3ca00); WP5-UX-REGATE4 PASS; area A re-audit PASS (WP5-UX-AUDIT-A5). Area B
+  (WP5-UX-AUDIT-B5) reports three keyboard-accessibility items: B5-01 sticky bars hide
+  the focused control on Shift+Tab, B5-02 the label-picker keyboard position is a 1.14:1
+  tint, B5-03 the editor dialog is a focus stop without indicator. **Owner question
+  WP5-UX-Q2** (board `pending_owner_question_2`): (a, recommended) one complete
+  accessibility sweep, then one fix round for everything, then regate and recheck;
+  (b) fix only B5-01..B5-03; (c) pilot on this UI with the items as recorded backlog
+  (no formal WP5 re-acceptance yet); (d) pilot on the last accepted snapshot 014bd47.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),

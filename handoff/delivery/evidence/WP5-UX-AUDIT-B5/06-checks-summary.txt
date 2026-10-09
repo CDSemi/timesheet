@@ -1,0 +1,14 @@
+WP5-UX-AUDIT-B5 - mandatory checks, run by the auditor in the scratch clone at 5e104e14dad71268a9185920c04ed0ee2a4b31c2
+Node v24.21.0 (portable, first on PATH); npm run through "$(cygpath -u "$APPDATA")/npm/node_modules/npm/bin/npm-cli.js";
+TEMP/TMP = <task>; DATA_DIR = <task>\data; DATABASE_PATH = <task>\data\ts.sqlite; E2E_SCREENSHOT_DIR = <task>\e2e-shots.
+
+| Check | Command | Exit | Result | Log |
+|---|---|---|---|---|
+| install | npm ci | 0 | added 161 packages (1 high severity advisory reported by npm) | 01a-npm-ci.txt |
+| typecheck | npm run typecheck | 0 | clean (3 tsc projects) | 02-typecheck.txt |
+| lint | npm run lint (typescript-eslint no-deprecated) | 0 | clean | 03-lint.txt |
+| unit/integration | npm test | 0 | Test Files 82 passed (82); Tests 1821 passed (1821) | 04-npm-test.txt |
+| full e2e | npm run test:e2e (build + playwright test, Edge, projects desktop and mobile) | 0 | 190 tests: 174 passed, 16 skipped, 0 failed (5.0 min); desktop 86 ok + 9 skipped; mobile 88 ok + 7 skipped; every skip project-scoped | 05-e2e-full.txt, 05a-e2e-counts.txt |
+| deprecation tracing | NODE_OPTIONS="--trace-deprecation --pending-deprecation": npm run lint (ignoring the untracked probe folder), npm test, npm run build; probe run 3 servers | 0 / 0 / 0 / 0 | 0 lines matching "deprecat" in each log and in both server stderr files; npm test again 82 files / 1821 tests | 07-deprecation-summary.txt |
+
+Times (UTC): typecheck/lint 22:36:52-22:37:28; npm test 22:37:32-22:38:21; e2e 22:38:31-22:43:34.

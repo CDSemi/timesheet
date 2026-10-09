@@ -1,0 +1,124 @@
+// WP5-UX-AUDIT-A5 delta proof for WP5-UX-B4-02: the zone note's due time. For many instants, including
+// every DST transition (gap and fold) of 2025-2027 in 16 zones and the 17:00 Los Angeles due time of
+// every day of 2025-2027, compare
+//   old  = instantText(instant, zone)      (the edaaa85 zone-note text, "YYYY-MM-DD HH:MM")
+//   new  = dueInZoneText(instant, zone)    (the 5e104e1 zone-note text, "Ddd MM/DD/YYYY, HH:MM")
+//   Intl = an oracle independent of the app (en-US parts in the zone).
+// Pass: new has exactly old's date and time (same instant, same zone, format only) and equals the oracle,
+// including the weekday. Run under several process TZ values: the output must not depend on the device zone.
+// Usage: node due-zone-probe.ts <export-root> <label>
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+
+const [root, label = '', deviceZone] = process.argv.slice(2);
+// Git Bash does not pass TZ to a native process, so the device zone is set here, before any module loads.
+if (deviceZone !== undefined) process.env.TZ = deviceZone;
+const pbm = await import(pathToFileURL(join(root, 'src/client/components/periodBarModel.ts')).href);
+const fmt = await import(pathToFileURL(join(root, 'src/client/components/format.ts')).href);
+const dueInZoneText: (dueAtUtc: string, zone: string) => string = pbm.dueInZoneText;
+const instantText: (instant: string, zone: string) => string = fmt.instantText;
+
+const ZONES = [
+  'America/Los_Angeles', 'America/New_York', 'America/St_Johns', 'America/Santiago', 'America/Sao_Paulo',
+  'Europe/London', 'Europe/Berlin', 'Africa/Casablanca', 'Asia/Kolkata', 'Asia/Kathmandu', 'Asia/Ho_Chi_Minh',
+  'Asia/Tokyo', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Pacific/Kiritimati', 'Pacific/Pago_Pago',
+];
+
+function oracle(epochMs: number, zone: string): { text: string; date: string; time: string } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(epochMs))
+      .map((p) => [p.type, p.value]),
+  );
+  return {
+    text: `${parts.weekday} ${parts.month}/${parts.day}/${parts.year}, ${parts.hour}:${parts.minute}`,
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`,
+  };
+}
+
+function offsetMinutes(epochMs: number, zone: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(epochMs))
+      .map((x) => [x.type, Number(x.value)]),
+  );
+  return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(epochMs / 1000) * 1000) / 60000);
+}
+
+const iso = (epochMs: number) => new Date(epochMs).toISOString().replace('.000Z', 'Z');
+
+let checks = 0;
+let failures = 0;
+const samples: string[] = [];
+function check(epochMs: number, zone: string, why: string) {
+  const instant = iso(epochMs);
+  const oldText = instantText(instant, zone);
+  const newText = dueInZoneText(instant, zone);
+  const o = oracle(epochMs, zone);
+  const newDate = `${newText.slice(10, 14)}-${newText.slice(4, 6)}-${newText.slice(7, 9)}`;
+  const newTime = newText.slice(16, 21);
+  const ok = newText === o.text && oldText === `${newDate} ${newTime}` && oldText === `${o.date} ${o.time}`;
+  checks += 1;
+  if (!ok) {
+    failures += 1;
+    if (failures <= 20) console.log(`FAIL ${why} ${zone} ${instant}: old=${oldText} new=${newText} oracle=${o.text}`);
+  }
+  return { instant, oldText, newText, oracle: o.text };
+}
+
+// 1. Every offset change 2025-01-01..2027-12-31 in each zone, found by an hourly scan and refined to the
+//    minute; instants from 3 h before to 3 h after the change in 15-minute steps, plus +-1 minute.
+const START = Date.UTC(2025, 0, 1);
+const END = Date.UTC(2028, 0, 1);
+let transitions = 0;
+for (const zone of ZONES) {
+  let previous = offsetMinutes(START, zone);
+  for (let t = START + 3_600_000; t < END; t += 3_600_000) {
+    const now = offsetMinutes(t, zone);
+    if (now === previous) continue;
+    let lo = t - 3_600_000;
+    let hi = t;
+    while (hi - lo > 60_000) {
+      const mid = lo + Math.floor((hi - lo) / 120_000) * 60_000;
+      if (offsetMinutes(mid, zone) === previous) lo = mid;
+      else hi = mid;
+    }
+    transitions += 1;
+    const kind = now > previous ? 'gap (clocks forward)' : 'fold (clocks back)';
+    for (let d = -180; d <= 180; d += 15) check(hi + d * 60_000, zone, `transition ${kind}`);
+    for (const d of [-1, 0, 1]) check(hi + d * 60_000, zone, `transition ${kind}`);
+    if (samples.length < 40 && (zone === 'America/Los_Angeles' || zone === 'Australia/Lord_Howe' || zone === 'Europe/London' || zone === 'Pacific/Chatham')) {
+      const before = check(hi - 60_000, zone, 'sample');
+      const after = check(hi, zone, 'sample');
+      samples.push(`${zone} ${kind} at ${iso(hi)}: ${before.instant} -> new "${before.newText}" old "${before.oldText}"; ${after.instant} -> new "${after.newText}" old "${after.oldText}"`);
+    }
+    previous = now;
+  }
+}
+
+// 2. The reporting-zone due time (17:00 America/Los_Angeles) of every day 2025-2027, in every zone.
+let dueDays = 0;
+for (let day = START; day < END; day += 86_400_000) {
+  // 17:00 LA on this civil date: try both offsets and keep the one that lands on 17:00 LA.
+  const y = new Date(day).getUTCFullYear();
+  const m = new Date(day).getUTCMonth();
+  const dd = new Date(day).getUTCDate();
+  for (const off of [7, 8]) {
+    const candidate = Date.UTC(y, m, dd, 17 + off, 0, 0);
+    const o = oracle(candidate, 'America/Los_Angeles');
+    if (o.time === '17:00' && o.date === new Date(day).toISOString().slice(0, 10)) {
+      dueDays += 1;
+      for (const zone of ZONES) check(candidate, zone, 'due 17:00 LA');
+    }
+  }
+}
+
+// 3. The FIX6 unit-test instant, printed.
+const fix6 = check(Date.UTC(2026, 9, 14, 0, 0, 0), 'Asia/Ho_Chi_Minh', 'fix6 example');
+
+console.log(`label=${label} process TZ=${process.env.TZ ?? '(unset)'} resolved=${Intl.DateTimeFormat().resolvedOptions().timeZone} getTimezoneOffset(2026-01-01)=${new Date(Date.UTC(2026, 0, 1)).getTimezoneOffset()} getTimezoneOffset(2026-07-01)=${new Date(Date.UTC(2026, 6, 1)).getTimezoneOffset()}`);
+console.log(`zones=${ZONES.length} transitions=${transitions} due-days=${dueDays} checks=${checks} failures=${failures}`);
+console.log(`fix6 example: ${fix6.instant} Asia/Ho_Chi_Minh old "${fix6.oldText}" new "${fix6.newText}" oracle "${fix6.oracle}"`);
+for (const s of samples) console.log(`sample ${s}`);
+process.exitCode = failures === 0 ? 0 : 1;

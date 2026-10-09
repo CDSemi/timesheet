@@ -1,0 +1,181 @@
+// WP5-UX-AUDIT-A5 scope 2 (AC-04) on 5e104e1 in three layouts: 1280 (non-modal panel), 1024 (modal
+// side panel) and the 390 phone (modal bottom sheet). Reason-required corrections, stale versions
+// and the conflict confirmation through the in-cell picker and the editor (opened from the sheet and
+// from "Open a day"), the one-tap break confirmation and Delete then Escape. Synthetic accounts only.
+import { expect, newPerson, test } from '../ex5e1/tests/e2e/fixtures.ts';
+import { editorLayout, openDay, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LA = 'America/Los_Angeles';
+
+test('AC-04: reason, stale version and conflict through the picker and the editor in each layout', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Edit Probe', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'four past free workdays').toBeGreaterThanOrEqual(4);
+  const [staleDay = '', quickDay = '', conflictDay = '', fieldsStaleDay = ''] = free;
+  const batch: any[] = [];
+  const dayPuts: any[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname === '/api/days/batch') batch.push(request.postDataJSON());
+    if (request.method() === 'PUT' && pathname.startsWith('/api/days/')) dayPuts.push({ path: pathname, body: request.postDataJSON() });
+  });
+  const result: Record<string, unknown> = { project: testInfo.project.name };
+  const picker = (workDate: string) => page.getByRole('button', { name: new RegExp(`^Label for ${workDate}`) });
+  const pick = async (workDate: string, label: string) => {
+    await picker(workDate).click();
+    await page.getByRole('listbox', { name: `Label for ${workDate}` }).getByRole('option', { name: label, exact: true }).click();
+  };
+
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+
+  // 1. Reason-required correction through the in-cell picker of an old period.
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldDay = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const oldBefore = await person.api.dayView(oldDay);
+  await pick(oldDay, 'Vacation');
+  const dialog = page.getByRole('dialog', { name: `Review label change for ${oldDay}` });
+  await expect(dialog).toBeVisible();
+  const reasonBox = dialog.getByLabel(/Reason for editing an old or finalized period/);
+  await expect(reasonBox).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  expect(batch.map((body) => body.mode), 'only the preview before the reason').toEqual(['preview']);
+  result.picker_preview_body = batch[0];
+  expect(batch[0]).toEqual({ mode: 'preview', entries: [{ work_date: oldDay, expected_version: oldBefore.entry?.version ?? null, category: 'Vacation' }] });
+  expect((await person.api.dayView(oldDay)).category, 'nothing saved before the reason').toBe(oldBefore.category);
+  await reasonBox.fill('Audit A5 synthetic correction (picker)');
+  await dialog.getByRole('button', { name: 'Commit changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_reason_commit = batch.at(-1);
+  expect(batch.at(-1)).toEqual({ mode: 'commit', entries: [{ work_date: oldDay, expected_version: oldBefore.entry?.version ?? null, category: 'Vacation' }], reason: 'Audit A5 synthetic correction (picker)' });
+
+  // 2. Reason-required correction through the day editor of this layout (opened from the sheet).
+  await page.locator(`[data-day="${oldDay}"]`).getByRole('button', { name: `Edit ${oldDay}`, exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  result.editor_layout = await editorLayout(page);
+  const fields = editor.getByRole('form', { name: 'Day fields' });
+  await fields.getByLabel('Worked from home (WFH)').check();
+  await expect(fields.getByRole('button', { name: 'Save day fields' })).toBeDisabled();
+  expect(dayPuts, 'no day PUT before the reason').toEqual([]);
+  await editor.getByLabel('Reason for editing an old or finalized period').fill('Audit A5 synthetic correction (editor)');
+  await fields.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  result.editor_reason_put = dayPuts.at(-1);
+  expect(dayPuts.at(-1)?.body).toMatchObject({ reason: 'Audit A5 synthetic correction (editor)', wfh: true, category: 'Vacation' });
+  expect(Object.keys(dayPuts.at(-1)?.body ?? {}).sort()).toEqual(['category', 'expected_version', 'leave_kind', 'leave_minutes', 'notes', 'reason', 'wfh']);
+  await editor.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toHaveCount(0);
+  const history = await person.api.call<any>('GET', '/api/history');
+  result.history_reasons = history.audit_events
+    .filter((event: any) => typeof event.reason === 'string' && event.reason.startsWith('Audit A5 synthetic'))
+    .map((event: any) => ({ operation: event.operation, entity_type: event.entity_type, reason: event.reason }));
+  expect((result.history_reasons as any[]).map((event) => event.reason)).toEqual(
+    expect.arrayContaining(['Audit A5 synthetic correction (picker)', 'Audit A5 synthetic correction (editor)']),
+  );
+
+  // 3. Stale version through the picker.
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator(`[data-day="${staleDay}"]`)).toBeVisible();
+  await person.api.putDay(staleDay, { notes: 'changed elsewhere (synthetic)' });
+  const staleBefore = await person.api.dayView(staleDay);
+  batch.length = 0;
+  await pick(staleDay, 'Sick');
+  const staleDialog = page.getByRole('dialog', { name: `Review label change for ${staleDay}` });
+  await expect(staleDialog).toBeVisible();
+  await expect(staleDialog.getByRole('alert')).toContainText('Some dates changed elsewhere');
+  await expect(staleDialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  result.picker_stale_modes = batch.map((body) => body.mode);
+  expect(batch.map((body) => body.mode)).toEqual(['preview']);
+  await staleDialog.getByRole('button', { name: 'Cancel' }).click();
+  expect((await person.api.dayView(staleDay)).entry?.version).toBe(staleBefore.entry?.version);
+
+  // 4. Stale version through the editor's day fields form, the editor opened from "Open a day".
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  dayPuts.length = 0;
+  const fieldsEditor = await openDay(page, fieldsStaleDay);
+  await person.api.putDay(fieldsStaleDay, { notes: 'changed behind the editor (synthetic)' });
+  const behind = await person.api.dayView(fieldsStaleDay);
+  const fieldsForm = fieldsEditor.getByRole('form', { name: 'Day fields' });
+  await fieldsForm.getByLabel('Notes').fill('typed in the editor (synthetic)');
+  await fieldsForm.getByRole('button', { name: 'Save day fields' }).click();
+  const fieldsStale = fieldsEditor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(fieldsStale).toBeVisible();
+  const fieldsAfter = await person.api.dayView(fieldsStaleDay);
+  result.editor_fields_stale = { sent_expected_version: dayPuts.at(-1)?.body?.expected_version ?? 'none', server_version: behind.entry?.version, after_version: fieldsAfter.entry?.version, after_notes: fieldsAfter.entry?.notes };
+  expect(dayPuts.at(-1)?.body?.expected_version ?? null, 'the editor sent the version it loaded').toBeNull();
+  expect(fieldsAfter.entry?.version).toBe(behind.entry?.version);
+  expect(fieldsAfter.entry?.notes).toBe('changed behind the editor (synthetic)');
+  await fieldsStale.getByRole('button', { name: 'Reload day' }).click();
+  await expect(fieldsStale).toHaveCount(0);
+  await expect(fieldsEditor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes')).toHaveValue('changed behind the editor (synthetic)');
+  await fieldsEditor.getByRole('button', { name: 'Close' }).click();
+
+  // 5. Stale version through the one-tap break confirmation of the editor.
+  await person.api.seedUnconfirmedBreaksDay(quickDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.locator(`[data-day="${quickDay}"]`).getByRole('button', { name: `Edit ${quickDay}`, exact: true }).click();
+  const quickEditor = page.getByRole('dialog', { name: /Day editor/ });
+  const quick = quickEditor.getByRole('group', { name: /^Breaks of the session/ });
+  await expect(quick.getByRole('button', { name: 'Confirm suggested breaks' })).toBeVisible();
+  const session = (await person.api.dayView(quickDay)).sessions[0];
+  await person.api.call('PUT', `/api/sessions/${session?.id}`, {
+    start: { local: `${quickDay}T09:00`, zone: LA },
+    end: { local: `${quickDay}T18:30`, zone: LA },
+    input_zone: LA,
+    breaks: [],
+    breaks_confirmed: false,
+    expected_version: session?.version,
+  });
+  const changed = (await person.api.dayView(quickDay)).sessions[0];
+  const sessionPuts: any[] = [];
+  const sessionListener = (request: any) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/sessions/')) sessionPuts.push(request.postDataJSON());
+  };
+  page.on('request', sessionListener);
+  await quick.getByRole('button', { name: 'Confirm suggested breaks' }).click();
+  const staleAlert = quickEditor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(staleAlert).toBeVisible();
+  page.off('request', sessionListener);
+  const quickAfter = (await person.api.dayView(quickDay)).sessions[0];
+  result.quick_stale = { loaded_version: session?.version, changed_version: changed?.version, after_version: quickAfter?.version, after_confirmed: quickAfter?.breaks_confirmed, sent_body_keys: Object.keys(sessionPuts[0] ?? {}).sort(), sent_expected_version: sessionPuts[0]?.expected_version };
+  expect(sessionPuts[0]?.expected_version, 'the one-tap confirmation sends the loaded version').toBe(session?.version);
+  expect(Object.keys(sessionPuts[0] ?? {}).sort()).toEqual(['breaks', 'breaks_confirmed', 'end', 'expected_version', 'input_zone', 'start']);
+  expect(quickAfter?.version).toBe(changed?.version);
+  expect(quickAfter?.breaks_confirmed).toBe(false);
+
+  // 6. Delete, then Escape, deletes nothing.
+  await staleAlert.getByRole('button', { name: 'Reload day' }).click();
+  await quickEditor.getByRole('button', { name: /^Delete session/ }).click();
+  await expect(quickEditor.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(quickEditor).toHaveCount(0);
+  result.delete_then_escape_sessions = (await person.api.dayView(quickDay)).sessions.length;
+  expect(result.delete_then_escape_sessions, 'Escape after Delete deletes nothing').toBe(1);
+
+  // 7. Conflict confirmation through the picker.
+  await person.api.seedCompleteDay(conflictDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  batch.length = 0;
+  await pick(conflictDay, 'Off');
+  const conflictDialog = page.getByRole('dialog', { name: `Review label change for ${conflictDay}` });
+  await conflictDialog.getByRole('button', { name: 'Review conflicts' }).click();
+  await expect(page.getByRole('dialog', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+  const confirmButton = page.getByRole('button', { name: 'Confirm and commit' });
+  await expect(confirmButton).toBeDisabled();
+  expect((await person.api.dayView(conflictDay)).category).toBe('Worked');
+  await page.getByLabel('I confirm the label change for these dates').check();
+  await confirmButton.click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_conflict_commit = batch.at(-1);
+  expect(batch.at(-1)).toMatchObject({ mode: 'commit', confirm_conflicts: true });
+  expect((await person.api.dayView(conflictDay)).sessions).toHaveLength(1);
+  writeResult(`ac04-${testInfo.project.name}.json`, { oldDay, staleDay, quickDay, conflictDay, fieldsStaleDay, ...result });
+});

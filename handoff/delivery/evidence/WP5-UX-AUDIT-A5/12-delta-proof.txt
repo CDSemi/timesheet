@@ -1,0 +1,65 @@
+WP5-UX-AUDIT-A5 delta proof of edaaa85..5e104e1 (WP5-UX-FIX6), auditor notes with the evidence they rest on
+
+Commits between edaaa85 and 5e104e1 (10-delta.txt, log part): c24d634 and 49a3ff0 (checkpoints) change 0 paths
+outside handoff/; 5e104e1 changes 8 paths outside handoff/: docs/04 EN and VI (line 79 each, wording),
+src/client/components/PeriodBar.tsx (+3/-3), src/client/components/periodBarModel.ts (+7), src/client/styles.css
+(+8/-3), tests/client/periodBarModel.test.ts (+9/-1), tests/e2e/focus-ring.spec.ts (new, +169),
+tests/e2e/timesheet.spec.ts (+9/-1). Nothing under src/server, src/domain, src/client/api.ts, the other client files,
+package*.json, configs, scripts or tests/e2e/fixtures.ts changed (11-boundary.txt).
+
+1. Zone note: same instant, same zone, format only
+   - edaaa85 PeriodBar.tsx:73  <dd>{instantText(period.due_at_utc, zone)}</dd>
+     5e104e1 PeriodBar.tsx:73  <dd>{dueInZoneText(period.due_at_utc, zone)}</dd>
+     The arguments are the same expressions: period = view.period (PeriodBar.tsx:31, unchanged) and the `zone` prop
+     (PeriodBar.tsx:18-24, unchanged); the label "Due, your time ({zone})" (:72) is unchanged.
+   - instantText (format.ts:38-40, unchanged since edaaa85):
+       formatInZone(zone, parseUtcInstant(instant)).slice(0, 16).replace('T', ' ')         -> "YYYY-MM-DD HH:MM"
+     dueInZoneText (periodBarModel.ts:28-32, new):
+       local = formatInZone(zone, parseUtcInstant(dueAtUtc)); date = local.slice(0, 10)
+       `${weekdayName(date)} ${usDate(date)}, ${local.slice(11, 16)}`                      -> "Ddd MM/DD/YYYY, HH:MM"
+     Both call the same domain functions (src/domain/zones.ts formatInZone, src/domain/instants.ts parseUtcInstant,
+     unchanged since 014bd47) with the same arguments, and take the same date (chars 0-9) and time (chars 11-15) of the
+     same string. weekdayName (periodBarModel.ts:15-17) is the existing helper of the bar (isoWeekday of the civil date
+     shown), usDate (format.ts:23-25) the existing US date formatter. No Date object in the device zone is used.
+   - Unit sweep (12b-due-zone-probe.txt): 17 zones, every UTC-offset change 2025-2027 found by scan (59 transitions:
+     gaps and folds, including 30-minute Lord Howe and 45-minute Chatham offsets) at 15-minute steps +-3 h and +-1 min,
+     plus 17:00 Los Angeles on each of 1095 days in every zone: 20316 checks, 0 failures - the new text equals an
+     independent Intl oracle (weekday included) and carries exactly the date and time of the old text. Repeated with
+     the process device zone unset, America/Los_Angeles, Asia/Tokyo, Pacific/Kiritimati, Pacific/Pago_Pago,
+     Australia/Lord_Howe and Europe/London: same result and the same sample lines (device-zone independent).
+   - Browser run time (34-zonenote-5e1.txt, 35-zonenote-eda.txt, 36-compare.txt part 3): the same probe on the
+     5e104e1 and edaaa85 builds, 8 browser zones x 7 periods (3 back, current, 3 ahead) x 3 layouts = 168 rows each:
+     same payroll date, same due_at_utc from the server, same due words (reporting zone), and the same local date and
+     time in every row; 42 rows have a different zone offset at the due instant than today (Europe/London and
+     America/New_York after their autumn change, Australia/Sydney, Lord_Howe, Pacific/Chatham and America/Santiago
+     before their spring change) and are correct on both builds. The R-07 probe (r07-*.json.txt) checks the current
+     period's note in 4 non-reporting zones in each layout against the oracle.
+
+2. No request, body, calculation or saved value changes
+   - No write call site, request-body builder, api.ts or server/domain file changed since edaaa85 (13-callsites.txt:
+     "write call texts only in 5e104e1: 0 / only in edaaa85: 0"; 14-body-builders.txt: all 12 builders IDENTICAL).
+   - Built server and domain are byte-identical between edaaa85 and 5e104e1 (11b-dist-server.txt: dist/server 180
+     files and dist/domain 46 files, list digests equal; dist/server also equals 014bd47's).
+   - dueInZoneText only returns a string for a <dd>; its only caller is PeriodBar.tsx:73 (12c-tests-delta.txt grep).
+   - Run time: bodies of every edit path equal 014bd47 (36-compare.txt part 1-2: mismatches 0); the focus probe's
+     keyboard-driven writes and bodies are identical on edaaa85 and 5e104e1 (36b-focus-compare.txt).
+
+3. The focus-ring token change cannot hide or block a control
+   - Declaration diff (12a-css-rules.txt): 1476 declarations before and after; only --focus-ring (value), the removed
+     dark --focus-ring override, the new --focus-ring-inset token and the phone tab's box-shadow (inset var(--focus-ring)
+     -> var(--focus-ring-inset)) changed. Properties touched: --focus-ring, --focus-ring-inset, box-shadow; no display,
+     visibility, opacity, position, overflow, clip, size, z-index, pointer-events, order, transform, margin or padding.
+     The tokens are used only as box-shadow of :focus-visible (styles.css:220-224), .shell-tabs .tab:focus-visible
+     (:333-335), button:focus-visible (:506-508) and .sheet .sheet-date:focus-visible (:1336-1338). A box-shadow takes
+     no layout space and is not hit-tested; an inset shadow paints below the content.
+   - Run time (33-focus-5e1.txt, 37-summary.txt, 36b-focus-compare.txt): 1280, 1024 and 390 px, light and dark; 25
+     (desktop, tablet) or 29 (phone) edit, clock, reason, confirmation and navigation controls each focused with
+     :focus-visible: all visible, opaque, inside the viewport and hit-testable at their centre; 170/218 neighbour
+     hit-tests per run are identical with and without the ring; clock in/out, the editor's day fields, the conflict
+     confirmation and the reason commit were driven by Enter/Space on the ringed control and sent the expected bodies.
+     The same probe on the edaaa85 build gives the same facts and the same writes.
+
+4. Tests: no area-A assertion removed or weakened
+   - tests delta (12c-tests-delta.txt): the only two removed lines are replaced, one import line (adds dueInZoneText)
+     and one response type (adds due_at_utc); timesheet.spec.ts gains an assertion of the zone-note due text against an
+     Intl oracle; focus-ring.spec.ts is new. tests/e2e/fixtures.ts unchanged.

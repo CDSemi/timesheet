@@ -1,0 +1,551 @@
+diff --git a/tests/e2e/admin.spec.ts b/tests/e2e/admin.spec.ts
+index 0a13a6a..59359fc 100644
+--- a/tests/e2e/admin.spec.ts
++++ b/tests/e2e/admin.spec.ts
+@@ -48,13 +48,26 @@ interface ApiCalendar {
+ 
+ interface ApiPeriods {
+   today_local: string;
+   current: { payroll_date: string; period_start: string };
+ }
+ 
++/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
++function isPhone(page: Page): boolean {
++  return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
++}
++
++/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
++async function openMoreOnPhone(page: Page) {
++  if (!isPhone(page)) return;
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ async function openAdmin(page: Page) {
++  await openMoreOnPhone(page);
+   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+ }
+ 
+ const userRow = (page: Page, email: string) => page.locator(`li.user-row[data-user-email="${email}"]`);
+ 
+@@ -179,13 +192,15 @@ test('settings: preview the effect, then create; the day figures equal the previ
+   const boundary = periods.current.period_start;
+ 
+   // The settings screen is the first one rendered: an account without a policy has no timesheet yet.
+   await signInPageAs(person, '#/settings');
+   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+   await expect(page.getByText('You have no policy version yet')).toBeVisible();
++  await openMoreOnPhone(page);
+   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
++  if (isPhone(page)) await page.keyboard.press('Escape');
+ 
+   const form = page.getByRole('form', { name: 'New policy version' });
+   await expect(form.getByLabel('Effective from')).toHaveValue(boundary);
+   await expect(form.getByRole('button', { name: 'Create version' })).toBeDisabled();
+   await form.getByRole('button', { name: 'Preview effect' }).click();
+   await expect(form.locator('[data-preview-empty="true"]')).toBeVisible();
+@@ -387,17 +402,34 @@ test('payroll exception needs a reason and is recorded once', async ({ page, bui
+ });
+ 
+ test.describe('navigation', () => {
+   test('Settings for everyone, Admin for administrators only', async ({ page, builtServer, signInThroughUi, signInPageAs }) => {
+     await signInThroughUi();
+     const nav = page.getByRole('navigation', { name: 'Main' });
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
++    const phone = isPhone(page);
++    // The desktop bar lists Settings (Import is a link inside Settings); the phone's tab bar lists the three
++    // frequent screens and "More" holds Settings, Import and, for administrators, Admin.
++    const frequent = ['Timesheet', 'Overtime', 'History'];
++    if (phone) {
++      await expect(nav.getByRole('link')).toHaveText(frequent);
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings']);
++    }
+     await page.evaluate("window.location.hash = '#/admin'");
+     await expect(page).toHaveURL(/#\/timesheet$/);
++    await openMoreOnPhone(page);
+     await nav.getByRole('link', { name: 'Settings' }).click();
+     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
++    await openMoreOnPhone(page);
+     await page.getByRole('button', { name: 'Sign out' }).click();
+ 
+     await signInPageAs(builtServer.credentials.admin);
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
++    if (phone) {
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import', 'Admin']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Admin']);
++    }
+   });
+ });
+diff --git a/tests/e2e/history-settings.spec.ts b/tests/e2e/history-settings.spec.ts
+index a364f3f..b8a04c2 100644
+--- a/tests/e2e/history-settings.spec.ts
++++ b/tests/e2e/history-settings.spec.ts
+@@ -247,22 +247,28 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+   await waitForFinal(person, revisionId, 1);
+   const firstState = (await attemptsOf(person, revisionId)).at(-1)?.state ?? '';
+   const outcome = OUTCOME[firstState];
+   if (outcome === undefined) throw new Error(`unexpected first delivery state ${firstState}`);
+   expect(firstState, 'a configured capture sender: the first attempt is accepted').toBe('accepted');
+ 
+-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
++  // The period status is the one status group of the period bar (above the clock and the sheet), not repeated in the sheet.
+   await signInPageAs(person.account, '#/timesheet');
+   const status = page.locator('[data-grid-status="line"]');
+   await expect(status).toHaveCount(1);
+   await expect(status.locator('[data-grid-status="review"]')).toHaveText('Submitted manually');
+   await expect(status.locator('[data-grid-status="revision"]')).toHaveText('Revision 1');
+   await expect(status.locator('[data-grid-status="pdf"]')).toHaveText('PDF ready');
+   await expect(status.locator('[data-grid-status="delivery"]')).toHaveText(outcome.badge);
+-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
+-  else await expect(page.locator('table.grid')).toHaveCount(0);
++  const layout = project === 'desktop' ? 'desktop' : 'phone';
++  await expect(page.locator('.period-bar [data-grid-status="line"]')).toHaveCount(1);
++  await expect(page.locator('[data-sheet] [data-grid-status="line"]')).toHaveCount(0);
++  await expect(page.locator(`[data-sheet="${layout}"]`)).toHaveCount(1);
++  await expect(page.locator(`[data-sheet]:not([data-sheet="${layout}"])`)).toHaveCount(0);
++  // The signature line of the sheet names the signer; never an image on the Timesheet page.
++  await expect(page.locator('[data-signature="employee"]')).toContainText('Signed by');
++  await expect(page.locator('[data-sheet] img')).toHaveCount(0);
+   await page.screenshot({ path: screenshotPath(`history-grid-status-${project}-synthetic.png`) });
+   await status.getByRole('link', { name: 'Open in History' }).click();
+   await expect(page).toHaveURL(/#\/history$/);
+ 
+   // Reading the history writes nothing.
+   const writes: string[] = [];
+diff --git a/tests/e2e/import.spec.ts b/tests/e2e/import.spec.ts
+index bc320a9..1f53c32 100644
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -87,23 +87,37 @@ async function decisionsFor(person: Person, id: string, importDays: readonly str
+   return answer.import.plan.decisions_required.map((item) => ({
+     work_date: item.work_date,
+     action: importDays.includes(item.work_date) && item.allowed_actions.includes('import') ? 'import' : 'skip',
+   }));
+ }
+ 
++/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
++function isPhone(page: Page): boolean {
++  return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
++}
++
++/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
++async function openMoreOnPhone(page: Page) {
++  if (!isPhone(page)) return;
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ test('upload, preview with source cells, decide, confirm and commit; the same workbook is already imported', async (
+   { page, context, builtServer, adminSeed, signInPageAs },
+   testInfo,
+ ) => {
+   const person = await freshPerson(builtServer, adminSeed);
+   const layout = layoutFor(person);
+   const bytes = workbookFor(layout.payrollDate);
+   await signInPageAs(person.account, '#/import');
+ 
+   const nav = page.getByRole('navigation', { name: 'Main' });
+-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
++  // Import is its own entry under "More" on a phone; the desktop bar marks Settings, the screen it is reached from.
++  await openMoreOnPhone(page);
++  await expect(nav.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
+   await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+ 
+   // 1. Upload: only a file is needed; nothing is stored until it is sent.
+   await expect(page.getByRole('button', { name: 'Upload and preview' })).toBeDisabled();
+   await upload(page, bytes);
+   await page.getByRole('button', { name: 'Upload and preview' }).click();
+@@ -194,19 +208,24 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+   await page.getByRole('button', { name: 'Previous period' }).click();
+   await expect(page.locator('[data-status="imported"]')).toHaveText('Imported, unverified');
+   await expect(page.locator('[data-imported-note]')).toContainText('read-only');
+   await expect(page.locator('[data-review-link-disabled]')).toBeDisabled();
+   await expect(page.getByRole('link', { name: /Review/ })).toHaveCount(0);
+   await expect(page.locator('[data-grid-status="line"]')).toHaveCount(0);
++  // An imported period has no signature lines and no review link on the sheet.
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+ 
++  await expect(page.getByRole('button', { name: 'Change several days' })).toBeDisabled();
+   const batch = page.getByRole('group', { name: 'Batch category edit' });
+   await expect(batch.getByRole('button', { name: 'Select all' })).toBeDisabled();
+   await expect(batch.getByRole('button', { name: 'Preview changes' })).toBeDisabled();
+   await expect(batch.getByLabel('Category for selected days')).toBeDisabled();
+   await expect(page.getByRole('checkbox', { name: `Select ${layout.cacheDay}` })).toBeDisabled();
+   await expect(page.locator(`[data-day="${layout.cacheDay}"]`)).toContainText('Holiday');
++  // Imported days are read-only history: the label cells carry no in-cell picker.
++  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+ 
+   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
+   await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
+   await expect(page.getByRole('dialog')).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
+   await page.keyboard.press('Escape');
+@@ -360,11 +379,22 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
+   expect((await other.api.call<{ opening_balance: unknown }>('GET', '/api/ot/opening-balance')).opening_balance).toBeNull();
+ });
+ 
+ test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {
+   await signInPageAs(builtServer.credentials.admin, '#/admin');
+   const nav = page.getByRole('navigation', { name: 'Main' });
++  await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
+-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  // The Admin view itself (both projects) has no import or opening-balance controls.
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
++  await expect(page.locator('main')).not.toContainText('Opening OT balance');
++  if (isPhone(page)) {
++    await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  } else {
++    // The desktop bar reaches Import through the "Import from Excel" link in Settings.
++    await nav.getByRole('link', { name: 'Settings' }).click();
++    await expect(page.getByRole('link', { name: 'Import from Excel' })).toBeVisible();
++  }
+   await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
+   await expect(page.locator('main')).not.toContainText('Opening OT balance');
+ });
+diff --git a/tests/e2e/isolation.spec.ts b/tests/e2e/isolation.spec.ts
+index 134a154..1b271f2 100644
+--- a/tests/e2e/isolation.spec.ts
++++ b/tests/e2e/isolation.spec.ts
+@@ -1,7 +1,8 @@
+ import { randomBytes } from 'node:crypto';
++import { type Page } from '@playwright/test';
+ import {
+   type CreatedAccount,
+   createAccountByAdminApi,
+   expect,
+   SeedClient,
+   screenshotPath,
+@@ -36,12 +37,20 @@ interface Owner {
+   sessionId: string;
+   sessionVersion: number;
+   note: string;
+ }
+ 
+ /** Employee 1 gets a complete day and a private note; the helper undoes it afterwards. */
++/** On a phone Settings, Import, Admin and Sign out sit under "More" in the tab bar; opens it when shown and closed. */
++async function openMoreOnPhone(page: Page) {
++  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if (!(await more.isVisible())) return;
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ async function seedOwner(employee: SeedClient): Promise<Owner> {
+   const [workDate] = await employee.pastFreeWorkdays();
+   expect(workDate, 'a past free workday').toBeDefined();
+   if (workDate === undefined) throw new Error('no free workday');
+   await employee.seedCompleteDay(workDate);
+   const note = `private-synthetic-${randomBytes(6).toString('hex')}`;
+@@ -92,13 +101,14 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
+     await signInPageAs(account);
+     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+ 
+     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
+     const row = page.locator(`[data-day="${owner.workDate}"]`);
+     await expect(row).toBeVisible();
+-    await expect(row).not.toContainText('complete');
++    await expect(row).not.toContainText('Complete');
++    await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
+     await expect(page.locator('main')).not.toContainText(owner.note);
+ 
+     // Hash swap: no route takes an id, and the admin route falls back to the employee's own timesheet.
+     for (const hash of ['#/admin', '#/admin/users', `#/timesheet/${owner.sessionId}`, `#/sessions/${owner.sessionId}`]) {
+       await page.evaluate(`window.location.hash = ${JSON.stringify(hash)}`);
+       await expect(page).toHaveURL(/#\/timesheet$/);
+@@ -136,12 +146,13 @@ test('an admin cannot open employee data through any admin screen', async (
+   { page, builtServer, adminSeed, employeeSeed, signInPageAs },
+   testInfo,
+ ) => {
+   const owner = await seedOwner(employeeSeed);
+   try {
+     await signInPageAs(builtServer.credentials.admin);
++    await openMoreOnPhone(page);
+     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+     await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+     await expect(page.locator('li.user-row').first()).toBeVisible();
+ 
+     // The Admin screen holds account and configuration data only.
+     const main = page.locator('main');
+@@ -171,25 +182,27 @@ test('an admin cannot open employee data through any admin screen', async (
+     await expectForeignSessionRefused(page, owner);
+ 
+     // The admin's own timesheet shows nothing of employee 1.
+     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' }).click();
+     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+     await expect(page.locator('main')).not.toContainText(owner.note);
+-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
+ 
+     const intact = await employeeSeed.dayView(owner.workDate);
+     expect(intact.sessions).toHaveLength(1);
+     expect(intact.entry?.notes).toBe(owner.note);
+   } finally {
+     await releaseOwner(employeeSeed, owner);
+   }
+ });
+ 
+ test('an employee sees no Admin entry and the server refuses the admin routes', async ({ page, signInThroughUi }) => {
+   await signInThroughUi();
+   const nav = page.getByRole('navigation', { name: 'Main' });
++  await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible();
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveCount(0);
+   await page.evaluate("window.location.hash = '#/admin'");
+   await expect(page).toHaveURL(/#\/timesheet$/);
+   await expect(page.getByRole('heading', { name: 'Administration' })).toHaveCount(0);
+   expect(await statusInPage(page, 'GET', '/api/admin/users')).toBe(403);
+diff --git a/tests/e2e/ot-leave.spec.ts b/tests/e2e/ot-leave.spec.ts
+index 6af02ea..e914667 100644
+--- a/tests/e2e/ot-leave.spec.ts
++++ b/tests/e2e/ot-leave.spec.ts
+@@ -91,13 +91,13 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
+   const project = testInfo.project.name;
+   const evidence = 'SYN-1001';
+   const { todayLocal } = await employeeSeed.today();
+   seedCredit(builtServer, 600);
+ 
+   await signInThroughUi();
+-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
++  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime' }).click();
+   await expect(page).toHaveURL(/#\/ot$/);
+   await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
+   await expectBalancesMatchApi(page, employeeSeed);
+ 
+   // Reserve 480 minutes for today.
+   await reserveThroughForm(page, evidence, 480);
+diff --git a/tests/e2e/setup.spec.ts b/tests/e2e/setup.spec.ts
+index fdbd4e5..beb96fa 100644
+--- a/tests/e2e/setup.spec.ts
++++ b/tests/e2e/setup.spec.ts
+@@ -154,16 +154,20 @@ test('first-time setup creates the administrator once and never returns', async
+     expect(storage).not.toContain(server.token.replaceAll('-', '').slice(0, 10));
+ 
+     await page.getByLabel('Email').fill(email);
+     await page.getByLabel('Password').fill(password);
+     await page.getByRole('button', { name: 'Sign in' }).click();
+     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++    // The desktop bar shows Sign out in the banner; on a phone it sits under "More" in the tab bar.
++    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++    const signOut = (await more.isVisible()) ? page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign out' }) : page.getByRole('banner').getByRole('button', { name: 'Sign out' });
++    if (await more.isVisible()) await more.click();
++    await expect(signOut).toBeVisible();
+ 
+     // Setup is closed for good: a fresh visit shows the sign-in form, and the status says so.
+-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
++    await signOut.click();
+     await page.goto(`${server.origin}/`);
+     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+     await expect(page.getByRole('heading', { name: 'First-time setup' })).toHaveCount(0);
+     const status = await page.evaluate("fetch('/api/auth/setup').then((response) => response.json())");
+     expect(status).toEqual({ available: false });
+   } finally {
+diff --git a/tests/e2e/sharing.spec.ts b/tests/e2e/sharing.spec.ts
+index b3e749a..40fabcc 100644
+--- a/tests/e2e/sharing.spec.ts
++++ b/tests/e2e/sharing.spec.ts
+@@ -127,14 +127,22 @@ async function givenShareId(owner: Person): Promise<string> {
+   return first.id;
+ }
+ 
+ const grantByApi = (owner: Person, grantee: Person, items: ApiShare['items']) =>
+   owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items }, 201);
+ 
++/** On a phone Settings and Sign out sit under "More" in the tab bar; opens it when it is shown and closed. */
++async function openMoreOnPhone(page: Page) {
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if (!(await more.isVisible())) return;
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ /** Signs the current person out and signs the next one in; an optional hash is the first screen. */
+ async function switchUser(page: Page, signIn: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, who: { email: string; password: string }, startHash: string) {
++  await openMoreOnPhone(page);
+   const signOut = page.getByRole('button', { name: 'Sign out' });
+   if (await signOut.isVisible()) {
+     await signOut.click();
+     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+   }
+   await signIn(who, startHash);
+@@ -224,18 +232,24 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   await expect(bar(page).getByText('Timesheets: view only')).toBeVisible();
+   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
+   await expect(page.locator(`[data-day="${workDay}"]`).first()).toBeVisible();
+   recorded.reset();
+ 
+   // Nothing that changes data is on the page: absent, not disabled.
+-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
++  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+     await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+   }
++  await expect(page.getByLabel('Open a day')).toHaveCount(0);
+   await expect(page.getByRole('checkbox')).toHaveCount(0);
+   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
++  // The label cells are plain text: no in-cell label picker without edit rights.
++  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
++  await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
+   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
++  // The owner's signature lines and review state are not part of a shared view.
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+   await expect(page.getByRole('navigation', { name: 'Shared views' }).getByRole('link')).toHaveText(['Timesheet', 'Revisions']);
+ 
+   // A read-only day: the figures and fields are shown, and no add, edit, delete or save control exists.
+   await page.screenshot({ path: screenshotPath(`sharing-view-only-${project}-synthetic.png`), animations: 'disabled' });
+   await page.getByRole('button', { name: `View ${workDay}`, exact: true }).click();
+   const dialog = page.getByRole('dialog');
+@@ -264,12 +278,13 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   await page.evaluate(`window.location.hash = '#/shared/${owner.account.id}/ot'`);
+   await expect(bar(page).locator('[data-share-bar-title]')).toBeVisible();
+   await expect(page.getByRole('navigation', { name: 'Shared views' }).getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
+   await expect(page.locator('[data-shared-view="ot"]')).toHaveCount(0);
+ 
+   // Leaving takes effect on the next request and removes the switcher.
++  await openMoreOnPhone(page);
+   await page.getByRole('link', { name: 'Settings' }).click();
+   const received = page.getByRole('list', { name: 'Shares I received' });
+   await expect(received.getByText('Timesheets: view only')).toBeVisible();
+   await received.getByRole('button', { name: "Leave Synthetic Owner's shared items" }).click();
+   const confirm = page.getByRole('group', { name: "Leave Synthetic Owner's shared items?" });
+   await expect(confirm).toBeFocused();
+@@ -304,29 +319,49 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+   await expect(row.getByText('Timesheets: can edit')).toBeVisible();
+ 
+   const recorded = recordApiRequests(page);
+   await switchUser(page, signInPageAs, grantee.account, `#/shared/${owner.account.id}/timesheet`);
+   await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - can edit");
+   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
+-  // Edit rights show the edit controls, but still no Clock in/out and no review.
++  // Edit rights show the edit controls (batch mode is opened first), but still no Clock in/out and no review.
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await page.getByRole('button', { name: 'Change several days' }).click();
+   await expect(page.getByRole('button', { name: 'Preview changes' })).toBeVisible();
++  await page.getByRole('button', { name: 'Done' }).click();
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await expect(page.getByLabel('Open a day')).toBeVisible();
+   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
+   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+   recorded.reset();
+ 
++  // The in-cell label picker writes through the share as well (a one-entry batch preview, then its
++  // commit, under /api/shared/:ownerId). It runs on the same day before the notes edit, which stays
++  // the newest change; "Work from home" keeps the category Worked, so no conflict review is needed.
++  await page.getByRole('button', { name: new RegExp(`^Label for ${workDay}`) }).click();
++  await page.getByRole('listbox', { name: `Label for ${workDay}` }).getByRole('option', { name: 'Work from home', exact: true }).click();
++  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
++  expect(await owner.api.dayView(workDay)).toMatchObject({ category: 'Worked', wfh: true });
++  expect(recorded.list.filter((entry) => entry.endsWith('/days/batch'))).toEqual([
++    `POST /api/shared/${owner.account.id}/days/batch`,
++    `POST /api/shared/${owner.account.id}/days/batch`,
++  ]);
++
+   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;
+   await page.screenshot({ path: screenshotPath(`sharing-edit-${project}-synthetic.png`), animations: 'disabled' });
+   await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
+   const dialog = page.getByRole('dialog');
+   await expect(dialog.getByRole('heading', { name: new RegExp(`Day editor .*${workDay}`) })).toBeVisible();
+   await dialog.getByLabel('Notes').fill(grantedNote);
+   await dialog.getByRole('button', { name: 'Save day fields' }).click();
+   await expect(dialog.getByText('Day fields saved.')).toBeVisible();
+   await page.screenshot({ path: screenshotPath(`sharing-edit-day-${project}-synthetic.png`), animations: 'disabled' });
+   await dialog.getByRole('button', { name: 'Close' }).click();
++  // Focus returns to the day's button.
++  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
+   expectOnlySharedRequests(recorded.list, owner.account.id);
+   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
+   // The server also refuses the live clock for an edit share.
+   expect(await statusInPage(page, 'POST', `/api/shared/${owner.account.id}/clock/in`, { input_zone: 'America/Los_Angeles' })).toBe(404);
+   // The review hint belongs to the owner: the shared view and the review route show and serve none (WP3-C-01).
+   await expect(page.locator('[data-grantee-changes]')).toHaveCount(0);
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index 20e2036..493f8d5 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -25,16 +25,38 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+   await expect(page.getByRole('heading', { name: 'Timesheet' })).toBeVisible();
+   await page.screenshot({ path: screenshotPath(`login-${project}-synthetic.png`) });
+ 
+   await signInThroughUi();
+ 
+   const nav = page.getByRole('navigation', { name: 'Main' });
+-  await expect(nav.getByRole('link')).toHaveCount(5);
+   await expect(nav.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
+   await expect(page).toHaveURL(/#\/timesheet$/);
+-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  if (project === 'mobile') {
++    // Phone: three tabs and "More"; the less frequent entries and Sign out open from it.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
++    const more = nav.getByRole('button', { name: 'More' });
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await more.click();
++    await expect(more).toHaveAttribute('aria-expanded', 'true');
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
++    await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
++    await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
++    await page.keyboard.press('Escape');
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await expect(more).toBeFocused();
++    // Each tab is at least 56x44 px.
++    for (const tab of [...(await nav.getByRole('link').all()), more]) {
++      const box = await tab.boundingBox();
++      expect(box?.height ?? 0).toBeGreaterThanOrEqual(56);
++      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
++    }
++  } else {
++    // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
++    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  }
+ });
+ 
+ test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {
+   await signInThroughUi();
+   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+   await page.evaluate("window.location.hash = '#/does-not-exist'");
+@@ -48,15 +70,18 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+   if (workDate === undefined) return;
+   await employeeSeed.seedCompleteDay(workDate);
+ 
+   await signInThroughUi();
+   await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+   const row = page.locator(`[data-day="${workDate}"]`);
+-  await expect(row).toContainText('complete');
+-  await expect(row).toContainText('8h 00m');
++  await expect(row).toContainText('Complete');
++  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+   await expect(page.locator('[data-day]')).toHaveCount(14);
++  // The worked minutes of the sheet's detail row (Show details), as h:mm.
++  await page.getByRole('button', { name: 'Show details' }).click();
++  await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
+ 
+   await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
+ });
+ 
+ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({ page, signInThroughUi }, testInfo) => {
+   test.skip(testInfo.project.name !== 'mobile', 'mobile layout only');
+@@ -65,13 +90,14 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
+ 
+   const widths = await page.evaluate<{ scroll: number; inner: number }>(
+     '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',
+   );
+   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
+ 
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
++  // Only rendered controls are tap targets: the desktop bar is not displayed on a phone.
++  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline').filter({ visible: true });
+   const count = await targets.count();
+   expect(count).toBeGreaterThan(4);
+   for (let index = 0; index < count; index += 1) {
+     const target = targets.nth(index);
+     const box = await target.boundingBox();
+     const name = (await target.textContent())?.trim() || (await target.getAttribute('aria-label')) || `target ${index}`;

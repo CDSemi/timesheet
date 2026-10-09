@@ -1,0 +1,210 @@
+// WP5-UX-AUDIT-A5 scope 1 (delta proof, CSS): the FIX6 focus-ring tokens cannot hide or block any edit,
+// clock, reason or confirmation control. In each layout (1280 side panel, 1024 modal editor, 390 phone
+// sheet) and in the light and dark themes, every such control is given keyboard focus (focus-visible):
+// it must paint the ring, stay visible, opaque, inside the viewport and hit-testable at its centre, and
+// every other listed control must stay hit-testable while it holds the ring. Then the flows are driven by
+// the keyboard with the ring shown (Enter / Space on the focused control), and the request bodies are
+// recorded: clock in and out, the editor's day fields, the old-period picker review with its reason, and
+// the conflict confirmation. Synthetic data only.
+import { expect, newPerson, test } from '../ex5e1/tests/e2e/fixtures.ts';
+import { inspectControl, recordWrites, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+async function focusVisible(page: any, locator: any): Promise<void> {
+  await locator.scrollIntoViewIfNeeded();
+  await page.keyboard.press('Shift');
+  await locator.focus();
+  await expect(locator).toBeFocused();
+  // The shared transition (300 ms) has settled when two reads agree.
+  await expect
+    .poll(async () => {
+      const first = await locator.evaluate((el: Element) => getComputedStyle(el).boxShadow);
+      await page.waitForTimeout(350);
+      const second = await locator.evaluate((el: Element) => getComputedStyle(el).boxShadow);
+      return first === second ? second : 'moving';
+    })
+    .not.toBe('moving');
+}
+
+/** Hit-test of a control at its centre: true, or what covers it, or why it was not tested. */
+async function hitTest(locator: any): Promise<boolean | string> {
+  if ((await locator.count()) === 0) return 'absent';
+  return locator.first().evaluate((el: Element) => {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return 'not rendered';
+    if (r.bottom <= 0 || r.top >= window.innerHeight) return 'off screen';
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const ok = hit !== null && (hit === el || el.contains(hit) || hit.contains(el) || (el as HTMLInputElement).labels?.[0]?.contains(hit) === true);
+    if (ok) return true;
+    const describe = (node: Element | null) => (node === null ? 'nothing' : `${node.tagName.toLowerCase()}${node.className ? `.${String(node.className).trim().replace(/\s+/g, '.')}` : ''}`);
+    return `covered by ${describe(hit)} (parent ${describe(hit?.parentElement ?? null)})`;
+  });
+}
+
+/**
+ * Focuses one control with the ring and inspects it. Every other listed control is hit-tested twice at
+ * the same scroll position: while the target holds the ring and after the target is blurred (no ring).
+ * The ring can block a control only if the two results differ.
+ */
+async function ringCheck(page: any, name: string, target: any, others: Array<[string, any]>, log: any[]): Promise<void> {
+  await focusVisible(page, target);
+  const facts = await inspectControl(page, name, target);
+  // inspectControl scrolls; re-assert focus is still on the target.
+  await expect(target).toBeFocused();
+  const scrollY = await page.evaluate('window.scrollY');
+  const withRing: Record<string, boolean | string> = {};
+  for (const [otherName, other] of others) withRing[otherName] = await hitTest(other);
+  await target.evaluate((el: HTMLElement) => el.blur());
+  const withoutRing: Record<string, boolean | string> = {};
+  for (const [otherName, other] of others) withoutRing[otherName] = await hitTest(other);
+  expect(await page.evaluate('window.scrollY'), 'blur kept the scroll position').toBe(scrollY);
+  log.push({ ...facts, neighbours_with_ring: withRing, neighbours_without_ring: withoutRing });
+  expect(withRing, `${name}: the ring changes no other control's hit-test`).toEqual(withoutRing);
+  await focusVisible(page, target);
+  expect(facts.focused, `${name} focused`).toBe(true);
+  expect(facts.focusVisible, `${name} :focus-visible`).toBe(true);
+  expect(facts.visible, `${name} visible`).toBe(true);
+  expect(facts.notCovered, `${name} hit-testable at its centre with the ring`).toBe(true);
+  expect(facts.opacity, `${name} opaque`).toBe('1');
+  expect(facts.visibility, `${name} visibility`).toBe('visible');
+  expect(facts.pointerEvents, `${name} pointer-events`).not.toBe('none');
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`focus ring (${colorScheme}): edit, clock, reason and confirmation controls stay visible, reachable and operable by keyboard`, async ({ page, adminSeed, builtServer }, testInfo) => {
+    test.setTimeout(300_000);
+    await page.emulateMedia({ colorScheme, reducedMotion: 'no-preference' });
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Focus Probe', signature: 'none' });
+    const [fieldsDay = '', conflictDay = '', otherDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+    expect(otherDay, 'three free workdays').not.toBe('');
+    await person.api.seedCompleteDay(conflictDay);
+    const writes = recordWrites(page);
+    const log: any[] = [];
+    await signIn(page, person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+
+    // 1. The sheet's controls, one by one with the ring, while all others stay reachable. A date in the
+    //    "Open a day" field enables its button (nothing is opened or written by typing it).
+    await page.getByLabel('Open a day').fill(otherDay);
+    const sheetControls: Array<[string, any]> = [
+      ['Clock in', page.getByRole('button', { name: 'Clock in', exact: true })],
+      ['Open a day field', page.getByLabel('Open a day')],
+      ['Open day button', page.getByRole('button', { name: 'Open day', exact: true })],
+      ['Change several days', page.getByRole('button', { name: 'Change several days' })],
+      ['Previous period', page.getByRole('button', { name: 'Previous period' })],
+      ['Next period', page.getByRole('button', { name: 'Next period' })],
+      [`Edit ${fieldsDay}`, page.locator(`[data-day="${fieldsDay}"]`).getByRole('button', { name: `Edit ${fieldsDay}`, exact: true })],
+      [`Label for ${otherDay}`, page.getByRole('button', { name: new RegExp(`^Label for ${otherDay}`) })],
+      [`Edit ${otherDay}`, page.locator(`[data-day="${otherDay}"]`).getByRole('button', { name: `Edit ${otherDay}`, exact: true })],
+    ];
+    const tabs = page.locator('.shell-tabs .tab');
+    for (let i = 0; i < (await tabs.count()); i += 1) sheetControls.push([`phone tab ${i}`, tabs.nth(i)]);
+    for (const [name, locator] of sheetControls) {
+      if ((await locator.count()) === 0 || !(await locator.first().isVisible())) {
+        log.push({ name, skipped: 'not rendered in this layout' });
+        continue;
+      }
+      await ringCheck(page, name, locator.first(), sheetControls.filter(([n]) => n !== name), log);
+    }
+
+    // 2. Clock in and out by keyboard, with the ring on each control.
+    await focusVisible(page, page.getByRole('button', { name: 'Clock in', exact: true }));
+    await page.keyboard.press('Enter');
+    const clockOut = page.getByRole('button', { name: 'Clock out', exact: true });
+    await expect(clockOut).toBeVisible();
+    await page.waitForTimeout(1_200);
+    await ringCheck(page, 'Clock out', clockOut, [], log);
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Clock out' });
+    await expect(dialog).toBeVisible();
+    const noBreaks = dialog.getByRole('radio', { name: /No breaks taken/ });
+    await ringCheck(page, 'Clock out: No breaks taken', noBreaks, [], log);
+    await page.keyboard.press('Space');
+    await expect(noBreaks).toBeChecked();
+    const submit = dialog.locator('button[type="submit"]');
+    await ringCheck(page, 'Clock out: submit', submit, [['No breaks taken', noBreaks]], log);
+    await page.keyboard.press('Enter');
+    await expect(dialog).toHaveCount(0);
+
+    // 3. The editor's day fields by keyboard (side panel at 1280, modal editor at 1024, sheet on the phone).
+    const editButton = page.locator(`[data-day="${fieldsDay}"]`).getByRole('button', { name: `Edit ${fieldsDay}`, exact: true });
+    await focusVisible(page, editButton);
+    await page.keyboard.press('Enter');
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const fields = editor.getByRole('form', { name: 'Day fields' });
+    const notes = fields.getByLabel('Notes');
+    const save = fields.getByRole('button', { name: 'Save day fields' });
+    const editorControls: Array<[string, any]> = [
+      ['Notes', notes],
+      ['Leave hours', fields.getByLabel('Leave hours')],
+      ['Leave minutes', fields.getByLabel('Leave minutes')],
+      ['Leave kind', fields.getByLabel('Leave kind')],
+      ['WFH', fields.getByLabel('Worked from home (WFH)')],
+      ['Save day fields', save],
+      ['Add session', editor.getByRole('button', { name: 'Add session' })],
+      ['Close', editor.getByRole('button', { name: 'Close' })],
+    ];
+    for (const [name, locator] of editorControls) await ringCheck(page, `editor ${name}`, locator, editorControls.filter(([n]) => n !== name), log);
+    await focusVisible(page, notes);
+    await page.keyboard.type('A5 focus probe note (synthetic)');
+    await focusVisible(page, save);
+    await page.keyboard.press('Enter');
+    await expect(editor.getByText('Day fields saved.')).toBeVisible();
+    await focusVisible(page, editor.getByRole('button', { name: 'Close' }));
+    await page.keyboard.press('Enter');
+    await expect(editor).toHaveCount(0);
+
+    // 4. Conflict confirmation: picker "Off" on a worked day, then the confirmation by keyboard.
+    await page.getByRole('button', { name: new RegExp(`^Label for ${conflictDay}`) }).click();
+    await page.getByRole('listbox', { name: `Label for ${conflictDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+    const conflictReview = page.getByRole('dialog', { name: `Review label change for ${conflictDay}` });
+    const reviewConflicts = conflictReview.getByRole('button', { name: 'Review conflicts' });
+    await ringCheck(page, 'Review conflicts', reviewConflicts, [['Cancel', conflictReview.getByRole('button', { name: 'Cancel' })]], log);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+    const confirmBox = page.getByLabel('I confirm the label change for these dates');
+    const confirmButton = page.getByRole('button', { name: 'Confirm and commit' });
+    await ringCheck(page, 'confirmation checkbox', confirmBox, [['Confirm and commit', confirmButton]], log);
+    await page.keyboard.press('Space');
+    await expect(confirmBox).toBeChecked();
+    await ringCheck(page, 'Confirm and commit', confirmButton, [['confirmation checkbox', confirmBox]], log);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+
+    // 5. Reason-required correction through the old-period picker review, by keyboard.
+    await page.getByRole('button', { name: 'Previous period' }).click();
+    await expect(page.locator('.period-title .badge.old')).toBeVisible();
+    const oldDay = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+    await page.getByRole('button', { name: new RegExp(`^Label for ${oldDay}`) }).click();
+    await page.getByRole('listbox', { name: `Label for ${oldDay}` }).getByRole('option', { name: 'Vacation', exact: true }).click();
+    const reasonDialog = page.getByRole('dialog', { name: `Review label change for ${oldDay}` });
+    const reason = reasonDialog.getByLabel(/Reason for editing an old or finalized period/);
+    const commit = reasonDialog.getByRole('button', { name: 'Commit changes' });
+    await ringCheck(page, 'reason field', reason, [['Cancel', reasonDialog.getByRole('button', { name: 'Cancel' })]], log);
+    await page.keyboard.type('A5 focus probe reason (synthetic)');
+    await expect(commit).toBeEnabled();
+    await ringCheck(page, 'Commit changes', commit, [['reason field', reason]], log);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+
+    const calls = writes.map((w) => w.call);
+    expect(calls).toEqual([
+      'POST /api/clock/in',
+      'POST /api/clock/out',
+      `PUT /api/days/${fieldsDay}`,
+      'POST /api/days/batch',
+      'POST /api/days/batch',
+      'POST /api/days/batch',
+      'POST /api/days/batch',
+    ]);
+    expect(Object.keys(writes[2]?.body ?? {}).sort()).toEqual(['category', 'expected_version', 'leave_kind', 'leave_minutes', 'notes', 'wfh']);
+    expect(writes[2]?.body.notes).toBe('A5 focus probe note (synthetic)');
+    expect(writes[4]?.body).toMatchObject({ mode: 'commit', confirm_conflicts: true });
+    expect(writes[6]?.body).toMatchObject({ mode: 'commit', reason: 'A5 focus probe reason (synthetic)' });
+    expect((await person.api.dayView(conflictDay)).category).toBe('Off');
+    expect((await person.api.dayView(oldDay)).category).toBe('Vacation');
+    writeResult(`focus-${testInfo.project.name}-${colorScheme}.json`, { project: testInfo.project.name, colorScheme, controls: log, writes });
+  });
+}

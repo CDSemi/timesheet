@@ -1,0 +1,160 @@
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index c34f3c4..6e3683f 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -76,7 +76,7 @@ Plain CSS custom properties in `src/client/styles.css`; system font stack only (
+ 
+ - Shape and depth: 4px corner radius (`--radius`); panels and cards use layered, diffuse soft shadows (`--shadow-panel`, `--shadow-overlay`) rather than hard borders.
+ - Motion: one shared transition token (`--transition`, 300 ms ease-out) on hover, active and focus states of buttons and links; a pressed button moves by a small token offset. No entrance or scroll animation; reduced-motion preferences are honored and the running-session dot is static.
+-- Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring.
++- Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring (one shared token: a solid accent ring with a card-coloured gap, at least 3:1 against every surface in both themes).
+ - Touch: controls are at least 44px (`--tap-min`) below 768px and with a coarse pointer.
+ - Day-state colour roles (sheet rules and heads, non-working tint with hatching, today, needs input, selected, running) have light and dark values. State is never colour alone: every state also has words or a shape.
+ - High-density, mobile-first layout; light and dark themes follow the device.
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index f6dacba..70899da 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -76,7 +76,7 @@ CSS custom properties thuần trong `src/client/styles.css`; chỉ dùng bộ fo
+ 
+ - Hình dạng và độ sâu: bo góc 4px (`--radius`); panel và card dùng bóng đổ mềm nhiều lớp, khuếch tán (`--shadow-panel`, `--shadow-overlay`) thay cho viền cứng.
+ - Chuyển động: một token transition dùng chung (`--transition`, 300 ms ease-out) cho trạng thái hover, active và focus của nút và liên kết; nút đang nhấn dịch một khoảng nhỏ theo token. Không có animation khi vào hay cuộn; tôn trọng tùy chọn giảm chuyển động và chấm ca đang chạy là tĩnh.
+-- Nút: primary (nền màu nhấn), secondary (card viền màu nhấn) và quiet (chữ màu nhấn), mỗi loại có vòng focus nhìn thấy được.
++- Nút: primary (nền màu nhấn), secondary (card viền màu nhấn) và quiet (chữ màu nhấn), mỗi loại có vòng focus nhìn thấy được (một token dùng chung: vòng màu nhấn đặc với khe màu card, độ tương phản tối thiểu 3:1 trên mọi bề mặt ở cả hai giao diện).
+ - Chạm: điều khiển cao ít nhất 44px (`--tap-min`) dưới 768px và với con trỏ thô.
+ - Các vai trò màu theo trạng thái ngày (đường kẻ và đầu bảng, nền ngày không làm việc kèm sọc, hôm nay, cần nhập, đang chọn, đang chạy) có giá trị sáng và tối. Trạng thái không bao giờ chỉ bằng màu: luôn có chữ hoặc hình.
+ - Bố cục mật độ cao, ưu tiên mobile; giao diện sáng và tối theo thiết bị.
+diff --git a/src/client/components/PeriodBar.tsx b/src/client/components/PeriodBar.tsx
+index ce90bd8..fcb095f 100644
+--- a/src/client/components/PeriodBar.tsx
++++ b/src/client/components/PeriodBar.tsx
+@@ -1,9 +1,9 @@
+ import type { TimesheetView } from '../api.ts';
+ import { reviewStatus } from './dayModel.ts';
+ import { gridStatus } from './deliveryModel.ts';
+-import { instantText, usDate } from './format.ts';
++import { usDate } from './format.ts';
+ import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
+-import { dueInWords, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
++import { dueInWords, dueInZoneText, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+ import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
+ import { SubmissionStatusLine } from './SubmissionStatus.tsx';
+ 
+@@ -70,7 +70,7 @@ export function PeriodBar({
+               </div>
+               <div>
+                 <dt>Due, your time ({zone})</dt>
+-                <dd>{instantText(period.due_at_utc, zone)}</dd>
++                <dd>{dueInZoneText(period.due_at_utc, zone)}</dd>
+               </div>
+             </dl>
+             <p className="muted hint">Dates are accounting dates in the reporting zone. Session times are shown in the display zone.</p>
+diff --git a/src/client/components/periodBarModel.ts b/src/client/components/periodBarModel.ts
+index 0748ef6..0b19696 100644
+--- a/src/client/components/periodBarModel.ts
++++ b/src/client/components/periodBarModel.ts
+@@ -24,6 +24,13 @@ export function dueInWords(period: Pick<Period, 'due_local_date' | 'due_local_ti
+   return `Due ${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`;
+ }
+ 
++/** The due instant in the display zone, formatted like the bar: `Wed 10/14/2026, 07:00`. Display only; the instant and zone are unchanged. */
++export function dueInZoneText(dueAtUtc: string, zone: string): string {
++  const local = formatInZone(zone, parseUtcInstant(dueAtUtc));
++  const date = local.slice(0, 10);
++  return `${weekdayName(date)} ${usDate(date)}, ${local.slice(11, 16)}`;
++}
++
+ /** The compact line that always names the zone this browser shows times in, for example `Times in Asia/Saigon`. */
+ export function viewingZoneText(displayZone: string): string {
+   return `Times in ${displayZone}`;
+diff --git a/src/client/styles.css b/src/client/styles.css
+index b77e24a..c342716 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -34,7 +34,13 @@
+     0 12px 32px rgb(28 36 48 / 0.04);
+   --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1),
+     0 24px 64px rgb(28 36 48 / 0.08);
+-  --focus-ring: 0 0 0 3px rgb(31 95 191 / 0.35);
++  /*
++   * Focus (WCAG 2.2 SC 1.4.11, technique C40): a solid two-colour ring, a 1px card-coloured gap inside a
++   * 2px solid accent ring. The accent reaches 3:1 against every surface token in both themes, and the gap
++   * keeps it visible on an accent-filled primary button. The inset form is for controls that touch an edge.
++   */
++  --focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent);
++  --focus-ring-inset: inset 0 0 0 2px var(--accent), inset 0 0 0 3px var(--card);
+   --scrim: rgb(18 22 28 / 0.5);
+   /* A sheet of white paper: the signature image is dark ink on it in both themes (as on the PDF) */
+   --paper: #ffffff;
+@@ -175,7 +181,6 @@
+       0 12px 32px rgb(4 8 14 / 0.25);
+     --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
+       0 24px 64px rgb(4 8 14 / 0.4);
+-    --focus-ring: 0 0 0 3px rgb(110 168 255 / 0.45);
+     --sheet-rule: #36404d;
+     --sheet-rule-soft: #29313c;
+     --sheet-rule-strong: #5d6a7b;
+@@ -326,7 +331,7 @@ body {
+ }
+ 
+ .shell-tabs .tab:focus-visible {
+-  box-shadow: inset var(--focus-ring);
++  box-shadow: var(--focus-ring-inset);
+ }
+ 
+ .shell-tabs .tab[aria-current] {
+diff --git a/tests/client/periodBarModel.test.ts b/tests/client/periodBarModel.test.ts
+index 79ab437..abd8e63 100644
+--- a/tests/client/periodBarModel.test.ts
++++ b/tests/client/periodBarModel.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from 'vitest';
+ import type { DayView, Session } from '../../src/client/api.ts';
+-import { clockedInText, dueInWords, runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
++import { clockedInText, dueInWords, dueInZoneText,runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+ 
+ function session(id: string, start: string, end: string | null): Session {
+   return { id, work_date: '2026-12-03', start_utc: start, end_utc: end, input_zone: 'America/Los_Angeles', source: 'clock', breaks_confirmed: false, version: 1, breaks: [] };
+@@ -26,6 +26,14 @@ describe('dueInWords', () => {
+   });
+ });
+ 
++describe('dueInZoneText', () => {
++  it('prints the due instant in the display zone in the US form of the bar', () => {
++    // 2026-10-14T00:00:00Z is 17:00 on Tue 10/13 in Los Angeles and 07:00 on Wed 10/14 in Ho Chi Minh City.
++    expect(dueInZoneText('2026-10-14T00:00:00Z', 'Asia/Ho_Chi_Minh')).toBe('Wed 10/14/2026, 07:00');
++    expect(dueInZoneText('2026-10-14T00:00:00Z', 'America/Los_Angeles')).toBe('Tue 10/13/2026, 17:00');
++  });
++});
++
+ describe('viewingZoneText', () => {
+   it('always names the display zone, whether or not it equals the reporting zone', () => {
+     expect(viewingZoneText('America/Los_Angeles')).toBe('Times in America/Los_Angeles');
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 8b4b962..5922c73 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -200,7 +200,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+   await employeeSeed.seedUnconfirmedBreaksDay(pendingDay);
+   const { reportingZone, currentPayrollDate } = await employeeSeed.today();
+   const sheet = await employeeSeed.call<{
+-    period: { due_local_date: string; period_start: string };
++    period: { due_local_date: string; period_start: string; due_at_utc: string };
+     totals: { provisional_credited_minutes: number; pending_days: number };
+   }>('GET', `/api/timesheets/${currentPayrollDate}`);
+   const complete = await employeeSeed.dayView(completeDay);
+@@ -229,6 +229,14 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+   await expect(page.locator('.facts')).toContainText(reportingZone);
+   await expect(page.locator('.facts')).toContainText(displayZone);
+   await expect(page.getByText(`Due, your time (${displayZone})`)).toBeVisible();
++  // WP5-UX-B4-02: the display-zone due time is in the US format of the bar ("Wed 10/14/2026, 07:00"), computed here by the test runtime.
++  const dueParts = Object.fromEntries(
++    new Intl.DateTimeFormat('en-US', { timeZone: displayZone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
++      .formatToParts(new Date(sheet.period.due_at_utc))
++      .map((part) => [part.type, part.value]),
++  );
++  const dueInDisplayZone = `${dueParts.weekday} ${dueParts.month}/${dueParts.day}/${dueParts.year}, ${dueParts.hour}:${dueParts.minute}`;
++  await expect(page.locator('[data-zone-note] dd').nth(2)).toHaveText(dueInDisplayZone);
+   // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
+   await expect(page.locator('[data-zone-note]')).toBeVisible();
+   // The period bar names the viewing zone compactly, and the reporting zone stays in the note.

@@ -1,0 +1,18 @@
+// WP5-UX-AUDIT-A5 scope 1 on 5e104e1: the zone-note due time across seven periods in eight browser zones
+// (see zonenote-body.ts). Here each note must equal the Intl oracle "Ddd MM/DD/YYYY, HH:MM" of the
+// server's due_at_utc in the viewing zone. Synthetic data only.
+import { expect, newPerson, test } from '../ex5e1/tests/e2e/fixtures.ts';
+import { dueOracle, signIn, writeResult } from './common.ts';
+import { collectZoneNotes } from './zonenote-body.ts';
+
+test('zone-note due time across periods and zones, including DST changes (5e104e1)', async ({ browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Zone Note Probe', signature: 'none' });
+  const { now, rows } = await collectZoneNotes({ browser, builtServer, person, use: testInfo.project.use, signIn, expect });
+  for (const row of rows) {
+    expect(row.note_label, `${row.zone} ${row.payroll_date}`).toBe(`Due, your time (${row.resolved})`);
+    expect(row.note_due, `${row.zone} ${row.payroll_date}`).toBe(dueOracle(row.due_at_utc, row.resolved));
+  }
+  expect(rows.length).toBe(56);
+  writeResult(`zonenote-5e104e1-${testInfo.project.name}.json`, { commit: '5e104e1', project: testInfo.project.name, now, rows });
+});

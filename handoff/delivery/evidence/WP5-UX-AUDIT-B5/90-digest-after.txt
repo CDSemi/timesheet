@@ -1,0 +1,27 @@
+WP5-UX-AUDIT-B5 - source digest after all checks and probes
+Time (UTC): 2026-10-09T23:11:32Z
+
+$ git rev-parse HEAD origin/main     (working repository)
+5e104e14dad71268a9185920c04ed0ee2a4b31c2
+5e104e14dad71268a9185920c04ed0ee2a4b31c2
+
+Form 1 (git ls-tree form), working repository:
+$ git ls-tree -r --format='%(path) %(objectname)' 5e104e14dad71268a9185920c04ed0ee2a4b31c2 | (grep -v '^handoff/', LC_ALL=C sort, via files)
+  790 lines; sha256 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635
+
+Form 2, working repository:
+$ node scripts/source-digest.mjs   (exit 0)
+07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635  (790 files, handoff/ excluded)
+
+Form 3, scratch clone at 5e104e1 (after typecheck, lint, npm test, full e2e, three probe runs and the traced build):
+$ node scripts/source-digest.mjs   (exit 0)
+07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635  (790 files, handoff/ excluded)
+$ git status --short   -> (empty; the probe folder audit-b5/ is in .git/info/exclude, dist/ is ignored)
+$ git rev-parse HEAD   -> 5e104e14dad71268a9185920c04ed0ee2a4b31c2
+
+Working repository, paths outside handoff/ that differ from 5e104e1:
+$ git diff --name-only 5e104e1 -- . ':!handoff'                  -> (none)
+$ git ls-files --others --exclude-standard -- . ':!handoff'       -> (none)
+`git status --short` lists only handoff/ paths (coordinator files, the other tasks' records, and this task's review and evidence).
+
+Equal to the digest recorded first (00-digest-before.txt) and to the digest of record of the brief: YES.

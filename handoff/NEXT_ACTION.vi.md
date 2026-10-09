@@ -13,14 +13,16 @@
   duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08): kế hoạch và mockup tĩnh đã sẵn
   (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án đã chấp
-  nhận E-1..E-7 theo khuyến nghị (2026-10-08). Phần triển khai T01..T06 và các bản sửa
-  FIX1..FIX5 đã freeze (commit mã nguồn cuối edaaa85, digest b7bbcbc0); WP5-UX-REGATE3
-  PASS; audit lại phần A PASS (WP5-UX-AUDIT-A4). Phần B (WP5-UX-AUDIT-B4) còn B4-01 (vòng
-  focus tương phản 1.72:1 / 2.46:1, cần 3:1) và B4-02 (ngày ISO trong ghi chú múi giờ).
-  **Câu hỏi cho chủ dự án WP5-UX-Q1** (board `pending_owner_question_2`): (a, khuyến
-  nghị) sửa cả hai trong WP5-UX-FIX6, rồi gate và kiểm tra lại; (b) chấp nhận cả hai như
-  rủi ro mang theo; (c) chỉ sửa vòng focus. Việc nghiệm thu lại WP5 và cập nhật định danh
-  pilot packet chờ câu trả lời này.
+  nhận E-1..E-7 theo khuyến nghị (2026-10-08) và trả lời WP5-UX-Q1 là (a) (2026-10-09).
+  Phần triển khai T01..T06 và các bản sửa FIX1..FIX6 đã freeze (commit mã nguồn cuối
+  5e104e1, digest 07c3ca00); WP5-UX-REGATE4 PASS; audit lại phần A PASS
+  (WP5-UX-AUDIT-A5). Phần B (WP5-UX-AUDIT-B5) còn ba lỗi trợ năng bàn phím: B5-01 thanh
+  sticky che control đang focus khi Shift+Tab, B5-02 vị trí bàn phím trong bộ chọn nhãn
+  chỉ là màu nhạt 1.14:1, B5-03 hộp thoại sửa ngày là điểm dừng focus không có dấu hiệu.
+  **Câu hỏi cho chủ dự án WP5-UX-Q2** (board `pending_owner_question_2`): (a, khuyến nghị)
+  rà soát trợ năng đầy đủ một lượt, rồi một vòng sửa tất cả, rồi gate và kiểm tra lại;
+  (b) chỉ sửa B5-01..B5-03; (c) chạy pilot với UI này, ghi các lỗi vào backlog (WP5 chưa
+  được nghiệm thu lại chính thức); (d) chạy pilot trên snapshot đã nghiệm thu 014bd47.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

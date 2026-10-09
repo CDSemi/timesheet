@@ -1,0 +1,19 @@
+// WP5-UX-AUDIT-A5 scope 1 on the edaaa85 build (before FIX6): the same zone-note probe (see
+// zonenote-body.ts). Here each note is the old text "YYYY-MM-DD HH:MM" of due_at_utc in the viewing zone.
+// Synthetic data only.
+import { expect, newPerson, test } from '../exeda/tests/e2e/fixtures.ts';
+import { local, signIn, writeResult } from './common.ts';
+import { collectZoneNotes } from './zonenote-body.ts';
+
+test('zone-note due time across periods and zones, including DST changes (edaaa85)', async ({ browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Zone Note Probe', signature: 'none' });
+  const { now, rows } = await collectZoneNotes({ browser, builtServer, person, use: testInfo.project.use, signIn, expect });
+  for (const row of rows) {
+    const l = local(row.due_at_utc, row.resolved);
+    expect(row.note_label, `${row.zone} ${row.payroll_date}`).toBe(`Due, your time (${row.resolved})`);
+    expect(row.note_due, `${row.zone} ${row.payroll_date}`).toBe(`${l.date} ${l.time}`);
+  }
+  expect(rows.length).toBe(56);
+  writeResult(`zonenote-edaaa85-${testInfo.project.name}.json`, { commit: 'edaaa85', project: testInfo.project.name, now, rows });
+});

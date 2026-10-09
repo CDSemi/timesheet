@@ -1,0 +1,94 @@
+// WP5-UX-AUDIT-A5: the same leave entries on the accepted build 014bd47 (one "Partial leave minutes"
+// field), for "valid input sends the same body as at 014bd47" and "malformed input sends nothing".
+// Synthetic data only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { expect, newPerson, test } from '../ex014/tests/e2e/fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+interface Case {
+  name: string;
+  keys?: string;
+  fill?: string;
+  sent: number | null;
+  serverCode?: string;
+}
+
+const CASES: Case[] = [
+  { name: 'malformed "2-"', keys: '2-', sent: null },
+  { name: 'malformed "150-"', keys: '150-', sent: null },
+  { name: 'malformed "e"', keys: 'e', sent: null },
+  { name: 'fraction "1.5"', keys: '1.5', sent: null },
+  { name: 'negative "-1"', keys: '-1', sent: null },
+  { name: 'empty', fill: '', sent: 0 },
+  { name: 'valid 150 (2h 30m)', fill: '150', sent: 150 },
+  { name: 'valid 240 typed (4h 00m)', keys: '240', sent: 240 },
+  { name: 'valid 45 (0h 45m)', fill: '45', sent: 45 },
+  { name: 'valid 480 (8h 00m)', fill: '480', sent: 480 },
+  { name: 'client-valid 1440, refused by the server rule', fill: '1440', sent: 1440, serverCode: 'leave_exceeds_required' },
+];
+
+test('leave input at 014bd47: what each entry sends and stores', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(600_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Leave Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  expect(workDate).not.toBe('');
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const results: Array<Record<string, unknown>> = [];
+  for (const item of CASES) {
+    const puts: Array<Record<string, unknown>> = [];
+    const listener = (request: any) => {
+      if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${workDate}`) puts.push(request.postDataJSON());
+    };
+    page.on('request', listener);
+    try {
+      await page.getByLabel('Open a day').fill(workDate);
+      await page.getByRole('button', { name: 'Open day', exact: true }).click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await editor.waitFor();
+      const form = editor.getByRole('form', { name: 'Day fields' });
+      await form.waitFor();
+      const box = form.getByLabel(/^Partial leave minutes/);
+      await box.fill('');
+      if (item.fill !== undefined) await box.fill(item.fill);
+      else {
+        await box.click();
+        await box.pressSequentially(item.keys ?? '');
+      }
+      await form.getByLabel(/^Leave kind/).selectOption('vacation');
+      const state = await form.evaluate((element: HTMLFormElement) => {
+        const input = element.querySelector('input[type="number"]') as HTMLInputElement;
+        return { noValidate: element.noValidate, formValid: element.checkValidity(), value: input.value, badInput: input.validity.badInput };
+      });
+      const before = await person.api.dayView(workDate);
+      await form.getByRole('button', { name: 'Save day fields' }).click();
+      await page.waitForTimeout(2_000);
+      const after = await person.api.dayView(workDate);
+      const alerts = await form.getByRole('alert').allInnerTexts();
+      results.push({ case: item.name, state, put_bodies: puts, alerts, stored_before: before.leave_minutes, stored_after: after.leave_minutes });
+      if (item.sent === null) {
+        expect(puts, `${item.name}: no PUT`).toEqual([]);
+        expect(after.leave_minutes).toBe(before.leave_minutes);
+      } else {
+        expect(puts.length, `${item.name}: one PUT`).toBe(1);
+        expect(puts[0]).toMatchObject({ leave_minutes: item.sent, leave_kind: item.sent > 0 ? 'vacation' : null });
+        expect(Object.keys(puts[0] ?? {}).sort()).toEqual(['category', 'expected_version', 'leave_kind', 'leave_minutes', 'notes', 'wfh']);
+        if (item.serverCode === undefined) expect(after.leave_minutes).toBe(item.sent);
+        else expect(alerts.join(' ')).toContain(item.serverCode);
+      }
+    } finally {
+      page.off('request', listener);
+      await page.keyboard.press('Escape');
+      await person.api.resetDay(workDate);
+      await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+    }
+  }
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `leave-014bd47-${testInfo.project.name}.json`), `${JSON.stringify({ commit: '014bd47', project: testInfo.project.name, workDate, results }, null, 2)}\n`, 'utf8');
+});

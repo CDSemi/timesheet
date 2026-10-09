@@ -1,0 +1,117 @@
+// Shared helpers of the WP5-UX-AUDIT-A5 probes (method of WP5-UX-AUDIT-A2..A4, rewritten for 5e104e1).
+// Results are written as JSON into the task folder (raw/probe-results). Synthetic accounts only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+export function writeResult(name: string, data: unknown): void {
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, name), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+export async function signIn(page: any, account: { email: string; password: string }, hash: string): Promise<void> {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+/** Every `/api/` request of a page as "METHOD /path". */
+export function recordApi(page: any): string[] {
+  const list: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) list.push(`${request.method()} ${pathname}`);
+  });
+  return list;
+}
+
+/** Every non-GET `/api/` request except sign-in, with its JSON body, in the order the page sent them. */
+export function recordWrites(page: any): Array<{ call: string; body: any }> {
+  const list: Array<{ call: string; body: any }> = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
+      list.push({ call: `${request.method()} ${pathname}`, body: request.postDataJSON() });
+    }
+  });
+  return list;
+}
+
+/** Local date `YYYY-MM-DD` and time `HH:MM` of an instant in a zone, by Intl (an oracle independent of the app). */
+export function local(instant: string, zone: string): { date: string; time: string; weekday: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}`, weekday: get('weekday') };
+}
+
+/** The zone-note due text the 5e104e1 build should show: "Ddd MM/DD/YYYY, HH:MM" in the zone. */
+export function dueOracle(instant: string, zone: string): string {
+  const l = local(instant, zone);
+  return `${l.weekday} ${l.date.slice(5, 7)}/${l.date.slice(8, 10)}/${l.date.slice(0, 4)}, ${l.time}`;
+}
+
+/** Opens a day's editor through the toolbar's "Open a day" field. */
+export async function openDay(page: any, workDate: string): Promise<any> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.waitFor();
+  await editor.getByRole('form', { name: 'Day fields' }).waitFor();
+  return editor;
+}
+
+/** The layout facts of the open editor: modal or not, bottom sheet or side panel, its box. */
+export async function editorLayout(page: any): Promise<Record<string, unknown>> {
+  return page.evaluate(`(() => {
+    const d = document.querySelector('dialog[data-day-editor]');
+    if (d === null) return { open: false };
+    const r = d.getBoundingClientRect();
+    return {
+      open: d.open,
+      modal: d.matches(':modal'),
+      className: d.className,
+      box: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  })()`);
+}
+
+/** Facts of one control: present, visible, inside the viewport width, not covered at its centre, its focus paint. */
+export async function inspectControl(page: any, name: string, locator: any): Promise<Record<string, any>> {
+  const count = await locator.count();
+  if (count === 0) return { name, count };
+  const first = locator.first();
+  await first.evaluate((el: Element) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+  const visible = await first.isVisible();
+  const facts = await first.evaluate((el: Element) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const style = getComputedStyle(el);
+    return {
+      box: { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 },
+      inside: r.left >= -0.5 && r.right <= window.innerWidth + 0.5,
+      notCovered: hit !== null && (hit === el || el.contains(hit) || hit.contains(el) || (el as HTMLInputElement).labels?.[0]?.contains(hit) === true),
+      disabled: (el as HTMLButtonElement).disabled === true,
+      focused: document.activeElement === el,
+      focusVisible: el.matches(':focus-visible'),
+      hover: el.matches(':hover'),
+      boxShadow: style.boxShadow,
+      opacity: style.opacity,
+      visibility: style.visibility,
+      pointerEvents: style.pointerEvents,
+    };
+  });
+  return { name, count, visible, ...facts };
+}

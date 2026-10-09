@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Runs auditor probes with the CLI of the export under test.
+# Usage: bash run-probe.sh <5e1|014|eda> <out-file> [playwright args...]
+source <task>/env.sh
+which="$1"; out="$2"; shift 2
+case "$which" in
+  5e1) cli="$T/ex5e1/node_modules/@playwright/test/cli.js"; cfg="$T/probe/probe.config.ts" ;;
+  014) cli="$T/ex014/node_modules/@playwright/test/cli.js"; cfg="$T/probe/probe014.config.ts" ;;
+  eda) cli="$T/exeda/node_modules/@playwright/test/cli.js"; cfg="$T/probe/probeeda.config.ts" ;;
+  *) echo "unknown build $which"; exit 2 ;;
+esac
+cd "$T/probe" || exit 2
+{
+  echo "\$ playwright test --config $(basename "$cfg") $*  (CLI of the $which export)"
+  node "$cli" test --config "$cfg" "$@"
+  echo "exit $?"
+} > "$out" 2>&1

@@ -137,3 +137,8 @@ Push per the profile. Append to this brief:
 ## Results
 
 (committer appends here)
+
+Self-reported model: claude-sonnet-5-5
+- Pre-HEAD 49a3ff04a9cb68d8a5f565b43fa52129bca0fd6c; post-HEAD/commit 5e104e14dad71268a9185920c04ed0ee2a4b31c2; pushed yes; remote SHA 5e104e14dad71268a9185920c04ed0ee2a4b31c2.
+- Digest before add 07c3ca00...; HEAD ls-tree digest 07c3ca00... (equal). Staged count 32.
+- All checks exit 0 (see evidence/WP5-UX-FIX6-FREEZE/checks.txt). No fixes applied.

@@ -1,0 +1,57 @@
+// WP5-UX-AUDIT-A5: the focus probe on 5e104e1 vs the same probe on the edaaa85 build (before FIX6).
+// Per layout and theme: the same controls checked, the same visibility and hit-test facts, the same
+// neighbour hit-tests, the same keyboard-driven writes and bodies; only the ring paint differs.
+// Also lists controls whose focused paint was not the shared ring and whether the pointer hovered them.
+// Usage: node focus-compare.mjs <results-dir>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+const j = (v) => JSON.stringify(v);
+let mismatches = 0;
+// The ring paint (boxShadow) is what FIX6 changed; the box can move by sub-pixels with the paint; whether
+// the emulated pointer happens to rest over the control (hover) depends on the last tap position and on
+// scrolling, so it is reported separately and not counted as a visibility or hit-test fact.
+const strip = (c) => {
+  const { boxShadow, box, hover, ...rest } = c;
+  return rest;
+};
+let hoverDiffs = 0;
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  for (const scheme of ['light', 'dark']) {
+    const N = load(`focus-${project}-${scheme}.json`);
+    const O = load(`focus-edaaa85-${project}-${scheme}.json`);
+    const names = (r) => r.controls.map((c) => c.name).join('|');
+    const sameNames = names(N) === names(O);
+    let factDiffs = 0;
+    for (const c of N.controls) {
+      const o = O.controls.find((x) => x.name === c.name);
+      if (o !== undefined && c.hover !== o.hover) {
+        hoverDiffs += 1;
+        console.log(`  note: ${project} ${scheme} ${c.name}: pointer over the control ${c.hover} at 5e104e1, ${o.hover} at edaaa85`);
+      }
+      if (o === undefined || j(strip(c)) !== j(strip(o))) {
+        factDiffs += 1;
+        console.log(`  DIFFERENT ${project} ${scheme} ${c.name}:\n    5e104e1 ${j(strip(c))}\n    edaaa85 ${j(strip(o))}`);
+      }
+    }
+    const sameWrites = j(N.writes) === j(O.writes);
+    if (!sameNames || factDiffs > 0 || !sameWrites) mismatches += 1;
+    const ringN = [...new Set(N.controls.filter((c) => c.boxShadow).map((c) => c.boxShadow))];
+    const ringO = [...new Set(O.controls.filter((c) => c.boxShadow).map((c) => c.boxShadow))];
+    console.log(`${project} ${scheme}: controls ${N.controls.length} vs ${O.controls.length} (same list ${sameNames}); visibility/hit-test/neighbour facts differing: ${factDiffs}; keyboard writes and bodies identical: ${sameWrites}`);
+    console.log(`  paints 5e104e1: ${j(ringN)}`);
+    console.log(`  paints edaaa85: ${j(ringO)}`);
+    const notRing = (r, ring) => r.controls.filter((c) => c.boxShadow && !c.boxShadow.startsWith(ring)).map((c) => `${c.name} (hover ${c.hover}): ${c.boxShadow}`);
+    const nr = notRing(N, scheme === 'light' ? 'rgb(255, 255, 255) 0px 0px 0px 1px, rgb(31, 95, 191) 0px 0px 0px 3px' : 'rgb(26, 32, 41) 0px 0px 0px 1px, rgb(110, 168, 255) 0px 0px 0px 3px');
+    console.log(`  5e104e1 focused controls not painted with the shared outset ring: ${nr.length}`);
+    for (const line of nr) console.log(`    ${line}`);
+    const no = notRing(O, scheme === 'light' ? 'rgba(31, 95, 191, 0.35) 0px 0px 0px 3px' : 'rgba(110, 168, 255, 0.45) 0px 0px 0px 3px');
+    console.log(`  edaaa85 focused controls not painted with its shared outset ring: ${no.length}`);
+    for (const line of no) console.log(`    ${line}`);
+  }
+}
+console.log(`\nhover-only differences (pointer position, not counted): ${hoverDiffs}`);
+console.log(`mismatches=${mismatches}`);
+process.exitCode = mismatches === 0 ? 0 : 1;

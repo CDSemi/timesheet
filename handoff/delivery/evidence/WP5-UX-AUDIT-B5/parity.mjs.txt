@@ -1,0 +1,44 @@
+// WP5-UX-AUDIT-B5: structural EN/VI parity of a document pair (headings, bullets, table rows, code spans,
+// quoted UI strings, numbers). Usage: node parity.mjs <en.md> <vi.md> [fromLine toLine]
+import { readFileSync } from 'node:fs';
+
+const [enPath, viPath, from = '1', to = '100000'] = process.argv.slice(2);
+const slice = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n');
+const en = slice(enPath);
+const vi = slice(viPath);
+const out = (line) => process.stdout.write(`${line}\n`);
+
+function profile(lines) {
+  const body = lines.slice(Number(from) - 1, Number(to));
+  const text = body.join('\n');
+  return {
+    lines: body.length,
+    headings: body.filter((line) => /^#{1,6} /.test(line)).length,
+    bullets: body.filter((line) => /^\s*- /.test(line)).length,
+    tableRows: body.filter((line) => /^\|/.test(line)).length,
+    code: [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1]).sort(),
+    quoted: [...text.matchAll(/"([A-Z][^"]{1,60})"/g)].map((match) => match[1]).filter((value) => /^[\x20-\x7e]+$/.test(value)).sort(),
+    numbers: [...text.matchAll(/\b\d+(?:[.,:]\d+)*(?:px|%)?\b/g)].map((match) => match[0].replace(',', '.')).sort(),
+  };
+}
+
+const a = profile(en);
+const b = profile(vi);
+out(`EN ${enPath} lines ${a.lines} headings ${a.headings} bullets ${a.bullets} tableRows ${a.tableRows}`);
+out(`VI ${viPath} lines ${b.lines} headings ${b.headings} bullets ${b.bullets} tableRows ${b.tableRows}`);
+const diff = (name, x, y) => {
+  const left = [...x];
+  const right = [...y];
+  const onlyEn = left.filter((item) => {
+    const index = right.indexOf(item);
+    if (index >= 0) {
+      right.splice(index, 1);
+      return false;
+    }
+    return true;
+  });
+  out(`${name}: EN ${x.length}, VI ${y.length}; only in EN ${JSON.stringify(onlyEn)}; only in VI ${JSON.stringify(right)}`);
+};
+diff('code spans', a.code, b.code);
+diff('quoted UI strings', a.quoted, b.quoted);
+diff('numbers', a.numbers, b.numbers);

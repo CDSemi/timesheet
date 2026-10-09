@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B5 probe runner. Usage: run-probe.sh <clone dir> <tag> <port base> [grep] [project]
+T=<task>
+N24DIR="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin"
+export PATH="$N24DIR:$(cygpath -u "$APPDATA")/npm:$PATH"
+export TEMP="$(cygpath -w "$T")"
+export TMP="$(cygpath -w "$T")"
+export DATA_DIR="$(cygpath -w "$T/data")"
+export DATABASE_PATH="$(cygpath -w "$T/data/ts.sqlite")"
+C="$1"; TAGV="$2"; BASE="$3"; GREP="${4:-.}"; PROJECT="${5:-}"
+cd "$C" || exit 9
+export PROBE_OUT="$T/probe-out"
+export PROBE_WORK="$T/probe-work"
+export PROBE_SHOTS="$T/probe-shots"
+export PROBE_TAG="$TAGV"
+export PROBE_PORT_BASE="$BASE"
+mkdir -p "$PROBE_OUT" "$PROBE_WORK" "$PROBE_SHOTS"
+STAMP="$(date -u +%H%M%S)"
+LOG="probe-run-$TAGV-$STAMP.txt"
+if [ -n "$PROJECT" ]; then
+  node node_modules/@playwright/test/cli.js test -c audit-b5/probe.config.ts -g "$GREP" --project="$PROJECT" > "$T/$LOG" 2>&1
+else
+  node node_modules/@playwright/test/cli.js test -c audit-b5/probe.config.ts -g "$GREP" > "$T/$LOG" 2>&1
+fi
+echo "probe exit=$? tag=$TAGV grep=$GREP project=${PROJECT:-both} log=$LOG at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/probe-summary.txt"

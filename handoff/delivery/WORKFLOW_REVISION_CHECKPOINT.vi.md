@@ -198,7 +198,29 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Đối chiếu (WP5-UX-RECON1): HEAD = origin/main = 49a3ff0, một commit chỉ chứa handoff do
   chủ dự án tự commit sau c24d634 (kết quả CKPT2, lần chuyển trạng thái board, checkpoint);
   mã nguồn không đổi.
-- Đang chạy: WP5-UX-FIX6-FREEZE (committer) trên gốc 49a3ff0.
+- WP5-UX-FIX6-FREEZE xong: 5e104e1 trên main, đã push (32 file, digest 07c3ca00, 790
+  file).
+- WP5-UX-REGATE4 PASS trên 5e104e1 (NAS chưa kiểm): digest 07c3ca00 ở ba dạng; verify
+  1821; e2e 174/0/16; AC-13 ba lần và hai múi giờ; drill 208/0, image
+  sha256:218dd7cc9e567862182f633914717e4087d2bb2265a77a2d98a7eaaf596e9791 (đã xóa sau khi
+  chạy); vòng focus 6.09 / 6.79:1 trên sáu loại control; ghi chú múi giờ dạng Mỹ; các lỗi
+  sửa trước vẫn đúng.
+- Board: current_source_digest 07c3ca00; WP5-RECHECK, A2, A3 và A4 có superseded_by
+  WP5-UX-AUDIT-A5.
+- WP5-UX-AUDIT-B5 FIX REQUIRED trên 5e104e1: B4-01 và B4-02 đã đóng; lỗi WCAG 2.2 AA mới
+  B5-01 (Medium, thanh sticky che control đang focus khi Shift+Tab, SC 2.4.11), B5-02
+  (Medium, lựa chọn đang chọn trong bộ chọn nhãn 1.14:1 / 1.28:1, SC 1.4.11) và B5-03
+  (Low, hộp thoại sửa ngày là một điểm dừng focus không có dấu hiệu, SC 2.4.7); không có
+  assertion nào bị nới lỏng; toàn bộ e2e 174/0/16.
+- WP5-UX-AUDIT-A5 PASS trên 5e104e1 / 07c3ca00, không có finding (FIX6 không đổi hành vi
+  phần A; 20316 phép kiểm DST; server giống từng byte). Phần A đã cập nhật.
+- Câu hỏi WP5-UX-Q2 trên board và trong NEXT_ACTION (+vi); brief chờ WP5-UX-A11Y-SWEEP
+  (phương án a).
+- Đang chạy: WP5-UX-CKPT3 (commit checkpoint trước khi hỏi); sau đó board chuyển
+  `blocked` với next_task_id WP5-UX-A11Y-SWEEP (lần chuyển này chưa commit).
+- Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
+  5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
+  handoff, commit nghiệm thu).
 - Tiếp theo: FIX6-FREEZE, WP5-UX-REGATE4, B5 mới và A5 kiểm phần thay đổi (A2, A3, A4 và
   WP5-RECHECK có superseded_by A5), rồi nghiệm thu lại WP5. Quyết định Q1 được ghi vào
   docs/10 trong task tài liệu lúc nghiệm thu.

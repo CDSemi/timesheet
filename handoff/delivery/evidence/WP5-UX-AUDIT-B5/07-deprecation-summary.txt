@@ -1,0 +1,17 @@
+WP5-UX-AUDIT-B5 - deprecated APIs and runtime deprecation warnings (scratch clone at 5e104e1)
+
+1. Static: `npm run lint` (typescript-eslint `no-deprecated` is part of the lint gate) exit 0 (03-lint.txt), before any probe
+   file existed in the clone.
+2. Tracing, with NODE_OPTIONS="--trace-deprecation --pending-deprecation":
+   - npm run lint -- --ignore-pattern audit-b5   exit 0   deprecation lines 0   (07a-deprecation-lint.txt)
+     (the untracked probe folder is ignored because its .ts files are outside the tsconfig projects)
+   - npm test                                    exit 0   deprecation lines 0   82 files / 1821 tests (07b-deprecation-npm-test.txt)
+   - npm run build                               exit 0   deprecation lines 0   (07c-deprecation-build.txt)
+   - probe run 3 (P6, P9; both projects): the runner and the built servers inherited the tracing options; Playwright log
+     0 deprecation lines (40d-probe-run-3-p6-p9-traced.txt); server stderr files 0 bytes on both projects.
+   Count command: grep -c -i "deprecat" <log>  -> 0 for every log above; all six server stderr files of runs 1-3 are 0 bytes.
+3. Browser console of every probe test (warnings and errors recorded by page.on('console'/'pageerror')): only
+   "Failed to load resource: the server responded with a status of 401 (Unauthorized)" from the pre-sign-in session check,
+   once per test; 0 deprecation messages, 0 page errors (49c-browser-console.json.txt).
+4. CSS standards scan: 20-css-scan.txt (the "named colour?" lines are `white-space` false positives of the scanner's
+   word list; there is no colour, shadow, duration, font or url literal outside the token blocks).

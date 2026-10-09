@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Lists "<relative path> <sha256>" for every file under a directory, sorted; prints the list digest.
+# Usage: bash tree-hash.sh <dir> <out-file>
+set -u
+DIR="$1"; OUT="$2"
+cd "$DIR" || exit 2
+find . -type f | sed 's#^\./##' | LC_ALL=C sort | while IFS= read -r f; do
+  h=$(sha256sum "$f"); echo "$f ${h%% *}"
+done > "$OUT"
+echo "files $(wc -l < "$OUT")"
+h=$(sha256sum "$OUT"); echo "list digest ${h%% *}"

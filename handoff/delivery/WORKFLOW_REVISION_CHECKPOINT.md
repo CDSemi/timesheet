@@ -194,7 +194,29 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Reconciled (WP5-UX-RECON1): HEAD = origin/main = 49a3ff0, a handoff-only commit the
   owner made himself after c24d634 (CKPT2 results, board flip, checkpoint); source
   unchanged.
-- Running: WP5-UX-FIX6-FREEZE (committer) on base 49a3ff0.
+- WP5-UX-FIX6-FREEZE done: 5e104e1 on main, pushed (32 files, digest 07c3ca00, 790
+  files).
+- WP5-UX-REGATE4 PASS on 5e104e1 (NAS NOT VERIFIED): digest 07c3ca00 in three forms;
+  verify 1821; e2e 174/0/16; AC-13 x3 and two zones; drill 208/0, image
+  sha256:218dd7cc9e567862182f633914717e4087d2bb2265a77a2d98a7eaaf596e9791 (removed after
+  the run); focus ring 6.09 / 6.79:1 on six controls; zone note US format; earlier fixes
+  hold.
+- Board: current_source_digest 07c3ca00; WP5-RECHECK, A2, A3 and A4 superseded_by
+  WP5-UX-AUDIT-A5.
+- WP5-UX-AUDIT-B5 FIX REQUIRED on 5e104e1: B4-01 and B4-02 closed; new WCAG 2.2 AA
+  findings B5-01 (Medium, sticky bars hide focused controls on Shift+Tab, SC 2.4.11),
+  B5-02 (Medium, label-picker active option 1.14:1 / 1.28:1, SC 1.4.11) and B5-03 (Low,
+  the editor dialog is a focus stop without indicator, SC 2.4.7); no weakened assertion;
+  full e2e 174/0/16.
+- WP5-UX-AUDIT-A5 PASS on 5e104e1 / 07c3ca00, no findings (FIX6 changes no area-A
+  behaviour; 20316 DST checks; server byte-identical). Area A current.
+- Owner question WP5-UX-Q2 on the board and in NEXT_ACTION (+vi); pending brief
+  WP5-UX-A11Y-SWEEP (option a).
+- Running: WP5-UX-CKPT3 (checkpoint commit before the question); afterwards the board is
+  set to `blocked` with next_task_id WP5-UX-A11Y-SWEEP (uncommitted flip).
+- Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
+  07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
+  handoff, accept commit).
 - Next: FIX6-FREEZE, WP5-UX-REGATE4, fresh B5 and an area-A delta A5 (A2, A3, A4 and
   WP5-RECHECK superseded_by A5), then the WP5 re-accept. Docs/10 gets the Q1 owner
   decision in the re-accept docs task.

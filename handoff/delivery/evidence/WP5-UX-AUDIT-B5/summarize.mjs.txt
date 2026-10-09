@@ -1,0 +1,58 @@
+// WP5-UX-AUDIT-B5: prints the summaries of the probe JSON records. Usage: node summarize.mjs <probe-out dir> <file...>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, ...files] = process.argv.slice(2);
+const line = (text) => process.stdout.write(`${text}\n`);
+
+function walkSummary(label, summary) {
+  if (summary === undefined) return;
+  line(`  ${label}: stops=${summary.stops} measured=${summary.measured} focusVisibleFalse=${summary.focusVisibleFalse} noRing=${summary.noRing} minOuter=${summary.minOuter} entirelyHidden=${JSON.stringify(summary.entirelyHidden)}`);
+  line(`    end: ${JSON.stringify(summary.end && { body: summary.end.body, hasFocus: summary.end.hasFocus, cycleTo: summary.end.cycleTo, left: summary.end.left, name: summary.end.name })}`);
+  for (const problem of summary.problems) line(`    problem: ${JSON.stringify(problem)}`);
+}
+
+function names(label, stops) {
+  if (stops === undefined) return;
+  line(`  ${label} order: ${stops.filter((stop) => stop.name !== undefined).map((stop) => `${stop.name}${stop.ring ? ` [${stop.ring.minOuter}|${stop.ring.sidesPresent}]` : ''}`).join(' | ')}`);
+}
+
+for (const file of files) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  line(`== ${file}`);
+  if (file.includes('-p1-')) {
+    line(`  completeDay=${data.completeDay} pendingDay=${data.pendingDay} editOrderAscending=${data.editOrderAscending} editOrder=${data.editOrder.join(',')}`);
+    walkSummary('forward', data.summary.forward);
+    walkSummary('backward', data.summary.backward);
+    walkSummary('batch', data.summary.batch);
+    names('forward', data.forward);
+    names('batch', data.batch);
+  } else if (file.includes('-p2-')) {
+    for (const [key, value] of Object.entries(data)) {
+      if (!key.startsWith('w')) continue;
+      line(` ${key}: day=${value.day} modal=${value.modal} onOpen=${JSON.stringify(value.onOpen)} afterEscape=${JSON.stringify(value.afterEscape)}`);
+      walkSummary('forward', value.summary.forward);
+      walkSummary('backward', value.summary.backward);
+      names('forward', value.forward);
+    }
+  } else if (file.includes('-p3-')) {
+    line(`  trigger: ${JSON.stringify(data.trigger)}`);
+    for (const state of data.list) {
+      line(`  list step ${state.step}: listFocusVisible=${state.listFocusVisible} listBoxShadow=${state.listBoxShadow} active=${state.activeText} rendered=${state.activeRendered} inactive=${state.inactiveText} rendered=${state.inactiveRendered} activeVsInactive=${state.activeVsInactive}`);
+      for (const option of state.options) line(`     option ${option.text} active=${option.active} selected=${option.selected} bg=${option.background} color=${option.color} weight=${option.weight} shadow=${option.boxShadow} outline=${option.outline}`);
+    }
+    line(`  labelReview: chosen=${data.labelReview.chosen} onOpen=${JSON.stringify(data.labelReview.onOpen)} afterEscape=${JSON.stringify(data.labelReview.afterEscape)} stored=${data.labelReview.storedCategory}`);
+    walkSummary('labelReview', data.labelReview.summary);
+    names('labelReview', data.labelReview.walk);
+    line(`  clockOut: onOpen=${JSON.stringify(data.clockOut.onOpen)} afterEscape=${JSON.stringify(data.clockOut.afterEscape)}`);
+    walkSummary('clockOut', data.clockOut.summary);
+    names('clockOut', data.clockOut.walk);
+  } else if (file.includes('-p4-')) {
+    for (const [key, value] of Object.entries(data)) {
+      line(` ${key}`);
+      walkSummary('forward', value.summary);
+    }
+  } else {
+    line(JSON.stringify(data, null, 1));
+  }
+}

@@ -1,0 +1,18 @@
+// WP5-UX-AUDIT-B5: lists the Shift+Tab stops of P8 (sticky bar) with their visibility. Usage: node sticky.mjs <p8 json>...
+import { readFileSync } from 'node:fs';
+
+for (const file of process.argv.slice(2)) {
+  const data = JSON.parse(readFileSync(file, 'utf8'));
+  const rows = data.stickyBackward ?? [];
+  const hidden = rows.filter((row) => row.vis.startsWith('0/'));
+  process.stdout.write(`== ${file.split(/[\\/]/).pop()} scrollPadding=${JSON.stringify(data.scrollPadding)} stops=${rows.length} entirelyHidden=${hidden.length}\n`);
+  for (const row of rows) {
+    process.stdout.write(`  step ${row.step} ${row.name} top=${row.rectTop?.toFixed(2)} bottom=${row.rectBottom?.toFixed(2)} vis=${row.vis} covers=${row.covers.join(',')} scrollY=${row.scrollY} bar=${row.bar?.position} ${row.bar?.top}-${row.bar?.bottom}\n`);
+  }
+  const stop = data.dialogStop ?? {};
+  for (const [width, value] of Object.entries(stop)) {
+    process.stdout.write(`  dialog ${width}: after Shift+Tab from ${value.firstAfterHeading} -> ${value.afterShiftTabFromFirst.tag} "${value.afterShiftTabFromFirst.name}" fv=${value.afterShiftTabFromFirst.fv}; tabIndex=${value.panel.tabIndexProperty} attr=${value.panel.tabindexAttribute} scroll ${value.panel.scrollHeight}/${value.panel.clientHeight}; boxShadow=${value.panel.boxShadow}; outline=${value.panel.outline}; ring sides=${value.panelRing?.sidesPresent} maxChange=${value.panelRing?.maxChange}; ArrowDown scrollTop ${value.scrollBefore}->${value.scrollAfter}\n`);
+  }
+  const date = data.openADay;
+  if (date !== undefined) process.stdout.write(`  open a day (Tab from Clock in): fv=${date.fv} settled=${date.settledBoxShadow} measured sides=${date.ring?.sidesPresent} minOuter=${date.ring?.minOuter}\n`);
+}

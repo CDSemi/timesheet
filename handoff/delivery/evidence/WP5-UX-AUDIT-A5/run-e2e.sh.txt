@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# The area-A e2e specs on both projects, then AC-13 once, in the clean 5e104e1 export.
+source <task>/env.sh
+cd "$T/ex5e1" || exit 2
+SPECS="tests/e2e/day-editor.spec.ts tests/e2e/sharing.spec.ts tests/e2e/isolation.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/pdf-visual.spec.ts tests/e2e/focus-ring.spec.ts"
+{
+  echo '$ playwright test tests/e2e/{day-editor,sharing,isolation,review,submission,timesheet,pdf-visual,focus-ring}.spec.ts (projects desktop and mobile)'
+  node node_modules/@playwright/test/cli.js test $SPECS
+  echo "exit $?"
+} > "$T/raw/04-e2e.txt" 2>&1
+{
+  echo '$ vitest run tests/integration/ac13-two-week.test.ts'
+  node node_modules/vitest/vitest.mjs run tests/integration/ac13-two-week.test.ts
+  echo "exit $?"
+} > "$T/raw/05-ac13.txt" 2>&1
+echo done > "$T/raw/e2e-done.txt"

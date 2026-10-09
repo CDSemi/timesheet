@@ -1,0 +1,23 @@
+// WP5-UX-AUDIT-A5 comparison probes on the edaaa85 build (before FIX6; auditor-owned). The runner is
+// exeda's own @playwright/test CLI and the specs import exeda's own fixtures.
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+export default {
+  testDir: here,
+  testMatch: '**/probeeda-a5-*.spec.ts',
+  outputDir: join(here, '..', 'tmp', 'probeeda-output'),
+  workers: 1,
+  reporter: 'list',
+  forbidOnly: true,
+  timeout: 180_000,
+  expect: { timeout: 10_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'tablet', use: { viewport: { width: 1024, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+};

@@ -1,0 +1,189 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE4 probe (scratch only, never committed): direct observation of B4-01 (the composited focus-ring
+ * colour against the adjacent background, reached by real Tab presses, in both themes) and B4-02 (the zone-note
+ * due time in the US format of the bar). Synthetic data.
+ */
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = process.env.UXREGATE_OUT ?? '';
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-b4.txt'), `${line}\n`);
+}
+
+type Rgba = [number, number, number, number];
+interface Layer {
+  colour: Rgba;
+  inset: boolean;
+  spread: number;
+}
+function parseColour(text: string): Rgba {
+  const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+  const [r = 0, g = 0, b = 0, a = 1] = numbers;
+  return [r, g, b, a];
+}
+function parseLayers(boxShadow: string): Layer[] {
+  if (boxShadow === 'none') return [];
+  return boxShadow.split(/,\s*(?=rgba?\()/).map((layer) => {
+    const lengths = (layer.replace(/rgba?\([^)]*\)/, '').match(/-?\d+(\.\d+)?px/g) ?? []).map(parseFloat);
+    return { colour: parseColour(layer), inset: layer.includes('inset'), spread: lengths[3] ?? 0 };
+  });
+}
+/** The layer that touches the outside edge: the widest outset layer, else the thinnest inset one. */
+function outermost(layers: Layer[]): Layer | undefined {
+  const outset = layers.filter((layer) => !layer.inset);
+  if (outset.length > 0) return outset.reduce((a, b) => (b.spread > a.spread ? b : a));
+  return layers.length === 0 ? undefined : layers.reduce((a, b) => (b.spread < a.spread ? b : a));
+}
+function over(top: Rgba, bottom: Rgba): Rgba {
+  const alpha = top[3] + bottom[3] * (1 - top[3]);
+  if (alpha === 0) return [0, 0, 0, 0];
+  const mix = (index: 0 | 1 | 2) => (top[index] * top[3] + bottom[index] * bottom[3] * (1 - top[3])) / alpha;
+  return [mix(0), mix(1), mix(2), alpha];
+}
+function luminance([r, g, b]: Rgba): number {
+  const channel = (value: number) => {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+function contrast(a: Rgba, b: Rgba): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+function backdropOf(chain: string[]): Rgba {
+  return chain.reduceRight<Rgba>((below, css) => over(parseColour(css), below), [255, 255, 255, 1]);
+}
+function hex([r, g, b]: Rgba): string {
+  return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function isActive(locator: Locator): Promise<boolean> {
+  return locator.evaluate((element) => element === element.ownerDocument.activeElement).catch(() => false);
+}
+
+interface Found {
+  boxShadow: string;
+  focusVisible: boolean;
+  own: string;
+  parents: string[];
+  presses: number;
+}
+
+/** Tab from the top of the document until the target is the active element (real key presses). */
+async function tabTo(page: Page, target: Locator, limit: number): Promise<Found | null> {
+  await page.evaluate("(document.activeElement instanceof HTMLElement) && document.activeElement.blur()");
+  for (let press = 1; press <= limit; press += 1) {
+    await page.keyboard.press('Tab');
+    if (await isActive(target)) {
+      const read = async () => target.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
+      await expect
+        .poll(async () => {
+          const first = await read();
+          await page.waitForTimeout(400);
+          return first === (await read()) && (outermost(parseLayers(first))?.spread ?? 0) > 0;
+        })
+        .toBe(true);
+      const info = await target.evaluate((element) => {
+        const style = (node: Element) => element.ownerDocument.defaultView?.getComputedStyle(node);
+        const parents: string[] = [];
+        for (let node = element.parentElement; node; node = node.parentElement) parents.push(style(node)?.backgroundColor ?? '');
+        return { boxShadow: style(element)?.boxShadow ?? 'none', focusVisible: element.matches(':focus-visible'), own: style(element)?.backgroundColor ?? '', parents };
+      });
+      return { ...info, presses: press };
+    }
+  }
+  return null;
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`B4-01 observation: ring contrast by Tab, ${colorScheme}`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    test.setTimeout(240_000);
+    const project = testInfo.project.name;
+    const phone = project === 'mobile';
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    const free = await employeeSeed.displayedPeriodFreeWorkdays();
+    await employeeSeed.seedCompleteDay(free[0] ?? '');
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.evaluate('window.scrollTo(0, 0)');
+
+    const main = page.getByRole('navigation', { name: 'Main' });
+    const targets: Array<[string, Locator]> = [
+      ['top-bar link (Overtime)', page.locator('.shell-nav .nav-link', { hasText: 'Overtime' })],
+      ['period button (Next period)', page.locator('.period-bar').getByRole('button', { name: 'Next period' })],
+      ['Clock in button', page.getByRole('button', { name: 'Clock in' })],
+      ['Review link', page.locator('.period-bar [data-review-link]')],
+      ['sheet Edit date button', page.getByRole('button', { name: /^Edit \d{4}-\d{2}-\d{2}$/ }).first()],
+      ['phone tab (History)', main.locator('.tab', { hasText: 'History' })],
+    ];
+    const lines: string[] = [];
+    for (const [name, locator] of targets) {
+      const visible = (await locator.count()) > 0 && (await locator.first().isVisible());
+      if (!visible) {
+        lines.push(`${project} ${colorScheme} ${name}: not rendered/visible in this layout (skipped)`);
+        continue;
+      }
+      await locator.first().scrollIntoViewIfNeeded();
+      const found = await tabTo(page, locator.first(), 400);
+      expect(found, `${name} is reachable by Tab`).not.toBeNull();
+      if (found === null) continue;
+      const ring = outermost(parseLayers(found.boxShadow));
+      expect(ring).toBeDefined();
+      if (ring === undefined) continue;
+      // The adjacent background: outside the element for an outset ring, the element's own surface for an inset ring.
+      const chain = ring.inset ? [found.own, ...found.parents] : found.parents;
+      const backdrop = backdropOf(chain);
+      const painted = over(ring.colour, over(backdrop, [255, 255, 255, 1]));
+      const ratio = contrast(painted, backdrop);
+      // Also against the page canvas, for completeness.
+      const ownBackdrop = backdropOf([found.own, ...found.parents]);
+      const ratioOwn = contrast(painted, ownBackdrop);
+      lines.push(
+        `${project} ${colorScheme} ${name}: Tab presses=${found.presses} :focus-visible=${found.focusVisible} box-shadow=${found.boxShadow} outer ring ${hex(painted)} (${ring.inset ? 'inset' : 'outset'}, ${ring.spread}px) on adjacent ${hex(backdrop)} = ${ratio.toFixed(2)}:1 (against own surface ${hex(ownBackdrop)} = ${ratioOwn.toFixed(2)}:1)`,
+      );
+      expect(ratio, `${name} ring against the adjacent background`).toBeGreaterThanOrEqual(3);
+      const slug = name.split(' ')[0] + '-' + (name.includes('phone') ? 'phonetab' : name.includes('top-bar') ? 'topbar' : name.includes('Clock') ? 'clockin' : 'x');
+      if ((name.includes('top-bar') && !phone) || (name.includes('phone') && phone) || (name.includes('Clock') && !phone && colorScheme === 'dark')) {
+        await page.screenshot({ path: screenshotPath(`b4-focus-${slug}-${project}-${colorScheme}-synthetic.png`), animations: 'disabled' });
+      }
+    }
+    // The label picker (a custom trigger) still shows its own inset accent ring.
+    const trigger = page.getByRole('button', { name: /^Label for \d{4}-\d{2}-\d{2}/ }).first();
+    if ((await trigger.count()) > 0 && (await trigger.isVisible())) {
+      await trigger.scrollIntoViewIfNeeded();
+      const found = await tabTo(page, trigger, 400);
+      const ring = found === null ? undefined : outermost(parseLayers(found.boxShadow));
+      lines.push(`${project} ${colorScheme} label picker trigger: reached=${found !== null} box-shadow=${found?.boxShadow} ring spread=${ring?.spread}`);
+      expect(ring?.spread ?? 0).toBeGreaterThan(0);
+    } else {
+      lines.push(`${project} ${colorScheme} label picker trigger: not rendered in this layout`);
+    }
+    for (const line of lines) note(line);
+  });
+}
+
+test('B4-02 observation: zone note due time in the US format of the bar', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+  const zoneNote = page.locator('[data-zone-note]');
+  await expect(zoneNote).toBeVisible();
+  const due = await zoneNote.locator('dd').nth(2).innerText();
+  const dt = await zoneNote.locator('dt').nth(2).innerText();
+  const bar = await page.locator('[data-period-due]').innerText();
+  const text = await zoneNote.innerText();
+  note(`B4-02 ${project}: display zone ${displayZone}; note label ${JSON.stringify(dt)} value ${JSON.stringify(due)}; bar due text ${JSON.stringify(bar)}; full note ${JSON.stringify(text)}`);
+  expect(due).toMatch(/^[A-Z][a-z]{2} \d{2}\/\d{2}\/\d{4}, \d{2}:\d{2}$/);
+  const { currentPayrollDate } = await employeeSeed.today();
+  const sheet = await employeeSeed.call<{ period: { due_at_utc: string } }>('GET', `/api/timesheets/${currentPayrollDate}`);
+  note(`B4-02 ${project}: due_at_utc ${sheet.period.due_at_utc}`);
+  await page.locator('.period-bar').screenshot({ path: screenshotPath(`b4-zone-note-${project}-synthetic.png`), animations: 'disabled' });
+});

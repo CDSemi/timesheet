@@ -1,0 +1,71 @@
+// WP5-UX-AUDIT-A5 scope 1 (delta proof, run time): the zone note's due time across seven periods
+// (three back, the current one, three ahead) in eight browser zones, several of which change their UTC
+// offset between today and a shown due instant (Europe/London and America/New_York leave summer time
+// after the current period; Australia/Sydney, Australia/Lord_Howe, Pacific/Chatham and America/Santiago
+// entered it before). The same probe runs on the edaaa85 build (old text "YYYY-MM-DD HH:MM") and on
+// 5e104e1 (new text "Ddd MM/DD/YYYY, HH:MM"); compare.mjs checks that both show the same local date and
+// time of the same due_at_utc. Synthetic data only.
+import { local } from './common.ts';
+
+export const ZONES = ['Europe/London', 'America/New_York', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'America/Santiago', 'Asia/Ho_Chi_Minh', 'Pacific/Kiritimati'];
+
+export function offsetMinutes(instant: string, zone: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(instant))
+      .map((x) => [x.type, Number(x.value)]),
+  );
+  const ms = Date.parse(instant);
+  return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000) / 60000);
+}
+
+export async function collectZoneNotes(options: { browser: any; builtServer: any; person: any; use: any; signIn: (page: any, account: any, hash: string) => Promise<void>; expect: any }) {
+  const { browser, builtServer, person, use, signIn, expect } = options;
+  const now = new Date().toISOString();
+  const rows: any[] = [];
+  for (const zone of ZONES) {
+    const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: zone, locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false, deviceScaleFactor: use.deviceScaleFactor ?? 1 });
+    const page = await context.newPage();
+    await signIn(page, person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const resolved = await page.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    const read = async (step: number) => {
+      const payroll = await page.locator('.period-bar [data-period-due]').getAttribute('data-period-due');
+      const sheet = await person.api.call('GET', `/api/timesheets/${payroll}`);
+      const due = sheet.period.due_at_utc as string;
+      const note = await page.locator('[data-zone-note]').count();
+      rows.push({
+        zone,
+        resolved,
+        step,
+        payroll_date: payroll,
+        due_at_utc: due,
+        reporting_zone: sheet.reporting_zone,
+        due_words: await page.locator('.period-bar [data-period-due]').innerText(),
+        note_label: note === 1 ? await page.locator('[data-zone-note] dt').nth(2).innerText() : null,
+        note_due: note === 1 ? await page.locator('[data-zone-note] dd').nth(2).innerText() : null,
+        oracle_local: local(due, resolved),
+        offset_now: offsetMinutes(now, resolved),
+        offset_at_due: offsetMinutes(due, resolved),
+      });
+    };
+    const move = async (label: 'Previous period' | 'Next period') => {
+      const before = await page.locator('.period-bar [data-period-due]').getAttribute('data-period-due');
+      await page.getByRole('button', { name: label }).click();
+      await expect(page.locator('.period-bar [data-period-due]')).not.toHaveAttribute('data-period-due', before ?? '');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+    };
+    await read(0);
+    for (let step = -1; step >= -3; step -= 1) {
+      await move('Previous period');
+      await read(step);
+    }
+    for (let i = 0; i < 3; i += 1) await move('Next period');
+    for (let step = 1; step <= 3; step += 1) {
+      await move('Next period');
+      await read(step);
+    }
+    await context.close();
+  }
+  return { now, rows };
+}

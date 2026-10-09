@@ -1,0 +1,1190 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
+import { test as base, expect, type Page } from '@playwright/test';
+import { newPerson, type Person, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B5 independent probes (auditor-written; not part of the reviewed source; kept out of git
+ * through .git/info/exclude of the scratch clone). Synthetic data only. Each project starts its own built
+ * server (dist/) on a fixed port of the task range (desktop PROBE_PORT_BASE, mobile PROBE_PORT_BASE + 1)
+ * with DATA_DIR and DATABASE_PATH inside the task folder, and stops it through the child handle.
+ *
+ * Focus-ring method: real Tab / Shift+Tab presses. At each stop two viewport screenshots are taken
+ * (focused, then the same element blurred; transitions fast-forwarded), decoded here, and compared along
+ * lines perpendicular to each side of the focused element. The ring is the pixel run that changed most;
+ * its rendered (composited) colour is compared with the rendered pixel just outside it (the adjacent
+ * background), with the pixel just inside it, and with what was painted there before focus.
+ * Hard expectations only guard the measurement itself; the findings are in the JSON records.
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const OUT = process.env.PROBE_OUT ?? join(REPO, '..', 'probe-out');
+const WORK = process.env.PROBE_WORK ?? join(REPO, '..', 'probe-work');
+const SHOTS = process.env.PROBE_SHOTS ?? join(REPO, '..', 'probe-shots');
+const PORT_BASE = Number(process.env.PROBE_PORT_BASE ?? '48200');
+const TAG = process.env.PROBE_TAG ?? '5e104e1';
+mkdirSync(OUT, { recursive: true });
+mkdirSync(WORK, { recursive: true });
+mkdirSync(SHOTS, { recursive: true });
+
+function record(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${TAG}-${name}.json`), `${JSON.stringify(data, null, 1)}\n`);
+}
+function shot(name: string): string {
+  if (!name.endsWith('-synthetic.png')) throw new Error('screenshot names end in -synthetic.png');
+  return join(SHOTS, `${TAG}-${name}`);
+}
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+interface ProbeServer {
+  origin: string;
+  employee: Credentials;
+  admin: Credentials;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+const test = base.extend<{ adminSeed: SeedClient; person: (name?: string) => Promise<Person>; signInAs: (who: Credentials, hash?: string) => Promise<void> }, { server: ProbeServer }>({
+  server: [
+    async ({}, use, workerInfo) => {
+      const port = workerInfo.project.name === 'desktop' ? PORT_BASE : PORT_BASE + 1;
+      const work = mkdtempSync(join(WORK, `${TAG}-${workerInfo.project.name}-`));
+      const origin = `http://127.0.0.1:${port}`;
+      const employee = { email: 'employee@example.invalid', password: randomBytes(18).toString('base64url') };
+      const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NODE_ENV: 'development',
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        DATABASE_PATH: join(work, 'timesheet.db'),
+        DATA_DIR: join(work, 'private-data'),
+        APP_ORIGINS: origin,
+        OUTBOUND_MODE: 'capture',
+        MAIL_FROM: 'timesheet-capture@example.invalid',
+        SEED_ADMIN_PASSWORD: admin.password,
+        SEED_EMPLOYEE_PASSWORD: employee.password,
+      };
+      for (const command of ['migrate', 'seed']) {
+        const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+        if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+      }
+      const errFd = openSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stderr.txt`), 'w');
+      const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: ['ignore', 'ignore', errFd] });
+      try {
+        await waitHealthy(origin, child);
+        await use({ origin, employee, admin });
+      } finally {
+        if (child.exitCode === null) {
+          const exited = new Promise((done) => child.once('exit', done));
+          child.kill();
+          await exited;
+        }
+        closeSync(errFd);
+        writeFileSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stopped.json`), `${JSON.stringify({ port, exitCode: child.exitCode, signal: child.signalCode })}\n`);
+      }
+    },
+    { scope: 'worker', timeout: 90_000 },
+  ],
+  baseURL: async ({ server }, use) => {
+    await use(server.origin);
+  },
+  adminSeed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.admin.email, server.admin.password));
+  },
+  person: async ({ server, adminSeed }, use) => {
+    await use((name = 'Synthetic Person') => newPerson(adminSeed, { origin: server.origin } as never, { displayName: name }));
+  },
+  signInAs: async ({ page }, use) => {
+    await use(async (who, hash) => {
+      await page.goto('/');
+      await page.getByLabel('Email').fill(who.email);
+      await page.getByLabel('Password').fill(who.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+      if (hash !== undefined) {
+        await page.goto(`/${hash}`);
+      }
+    });
+  },
+});
+
+test.use({ timezoneId: 'Asia/Ho_Chi_Minh', locale: 'en-US' });
+
+const consoleLines: string[] = [];
+test.beforeEach(async ({ page }) => {
+  page.on('console', (message) => {
+    if (message.type() === 'warning' || message.type() === 'error') consoleLines.push(`${message.type()}: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => consoleLines.push(`pageerror: ${error.message}`));
+});
+test.afterAll(async ({}, workerInfo) => {
+  record(`console-${workerInfo.project.name}`, consoleLines);
+});
+
+/* ---- PNG decoding and colour maths ------------------------------------------------------------- */
+
+type RGB = [number, number, number];
+interface Img {
+  width: number;
+  height: number;
+  data: Buffer;
+  bpp: number;
+}
+
+function decodePng(buf: Buffer): Img {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat: Buffer[] = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos);
+    const type = buf.toString('latin1', pos + 4, pos + 8);
+    const chunk = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === 'IHDR') {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+      bitDepth = chunk[8] ?? 0;
+      colorType = chunk[9] ?? 0;
+      interlace = chunk[12] ?? 0;
+    } else if (type === 'IDAT') idat.push(chunk);
+    else if (type === 'IEND') break;
+    pos += 12 + length;
+  }
+  if (bitDepth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) throw new Error(`unsupported PNG ${bitDepth}/${colorType}/${interlace}`);
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const data = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)] ?? 0;
+    const src = y * (stride + 1) + 1;
+    const dst = y * stride;
+    for (let i = 0; i < stride; i += 1) {
+      const left = i >= bpp ? (data[dst + i - bpp] ?? 0) : 0;
+      const up = y > 0 ? (data[dst - stride + i] ?? 0) : 0;
+      const upLeft = i >= bpp && y > 0 ? (data[dst - stride + i - bpp] ?? 0) : 0;
+      const x = raw[src + i] ?? 0;
+      let value = x;
+      if (filter === 1) value = x + left;
+      else if (filter === 2) value = x + up;
+      else if (filter === 3) value = x + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = x + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      } else if (filter !== 0) throw new Error(`PNG filter ${filter}`);
+      data[dst + i] = value & 0xff;
+    }
+  }
+  return { width, height, data, bpp };
+}
+
+function pixel(img: Img, x: number, y: number): RGB | null {
+  if (x < 0 || y < 0 || x >= img.width || y >= img.height) return null;
+  const o = (y * img.width + x) * img.bpp;
+  return [img.data[o] ?? 0, img.data[o + 1] ?? 0, img.data[o + 2] ?? 0];
+}
+
+function luminance([r, g, b]: RGB): number {
+  const c = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+}
+function contrast(a: RGB, b: RGB): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p) as [number, number];
+  return (x + 0.05) / (y + 0.05);
+}
+const hex = (c: RGB | null) => (c === null ? null : `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/* ---- Ring measurement ---------------------------------------------------------------------------- */
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface SideResult {
+  side: string;
+  at: number;
+  change: number;
+  d: number | null;
+  ring: string | null;
+  under: string | null;
+  outer: string | null;
+  inner: string | null;
+  outerRatio: number | null;
+  innerRatio: number | null;
+  bandCss: number;
+}
+
+function analyseLine(points: Array<{ d: number; f: RGB; u: RGB }>, dsf: number) {
+  let best = -1;
+  let bestCh = 1;
+  points.forEach((point, index) => {
+    const ch = contrast(point.f, point.u);
+    if (ch > bestCh + 1e-9) {
+      bestCh = ch;
+      best = index;
+    }
+  });
+  if (best < 0) return { change: 1, d: null, ring: null, under: null, outer: null, inner: null, outerRatio: null, innerRatio: null, bandCss: 0 };
+  const ring = points[best]?.f as RGB;
+  let start = best;
+  let end = best;
+  while (start - 1 >= 0 && contrast(points[start - 1]?.f as RGB, ring) < 1.15) start -= 1;
+  while (end + 1 < points.length && contrast(points[end + 1]?.f as RGB, ring) < 1.15) end += 1;
+  const outer = points[end + 1]?.f ?? null;
+  const inner = points[start - 1]?.f ?? null;
+  return {
+    change: r2(bestCh),
+    d: r2(points[best]?.d ?? 0),
+    ring: hex(ring),
+    under: hex(points[best]?.u ?? null),
+    outer: hex(outer),
+    inner: hex(inner),
+    outerRatio: outer === null ? null : r2(contrast(ring, outer)),
+    innerRatio: inner === null ? null : r2(contrast(ring, inner)),
+    bandCss: r2((end - start + 1) / dsf),
+  };
+}
+
+function ringOf(focused: Img, unfocused: Img, rect: Rect, dsf: number) {
+  const sides: SideResult[] = [];
+  for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+    let bestSide: SideResult | null = null;
+    const vertical = side === 'top' || side === 'bottom';
+    const inside = Math.max(0.5, Math.min(6, (vertical ? rect.height : rect.width) / 2 - 0.5));
+    for (const at of [0.3, 0.5, 0.7]) {
+      const points: Array<{ d: number; f: RGB; u: RGB }> = [];
+      if (vertical) {
+        const col = Math.floor((rect.x + at * rect.width) * dsf);
+        const edge = side === 'top' ? rect.y : rect.y + rect.height;
+        const sign = side === 'top' ? -1 : 1;
+        const from = Math.floor((edge - sign * inside) * dsf);
+        const to = Math.floor((edge + sign * 8) * dsf);
+        for (let row = from; sign > 0 ? row <= to : row >= to; row += sign) {
+          const f = pixel(focused, col, row);
+          const u = pixel(unfocused, col, row);
+          if (f === null || u === null) continue;
+          points.push({ d: sign * ((row + 0.5) / dsf - edge), f, u });
+        }
+      } else {
+        const row = Math.floor((rect.y + at * rect.height) * dsf);
+        const edge = side === 'left' ? rect.x : rect.x + rect.width;
+        const sign = side === 'left' ? -1 : 1;
+        const from = Math.floor((edge - sign * inside) * dsf);
+        const to = Math.floor((edge + sign * 8) * dsf);
+        for (let col = from; sign > 0 ? col <= to : col >= to; col += sign) {
+          const f = pixel(focused, col, row);
+          const u = pixel(unfocused, col, row);
+          if (f === null || u === null) continue;
+          points.push({ d: sign * ((col + 0.5) / dsf - edge), f, u });
+        }
+      }
+      const result = { side, at, ...analyseLine(points, dsf) };
+      if (bestSide === null || result.change > bestSide.change) bestSide = result;
+    }
+    if (bestSide !== null) sides.push(bestSide);
+  }
+  const present = sides.filter((side) => side.change >= 3);
+  // A side whose outer pixel lies beyond the viewport image (the ring touches the screen edge) has no
+  // adjacent colour to measure; it counts as present but not in the minimum.
+  const outerRatios = present.filter((side) => side.outerRatio !== null).map((side) => side.outerRatio ?? 0);
+  const innerRatios = present.filter((side) => side.innerRatio !== null).map((side) => side.innerRatio ?? 0);
+  return {
+    sidesPresent: present.length,
+    minOuter: outerRatios.length === 0 ? null : r2(Math.min(...outerRatios)),
+    minInner: innerRatios.length === 0 ? null : r2(Math.min(...innerRatios)),
+    minChange: present.length === 0 ? null : r2(Math.min(...present.map((side) => side.change))),
+    maxChange: sides.length === 0 ? null : r2(Math.max(...sides.map((side) => side.change))),
+    sides,
+  };
+}
+
+interface StopInfo {
+  body?: boolean;
+  hasFocus?: boolean;
+  id?: number;
+  tag?: string;
+  type?: string | null;
+  role?: string | null;
+  name?: string;
+  focusVisible?: boolean;
+  boxShadow?: string;
+  outline?: string;
+  rect?: Rect;
+  inViewport?: boolean;
+  pts?: number;
+  vis?: number;
+  covers?: string[];
+  inDialog?: string | null;
+  inPanel?: boolean;
+  dataDay?: string | null;
+  scrollY?: number;
+}
+
+async function stopInfo(page: Page): Promise<StopInfo> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __ids?: WeakMap<Element, number>; __next?: number };
+    w.__ids ??= new WeakMap();
+    w.__next ??= 0;
+    const a = document.activeElement as HTMLElement | null;
+    if (a === null || a === document.body || a === document.documentElement) return { body: true, hasFocus: document.hasFocus() };
+    let id = w.__ids.get(a);
+    if (id === undefined) {
+      w.__next += 1;
+      id = w.__next;
+      w.__ids.set(a, id);
+    }
+    const r = a.getBoundingClientRect();
+    const cs = getComputedStyle(a);
+    const labelled = a.getAttribute('aria-labelledby');
+    const labels = (a as HTMLInputElement).labels;
+    const name = (
+      a.getAttribute('aria-label') ??
+      (labelled !== null ? labelled.split(' ').map((part) => document.getElementById(part)?.textContent ?? '').join(' ') : null) ??
+      (labels !== null && labels !== undefined && labels.length > 0 ? (labels[0]?.textContent ?? '') : null) ??
+      a.innerText ??
+      ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+    let pts = 0;
+    let vis = 0;
+    const covers = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) {
+        const x = r.left + 1 + ((r.width - 2) * (i + 0.5)) / 5;
+        const y = r.top + 1 + ((r.height - 2) * (j + 0.5)) / 5;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+        pts += 1;
+        const hit = document.elementFromPoint(x, y);
+        const inLabel = labels !== null && labels !== undefined && [...labels].some((label) => hit !== null && label.contains(hit));
+        if (hit !== null && (hit === a || a.contains(hit) || inLabel)) vis += 1;
+        else if (hit !== null) covers.add(`${hit.tagName}.${typeof hit.className === 'string' ? hit.className.split(' ')[0] : ''}`);
+      }
+    }
+    return {
+      id,
+      tag: a.tagName,
+      type: a.getAttribute('type'),
+      role: a.getAttribute('role'),
+      name,
+      focusVisible: a.matches(':focus-visible'),
+      boxShadow: cs.boxShadow,
+      outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+      rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+      inViewport: r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth,
+      pts,
+      vis,
+      covers: [...covers],
+      inDialog: a.closest('dialog')?.getAttribute('aria-labelledby') ?? null,
+      inPanel: a.closest('.day-panel') !== null,
+      dataDay: a.closest('[data-day]')?.getAttribute('data-day') ?? null,
+      scrollY: Math.round(scrollY),
+    };
+  });
+}
+
+async function measureRing(page: Page, info: StopInfo, dsf: number) {
+  if (info.rect === undefined) return null;
+  const focused = decodePng(await page.screenshot({ animations: 'disabled' }));
+  await page.evaluate(() => {
+    const a = document.activeElement as HTMLElement;
+    (window as unknown as { __probeEl: HTMLElement }).__probeEl = a;
+    a.blur();
+  });
+  const unfocused = decodePng(await page.screenshot({ animations: 'disabled' }));
+  const back = await page.evaluate(() => {
+    const el = (window as unknown as { __probeEl: HTMLElement }).__probeEl;
+    el.focus({ preventScroll: true });
+    return document.activeElement === el;
+  });
+  return { refocused: back, ...ringOf(focused, unfocused, info.rect, dsf) };
+}
+
+interface WalkOptions {
+  back?: boolean;
+  max: number;
+  measure?: boolean;
+  leaveWhen?: (info: StopInfo) => boolean;
+  /** Screenshot name prefix for stops that are entirely covered or show no ring. */
+  label?: string;
+}
+
+/** Parks the pointer on a non-interactive spot of the sticky top bar, so no control is hovered while scrolling. */
+async function parkPointer(page: Page) {
+  const spot = await page.evaluate(() => {
+    const bar = document.querySelector('.shell-bar')?.getBoundingClientRect();
+    if (bar === undefined) return null;
+    for (const fraction of [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65]) {
+      const x = bar.left + bar.width * fraction;
+      const y = bar.top + 3;
+      const hit = document.elementFromPoint(x, y);
+      if (hit !== null && hit.closest('button, a, input, select, textarea, label, [tabindex]') === null) return { x, y, hit: `${hit.tagName}.${typeof hit.className === 'string' ? hit.className.split(' ')[0] : ''}` };
+    }
+    return null;
+  });
+  if (spot !== null) await page.mouse.move(spot.x, spot.y);
+  return spot;
+}
+
+async function walk(page: Page, dsf: number, options: WalkOptions) {
+  let shots = 0;
+  const stops: Array<Record<string, unknown>> = [];
+  const seen = new Set<number>();
+  let lastId: number | undefined;
+  let repeats = 0;
+  for (let index = 0; index < options.max; index += 1) {
+    await page.keyboard.press(options.back === true ? 'Shift+Tab' : 'Tab');
+    // Let the shared 300 ms transition finish, so the recorded box-shadow is the settled ring.
+    await page.waitForTimeout(380);
+    const info = await stopInfo(page);
+    if (info.body === true) {
+      stops.push({ index, body: true, hasFocus: info.hasFocus });
+      break;
+    }
+    // A date input keeps focus while Tab moves through its month, day and year segments.
+    if (info.id !== undefined && info.id === lastId && repeats < 5) {
+      repeats += 1;
+      continue;
+    }
+    repeats = 0;
+    lastId = info.id;
+    if (info.id !== undefined && seen.has(info.id)) {
+      stops.push({ index, cycleTo: info.id, name: info.name });
+      break;
+    }
+    if (info.id !== undefined) seen.add(info.id);
+    if (options.leaveWhen?.(info) === true) {
+      stops.push({ index, left: true, name: info.name, tag: info.tag });
+      break;
+    }
+    if (options.label !== undefined && shots < 6 && info.vis === 0) {
+      shots += 1;
+      await page.screenshot({ path: shot(`${options.label}-hidden-${index}-${String(info.name).replace(/[^A-Za-z0-9]+/g, '-').slice(0, 30)}-synthetic.png`) });
+    }
+    const ring = options.measure === false ? null : await measureRing(page, info, dsf);
+    stops.push({ index, ...info, ring });
+  }
+  return stops;
+}
+
+function summarise(stops: Array<Record<string, unknown>>) {
+  const measured = stops.filter((stop) => stop.ring !== undefined && stop.ring !== null) as Array<Record<string, unknown> & { ring: ReturnType<typeof ringOf> & { refocused: boolean }; focusVisible: boolean; inViewport: boolean; vis: number; pts: number; name: string; tag: string }>;
+  const outer = measured.map((stop) => stop.ring.minOuter).filter((value): value is number => value !== null);
+  const problems = measured
+    .filter((stop) => !stop.focusVisible || stop.ring.sidesPresent < 4 || (stop.ring.minOuter ?? 0) < 3 || stop.vis === 0 || stop.vis < stop.pts || !stop.inViewport)
+    .map((stop) => ({
+      name: stop.name,
+      tag: stop.tag,
+      focusVisible: stop.focusVisible,
+      sidesPresent: stop.ring.sidesPresent,
+      minOuter: stop.ring.minOuter,
+      minInner: stop.ring.minInner,
+      vis: `${stop.vis}/${stop.pts}`,
+      inViewport: stop.inViewport,
+      covers: stop.covers,
+      absentSides: stop.ring.sides.filter((side) => side.change < 3).map((side) => `${side.side}:${side.change}`),
+    }));
+  return {
+    stops: stops.length,
+    measured: measured.length,
+    focusVisibleFalse: measured.filter((stop) => !stop.focusVisible).length,
+    noRing: measured.filter((stop) => stop.ring.sidesPresent === 0).length,
+    minOuter: outer.length === 0 ? null : Math.min(...outer),
+    entirelyHidden: measured.filter((stop) => stop.vis === 0).map((stop) => stop.name),
+    problems,
+    end: stops.at(-1),
+  };
+}
+
+function compact(stops: Array<Record<string, unknown>>) {
+  return stops.map((stop) => {
+    const ring = stop.ring as (ReturnType<typeof ringOf> & { refocused: boolean }) | null | undefined;
+    return {
+      index: stop.index,
+      name: stop.name,
+      tag: stop.tag,
+      role: stop.role,
+      fv: stop.focusVisible,
+      vis: stop.vis === undefined ? undefined : `${String(stop.vis)}/${String(stop.pts)}`,
+      inViewport: stop.inViewport,
+      covers: stop.covers,
+      boxShadow: stop.boxShadow,
+      rect: stop.rect,
+      day: stop.dataDay,
+      dialog: stop.inDialog,
+      panel: stop.inPanel,
+      ring:
+        ring === null || ring === undefined
+          ? null
+          : {
+              refocused: ring.refocused,
+              sidesPresent: ring.sidesPresent,
+              minOuter: ring.minOuter,
+              minInner: ring.minInner,
+              minChange: ring.minChange,
+              sides: ring.sides.map((side) => `${side.side} ch=${side.change} d=${side.d} ring=${side.ring} outer=${side.outer}(${side.outerRatio}) inner=${side.inner}(${side.innerRatio}) under=${side.under} band=${side.bandCss}`),
+            },
+      body: stop.body,
+      hasFocus: stop.hasFocus,
+      cycleTo: stop.cycleTo,
+      left: stop.left,
+    };
+  });
+}
+
+async function freshStart(page: Page, hash: string) {
+  await page.goto(`/${hash}`);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+}
+
+async function seeded(person: (name?: string) => Promise<Person>) {
+  const someone = await person();
+  const days = await someone.api.displayedPeriodFreeWorkdays();
+  const [completeDay = '', pendingDay = ''] = days;
+  expect(completeDay, 'a past free workday').not.toBe('');
+  await someone.api.seedCompleteDay(completeDay);
+  if (pendingDay !== '') await someone.api.seedUnconfirmedBreaksDay(pendingDay);
+  return { someone, completeDay, pendingDay };
+}
+
+const SCHEMES = ['light', 'dark'] as const;
+
+/* ---- P1: Tab walks over the Timesheet page (forward, backward, batch mode) ------------------------- */
+
+for (const scheme of SCHEMES) {
+  test(`P1 timesheet tab walk ${scheme}`, async ({ page, person, signInAs }, testInfo) => {
+    const project = testInfo.project.name;
+    const dsf = project === 'mobile' ? 2 : 1;
+    await page.emulateMedia({ colorScheme: scheme });
+    const { someone, completeDay, pendingDay } = await seeded(person);
+    await signInAs(someone.account);
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await parkPointer(page);
+    const forward = await walk(page, dsf, { max: 140, label: `p1-${project}-${scheme}-fwd` });
+    await page.screenshot({ path: shot(`p1-${project}-${scheme}-end-of-forward-synthetic.png`) });
+    const backward = await walk(page, dsf, { back: true, max: 140, label: `p1-${project}-${scheme}-back` });
+    // Batch mode: its selection boxes and bar.
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await parkPointer(page);
+    await page.getByRole('button', { name: 'Change several days' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+    const batch = await walk(page, dsf, { max: 80, label: `p1-${project}-${scheme}-batch` });
+    const editOrder = forward.filter((stop) => typeof stop.name === 'string' && /^(Edit|View) \d{4}-\d{2}-\d{2}$/.test(stop.name)).map((stop) => String(stop.name).slice(5));
+    record(`p1-${project}-${scheme}`, {
+      completeDay,
+      pendingDay,
+      editOrder,
+      editOrderAscending: editOrder.every((date, index) => index === 0 || date > (editOrder[index - 1] ?? '')),
+      summary: { forward: summarise(forward), backward: summarise(backward), batch: summarise(batch) },
+      forward: compact(forward),
+      backward: compact(backward),
+      batch: compact(batch),
+    });
+  });
+}
+
+/* ---- P2: the day editor (side panel 1280, modal 1024 on desktop; bottom sheet on the phone) -------- */
+
+for (const scheme of SCHEMES) {
+  test(`P2 day editor tab walk ${scheme}`, async ({ page, person, signInAs }, testInfo) => {
+    const project = testInfo.project.name;
+    const dsf = project === 'mobile' ? 2 : 1;
+    await page.emulateMedia({ colorScheme: scheme });
+    const { someone, completeDay, pendingDay } = await seeded(person);
+    await signInAs(someone.account);
+    const widths = project === 'mobile' ? [390] : [1280, 1024];
+    const result: Record<string, unknown> = { completeDay, pendingDay };
+    for (const width of widths) {
+      if (project === 'desktop') await page.setViewportSize({ width, height: 800 });
+      await freshStart(page, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await parkPointer(page);
+      for (const day of [pendingDay === '' ? completeDay : pendingDay]) {
+        const dateButton = page.getByRole('button', { name: `Edit ${day}`, exact: true });
+        await dateButton.focus();
+        await page.keyboard.press('Enter');
+        const editor = page.getByRole('dialog', { name: /Day editor/ });
+        await expect(editor).toBeVisible();
+        await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+        await page.waitForTimeout(300);
+        const onOpen = await stopInfo(page);
+        const modal = await editor.evaluate((element) => element.matches(':modal'));
+        const forward = await walk(page, dsf, { max: 70, leaveWhen: (info) => info.inPanel !== true, label: `p2-${project}-${width}-${scheme}-fwd` });
+        await page.screenshot({ path: shot(`p2-${project}-${width}-${scheme}-editor-forward-end-synthetic.png`) });
+        const backward = await walk(page, dsf, { back: true, max: 70, leaveWhen: (info) => info.inPanel !== true, label: `p2-${project}-${width}-${scheme}-back` });
+        // Escape closes the editor wherever focus is; focus returns to the day's date button.
+        const inEditor = await page.evaluate(() => document.activeElement?.closest('.day-panel') !== null);
+        if (!inEditor) await editor.getByRole('button', { name: 'Close' }).focus();
+        await page.keyboard.press('Escape');
+        await expect(editor).toHaveCount(0);
+        const afterEscape = await stopInfo(page);
+        result[`w${width}`] = {
+          day,
+          modal,
+          onOpen: { name: onOpen.name, tag: onOpen.tag, inPanel: onOpen.inPanel },
+          afterEscape: { name: afterEscape.name, tag: afterEscape.tag, focusVisible: afterEscape.focusVisible },
+          summary: { forward: summarise(forward), backward: summarise(backward) },
+          forward: compact(forward),
+          backward: compact(backward),
+        };
+      }
+    }
+    record(`p2-${project}-${scheme}`, result);
+  });
+}
+
+/* ---- P3: dialogs (Clock out) and the label picker with its review dialog -------------------------- */
+
+for (const scheme of SCHEMES) {
+  test(`P3 dialogs and label picker ${scheme}`, async ({ page, person, signInAs }, testInfo) => {
+    const project = testInfo.project.name;
+    const dsf = project === 'mobile' ? 2 : 1;
+    await page.emulateMedia({ colorScheme: scheme });
+    const { someone, completeDay } = await seeded(person);
+    await signInAs(someone.account);
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await parkPointer(page);
+    const result: Record<string, unknown> = { completeDay };
+
+    // The label picker: trigger ring, then the open list and its active option, moved by the arrows.
+    const trigger = page.getByRole('button', { name: new RegExp(`^Label for ${completeDay}`) });
+    await trigger.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    const triggerInfo = await stopInfo(page);
+    result.trigger = compact([{ ...triggerInfo, ring: await measureRing(page, triggerInfo, dsf) }]);
+    await page.keyboard.press('Enter');
+    const list = page.getByRole('listbox', { name: `Label for ${completeDay}` });
+    await expect(list).toBeVisible();
+    await expect(list).toBeFocused();
+    const listStates: unknown[] = [];
+    for (let step = 0; step < 3; step += 1) {
+      await page.waitForTimeout(350);
+      const state = await list.evaluate((element) => {
+        const activeId = element.getAttribute('aria-activedescendant');
+        const options = [...element.querySelectorAll('[role="option"]')].map((option) => {
+          const cs = getComputedStyle(option);
+          const r = option.getBoundingClientRect();
+          return { id: option.id, text: option.textContent, active: option.id === activeId, selected: option.getAttribute('aria-selected'), background: cs.backgroundColor, color: cs.color, weight: cs.fontWeight, boxShadow: cs.boxShadow, outline: `${cs.outlineStyle} ${cs.outlineWidth}`, rect: { x: r.left, y: r.top, width: r.width, height: r.height } };
+        });
+        const ls = getComputedStyle(element);
+        return { listFocusVisible: element.matches(':focus-visible'), listBoxShadow: ls.boxShadow, listBackground: ls.backgroundColor, options };
+      });
+      // Rendered colours: the centre-left padding pixel of the active option and of an inactive option.
+      const png = decodePng(await page.screenshot({ animations: 'disabled' }));
+      const sample = (rect: Rect) => pixel(png, Math.floor((rect.x + 4) * dsf), Math.floor((rect.y + rect.height / 2) * dsf));
+      const active = state.options.find((option) => option.active);
+      const inactive = state.options.find((option) => !option.active && option.selected !== 'true');
+      const activePx = active === undefined ? null : sample(active.rect);
+      const inactivePx = inactive === undefined ? null : sample(inactive.rect);
+      listStates.push({
+        step,
+        ...state,
+        activeText: active?.text,
+        activeRendered: hex(activePx),
+        inactiveText: inactive?.text,
+        inactiveRendered: hex(inactivePx),
+        activeVsInactive: activePx !== null && inactivePx !== null ? r2(contrast(activePx, inactivePx)) : null,
+      });
+      await page.screenshot({ path: shot(`p3-${project}-${scheme}-label-list-step${step}-synthetic.png`) });
+      await page.keyboard.press('ArrowDown');
+    }
+    result.list = listStates;
+    // Pick "Vacation" on a day with recorded work: the review dialog asks first; Escape cancels it.
+    await page.keyboard.press('Home');
+    for (let step = 0; step < 2; step += 1) await page.keyboard.press('ArrowDown');
+    const chosen = await list.evaluate((element) => document.getElementById(element.getAttribute('aria-activedescendant') ?? '')?.textContent);
+    await page.keyboard.press('Enter');
+    const reviewDialog = page.locator('dialog[open]');
+    await expect(reviewDialog).toHaveCount(1);
+    await page.waitForTimeout(300);
+    const reviewOpen = await stopInfo(page);
+    const reviewWalk = await walk(page, dsf, { max: 20 });
+    await page.screenshot({ path: shot(`p3-${project}-${scheme}-label-review-synthetic.png`) });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    const afterReview = await stopInfo(page);
+    const stored = await someone.api.dayView(completeDay);
+    result.labelReview = { chosen, onOpen: { name: reviewOpen.name, dialog: reviewOpen.inDialog }, summary: summarise(reviewWalk), walk: compact(reviewWalk), afterEscape: { name: afterReview.name, focusVisible: afterReview.focusVisible }, storedCategory: (stored as unknown as { category?: string }).category };
+
+    // Clock in, then Clock out opens the break confirmation dialog: walk its controls.
+    await page.getByRole('button', { name: 'Clock in' }).focus();
+    await page.keyboard.press('Enter');
+    const clockOut = page.getByRole('button', { name: 'Clock out' });
+    await expect(clockOut).toBeVisible();
+    await page.waitForTimeout(1500);
+    await clockOut.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Clock out' });
+    await expect(dialog).toBeVisible();
+    await page.waitForTimeout(300);
+    const dialogOpen = await stopInfo(page);
+    const dialogWalk = await walk(page, dsf, { max: 40 });
+    await page.screenshot({ path: shot(`p3-${project}-${scheme}-clock-out-dialog-synthetic.png`) });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    const afterDialog = await stopInfo(page);
+    result.clockOut = { onOpen: { name: dialogOpen.name, dialog: dialogOpen.inDialog }, summary: summarise(dialogWalk), walk: compact(dialogWalk), afterEscape: { name: afterDialog.name, focusVisible: afterDialog.focusVisible } };
+    record(`p3-${project}-${scheme}`, result);
+  });
+}
+
+/* ---- P4: other screens (Review, Overtime, History, Settings) ------------------------------------- */
+
+for (const scheme of SCHEMES) {
+  test(`P4 other screens tab walk ${scheme}`, async ({ page, person, signInAs }, testInfo) => {
+    const project = testInfo.project.name;
+    const dsf = project === 'mobile' ? 2 : 1;
+    await page.emulateMedia({ colorScheme: scheme });
+    const { someone } = await seeded(person);
+    await signInAs(someone.account);
+    const result: Record<string, unknown> = {};
+    for (const hash of [`#/review/${someone.payrollDate}`, '#/ot', '#/history', '#/settings']) {
+      await freshStart(page, hash);
+      await page.waitForTimeout(800);
+      await parkPointer(page);
+      const forward = await walk(page, dsf, { max: 120 });
+      result[hash] = { summary: summarise(forward), walk: compact(forward) };
+    }
+    record(`p4-${project}-${scheme}`, result);
+  });
+}
+
+/* ---- P5: phone reflow and 44px at 390/375/360/320 (default, batch, editor, Review, More) ----------- */
+
+test('P5 phone reflow and targets', async ({ page, person, signInAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths');
+  const { someone, completeDay } = await seeded(person);
+  await signInAs(someone.account);
+  const result: Record<string, unknown> = {};
+  const measure = () =>
+    page.evaluate(() => {
+      const controls = [...document.querySelectorAll<HTMLElement>('button, a[href], input:not([type="hidden"]), select, textarea, label.pick, label.inline, [role="option"], [tabindex="0"]')];
+      const visible = controls.filter((element) => {
+        const r = element.getBoundingClientRect();
+        const cs = getComputedStyle(element);
+        return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && element.closest('[inert]') === null;
+      });
+      const small = visible
+        .filter((element) => {
+          if (element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio')) {
+            const label = element.closest('label');
+            const box = (label ?? element).getBoundingClientRect();
+            return box.width < 44 || box.height < 44;
+          }
+          const r = element.getBoundingClientRect();
+          return r.width < 43.5 || r.height < 43.5;
+        })
+        .map((element) => {
+          const r = element.getBoundingClientRect();
+          return `${element.tagName} ${(element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+        });
+      const overflow = [...document.querySelectorAll<HTMLElement>('body *')]
+        .filter((element) => {
+          const r = element.getBoundingClientRect();
+          const cs = getComputedStyle(element);
+          if (cs.clipPath !== 'none' || cs.position === 'fixed' || r.width === 0) return false;
+          return r.right > innerWidth + 0.5 || r.left < -0.5;
+        })
+        .map((element) => `${element.tagName}.${typeof element.className === 'string' ? element.className.split(' ')[0] : ''}`)
+        .slice(0, 10);
+      return { scroll: document.documentElement.scrollWidth, inner: innerWidth, controls: visible.length, small, overflow };
+    });
+  for (const width of [390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const states: Record<string, unknown> = {};
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    states.default = await measure();
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
+    states.batch = await measure();
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('button', { name: `Edit ${completeDay}`, exact: true }).click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    states.editor = await measure();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: new RegExp(`^Label for ${completeDay}`) }).click();
+    await expect(page.getByRole('listbox')).toBeVisible();
+    states.labelList = await measure();
+    await page.keyboard.press('Escape');
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+    states.more = await measure();
+    await page.keyboard.press('Escape');
+    await freshStart(page, `#/review/${someone.payrollDate}`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    states.review = await measure();
+    if (width === 320) await page.screenshot({ path: shot(`p5-w320-review-synthetic.png`), fullPage: true });
+    result[`w${width}`] = states;
+  }
+  record('p5-reflow', result);
+});
+
+/* ---- P6: zone note (B4-02), names, check words and shapes, text contrast ------------------------ */
+
+test('P6 zone note, names, status words, text contrast', async ({ page, person, signInAs }, testInfo) => {
+  const project = testInfo.project.name;
+  const { someone, completeDay, pendingDay } = await seeded(person);
+  await signInAs(someone.account);
+  await freshStart(page, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const sheet = await someone.api.call<{ period: { due_at_utc: string; due_local_date: string; due_local_time: string }; reporting_zone: string }>('GET', `/api/timesheets/${someone.payrollDate}`);
+  const zone = await page.evaluate(() => ({
+    viewing: document.querySelector('[data-period-zone]')?.textContent,
+    due: document.querySelector('[data-period-due]')?.textContent,
+    noteTerms: [...document.querySelectorAll('[data-zone-note] dt')].map((element) => element.textContent),
+    noteValues: [...document.querySelectorAll('[data-zone-note] dd')].map((element) => element.textContent),
+    hint: document.querySelector('[data-zone-note] .hint')?.textContent,
+    periodName: document.querySelector('.period-name')?.textContent,
+    payroll: document.querySelector('.period-meta b')?.textContent,
+  }));
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(sheet.period.due_at_utc))
+      .map((part) => [part.type, part.value]),
+  );
+  const expectedDue = `${parts.weekday} ${parts.month}/${parts.day}/${parts.year}, ${parts.hour}:${parts.minute}`;
+  await page.locator('.period-bar').screenshot({ path: shot(`p6-${project}-zone-note-synthetic.png`) });
+  // Names of the 14 day elements and their Edit buttons, the Check words and shapes.
+  const names = await page.locator('[data-day]').evaluateAll((elements) => elements.map((element) => element.getAttribute('aria-label')));
+  const checks = await page.locator('[data-check]').evaluateAll((elements) =>
+    elements.map((element) => ({ key: element.getAttribute('data-check'), text: (element as HTMLElement).innerText.trim(), shape: element.querySelector('.shape') !== null })),
+  );
+  // Rendered text contrast (computed colours over the composited ancestor backgrounds), both themes.
+  const textContrast: Record<string, unknown> = {};
+  for (const scheme of SCHEMES) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(400);
+    textContrast[scheme] = await page.evaluate(() => {
+      const parse = (text: string): [number, number, number, number] => {
+        const n = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '0 0 0 0').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+        return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
+      };
+      const over = (top: number[], bottom: number[]) => {
+        const a = (top[3] ?? 1) + (bottom[3] ?? 1) * (1 - (top[3] ?? 1));
+        const mix = (i: number) => ((top[i] ?? 0) * (top[3] ?? 1) + (bottom[i] ?? 0) * (bottom[3] ?? 1) * (1 - (top[3] ?? 1))) / (a === 0 ? 1 : a);
+        return [mix(0), mix(1), mix(2), a];
+      };
+      const lum = (c: number[]) => {
+        const f = (v: number) => {
+          const s = v / 255;
+          return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * f(c[0] ?? 0) + 0.7152 * f(c[1] ?? 0) + 0.0722 * f(c[2] ?? 0);
+      };
+      const ratio = (a: number[], b: number[]) => {
+        const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return ((x ?? 0) + 0.05) / ((y ?? 0) + 0.05);
+      };
+      const rows: Array<{ text: string; ratio: number; size: number; weight: number }> = [];
+      for (const element of document.querySelectorAll<HTMLElement>('main *, header *, nav *')) {
+        const own = [...element.childNodes].some((node) => node.nodeType === 3 && (node.textContent ?? '').trim() !== '');
+        if (!own) continue;
+        const r = element.getBoundingClientRect();
+        const cs = getComputedStyle(element);
+        if (r.width === 0 || r.height === 0 || cs.visibility === 'hidden' || cs.clipPath !== 'none') continue;
+        const chain: string[] = [];
+        for (let node: HTMLElement | null = element; node !== null; node = node.parentElement) chain.push(getComputedStyle(node).backgroundColor);
+        const background = chain.reduceRight<number[]>((below, css) => over(parse(css), below), [255, 255, 255, 1]);
+        const fg = over(parse(cs.color), background);
+        rows.push({ text: (element.textContent ?? '').trim().slice(0, 30), ratio: Math.round(ratio(fg, background) * 100) / 100, size: parseFloat(cs.fontSize), weight: Number(cs.fontWeight) });
+      }
+      const under = rows.filter((row) => row.ratio < 4.5 && !(row.size >= 24 || (row.size >= 18.66 && row.weight >= 700)));
+      return { nodes: rows.length, min: Math.min(...rows.map((row) => row.ratio)), under };
+    });
+  }
+  record(`p6-${project}`, {
+    completeDay,
+    pendingDay,
+    due: { utc: sheet.period.due_at_utc, local: `${sheet.period.due_local_date} ${sheet.period.due_local_time}`, reportingZone: sheet.reporting_zone, expectedDisplayZoneText: expectedDue },
+    zone,
+    dueMatches: zone.noteValues[2] === expectedDue,
+    names,
+    checks,
+    textContrast,
+  });
+});
+
+/* ---- P7: hover over a focused control (desktop; a carried risk, not in the ring rule) -------------- */
+
+test('P7 hover over a keyboard-focused button', async ({ page, person, signInAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'pointer hover');
+  const { someone, completeDay } = await seeded(person);
+  await signInAs(someone.account);
+  await freshStart(page, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const out: Record<string, unknown> = {};
+  for (const [label, locator] of [
+    ['Clock in', page.getByRole('button', { name: 'Clock in' })],
+    ['sheet date', page.getByRole('button', { name: `Edit ${completeDay}`, exact: true })],
+    ['label trigger', page.getByRole('button', { name: new RegExp(`^Label for ${completeDay}`) })],
+  ] as const) {
+    await page.mouse.move(2, 798);
+    await locator.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    const before = await locator.evaluate((element) => ({ fv: element.matches(':focus-visible'), shadow: getComputedStyle(element).boxShadow }));
+    const box = await locator.boundingBox();
+    if (box !== null) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(400);
+    const hovered = await locator.evaluate((element) => ({ fv: element.matches(':focus-visible'), hover: element.matches(':hover'), shadow: getComputedStyle(element).boxShadow }));
+    out[label] = { before, hovered };
+  }
+  record('p7-hover-desktop', out);
+});
+
+/* ---- P8: targeted reproductions (date input ring, editor dialog stop, sticky bars, label list) ------- */
+
+for (const scheme of SCHEMES) {
+  test(`P8 targeted reproductions ${scheme}`, async ({ page, person, signInAs }, testInfo) => {
+    const project = testInfo.project.name;
+    const dsf = project === 'mobile' ? 2 : 1;
+    await page.emulateMedia({ colorScheme: scheme });
+    const { someone, completeDay, pendingDay } = await seeded(person);
+    await signInAs(someone.account);
+    const result: Record<string, unknown> = { completeDay, pendingDay };
+
+    // A. "Open a day" (a date input) reached by Tab from "Clock in": settled ring, rendered.
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    result.pointer = await parkPointer(page);
+    await page.getByRole('button', { name: 'Clock in' }).focus();
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(500);
+    const dateInfo = await stopInfo(page);
+    const dateFocused = await page.screenshot({ animations: 'disabled' });
+    const box = dateInfo.rect;
+    if (box !== undefined) {
+      await page.screenshot({ path: shot(`p8-${project}-${scheme}-open-a-day-focused-synthetic.png`), clip: { x: Math.max(0, box.x - 12), y: Math.max(0, box.y - 12), width: box.width + 24, height: box.height + 24 } });
+    }
+    const dateMeasured = await measureRing(page, dateInfo, dsf);
+    result.openADay = { name: dateInfo.name, fv: dateInfo.focusVisible, settledBoxShadow: dateInfo.boxShadow, rect: dateInfo.rect, ring: dateMeasured, focusedBytes: dateFocused.length };
+
+    // B. The day editor: Shift+Tab from Close lands on the <dialog> itself? Is anything painted?
+    const widths = project === 'mobile' ? [390] : [1280, 1024];
+    const dialogStops: Record<string, unknown> = {};
+    for (const width of widths) {
+      if (project === 'desktop') await page.setViewportSize({ width, height: 800 });
+      await freshStart(page, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await parkPointer(page);
+      await page.getByRole('button', { name: `Edit ${pendingDay}`, exact: true }).focus();
+      await page.keyboard.press('Enter');
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(380);
+      const first = await stopInfo(page);
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(380);
+      const before = await stopInfo(page);
+      const panel = await editor.evaluate((element) => ({
+        tabIndexProperty: (element as HTMLElement).tabIndex,
+        tabindexAttribute: element.getAttribute('tabindex'),
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+        isActive: document.activeElement === element,
+        focusVisible: element.matches(':focus-visible'),
+        boxShadow: getComputedStyle(element).boxShadow,
+        outline: `${getComputedStyle(element).outlineStyle} ${getComputedStyle(element).outlineWidth} ${getComputedStyle(element).outlineColor}`,
+      }));
+      await page.screenshot({ path: shot(`p8-${project}-${width}-${scheme}-editor-dialog-focused-synthetic.png`) });
+      const panelRing = panel.isActive ? await measureRing(page, before, dsf) : null;
+      // Arrow keys scroll the focused panel (the purpose of a focusable scroller).
+      const scrollBefore = await editor.evaluate((element) => element.scrollTop);
+      if (panel.isActive) await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(200);
+      const scrollAfter = await editor.evaluate((element) => element.scrollTop);
+      dialogStops[`w${width}`] = { firstAfterHeading: first.name, afterShiftTabFromFirst: { tag: before.tag, name: before.name, fv: before.focusVisible }, panel, panelRing: panelRing && { sidesPresent: panelRing.sidesPresent, maxChange: panelRing.maxChange, minOuter: panelRing.minOuter }, scrollBefore, scrollAfter };
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+    }
+    result.dialogStop = dialogStops;
+    if (project === 'desktop') await page.setViewportSize({ width: 1280, height: 800 });
+
+    // C. Sticky top bar: from the end of the page, Shift+Tab back to the week-1 dates and the period buttons.
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await parkPointer(page);
+    await page.locator('[data-signature="employee"] a, [data-sheet-review-link]').first().focus();
+    await page.waitForTimeout(300);
+    const sticky: unknown[] = [];
+    for (let step = 0; step < 45; step += 1) {
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(380);
+      const info = await stopInfo(page);
+      if (info.body === true) break;
+      const bar = await page.evaluate(() => {
+        const element = document.querySelector('.shell-bar');
+        const r = element?.getBoundingClientRect();
+        return r === undefined ? null : { top: r.top, bottom: r.bottom, position: getComputedStyle(element as Element).position };
+      });
+      const entry = { step, name: info.name, rectTop: info.rect?.y, rectBottom: info.rect === undefined ? undefined : info.rect.y + info.rect.height, vis: `${info.vis}/${info.pts}`, covers: info.covers, scrollY: info.scrollY, bar };
+      sticky.push(entry);
+      if (info.vis === 0 && sticky.filter((item) => (item as { vis: string }).vis.startsWith('0/')).length <= 3) {
+        await page.screenshot({ path: shot(`p8-${project}-${scheme}-sticky-hidden-${step}-synthetic.png`) });
+      }
+    }
+    result.stickyBackward = sticky;
+    result.scrollPadding = await page.evaluate(() => ({ top: getComputedStyle(document.documentElement).scrollPaddingTop, bottom: getComputedStyle(document.documentElement).scrollPaddingBottom }));
+    record(`p8-${project}-${scheme}`, result);
+  });
+}
+
+/* ---- P9: follow-ups (other dialogs as scrollers, date input by Shift+Tab, edge clipping, tap-target filter) -- */
+
+test('P9 follow-ups', async ({ page, person, signInAs }, testInfo) => {
+  const project = testInfo.project.name;
+  const dsf = project === 'mobile' ? 2 : 1;
+  const { someone, completeDay, pendingDay } = await seeded(person);
+  await signInAs(someone.account);
+  const result: Record<string, unknown> = { completeDay, pendingDay };
+  await freshStart(page, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await parkPointer(page);
+
+  // A. "Open a day" reached by Shift+Tab from "Show details".
+  await page.getByRole('button', { name: 'Show details' }).focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.waitForTimeout(500);
+  const back = await stopInfo(page);
+  if (back.rect !== undefined) {
+    await page.screenshot({ path: shot(`p9-${project}-open-a-day-shift-tab-synthetic.png`), clip: { x: Math.max(0, back.rect.x - 12), y: Math.max(0, back.rect.y - 12), width: back.rect.width + 24, height: back.rect.height + 24 } });
+  }
+  const segment = await page.evaluate(() => {
+    const input = document.activeElement as HTMLInputElement;
+    return { type: input.type, value: input.value, fv: input.matches(':focus-visible'), focusWithin: input.matches(':focus-within'), boxShadow: getComputedStyle(input).boxShadow };
+  });
+  result.openADayShiftTab = { name: back.name, segment, ring: await measureRing(page, back, dsf) };
+
+  // B. The Clock out dialog: Shift+Tab from its first control; is the <dialog> a stop, and is it painted?
+  await page.getByRole('button', { name: 'Clock in' }).click();
+  const clockOut = page.getByRole('button', { name: 'Clock out' });
+  await expect(clockOut).toBeVisible();
+  await page.waitForTimeout(1200);
+  await clockOut.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await expect(dialog).toBeVisible();
+  await page.waitForTimeout(400);
+  const opened = await stopInfo(page);
+  await page.keyboard.press('Shift+Tab');
+  await page.waitForTimeout(400);
+  const before = await stopInfo(page);
+  const dialogState = await dialog.evaluate((element) => ({ isActive: document.activeElement === element, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, overflowY: getComputedStyle(element).overflowY, boxShadow: getComputedStyle(element).boxShadow }));
+  await page.screenshot({ path: shot(`p9-${project}-clock-out-shift-tab-synthetic.png`) });
+  result.clockOutDialog = { opened: opened.name, afterShiftTab: { tag: before.tag, name: before.name, fv: before.focusVisible }, dialogState };
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  // C. Edge clipping: "Save day fields", the last control of the editor, reached by Tab.
+  await freshStart(page, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await parkPointer(page);
+  await page.getByRole('button', { name: `Edit ${completeDay}`, exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  await editor.getByLabel('Notes').focus();
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(500);
+  const save = await stopInfo(page);
+  const panelBox = await editor.boundingBox();
+  if (save.rect !== undefined) {
+    await page.screenshot({ path: shot(`p9-${project}-save-day-fields-edge-synthetic.png`), clip: { x: Math.max(0, save.rect.x - 16), y: Math.max(0, save.rect.y - 16), width: save.rect.width + 32, height: Math.min(save.rect.height + 32, (page.viewportSize()?.height ?? 800) - Math.max(0, save.rect.y - 16)) } });
+  }
+  result.saveEdge = { name: save.name, rect: save.rect, panelBottom: panelBox === null ? null : panelBox.y + panelBox.height, ring: await measureRing(page, save, dsf) };
+  await page.keyboard.press('Escape');
+
+  // D. The tap-target loops of the specs filter visible controls: how many matched controls are not visible?
+  if (project === 'mobile') {
+    // Batch mode on the phone: the day button of 2026-09-30-like rows next to the selection box (crop for a visual check).
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    const days = await page.locator('[data-day]').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-day')));
+    const crops: unknown[] = [];
+    for (const day of days.slice(0, 5)) {
+      await page.getByRole('checkbox', { name: `Select ${day}` }).focus();
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(450);
+      const info = await stopInfo(page);
+      if (info.rect !== undefined) {
+        await page.screenshot({ path: shot(`p9-mobile-batch-edit-${day}-synthetic.png`), clip: { x: Math.max(0, info.rect.x - 12), y: Math.max(0, info.rect.y - 12), width: info.rect.width + 120, height: info.rect.height + 24 } });
+      }
+      const ring = await measureRing(page, info, dsf);
+      crops.push({ day, name: info.name, minOuter: ring?.minOuter, sides: ring?.sides.map((side) => `${side.side} ch=${side.change} ring=${side.ring} outer=${side.outer}(${side.outerRatio}) under=${side.under}`) });
+    }
+    result.batchCrops = crops;
+    await page.getByRole('button', { name: 'Done' }).click();
+    await freshStart(page, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const selectors = {
+      shell: 'button, a[href], input:not([type="checkbox"]), label.inline',
+      timesheet: 'button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline',
+    };
+    const counts: Record<string, unknown> = {};
+    for (const [key, selector] of Object.entries(selectors)) {
+      counts[key] = await page.evaluate((css) => {
+        const all = [...document.querySelectorAll<HTMLElement>(css)];
+        const hidden = all.filter((element) => {
+          const r = element.getBoundingClientRect();
+          return r.width === 0 || r.height === 0 || getComputedStyle(element).visibility === 'hidden';
+        });
+        return { all: all.length, hidden: hidden.length, hiddenNames: hidden.map((element) => `${element.tagName} ${(element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 30)} display=${getComputedStyle(element.closest('.shell-nav, .shell-user, nav, header') ?? element).display}`) };
+      }, selector);
+    }
+    await freshStart(page, `#/review/${someone.payrollDate}`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    counts.review = await page.evaluate(() => {
+      const all = [...document.querySelectorAll<HTMLElement>('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline')];
+      const hidden = all.filter((element) => {
+        const r = element.getBoundingClientRect();
+        return r.width === 0 || r.height === 0;
+      });
+      return { all: all.length, hidden: hidden.length, hiddenNames: hidden.map((element) => `${element.tagName} ${(element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 30)}`) };
+    });
+    result.tapTargetFilter = counts;
+  }
+  record(`p9-${project}`, result);
+});

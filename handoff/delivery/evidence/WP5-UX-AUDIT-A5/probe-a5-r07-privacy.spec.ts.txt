@@ -1,0 +1,170 @@
+// WP5-UX-AUDIT-A5 scope 2: R-07 device-zone probe (with the FIX6 zone-note due time) and signature
+// privacy on 5e104e1, in three layouts.
+// R-07: the same saved sessions viewed with five browser zones: times follow an Intl oracle in the
+// viewing zone, no session leaves its saved accounting date, OT cells and total are identical, the
+// period bar names the viewing zone, the due words stay the reporting-zone fields, the zone note's due
+// time equals the Intl oracle of the server's due_at_utc in the viewing zone, and the Review shows
+// reporting-zone times in every device zone.
+// Privacy: the signature image appears on the Review only, never on the Timesheet page. Synthetic only.
+import { addDays } from '../ex5e1/src/domain/dates.ts';
+import { expect, newPerson, test } from '../ex5e1/tests/e2e/fixtures.ts';
+import { dueOracle, local, recordApi, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LA = 'America/Los_Angeles';
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function dayDiff(later: string, earlier: string): number {
+  return Math.round((Date.parse(`${later}T00:00:00Z`) - Date.parse(`${earlier}T00:00:00Z`)) / 86_400_000);
+}
+
+function expectedRange(session: { start_utc: string; end_utc: string | null }, workDate: string, zone: string) {
+  const start = local(session.start_utc, zone);
+  const startDate = start.date === workDate ? null : `${start.date.slice(5, 7)}/${start.date.slice(8, 10)}`;
+  if (session.end_utc === null) return { text: start.time, startDate };
+  const end = local(session.end_utc, zone);
+  const later = dayDiff(end.date, start.date);
+  return { text: `${start.time}-${end.time}${later > 0 ? `+${later}` : ''}`, startDate };
+}
+
+const COLLECT = (attr: string) => `[...document.querySelectorAll('[${attr}]')].map((el) => ({
+  date: el.getAttribute('${attr}'),
+  ranges: [...el.querySelectorAll('[data-range]')].map((r) => {
+    const sub = r.querySelector('.cell-sub');
+    const marker = sub === null ? '' : sub.textContent;
+    return { key: r.getAttribute('data-range'), startDate: sub === null ? null : marker, text: r.textContent.slice(marker.length) };
+  }),
+  ot: el.querySelector('[data-ot]') === null ? '' : el.querySelector('[data-ot]').textContent,
+}))`;
+
+test('R-07: a device-zone change shows other clock times and due time but never regroups a day', async ({ browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Zone Probe', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length).toBeGreaterThanOrEqual(3);
+  const late = free[0] ?? '';
+  const early = free[1] ?? '';
+  const overnight = free.at(-1) ?? '';
+  expect(addDays(overnight, 1) <= person.todayLocal).toBe(true);
+  await person.api.createSession(late, '23:00', '23:50', []);
+  await person.api.createSession(early, '00:20', '01:10', []);
+  await person.api.call('POST', `/api/days/${overnight}/sessions`, {
+    start: { local: `${overnight}T22:00`, zone: LA },
+    end: { local: `${addDays(overnight, 1)}T02:00`, zone: LA },
+    input_zone: LA,
+    breaks_confirmed: true,
+    breaks: [],
+  }, 201);
+  const sheet = await person.api.call<any>('GET', `/api/timesheets/${person.payrollDate}`);
+  const owner = new Map<string, string>();
+  const sessions: any[] = [];
+  for (const day of sheet.days) for (const session of day.sessions) {
+    owner.set(session.id, day.work_date);
+    sessions.push({ ...session, work_date: day.work_date });
+  }
+  expect(sessions.length).toBe(3);
+  const dueDate = sheet.period.due_local_date as string;
+  const dueWords = `Due ${WEEKDAYS[new Date(`${dueDate}T00:00:00Z`).getUTCDay()]} ${dueDate.slice(5, 7)}/${dueDate.slice(8, 10)}/${dueDate.slice(0, 4)}, ${sheet.period.due_local_time} (${sheet.reporting_zone})`;
+  const zones = ['America/Los_Angeles', 'Asia/Tokyo', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Ho_Chi_Minh'];
+  const use = testInfo.project.use as any;
+  const runs: any[] = [];
+  for (const zone of zones) {
+    const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: zone, locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false, deviceScaleFactor: use.deviceScaleFactor ?? 1 });
+    const page = await context.newPage();
+    await signIn(page, person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator(`[data-range="${sessions[0].id}"]`)).toHaveCount(1);
+    const resolved = await page.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    const days = await page.evaluate(COLLECT('data-day'));
+    const periodZone = await page.locator('.period-bar [data-period-zone]').innerText();
+    const dueWordsShown = await page.locator('.period-bar [data-period-due]').innerText();
+    const zoneNote = await page.locator('[data-zone-note]').count();
+    const noteDue = zoneNote === 1 ? await page.locator('[data-zone-note] dd').nth(2).innerText() : null;
+    const noteLabel = zoneNote === 1 ? await page.locator('[data-zone-note] dt').nth(2).innerText() : null;
+    const total = await page.locator('[data-ot-total]').innerText();
+    await page.evaluate(`window.location.hash = '#/review/${person.payrollDate}'`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    const review = await page.evaluate(COLLECT('data-review-day'));
+    runs.push({ zone, resolved, periodZone, dueWordsShown, zoneNote, noteLabel, noteDue, noteDueOracle: dueOracle(sheet.period.due_at_utc, resolved), total, days, review });
+    await context.close();
+  }
+  const reference = runs[0];
+  const checks: string[] = [];
+  for (const run of runs) {
+    expect(run.days.map((day: any) => day.date)).toEqual(sheet.days.map((day: any) => day.work_date));
+    for (const day of run.days) for (const range of day.ranges) {
+      expect(owner.get(range.key), `${run.zone}: ${range.key} stays on its accounting date`).toBe(day.date);
+      const want = expectedRange(sessions.find((item) => item.id === range.key), day.date, run.resolved);
+      expect(range.text, `${run.zone}: ${range.key} text`).toBe(want.text);
+      expect(range.startDate, `${run.zone}: ${range.key} start-date marker`).toBe(want.startDate);
+    }
+    expect(run.days.map((day: any) => day.ot)).toEqual(reference.days.map((day: any) => day.ot));
+    expect(run.total).toBe(reference.total);
+    expect(run.periodZone).toBe(`Times in ${run.resolved}`);
+    expect(run.dueWordsShown, `${run.zone}: the due words are the reporting-zone fields`).toBe(dueWords);
+    expect(run.zoneNote).toBe(run.resolved === sheet.reporting_zone ? 0 : 1);
+    if (run.zoneNote === 1) {
+      expect(run.noteLabel).toBe(`Due, your time (${run.resolved})`);
+      expect(run.noteDue, `${run.zone}: the zone-note due time is due_at_utc in the viewing zone`).toBe(run.noteDueOracle);
+    }
+    expect(run.review).toEqual(reference.review);
+    checks.push(`${run.zone} (${run.resolved}): ok${run.zoneNote === 1 ? `, note due "${run.noteDue}"` : ', no note'}`);
+  }
+  for (const day of reference.review) for (const range of day.ranges) {
+    expect(range.text, `review ${range.key} in the reporting zone`).toBe(expectedRange(sessions.find((item) => item.id === range.key), day.date, sheet.reporting_zone).text);
+  }
+  writeResult(`r07-${testInfo.project.name}.json`, {
+    reporting_zone: sheet.reporting_zone,
+    period: { payroll_date: sheet.period.payroll_date, due_local_date: sheet.period.due_local_date, due_local_time: sheet.period.due_local_time, due_at_utc: sheet.period.due_at_utc },
+    sessions: sessions.map((item) => ({ id: item.id, work_date: item.work_date, start_utc: item.start_utc, end_utc: item.end_utc })),
+    runs: runs.map((run) => ({ zone: run.zone, resolved: run.resolved, periodZone: run.periodZone, dueWordsShown: run.dueWordsShown, zoneNote: run.zoneNote, noteLabel: run.noteLabel, noteDue: run.noteDue, noteDueOracle: run.noteDueOracle, total: run.total, sessionCells: run.days.filter((d: any) => d.ranges.length > 0), reviewSessionCells: run.review.filter((d: any) => d.ranges.length > 0) })),
+    checks,
+  });
+});
+
+test('privacy: the signature image is on the Review only, never on the Timesheet page, before or after sign-off', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const signer = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Signer' });
+  const [day = ''] = await signer.api.displayedPeriodFreeWorkdays();
+  await signer.api.seedCompleteDay(day);
+  const requests = recordApi(page);
+  const result: Record<string, unknown> = {};
+  await signIn(page, signer.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('[data-signature="employee"]')).toHaveText('Not signed yet');
+  await page.waitForTimeout(1_000);
+  result.timesheet_before = { images: await page.locator('img').count(), signature_requests: requests.filter((e) => e.includes('/api/signatures')), css_url_backgrounds: await page.evaluate("[...document.querySelectorAll('*')].filter((el) => getComputedStyle(el).backgroundImage.includes('url(')).length") };
+  requests.length = 0;
+  await page.evaluate(`window.location.hash = '#/review/${signer.payrollDate}'`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  const image = page.getByRole('img', { name: 'Your saved signature image' });
+  await expect(image).toBeVisible();
+  result.review = { images: await page.locator('img').count(), image_src: await image.getAttribute('src'), signature_requests: requests.filter((e) => e.includes('/api/signatures')), image_inside_sheet: await page.locator('[data-review-day] img, article.sheet img').count() };
+  await page.getByLabel('Your name').fill('Synthetic Signer');
+  const acknowledgement = page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if ((await acknowledgement.count()) > 0) await acknowledgement.check();
+  await page.getByRole('button', { name: 'Sign off & Submit' }).click();
+  await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
+  const finalization = await signer.api.call<any>('GET', `/api/timesheets/${signer.payrollDate}/finalization`);
+  const signedLocal = local(finalization.signoff.signed_at, (await signer.api.today()).reportingZone).date;
+  requests.length = 0;
+  await page.evaluate(`window.location.hash = '#/timesheet'`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('[data-signature="employee"]')).toHaveText('Signed by Synthetic Signer');
+  await page.waitForTimeout(1_000);
+  result.timesheet_after = {
+    images: await page.locator('img').count(),
+    signature_requests: requests.filter((e) => e.includes('/api/signatures')),
+    css_url_backgrounds: await page.evaluate("[...document.querySelectorAll('*')].filter((el) => getComputedStyle(el).backgroundImage.includes('url(')).length"),
+    strip: await page.locator('[data-signature="employee"]').innerText(),
+    strip_date: await page.locator('[data-signature="employee-date"]').innerText(),
+    expected_date: `${signedLocal.slice(5, 7)}/${signedLocal.slice(8, 10)}/${signedLocal.slice(0, 4)}`,
+  };
+  expect(result.timesheet_before).toMatchObject({ images: 0, signature_requests: [], css_url_backgrounds: 0 });
+  expect(result.review).toMatchObject({ images: 1, image_inside_sheet: 0 });
+  expect((result.review as any).image_src).toMatch(/^\/api\/signatures\//);
+  expect(result.timesheet_after).toMatchObject({ images: 0, signature_requests: [], css_url_backgrounds: 0 });
+  expect((result.timesheet_after as any).strip_date).toBe((result.timesheet_after as any).expected_date);
+  writeResult(`privacy-${testInfo.project.name}.json`, result);
+});

@@ -1,0 +1,52 @@
+WP5-UX-AUDIT-B5 - test strength since 014bd47 (the whole round) and since edaaa85 (FIX6), at 5e104e1
+
+Commands (scratch clone at 5e104e1):
+  git diff --numstat 014bd47..5e104e1 -- tests playwright.config.ts vitest.config.ts   -> 11-tests-numstat.txt
+  git diff -U0 014bd47..5e104e1 -- tests  (removed lines)                               -> 12-removed-test-lines.txt
+  git diff -U6/-U8/-U10 per file (context)                                              -> 13a..13d context diffs
+  grep for .only / fixme / skip / todo / test.fail                                      -> 14-only-skip-scan.txt
+  playwright.config.ts, vitest.config.ts and tests/e2e/fixtures.ts: no change since 014bd47 (absent from the numstat).
+
+Every removed or replaced assertion, judged against its replacement:
+
+| # | File | Removed / replaced | Replacement | Judgement |
+|---|---|---|---|---|
+| 1 | tests/client/dayModel.test.ts | weekGroups: 3 cases (two-week split, mid-week start, empty) | sheetModel.test.ts (new, 357 lines): Monday-Sunday bands, mid-week periods, empty input, zone stability | equivalent (function moved) |
+| 2 | tests/client/sessionModel.test.ts | leaveMinutes '240' bodies; bad list ['1.5','-1','1441','abc']; leaveHint('240'/''/'1.5') | hours+minutes bodies (240, 0, 90); bad pairs 1.5h, -1h, 24h1m, 25h, 60m, abc, 1e1m; hint cases 4h00m, 45m, empty, 1.5 | stronger (7 bad inputs instead of 4, a 90-minute case) |
+| 3 | tests/domain/engine.test.ts | import line only | adds formatHoursMinutes cases and a 0..3000 equality loop with the PDF formatter | added |
+| 4 | tests/e2e/admin.spec.ts | nav lists ['Timesheet','OT','History','Import','Settings'(,'Admin')] | exact lists per layout: desktop [Timesheet, Overtime, History, Settings(, Admin)]; phone 3 tabs then More [.., Settings, Import(, Admin)] | equivalent (E-5 names and layout) |
+| 5 | tests/e2e/history-settings.spec.ts | status in table.grid caption (desktop) / no grid (phone) | status once in .period-bar, 0 in [data-sheet], one sheet layout per project, "Signed by" line, no img in the sheet | stronger |
+| 6 | tests/e2e/import.spec.ts:154 | Import link aria-current on the import route | phone: Import aria-current (under More); desktop: Settings aria-current (Import is a Settings link) | equivalent (E-5) |
+| 7 | tests/e2e/import.spec.ts:198 | Import link visible on the admin view | absence checks of the import UI on the Admin view on both projects, then phone: Import visible; desktop: Settings link "Import from Excel" visible, absence checks repeated | stronger than the original (B-03 closed) |
+| 8 | tests/e2e/isolation.spec.ts | not.toContainText('complete') x2 | not.toContainText('Complete') + [data-check="complete"] count 0 | equivalent+ (status word capitalised; structural check added) |
+| 9 | tests/e2e/ot-leave.spec.ts | link 'OT' | link 'Overtime' | equivalent (rename) |
+| 10 | tests/e2e/review.spec.ts | per day Regular/Off-calendar/Credit cells (formatDuration or 'none') | per day detail rows regular/off-calendar = server minutes as h:mm (or empty); OT cell by the PDF rule (complete -> credited h:mm, incomplete/incomplete_breaks -> 'pending', else absent) | equivalent (every day still checked against the server payload; Credit is now the OT cell) |
+| 11 | tests/e2e/review.spec.ts | 'complete' / 'breaks unconfirmed' (x4) | 'Complete' / 'breaks not confirmed' | equivalent (wording) |
+| 12 | tests/e2e/review.spec.ts:332 | 44px targets over all matching elements | same selector .filter({ visible: true }), count guard > 5 kept | equivalent (my P5: 0 visible controls < 44px at 390/375/360/320 in 6 states) |
+| 13 | tests/e2e/setup.spec.ts | Sign out in the banner | Sign out in the banner (desktop) or under More (phone), clicked | equivalent |
+| 14 | tests/e2e/sharing.spec.ts | absent buttons list of 5 | list of 7 + "Open a day" absent + no label picker + no signature/review link; edit share: batch opened on demand, label picker writes through /api/shared, focus returns | stronger |
+| 15 | tests/e2e/shell.spec.ts | nav link count 5; banner Sign out; row 'complete' + '8h 00m'; 44px over all | exact lists per layout + More behaviour + tab sizes; row 'Complete' + [data-check]; detail row regular '8:00'; 44px loop .filter({ visible: true }) with count guard > 4 | equivalent or stronger |
+| 16 | tests/e2e/day-editor.spec.ts | heading 'Figures from the server' | 'Figures (computed by the server)' | equivalent (rename) |
+| 17 | tests/e2e/day-editor.spec.ts | fill 'Partial leave minutes' 240 | Leave hours/minutes default 0/0; 60 minutes refused in the page with 0 writes (version unchanged); 4 h 0 m sent as 240 | stronger |
+| 18 | tests/e2e/day-editor.spec.ts | 'missing record'; 'upcoming'; not 'missing record'; not 'pending OT' | 'No times' + [data-check="missing"]; period text changes before counting rows; 'Upcoming' + [data-check="upcoming"]; not 'No times', not 'Missing record', no [data-check="missing"], no [data-ot="pending"], not 'pending' | stronger |
+| 19 | tests/e2e/timesheet.spec.ts | table.grid / .day-list counts | [data-sheet="desktop"/"phone"] counts + form header, 2 weeks x 7 days, Overtime Total = server total, Signatures region | stronger |
+| 20 | tests/e2e/timesheet.spec.ts | .facts contains due_local_date (ISO) | [data-period-due] contains MM/DD/YYYY and the reporting zone; FIX6: zone note dd[2] equals the display-zone due computed by the test runtime (Intl, en-US, h23) | stronger (B4-02 asserted) |
+| 21 | tests/e2e/timesheet.spec.ts | period_start row contains the ISO date | accessible name ends with the ISO date; cell shows MM/DD; "Edit {date}" button visible | equivalent+ |
+| 22 | tests/e2e/timesheet.spec.ts | complete row 'complete' + '8h 00m', not 'pending OT'; pending row 'confirm breaks' + 'pending OT' | session range in the display zone (not the LA 09:00-18:00); 'Complete'; OT cell = server credited h:mm; no 'pending' in the OT cell; 'Confirm breaks'; OT cell 'pending'; Show details toggles; regular detail = server 8:00; 14 regular details | stronger |
+| 23 | tests/e2e/timesheet.spec.ts | 44px over all matching elements (phone) | same selector .filter({ visible: true }), count guard > 20 kept | equivalent (see 12) |
+| 24 | tests/e2e/timesheet.spec.ts (FIX6) | type line of the sheet call (not an assertion) | adds due_at_utc to the type | n/a |
+
+FIX6 (edaaa85..5e104e1): tests/client/periodBarModel.test.ts adds dueInZoneText (2 expectations; 1 import line reformatted);
+tests/e2e/timesheet.spec.ts adds the zone-note due assertion (1 type line changed, 8 lines added); tests/e2e/focus-ring.spec.ts
+is new (169 lines, 4 tests: light/dark x desktop/mobile). No assertion was removed or loosened.
+
+Strength of the new focus-ring check (scratch copy clone-old only, never the reviewed tree):
+  - edaaa85 styles.css (the old tokens) on 5e104e1: 4 of 4 tests fail ("--focus-ring rgba(31, 95, 191, 0.35) ... against --card",
+    1.72 light; "rgba(110, 168, 255, 0.45)", 2.46 dark), see 31-focus-ring-on-edaaa85-tokens.txt.
+  - only the desktop sheet-date rule set back to the old ring colour: desktop light and dark fail on "sheet date ring ... against
+    its backdrop" (1.72 / 1.35); the phone passes because the phone's day button is a different element (expected), see 33-...
+  Limits (risk, not a defect): the check covers the shared token on 7 surface tokens and four real controls; it does not cover
+  the label picker's open list, the editor dialog element or the sticky-bar occlusion; parseColour falls back to black for a
+  colour syntax other than rgb()/rgba() (a future oklch() token could pass vacuously on light surfaces).
+
+Result: no assertion removed or weakened since 014bd47, including FIX6.

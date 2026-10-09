@@ -1,0 +1,65 @@
+// WP5-UX-AUDIT-A5: per-layout facts of the own probes (AC-04, AC-16/AC-01, R-07 with the zone-note due
+// time, privacy, focus ring). Usage: node summary.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => (existsSync(join(dir, name)) ? JSON.parse(readFileSync(join(dir, name), 'utf8')) : null);
+const j = (v) => JSON.stringify(v);
+let missing = 0;
+
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  console.log(`==== ${project}`);
+  const ac = load(`ac04-${project}.json`);
+  if (ac === null) missing += 1;
+  else {
+    console.log(`AC-04 editor layout: modal=${ac.editor_layout.modal} class=${ac.editor_layout.className} box=${j(ac.editor_layout.box)}`);
+    console.log(`  picker old-period preview body: ${j(ac.picker_preview_body)}`);
+    console.log(`  picker commit with reason: ${j(ac.picker_reason_commit)}`);
+    console.log(`  editor PUT with reason: ${j(ac.editor_reason_put)}`);
+    console.log(`  history reasons: ${j(ac.history_reasons)}`);
+    console.log(`  picker stale modes sent: ${j(ac.picker_stale_modes)}; editor (Open a day) stale: ${j(ac.editor_fields_stale)}`);
+    console.log(`  one-tap break confirmation stale: ${j(ac.quick_stale)}`);
+    console.log(`  Delete then Escape, sessions left: ${ac.delete_then_escape_sessions}; picker conflict commit: ${j(ac.picker_conflict_commit)}`);
+  }
+  const sh = load(`sharing-${project}.json`);
+  if (sh === null) missing += 1;
+  else {
+    console.log(`AC-16 view-only controls: ${j(sh.view_only_controls)}`);
+    console.log(`  view-only editor (read-only, layout modal=${sh.view_only_editor_layout.modal}): ${j(sh.view_only_editor)}; requests outside the shared path: ${j(sh.view_only_outside_requests)}`);
+    console.log(`  edit grantee controls: ${j(sh.edit_controls)}; writes: ${j(sh.edit_writes)}`);
+    console.log(`  owner history via share: ${sh.owner_history_via_share.length} events, actors ${j([...new Set(sh.owner_history_via_share.map((e) => e.actor_display_name))])}`);
+    console.log(`AC-01 third user: ${j(sh.isolation)}`);
+  }
+  const r = load(`r07-${project}.json`);
+  if (r === null) missing += 1;
+  else {
+    console.log(`R-07 reporting zone ${r.reporting_zone}; period ${j(r.period)}`);
+    for (const run of r.runs) console.log(`  ${run.zone} (${run.resolved}): bar "${run.periodZone}", words "${run.dueWordsShown}", note ${run.zoneNote ? `"${run.noteDue}" (oracle "${run.noteDueOracle}")` : 'none'}, total ${run.total}, session cells ${j(run.sessionCells.map((d) => [d.date, d.ranges.map((x) => `${x.startDate ?? ''}${x.text}`)]))}`);
+  }
+  const p = load(`privacy-${project}.json`);
+  if (p === null) missing += 1;
+  else console.log(`privacy: ${j(p)}`);
+  for (const scheme of ['light', 'dark']) {
+    const f = load(`focus-${project}-${scheme}.json`);
+    if (f === null) {
+      missing += 1;
+      continue;
+    }
+    const checked = f.controls.filter((c) => c.skipped === undefined);
+    const skipped = f.controls.filter((c) => c.skipped !== undefined).map((c) => c.name);
+    const rings = [...new Set(checked.map((c) => c.boxShadow))];
+    const allGood = checked.every((c) => c.focused && c.focusVisible && c.visible && c.notCovered && c.opacity === '1' && c.visibility === 'visible' && c.pointerEvents !== 'none');
+    const neighbourPairs = checked.reduce((n, c) => n + Object.keys(c.neighbours_with_ring ?? {}).length, 0);
+    const differ = checked.filter((c) => j(c.neighbours_with_ring) !== j(c.neighbours_without_ring)).map((c) => c.name);
+    const coveredBoth = [];
+    for (const c of checked) for (const [k, v] of Object.entries(c.neighbours_with_ring ?? {})) if (typeof v === 'string' && v.startsWith('covered')) coveredBoth.push(`${k} while ${c.name}: ${v} (same without the ring: ${c.neighbours_without_ring[k] === v})`);
+    console.log(`focus ${scheme}: ${checked.length} controls with the ring, all focused/focus-visible/visible/opaque/hit-testable: ${allGood}; skipped (not rendered in this layout): ${j(skipped)}`);
+    console.log(`  ring box-shadows seen: ${j(rings)}`);
+    console.log(`  neighbour hit-tests with vs without the ring: ${neighbourPairs} pairs, differing: ${j(differ)}`);
+    if (coveredBoth.length > 0) console.log(`  neighbours covered at their centre by page chrome (with and without the ring): ${coveredBoth.length}; first: ${coveredBoth.slice(0, 3).join(' | ')}`);
+    console.log(`  keyboard-driven writes: ${j(f.writes.map((w) => w.call))}`);
+    console.log(`  bodies: clock-out ${j(f.writes[1]?.body && Object.keys(f.writes[1].body).sort())}, day PUT ${j(f.writes[2]?.body)}, conflict commit ${j(f.writes[4]?.body)}, reason commit ${j(f.writes[6]?.body)}`);
+  }
+}
+console.log(`\nmissing result files: ${missing}`);

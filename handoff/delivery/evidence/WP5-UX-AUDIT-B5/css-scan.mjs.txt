@@ -1,0 +1,83 @@
+// WP5-UX-AUDIT-B5 CSS standards scan of src/client/styles.css (read only).
+// Usage: node css-scan.mjs <styles.css>
+// Reports, outside the :root token blocks: colour literals, length literals in box-shadow, border-radius,
+// transition, animation, font-family and url() values; every transition value; undefined var() names.
+import { readFileSync } from 'node:fs';
+
+const text = readFileSync(process.argv[2], 'utf8');
+const lines = text.split('\n');
+const out = (line) => process.stdout.write(`${line}\n`);
+
+// Token blocks: every ':root {' block (also the ones nested in media queries), up to its closing brace.
+const inToken = new Array(lines.length).fill(false);
+for (let index = 0; index < lines.length; index += 1) {
+  if (/^\s*:root\s*\{/.test(lines[index])) {
+    let depth = 0;
+    for (let j = index; j < lines.length; j += 1) {
+      depth += (lines[j].match(/\{/g) ?? []).length;
+      depth -= (lines[j].match(/\}/g) ?? []).length;
+      inToken[j] = true;
+      if (depth === 0) break;
+    }
+  }
+}
+
+const defined = new Set();
+for (const match of text.matchAll(/(--[a-z0-9-]+)\s*:/g)) defined.add(match[1]);
+const used = new Set();
+for (const match of text.matchAll(/var\((--[a-z0-9-]+)/g)) used.add(match[1]);
+
+let inComment = false;
+const findings = [];
+const transitions = [];
+const radius = [];
+for (let index = 0; index < lines.length; index += 1) {
+  let line = lines[index];
+  // strip comments
+  let clean = '';
+  for (let k = 0; k < line.length; k += 1) {
+    if (!inComment && line.startsWith('/*', k)) {
+      inComment = true;
+      k += 1;
+      continue;
+    }
+    if (inComment && line.startsWith('*/', k)) {
+      inComment = false;
+      k += 1;
+      continue;
+    }
+    if (!inComment) clean += line[k];
+  }
+  line = clean;
+  if (inToken[index]) continue;
+  const n = index + 1;
+  if (/#[0-9a-fA-F]{3,8}\b/.test(line)) findings.push(`${n}: hex colour: ${line.trim()}`);
+  if (/\b(rgba?|hsla?|oklch|lab|lch|color)\(/.test(line)) findings.push(`${n}: colour function: ${line.trim()}`);
+  if (/\b(white|black|red|blue|green|gray|grey|orange|yellow|purple)\b/.test(line) && /:\s/.test(line) && !/var\(/.test(line)) findings.push(`${n}: named colour?: ${line.trim()}`);
+  const prop = /^\s*([a-z-]+)\s*:\s*(.*?);?\s*$/.exec(line);
+  if (prop !== null) {
+    const [, name, value] = prop;
+    if (name === 'transition' || name === 'transition-duration' || name === 'transition-timing-function') transitions.push(`${n}: ${name}: ${value}`);
+    if (name === 'border-radius') radius.push(`${n}: ${value}`);
+    if ((name === 'box-shadow' || name === 'border-radius' || name.startsWith('transition') || name.startsWith('animation')) && /\d(px|ms|s|rem|em)\b/.test(value) && !/^var\(/.test(value)) findings.push(`${n}: literal in ${name}: ${value}`);
+    if (name === 'font-family' && !/var\(--font-mono\)|inherit|system-ui/.test(value)) findings.push(`${n}: font-family: ${value}`);
+    if (/url\(/.test(value)) findings.push(`${n}: url(): ${value}`);
+    if (name.startsWith('animation') || /@keyframes/.test(line)) findings.push(`${n}: animation: ${line.trim()}`);
+  }
+  if (/@keyframes|@font-face|@import/.test(line)) findings.push(`${n}: at-rule: ${line.trim()}`);
+}
+
+out(`lines=${lines.length} tokenLines=${inToken.filter(Boolean).length}`);
+out(`--radius: ${/--radius:\s*([^;]+);/.exec(text)?.[1]}`);
+out(`--transition: ${/--transition:\s*([^;]+);/.exec(text)?.[1]} (--duration ${/--duration:\s*([^;]+);/.exec(text)?.[1]}, --ease ${/--ease:\s*([^;]+);/.exec(text)?.[1]})`);
+out(`--focus-ring: ${/--focus-ring:\s*([^;]+);/.exec(text)?.[1]}`);
+out(`--focus-ring-inset: ${/--focus-ring-inset:\s*([^;]+);/.exec(text)?.[1]}`);
+out(`findings outside token blocks: ${findings.length}`);
+for (const finding of findings) out(`  ${finding}`);
+out(`transition declarations: ${transitions.length}`);
+for (const item of transitions) out(`  ${item}`);
+out(`border-radius declarations: ${radius.length}`);
+for (const item of radius) out(`  ${item}`);
+const undefinedVars = [...used].filter((name) => !defined.has(name));
+out(`var() names used: ${used.size}; undefined: ${undefinedVars.length} ${JSON.stringify(undefinedVars)}`);
+out(`reduced-motion block: ${/@media \(prefers-reduced-motion: reduce\)/.test(text)}`);

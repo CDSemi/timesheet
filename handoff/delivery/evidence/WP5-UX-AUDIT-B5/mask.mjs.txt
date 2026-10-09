@@ -1,0 +1,22 @@
+// WP5-UX-AUDIT-B5: copies a text file into the evidence folder masked (paths, user name), without ANSI codes, with LF endings.
+// Usage: node mask.mjs <source> <target>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [source, target] = process.argv.slice(2);
+let text = readFileSync(source, 'utf8');
+const user = process.env.USERNAME ?? '<user>';
+const rules = [
+  [/\u001b\[[0-9;?]*[A-Za-z]/g, ''],
+  [/\r\n/g, '\n'],
+  [/\r/g, '\n'],
+  [/[A-Za-z]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX-AUDIT-B5/gi, '<task>'],
+  [/\/[a-z]\/\.claude-tmp\/timesheet\/WP5-UX-AUDIT-B5/gi, '<task>'],
+  [/[A-Za-z]:[\\/]+\.claude-tmp[\\/]+claude[\\/]+[^\s"']*/gi, '<scratch>'],
+  [/[A-Za-z]:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet/gi, '<project>'],
+  [/\/[a-z]\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"']+/gi, '<user-home>'],
+  [/\/c\/Users\/[^/\s"']+/gi, '<user-home>'],
+  [new RegExp(user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '<user>'],
+];
+for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
+writeFileSync(target, text.endsWith('\n') ? text : `${text}\n`);

@@ -1,0 +1,157 @@
+// WP5-UX-AUDIT-A5: compares the request bodies captured on 5e104e1 with 014bd47, and the zone-note due
+// texts of 5e104e1 with the edaaa85 build.
+// 1. Leave entries: PUT /api/days/:date bodies of the same entries (expected_version excluded); A-01 refusals.
+// 2. Clock in/out, sign-off, batch (old period with reason), the editor's day fields and new session, and the
+//    one-day label change (5e104e1 in-cell picker vs the 014bd47 batch bar with one day).
+// 3. Zone note: same period, same due_at_utc, same local date and time in the same zone; only the format differs.
+// Usage: node compare.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+let mismatches = 0;
+const sortKeys = (value) =>
+  Array.isArray(value)
+    ? value.map(sortKeys)
+    : value !== null && typeof value === 'object'
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)]))
+      : value;
+const text = (value) => JSON.stringify(sortKeys(value));
+const without = (body, ...keys) => Object.fromEntries(Object.entries(body ?? {}).filter(([k]) => !keys.includes(k)));
+function same(label, x, y) {
+  const ok = x !== undefined && y !== undefined && text(x) === text(y);
+  if (!ok) mismatches += 1;
+  console.log(`  ${ok ? 'SAME     ' : 'DIFFERENT'} ${label}${ok ? `: ${text(x)}` : `\n      A=${text(x)}\n      B=${text(y)}`}`);
+  return ok;
+}
+
+console.log('== 1. Leave entries: PUT count, leave_minutes sent, stored after, page message');
+const leave = {};
+for (const name of ['5e104e1-desktop', '5e104e1-tablet', '5e104e1-mobile', '014bd47-desktop', '014bd47-mobile']) {
+  const file = `leave-${name}.json`;
+  if (!existsSync(join(dir, file))) {
+    console.log(`-- ${name}: MISSING`);
+    mismatches += 1;
+    continue;
+  }
+  const data = load(file);
+  leave[name] = data;
+  console.log(`-- ${name} (workDate ${data.workDate})${data.editor_layout ? ` editor modal=${data.editor_layout.modal} class=${data.editor_layout.className}` : ''}`);
+  for (const r of data.results) {
+    const puts = r.put_bodies ?? [];
+    const sent = puts.map((b) => b.leave_minutes).join(',') || '-';
+    const after = typeof r.stored_after === 'object' ? r.stored_after.leave_minutes : r.stored_after;
+    const msg = (r.alert_texts ?? r.alerts ?? []).join(' | ') || '-';
+    const native = r.state ? ` formValid=${r.state.formValid} badInput=${r.state.badInput}` : '';
+    const marks = r.hours_attrs ? ` aria-invalid h=${r.hours_attrs.ariaInvalid ?? '-'} m=${r.minutes_attrs.ariaInvalid ?? '-'}` : '';
+    console.log(`  ${r.case}: PUTs=${puts.length} sent=${sent} stored=${after}${native}${marks} msg=${msg}`);
+  }
+}
+const pairs = [
+  ['empty hours and minutes', 'empty'],
+  ['valid 2h 30m', 'valid 150 (2h 30m)'],
+  ['valid 4h 00m typed', 'valid 240 typed (4h 00m)'],
+  ['valid 0h 45m (hours empty)', 'valid 45 (0h 45m)'],
+  ['valid 8h 00m (the required day)', 'valid 480 (8h 00m)'],
+  ['client-valid 24h 00m, refused by the server rule', 'client-valid 1440, refused by the server rule'],
+];
+console.log('\n-- valid entries: body at 5e104e1 (hours + minutes) vs 014bd47 (minutes), expected_version excluded');
+for (const [now, then] of [['5e104e1-desktop', '014bd47-desktop'], ['5e104e1-tablet', '014bd47-desktop'], ['5e104e1-mobile', '014bd47-mobile']]) {
+  for (const [a, b] of pairs) {
+    const x = leave[now]?.results.find((r) => r.case === a)?.put_bodies?.[0];
+    const y = leave[then]?.results.find((r) => r.case === b)?.put_bodies?.[0];
+    same(`${now} "${a}" vs ${then} "${b}"`, without(x, 'expected_version'), without(y, 'expected_version'));
+  }
+}
+const refused = Object.entries(leave)
+  .filter(([label]) => label.startsWith('5e104e1'))
+  .flatMap(([label, data]) => data.results.filter((r) => (r.alert_texts ?? []).some((t) => t.startsWith('Enter leave'))).map((r) => ({ label, case: r.case, puts: r.put_bodies.length, changed: r.stored_after.version !== r.stored_before.version })));
+console.log(`-- 5e104e1 refused entries with the page message: ${refused.length}; with a PUT: ${refused.filter((r) => r.puts > 0).length}; with a stored change: ${refused.filter((r) => r.changed).length}`);
+if (refused.length !== 36 || refused.some((r) => r.puts > 0 || r.changed)) mismatches += 1;
+const malformed014 = Object.entries(leave)
+  .filter(([label]) => label.startsWith('014bd47'))
+  .flatMap(([label, data]) => data.results.filter((r) => /malformed|fraction|negative/.test(r.case)).map((r) => `${label}: ${r.case} PUTs=${r.put_bodies.length} formValid=${r.state.formValid}`));
+console.log(`-- 014bd47 malformed/fraction/negative entries: ${malformed014.length}; ${malformed014.join('; ')}`);
+
+console.log('\n== 2. Clock, sign-off, batch, editor day fields and new session, one-day label change: 5e104e1 vs 014bd47');
+const keysOf = (body) => (body === null || typeof body !== 'object' ? String(body) : Object.keys(body).sort().join(','));
+for (const [now, then] of [['desktop', 'desktop'], ['tablet', 'desktop'], ['mobile', 'mobile']]) {
+  const A = load(`bodies-5e104e1-${now}.json`);
+  const B = load(`bodies-014bd47-${then}.json`);
+  console.log(`-- 5e104e1 ${now} (editor modal=${A.editor_layout?.modal} class=${A.editor_layout?.className}) vs 014bd47 ${then}`);
+  for (const path of ['POST /api/clock/in', 'POST /api/clock/out']) {
+    const x = A.clock.find((c) => c.call === path)?.body;
+    const y = B.clock.find((c) => c.call === path)?.body;
+    same(`${path} keys`, keysOf(x), keysOf(y));
+    same(`${path} run-independent values`, without(x, 'expected_version'), without(y, 'expected_version'));
+  }
+  const sA = A.signoff.at(-1);
+  const sB = B.signoff.at(-1);
+  const signPath = (p) => p.replace(/\/api\/timesheets\/[^/]+\//, '/api/timesheets/:p/');
+  same('sign-off call', signPath(sA.call), signPath(sB.call));
+  same('sign-off keys', keysOf(sA.body), keysOf(sB.body));
+  same('sign-off run-independent values', without(sA.body, 'reviewed_hash', 'expected_version'), without(sB.body, 'reviewed_hash', 'expected_version'));
+  const bound = sA.body.reviewed_hash === A.review_binding.payload_hash && sA.body.expected_version === A.review_binding.expected_version;
+  if (!bound) mismatches += 1;
+  console.log(`  sign-off binding 5e104e1: reviewed_hash = payload_hash and expected_version = reviewed ${bound}; status ${A.signoff_status}; 014bd47 status ${B.signoff_status}; other writes on the review page ${A.signoff.length - 1} vs ${B.signoff.length - 1}`);
+  same('batch days', A.batch_days, B.batch_days);
+  same('batch preview and commit bodies', A.batch.map((w) => w.body), B.batch.map((w) => w.body));
+  same('editor day dates', A.editor_days, B.editor_days);
+  same('editor writes (calls)', A.editor.map((w) => w.call), B.editor.map((w) => w.call));
+  same('editor day-fields PUT body', A.editor[0]?.body, B.editor[0]?.body);
+  same('editor new-session POST body', A.editor[1]?.body, B.editor[1]?.body);
+  same('one-day label change calls (picker vs batch bar)', A.picker.map((w) => w.call), B.picker.map((w) => w.call));
+  same('one-day label change preview and commit bodies (picker vs batch bar)', A.picker.map((w) => w.body), B.picker.map((w) => w.body));
+}
+
+console.log('\n== 3. Zone-note due time: 5e104e1 vs edaaa85, same project, zone and period');
+const parseNew = (s) => {
+  const m = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d{2})\/(\d{2})\/(\d{4}), (\d{2}:\d{2})$/.exec(s ?? '');
+  return m === null ? null : { weekday: m[1], date: `${m[4]}-${m[2]}-${m[3]}`, time: m[5] };
+};
+const parseOld = (s) => {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/.exec(s ?? '');
+  return m === null ? null : { date: m[1], time: m[2] };
+};
+let rows = 0;
+let dstRows = 0;
+const dstExamples = [];
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  const N = load(`zonenote-5e104e1-${project}.json`);
+  const O = load(`zonenote-edaaa85-${project}.json`);
+  let ok = 0;
+  for (const n of N.rows) {
+    const o = O.rows.find((r) => r.zone === n.zone && r.step === n.step);
+    const pn = parseNew(n.note_due);
+    const po = parseOld(o?.note_due);
+    const good =
+      o !== undefined &&
+      o.payroll_date === n.payroll_date &&
+      o.due_at_utc === n.due_at_utc &&
+      o.resolved === n.resolved &&
+      pn !== null &&
+      po !== null &&
+      pn.date === po.date &&
+      pn.time === po.time &&
+      pn.date === n.oracle_local.date &&
+      pn.time === n.oracle_local.time &&
+      pn.weekday === n.oracle_local.weekday &&
+      o.due_words === n.due_words;
+    rows += 1;
+    if (good) ok += 1;
+    else {
+      mismatches += 1;
+      console.log(`  DIFFERENT ${project} ${n.zone} step ${n.step}: new=${n.note_due} old=${o?.note_due} due=${n.due_at_utc}/${o?.due_at_utc}`);
+    }
+    if (n.offset_now !== n.offset_at_due) {
+      dstRows += 1;
+      if (project === 'desktop') dstExamples.push(`${n.zone} payroll ${n.payroll_date} due_at_utc ${n.due_at_utc}: offset today ${n.offset_now} min, at the due instant ${n.offset_at_due} min; 5e104e1 "${n.note_due}", edaaa85 "${o?.note_due}"`);
+    }
+  }
+  console.log(`-- ${project}: ${ok}/${N.rows.length} rows with the same period, due_at_utc, zone, local date and time (and weekday = Intl), same due words`);
+}
+console.log(`-- rows ${rows}; rows whose zone offset at the due instant differs from today's offset (DST between): ${dstRows}`);
+for (const e of dstExamples) console.log(`   ${e}`);
+console.log(`\nmismatches=${mismatches}`);
+process.exitCode = mismatches === 0 ? 0 : 1;

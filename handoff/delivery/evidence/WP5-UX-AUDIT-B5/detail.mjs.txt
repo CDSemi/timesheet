@@ -1,0 +1,11 @@
+// WP5-UX-AUDIT-B5: prints the full record of selected stops. Usage: node detail.mjs <json> <path.to.walk> <name regex>
+import { readFileSync } from 'node:fs';
+
+const [file, path, pattern] = process.argv.slice(2);
+let node = JSON.parse(readFileSync(file, 'utf8'));
+for (const key of path.split('.')) node = node[key];
+const regex = new RegExp(pattern);
+for (const stop of node) {
+  if (typeof stop.name !== 'string' || !regex.test(stop.name)) continue;
+  process.stdout.write(`${JSON.stringify(stop, null, 1)}\n`);
+}

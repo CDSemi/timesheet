@@ -1,0 +1,30 @@
+WP5-UX-AUDIT-B5 - source digest recorded FIRST (after `node --version` = v24.21.0)
+Time (UTC): 2026-10-09T22:35:57Z
+
+Reviewed commit: 5e104e14dad71268a9185920c04ed0ee2a4b31c2
+HEAD = origin/main = 5e104e14dad71268a9185920c04ed0ee2a4b31c2 (git rev-parse HEAD origin/main)
+
+Form 1 (git ls-tree form), working repository:
+$ git ls-tree -r --format='%(path) %(objectname)' 5e104e14dad71268a9185920c04ed0ee2a4b31c2 > lstree-raw.txt
+$ grep -v '^handoff/' lstree-raw.txt | LC_ALL=C sort > lstree-src.txt
+$ wc -l < lstree-src.txt          -> 790
+$ sha256sum < lstree-src.txt      -> 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635
+
+Form 2 (repository script), working repository:
+$ node scripts/source-digest.mjs  (exit 0)
+07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635  (790 files, handoff/ excluded)
+
+Digest of record (brief): 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635 -> EQUAL
+
+Working-tree status at start (only handoff/ paths differ):
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/WP5-UX-FIX6-FREEZE.md
+?? handoff/delivery/evidence/WP5-UX-FIX6-FREEZE/
+?? handoff/delivery/evidence/WP5-UX-REGATE4/
+?? handoff/delivery/tasks/WP5-UX-AUDIT-A5.md
+?? handoff/delivery/tasks/WP5-UX-AUDIT-B5.md
+?? handoff/delivery/tasks/WP5-UX-REGATE4.md
+
+Form 3 (scratch clone at 5e104e1) is recorded in 01-setup-clone.txt.

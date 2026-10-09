@@ -1,0 +1,83 @@
+// WCAG 2.x contrast of design-token pairs read from src/client/styles.css (light :root and the dark media block).
+import { readFileSync } from 'node:fs';
+
+const css = readFileSync(process.argv[2], 'utf8');
+const rootStart = css.indexOf(':root {');
+const rootEnd = css.indexOf('\n}', rootStart);
+const light = css.slice(rootStart, rootEnd);
+const darkStart = css.indexOf('@media (prefers-color-scheme: dark)');
+const darkEnd = css.indexOf('\n}', css.indexOf('\n  }', darkStart) + 1);
+const dark = css.slice(darkStart, darkEnd);
+
+function tokens(block) {
+  const out = {};
+  for (const m of block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) out[m[1]] = m[2];
+  return out;
+}
+const lightTokens = tokens(light);
+const darkTokens = { ...lightTokens, ...tokens(dark) };
+
+function lum(hex) {
+  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = v.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function ratio(a, b) {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+// [foreground token, background token, kind]; kind text needs 4.5, ui needs 3.
+const pairs = [
+  ['attention-ink', 'attention-bg', 'text'],
+  ['muted', 'day-nonworking', 'text'],
+  ['accent', 'sheet-head', 'text'],
+  ['text', 'day-nonworking', 'text'],
+  ['muted', 'sheet-head', 'text'],
+  ['muted', 'sheet-head-off', 'text'],
+  ['text', 'sheet-head', 'text'],
+  ['text', 'sheet-head-off', 'text'],
+  ['accent', 'day-nonworking', 'text'],
+  ['accent', 'sheet-head-off', 'text'],
+  ['accent-strong', 'sheet-head', 'text'],
+  ['muted', 'card', 'text'],
+  ['muted', 'bg', 'text'],
+  ['text', 'card', 'text'],
+  ['text', 'bg', 'text'],
+  ['accent', 'card', 'text'],
+  ['accent', 'bg', 'text'],
+  ['on-accent', 'accent', 'text'],
+  ['on-accent', 'accent-strong', 'text'],
+  ['text', 'attention-bg', 'text'],
+  ['muted', 'attention-bg', 'text'],
+  ['error', 'card', 'text'],
+  ['ok', 'card', 'text'],
+  ['warn', 'card', 'text'],
+  ['error', 'day-nonworking', 'text'],
+  ['warn', 'day-nonworking', 'text'],
+  ['sheet-rule-strong', 'card', 'ui'],
+  // focus ring (--focus-ring, --focus-ring-inset): the visible ring is var(--accent); the gap is var(--card)
+  ['accent', 'card', 'ui'],
+  ['accent', 'bg', 'ui'],
+  ['accent', 'sheet-head', 'ui'],
+  ['accent', 'sheet-head-off', 'ui'],
+  ['accent', 'day-nonworking', 'ui'],
+  ['accent', 'attention-bg', 'ui'],
+  ['card', 'accent', 'ui'],
+];
+
+let below = 0;
+for (const [name, set] of [['light', lightTokens], ['dark', darkTokens]]) {
+  for (const [fg, bg, kind] of pairs) {
+    if (!set[fg] || !set[bg]) {
+      console.log(`${name}  ${fg} on ${bg}: MISSING TOKEN`);
+      continue;
+    }
+    const r = ratio(set[fg], set[bg]);
+    const need = kind === 'text' ? 4.5 : 3;
+    const ok = r >= need;
+    if (!ok) below += 1;
+    console.log(`${name.padEnd(5)} ${kind.padEnd(4)} ${fg} ${set[fg]} on ${bg} ${set[bg]} = ${r.toFixed(2)}:1 ${ok ? 'ok' : 'BELOW ' + need}`);
+  }
+}
+console.log(`pairs below threshold: ${below}`);

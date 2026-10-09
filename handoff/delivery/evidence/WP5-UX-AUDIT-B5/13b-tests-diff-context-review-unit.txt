@@ -1,0 +1,344 @@
+diff --git a/tests/client/dayModel.test.ts b/tests/client/dayModel.test.ts
+index dddfed1..075c8a6 100644
+--- a/tests/client/dayModel.test.ts
++++ b/tests/client/dayModel.test.ts
+@@ -4,17 +4,16 @@ import {
+   batchEntries,
+   completenessOf,
+   conflictDetails,
+   isPendingOt,
+   reviewStatus,
+   staleDates,
+   staleReloadMessage,
+   toDayDisplay,
+-  weekGroups,
+ } from '../../src/client/components/dayModel.ts';
+ 
+ function calculation(status: Calculation['status'], regular: number | null = null): Calculation {
+   return {
+     status,
+     provisional: true,
+     policy_version_id: 'policy-1',
+     gross_seconds: 0,
+@@ -150,43 +149,17 @@ describe('toDayDisplay', () => {
+         category_source: 'explicit',
+       }),
+       null,
+     );
+     expect(display).toMatchObject({ nonworking: true, calendarLabel: 'Founders Day', categoryExplicit: true });
+   });
+ });
+ 
+-describe('weekGroups', () => {
+-  it('splits a two-week period into Monday to Sunday groups', () => {
+-    const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
+-    const groups = weekGroups(
+-      dates.map((date) => day(date)),
+-      null,
+-    );
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 7],
+-      ['2026-10-05', 7],
+-    ]);
+-    expect(groups[0]?.days[0]?.weekday).toBe('Mon');
+-    expect(groups[1]?.days[6]?.weekday).toBe('Sun');
+-  });
+-
+-  it('groups a period that starts mid-week into partial weeks', () => {
+-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 2],
+-      ['2026-10-05', 1],
+-    ]);
+-  });
+-
+-  it('returns nothing for no days', () => {
+-    expect(weekGroups([], null)).toEqual([]);
+-  });
+-});
++// The week grouping moved to sheetModel.ts (sheetWeeks); its cases live in sheetModel.test.ts.
+ 
+ describe('batchEntries', () => {
+   it('builds date-ordered entries with the version each day was loaded at', () => {
+     const days = [day('2026-09-29'), day('2026-09-30', { entry: entry('2026-09-30', 4) }), day('2026-10-01')];
+     expect(batchEntries(days, new Set(['2026-10-01', '2026-09-30']), 'Vacation')).toEqual([
+       { work_date: '2026-09-30', category: 'Vacation', expected_version: 4 },
+       { work_date: '2026-10-01', category: 'Vacation', expected_version: null },
+     ]);
+diff --git a/tests/client/sessionModel.test.ts b/tests/client/sessionModel.test.ts
+index 7140453..2be9af6 100644
+--- a/tests/client/sessionModel.test.ts
++++ b/tests/client/sessionModel.test.ts
+@@ -433,36 +433,51 @@ describe('server figures, E-2 notice and day fields', () => {
+       day({ ot_leave: { kind_minutes: 120, consumed_minutes: 60, reversed_minutes: 0, mismatch: true } }),
+     );
+     expect(notice).toContain('2h 00m');
+     expect(notice).toContain('1h 00m');
+     expect(notice).toContain('nothing is spent, reserved or released');
+   });
+ 
+   it('builds the day entry body with the version it saw and drops the kind without leave', () => {
+-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
++    // 4 hours and 0 minutes are the same integer 240 leave minutes the API always took.
++    const built = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+     expect(built).toEqual({
+       ok: true,
+       request: { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: 'n', expected_version: 3, reason: 'because' },
+     });
+-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
++    const none = buildDayEntryRequest({ category: 'Off', leave: { hours: '0', minutes: '0' }, leaveKind: 'sick', wfh: false, notes: '' }, null);
+     expect(none).toEqual({
+       ok: true,
+       request: { category: 'Off', leave_minutes: 0, leave_kind: null, wfh: false, notes: '', expected_version: null },
+     });
++    const partial = buildDayEntryRequest({ category: 'Worked', leave: { hours: '1', minutes: '30' }, leaveKind: 'ot', wfh: false, notes: '' }, 2);
++    expect(partial).toMatchObject({ ok: true, request: { leave_minutes: 90, leave_kind: 'ot' } });
+   });
+ 
+-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
+-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
++  it('leaves a missing kind to the server and rejects only malformed or out-of-range leave fields', () => {
++    const missingKind = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '' }, leaveKind: '', wfh: false, notes: '' }, 1);
+     expect(missingKind).toMatchObject({ ok: true, request: { leave_minutes: 240, leave_kind: null } });
+-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
+-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
++    const bad: Array<[string, string]> = [
++      ['1.5', '0'],
++      ['-1', '0'],
++      ['24', '1'],
++      ['25', '0'],
++      ['0', '60'],
++      ['abc', '0'],
++      ['0', '1e1'],
++    ];
++    for (const [hours, minutes] of bad) {
++      const result = buildDayEntryRequest({ category: 'Worked', leave: { hours, minutes }, leaveKind: '', wfh: false, notes: '' }, 1);
++      expect(result.ok, `${hours} h ${minutes} m`).toBe(false);
+     }
+   });
+ 
+-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
++  it('starts the form from the day in hours and minutes, and hints the typed leave as hours and minutes', () => {
+     const draftFields = dayFieldsDraft(day({ category: 'Vacation', leave_minutes: 240, leave_kind: 'vacation', wfh: true }));
+-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
+-    expect(leaveHint('240')).toBe('4h 00m');
+-    expect(leaveHint('')).toBeNull();
+-    expect(leaveHint('1.5')).toBeNull();
++    expect(draftFields).toEqual({ category: 'Vacation', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: '' });
++    expect(dayFieldsDraft(day({ leave_minutes: 95 })).leave).toEqual({ hours: '1', minutes: '35' });
++    expect(leaveHint({ hours: '4', minutes: '0' })).toBe('4h 00m');
++    expect(leaveHint({ hours: '', minutes: '45' })).toBe('45m');
++    expect(leaveHint({ hours: '', minutes: '' })).toBeNull();
++    expect(leaveHint({ hours: '1.5', minutes: '' })).toBeNull();
+   });
+ });
+diff --git a/tests/domain/engine.test.ts b/tests/domain/engine.test.ts
+index 08206dd..94fbd8a 100644
+--- a/tests/domain/engine.test.ts
++++ b/tests/domain/engine.test.ts
+@@ -1,15 +1,15 @@
+ import { describe, expect, it } from 'vitest';
+ import { defaultCategory } from '../../src/domain/attendance.ts';
+ import { expectedFinishUtc, suggestBreaks } from '../../src/domain/breaks.ts';
+ import { type CalendarVersion, classifyDate } from '../../src/domain/calendar.ts';
+ import { addDays, diffDays, isoWeekday } from '../../src/domain/dates.ts';
+ import { decideDeficit } from '../../src/domain/deficit.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
++import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+ import { formatUtcInstant, parseUtcInstant } from '../../src/domain/instants.ts';
+ import type { SessionInterval } from '../../src/domain/intervals.ts';
+ import { roundToStepMidpointDown } from '../../src/domain/overtime.ts';
+ import {
+   currentPayPeriod,
+   type PayrollScheduleRules,
+   payPeriodContaining,
+   payPeriodForPayrollDate,
+@@ -21,16 +21,17 @@ import { effectiveVersionOn } from '../../src/domain/versions.ts';
+ import { computeWorkDay } from '../../src/domain/workday.ts';
+ import {
+   formatInZone,
+   localDateOf,
+   resolveLocalDateTime,
+   splitAtLocalMidnights,
+   startOfLocalDay,
+ } from '../../src/domain/zones.ts';
++import { formatHoursMinutes as pdfHoursMinutes } from '../../src/server/pdf/layout.ts';
+ import { expectDomainError } from '../support/fixtures.ts';
+ 
+ const LA = 'America/Los_Angeles';
+ const utc = parseUtcInstant;
+ const at = (local: string) => resolveLocalDateTime(local, LA).utc;
+ 
+ const calendar2026: CalendarVersion = {
+   id: 'cal-2026',
+@@ -415,9 +416,28 @@ describe('display formatting', () => {
+   it('shows hours and minutes, never decimal hours', () => {
+     expect([formatDuration(90), formatDuration(45), formatDuration(480), formatDuration(-60)]).toEqual([
+       '1h 30m',
+       '45m',
+       '8h 00m',
+       '−1h 00m',
+     ]);
+   });
++
++  it('shows h:mm exactly as the timesheet PDF prints it', () => {
++    expect([0, 5, 59, 60, 90, 135, 330, 600, 1439, 6000].map(formatHoursMinutes)).toEqual([
++      '0:00',
++      '0:05',
++      '0:59',
++      '1:00',
++      '1:30',
++      '2:15',
++      '5:30',
++      '10:00',
++      '23:59',
++      '100:00',
++    ]);
++    // The app and the PDF print the same text for every whole minute count the PDF accepts.
++    for (let minutes = 0; minutes <= 3000; minutes += 1) expect(formatHoursMinutes(minutes)).toBe(pdfHoursMinutes(minutes));
++    // Display only: an unexpected value never throws on a screen.
++    expect([formatHoursMinutes(-60), formatHoursMinutes(90.9)]).toEqual(['−1:00', '1:30']);
++  });
+ });
+diff --git a/tests/e2e/review.spec.ts b/tests/e2e/review.spec.ts
+index 0ba76ec..ad7f148 100644
+--- a/tests/e2e/review.spec.ts
++++ b/tests/e2e/review.spec.ts
+@@ -1,12 +1,12 @@
+ import { crc32, deflateSync } from 'node:zlib';
+ import { type Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
++import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+ import {
+   type BuiltServer,
+   type CreatedAccount,
+   createAccountByAdminApi,
+   expect,
+   SeedClient,
+   screenshotPath,
+   starterPolicyBody,
+@@ -123,17 +123,17 @@ async function newReviewer(adminSeed: SeedClient, server: BuiltServer, options:
+   );
+   await uploadSignature(server, account);
+   const days = await api.displayedPeriodFreeWorkdays();
+   return { account, api, payrollDate: currentPayrollDate, days };
+ }
+ 
+ interface ApiReview {
+   payload: {
+-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
++    days: Array<{ work_date: string; completeness: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+     totals: { credited_minutes: number; pending_days: number };
+     ot_proposals: Array<{ work_date: string; credited_minutes: number }>;
+     deficit_proposals: Array<{ work_date: string; mode: string; deficit_minutes: number }>;
+     unresolved_inputs: Array<{ work_date: string; reason: string }>;
+     recipients: { to: string[]; subject: string };
+   };
+   payload_hash: string;
+   expected_version: number;
+@@ -190,30 +190,36 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+   await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+   // The review belongs under Timesheet in the navigation.
+   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
+ 
+   // Exactly the server payload: 14 days, and every figure on screen is the server's own number.
+   await expect(page.locator('[data-review-day]')).toHaveCount(14);
+   for (const day of api.payload.days) {
+     const row = page.locator(`[data-review-day="${day.work_date}"]`);
+-    for (const [label, minutes] of [
+-      ['Regular', day.calculation?.regular_minutes ?? null],
+-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
+-      ['Credit', day.calculation?.credited_minutes ?? null],
++    // The detail rows are always on in the review: worked on a workday / on a day off, as h:mm.
++    for (const [detail, minutes] of [
++      ['regular', day.calculation?.regular_minutes ?? null],
++      ['off-calendar', day.calculation?.nonworking_minutes ?? null],
+     ] as const) {
+-      const cell = row.locator(`td[data-label="${label}"]`);
+-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
++      const cell = page.locator(`[data-detail="${detail}"][data-detail-day="${day.work_date}"]`);
++      await expect(cell, `${day.work_date} ${detail}`).toHaveText(minutes === null ? '' : formatHoursMinutes(minutes));
+     }
++    // The OT cell follows the PDF rule: the credit of a complete day, "pending" while evidence is open, else blank.
++    const credited = day.calculation?.credited_minutes ?? null;
++    const ot = row.locator('[data-ot]');
++    if (day.completeness === 'complete' && credited !== null) await expect(ot, `${day.work_date} OT`).toHaveText(formatHoursMinutes(credited));
++    else if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') await expect(ot, `${day.work_date} OT`).toHaveText('pending');
++    else await expect(ot, `${day.work_date} OT`).toHaveCount(0);
+   }
+   const completeRow = page.locator(`[data-review-day="${completeDay}"]`);
+-  await expect(completeRow).toContainText('complete');
++  await expect(completeRow).toContainText('Complete');
+   await expect(completeRow).toContainText('3 breaks');
+   const pendingRow = page.locator(`[data-review-day="${pendingDay}"]`);
+-  await expect(pendingRow).toContainText('breaks unconfirmed');
++  await expect(pendingRow).toContainText('breaks not confirmed');
+   await expect(page.locator('[data-total="credited"] dd')).toHaveAttribute('data-minutes', String(api.payload.totals.credited_minutes));
+ 
+   // Missing evidence, recipients and the rendered email, the signature preview.
+   await expect(page.locator(`[data-unresolved="${pendingDay}"]`)).toContainText('Breaks not confirmed');
+   await expect(page.locator('[data-envelope="to"] dd')).toHaveText('payroll@example.invalid');
+   await expect(page.locator('[data-envelope="subject"]')).toHaveText(api.payload.recipients.subject);
+   const signature = page.getByRole('img', { name: 'Your saved signature image' });
+   await expect(signature).toBeVisible();
+@@ -343,17 +349,17 @@ async function signOffElsewhere(reviewer: Reviewer): Promise<void> {
+ }
+ 
+ test('a period finalized in another window reloads with a clear message and no second revision', async ({ page, adminSeed, builtServer }) => {
+   const reviewer = await newReviewer(adminSeed, builtServer);
+   const [day = ''] = reviewer.days;
+   await reviewer.api.seedCompleteDay(day);
+ 
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+   await signOffElsewhere(reviewer);
+ 
+   // A different request than the one already recorded (another name): refused, never a second revision.
+   await page.getByLabel('Your name').fill('Synthetic Reviewer Junior');
+   await acknowledge(page);
+   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
+   const notice = page.locator('[data-notice="stale"]');
+   await expect(notice).toContainText('already submitted');
+@@ -368,17 +374,17 @@ test('a period finalized in another window reloads with a clear message and no s
+ });
+ 
+ test('an identical sign-off repeated from a second window is recognised and creates nothing', async ({ page, adminSeed, builtServer }) => {
+   const reviewer = await newReviewer(adminSeed, builtServer);
+   const [day = ''] = reviewer.days;
+   await reviewer.api.seedCompleteDay(day);
+ 
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+   await signOffElsewhere(reviewer);
+ 
+   await page.getByLabel('Your name').fill('Synthetic Reviewer');
+   await acknowledge(page);
+   await page.getByRole('button', { name: 'Sign off & Submit' }).click();
+   await expect(page.locator('[data-result="replayed"]')).toContainText('Nothing new was created');
+   const finalized = await reviewer.api.call<ApiFinalization>('GET', finalizationPath(reviewer.payrollDate));
+   expect(finalized.revision?.revision_no, 'still the one revision').toBe(1);
+@@ -476,17 +482,20 @@ test('mobile: the review fits the width and every control is at least 44px', asy
+   const [shortDay = '', pendingDay = ''] = reviewer.days;
+   await reviewer.api.createSession(shortDay, '09:00', '12:00', []);
+   await reviewer.api.seedUnconfirmedBreaksDay(pendingDay);
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+   await expect(page.locator('[data-review-day]')).toHaveCount(14);
+   await expect(page.locator(`[data-deficit="${shortDay}"]`)).toBeVisible();
+   await expectNoSidewaysScroll(page);
+ 
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
++  // Only rendered controls are tap targets: the desktop bar (display none below 768px) is excluded.
++  const targets = page
++    .locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline')
++    .filter({ visible: true });
+   const count = await targets.count();
+   expect(count).toBeGreaterThan(5);
+   for (let index = 0; index < count; index += 1) {
+     const target = targets.nth(index);
+     const box = await target.boundingBox();
+     const name = (await target.textContent())?.trim() || (await target.getAttribute('aria-label')) || `target ${index}`;
+     expect(box, name).not.toBeNull();
+     expect(box?.height ?? 0, `${name} height`).toBeGreaterThanOrEqual(44);

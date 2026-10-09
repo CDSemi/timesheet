@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# npm test, typecheck, lint and build in the clean 5e104e1 export (each with its exit code).
+source <task>/env.sh
+cd "$T/ex5e1" || exit 2
+{ echo '$ npm test'; npmr test; echo "exit $?"; } > "$T/raw/02-npm-test.txt" 2>&1
+{ echo '$ npm run typecheck'; npmr run typecheck; echo "exit $?"; echo '$ npm run lint'; npmr run lint; echo "exit $?"; } > "$T/raw/07-typecheck-lint.txt" 2>&1
+{ echo '$ npm run build'; npmr run build; echo "exit $?"; } > "$T/raw/03-build.txt" 2>&1
+echo done > "$T/raw/checks-done.txt"

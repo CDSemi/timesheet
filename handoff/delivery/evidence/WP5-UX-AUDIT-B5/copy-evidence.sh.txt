@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B5: copies masked LF evidence and synthetic screenshots into the evidence folder.
+T=<task>
+E=<project>/handoff/delivery/evidence/WP5-UX-AUDIT-B5
+N24DIR="$(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin"
+export PATH="$N24DIR:$PATH"
+m() { node "$T/mask.mjs" "$1" "$E/$2" || echo "FAILED $1"; }
+cd "$T" || exit 9
+
+# Deprecation tracing
+m dep-build.txt 07c-deprecation-build.txt
+
+# Probe run logs
+m probe-summary.txt 40-probe-runs.txt
+m probe-run-5e104e1-224907.txt 40a-probe-run-1-p6-desktop.txt
+m probe-run-5e104e1-224919.txt 40b-probe-run-1-all.txt
+m probe-run-5e104e1r2-225554.txt 40c-probe-run-2-all.txt
+m probe-run-5e104e1r3-230805.txt 40d-probe-run-3-p6-p9-traced.txt
+
+# Summaries
+cat sum-r2-p1-d.txt sum-r2-p1-ml.txt sum-r2-p1-md.txt > s41.txt; m s41.txt 41-P1-tab-walks-summary.txt
+m aggregate.txt 41a-aggregate.txt
+node summarize.mjs probe-out 5e104e1r2-p2-desktop-light.json 5e104e1r2-p2-desktop-dark.json 5e104e1r2-p2-mobile-light.json 5e104e1r2-p2-mobile-dark.json > s42.txt; m s42.txt 42-P2-editor-walks-summary.txt
+node summarize.mjs probe-out 5e104e1r2-p3-desktop-light.json 5e104e1r2-p3-desktop-dark.json 5e104e1r2-p3-mobile-light.json 5e104e1r2-p3-mobile-dark.json > s43.txt; m s43.txt 43-P3-label-picker-dialogs-summary.txt
+node summarize.mjs probe-out 5e104e1r2-p4-desktop-light.json 5e104e1r2-p4-desktop-dark.json 5e104e1r2-p4-mobile-light.json 5e104e1r2-p4-mobile-dark.json > s44.txt; m s44.txt 44-P4-other-screens-summary.txt
+m probe-out/5e104e1r2-p5-reflow.json 45-P5-reflow.json.txt
+cat probe-out/5e104e1r2-p6-desktop.json probe-out/5e104e1r2-p6-mobile.json > s46.txt; m s46.txt 46-P6-zone-names-contrast.json.txt
+m probe-out/5e104e1r2-p7-hover-desktop.json 47-P7-hover.json.txt
+m sticky.txt 48a-P8-sticky-dialog-date.txt
+cat probe-out/5e104e1r3-p9-desktop.json probe-out/5e104e1r3-p9-mobile.json > s49.txt; m s49.txt 49-P9-followups.json.txt
+cat probe-out/5e104e1r2-console-desktop.json probe-out/5e104e1r2-console-mobile.json probe-out/5e104e1r3-console-desktop.json probe-out/5e104e1r3-console-mobile.json > s49c.txt; m s49c.txt 49c-browser-console.json.txt
+cat probe-out/5e104e1r2-server-desktop-stopped.json probe-out/5e104e1r2-server-mobile-stopped.json probe-out/5e104e1r3-server-desktop-stopped.json probe-out/5e104e1r3-server-mobile-stopped.json > s49s.txt; m s49s.txt 49s-probe-servers-stopped.json.txt
+
+# Raw probe records (run 2 and run 3)
+for f in probe-out/5e104e1r2-p*.json probe-out/5e104e1r3-p*.json; do
+  b=$(basename "$f" .json)
+  m "$f" "raw-$b.json.txt"
+done
+
+# Scripts
+m clone/audit-b5/b5.probe.ts b5.probe.ts.txt
+m clone/audit-b5/probe.config.ts probe.config.ts.txt
+for s in run-probe.sh copy-evidence.sh; do m "$s" "$s.txt"; done
+for s in mask summarize detail aggregate sticky css-scan parity; do m "$s.mjs" "$s.mjs.txt"; done
+
+# Synthetic screenshots
+S=probe-shots
+cp "$S/5e104e1r2-p8-desktop-light-sticky-hidden-15-synthetic.png" "$E/b5-sticky-hidden-desktop-light-synthetic.png"
+cp "$S/5e104e1r2-p8-desktop-dark-sticky-hidden-15-synthetic.png" "$E/b5-sticky-hidden-desktop-dark-synthetic.png"
+cp "$S/5e104e1r2-p1-mobile-light-back-hidden-38-Next-period-synthetic.png" "$E/b5-sticky-hidden-phone-next-period-synthetic.png"
+cp "$S/5e104e1r2-p1-mobile-light-back-hidden-12-Edit-2026-10-08-synthetic.png" "$E/b5-sticky-hidden-phone-edit-date-synthetic.png"
+cp "$S/5e104e1r2-p2-mobile-390-light-back-hidden-5-Worked-from-home-WFH--synthetic.png" "$E/b5-editor-head-hidden-phone-wfh-synthetic.png"
+cp "$S/5e104e1r2-p2-mobile-390-light-back-hidden-9-Confirm-suggested-breaks-synthetic.png" "$E/b5-editor-head-hidden-phone-confirm-breaks-synthetic.png"
+cp "$S/5e104e1r2-p3-desktop-light-label-list-step1-synthetic.png" "$E/b5-label-list-light-synthetic.png"
+cp "$S/5e104e1r2-p3-desktop-dark-label-list-step1-synthetic.png" "$E/b5-label-list-dark-synthetic.png"
+cp "$S/5e104e1r2-p8-desktop-1024-light-editor-dialog-focused-synthetic.png" "$E/b5-editor-dialog-focused-1024-light-synthetic.png"
+cp "$S/5e104e1r2-p6-desktop-zone-note-synthetic.png" "$E/b5-zone-note-desktop-synthetic.png"
+cp "$S/5e104e1r2-p6-mobile-zone-note-synthetic.png" "$E/b5-zone-note-phone-synthetic.png"
+cp "$S/5e104e1r3-p9-desktop-open-a-day-shift-tab-synthetic.png" "$E/b5-open-a-day-shift-tab-desktop-synthetic.png"
+cp "$S/5e104e1r2-p8-mobile-light-open-a-day-focused-synthetic.png" "$E/b5-open-a-day-tab-phone-synthetic.png"
+cp "$S/5e104e1r3-p9-mobile-batch-edit-2026-09-30-synthetic.png" "$E/b5-phone-batch-edit-crowding-synthetic.png"
+echo "copy done"
