@@ -729,7 +729,9 @@ test('future days show as upcoming from the server date, past days without a rec
   expect(futureDay, 'a future expected workday within four weeks').not.toBe('');
 
   await signInThroughUi();
-  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('missing record');
+  // The sheet's Check words: a past expected day without times says "No times" (status key missing).
+  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('No times');
+  await expect(page.locator(`[data-day="${pastDay}"] [data-check="missing"]`)).toHaveCount(1);
   const next = page.getByRole('button', { name: 'Next period' });
   const row = page.locator(`[data-day="${futureDay}"]`);
   for (let step = 0; step < 4 && (await row.count()) === 0; step += 1) {
@@ -737,9 +739,13 @@ test('future days show as upcoming from the server date, past days without a rec
     await expect(page.locator('[data-day]')).toHaveCount(14);
   }
   await expect(row).toBeVisible();
-  await expect(row).toContainText('upcoming');
-  await expect(row).not.toContainText('missing record');
-  await expect(row).not.toContainText('pending OT');
+  await expect(row).toContainText('Upcoming');
+  await expect(row.locator('[data-check="upcoming"]')).toHaveCount(1);
+  await expect(row).not.toContainText('No times');
+  await expect(row).not.toContainText('Missing record');
+  await expect(row.locator('[data-check="missing"]')).toHaveCount(0);
+  await expect(row.locator('[data-ot="pending"]')).toHaveCount(0);
+  await expect(row).not.toContainText('pending');
   await row.scrollIntoViewIfNeeded();
   await snap(page, 'upcoming-days', project);
 

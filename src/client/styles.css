@@ -707,6 +707,10 @@ tr.nonworking td {
   color: var(--muted);
 }
 
+.status-running {
+  color: var(--ok);
+}
+
 .shape {
   display: inline-block;
   flex: none;
@@ -744,68 +748,15 @@ tr.nonworking td {
   padding: var(--space-1);
 }
 
-.week-tag {
-  display: block;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-strong);
-}
-
 .cal-note {
   display: block;
   font-size: var(--font-size-xs);
-}
-
-.grid td.sessions {
-  white-space: normal;
-}
-
-.grid tbody + tbody tr.week-start td {
-  border-top: var(--rule) solid var(--line);
 }
 
 ul.plain {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.day-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.day-item {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: var(--hairline) solid var(--line-soft);
-}
-
-.day-item.nonworking {
-  background: var(--off);
-}
-
-.day-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.day-head,
-.day-line,
-.day-minutes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-}
-
-.day-minutes {
-  font-size: var(--font-size-xs);
 }
 
 .batch-bar {
@@ -914,6 +865,594 @@ textarea {
 
   .dialog-actions {
     flex-direction: column-reverse;
+  }
+}
+
+/* ---- Timesheet sheet: the Excel form (WP5-UX-T02) ------------------------------ */
+
+/*
+ * The form people know from the Excel template and the PDF: header block, two Monday to Sunday
+ * week bands with the rows Day, Date, Label, Time, OT (and Check), Overtime Total bottom right and
+ * the signature lines. From 768px each band is a CSS grid whose day columns share the band's rows
+ * (subgrid); below it each band is a 4-column table. Non-working days of the server calendar are
+ * tinted and hatched (a non-colour cue); every status keeps its words and shape.
+ */
+.sheet {
+  --sheet-days: 7;
+  --sheet-caps-spacing: 0.08em;
+  --sheet-today-bar: calc(var(--rule) + var(--hairline));
+  --sheet-signature-cols: 1.6fr 1fr;
+  --sheet-leading: 1.25;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.sheet .status {
+  white-space: normal;
+}
+
+.form-head {
+  display: grid;
+  grid-template-columns: var(--track) auto;
+  gap: var(--space-2) var(--space-5);
+  align-items: end;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--rule) solid var(--sheet-rule-strong);
+}
+
+.company {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.form-title {
+  margin-top: var(--space-0);
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--sheet-caps-spacing);
+  text-transform: uppercase;
+}
+
+.form-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.form-fields > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.form-fields dt {
+  color: var(--muted);
+}
+
+.form-fields dd {
+  margin: 0;
+  font-weight: var(--font-weight-strong);
+}
+
+.sheet-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sheet-toggle {
+  margin-left: auto;
+}
+
+.sheet .sheet-toggle[aria-pressed='true'] {
+  background: var(--day-selected);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--hairline) var(--accent);
+}
+
+.sheet-week {
+  min-width: 0;
+}
+
+.week-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-1) var(--space-3);
+  border: var(--hairline) solid var(--sheet-rule);
+  border-bottom: 0;
+  background: var(--sheet-head);
+  font-size: var(--font-size-sm);
+}
+
+.week-bar strong {
+  letter-spacing: var(--sheet-caps-spacing);
+}
+
+/* Desktop: one grid per week; the visual row-label column is hidden from screen readers. */
+.week-grid {
+  display: grid;
+  grid-template-columns: var(--sheet-label-col) repeat(var(--sheet-days), minmax(0, var(--track)));
+  grid-template-rows:
+    minmax(var(--row-day), auto) minmax(var(--row-date), auto) minmax(var(--row-label), auto)
+    minmax(var(--row-time), auto) minmax(var(--row-ot), auto) minmax(var(--row-check), auto);
+  border: var(--hairline) solid var(--sheet-rule);
+}
+
+.week-grid.with-details {
+  grid-template-rows:
+    minmax(var(--row-day), auto) minmax(var(--row-date), auto) minmax(var(--row-label), auto)
+    minmax(var(--row-time), auto) minmax(var(--row-ot), auto) minmax(var(--row-check), auto)
+    minmax(var(--row-check), auto) minmax(var(--row-check), auto);
+}
+
+.row-labels {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  grid-template-rows: subgrid;
+  border-right: var(--hairline) solid var(--sheet-rule);
+  background: var(--sheet-head);
+}
+
+.row-labels > div {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-bottom: var(--hairline) solid var(--sheet-rule-soft);
+  color: var(--muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--sheet-leading);
+}
+
+.sheet-day {
+  position: relative;
+  display: grid;
+  grid-row: 1 / -1;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  border-right: var(--hairline) solid var(--sheet-rule);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.sheet-day:last-child {
+  border-right: 0;
+}
+
+.sheet-day:hover {
+  background-color: var(--day-hover);
+}
+
+.sheet-day > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-0);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--hairline) solid var(--sheet-rule-soft);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.row-labels > div:last-child,
+.sheet-day > div:last-child {
+  border-bottom: 0;
+}
+
+.sheet-day > .d-day {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  background: var(--sheet-head);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.d-day .pick {
+  padding: 0;
+}
+
+/* The date is the day's button ("Edit {date}"): plain text that underlines on hover. */
+.sheet .sheet-date {
+  padding: var(--space-0) var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-sm);
+  font-weight: normal;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: var(--space-1);
+}
+
+.sheet .sheet-date:hover:not(:disabled),
+.sheet-day:hover .sheet-date {
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.sheet .sheet-date:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.d-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--sheet-leading);
+}
+
+.cell-main,
+.cell-range,
+.cell-sub,
+.cell-note {
+  display: block;
+}
+
+.cell-sub {
+  color: var(--muted);
+  font-size: var(--font-size-2xs);
+  font-weight: normal;
+}
+
+.cell-note {
+  color: var(--accent);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-strong);
+}
+
+.d-time {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-xs);
+}
+
+.d-ot {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+}
+
+.ot-pending {
+  color: var(--attention-ink);
+  font-size: var(--font-size-xs);
+  font-weight: normal;
+}
+
+.ot-na {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: normal;
+}
+
+.d-check {
+  font-size: var(--font-size-2xs);
+}
+
+.d-detail {
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-xs);
+}
+
+.sheet .attention {
+  background-color: var(--attention-bg);
+}
+
+.sheet .nonworking,
+.sheet-table tr.nonworking td {
+  background-color: var(--day-nonworking);
+  background-image: var(--hatch);
+}
+
+.sheet-day.nonworking > .d-day {
+  background: var(--sheet-head-off);
+}
+
+.sheet-day.today {
+  box-shadow: inset 0 var(--sheet-today-bar) 0 var(--accent);
+}
+
+.sheet-day.selected,
+.sheet-table tr.selected td {
+  background-color: var(--day-selected);
+}
+
+.sheet-day.selected {
+  box-shadow: inset 0 0 0 var(--rule) var(--accent);
+}
+
+.today-tag {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-strong);
+}
+
+/* A running session: a ringed dot, distinct from the solid "Complete" circle, and static. */
+.live-dot {
+  border-radius: var(--shape-round);
+  box-shadow: 0 0 0 var(--hairline) var(--card), 0 0 0 var(--rule) currentColor;
+}
+
+/* Below 768px: one 4-column table per week, a row per day, no sideways scroll. */
+.sheet-table {
+  --col-day: 30%;
+  --col-label: 25%;
+  --col-time: 28%;
+  --col-ot: 17%;
+  table-layout: fixed;
+  border: var(--hairline) solid var(--sheet-rule);
+}
+
+.sheet-table .col-day {
+  width: var(--col-day);
+}
+
+.sheet-table .col-label {
+  width: var(--col-label);
+}
+
+.sheet-table .col-time {
+  width: var(--col-time);
+}
+
+.sheet-table .col-ot {
+  width: var(--col-ot);
+}
+
+.sheet-table th {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--hairline) solid var(--sheet-rule);
+  background: var(--sheet-head);
+  font-size: var(--font-size-2xs);
+  white-space: normal;
+}
+
+.sheet-table td {
+  height: var(--row-time);
+  padding: var(--space-1);
+  border-bottom: var(--hairline) solid var(--sheet-rule-soft);
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sheet-table th:last-child,
+.sheet-table td.t-ot {
+  text-align: right;
+}
+
+.sheet-table tr.sheet-row {
+  cursor: pointer;
+}
+
+.sheet-table tr.today td:first-child {
+  box-shadow: inset var(--sheet-today-bar) 0 0 var(--accent);
+}
+
+.t-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sheet .sheet-day-button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: var(--font-weight-heavy);
+  text-align: left;
+}
+
+.sheet .sheet-day-button:hover:not(:disabled) {
+  background: var(--day-hover);
+  box-shadow: none;
+}
+
+.sheet-day-button .mono {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: normal;
+}
+
+.t-day .status,
+.t-day .today-tag {
+  display: inline-flex;
+  margin-top: var(--space-0);
+  font-size: var(--font-size-2xs);
+}
+
+.t-label {
+  font-weight: var(--font-weight-strong);
+  line-height: var(--sheet-leading);
+}
+
+.t-time {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-2xs);
+}
+
+.sheet-table td.t-ot {
+  font-family: var(--font-mono), monospace;
+  font-weight: var(--font-weight-heavy);
+  overflow-wrap: normal;
+}
+
+.t-ot .ot-pending {
+  font-size: var(--font-size-2xs);
+}
+
+.sheet-table tr.sheet-detail-row td {
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.detail-pair {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-right: var(--space-3);
+}
+
+/* Foot: pending note, legend, and "Overtime Total :" bottom right, as on the form. */
+.sheet-foot {
+  display: grid;
+  grid-template-columns: var(--track) auto;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.foot-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pending-note {
+  margin: 0;
+  color: var(--attention-ink);
+  font-size: var(--font-size-sm);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch {
+  display: inline-block;
+  width: var(--space-4);
+  height: var(--space-3);
+  border: var(--hairline) solid var(--sheet-rule);
+}
+
+.swatch-off {
+  background-color: var(--day-nonworking);
+  background-image: var(--hatch);
+}
+
+.swatch-today {
+  background: var(--card);
+  box-shadow: inset 0 var(--sheet-today-bar) 0 var(--accent);
+}
+
+.swatch-attention {
+  background: var(--attention-bg);
+}
+
+.ot-total {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: var(--rule) solid var(--sheet-rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet-head);
+}
+
+.ot-total-label {
+  font-weight: var(--font-weight-heavy);
+}
+
+.ot-total-value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heavy);
+}
+
+.ot-total-unit {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Signature lines: names and dates only; the signature image stays on the review screen. */
+.signatures {
+  display: grid;
+  grid-template-columns: var(--sheet-signature-cols);
+  gap: var(--space-5) var(--space-6);
+  margin-top: var(--space-2);
+}
+
+.sig {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.sig-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-0) var(--space-1);
+  border-bottom: var(--hairline) solid var(--sheet-rule-strong);
+  font-size: var(--font-size-sm);
+}
+
+.sig-state,
+.sig-cap {
+  color: var(--muted);
+}
+
+.sig-cap {
+  font-size: var(--font-size-xs);
+}
+
+.signatures .sig-link {
+  border-color: transparent;
+}
+
+@media (max-width: 767px) {
+  .form-head,
+  .sheet-foot,
+  .signatures {
+    grid-template-columns: var(--track);
+  }
+
+  .company {
+    font-size: var(--font-size-sm);
+  }
+
+  .sheet-foot .ot-total {
+    order: var(--order-first);
+    grid-template-columns: var(--track) auto auto;
+  }
+
+  .sig-line {
+    flex-wrap: wrap;
   }
 }
 
@@ -1570,13 +2109,7 @@ code {
   font-size: var(--font-size-base);
 }
 
-/* The period status above the grid (a table caption) and above the day list on a phone. */
-.grid-caption {
-  padding: 0 0 var(--space-2);
-  text-align: left;
-  caption-side: top;
-}
-
+/* The period status inside the sheet, above the week bands. */
 .grid-status {
   display: flex;
   flex-wrap: wrap;

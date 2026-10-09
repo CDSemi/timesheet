@@ -4,7 +4,7 @@ import { expectedFinishUtc, suggestBreaks } from '../../src/domain/breaks.ts';
 import { type CalendarVersion, classifyDate } from '../../src/domain/calendar.ts';
 import { addDays, diffDays, isoWeekday } from '../../src/domain/dates.ts';
 import { decideDeficit } from '../../src/domain/deficit.ts';
-import { formatDuration } from '../../src/domain/format.ts';
+import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
 import { formatUtcInstant, parseUtcInstant } from '../../src/domain/instants.ts';
 import type { SessionInterval } from '../../src/domain/intervals.ts';
 import { roundToStepMidpointDown } from '../../src/domain/overtime.ts';
@@ -26,6 +26,7 @@ import {
   splitAtLocalMidnights,
   startOfLocalDay,
 } from '../../src/domain/zones.ts';
+import { formatHoursMinutes as pdfHoursMinutes } from '../../src/server/pdf/layout.ts';
 import { expectDomainError } from '../support/fixtures.ts';
 
 const LA = 'America/Los_Angeles';
@@ -419,5 +420,24 @@ describe('display formatting', () => {
       '8h 00m',
       '−1h 00m',
     ]);
+  });
+
+  it('shows h:mm exactly as the timesheet PDF prints it', () => {
+    expect([0, 5, 59, 60, 90, 135, 330, 600, 1439, 6000].map(formatHoursMinutes)).toEqual([
+      '0:00',
+      '0:05',
+      '0:59',
+      '1:00',
+      '1:30',
+      '2:15',
+      '5:30',
+      '10:00',
+      '23:59',
+      '100:00',
+    ]);
+    // The app and the PDF print the same text for every whole minute count the PDF accepts.
+    for (let minutes = 0; minutes <= 3000; minutes += 1) expect(formatHoursMinutes(minutes)).toBe(pdfHoursMinutes(minutes));
+    // Display only: an unexpected value never throws on a screen.
+    expect([formatHoursMinutes(-60), formatHoursMinutes(90.9)]).toEqual(['−1:00', '1:30']);
   });
 });

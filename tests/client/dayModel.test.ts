@@ -9,7 +9,6 @@ import {
   staleDates,
   staleReloadMessage,
   toDayDisplay,
-  weekGroups,
 } from '../../src/client/components/dayModel.ts';
 
 function calculation(status: Calculation['status'], regular: number | null = null): Calculation {
@@ -155,33 +154,7 @@ describe('toDayDisplay', () => {
   });
 });
 
-describe('weekGroups', () => {
-  it('splits a two-week period into Monday to Sunday groups', () => {
-    const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
-    const groups = weekGroups(
-      dates.map((date) => day(date)),
-      null,
-    );
-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
-      ['2026-09-28', 7],
-      ['2026-10-05', 7],
-    ]);
-    expect(groups[0]?.days[0]?.weekday).toBe('Mon');
-    expect(groups[1]?.days[6]?.weekday).toBe('Sun');
-  });
-
-  it('groups a period that starts mid-week into partial weeks', () => {
-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
-      ['2026-09-28', 2],
-      ['2026-10-05', 1],
-    ]);
-  });
-
-  it('returns nothing for no days', () => {
-    expect(weekGroups([], null)).toEqual([]);
-  });
-});
+// The week grouping moved to sheetModel.ts (sheetWeeks); its cases live in sheetModel.test.ts.
 
 describe('batchEntries', () => {
   it('builds date-ordered entries with the version each day was loaded at', () => {

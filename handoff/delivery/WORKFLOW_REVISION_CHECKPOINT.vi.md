@@ -39,9 +39,19 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - T01 xong sau phụ lục 2: toàn bộ e2e exit 0 (desktop 72/0/3, mobile 73/0/2);
   typecheck, lint, verify exit 0; digest b5cdb2d4 (779 file). Một heredoc rỗng lỡ chạy
   (không ảnh hưởng, không còn task treo).
-- Đang chạy: WP5-UX-T01-FREEZE (committer) trên gốc 5faa0b6.
-- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T02 (bảng
-  kiểu Excel; worker-high, opus, novelty).
+- WP5-UX-T01-FREEZE xong: 3224474 trên main, đã push (26 file, digest b5cdb2d4, mọi
+  kiểm tra exit 0).
+- Đang chạy: WP5-UX-T02 (worker-high, opus, novelty; bảng kiểu Excel) trên gốc
+  3224474 / b5cdb2d4. Sở hữu các component bảng, sheetModel, hàm định dạng, phần thay
+  hiển thị trong màn hình, styles và các spec trong `tests/e2e` (không gồm fixtures.ts).
+- T02 xong (2 lần bàn giao): thêm component bảng, xóa bảng/danh sách cũ, hàm định dạng
+  hiển thị; unit 1783 đạt; toàn bộ e2e exit 0 (desktop 72/0/3, mobile 73/0/2); verify
+  exit 0; digest probe 1789a8be (781 file) vì `npm run digest` exit 1 khi việc xóa file
+  chưa được stage (ghi trong backlog). Để gate xem: thanh trên cùng của điện thoại xuất
+  hiện giữa ảnh chụp nguyên trang.
+- Đang chạy: WP5-UX-T02-FREEZE (committer; tính digest sau khi stage) trên gốc 3224474.
+- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T03 (thanh
+  kỳ lương, nút chấm công, chế độ sửa nhiều ngày; worker, sonnet).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

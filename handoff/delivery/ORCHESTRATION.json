@@ -28,7 +28,7 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-T01-FREEZE",
+  "next_task_id": "WP5-UX-T02-FREEZE",
   "runtime_observations": [
     {
       "date": "2026-10-08",
@@ -155,6 +155,7 @@
     }
   },
   "governance_backlog": [
+    "2026-10-08 (tooling, not a governance path): scripts/source-digest.mjs hashes `git ls-files --cached` paths and exits 1 when a tracked file is deleted but the deletion is unstaged (WP5-UX-T02). Workers cannot stage, so slices that delete files report a probe digest and the freeze computes the digest after staging. Optional fix: skip index paths missing from the working tree (deleted files are not part of the working-tree snapshot).",
     "Evidence whitespace policy: resolved in WP2 by WP2-INFRA1 (.gitattributes 'handoff/delivery/evidence/** -whitespace'; .gitattributes is not a governance path). Optional later: mention it in docs/08 commit checks during the next GOV cycle.",
     "GOV-E8-AUDIT R1: resolved by GOV-RECOVERY-FIX (frozen 7f750e9, GOV-RECOVERY-GATE PASS, GOV-RECOVERY-AUDIT PASS). Optional follow-ups from GOV_RECOVERY_REVIEW: synthetic boards still inherit coordinator_runtime; no in-suite guard for status independence; override runs not marked in the output.",
     "GOV-E8-AUDIT R2: AGENTS.vi.md UI item 2 lacks 'mobile-first default' and '(clean padding/gap)' (translation gap).",
@@ -171,7 +172,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "5faa0b6f046568dae300331790a9dd168685427b",
+    "last_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
     "unpushed": []
   },
   "owner_decisions": [
@@ -14337,9 +14338,117 @@
       "id": "WP5-UX-T01-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a5868c0109924a383",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T01-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-T01-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "5faa0b6f046568dae300331790a9dd168685427b",
+      "branch": "main",
+      "commit_sha": "32244744ff37835603a1c2685ef2eb4e4d78861f",
+      "pushed": true,
+      "source_digest": "b5cdb2d469506b978847eadf41815b8b9fe72c0e585602b99f81d350cc96a41b",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 26 files (12 slice paths, App.tsx untouched, 14 handoff records); working-tree and new-HEAD digests b5cdb2d4; node v24.21.0; precommit PASS (26 files, 0 findings), diff-check, JSON parse, validator (269 tasks), check_recovery (87) and preflight exit 0; remote main = 3224474.",
+      "next_action": "None; WP5-UX-T02 follows."
+    },
+    {
+      "id": "WP5-UX-T02",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX-T01-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa193ddfa339be714",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/TimesheetSheet.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "src/client/components/sheetModel.ts",
+        "src/client/components/TimesheetGrid.tsx",
+        "src/client/components/DayList.tsx",
+        "src/client/components/DayStatus.tsx",
+        "src/client/components/dayModel.ts",
+        "src/client/components/format.ts",
+        "src/domain/format.ts",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/styles.css",
+        "tests/client/sheetModel.test.ts",
+        "tests/client/dayModel.test.ts",
+        "tests/domain/engine.test.ts",
+        "tests/e2e",
+        "handoff/delivery/tasks/WP5-UX-T02.md",
+        "handoff/delivery/evidence/WP5-UX-T02"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T02.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T02.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T02/typecheck-2.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/lint-2.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/unit.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/e2e-2.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/verify.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/digest.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/digest-probe.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/digest-probe.mjs.txt",
+        "handoff/delivery/evidence/WP5-UX-T02/sheet-desktop-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T02/sheet-desktop-dark-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T02/sheet-phone-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T02/sheet-phone-dark-synthetic.png"
+      ],
+      "baseline_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
+      "source_digest": "1789a8be51e0339ecc96ddc26d3e59c0eabfa8a5ae362feb3144bdbbdd43b434",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (2 hand-backs): added TimesheetSheet.tsx, SheetWeekTable.tsx, sheetModel.ts and tests/client/sheetModel.test.ts; deleted TimesheetGrid.tsx and DayList.tsx; modified TimesheetScreen.tsx (render swap; useGridStatus replaced by usePeriodState + gridStatus, same two GET routes), DayStatus.tsx, dayModel.ts, client format.ts, styles.css, src/domain/format.ts (display-only formatHoursMinutes, equal to the PDF's for 0..3000), dayModel and engine unit tests, seven e2e specs (no assertion removed; several strengthened). Unit 78 files / 1783 passed; full e2e run 2 exit 0: desktop 72/0/3, mobile 73/0/2; typecheck, lint, verify (smoke port 47823) exit 0; privacy grep 0 profile paths, no new emails. npm run digest exit 1 because the two deletions are unstaged (the script hashes index paths); probe digest without them 1789a8be (781 files), to be confirmed by the committer after staging. useGridStatus in SubmissionStatus.tsx is now unused (T03 owns that file). Open for the gate: the fixed phone top bar appears once mid-image in full-page captures (believed a Playwright stitching artifact).",
+      "next_action": "WP5-UX-T02-FREEZE stages the slice (including the two deletions), confirms digest 1789a8be after staging, commits and pushes; then WP5-UX-T03."
+    },
+    {
+      "id": "WP5-UX-T02-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-T02"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -14357,18 +14466,18 @@
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX-T01-FREEZE"
+        "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T02-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "5faa0b6f046568dae300331790a9dd168685427b",
+      "baseline_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the T01 slice and the listed handoff records, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-T02 brief."
+      "next_action": "Committer stages the T02 slice and the listed handoff records, computes the digest after staging, commits on main and pushes; then the coordinator writes the WP5-UX-T03 brief."
     }
   ],
   "future_packages": [

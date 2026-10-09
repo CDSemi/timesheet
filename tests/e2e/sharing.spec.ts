@@ -241,6 +241,8 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
+  // The owner's signature lines and review state are not part of a shared view.
+  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Shared views' }).getByRole('link')).toHaveText(['Timesheet', 'Revisions']);
 
   // A read-only day: the figures and fields are shown, and no add, edit, delete or save control exists.
@@ -321,6 +323,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
+  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
   recorded.reset();
 
   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;

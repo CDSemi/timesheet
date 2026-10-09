@@ -133,4 +133,12 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 5faa0b6f046568dae300331790a9dd168685427b; post-HEAD and commit
+  32244744ff37835603a1c2685ef2eb4e4d78861f; pushed yes; remote SHA the same.
+- Digest before staging and on new HEAD: b5cdb2d469506b978847eadf41815b8b9fe72c0e585602b99f81d350cc96a41b
+  (both). Staged count 26. All 12 listed non-handoff paths were changed.
+- Checks (all exit 0): node --version v24.21.0; digest; git add; precommit (26 files, 0
+  findings); diff --check; ORCHESTRATION.json parse; validate_orchestration; check_recovery;
+  validate_package --preflight; HEAD ls-tree digest.
+- Fixes: none. Evidence: evidence/WP5-UX-T01-FREEZE/checks.txt, commit-message.txt (unstaged).
+- Model: claude-sonnet-5-5.

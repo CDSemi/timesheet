@@ -1,10 +1,11 @@
-import { addDays, isoWeekday } from '../../domain/dates.ts';
+import { isoWeekday } from '../../domain/dates.ts';
 import type { BatchConflict, DayBatchEntry, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
 
 /*
  * Pure presentation logic for the timesheet views. It maps fields the server already computed
- * (calculation.status, attendance_expected, regular/credited minutes) to display states and
- * groups days into weeks. It never derives business minutes, completeness rules or overtime.
+ * (calculation.status, attendance_expected, regular/credited minutes) to display states; the
+ * sheet's week bands are built in sheetModel.ts. It never derives business minutes,
+ * completeness rules or overtime.
  */
 
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -103,27 +104,6 @@ export function toDayDisplay(day: DayView, todayLocal: string | null): DayDispla
     creditedMinutes: day.calculation?.credited_minutes ?? null,
     entryVersion: day.entry?.version ?? null,
   };
-}
-
-export interface WeekGroup {
-  /** The Monday that starts the week. */
-  weekStart: string;
-  days: DayDisplay[];
-}
-
-/** Groups consecutive days into Monday to Sunday weeks (a two-week period gives two groups). */
-export function weekGroups(days: readonly DayView[], todayLocal: string | null): WeekGroup[] {
-  const groups: WeekGroup[] = [];
-  for (const day of days) {
-    const weekStart = addDays(day.work_date, -(isoWeekday(day.work_date) - 1));
-    let group = groups.at(-1);
-    if (group?.weekStart !== weekStart) {
-      group = { weekStart, days: [] };
-      groups.push(group);
-    }
-    group.days.push(toDayDisplay(day, todayLocal));
-  }
-  return groups;
 }
 
 /** The only review status the server provides before WP3: draft or finalized. */

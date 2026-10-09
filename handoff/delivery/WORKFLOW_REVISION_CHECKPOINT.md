@@ -41,9 +41,19 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - T01 done after addendum 2: full e2e exit 0 (desktop 72/0/3, mobile 73/0/2);
   typecheck, lint, verify exit 0; digest b5cdb2d4 (779 files). One stray empty heredoc
   (no effect, no task left).
-- Running: WP5-UX-T01-FREEZE (committer) on base 5faa0b6.
-- Next action: on the freeze result, record commit/push, then write the WP5-UX-T02 brief
-  (sheet; worker-high, opus, novelty).
+- WP5-UX-T01-FREEZE done: 3224474 on main, pushed (26 files, digest b5cdb2d4, all checks
+  exit 0).
+- Running: WP5-UX-T02 (worker-high, opus, novelty; the Excel-style sheet) on base
+  3224474 / b5cdb2d4. Owns the sheet components, sheetModel, formatter, screen swap,
+  styles and `tests/e2e` specs (not fixtures.ts).
+- T02 done (2 hand-backs): sheet components added, grid/list deleted, display formatter;
+  unit 1783 passed; full e2e exit 0 (desktop 72/0/3, mobile 73/0/2); verify exit 0;
+  probe digest 1789a8be (781 files) because `npm run digest` exits 1 on unstaged
+  deletions (backlog note). Open for the gate: the fixed phone top bar appears mid-image
+  in full-page captures.
+- Running: WP5-UX-T02-FREEZE (committer; digest computed after staging) on base 3224474.
+- Next action: on the freeze result, record commit/push, then write the WP5-UX-T03 brief
+  (period bar, clock panel, batch mode; worker, sonnet).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

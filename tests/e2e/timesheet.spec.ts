@@ -1,8 +1,10 @@
 import type { Page } from '@playwright/test';
+import { formatHoursMinutes } from '../../src/domain/format.ts';
 import { expect, screenshotPath, test } from './fixtures.ts';
 
 /*
- * Two-week grid (desktop), day list (mobile) and batch category edit, on both projects.
+ * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
+ * category edit, on both projects.
  * The browser zone differs from the reporting zone on purpose, so both zones are visible.
  * Data are synthetic and relative to today; every assertion derives its dates from the API.
  */
@@ -22,6 +24,11 @@ test.beforeEach(({ page }) => {
 
 function dayRow(page: Page, workDate: string) {
   return page.locator(`[data-day="${workDate}"]`);
+}
+
+/** HH:MM of a UTC instant in a zone, computed by the test runtime (an oracle independent of the app). */
+function clockText(instant: string, zone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(instant));
 }
 
 /** Picks the days to select, failing clearly when the period has too few past workdays. */
@@ -44,18 +51,29 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await employeeSeed.seedCompleteDay(completeDay);
   await employeeSeed.seedUnconfirmedBreaksDay(pendingDay);
   const { reportingZone, currentPayrollDate } = await employeeSeed.today();
-  const sheet = await employeeSeed.call<{ period: { due_local_date: string; period_start: string } }>(
-    'GET',
-    `/api/timesheets/${currentPayrollDate}`,
-  );
+  const sheet = await employeeSeed.call<{
+    period: { due_local_date: string; period_start: string };
+    totals: { provisional_credited_minutes: number; pending_days: number };
+  }>('GET', `/api/timesheets/${currentPayrollDate}`);
+  const complete = await employeeSeed.dayView(completeDay);
+  const completeSession = complete.sessions[0];
+  expect(completeSession?.end_utc, 'the seeded complete day has one ended session').toBeTruthy();
 
   await signInThroughUi();
   await expect(page.locator('[data-day]')).toHaveCount(14);
 
-  // Exactly one of the grid and the list renders, chosen by the 768px media query.
+  // Exactly one of the two sheet layouts renders, chosen by the 768px media query.
   const isDesktop = project === 'desktop';
-  await expect(page.locator('table.grid')).toHaveCount(isDesktop ? 1 : 0);
-  await expect(page.locator('.day-list')).toHaveCount(isDesktop ? 0 : 1);
+  await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(isDesktop ? 1 : 0);
+  await expect(page.locator('[data-sheet="phone"]')).toHaveCount(isDesktop ? 0 : 1);
+  // The Excel form: company header, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
+  const form = page.getByRole('article', { name: 'Timesheet form' });
+  await expect(form).toContainText('C&D Semiconductor Services, Inc.');
+  const weeks = form.locator('section.sheet-week');
+  await expect(weeks).toHaveCount(2);
+  for (const index of [0, 1]) await expect(weeks.nth(index).locator('[data-day]')).toHaveCount(7);
+  await expect(form.locator('[data-ot-total]')).toHaveText(formatHoursMinutes(sheet.totals.provisional_credited_minutes));
+  await expect(form.getByRole('region', { name: 'Signatures' })).toContainText('Manager Signature');
 
   // Zones, due date in both zones, accounting dates, and the server-provided review status.
   await expect(page.getByText('Reporting zone', { exact: true })).toBeVisible();
@@ -66,19 +84,39 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
   await expect(page.locator('.period-title')).toContainText('Draft');
   await expect(page.locator('.period-title .badge.current')).toBeVisible();
-  await expect(dayRow(page, sheet.period.period_start)).toContainText(sheet.period.period_start);
+  // Each day is named by its accounting date (the ISO date); its date cell prints the US form date.
+  const start = sheet.period.period_start;
+  await expect(dayRow(page, start)).toHaveAccessibleName(new RegExp(`${start}$`));
+  await expect(dayRow(page, start)).toContainText(`${start.slice(5, 7)}/${start.slice(8, 10)}`);
+  await expect(dayRow(page, start).getByRole('button', { name: `Edit ${start}`, exact: true })).toBeVisible();
   await expect(page.getByText('accounting dates', { exact: false }).first()).toBeVisible();
 
-  // A complete day shows complete and 8h 00m; unconfirmed breaks show pending OT.
-  await expect(dayRow(page, completeDay)).toContainText('complete');
-  await expect(dayRow(page, completeDay)).toContainText('8h 00m');
-  await expect(dayRow(page, completeDay)).not.toContainText('pending OT');
-  await expect(dayRow(page, pendingDay)).toContainText('confirm breaks');
-  await expect(dayRow(page, pendingDay)).toContainText('pending OT');
+  // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).
+  const range = `${clockText(completeSession?.start_utc ?? '', displayZone)}-${clockText(completeSession?.end_utc ?? '', displayZone)}`;
+  await expect(dayRow(page, completeDay)).toContainText(range);
+  await expect(dayRow(page, completeDay)).not.toContainText('09:00-18:00');
+
+  // A complete day shows Complete, its server OT as h:mm and, under Show details, 8:00 worked on a workday;
+  // unconfirmed breaks show Confirm breaks and pending OT.
+  await expect(dayRow(page, completeDay)).toContainText('Complete');
+  await expect(dayRow(page, completeDay).locator('[data-ot]')).toHaveText(formatHoursMinutes(complete.calculation?.credited_minutes ?? -1));
+  await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
+  await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
+  await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
+  const details = form.getByRole('button', { name: 'Show details' });
+  await expect(details).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-detail]')).toHaveCount(0);
+  await details.click();
+  await expect(details).toHaveAttribute('aria-pressed', 'true');
+  const regular = page.locator(`[data-detail="regular"][data-detail-day="${completeDay}"]`);
+  await expect(regular).toHaveText(formatHoursMinutes(complete.calculation?.regular_minutes ?? -1));
+  await expect(regular).toHaveText('8:00');
+  await expect(page.locator('[data-detail="regular"]')).toHaveCount(14);
   // Status is text plus a shape, never colour alone.
   await expect(dayRow(page, pendingDay).locator('.status .shape').first()).toBeAttached();
-  // No em dash or en dash placeholder anywhere on the screen.
+  // No em dash or en dash placeholder anywhere on the screen, and no "none" placeholder on the sheet.
   expect(await page.locator('main').innerText()).not.toMatch(/[–—]/);
+  expect(await form.innerText()).not.toMatch(/\bnone\b/i);
 
   if (!isDesktop) {
     const widths = await page.evaluate<{ scroll: number; inner: number }>(
@@ -100,6 +138,11 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   }
 
   await page.screenshot({ path: screenshotPath(`timesheet-view-${project}-synthetic.png`), fullPage: true });
+  // The sheet in both themes (synthetic data), for the visual record.
+  // `animations: 'disabled'` finishes the colour transitions of the theme switch before the capture.
+  await page.screenshot({ path: screenshotPath(`sheet-${project}-light-synthetic.png`), fullPage: true, animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: screenshotPath(`sheet-${project}-dark-synthetic.png`), fullPage: true, animations: 'disabled' });
 });
 
 test('batch edit: preview, conflict dialog for a clock session, confirmed commit', async ({

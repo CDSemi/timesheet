@@ -211,6 +211,8 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
   await expect(page.locator('[data-review-link-disabled]')).toBeDisabled();
   await expect(page.getByRole('link', { name: /Review/ })).toHaveCount(0);
   await expect(page.locator('[data-grid-status="line"]')).toHaveCount(0);
+  // An imported period has no signature lines and no review link on the sheet.
+  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
 
   const batch = page.getByRole('group', { name: 'Batch category edit' });
   await expect(batch.getByRole('button', { name: 'Select all' })).toBeDisabled();

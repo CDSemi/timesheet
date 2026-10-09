@@ -250,7 +250,7 @@ test('history shows the signed revision with its PDF and delivery; download, exp
   if (outcome === undefined) throw new Error(`unexpected first delivery state ${firstState}`);
   expect(firstState, 'a configured capture sender: the first attempt is accepted').toBe('accepted');
 
-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
+  // The period status sits in the sheet, above the week bands (the desktop sheet, or the phone tables).
   await signInPageAs(person.account, '#/timesheet');
   const status = page.locator('[data-grid-status="line"]');
   await expect(status).toHaveCount(1);
@@ -258,8 +258,12 @@ test('history shows the signed revision with its PDF and delivery; download, exp
   await expect(status.locator('[data-grid-status="revision"]')).toHaveText('Revision 1');
   await expect(status.locator('[data-grid-status="pdf"]')).toHaveText('PDF ready');
   await expect(status.locator('[data-grid-status="delivery"]')).toHaveText(outcome.badge);
-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
-  else await expect(page.locator('table.grid')).toHaveCount(0);
+  const layout = project === 'desktop' ? 'desktop' : 'phone';
+  await expect(page.locator(`[data-sheet="${layout}"] [data-grid-status="line"]`)).toHaveCount(1);
+  await expect(page.locator(`[data-sheet]:not([data-sheet="${layout}"])`)).toHaveCount(0);
+  // The signature line of the sheet names the signer; never an image on the Timesheet page.
+  await expect(page.locator('[data-signature="employee"]')).toContainText('Signed by');
+  await expect(page.locator('[data-sheet] img')).toHaveCount(0);
   await page.screenshot({ path: screenshotPath(`history-grid-status-${project}-synthetic.png`) });
   await status.getByRole('link', { name: 'Open in History' }).click();
   await expect(page).toHaveURL(/#\/history$/);

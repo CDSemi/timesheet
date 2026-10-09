@@ -104,7 +104,8 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
     const row = page.locator(`[data-day="${owner.workDate}"]`);
     await expect(row).toBeVisible();
-    await expect(row).not.toContainText('complete');
+    await expect(row).not.toContainText('Complete');
+    await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
     await expect(page.locator('main')).not.toContainText(owner.note);
 
     // Hash swap: no route takes an id, and the admin route falls back to the employee's own timesheet.
@@ -184,7 +185,8 @@ test('an admin cannot open employee data through any admin screen', async (
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' }).click();
     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
     await expect(page.locator('main')).not.toContainText(owner.note);
-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
+    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
+    await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
 
     const intact = await employeeSeed.dayView(owner.workDate);
     expect(intact.sessions).toHaveLength(1);

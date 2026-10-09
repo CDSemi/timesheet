@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { addDays } from '../domain/dates.ts';
-import { formatDuration } from '../domain/format.ts';
 import {
   api,
   ApiRequestError,
@@ -19,20 +18,20 @@ import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
 import { ClockBar } from './components/ClockBar.tsx';
 import { ClockOutDialog } from './components/ClockOutDialog.tsx';
-import { DayList } from './components/DayList.tsx';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+import { gridStatus } from './components/deliveryModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodHeader } from './components/PeriodHeader.tsx';
-import { SubmissionStatusLine, useGridStatus } from './components/SubmissionStatus.tsx';
-import { TimesheetGrid } from './components/TimesheetGrid.tsx';
+import { usePeriodState } from './components/ReviewStatus.tsx';
+import { TimesheetSheet } from './components/TimesheetSheet.tsx';
 import { DayEditor } from './DayEditor.tsx';
 
-/** The documented layout breakpoint: the grid from 768px up, the day list below it. */
+/** The documented layout breakpoint: the 7-column sheet from 768px up, one table per week below it. */
 const DESKTOP_QUERY = '(min-width: 768px)';
 
-/** True when the grid should render. Exactly one of grid and list is ever in the page. */
+/** True when the desktop sheet should render. Exactly one of the two layouts is ever in the page. */
 function useDesktop(): boolean {
   return useSyncExternalStore(
     (notify) => {
@@ -79,7 +78,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   // A shared view has no status line: the finalization and delivery routes are the owner's own.
   // F-2: an imported period is read-only history with no review or delivery state, so it has no status line.
   const imported = view?.timesheet.imported_unverified === true;
-  const periodStatus = useGridStatus(own && !imported ? (view?.period.payroll_date ?? null) : null, view?.timesheet.version);
+  // The same finalization and delivery reads as before; the sheet also takes its signature lines from them.
+  const periodState = usePeriodState(view?.period.payroll_date ?? '', view?.timesheet.version, own && !imported && view !== null);
+  const periodStatus = periodState === null ? null : gridStatus(periodState);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -259,37 +260,17 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
             />
           )}
 
-          {desktop ? (
-            <TimesheetGrid
-              days={view.days}
-              zone={displayZone}
-              todayLocal={todayLocal}
-              selected={selected}
-              onToggle={toggle}
-              onEdit={setEditDate}
-              status={periodStatus}
-              editable={canEdit}
-              locked={imported}
-            />
-          ) : (
-            <>
-              <SubmissionStatusLine status={periodStatus} />
-              <DayList
-                days={view.days}
-                zone={displayZone}
-                todayLocal={todayLocal}
-                selected={selected}
-                onToggle={toggle}
-                onEdit={setEditDate}
-                editable={canEdit}
-                locked={imported}
-              />
-            </>
-          )}
-          <p className="muted">
-            *Provisional OT credit: {formatDuration(view.totals.provisional_credited_minutes)}; days pending OT evidence:{' '}
-            {view.totals.pending_days}. Credits post only when a revision is finalized (WP3).
-          </p>
+          <TimesheetSheet
+            view={view}
+            employeeName={shared === undefined ? user.display_name : shared.ownerName}
+            zone={displayZone}
+            todayLocal={todayLocal}
+            desktop={desktop}
+            actions={{ selected, onToggle: toggle, onEdit: setEditDate, editable: canEdit, locked: imported }}
+            status={periodStatus}
+            finalization={periodState?.finalization ?? null}
+            signatures={own && !imported}
+          />
         </section>
       )}
 

@@ -19,6 +19,16 @@ function localDate(instant: string, zone: string): string {
   return formatInZone(zone, parseUtcInstant(instant)).slice(0, 10);
 }
 
+/** An accounting date `YYYY-MM-DD` as the US form date `MM/DD/YYYY`, as the Excel form and the PDF print it. */
+export function usDate(date: string): string {
+  return `${date.slice(5, 7)}/${date.slice(8, 10)}/${date.slice(0, 4)}`;
+}
+
+/** An accounting date `YYYY-MM-DD` as the short US form `MM/DD`, the date cell of the sheet. */
+export function usShortDate(date: string): string {
+  return `${date.slice(5, 7)}/${date.slice(8, 10)}`;
+}
+
 /** A period as a range in words, for example `2026-09-28 to 2026-10-11`. */
 export function periodRange(period: Pick<Period, 'period_start' | 'period_end'>): string {
   return `${period.period_start} to ${period.period_end}`;
