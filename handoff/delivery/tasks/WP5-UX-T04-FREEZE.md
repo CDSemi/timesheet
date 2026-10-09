@@ -144,4 +144,10 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD b6324b7cd0cca0d44b18f82b835387a8846bb0b1 (= origin/main); post-HEAD and
+  commit SHA 118a104a0e271a2fb2b8916a2cb1bf85244147bf; pushed yes; remote SHA same.
+- Digest before add and ls-tree digest of HEAD: both 6f362af9f9a2d09995d2c3f48d732abfce43772ae352efa40c00bf7825ffa538 (789 files). Staged: 37 files.
+- Checks: node 24.21.0 (0); digest (0); git add (0); precommit PASS 37 files (0);
+  diff --check (0); JSON parse (0); validate_orchestration (0); check_recovery (0);
+  validate_package --preflight (0). Details: evidence/WP5-UX-T04-FREEZE/checks.txt.
+- Fixes: none. Stop reason: none.

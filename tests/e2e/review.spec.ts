@@ -1,7 +1,7 @@
 import { crc32, deflateSync } from 'node:zlib';
 import { type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/dates.ts';
-import { formatDuration } from '../../src/domain/format.ts';
+import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
 import {
   type BuiltServer,
   type CreatedAccount,
@@ -128,7 +128,7 @@ async function newReviewer(adminSeed: SeedClient, server: BuiltServer, options: 
 
 interface ApiReview {
   payload: {
-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+    days: Array<{ work_date: string; completeness: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
     totals: { credited_minutes: number; pending_days: number };
     ot_proposals: Array<{ work_date: string; credited_minutes: number }>;
     deficit_proposals: Array<{ work_date: string; mode: string; deficit_minutes: number }>;
@@ -195,20 +195,26 @@ test('the review shows the server content for all 14 days, then the sign-off sub
   await expect(page.locator('[data-review-day]')).toHaveCount(14);
   for (const day of api.payload.days) {
     const row = page.locator(`[data-review-day="${day.work_date}"]`);
-    for (const [label, minutes] of [
-      ['Regular', day.calculation?.regular_minutes ?? null],
-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
-      ['Credit', day.calculation?.credited_minutes ?? null],
+    // The detail rows are always on in the review: worked on a workday / on a day off, as h:mm.
+    for (const [detail, minutes] of [
+      ['regular', day.calculation?.regular_minutes ?? null],
+      ['off-calendar', day.calculation?.nonworking_minutes ?? null],
     ] as const) {
-      const cell = row.locator(`td[data-label="${label}"]`);
-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
+      const cell = page.locator(`[data-detail="${detail}"][data-detail-day="${day.work_date}"]`);
+      await expect(cell, `${day.work_date} ${detail}`).toHaveText(minutes === null ? '' : formatHoursMinutes(minutes));
     }
+    // The OT cell follows the PDF rule: the credit of a complete day, "pending" while evidence is open, else blank.
+    const credited = day.calculation?.credited_minutes ?? null;
+    const ot = row.locator('[data-ot]');
+    if (day.completeness === 'complete' && credited !== null) await expect(ot, `${day.work_date} OT`).toHaveText(formatHoursMinutes(credited));
+    else if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') await expect(ot, `${day.work_date} OT`).toHaveText('pending');
+    else await expect(ot, `${day.work_date} OT`).toHaveCount(0);
   }
   const completeRow = page.locator(`[data-review-day="${completeDay}"]`);
-  await expect(completeRow).toContainText('complete');
+  await expect(completeRow).toContainText('Complete');
   await expect(completeRow).toContainText('3 breaks');
   const pendingRow = page.locator(`[data-review-day="${pendingDay}"]`);
-  await expect(pendingRow).toContainText('breaks unconfirmed');
+  await expect(pendingRow).toContainText('breaks not confirmed');
   await expect(page.locator('[data-total="credited"] dd')).toHaveAttribute('data-minutes', String(api.payload.totals.credited_minutes));
 
   // Missing evidence, recipients and the rendered email, the signature preview.
@@ -348,7 +354,7 @@ test('a period finalized in another window reloads with a clear message and no s
   await reviewer.api.seedCompleteDay(day);
 
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
   await signOffElsewhere(reviewer);
 
   // A different request than the one already recorded (another name): refused, never a second revision.
@@ -373,7 +379,7 @@ test('an identical sign-off repeated from a second window is recognised and crea
   await reviewer.api.seedCompleteDay(day);
 
   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
   await signOffElsewhere(reviewer);
 
   await page.getByLabel('Your name').fill('Synthetic Reviewer');

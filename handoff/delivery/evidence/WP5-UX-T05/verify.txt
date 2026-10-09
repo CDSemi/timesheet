@@ -1,0 +1,94 @@
+
+> <email>0 verify
+> npm run typecheck && npm run lint && npm test && npm run build && npm run smoke
+
+
+> <email>0 typecheck
+> tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json && tsc -p tsconfig.test.json
+
+
+> <email>0 lint
+> eslint .
+
+
+> <email>0 test
+> vitest run
+
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+
+ Test Files  82 passed (82)
+      Tests  1816 passed (1816)
+   Start at  22:11:53
+   Duration  55.14s (tests 92%, import 6%, transform 2%)
+
+
+> <email>0 build
+> npm run build:server && npm run build:client
+
+
+> <email>0 build:server
+> tsc -p tsconfig.server.json
+
+
+> <email>0 build:client
+> vite build
+
+[36mvite v8.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/client/assets/index-C9Tc2C5b.css   43.06 kB │ gzip:   8.20 kB
+dist/client/assets/index-C0NYxvSN.js   479.27 kB │ gzip: 135.79 kB │ map: 1,991.82 kB
+
+[32m✓ built in 148ms[39m
+
+> <email>0 smoke
+> node scripts/smoke-built-server.mjs
+
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13],"version":13}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":13}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    <email> |   employee <email> |   employee <email> |   sample data for <email>: 3 sessions, 1 leave request, setup credit 600 minutes |   submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for <email> |   capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured
+PASS  cli seed lists <email> and its sample data
+PASS  built server starts  Timesheet listening on http://127.0.0.1:47852 (schema v13)
+PASS  GET /api/health has no personal data  {"status":"ok"}
+PASS  GET /api/ready returns 200 with the allowlisted keys only  {"status":"ready","schema":{"expected":13,"actual":13},"data_dir_writable":true}
+PASS  GET / serves the built React client with CSP
+PASS  SPA fallback serves index.html
+PASS  employee login sets an HttpOnly SameSite=Strict cookie
+PASS  GET /api/periods/current  today 2026-10-08, current payroll 2026-10-16, due 2026-10-14T00:00:00Z
+PASS  POST 09:00–18:00 on 2026-10-05 with shifted breaks  status 201, R 480, O 0, credited 0
+PASS  admin cannot read the employee session by id (404)  404
+PASS  employee gets 403 on the admin area and anonymous gets 401  403/403/401
+PASS  admin lists the three accounts with account fields only  id,email,display_name,role,status,calendar_id,created_at,updated_at,not_set_up
+PASS  employee2 signs in with the environment password  200
+PASS  employee2 OT summary: posted 600, reserved 240, available 360, not negative  posted 600, reserved 240, available 360, provisional 120
+PASS  employee OT summary is separate (posted 0, reserved 0)  posted 0, reserved 0
+PASS  employee2 lists the one seeded leave request  status 200, count 1
+PASS  admin sees no employee leave requests
+PASS  another employee and the admin get 404 on the employee2 leave request by id  404/404
+PASS  the refused cancels changed nothing
+PASS  evidence CSV: text/csv, no-store, safe filename, export header, seven sections in order  sections export,policy_versions,intervals,breaks,daily,ledger,leave_permissions
+PASS  evidence CSV carries the seeded setup credit and the leave permission of employee2 only
+PASS  employee evidence CSV has no employee2 ledger or permission rows
+PASS  employee2 evidence lists the 3 seeded sample sessions  3
+PASS  employee cannot read an employee2 session by id (404)  string, 404
+PASS  state change without Origin is rejected (403)  403
+PASS  employee2 identifies and has a current period  200/200
+PASS  seed: employee2 has saved submission settings (recipients on example.invalid) and a synthetic signature  200/200
+PASS  review GET and the other submission reads change nothing in the database (data_version and every table count)  200,200,200,200,200,200,200,200,200
+PASS  sign-off of the reviewed period creates revision 1  201
+PASS  a second, different sign-off of the same period is refused with 409 and writes nothing  409 already_finalized
+PASS  a sign-off built from a stale review hash is also a 409  409
+PASS  cli run-jobs --once --now runs the PDF and send jobs  {"claimed":4,"succeeded":4,"retried":0,"intervention":0,"lost":0} {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0} {"claimed":0,"succeeded":0,"retried":0,"intervention":0,"lost":0}
+PASS  the owner downloads the revision PDF (application/pdf, no-store, attachment)  200 27663 bytes
+PASS  the revision PDF is private: another employee and the admin get 404, anonymous gets 401  404/404/401
+PASS  capture: one accepted attempt; message.eml, attachment.pdf and metadata.json exist; the PDF equals the download; sender and recipients are example.invalid  accepted attachment.pdf+message.eml+metadata.json
+PASS  capture: no password in the captured metadata
+PASS  shared routes of an owner without a share: a non-grantee and the admin get 404, anonymous gets 401  404/404/401 404/404/401 404/404/401 404/404/401
+PASS  logout revokes the session  200/401
+SMOKE PASSED

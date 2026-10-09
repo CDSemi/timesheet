@@ -8,6 +8,7 @@ import {
 } from '../../src/client/api.ts';
 import {
   buildSubmitBody,
+  checklistSteps,
   classifySubmitError,
   deficitChoiceDays,
   deliveryStatus,
@@ -21,10 +22,13 @@ import {
   reviewDayRow,
   reviewHash,
   reviewMode,
+  reviewSheetDay,
+  reviewSheetWeeks,
   sessionLine,
   submitBlockers,
   unresolvedText,
 } from '../../src/client/components/reviewModel.ts';
+import { addDays } from '../../src/domain/dates.ts';
 import type { ReviewSnapshot, SnapshotDay } from '../../src/domain/snapshot.ts';
 import { dateTimeIn, instantOfWallTime } from './zoneOracle.ts';
 
@@ -445,5 +449,93 @@ describe('review content helpers', () => {
     expect(row).toMatchObject({ weekday: 'Sat', calendar: 'Non-working day', nonworking: true, leave: 'vacation leave 4h 00m', wfh: true, notes: 'private' });
     expect(reviewDayRow(day('2026-10-12', { day_class: 'normal', holiday_name: 'Synthetic Day' }), 'America/Los_Angeles').calendar).toBe('Synthetic Day');
     expect(reviewDayRow(day('2026-10-12', { day_class: null }), 'America/Los_Angeles').calendar).toBe('unclassified');
+  });
+});
+
+describe('the review payload on the sheet', () => {
+  const zone = 'America/Los_Angeles';
+  const at = (date: string, time: string, inZone = zone) => instantOfWallTime(date, time, inZone).replace('.000Z', 'Z');
+  const calc = (credited: number | null) => ({ regular_minutes: 480, nonworking_minutes: 0, normal_excess_minutes: 0, eligible_minutes: 30, credited_minutes: credited });
+  const session = (date: string, start: string, end: string | null, confirmed = true, breaks = 1) => ({
+    id: `s-${date}`,
+    start_utc: at(date, start),
+    end_utc: end === null ? null : at(date, end),
+    source: 'manual',
+    breaks_confirmed: confirmed,
+    breaks: Array.from({ length: breaks }, () => ({ start_utc: at(date, '12:00'), end_utc: at(date, '12:30'), counts_as_work: false })),
+  });
+
+  it('shows a complete day with its payload minutes as h:mm, times in the reporting zone, and no Check blank', () => {
+    const row = reviewSheetDay(day('2026-09-28', { calculation: calc(90), sessions: [session('2026-09-28', '09:00', '17:30')] }), zone);
+    expect(row).toMatchObject({ workDate: '2026-09-28', weekday: 'Mon', dateText: '09/28', name: 'Mon 2026-09-28', today: false, nonworking: false });
+    expect(row.time.ranges.map((range) => range.text)).toEqual(['09:00-17:30']);
+    expect(row.time).toMatchObject({ note: '1 break', attention: false });
+    expect(row.ot).toEqual({ kind: 'minutes', text: '1:30' });
+    expect(row.check).toEqual({ key: 'complete', text: 'Complete', shape: 'circle' });
+    expect(row.details).toEqual({ regular: '8:00', offCalendar: '0:00' });
+  });
+
+  it('keeps the reporting-zone time of a session whatever the device zone is', () => {
+    const row = reviewSheetDay(day('2026-01-12', { sessions: [session('2026-01-12', '23:00', null, false, 0)] }), zone);
+    expect(row.time.ranges[0]?.text).toBe('23:00');
+    const other = reviewSheetDay(day('2026-01-12', { sessions: [session('2026-01-12', '23:00', null, false, 0)] }), 'Asia/Ho_Chi_Minh');
+    expect(other.time.ranges[0]?.startDate, 'another zone shows another local date').not.toBeNull();
+  });
+
+  it('maps every completeness to the OT cell and the Check cell of the PDF rule', () => {
+    const cell = (overrides: Partial<SnapshotDay>) => {
+      const row = reviewSheetDay(day('2026-09-29', overrides), zone);
+      return { ot: row.ot.kind, check: row.check?.key ?? null, attention: row.time.attention };
+    };
+    expect(cell({ completeness: 'complete', calculation: calc(0) })).toEqual({ ot: 'minutes', check: 'complete', attention: false });
+    expect(cell({ completeness: 'incomplete', sessions: [session('2026-09-29', '09:00', null)] })).toEqual({ ot: 'pending', check: 'running', attention: false });
+    expect(cell({ completeness: 'incomplete', sessions: [session('2026-09-29', '09:00', '10:00')] })).toMatchObject({ ot: 'pending', check: 'open_session' });
+    expect(cell({ completeness: 'incomplete_breaks' })).toEqual({ ot: 'pending', check: 'confirm_breaks', attention: true });
+    expect(cell({ completeness: 'no_records' })).toEqual({ ot: 'blank', check: 'missing', attention: true });
+    expect(cell({ completeness: 'no_records', attendance_expected: false })).toEqual({ ot: 'blank', check: null, attention: false });
+    expect(cell({ completeness: 'calculation_error', calculation_error: 'overlap' })).toMatchObject({ ot: 'na', check: 'error' });
+  });
+
+  it('writes the label, the leave line and the note in full', () => {
+    const holiday = reviewSheetDay(day('2026-11-26', { day_class: 'nonworking', holiday_name: 'Synthetic Day', category: 'Holiday' }), zone);
+    expect(holiday).toMatchObject({ nonworking: true, label: { main: 'Synthetic Day', lines: ['Holiday'], note: false } });
+    const leave = reviewSheetDay(day('2026-09-30', { category: 'Vacation', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: 'private note' }), zone);
+    expect(leave.label.main).toBe('Vacation');
+    expect(leave.label.lines).toEqual(['Work from home', 'Leave 4:00']);
+    expect(leave.noteText).toBe('private note');
+    expect(reviewSheetDay(day('2026-09-30', { day_class: null, holiday_name: null, category: null }), zone).label.lines).toEqual(['Not in the calendar']);
+  });
+
+  it('groups the 14 days of a period into two Monday to Sunday weeks', () => {
+    const days = Array.from({ length: 14 }, (_, index) => day(addDays('2026-09-28', index)));
+    const weeks = reviewSheetWeeks(days, zone);
+    expect(weeks.map((week) => [week.index, week.rangeText, week.days.length])).toEqual([
+      [1, '09/28/2026 - 10/04/2026', 7],
+      [2, '10/05/2026 - 10/11/2026', 7],
+    ]);
+  });
+});
+
+describe('the checklist beside the sheet', () => {
+  it('lists the three steps in order with their states in words', () => {
+    const ready = payload();
+    expect(checklistSteps(ready, form(), false)).toEqual([
+      { key: 'attention', title: 'Days that need attention', state: 'Nothing to resolve' },
+      { key: 'email', title: 'Email and PDF', state: 'Recipients and signature ready' },
+      { key: 'sign', title: 'Sign', state: 'Waiting for your signature' },
+    ]);
+  });
+
+  it('says what still needs the person: acknowledgement, then deficit choices', () => {
+    const open = payload({ unresolved_inputs: unresolved, deficit_proposals: [chooseDay('2026-09-30')] });
+    expect(checklistSteps(open, form(), false)[0]?.state).toBe('1 day needs your acknowledgement');
+    expect(checklistSteps(open, form({ acknowledged: true }), false)[0]?.state).toBe('1 deficit day needs your choice');
+    expect(checklistSteps(open, form({ acknowledged: true, choices: { '2026-09-30': 'waive' } }), false)[0]?.state).toBe('Acknowledged');
+  });
+
+  it('names a missing signature or recipient and the imported lock', () => {
+    expect(checklistSteps(payload({ signature: null }), form(), false)[1]?.state).toBe('No signature image saved');
+    expect(checklistSteps(payload({ recipients: { ...payload().recipients, to: [] } }), form(), false)[1]?.state).toBe('No recipient set');
+    expect(checklistSteps(payload(), form(), true)[2]?.state).toBe('Locked: imported history');
   });
 });

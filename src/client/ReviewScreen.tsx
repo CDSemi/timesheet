@@ -12,6 +12,7 @@ import { loadPeriodState, type PeriodState, ReviewBadges } from './components/Re
 import {
   type Blocker,
   buildSubmitBody,
+  checklistSteps,
   classifySubmitError,
   type FieldKey,
   type FormState,
@@ -157,6 +158,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
 
   const { payload } = review;
   const mode = reviewMode(period?.finalization.revision ?? null);
+  const steps = checklistSteps(payload, form, imported).filter((step) => step.key !== 'sign' || done === null);
   return (
     <div className="review-screen stack">
       <header className="toolbar">
@@ -224,49 +226,68 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
         </section>
       )}
 
-      <ReviewDays days={payload.days} zone={payload.reporting_zone} totalCredited={payload.totals.credited_minutes} pendingDays={payload.totals.pending_days} />
-      <ReviewOtProposals payload={payload} />
-      <ReviewDeficits
-        proposals={payload.deficit_proposals}
-        choices={form.choices}
-        onChoose={(workDate, choice) => setForm({ ...form, choices: { ...form.choices, [workDate]: choice } })}
-        error={errors.deficit_choices ?? null}
-      />
-      <ReviewEvidence
-        payload={payload}
-        acknowledged={form.acknowledged}
-        onAcknowledge={(value) => setForm({ ...form, acknowledged: value })}
-        error={errors.acknowledgement ?? null}
-      />
-      <ReviewReservations payload={payload} />
-      <ReviewEnvelope payload={payload} error={errors.signature ?? null} />
+      <div className="review-layout">
+        <ReviewDays payload={payload} />
 
-      {done === null && imported && (
-        <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
-          <h2 id="review-imported-title">Sign off</h2>
-          <ImportedNote id="imported-reason" />
-          <div className="button-row">
-            <button type="button" disabled aria-describedby="imported-reason">
-              Sign off &amp; Submit
-            </button>
-            <a className="button-link" href="#/timesheet">
-              Back to the timesheet
-            </a>
-          </div>
-        </section>
-      )}
-
-      {done === null && !imported && (
-        <ReviewSignoff
-          mode={mode}
-          employeeName={payload.employee.name}
-          form={form}
-          errors={errors}
-          busy={busy}
-          onChange={setForm}
-          onSubmit={() => void submit()}
-        />
-      )}
+        <aside className="review-checklist" aria-label="Before you sign">
+          <ol className="review-steps plain">
+            {steps.map((step, index) => (
+              <li key={step.key} className="review-step card stack" data-step={step.key}>
+                <p className="step-head">
+                  <span className="step-title">
+                    Step {index + 1}: {step.title}
+                  </span>
+                  <span className="step-state">{step.state}</span>
+                </p>
+                {step.key === 'attention' && (
+                  <>
+                    <ReviewOtProposals payload={payload} />
+                    <ReviewDeficits
+                      proposals={payload.deficit_proposals}
+                      choices={form.choices}
+                      onChoose={(workDate, choice) => setForm({ ...form, choices: { ...form.choices, [workDate]: choice } })}
+                      error={errors.deficit_choices ?? null}
+                    />
+                    <ReviewEvidence
+                      payload={payload}
+                      acknowledged={form.acknowledged}
+                      onAcknowledge={(value) => setForm({ ...form, acknowledged: value })}
+                      error={errors.acknowledgement ?? null}
+                    />
+                    <ReviewReservations payload={payload} />
+                  </>
+                )}
+                {step.key === 'email' && <ReviewEnvelope payload={payload} error={errors.signature ?? null} />}
+                {step.key === 'sign' && done === null && imported && (
+                  <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
+                    <h2 id="review-imported-title">Sign off</h2>
+                    <ImportedNote id="imported-reason" />
+                    <div className="button-row">
+                      <button type="button" disabled aria-describedby="imported-reason">
+                        Sign off &amp; Submit
+                      </button>
+                      <a className="button-link" href="#/timesheet">
+                        Back to the timesheet
+                      </a>
+                    </div>
+                  </section>
+                )}
+                {step.key === 'sign' && done === null && !imported && (
+                  <ReviewSignoff
+                    mode={mode}
+                    employeeName={payload.employee.name}
+                    form={form}
+                    errors={errors}
+                    busy={busy}
+                    onChange={setForm}
+                    onSubmit={() => void submit()}
+                  />
+                )}
+              </li>
+            ))}
+          </ol>
+        </aside>
+      </div>
     </div>
   );
 }

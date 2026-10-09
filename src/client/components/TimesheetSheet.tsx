@@ -1,6 +1,6 @@
 import type { FinalizationResponse, TimesheetView } from '../api.ts';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
-import { usDate } from './format.ts';
+import { minutesText, usDate } from './format.ts';
 import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
 import {
   DETAIL_ROWS,
@@ -13,7 +13,18 @@ import {
   sheetWeeks,
   signatureLines,
 } from './sheetModel.ts';
-import { type DayActions, dayClass, dayVerb, LabelPicker, labelPickerOf, openOnClick, SelectBox, SheetWeekTable } from './SheetWeekTable.tsx';
+import {
+  type DayActions,
+  dayClass,
+  dayVerb,
+  LabelPicker,
+  labelPickerOf,
+  openOnClick,
+  REVIEW_ACTIONS,
+  ReviewNote,
+  SelectBox,
+  SheetWeekTable,
+} from './SheetWeekTable.tsx';
 
 /** A cell's row name for screen readers; the visual row-label column is hidden from them. */
 function RowName({ name }: { name: string }) {
@@ -25,13 +36,15 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
   const verb = dayVerb(actions);
   const picker = labelPickerOf(actions);
   const hasTime = day.time.ranges.length > 0 || day.time.note !== null;
+  const review = actions.review === true;
   return (
     <div
-      className={dayClass(day, actions.selected.has(day.workDate), 'sheet-day')}
-      data-day={day.workDate}
+      className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-day sheet-day-static' : 'sheet-day')}
+      data-day={review ? undefined : day.workDate}
+      data-review-day={review ? day.workDate : undefined}
       role="group"
       aria-label={day.name}
-      onClick={openOnClick(day.workDate, actions.onEdit)}
+      onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
     >
       <div className="d-day">
         <span aria-hidden="true">{day.weekday}</span>
@@ -39,9 +52,13 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
         <SelectBox day={day} actions={actions} />
       </div>
       <div className="d-date">
-        <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
-          {day.dateText}
-        </button>
+        {review ? (
+          <span className="sheet-date-text">{day.dateText}</span>
+        ) : (
+          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
+            {day.dateText}
+          </button>
+        )}
       </div>
       <div className={`d-label${picker === null ? '' : ' with-picker'}`} data-cell="label">
         {picker === null ? (
@@ -52,6 +69,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
         ) : (
           <LabelPicker day={day} picker={picker} />
         )}
+        {review && <ReviewNote day={day} />}
       </div>
       <div className={`d-time${day.time.attention ? ' attention' : ''}`} data-cell="time">
         {hasTime && <RowName name={SHEET_ROWS.time} />}
@@ -121,17 +139,19 @@ function SheetWeekGrid({ week, details, actions }: { week: SheetWeek; details: b
 }
 
 /** The legend of the sheet's day states; every state also has words or a shape in the cells. */
-function Legend() {
+function Legend({ today }: { today: boolean }) {
   return (
     <ul className="legend" aria-label="Legend">
       <li>
         <i className="swatch swatch-off" aria-hidden="true" />
         Weekend or holiday
       </li>
-      <li>
-        <i className="swatch swatch-today" aria-hidden="true" />
-        Today
-      </li>
+      {today && (
+        <li>
+          <i className="swatch swatch-today" aria-hidden="true" />
+          Today
+        </li>
+      )}
       <li>
         <i className="swatch swatch-attention" aria-hidden="true" />
         Needs your input
@@ -261,7 +281,7 @@ export function TimesheetSheet({
         <div className="foot-notes">
           {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
           <p className="muted hint">Provisional: OT is added to your balance when the period is finalized.</p>
-          <Legend />
+          <Legend today />
         </div>
         <div className="ot-total" role="group" aria-label="Overtime total">
           <span className="ot-total-label">Overtime Total :</span>
@@ -273,6 +293,90 @@ export function TimesheetSheet({
       </div>
 
       {signatures && <SignatureStrip payrollDate={period.payroll_date} finalization={finalization} reportingZone={view.reporting_zone} />}
+    </article>
+  );
+}
+
+/**
+ * "What you sign": the same sheet in read-only mode, fed by the review payload (see
+ * `reviewSheetWeeks`). Same form header, week bands, Overtime Total and legend as the Timesheet
+ * page and the PDF; the detail rows are always on, no day opens, and there is no signature image
+ * or review link here (the signing happens in the checklist beside it).
+ */
+export function ReviewSheet({
+  weeks,
+  employeeName,
+  period,
+  desktop,
+  totalCredited,
+  pendingDays,
+}: {
+  weeks: SheetWeek[];
+  employeeName: string;
+  period: { payroll_date: string; period_start: string; period_end: string };
+  desktop: boolean;
+  /** The payload's `totals.credited_minutes`: the OT credit if signed now. */
+  totalCredited: number;
+  /** The payload's `totals.pending_days`. */
+  pendingDays: number;
+}) {
+  const total = overtimeTotal({ provisional_credited_minutes: totalCredited, pending_days: pendingDays });
+  return (
+    <article className={`sheet sheet-review ${desktop ? 'sheet-desktop' : 'sheet-phone'}`} aria-label="What you sign" data-sheet={desktop ? 'desktop' : 'phone'}>
+      <header className="form-head">
+        <div className="form-brand">
+          <div className="company">{SHEET_COMPANY}</div>
+          <div className="form-title">{SHEET_TITLE}</div>
+        </div>
+        <dl className="form-fields">
+          <div>
+            <dt>Employee:</dt>
+            <dd>{employeeName}</dd>
+          </div>
+          <div>
+            <dt>Payroll Date:</dt>
+            <dd className="mono">{usDate(period.payroll_date)}</dd>
+          </div>
+          <div>
+            <dt>Period:</dt>
+            <dd className="mono">
+              {usDate(period.period_start)} - {usDate(period.period_end)}
+            </dd>
+          </div>
+        </dl>
+      </header>
+
+      {weeks.map((week) =>
+        desktop ? (
+          <SheetWeekGrid key={week.index} week={week} details actions={REVIEW_ACTIONS} />
+        ) : (
+          <SheetWeekTable key={week.index} week={week} details actions={REVIEW_ACTIONS} />
+        ),
+      )}
+
+      <div className="sheet-foot">
+        <div className="foot-notes">
+          {total.pendingNote !== null && <p className="pending-note">{total.pendingNote}</p>}
+          <Legend today={false} />
+          <dl className="facts review-totals" aria-label="Period totals from the server">
+            <div data-total="credited">
+              <dt>OT credit if signed now</dt>
+              <dd data-minutes={totalCredited}>{minutesText(totalCredited)}</dd>
+            </div>
+            <div data-total="pending">
+              <dt>Days pending OT evidence</dt>
+              <dd>{pendingDays}</dd>
+            </div>
+          </dl>
+        </div>
+        <div className="ot-total" role="group" aria-label="Overtime total">
+          <span className="ot-total-label">Overtime Total :</span>
+          <span className="ot-total-value mono" data-ot-total={totalCredited}>
+            {total.text}
+          </span>
+          <span className="ot-total-unit">h:mm</span>
+        </div>
+      </div>
     </article>
   );
 }

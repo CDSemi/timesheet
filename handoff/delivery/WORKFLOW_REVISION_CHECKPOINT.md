@@ -66,9 +66,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   in-cell label picker (three new pure models); unit 1808; full e2e exit 0 (desktop
   76/0/3, mobile 77/0/2); verify exit 0; digest 6f362af9 (789 files). Eighth stdin-rule
   slip (empty `cat` heredoc, no effect).
-- Running: WP5-UX-T04-FREEZE (committer) on base b6324b7.
-- Next action: on the freeze result, record commit/push, then write the WP5-UX-T05 brief
-  (Review restyle; worker, sonnet).
+- WP5-UX-T04-FREEZE done: 118a104 on main, pushed (37 files, digest 6f362af9, all checks
+  exit 0).
+- T05 done: Review as read-only sheet plus checklist; unit 1816; full e2e exit 0
+  (desktop 76/0/3, mobile 77/0/2); verify exit 0; digest 0071a588. review.spec per-day
+  assertions adapted (audit must confirm no weakening). Ninth stdin-rule slip (empty
+  `cat >>` heredoc, no effect).
+- Running: WP5-UX-T05-FREEZE (committer) on base 118a104.
+- Next action: on the freeze result, record commit/push, then write the WP5-UX-T06 brief
+  (docs/04 and docs/12 EN+VI; worker, sonnet).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

@@ -8,6 +8,7 @@ import type {
   SnapshotSession,
   SnapshotUnresolved,
 } from '../../domain/snapshot.ts';
+import { formatHoursMinutes } from '../../domain/format.ts';
 import { formatInZone } from '../../domain/zones.ts';
 import {
   ApiRequestError,
@@ -18,7 +19,9 @@ import {
   type RevisionSummary,
 } from '../api.ts';
 import { describeError } from './errors.ts';
-import { minutesText } from './format.ts';
+import { WEEKDAYS } from './dayModel.ts';
+import { minutesText, usShortDate } from './format.ts';
+import { breaksNote, hm, type SheetCheck, type SheetDay, type SheetOt, type SheetWeek, sessionRange, sheetLabel, weeksOf } from './sheetModel.ts';
 
 /*
  * Pure logic for the review and sign-off screen. Every business value on that screen (minutes,
@@ -400,4 +403,104 @@ export function reviewDayRow(day: SnapshotDay, zone: string): ReviewDayRow {
     credited: day.calculation?.credited_minutes ?? null,
     status: dayStatus(day),
   };
+}
+
+/* ---- The checklist beside the sheet ------------------------------------------------------ */
+
+export interface ChecklistStep {
+  key: 'attention' | 'email' | 'sign';
+  title: string;
+  /** The state in words (never colour alone). */
+  state: string;
+}
+
+/**
+ * The three steps of the review in order, each with its state in words. Only counts and presence
+ * checks of the payload and the form: the person's choices, no business figure.
+ */
+export function checklistSteps(payload: ReviewSnapshot, form: FormState, imported: boolean): ChecklistStep[] {
+  const evidence = payload.unresolved_inputs.length;
+  const undecided = deficitChoiceDays(payload).filter((item) => form.choices[item.work_date] === undefined).length;
+  let attention = 'Nothing to resolve';
+  if (evidence > 0 && !form.acknowledged) attention = evidence === 1 ? '1 day needs your acknowledgement' : `${evidence} days need your acknowledgement`;
+  else if (undecided > 0) attention = undecided === 1 ? '1 deficit day needs your choice' : `${undecided} deficit days need your choice`;
+  else if (evidence > 0) attention = 'Acknowledged';
+  const email =
+    payload.signature === null ? 'No signature image saved' : payload.recipients.to.length === 0 ? 'No recipient set' : 'Recipients and signature ready';
+  return [
+    { key: 'attention', title: 'Days that need attention', state: attention },
+    { key: 'email', title: 'Email and PDF', state: email },
+    { key: 'sign', title: 'Sign', state: imported ? 'Locked: imported history' : 'Waiting for your signature' },
+  ];
+}
+
+/* ---- The review payload on the sheet ------------------------------------------------------- */
+
+/** The Check cell of a payload day: the same words and shapes as the Timesheet page, from the payload's own status. */
+function reviewCheck(day: SnapshotDay): SheetCheck | null {
+  if (day.calculation_error !== null) return { key: 'error', text: 'Calculation problem', shape: 'triangle' };
+  switch (day.completeness) {
+    case 'complete':
+      return { key: 'complete', text: 'Complete', shape: 'circle' };
+    case 'incomplete':
+      return day.sessions.some((session) => session.end_utc === null)
+        ? { key: 'running', text: 'Running', shape: 'live' }
+        : { key: 'open_session', text: 'Open session', shape: 'diamond' };
+    case 'incomplete_breaks':
+      return { key: 'confirm_breaks', text: 'Confirm breaks', shape: 'diamond' };
+    default:
+      if (!day.attendance_expected) return null;
+      return { key: 'missing', text: day.sessions.length === 0 ? 'No times' : 'Missing record', shape: 'square' };
+  }
+}
+
+/** The OT cell by the PDF rule, from the payload: credited h:mm of a complete day, "pending", "n/a" or blank. */
+function reviewOt(day: SnapshotDay): SheetOt {
+  if (day.calculation_error !== null) return { kind: 'na', text: 'n/a' };
+  const credited = day.calculation?.credited_minutes ?? null;
+  if (day.completeness === 'complete' && credited !== null) return { kind: 'minutes', text: formatHoursMinutes(credited) };
+  if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') return { kind: 'pending', text: 'pending' };
+  return { kind: 'blank', text: '' };
+}
+
+/**
+ * One day of the review payload as a sheet day: dates are the accounting dates, session times the
+ * reporting zone (the zone of the PDF), every minute figure is the payload's own number as h:mm.
+ * The note is shown in full here because the person signs what the note says.
+ */
+export function reviewSheetDay(day: SnapshotDay, zone: string): SheetDay {
+  const weekday = WEEKDAYS[isoWeekday(day.work_date) - 1] ?? '';
+  const check = reviewCheck(day);
+  const noTimes = check?.key === 'missing' && day.sessions.length === 0;
+  const label = sheetLabel({
+    category: day.category,
+    classification: day.day_class === null ? null : { name: day.holiday_name },
+    wfh: day.wfh,
+    leave_minutes: day.leave_minutes,
+    leave_kind: day.leave_kind,
+    entry: null,
+  });
+  return {
+    workDate: day.work_date,
+    weekday,
+    dateText: usShortDate(day.work_date),
+    name: `${weekday} ${day.work_date}`,
+    today: false,
+    nonworking: day.day_class === 'nonworking',
+    label,
+    time: {
+      ranges: day.sessions.map((session) => sessionRange(session, day.work_date, zone)),
+      note: noTimes ? 'no times yet' : breaksNote(day.sessions),
+      attention: check?.key === 'missing' || check?.key === 'confirm_breaks',
+    },
+    ot: reviewOt(day),
+    check,
+    details: { regular: hm(day.calculation?.regular_minutes), offCalendar: hm(day.calculation?.nonworking_minutes) },
+    noteText: day.notes,
+  };
+}
+
+/** The payload's days in Monday to Sunday weeks, as the sheet shows them. */
+export function reviewSheetWeeks(days: readonly SnapshotDay[], zone: string): SheetWeek[] {
+  return weeksOf(days, (day) => reviewSheetDay(day, zone));
 }

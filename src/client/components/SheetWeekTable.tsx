@@ -25,6 +25,25 @@ export interface DayActions {
   locked: boolean;
   /** The label picker; absent, or unused while the day cannot change or batch mode is on. */
   label?: LabelPickerActions;
+  /** True in the read-only review: no day opens, the date is plain text, the day is marked `[data-review-day]` and its note shows in full. */
+  review?: boolean;
+}
+
+/** The read-only review sheet: nothing is editable, selectable or openable. */
+export const REVIEW_ACTIONS: DayActions = {
+  selected: new Set<string>(),
+  onToggle: () => undefined,
+  onEdit: () => undefined,
+  editable: false,
+  selecting: false,
+  locked: true,
+  review: true,
+};
+
+/** The day's note in full, shown only in the review. */
+export function ReviewNote({ day }: { day: SheetDay }) {
+  if (day.noteText === undefined || day.noteText === '') return null;
+  return <span className="cell-sub review-note">Note: {day.noteText}</span>;
 }
 
 /** The label picker of a day, or null when the label is plain text (view only, imported, batch mode). */
@@ -238,26 +257,38 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
 
 function DayRows({ day, details, actions, verb }: { day: SheetDay; details: boolean; actions: DayActions; verb: 'Edit' | 'View' }) {
   const picker = labelPickerOf(actions);
+  const review = actions.review === true;
   return (
     <>
       <tr
-        data-day={day.workDate}
+        data-day={review ? undefined : day.workDate}
+        data-review-day={review ? day.workDate : undefined}
         aria-label={day.name}
-        className={dayClass(day, actions.selected.has(day.workDate), 'sheet-row')}
-        onClick={openOnClick(day.workDate, actions.onEdit)}
+        className={dayClass(day, actions.selected.has(day.workDate), review ? 'sheet-row sheet-row-static' : 'sheet-row')}
+        onClick={review ? undefined : openOnClick(day.workDate, actions.onEdit)}
       >
         <td className="t-day">
           <div className="t-day-head">
             <SelectBox day={day} actions={actions} />
-            <button type="button" className="sheet-day-button" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
-              <span className="t-weekday">{day.weekday}</span>
-              <span className="mono">{day.dateText}</span>
-            </button>
+            {review ? (
+              <span className="sheet-day-text">
+                <span className="t-weekday">{day.weekday}</span>
+                <span className="mono">{day.dateText}</span>
+              </span>
+            ) : (
+              <button type="button" className="sheet-day-button" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
+                <span className="t-weekday">{day.weekday}</span>
+                <span className="mono">{day.dateText}</span>
+              </button>
+            )}
           </div>
           {day.today && <span className="today-tag">Today</span>}
           {day.check !== null && <CheckBadge check={day.check} />}
         </td>
-        <td className="t-label">{picker === null ? <LabelContent label={day.label} /> : <LabelPicker day={day} picker={picker} />}</td>
+        <td className="t-label">
+          {picker === null ? <LabelContent label={day.label} /> : <LabelPicker day={day} picker={picker} />}
+          {review && <ReviewNote day={day} />}
+        </td>
         <td className={`t-time${day.time.attention ? ' attention' : ''}`}>
           <TimeContent time={day.time} />
         </td>

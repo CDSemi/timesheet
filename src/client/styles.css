@@ -79,6 +79,7 @@
   --counter-min: 6rem;
   --action-min: 14rem;
   --signature-max-width: 16rem;
+  --checklist-width: 380px;
   --signature-max-height: 6rem;
   --mail-body-max-height: 18rem;
 
@@ -2401,20 +2402,6 @@ textarea.mono {
   white-space: normal;
 }
 
-.review-table .review-date {
-  color: var(--text);
-  font-weight: inherit;
-}
-
-.review-table td.review-sessions {
-  white-space: normal;
-}
-
-.review-table td > span:not(.status),
-.review-table .review-date > span {
-  display: block;
-}
-
 .review-mail {
   display: flex;
   flex-direction: column;
@@ -2455,51 +2442,120 @@ textarea.mono {
   box-shadow: var(--shadow-panel);
 }
 
-/* Below 768px each day is a labelled block instead of a table row, so nothing scrolls sideways. */
-@media (max-width: 767px) {
-  .review-table,
-  .review-table tbody,
-  .review-table th,
-  .review-table td {
-    display: block;
+/*
+ * Review layout (WP5-UX-T05): "What you sign" is the read-only sheet, the checklist (three steps in
+ * an ordered list) sits beside it from 1200px and follows it below. Inside a step the existing
+ * review sections lose their own card surface; the step is the card.
+ */
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .review-layout {
+    grid-template-columns: minmax(0, var(--track)) var(--checklist-width);
   }
 
-  .review-table thead {
-    position: absolute;
-    width: var(--hairline);
-    height: var(--hairline);
-    overflow: hidden;
-    clip-path: var(--clip-hidden);
+  /* The narrower sheet beside the checklist stacks its form header instead of squeezing the company name. */
+  .review-layout .form-head {
+    grid-template-columns: var(--track);
   }
+}
 
-  .review-table tr {
-    display: grid;
-    grid-template-columns: repeat(var(--cols-2), var(--track));
-    gap: var(--space-1) var(--space-3);
-    padding: var(--space-3) 0;
-    border-bottom: var(--hairline) solid var(--line-soft);
-  }
+.review-sheet-block {
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-panel);
+}
 
-  .review-table th,
-  .review-table td {
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    white-space: normal;
-  }
+.review-sheet-intro {
+  gap: var(--space-1);
+}
 
-  .review-table .review-date,
-  .review-table td[data-label='Category'],
-  .review-table td[data-label='Sessions'] {
-    grid-column: span var(--cols-2);
-  }
+.review-checklist {
+  min-width: 0;
+}
 
-  .review-table td::before {
-    display: block;
-    content: attr(data-label);
-    color: var(--muted);
-    font-size: var(--font-size-xs);
-  }
+.review-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--hairline) solid var(--line-soft);
+}
+
+.step-title {
+  font-weight: var(--font-weight-heavy);
+}
+
+.step-state {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.review-step .card {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.review-step .card + .card {
+  padding-top: var(--space-3);
+  border-top: var(--hairline) solid var(--line-soft);
+}
+
+.review-step .status {
+  white-space: normal;
+}
+
+.review-totals {
+  margin-top: var(--space-1);
+}
+
+/* The read-only sheet: nothing opens, so nothing looks clickable. */
+.sheet-day-static,
+.sheet-table tr.sheet-row-static {
+  cursor: default;
+}
+
+.sheet-review .sheet-day:hover:not(.nonworking) {
+  background-color: transparent;
+}
+
+.sheet-review .sheet-day.nonworking:hover {
+  background-color: var(--day-nonworking);
+}
+
+.sheet-date-text {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-sm);
+}
+
+.sheet-day-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-1);
+  font-weight: var(--font-weight-heavy);
+}
+
+.sheet-day-text .mono {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: normal;
 }
 
 /* ---- Administrator operations status (WP3-T13D) ------------------------------------------ */

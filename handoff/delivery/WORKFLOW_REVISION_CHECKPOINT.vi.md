@@ -65,9 +65,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   chọn nhãn trong ô (ba model thuần mới); unit 1808; toàn bộ e2e exit 0 (desktop
   76/0/3, mobile 77/0/2); verify exit 0; digest 6f362af9 (789 file). Lần thứ tám vi
   phạm quy tắc stdin (heredoc `cat` rỗng, không ảnh hưởng).
-- Đang chạy: WP5-UX-T04-FREEZE (committer) trên gốc b6324b7.
-- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T05 (làm
-  lại trang Review; worker, sonnet).
+- WP5-UX-T04-FREEZE xong: 118a104 trên main, đã push (37 file, digest 6f362af9, mọi
+  kiểm tra exit 0).
+- T05 xong: Review thành bảng chỉ đọc kèm checklist; unit 1816; toàn bộ e2e exit 0
+  (desktop 76/0/3, mobile 77/0/2); verify exit 0; digest 0071a588. Các assertion theo
+  ngày trong review.spec được chuyển sang định dạng bảng (audit phải xác nhận không bị
+  nới lỏng). Lần thứ chín vi phạm quy tắc stdin (heredoc `cat >>` rỗng, không ảnh hưởng).
+- Đang chạy: WP5-UX-T05-FREEZE (committer) trên gốc 118a104.
+- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T06
+  (docs/04 và docs/12 EN+VI; worker, sonnet).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

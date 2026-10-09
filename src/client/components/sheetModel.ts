@@ -82,6 +82,8 @@ export interface SheetDay {
   check: SheetCheck | null;
   /** The "Show details" rows, h:mm of the server's minutes; blank when the server has no value. */
   details: { regular: string; offCalendar: string };
+  /** The day's note in full. Only the read-only review sets it (the Timesheet page shows a "Note" marker). */
+  noteText?: string;
 }
 
 export interface SheetWeek {
@@ -94,12 +96,22 @@ export interface SheetWeek {
   days: SheetDay[];
 }
 
-const LEAVE_WORD = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' } as const;
+const LEAVE_WORD: Readonly<Record<string, string>> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
 
-const hm = (minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
+export const hm = (minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
+
+/** What the label cell reads from a day: the day view of the Timesheet page and the review payload both fit. */
+export interface LabelSource {
+  category: string | null;
+  classification: { name: string | null } | null;
+  wfh: boolean;
+  leave_minutes: number;
+  leave_kind: string | null;
+  entry: { notes: string } | null;
+}
 
 /** The label cell: holiday name in the cell, WFH as "Work from home", leave as a second line. */
-export function sheetLabel(day: DayView): SheetLabel {
+export function sheetLabel(day: LabelSource): SheetLabel {
   const category = day.category ?? '';
   const holiday = day.classification?.name ?? null;
   const lines: string[] = [];
@@ -117,7 +129,7 @@ export function sheetLabel(day: DayView): SheetLabel {
     else lines.push('Work from home');
   }
   if (day.leave_minutes > 0) {
-    const kind = day.leave_kind === null ? null : LEAVE_WORD[day.leave_kind];
+    const kind = day.leave_kind === null ? null : (LEAVE_WORD[day.leave_kind] ?? null);
     // A vacation or sick day already says what the leave is; any other day names the kind.
     const named = kind === null || kind === category ? 'Leave' : `${kind} leave`;
     lines.push(`${named} ${formatHoursMinutes(day.leave_minutes)}`);
@@ -132,7 +144,7 @@ function localParts(instant: string, zone: string): { date: string; time: string
 }
 
 /** One session as the PDF prints it, but in the display zone: `08:00-17:00`, `22:00-06:00+1`, or `08:12` while running. */
-export function sessionRange(session: Session, workDate: string, zone: string): SheetRange {
+export function sessionRange(session: Pick<Session, 'id' | 'start_utc' | 'end_utc'>, workDate: string, zone: string): SheetRange {
   const start = localParts(session.start_utc, zone);
   const startDate = start.date === workDate ? null : usShortDate(start.date);
   if (session.end_utc === null) return { key: session.id, text: start.time, startDate };
@@ -141,7 +153,7 @@ export function sessionRange(session: Session, workDate: string, zone: string): 
   return { key: session.id, text: `${start.time}-${end.time}${later > 0 ? `+${later}` : ''}`, startDate };
 }
 
-function breaksNote(sessions: readonly Session[]): string | null {
+export function breaksNote(sessions: ReadonlyArray<Pick<Session, 'end_utc' | 'breaks_confirmed'> & { breaks: readonly unknown[] }>): string | null {
   if (sessions.length === 0) return null;
   if (sessions.some((session) => session.end_utc === null)) return 'running';
   if (sessions.some((session) => !session.breaks_confirmed)) return 'breaks not confirmed';
@@ -209,7 +221,12 @@ export function sheetDay(day: DayView, zone: string, todayLocal: string | null):
 
 /** Consecutive days grouped into Monday to Sunday weeks, numbered from 1 (a two-week period gives two). */
 export function sheetWeeks(days: readonly DayView[], zone: string, todayLocal: string | null): SheetWeek[] {
-  const weeks: Array<{ monday: string; days: DayView[] }> = [];
+  return weeksOf(days, (day) => sheetDay(day, zone, todayLocal));
+}
+
+/** The same grouping for any dated source (the review payload uses it with its own day mapping). */
+export function weeksOf<T extends { work_date: string }>(days: readonly T[], toDay: (day: T) => SheetDay): SheetWeek[] {
+  const weeks: Array<{ monday: string; days: T[] }> = [];
   for (const day of days) {
     const monday = addDays(day.work_date, -(isoWeekday(day.work_date) - 1));
     const last = weeks.at(-1);
@@ -223,7 +240,7 @@ export function sheetWeeks(days: readonly DayView[], zone: string, todayLocal: s
       index: index + 1,
       rangeText: `${usDate(first)} - ${usDate(end)}`,
       rangeName: `${usDate(first)} to ${usDate(end)}`,
-      days: week.days.map((day) => sheetDay(day, zone, todayLocal)),
+      days: week.days.map(toDay),
     };
   });
 }
