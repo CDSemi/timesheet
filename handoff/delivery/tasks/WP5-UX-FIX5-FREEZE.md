@@ -139,4 +139,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb (= origin/main); post-HEAD
+  edaaa852370128ca9bdf206d730f3849346ba994; pushed yes; remote SHA edaaa852370128ca9bdf206d730f3849346ba994.
+- Digest before add and ls-tree digest of HEAD: both
+  b7bbcbc0a5bbb097a5547b441d1228f20963445e86b0429169cb7ab47980a873.
+- Staged 302 files; evidence per folder: AUDIT-A3 90, AUDIT-B3 89, REGATE2 73, FIX5 29,
+  FIX4-FREEZE 2; 29 .png files, all with "synthetic" in the name.
+- Checks (all exit 0): node v24.21.0; precommit 302 files/0 findings; diff --cached --check;
+  JSON parse; validate_orchestration; check_recovery 106 probes; validate_package
+  --preflight. Details in evidence/WP5-UX-FIX5-FREEZE/checks.txt.
+- Fixes applied: none. Stop reason: none. Node 24 was the portable 24.21.0 (system Node is v26).

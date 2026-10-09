@@ -1,0 +1,79 @@
+diff --git a/src/client/styles.css b/src/client/styles.css
+index b77e24a..ab11e2f 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -1080,26 +1080,28 @@ textarea {
+     display: none;
+   }
+ 
+-  /* The label sits beside its date field, so the row stays one control high where it fits. */
+   .tools .open-day {
+-    flex-wrap: wrap;
+-    align-items: center;
++    flex-wrap: nowrap;
+     width: 100%;
+   }
+ 
+-  /* The label keeps a full date beside it; when that and the button do not fit, the button wraps below. */
++  /* The label sits beside its date field, so the row stays one control high. */
+   .tools .open-day label {
+-    flex: 1 1 var(--open-day-label-min);
++    flex: 1;
+     flex-direction: row;
+     align-items: center;
+     gap: var(--space-2);
+-    min-width: var(--open-day-label-min);
++    min-width: 0;
+     white-space: nowrap;
+   }
+ 
+   .tools .open-day input {
+     flex: 1;
+-    min-width: var(--date-field-min);
++    min-width: 0;
++  }
++
++  .tools .open-day {
++    align-items: center;
+   }
+ 
+   .tools-right {
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 8b4b962..194412a 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -160,24 +160,24 @@ test.describe('phone first screen', () => {
+           return glyphs + frame.reduce((sum, side) => sum + parseFloat(style[side]), 0) + ${DATE_FIELD_CHROME};
+         })()`);
+       const shownValue = new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(Date.UTC(2026, 9, 9));
+-      expect(shownValue).toBe('10/09/2026');
++      expect.soft(shownValue).toBe('10/09/2026');
+       const placeholderNeed = await needed('mm/dd/yyyy');
+       const valueNeed = await needed(shownValue);
+-      expect(valueNeed, 'the measured need of a full date').toBeGreaterThan(100);
++      expect.soft(valueNeed, 'the measured need of a full date').toBeGreaterThan(100);
+       const empty = await field.boundingBox();
+-      expect(empty, 'empty date field box').not.toBeNull();
+-      expect(empty?.width ?? 0, 'the empty field shows "mm/dd/yyyy" whole').toBeGreaterThanOrEqual(placeholderNeed);
++      expect.soft(empty, 'empty date field box').not.toBeNull();
++      expect.soft(empty?.width ?? 0, 'the empty field shows "mm/dd/yyyy" whole').toBeGreaterThanOrEqual(placeholderNeed);
+       await field.fill('2026-10-09');
+-      await expect(field).toHaveValue('2026-10-09');
++      await expect.soft(field).toHaveValue('2026-10-09');
+       const box = await field.boundingBox();
+-      expect(box, 'date field box').not.toBeNull();
++      expect.soft(box, 'date field box').not.toBeNull();
+       const minimum = await page.evaluate<number>(
+         "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
+       );
+-      expect(minimum, 'the --date-field-min token covers the measured need of the empty field and of a full date').toBeGreaterThanOrEqual(Math.max(placeholderNeed, valueNeed));
+-      expect(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
+-      expect(box?.width ?? 0, 'the date value is not clipped (its measured need)').toBeGreaterThanOrEqual(valueNeed);
+-      expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
++      expect.soft(minimum, 'the --date-field-min token covers the measured need of the empty field and of a full date').toBeGreaterThanOrEqual(Math.max(placeholderNeed, valueNeed));
++      expect.soft(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
++      expect.soft(box?.width ?? 0, 'the date value is not clipped (its measured need)').toBeGreaterThanOrEqual(valueNeed);
++      expect.soft(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
+       const tools = await page.locator('.tools .open-day').boundingBox();
+       await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`fix4-open-day-w${width}-synthetic.png`) });
+       testInfo.annotations.push({ type: 'open-day-field', description: `width ${width}: field ${box?.width}px, row bottom ${(tools?.y ?? 0) + (tools?.height ?? 0)}` });

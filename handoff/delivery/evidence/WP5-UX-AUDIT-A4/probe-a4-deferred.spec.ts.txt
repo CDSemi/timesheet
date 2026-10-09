@@ -1,0 +1,594 @@
+// WP5-UX-AUDIT-A4 scope 1 (delta proof at run time) and scope 3 (A2 risk R2), on edaaa85, desktop
+// browser only (crossing 1200px is a desktop layout change). FIX5 defers the editor's
+// modal/non-modal switch while another modal dialog (a label review, a batch review, the clock-out
+// dialog) is open, through a MutationObserver. Each scenario records every write the page sends,
+// the editor's typed values before and after the deferred switch, the open dialogs, page errors,
+// and every MutationObserver the editor creates (instrumented: observe on document.body with the
+// "open" attribute filter, and its disconnect). Controls run the same steps without the switch on a
+// fresh synthetic person (fresh persons get the same free dates, so the bodies compare directly).
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { dialogStates, editorLayout, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const INSTRUMENT = `(() => {
+  const Native = window.MutationObserver;
+  const log = [];
+  window.__a4mo = log;
+  window.MutationObserver = class extends Native {
+    constructor(callback) {
+      super(callback);
+      this.__a4 = null;
+    }
+    observe(target, options) {
+      if (target === document.body && options && Array.isArray(options.attributeFilter) && options.attributeFilter.includes('open')) {
+        this.__a4 = { id: log.length, active: true, observedAt: Math.round(performance.now()), disconnectedAt: null };
+        log.push(this.__a4);
+      }
+      return super.observe(target, options);
+    }
+    disconnect() {
+      if (this.__a4 !== null && this.__a4.active) {
+        this.__a4.active = false;
+        this.__a4.disconnectedAt = Math.round(performance.now());
+      }
+      return super.disconnect();
+    }
+  };
+})()`;
+
+const NOTES = 'A4 unsaved notes typed before the switch (synthetic)';
+
+type Ctx = { page: any; writes: Array<{ call: string; body: any }>; errors: string[]; consoleErrors: string[]; apiCalls: string[] };
+
+/** Records every write (non-GET, not auth) with its body, every /api call, uncaught page errors and console errors. */
+function setup(page: any): Ctx {
+  const writes: Array<{ call: string; body: any }> = [];
+  const errors: string[] = [];
+  const consoleErrors: string[] = [];
+  const apiCalls: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) apiCalls.push(`${request.method()} ${pathname}`);
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) writes.push({ call: `${request.method()} ${pathname}`, body: request.postDataJSON() });
+  });
+  page.on('pageerror', (error: Error) => errors.push(String(error)));
+  page.on('console', (message: any) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  return { page, writes, errors, consoleErrors, apiCalls };
+}
+
+async function observers(page: any): Promise<{ total: number; active: number }> {
+  const log = (await page.evaluate('window.__a4mo')) as Array<{ active: boolean }>;
+  return { total: log.length, active: log.filter((entry) => entry.active).length };
+}
+
+async function settle(page: any, wide: boolean) {
+  const area = page.locator('.sheet-area');
+  if (wide) await expect(area).toHaveClass(/with-editor/);
+  else await expect(area).not.toHaveClass(/with-editor/);
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))');
+}
+
+async function resize(page: any, width: number) {
+  await page.setViewportSize({ width, height: 800 });
+  await settle(page, width >= 1200);
+}
+
+async function openWide(page: any, account: any, workDate: string, hash = '#/timesheet') {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, account, hash);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  return openEditorByButton(page, workDate);
+}
+
+async function openEditorByButton(page: any, workDate: string) {
+  await page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  return editor;
+}
+
+async function typeUnsaved(editor: any, notes = NOTES) {
+  const form = editor.getByRole('form', { name: 'Day fields' });
+  await form.getByLabel('Notes').fill(notes);
+  await form.getByLabel('Leave hours').fill('2');
+  await form.getByLabel('Leave minutes').fill('30');
+  await form.getByLabel('Leave kind').selectOption('vacation');
+  await form.getByLabel('Worked from home (WFH)').check();
+}
+
+async function values(editor: any): Promise<Record<string, unknown>> {
+  const form = editor.getByRole('form', { name: 'Day fields' });
+  const reason = editor.getByLabel('Reason for editing an old or finalized period');
+  return {
+    label: await form.getByLabel('Label').inputValue(),
+    wfh: await form.getByLabel('Worked from home (WFH)').isChecked(),
+    hours: await form.getByLabel('Leave hours').inputValue(),
+    minutes: await form.getByLabel('Leave minutes').inputValue(),
+    kind: await form.getByLabel('Leave kind').inputValue(),
+    notes: await form.getByLabel('Notes').inputValue(),
+    editor_reason: (await reason.count()) === 0 ? null : await reason.inputValue(),
+  };
+}
+
+async function pickReview(page: any, workDate: string, label: string) {
+  await page.getByRole('button', { name: new RegExp(`^Label for ${workDate}`) }).click();
+  await page.getByRole('listbox', { name: `Label for ${workDate}` }).getByRole('option', { name: label, exact: true }).click();
+  const review = page.getByRole('dialog', { name: `Review label change for ${workDate}` });
+  await expect(review).toBeVisible();
+  await expect.poll(async () => review.evaluate((element: Element) => element.matches(':focus-within'))).toBe(true);
+  return review;
+}
+
+const isModal = (editor: any) => editor.evaluate((element: Element) => element.matches(':modal'));
+
+test.beforeEach(async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'The 1200px crossing is driven from a desktop browser');
+  await page.addInitScript(INSTRUMENT);
+});
+
+test('A: label review open, 1280 to 1024 (deferred), Escape, then Save day fields', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred A', signature: 'none' });
+  const [editDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const editor = await openWide(page, person.account, editDay);
+  await typeUnsaved(editor);
+  const typed = await values(editor);
+  const r: Record<string, any> = { editDay, workedDay, typed };
+  ctx.writes.length = 0;
+  const review = await pickReview(page, workedDay, 'Off');
+  r.at1280 = { dialogs: await dialogStates(page), observers: await observers(page) };
+  await resize(page, 1024);
+  r.after_shrink = { dialogs: await dialogStates(page), observers: await observers(page), editor_modal: await isModal(editor), values: await values(editor), writes: ctx.writes.map((w) => w.call) };
+  expect(r.after_shrink.editor_modal, 'deferred: the editor stays non-modal under the open review').toBe(false);
+  expect(r.after_shrink.observers).toEqual({ total: 1, active: 1 });
+  expect(r.after_shrink.values, 'typed input kept under the deferral').toEqual(typed);
+  await page.keyboard.press('Escape');
+  await expect(review).toHaveCount(0);
+  await expect.poll(() => isModal(editor)).toBe(true);
+  r.after_escape = { dialogs: await dialogStates(page), observers: await observers(page), layout: await editorLayout(page), values: await values(editor), writes: ctx.writes.map((w) => w.call) };
+  expect(r.after_escape.observers).toEqual({ total: 1, active: 0 });
+  expect(r.after_escape.values, 'typed input kept after the deferred switch').toEqual(typed);
+  expect(ctx.writes.map((w) => w.call), 'the switch sends nothing; only the preview so far').toEqual(['POST /api/days/batch']);
+  expect(ctx.writes[0]?.body?.mode).toBe('preview');
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  r.writes = ctx.writes;
+  const stored = await person.api.dayView(editDay);
+  r.stored = { category: stored.category, leave_minutes: stored.leave_minutes, leave_kind: stored.leave_kind, wfh: stored.wfh, notes: stored.entry?.notes ?? null, version: stored.entry?.version ?? null };
+  r.worked_day_category = (await person.api.dayView(workedDay)).category;
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', `PUT /api/days/${editDay}`]);
+  expect(ctx.writes[1]?.body).toEqual({ category: typed.label, leave_minutes: 150, leave_kind: 'vacation', wfh: true, notes: NOTES, expected_version: null });
+  expect(r.stored).toMatchObject({ leave_minutes: 150, leave_kind: 'vacation', wfh: true, notes: NOTES });
+  expect(r.worked_day_category).toBe('Worked');
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-A.json', r);
+});
+
+test('A0 control: the same steps without a resize (1280): review, Escape, Save day fields', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Control A0', signature: 'none' });
+  const [editDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const editor = await openWide(page, person.account, editDay);
+  await typeUnsaved(editor);
+  const typed = await values(editor);
+  ctx.writes.length = 0;
+  const review = await pickReview(page, workedDay, 'Off');
+  await page.keyboard.press('Escape');
+  await expect(review).toHaveCount(0);
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  const r = { editDay, workedDay, typed, writes: ctx.writes, observers: await observers(page), errors: ctx.errors, consoleErrors: ctx.consoleErrors, apiCalls: ctx.apiCalls };
+  expect(r.observers.total, 'no deferral without a resize').toBe(0);
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-A0-control.json', r);
+});
+
+test('A1 control: the same values saved in the editor opened at 1024 (modal from the start)', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Control A1', signature: 'none' });
+  const [editDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = await openEditorByButton(page, editDay);
+  expect(await isModal(editor)).toBe(true);
+  await typeUnsaved(editor);
+  const typed = await values(editor);
+  ctx.writes.length = 0;
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  const r = { editDay, typed, writes: ctx.writes, observers: await observers(page), errors: ctx.errors, consoleErrors: ctx.consoleErrors, apiCalls: ctx.apiCalls };
+  expect(r.observers.total, 'no deferral when no other modal is open').toBe(0);
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-A1-control.json', r);
+});
+
+test('B: old period, review needing a reason committed while deferred, then the editor save with its own reason', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred B', signature: 'none' });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldEdit = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const oldPick = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+  const pickBefore = await person.api.dayView(oldPick);
+  const editor = await openEditorByButton(page, oldEdit);
+  await editor.getByLabel('Reason for editing an old or finalized period').fill('A4 editor reason (synthetic)');
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 old-period notes (synthetic)');
+  const typed = await values(editor);
+  ctx.writes.length = 0;
+  const review = await pickReview(page, oldPick, 'Vacation');
+  const commit = review.getByRole('button', { name: 'Commit changes' });
+  await expect(commit).toBeDisabled();
+  await resize(page, 1024);
+  const r: Record<string, any> = { oldEdit, oldPick, typed };
+  r.after_shrink = { dialogs: await dialogStates(page), observers: await observers(page), editor_modal: await isModal(editor), commit_disabled: await commit.isDisabled() };
+  expect(r.after_shrink.editor_modal).toBe(false);
+  expect(r.after_shrink.commit_disabled, 'the review still needs its reason').toBe(true);
+  const reviewReason = review.getByLabel(/Reason for editing an old or finalized period/);
+  await reviewReason.fill('A4 review reason (synthetic)');
+  r.review_reason_focused = await reviewReason.evaluate((element: Element) => document.activeElement === element);
+  await commit.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved 1 day.' })).toBeVisible();
+  await expect(review).toHaveCount(0);
+  await expect.poll(() => isModal(editor)).toBe(true);
+  r.after_commit = { dialogs: await dialogStates(page), observers: await observers(page), values: await values(editor), writes: ctx.writes.map((w) => ({ call: w.call, body: w.body })) };
+  expect(r.after_commit.values, 'the editor keeps its typed reason and notes').toEqual(typed);
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'POST /api/days/batch']);
+  expect(ctx.writes[1]?.body).toEqual({ mode: 'commit', entries: [{ work_date: oldPick, expected_version: pickBefore.entry?.version ?? null, category: 'Vacation' }], reason: 'A4 review reason (synthetic)' });
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  r.writes = ctx.writes;
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'POST /api/days/batch', `PUT /api/days/${oldEdit}`]);
+  expect(ctx.writes[2]?.body).toMatchObject({ reason: 'A4 editor reason (synthetic)', notes: 'A4 old-period notes (synthetic)' });
+  expect(Object.keys(ctx.writes[2]?.body ?? {}).sort()).toEqual(['category', 'expected_version', 'leave_kind', 'leave_minutes', 'notes', 'reason', 'wfh']);
+  const history = await person.api.call<any>('GET', '/api/history');
+  r.history = history.audit_events.filter((e: any) => typeof e.reason === 'string' && e.reason.startsWith('A4 ')).map((e: any) => ({ operation: e.operation, entity_type: e.entity_type, reason: e.reason }));
+  expect(r.history.map((e: any) => e.reason)).toEqual(expect.arrayContaining(['A4 review reason (synthetic)', 'A4 editor reason (synthetic)']));
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-B.json', r);
+});
+
+test('C: stale version after a deferred switch: the save sends the loaded version and is refused', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred C', signature: 'none' });
+  const [staleDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const editor = await openWide(page, person.account, staleDay);
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 typed before the change (synthetic)');
+  ctx.writes.length = 0;
+  const review = await pickReview(page, workedDay, 'Off');
+  await resize(page, 1024);
+  expect(await isModal(editor)).toBe(false);
+  await person.api.putDay(staleDay, { notes: 'A4 changed elsewhere (synthetic)' });
+  const behind = await person.api.dayView(staleDay);
+  await page.keyboard.press('Escape');
+  await expect(review).toHaveCount(0);
+  await expect.poll(() => isModal(editor)).toBe(true);
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  const staleAlert = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(staleAlert).toBeVisible();
+  const after = await person.api.dayView(staleDay);
+  const r: Record<string, any> = { staleDay, writes: ctx.writes, server_version_behind: behind.entry?.version, after_version: after.entry?.version, after_notes: after.entry?.notes };
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', `PUT /api/days/${staleDay}`]);
+  expect(ctx.writes[1]?.body?.expected_version, 'the version the editor loaded').toBeNull();
+  expect(after.entry?.version).toBe(behind.entry?.version);
+  expect(after.entry?.notes).toBe('A4 changed elsewhere (synthetic)');
+  await staleAlert.getByRole('button', { name: 'Reload day' }).click();
+  await expect(editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes')).toHaveValue('A4 changed elsewhere (synthetic)');
+  r.observers = await observers(page);
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.writes.length, 'reload sends no write').toBe(2);
+  expect(ctx.errors.filter((e) => !e.includes('409'))).toEqual([]);
+  writeResult('deferred-C.json', r);
+});
+
+test('D: conflict confirmation committed while deferred; then a session saved and the day fields saved', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred D', signature: 'none' });
+  const [editDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const workedBefore = await person.api.dayView(workedDay);
+  const editor = await openWide(page, person.account, editDay);
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 notes kept through a conflict (synthetic)');
+  ctx.writes.length = 0;
+  const review = await pickReview(page, workedDay, 'Off');
+  await resize(page, 1024);
+  const r: Record<string, any> = { editDay, workedDay };
+  await review.getByRole('button', { name: 'Review conflicts' }).click();
+  const conflict = page.getByRole('dialog', { name: 'Recorded work conflicts with the new label' });
+  await expect(conflict).toBeVisible();
+  const confirm = conflict.getByRole('button', { name: 'Confirm and commit' });
+  await expect(confirm).toBeDisabled();
+  r.conflict_step = { dialogs: await dialogStates(page), observers: await observers(page), editor_modal: await isModal(editor) };
+  expect(r.conflict_step.editor_modal).toBe(false);
+  expect((await person.api.dayView(workedDay)).category, 'nothing saved before the confirmation').toBe('Worked');
+  await conflict.getByLabel('I confirm the label change for these dates').check();
+  await confirm.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved 1 day.' })).toBeVisible();
+  await expect(conflict).toHaveCount(0);
+  await expect.poll(() => isModal(editor)).toBe(true);
+  r.after_commit = { observers: await observers(page), notes: await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').inputValue() };
+  expect(r.after_commit.notes).toBe('A4 notes kept through a conflict (synthetic)');
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'POST /api/days/batch']);
+  expect(ctx.writes[1]?.body).toEqual({ mode: 'commit', entries: [{ work_date: workedDay, expected_version: workedBefore.entry?.version ?? null, category: 'Off' }], confirm_conflicts: true });
+  const workedAfter = await person.api.dayView(workedDay);
+  r.worked_after = { category: workedAfter.category, sessions: workedAfter.sessions.length };
+  expect(r.worked_after).toEqual({ category: 'Off', sessions: 1 });
+  // A session added in the (now modal) editor.
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = editor.getByRole('form', { name: 'New session' });
+  await form.getByLabel('Input zone').fill('America/Los_Angeles');
+  await form.getByLabel('Start time', { exact: true }).fill('09:00');
+  await form.getByLabel('End time', { exact: true }).fill('10:00');
+  await form.getByRole('radio', { name: /No breaks taken/ }).check();
+  await form.getByRole('button', { name: 'Save session' }).click();
+  await expect(editor.getByText('Session saved.')).toBeVisible();
+  // The day fields form keeps the typed notes only until a write reloads the day: check what it holds now.
+  r.notes_after_session_save = await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').inputValue();
+  r.writes = ctx.writes;
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'POST /api/days/batch', `POST /api/days/${editDay}/sessions`]);
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-D.json', r);
+});
+
+test('D0 control: the same session saved at 1280 without any dialog or resize', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Control D0', signature: 'none' });
+  const [editDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  const editor = await openWide(page, person.account, editDay);
+  ctx.writes.length = 0;
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = editor.getByRole('form', { name: 'New session' });
+  await form.getByLabel('Input zone').fill('America/Los_Angeles');
+  await form.getByLabel('Start time', { exact: true }).fill('09:00');
+  await form.getByLabel('End time', { exact: true }).fill('10:00');
+  await form.getByRole('radio', { name: /No breaks taken/ }).check();
+  await form.getByRole('button', { name: 'Save session' }).click();
+  await expect(editor.getByText('Session saved.')).toBeVisible();
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-D0-control.json', { editDay, writes: ctx.writes, observers: await observers(page), errors: ctx.errors, consoleErrors: ctx.consoleErrors, apiCalls: ctx.apiCalls });
+});
+
+test('E: the clock-out dialog as the other modal: clock out while deferred, then the editor save', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred E', signature: 'none' });
+  const [editDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Clock in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Clock out', exact: true })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  const editor = await openEditorByButton(page, editDay);
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 notes kept through a clock-out (synthetic)');
+  await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await expect(dialog).toBeVisible();
+  await resize(page, 1024);
+  const r: Record<string, any> = { editDay };
+  r.after_shrink = { dialogs: await dialogStates(page), observers: await observers(page), editor_modal: await isModal(editor) };
+  expect(r.after_shrink.editor_modal).toBe(false);
+  expect(r.after_shrink.observers).toEqual({ total: 1, active: 1 });
+  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => isModal(editor)).toBe(true);
+  r.after_clock_out = { observers: await observers(page), notes: await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').inputValue() };
+  expect(r.after_clock_out.notes).toBe('A4 notes kept through a clock-out (synthetic)');
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  r.writes = ctx.writes;
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/clock/in', 'POST /api/clock/out', `PUT /api/days/${editDay}`]);
+  expect(Object.keys(ctx.writes[1]?.body ?? {}).sort()).toEqual(['breaks', 'breaks_confirmed', 'expected_version']);
+  expect(ctx.writes[1]?.body).toMatchObject({ breaks: [], breaks_confirmed: true });
+  expect(ctx.writes[2]?.body).toMatchObject({ notes: 'A4 notes kept through a clock-out (synthetic)' });
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-E.json', r);
+});
+
+test('F: 1280 to 1024 to 1280 with the review open; Escape; the save from the non-modal panel', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred F', signature: 'none' });
+  const [editDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const editor = await openWide(page, person.account, editDay);
+  await typeUnsaved(editor);
+  const typed = await values(editor);
+  ctx.writes.length = 0;
+  const review = await pickReview(page, workedDay, 'Off');
+  await resize(page, 1024);
+  const r: Record<string, any> = { editDay, workedDay };
+  r.at1024 = { observers: await observers(page), editor_modal: await isModal(editor) };
+  await resize(page, 1280);
+  r.back1280 = { observers: await observers(page), editor_modal: await isModal(editor), dialogs: await dialogStates(page) };
+  expect(r.back1280.observers, 'the first observer was disconnected by the effect cleanup, a second waits').toEqual({ total: 2, active: 1 });
+  await page.keyboard.press('Escape');
+  await expect(review).toHaveCount(0);
+  await page.waitForTimeout(300);
+  r.after_escape = { observers: await observers(page), editor_modal: await isModal(editor), dialogs: await dialogStates(page), values: await values(editor) };
+  expect(r.after_escape.observers).toEqual({ total: 2, active: 0 });
+  expect(r.after_escape.editor_modal).toBe(false);
+  expect(r.after_escape.values).toEqual(typed);
+  await editor.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  r.writes = ctx.writes;
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', `PUT /api/days/${editDay}`]);
+  expect(ctx.writes[1]?.body).toEqual({ category: typed.label, leave_minutes: 150, leave_kind: 'vacation', wfh: true, notes: NOTES, expected_version: null });
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-F.json', r);
+});
+
+test('G: the editor unmounts while its switch is deferred: the observer is disconnected and acts on no later day', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Deferred G', signature: 'none' });
+  const [dayX = '', workedDay = '', dayY = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const editor = await openWide(page, person.account, dayX);
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 never saved (synthetic)');
+  ctx.writes.length = 0;
+  await pickReview(page, workedDay, 'Off');
+  await resize(page, 1024);
+  const r: Record<string, any> = { dayX, workedDay, dayY };
+  r.deferred = { observers: await observers(page), editor_modal: await isModal(editor) };
+  expect(r.deferred.observers).toEqual({ total: 1, active: 1 });
+  // Leave the Timesheet page by its route while the review is still open (the page unmounts both).
+  await page.evaluate("window.location.hash = '#/history'");
+  await expect(page.locator('[data-day]')).toHaveCount(0);
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  r.after_unmount = { observers: await observers(page), open_dialogs: await page.locator('dialog[open]').count() };
+  expect(r.after_unmount.observers, 'the effect cleanup disconnected the waiting observer').toEqual({ total: 1, active: 0 });
+  // Mutations a leaked observer would see: a dialog opened and closed, then removed.
+  await page.evaluate(`(() => { const d = document.createElement('dialog'); document.body.append(d); d.showModal(); d.close(); d.remove(); })()`);
+  await page.waitForTimeout(300);
+  // Back to the Timesheet (still 1024): a later day opened through "Open a day" behaves normally.
+  await page.evaluate("window.location.hash = '#/timesheet'");
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(dayY);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const later = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(later).toBeVisible();
+  expect(await later.getAttribute('data-day-editor')).toBe(dayY);
+  expect(await isModal(later)).toBe(true);
+  await later.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 later day (synthetic)');
+  await later.getByRole('form', { name: 'Day fields' }).getByRole('button', { name: 'Save day fields' }).click();
+  await expect(later.getByText('Day fields saved.')).toBeVisible();
+  r.later = { observers: await observers(page), dialogs: await dialogStates(page) };
+  r.writes = ctx.writes;
+  r.stored = {
+    dayX_notes: (await person.api.dayView(dayX)).entry?.notes ?? null,
+    dayY_notes: (await person.api.dayView(dayY)).entry?.notes ?? null,
+    worked_category: (await person.api.dayView(workedDay)).category,
+  };
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(r.later.observers.total, 'no new observer for the later day').toBe(1);
+  expect(ctx.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', `PUT /api/days/${dayY}`]);
+  expect(r.stored).toEqual({ dayX_notes: null, dayY_notes: 'A4 later day (synthetic)', worked_category: 'Worked' });
+  expect(ctx.errors).toEqual([]);
+  writeResult('deferred-G.json', r);
+});
+
+for (const variant of ['H-deferred', 'H0-control'] as const) {
+  test(`${variant}: one-tap break confirmation and a session delete${variant === 'H-deferred' ? ' after a deferred switch' : ' without a resize (control)'}`, async ({ page, adminSeed, builtServer }) => {
+    const ctx = setup(page);
+    const person = await newPerson(adminSeed, builtServer, { displayName: `Synthetic ${variant}`, signature: 'none' });
+    const [quickDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedUnconfirmedBreaksDay(quickDay);
+    await person.api.seedCompleteDay(workedDay);
+    const editor = await openWide(page, person.account, quickDay);
+    const quick = editor.getByRole('group', { name: /^Breaks of the session/ });
+    await expect(quick.getByRole('button', { name: 'Confirm suggested breaks' })).toBeVisible();
+    ctx.writes.length = 0;
+    const review = await pickReview(page, workedDay, 'Off');
+    if (variant === 'H-deferred') {
+      await resize(page, 1024);
+      expect(await isModal(editor)).toBe(false);
+    }
+    await page.keyboard.press('Escape');
+    await expect(review).toHaveCount(0);
+    if (variant === 'H-deferred') await expect.poll(() => isModal(editor)).toBe(true);
+    const session = (await person.api.dayView(quickDay)).sessions[0];
+    await quick.getByRole('button', { name: 'Confirm suggested breaks' }).click();
+    await expect(editor.getByText('Breaks confirmed.')).toBeVisible();
+    const confirmed = (await person.api.dayView(quickDay)).sessions[0];
+    await editor.getByRole('button', { name: /^Delete session/ }).click();
+    await editor.getByRole('button', { name: 'Confirm delete' }).click();
+    await expect(editor.getByText('Session deleted.')).toBeVisible();
+    const r = {
+      variant,
+      quickDay,
+      writes: ctx.writes.map((w) => ({ call: w.call.replace(session?.id ?? '<none>', '<session>'), body: w.body })),
+      loaded_version: session?.version,
+      confirmed: { breaks_confirmed: confirmed?.breaks_confirmed, breaks: confirmed?.breaks.length, version: confirmed?.version },
+      sessions_after_delete: (await person.api.dayView(quickDay)).sessions.length,
+      observers: await observers(page),
+      errors: ctx.errors,
+      consoleErrors: ctx.consoleErrors,
+      apiCalls: ctx.apiCalls.map((call) => call.replace(session?.id ?? '<none>', '<session>')),
+    };
+    expect(r.writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'PUT /api/sessions/<session>', 'DELETE /api/sessions/<session>']);
+    expect(r.confirmed.breaks_confirmed).toBe(true);
+    expect(r.sessions_after_delete).toBe(0);
+    expect(ctx.errors).toEqual([]);
+    writeResult(`deferred-${variant}.json`, r);
+  });
+}
+
+test('R2 (A2/A3 risk): old-period picker review over the non-modal editor, shrink, Escape twice - what each Escape closes, nothing written', async ({ page, adminSeed, builtServer }) => {
+  const ctx = setup(page);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Risk R2', signature: 'none' });
+  const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByLabel('Open a day').fill(day);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+  await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('A4 R2 unsaved note (synthetic)');
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldDay = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+  const oldBefore = await person.api.dayView(oldDay);
+  ctx.writes.length = 0;
+  const review = await pickReview(page, oldDay, 'Sick');
+  await resize(page, 1024);
+  const r: Record<string, any> = { day, oldDay };
+  const reviewReason = review.getByLabel(/Reason for editing an old or finalized period/);
+  r.after_shrink = {
+    dialogs: await dialogStates(page),
+    review_reason_focusable: await reviewReason.evaluate((el: HTMLElement) => {
+      el.focus();
+      return document.activeElement === el;
+    }),
+    commit_disabled: await review.getByRole('button', { name: 'Commit changes' }).isDisabled(),
+  };
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  r.after_first_escape = { dialogs: await dialogStates(page), review_open: await review.count(), notes: await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').inputValue() };
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  r.after_second_escape = { dialogs: await dialogStates(page) };
+  r.writes = ctx.writes.map((w) => ({ call: w.call, mode: w.body?.mode ?? null }));
+  r.stored = { old_category_before: oldBefore.category, old_category_after: (await person.api.dayView(oldDay)).category, editor_day_notes: (await person.api.dayView(day)).entry?.notes ?? null };
+  r.errors = ctx.errors;
+  r.consoleErrors = ctx.consoleErrors;
+  r.apiCalls = ctx.apiCalls;
+  expect(r.after_shrink.review_reason_focusable, 'the review reason takes focus (the review is on top)').toBe(true);
+  expect(r.after_first_escape.review_open, 'the first Escape closes the review').toBe(0);
+  expect(r.after_first_escape.dialogs.dialogs.map((d: any) => d.name)).toEqual(['editor']);
+  expect(r.after_first_escape.notes, 'the unsaved note is still in the editor').toBe('A4 R2 unsaved note (synthetic)');
+  expect(r.after_second_escape.dialogs.dialogs).toEqual([]);
+  expect(r.writes).toEqual([{ call: 'POST /api/days/batch', mode: 'preview' }]);
+  expect(r.stored.old_category_after).toBe(oldBefore.category);
+  expect(r.stored.editor_day_notes).toBeNull();
+  expect(ctx.errors).toEqual([]);
+  writeResult('r2-desktop.json', r);
+});

@@ -1,0 +1,222 @@
+diff --git a/tests/client/sessionModel.test.ts b/tests/client/sessionModel.test.ts
+index 7140453..2be9af6 100644
+--- a/tests/client/sessionModel.test.ts
++++ b/tests/client/sessionModel.test.ts
+@@ -438,31 +438,46 @@ describe('server figures, E-2 notice and day fields', () => {
+   });
+ 
+   it('builds the day entry body with the version it saw and drops the kind without leave', () => {
+-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
++    // 4 hours and 0 minutes are the same integer 240 leave minutes the API always took.
++    const built = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+     expect(built).toEqual({
+       ok: true,
+       request: { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: 'n', expected_version: 3, reason: 'because' },
+     });
+-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
++    const none = buildDayEntryRequest({ category: 'Off', leave: { hours: '0', minutes: '0' }, leaveKind: 'sick', wfh: false, notes: '' }, null);
+     expect(none).toEqual({
+       ok: true,
+       request: { category: 'Off', leave_minutes: 0, leave_kind: null, wfh: false, notes: '', expected_version: null },
+     });
++    const partial = buildDayEntryRequest({ category: 'Worked', leave: { hours: '1', minutes: '30' }, leaveKind: 'ot', wfh: false, notes: '' }, 2);
++    expect(partial).toMatchObject({ ok: true, request: { leave_minutes: 90, leave_kind: 'ot' } });
+   });
+ 
+-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
+-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
++  it('leaves a missing kind to the server and rejects only malformed or out-of-range leave fields', () => {
++    const missingKind = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '' }, leaveKind: '', wfh: false, notes: '' }, 1);
+     expect(missingKind).toMatchObject({ ok: true, request: { leave_minutes: 240, leave_kind: null } });
+-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
+-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
++    const bad: Array<[string, string]> = [
++      ['1.5', '0'],
++      ['-1', '0'],
++      ['24', '1'],
++      ['25', '0'],
++      ['0', '60'],
++      ['abc', '0'],
++      ['0', '1e1'],
++    ];
++    for (const [hours, minutes] of bad) {
++      const result = buildDayEntryRequest({ category: 'Worked', leave: { hours, minutes }, leaveKind: '', wfh: false, notes: '' }, 1);
++      expect(result.ok, `${hours} h ${minutes} m`).toBe(false);
+     }
+   });
+ 
+-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
++  it('starts the form from the day in hours and minutes, and hints the typed leave as hours and minutes', () => {
+     const draftFields = dayFieldsDraft(day({ category: 'Vacation', leave_minutes: 240, leave_kind: 'vacation', wfh: true }));
+-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
+-    expect(leaveHint('240')).toBe('4h 00m');
+-    expect(leaveHint('')).toBeNull();
+-    expect(leaveHint('1.5')).toBeNull();
++    expect(draftFields).toEqual({ category: 'Vacation', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: '' });
++    expect(dayFieldsDraft(day({ leave_minutes: 95 })).leave).toEqual({ hours: '1', minutes: '35' });
++    expect(leaveHint({ hours: '4', minutes: '0' })).toBe('4h 00m');
++    expect(leaveHint({ hours: '', minutes: '45' })).toBe('45m');
++    expect(leaveHint({ hours: '', minutes: '' })).toBeNull();
++    expect(leaveHint({ hours: '1.5', minutes: '' })).toBeNull();
+   });
+ });
+diff --git a/tests/e2e/admin.spec.ts b/tests/e2e/admin.spec.ts
+index 0a13a6a..59359fc 100644
+--- a/tests/e2e/admin.spec.ts
++++ b/tests/e2e/admin.spec.ts
+@@ -51,7 +51,20 @@ interface ApiPeriods {
+   current: { payroll_date: string; period_start: string };
+ }
+ 
++/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
++function isPhone(page: Page): boolean {
++  return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
++}
++
++/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
++async function openMoreOnPhone(page: Page) {
++  if (!isPhone(page)) return;
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ async function openAdmin(page: Page) {
++  await openMoreOnPhone(page);
+   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+   await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+ }
+@@ -182,7 +195,9 @@ test('settings: preview the effect, then create; the day figures equal the previ
+   await signInPageAs(person, '#/settings');
+   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+   await expect(page.getByText('You have no policy version yet')).toBeVisible();
++  await openMoreOnPhone(page);
+   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
++  if (isPhone(page)) await page.keyboard.press('Escape');
+ 
+   const form = page.getByRole('form', { name: 'New policy version' });
+   await expect(form.getByLabel('Effective from')).toHaveValue(boundary);
+@@ -390,14 +405,31 @@ test.describe('navigation', () => {
+   test('Settings for everyone, Admin for administrators only', async ({ page, builtServer, signInThroughUi, signInPageAs }) => {
+     await signInThroughUi();
+     const nav = page.getByRole('navigation', { name: 'Main' });
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
++    const phone = isPhone(page);
++    // The desktop bar lists Settings (Import is a link inside Settings); the phone's tab bar lists the three
++    // frequent screens and "More" holds Settings, Import and, for administrators, Admin.
++    const frequent = ['Timesheet', 'Overtime', 'History'];
++    if (phone) {
++      await expect(nav.getByRole('link')).toHaveText(frequent);
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings']);
++    }
+     await page.evaluate("window.location.hash = '#/admin'");
+     await expect(page).toHaveURL(/#\/timesheet$/);
++    await openMoreOnPhone(page);
+     await nav.getByRole('link', { name: 'Settings' }).click();
+     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
++    await openMoreOnPhone(page);
+     await page.getByRole('button', { name: 'Sign out' }).click();
+ 
+     await signInPageAs(builtServer.credentials.admin);
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
++    if (phone) {
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import', 'Admin']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Admin']);
++    }
+   });
+ });
+diff --git a/tests/e2e/sharing.spec.ts b/tests/e2e/sharing.spec.ts
+index b3e749a..40fabcc 100644
+--- a/tests/e2e/sharing.spec.ts
++++ b/tests/e2e/sharing.spec.ts
+@@ -130,8 +130,16 @@ async function givenShareId(owner: Person): Promise<string> {
+ const grantByApi = (owner: Person, grantee: Person, items: ApiShare['items']) =>
+   owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items }, 201);
+ 
++/** On a phone Settings and Sign out sit under "More" in the tab bar; opens it when it is shown and closed. */
++async function openMoreOnPhone(page: Page) {
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if (!(await more.isVisible())) return;
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ /** Signs the current person out and signs the next one in; an optional hash is the first screen. */
+ async function switchUser(page: Page, signIn: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, who: { email: string; password: string }, startHash: string) {
++  await openMoreOnPhone(page);
+   const signOut = page.getByRole('button', { name: 'Sign out' });
+   if (await signOut.isVisible()) {
+     await signOut.click();
+@@ -227,12 +235,18 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   recorded.reset();
+ 
+   // Nothing that changes data is on the page: absent, not disabled.
+-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
++  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+     await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+   }
++  await expect(page.getByLabel('Open a day')).toHaveCount(0);
+   await expect(page.getByRole('checkbox')).toHaveCount(0);
+   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
++  // The label cells are plain text: no in-cell label picker without edit rights.
++  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
++  await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
+   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
++  // The owner's signature lines and review state are not part of a shared view.
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+   await expect(page.getByRole('navigation', { name: 'Shared views' }).getByRole('link')).toHaveText(['Timesheet', 'Revisions']);
+ 
+   // A read-only day: the figures and fields are shown, and no add, edit, delete or save control exists.
+@@ -267,6 +281,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   await expect(page.locator('[data-shared-view="ot"]')).toHaveCount(0);
+ 
+   // Leaving takes effect on the next request and removes the switcher.
++  await openMoreOnPhone(page);
+   await page.getByRole('link', { name: 'Settings' }).click();
+   const received = page.getByRole('list', { name: 'Shares I received' });
+   await expect(received.getByText('Timesheets: view only')).toBeVisible();
+@@ -307,13 +322,31 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+   await switchUser(page, signInPageAs, grantee.account, `#/shared/${owner.account.id}/timesheet`);
+   await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - can edit");
+   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
+-  // Edit rights show the edit controls, but still no Clock in/out and no review.
++  // Edit rights show the edit controls (batch mode is opened first), but still no Clock in/out and no review.
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await page.getByRole('button', { name: 'Change several days' }).click();
+   await expect(page.getByRole('button', { name: 'Preview changes' })).toBeVisible();
++  await page.getByRole('button', { name: 'Done' }).click();
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await expect(page.getByLabel('Open a day')).toBeVisible();
+   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
+   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+   recorded.reset();
+ 
++  // The in-cell label picker writes through the share as well (a one-entry batch preview, then its
++  // commit, under /api/shared/:ownerId). It runs on the same day before the notes edit, which stays
++  // the newest change; "Work from home" keeps the category Worked, so no conflict review is needed.
++  await page.getByRole('button', { name: new RegExp(`^Label for ${workDay}`) }).click();
++  await page.getByRole('listbox', { name: `Label for ${workDay}` }).getByRole('option', { name: 'Work from home', exact: true }).click();
++  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
++  expect(await owner.api.dayView(workDay)).toMatchObject({ category: 'Worked', wfh: true });
++  expect(recorded.list.filter((entry) => entry.endsWith('/days/batch'))).toEqual([
++    `POST /api/shared/${owner.account.id}/days/batch`,
++    `POST /api/shared/${owner.account.id}/days/batch`,
++  ]);
++
+   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;
+   await page.screenshot({ path: screenshotPath(`sharing-edit-${project}-synthetic.png`), animations: 'disabled' });
+   await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
+@@ -324,6 +357,8 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+   await expect(dialog.getByText('Day fields saved.')).toBeVisible();
+   await page.screenshot({ path: screenshotPath(`sharing-edit-day-${project}-synthetic.png`), animations: 'disabled' });
+   await dialog.getByRole('button', { name: 'Close' }).click();
++  // Focus returns to the day's button.
++  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
+   expectOnlySharedRequests(recorded.list, owner.account.id);
+   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
+   // The server also refuses the live clock for an edit share.

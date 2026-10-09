@@ -1,0 +1,29 @@
+// Checks every file of the evidence folder: CR bytes, user-profile paths, the user name, the task
+// or project absolute paths, e-mail addresses outside example.invalid, and non-synthetic names.
+// Usage: node check-evidence.mjs <evidence-dir> <user-name>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, userName] = process.argv.slice(2);
+const checks = {
+  cr_bytes: (b) => b.filter((x) => x === 13).length,
+  user_profile_paths: (t) => (t.match(/[A-Za-z]:[\\/]+Users[\\/]+|\/c\/Users\//gi) ?? []).length,
+  user_name: (t) => (userName ? (t.match(new RegExp(userName, 'gi')) ?? []).length : 0),
+  absolute_task_or_project: (t) => (t.match(/\.claude-tmp|Dropbox/gi) ?? []).length,
+  emails_outside_example_invalid: (t) => (t.match(/[A-Za-z0-9._%+-]+@(?!example\.invalid)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? []).length,
+};
+const totals = Object.fromEntries(Object.keys(checks).map((k) => [k, 0]));
+let files = 0;
+for (const name of readdirSync(dir).sort()) {
+  const bytes = [...readFileSync(join(dir, name))];
+  const text = Buffer.from(bytes).toString('utf8');
+  files += 1;
+  const row = {};
+  for (const [key, fn] of Object.entries(checks)) {
+    const n = key === 'cr_bytes' ? fn(bytes) : fn(text);
+    row[key] = n;
+    totals[key] += n;
+  }
+  if (Object.values(row).some((n) => n > 0)) console.log(`${name}: ${JSON.stringify(row)}`);
+}
+console.log(`files ${files}; totals ${JSON.stringify(totals)}`);

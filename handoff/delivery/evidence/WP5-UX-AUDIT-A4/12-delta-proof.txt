@@ -1,0 +1,113 @@
+== 1. src/client/DayEditor.tsx
+file lines: a2ea7a4 446, edaaa85 467
+outside the effect and the helper: IDENTICAL (19268 vs 19268 chars)
+--- a2ea7a4 effect block
+  // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
+  useEffect(() => {
+    const element = dialog.current;
+    if (element === null) return;
+    if (element.open) {
+      if (element.matches(':modal') === modal) return;
+      element.close();
+    }
+    if (modal) element.showModal();
+    else element.show();
+    heading.current?.focus();
+  }, [modal]);
+
+--- edaaa85 effect block
+  // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
+  // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the clock-out
+  // dialog) would stack the editor above that dialog and take its focus and its Escape. The switch then
+  // waits until no other modal dialog is left (closed or removed), so the open dialog keeps both.
+  useEffect(() => {
+    const element = dialog.current;
+    if (element === null) return;
+    const apply = () => {
+      if (element.open) {
+        if (element.matches(':modal') === modal) return;
+        element.close();
+      }
+      if (modal) element.showModal();
+      else element.show();
+      heading.current?.focus();
+    };
+    if (!element.open || !otherModalOpen(element)) {
+      apply();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (otherModalOpen(element)) return;
+      observer.disconnect();
+      apply();
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    return () => observer.disconnect();
+  }, [modal]);
+
+--- edaaa85 new helper
+/** True while a modal dialog other than the editor itself is open (it owns focus and Escape). */
+function otherModalOpen(editor: HTMLDialogElement): boolean {
+  return [...document.querySelectorAll('dialog:modal')].some((open) => open !== editor);
+}
+
+--- old effect statements after the null check
+  if (element.open) {
+  if (element.matches(':modal') === modal) return;
+  element.close();
+  }
+  if (modal) element.showModal();
+  else element.show();
+  heading.current?.focus();
+--- new apply() statements
+  if (element.open) {
+  if (element.matches(':modal') === modal) return;
+  element.close();
+  }
+  if (modal) element.showModal();
+  else element.show();
+  heading.current?.focus();
+old effect statements equal apply() statements: true
+--- added code lines (comments removed)
+  const apply = () => {
+  };
+  if (!element.open || !otherModalOpen(element)) {
+  apply();
+  return;
+  const observer = new MutationObserver(() => {
+  if (otherModalOpen(element)) return;
+  observer.disconnect();
+  apply();
+  });
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+  return () => observer.disconnect();
+  /** True while a modal dialog other than the editor itself is open (it owns focus and Escape). */
+  function otherModalOpen(editor: HTMLDialogElement): boolean {
+  return [...document.querySelectorAll('dialog:modal')].some((open) => open !== editor);
+  }
+added lines calling a request, a setter, a callback prop, submit, click, load, reason or a timer: 0
+observer.disconnect() calls in the effect: 2 (one before apply in the callback, one in the cleanup)
+cleanup returns the disconnect: true
+effect dependency list unchanged ([modal]): true
+
+== 2. src/client/styles.css
+rules: a2ea7a4 447, edaaa85 447
+  changed rule  | :root: - --date-field-min: 9.5rem; --open-day-label-min: 15.25rem + --date-field-min: 8.5rem; --open-day-label-min: 14.25rem
+changed custom properties: --date-field-min, --open-day-label-min
+rules using them:
+  @media (max-width: 767px) | .tools .open-day label: flex: 1 1 var(--open-day-label-min); min-width: var(--open-day-label-min)
+  @media (max-width: 767px) | .tools .open-day input: min-width: var(--date-field-min)
+changed or token-using declarations with a hide/move/clip/block property: 0
+
+== 3. tests/e2e
+tests/e2e/day-editor.spec.ts: lines 1252 -> 1372; a2ea7a4 lines kept in order 1252; removed or changed 0; expect lines 321 -> 348
+  skip/fixme/only lines 2 -> 3
+tests/e2e/timesheet.spec.ts: lines 388 -> 425; a2ea7a4 lines kept in order 385; removed or changed 3; expect lines 114 -> 118
+  - 127:   for (const width of [390, 360, 320]) {
+  - 140:       expect(minimum, 'the --date-field-min token resolves to a width').toBeGreaterThanOrEqual(135);
+  - 142:       expect(await field.evaluate((input) => input.scrollWidth <= input.clientWidth), 'the date value is not clipped').toBe(true);
+  skip/fixme/only lines 1 -> 1
+
+problems=0

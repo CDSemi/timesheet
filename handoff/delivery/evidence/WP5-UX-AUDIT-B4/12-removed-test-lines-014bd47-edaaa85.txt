@@ -1,0 +1,221 @@
++++ b/tests/client/dayEditorModel.test.ts
+@@ -0,0 +1,164 @@
++++ b/tests/client/dayModel.test.ts
+@@ -12 +11,0 @@ import {
+-  weekGroups,
+@@ -158,27 +157 @@ describe('toDayDisplay', () => {
+-describe('weekGroups', () => {
+-  it('splits a two-week period into Monday to Sunday groups', () => {
+-    const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
+-    const groups = weekGroups(
+-      dates.map((date) => day(date)),
+-      null,
+-    );
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 7],
+-      ['2026-10-05', 7],
+-    ]);
+-    expect(groups[0]?.days[0]?.weekday).toBe('Mon');
+-    expect(groups[1]?.days[6]?.weekday).toBe('Sun');
+-  });
+-  it('groups a period that starts mid-week into partial weeks', () => {
+-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 2],
+-      ['2026-10-05', 1],
+-    ]);
+-  });
+-  it('returns nothing for no days', () => {
+-    expect(weekGroups([], null)).toEqual([]);
+-  });
+-});
++++ b/tests/client/labelPickerModel.test.ts
+@@ -0,0 +1,88 @@
++++ b/tests/client/leaveInputModel.test.ts
+@@ -0,0 +1,93 @@
++++ b/tests/client/periodBarModel.test.ts
+@@ -0,0 +1,67 @@
++++ b/tests/client/reviewModel.test.ts
+@@ -10,0 +11 @@ import {
+@@ -23,0 +25,2 @@ import {
+@@ -27,0 +31 @@ import {
+@@ -449,0 +454,88 @@ describe('review content helpers', () => {
++++ b/tests/client/sessionModel.test.ts
+@@ -441 +441,2 @@ describe('server figures, E-2 notice and day fields', () => {
+-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+@@ -446 +447 @@ describe('server figures, E-2 notice and day fields', () => {
+-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
+@@ -450,0 +452,2 @@ describe('server figures, E-2 notice and day fields', () => {
+@@ -453,2 +456,2 @@ describe('server figures, E-2 notice and day fields', () => {
+-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
+-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
+@@ -456,2 +459,12 @@ describe('server figures, E-2 notice and day fields', () => {
+-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
+-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
+@@ -461 +474 @@ describe('server figures, E-2 notice and day fields', () => {
+-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
+@@ -463,4 +476,6 @@ describe('server figures, E-2 notice and day fields', () => {
+-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
+-    expect(leaveHint('240')).toBe('4h 00m');
+-    expect(leaveHint('')).toBeNull();
+-    expect(leaveHint('1.5')).toBeNull();
++++ b/tests/client/sheetModel.test.ts
+@@ -0,0 +1,357 @@
++++ b/tests/domain/engine.test.ts
+@@ -7 +7 @@ import { decideDeficit } from '../../src/domain/deficit.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
+@@ -28,0 +29 @@ import {
+@@ -422,0 +424,19 @@ describe('display formatting', () => {
++++ b/tests/e2e/admin.spec.ts
+@@ -53,0 +54,12 @@ interface ApiPeriods {
+@@ -54,0 +67 @@ async function openAdmin(page: Page) {
+@@ -184,0 +198 @@ test('settings: preview the effect, then create; the day figures equal the previ
+@@ -185,0 +200 @@ test('settings: preview the effect, then create; the day figures equal the previ
+@@ -393 +408,11 @@ test.describe('navigation', () => {
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
+@@ -395,0 +421 @@ test.describe('navigation', () => {
+@@ -397,0 +424 @@ test.describe('navigation', () => {
+@@ -401 +428,6 @@ test.describe('navigation', () => {
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
++++ b/tests/e2e/day-editor.spec.ts
+@@ -4 +4 @@ import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.
+-import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+@@ -10 +10,4 @@ import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+- * notice; the reason prompt for old periods; and future days shown as upcoming.
+@@ -47 +50 @@ async function openEditor(page: Page, workDate: string): Promise<Locator> {
+-  await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
+@@ -482,0 +486,5 @@ test('Clock in then Clock out asks for break confirmation and sends the session
+@@ -503,0 +512,3 @@ test('Clock in then Clock out asks for break confirmation and sends the session
+@@ -557 +568,13 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
+-    await fields.getByLabel('Partial leave minutes').fill('240');
+@@ -576,0 +600,72 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
+@@ -732 +827,3 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('missing record');
+@@ -735,0 +833,4 @@ test('future days show as upcoming from the server date, past days without a rec
+@@ -736,0 +838 @@ test('future days show as upcoming from the server date, past days without a rec
+@@ -740,3 +842,7 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await expect(row).toContainText('upcoming');
+-  await expect(row).not.toContainText('missing record');
+-  await expect(row).not.toContainText('pending OT');
+@@ -787,0 +894,478 @@ test('mobile: the editor fits the screen and every control is at least 44 by 44'
++++ b/tests/e2e/history-settings.spec.ts
+@@ -253 +253 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
+@@ -261,2 +261,8 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
+-  else await expect(page.locator('table.grid')).toHaveCount(0);
++++ b/tests/e2e/import.spec.ts
+@@ -92,0 +93,12 @@ async function decisionsFor(person: Person, id: string, importDays: readonly str
+@@ -103 +115,3 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
+-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
+@@ -199,0 +214,2 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+@@ -200,0 +217 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+@@ -206,0 +224,2 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+@@ -365,0 +385 @@ test('the Import entry is for the signed-in person and is not part of the admini
+@@ -367 +387,11 @@ test('the Import entry is for the signed-in person and is not part of the admini
+-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++++ b/tests/e2e/isolation.spec.ts
+@@ -1,0 +2 @@ import { randomBytes } from 'node:crypto';
+@@ -41,0 +43,8 @@ interface Owner {
+@@ -98 +107,2 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
+-    await expect(row).not.toContainText('complete');
+@@ -141,0 +152 @@ test('an admin cannot open employee data through any admin screen', async (
+@@ -177 +188,2 @@ test('an admin cannot open employee data through any admin screen', async (
+-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
+@@ -189,0 +202 @@ test('an employee sees no Admin entry and the server refuses the admin routes',
++++ b/tests/e2e/ot-leave.spec.ts
+@@ -97 +97 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
+-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
++++ b/tests/e2e/review.spec.ts
+@@ -4 +4 @@ import { addDays } from '../../src/domain/dates.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
+@@ -131 +131 @@ interface ApiReview {
+-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+@@ -198,4 +198,4 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-    for (const [label, minutes] of [
+-      ['Regular', day.calculation?.regular_minutes ?? null],
+-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
+-      ['Credit', day.calculation?.credited_minutes ?? null],
+@@ -203,2 +203,2 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-      const cell = row.locator(`td[data-label="${label}"]`);
+-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
+@@ -205,0 +206,6 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+@@ -208 +214 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-  await expect(completeRow).toContainText('complete');
+@@ -211 +217 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-  await expect(pendingRow).toContainText('breaks unconfirmed');
+@@ -351 +357 @@ test('a period finalized in another window reloads with a clear message and no s
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+@@ -376 +382 @@ test('an identical sign-off repeated from a second window is recognised and crea
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
+@@ -484 +490,4 @@ test('mobile: the review fits the width and every control is at least 44px', asy
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
++++ b/tests/e2e/setup.spec.ts
+@@ -160 +160,5 @@ test('first-time setup creates the administrator once and never returns', async
+-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+@@ -163 +167 @@ test('first-time setup creates the administrator once and never returns', async
+-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
++++ b/tests/e2e/sharing.spec.ts
+@@ -132,0 +133,7 @@ const grantByApi = (owner: Person, grantee: Person, items: ApiShare['items']) =>
+@@ -134,0 +142 @@ async function switchUser(page: Page, signIn: (credentials: { email: string; pas
+@@ -230 +238 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
+@@ -232,0 +241 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+@@ -234,0 +244,3 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+@@ -235,0 +248,2 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+@@ -269,0 +284 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+@@ -310 +325,3 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  // Edit rights show the edit controls, but still no Clock in/out and no review.
+@@ -311,0 +329,3 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+@@ -314,0 +335 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+@@ -316,0 +338,12 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+@@ -326,0 +360,2 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
++++ b/tests/e2e/shell.spec.ts
+@@ -31 +30,0 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+-  await expect(nav.getByRole('link')).toHaveCount(5);
+@@ -34 +33,24 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+@@ -54,2 +76,2 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  await expect(row).toContainText('complete');
+-  await expect(row).toContainText('8h 00m');
+@@ -56,0 +79,3 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+@@ -71 +96,2 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
++++ b/tests/e2e/timesheet.spec.ts
+@@ -1,0 +2 @@ import type { Page } from '@playwright/test';
+@@ -5 +6,2 @@ import { expect, screenshotPath, test } from './fixtures.ts';
+- * Two-week grid (desktop), day list (mobile) and batch category edit, on both projects.
+@@ -26,0 +29,5 @@ function dayRow(page: Page, workDate: string) {
+@@ -32,0 +40,148 @@ function need(days: string[], count: number): string[] {
+@@ -47,4 +202,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  const sheet = await employeeSeed.call<{ period: { due_local_date: string; period_start: string } }>(
+-    'GET',
+-    `/api/timesheets/${currentPayrollDate}`,
+-  );
+@@ -55 +213 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // Exactly one of the grid and the list renders, chosen by the 768px media query.
+@@ -57,2 +215,10 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(page.locator('table.grid')).toHaveCount(isDesktop ? 1 : 0);
+-  await expect(page.locator('.day-list')).toHaveCount(isDesktop ? 0 : 1);
+@@ -66 +232,8 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
+@@ -67,0 +241,10 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+@@ -69 +252,5 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(dayRow(page, sheet.period.period_start)).toContainText(sheet.period.period_start);
+@@ -72,6 +259,21 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // A complete day shows complete and 8h 00m; unconfirmed breaks show pending OT.
+-  await expect(dayRow(page, completeDay)).toContainText('complete');
+-  await expect(dayRow(page, completeDay)).toContainText('8h 00m');
+-  await expect(dayRow(page, completeDay)).not.toContainText('pending OT');
+-  await expect(dayRow(page, pendingDay)).toContainText('confirm breaks');
+-  await expect(dayRow(page, pendingDay)).toContainText('pending OT');
+@@ -80 +282 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // No em dash or en dash placeholder anywhere on the screen.
+@@ -81,0 +284 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+@@ -88 +291,4 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-    const targets = page.locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline');
+@@ -99,0 +306,5 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+@@ -118,0 +330 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
+@@ -120,0 +333,2 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
+@@ -159,0 +374 @@ test('batch edit: an old period asks for a reason and commits with it', async ({
+@@ -186,0 +402 @@ test('batch edit: a stale version shows the reload message naming the date', asy

@@ -170,8 +170,28 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   mở; docs/04 dòng 55; O-5 thành assertion có thể fail; R-7 token 8.5/14.25rem (ở 375px
   dòng đầu nay nằm trên thanh tab); tự kiểm 9 đường thay đổi kích thước; e2e desktop
   84/0/9, mobile 86/0/7; verify exit 0; digest b7bbcbc0.
-- Đang chạy: WP5-UX-FIX5-FREEZE (committer; mang theo các bản ghi REGATE2, A3/B3 và
-  FIX4-FREEZE từ sau a2ea7a4).
+- WP5-UX-FIX5-FREEZE xong: edaaa85 trên main, đã push (302 file, digest b7bbcbc0).
+- WP5-UX-REGATE3 PASS trên edaaa85 (NAS chưa kiểm): digest b7bbcbc0 ở ba dạng; verify
+  1820; e2e 170/0/16; AC-13 ba lần và hai múi giờ; drill 208/0, image
+  sha256:1332b6d5ac7bbbc127b0b64f56814373088e989508137f6760640a7d5abc6af2 (đã xóa sau khi
+  chạy); B3-01 đúng trên ba đường đổi kích thước; B3-02, R-7 (đủ ngày ở 390/375/360/320)
+  và các lỗi đã sửa trước vẫn đúng.
+- Board: current_source_digest b7bbcbc0; WP5-RECHECK, WP5-UX-AUDIT-A2 và -A3 có
+  superseded_by WP5-UX-AUDIT-A4.
+- WP5-UX-AUDIT-A4 PASS trên edaaa85 / b7bbcbc0, không có finding (việc hoãn đổi chế độ
+  không bao giờ đổi dữ liệu được lưu; 12 lần lưu sau khi đổi giống 014bd47; các kiểm tra
+  đều đạt).
+- WP5-UX-AUDIT-B4 FIX REQUIRED trên edaaa85: B3-01 đã đóng trên 7 đường, B3-02, O-5, R-7
+  xong, không assertion nào bị nới lỏng; mới có B4-01 (Medium, đánh giá lại R-1: vòng
+  focus 1.72:1 / 2.46:1, WCAG 1.4.11) và B4-02 (Low, giờ hạn nộp dạng ISO trong ghi chú
+  múi giờ so với docs/04 dòng 45).
+- Theo quyết định 2026-10-09, hỏi chủ dự án WP5-UX-Q1 thay vì lặp tiếp; đã chuẩn bị brief
+  WP5-UX-FIX6 ở trạng thái pending (khuyến nghị phương án a).
+- Đang chạy: WP5-UX-CKPT2 (commit checkpoint các bản ghi REGATE3, A4, B4 và brief FIX6
+  đang chờ). Sau đó board chuyển `blocked` chờ WP5-UX-Q1 (lần chuyển này chưa commit).
+- Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet
+  thành edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, commit
+  nghiệm thu); nếu phần B lại không đạt, hỏi chủ dự án thay vì lặp tiếp.
 - Tiếp theo: WP5-UX-REGATE3, rồi B4 và A4 mới (A2, A3 và WP5-RECHECK có superseded_by
   A4). Nếu phần B lại không đạt sau vòng này, hỏi chủ dự án thay vì lặp tiếp.
 - Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5: một task tài liệu cập nhật định

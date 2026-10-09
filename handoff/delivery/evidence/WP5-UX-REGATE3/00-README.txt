@@ -1,0 +1,7 @@
+WP5-UX-REGATE3 evidence. freeze_commit edaaa852370128ca9bdf206d730f3849346ba994; HEAD = origin/main = the same before and after (non-handoff diff since freeze: none, nonhandoff-since-freeze.txt empty).
+Node v24.21.0 portable (env.sh.txt), Git Bash, workflow Python (codex runtime, user <user>) for the validators. Machine zone America/Los_Angeles.
+Digest of record b7bbcbc0a5bbb097a5547b441d1228f20963445e86b0429169cb7ab47980a873 (789 files, handoff/ excluded): exdigest-before.txt and exdigest-after.txt (clean git archive export, git hash-object --no-filters), lstree-sha.txt (git ls-tree form), repo-digest.txt (npm run digest).
+Scripts: contrast.mjs.txt, run-tz.mjs.txt, tzprobe.test.ts.txt, ux-regate3.spec.ts.txt, ux-regate3-b.spec.ts.txt (R-7), ux-regate3-c.spec.ts.txt (44px/overflow) and ux-regate3-d.spec.ts.txt (B3-01) (scratch, run only in the task-local export, removed before the final digest), exdigest.sh.txt, keys.sh.txt, mask.py.txt, env.sh.txt.
+Observations: obs-b3.txt (B3-01 paths A, B, C), obs-r7.txt (R-7 field and first-row bottoms at 390/375/360/320 with and without the zone note), obs-desktop.txt and obs-phone.txt (A-01, B-01, B-02, tab order), obs-targets.txt (44px and overflow at 390/375/360/320).
+Run logs: 60-regate3-a-run.txt, 61-regate3-bc-run.txt. Screenshots are synthetic (example.invalid accounts, run-time passwords); ten kept of twenty-four produced.
+Slips against the no-/dev/null rule (nothing written to or read from a real file): one `git archive --help >/dev/null 2>&1` and one `tail -n 0 /dev/null 2>&1 | true`, both no-ops.

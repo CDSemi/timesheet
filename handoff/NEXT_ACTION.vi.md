@@ -13,9 +13,14 @@
   duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08): kế hoạch và mockup tĩnh đã sẵn
   (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án đã chấp
-  nhận E-1..E-7 theo khuyến nghị (2026-10-08); đang triển khai T01..T06. Khi thiết kế mới vào
-  code, snapshot WP5 phải chạy lại gate và audit độc lập, và định danh release trong
-  pilot packet được cập nhật.
+  nhận E-1..E-7 theo khuyến nghị (2026-10-08). Phần triển khai T01..T06 và các bản sửa
+  FIX1..FIX5 đã freeze (commit mã nguồn cuối edaaa85, digest b7bbcbc0); WP5-UX-REGATE3
+  PASS; audit lại phần A PASS (WP5-UX-AUDIT-A4). Phần B (WP5-UX-AUDIT-B4) còn B4-01 (vòng
+  focus tương phản 1.72:1 / 2.46:1, cần 3:1) và B4-02 (ngày ISO trong ghi chú múi giờ).
+  **Câu hỏi cho chủ dự án WP5-UX-Q1** (board `pending_owner_question_2`): (a, khuyến
+  nghị) sửa cả hai trong WP5-UX-FIX6, rồi gate và kiểm tra lại; (b) chấp nhận cả hai như
+  rủi ro mang theo; (c) chỉ sửa vòng focus. Việc nghiệm thu lại WP5 và cập nhật định danh
+  pilot packet chờ câu trả lời này.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B4: UI-standards scan, EN/VI parity, docs lines, and Node deprecation tracing, all at edaaa85
+# in the pristine scratch clone (no probe folder in it).
+source <task>/env.sh
+cd "$T/clone" || exit 9
+S="$T/standards-summary.txt"
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ) HEAD=$(git rev-parse HEAD)" > "$S"
+
+# 1. Tokens only, radius, transition, reduced motion, fonts: the whole file and the round's diffs.
+git diff 014bd47 edaaa85 -- src/client/styles.css > "$T/tmp/styles-014bd47-edaaa85.diff"
+git diff a2ea7a4 edaaa85 -- src/client/styles.css > "$T/tmp/styles-a2ea7a4-edaaa85.diff"
+"$N24" "$T/css-scan.mjs" src/client/styles.css "$T/tmp/styles-014bd47-edaaa85.diff" > "$T/20-css-scan-014bd47-edaaa85.txt" 2>&1
+echo "css-scan round exit=$?" >> "$S"
+"$N24" "$T/css-scan.mjs" src/client/styles.css "$T/tmp/styles-a2ea7a4-edaaa85.diff" > "$T/21-css-scan-a2ea7a4-edaaa85.txt" 2>&1
+echo "css-scan fix5 exit=$?" >> "$S"
+{
+  echo "font/url/@font-face/@import in src/client (expect none beyond the system stacks):"
+  grep -rn "@font-face\|@import\|fonts.googleapis\|url(" src/client || echo "  none"
+  echo "Content-Security-Policy in the server:"
+  grep -rn "default-src\|font-src\|style-src" src/server || echo "  none"
+  echo "inline style= attributes in src/client TSX:"
+  grep -rn "style={{" src/client || echo "  none"
+} > "$T/22-fonts-csp-inline.txt" 2>&1
+
+# 2. EN/VI parity: docs/04 whole; docs/10 and docs/12 round sections.
+sed -n '167,179p' docs/10_DECISIONS_AND_SOURCES.md > "$T/tmp/d10-en-round.md"
+sed -n '168,180p' docs/10_DECISIONS_AND_SOURCES.vi.md > "$T/tmp/d10-vi-round.md"
+sed -n '20,28p' docs/12_RELEASE_NOTES.md > "$T/tmp/d12-en-round.md"
+sed -n '20,28p' docs/12_RELEASE_NOTES.vi.md > "$T/tmp/d12-vi-round.md"
+"$N24" "$T/parity.mjs" docs/04_UX_AND_SETTINGS.md docs/04_UX_AND_SETTINGS.vi.md 0 "$T/tmp/d10-en-round.md" "$T/tmp/d10-vi-round.md" 0 "$T/tmp/d12-en-round.md" "$T/tmp/d12-vi-round.md" 0 > "$T/60-docs-parity.txt" 2>&1
+echo "parity exit=$?" >> "$S"
+{
+  echo "docs/04 EN line 55:"; sed -n '55p' docs/04_UX_AND_SETTINGS.md
+  echo "docs/04 VI line 55:"; sed -n '55p' docs/04_UX_AND_SETTINGS.vi.md
+  echo "docs/04 EN line 16:"; sed -n '16p' docs/04_UX_AND_SETTINGS.md
+  echo "docs/04 EN line 48:"; sed -n '48p' docs/04_UX_AND_SETTINGS.md
+  echo "docs/04 EN line 59:"; sed -n '59p' docs/04_UX_AND_SETTINGS.md
+  echo "docs/04 VI line 59:"; sed -n '59p' docs/04_UX_AND_SETTINGS.vi.md
+  echo "docs/04 EN line 79:"; sed -n '79p' docs/04_UX_AND_SETTINGS.md
+  echo "docs/12 release identity section (lines 5-12):"; sed -n '5,12p' docs/12_RELEASE_NOTES.md
+  echo "OpenDay control (no min/max):"; grep -n "type=\"date\"\|min=\|max=" src/client/components/OpenDay.tsx || echo "  no min/max attribute"
+} > "$T/61-docs-lines.txt" 2>&1
+
+# 3. Node deprecation tracing on lint, unit tests, build; then the built server at runtime.
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+npmr run lint > "$T/dep-lint.txt" 2>&1
+echo "lint exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-lint.txt")" >> "$S"
+npmr test > "$T/dep-test.txt" 2>&1
+echo "npm test exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-test.txt")" >> "$S"
+npmr run build > "$T/dep-build.txt" 2>&1
+echo "build exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-build.txt")" >> "$S"
+unset NODE_OPTIONS
+mkdir -p "$T/runtime-work"
+"$N24" "$T/runtime-deprecation.mjs" "$T/clone" "$T/runtime-work" > "$T/dep-runtime.txt" 2>&1
+echo "runtime check exit=$?" >> "$S"
+echo "git status --short (expect empty):" >> "$S"
+git status --short >> "$S"
+"$N24" scripts/source-digest.mjs >> "$S" 2>&1
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

@@ -1,0 +1,55 @@
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index 7acdceb..e135035 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -15,6 +15,11 @@ type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: s
+ 
+ const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
+ 
++/** True while a modal dialog other than the editor itself is open (it owns focus and Escape). */
++function otherModalOpen(editor: HTMLDialogElement): boolean {
++  return [...document.querySelectorAll('dialog:modal')].some((open) => open !== editor);
++}
++
+ /**
+  * Day editor (WP5-UX-T04, owner decision E-3 a). From 1200px it is a non-modal panel in its own
+  * column beside the sheet, so the sheet stays usable. Below that (`modal`) it is modal and traps
+@@ -82,16 +87,32 @@ export function DayEditor({
+ 
+   // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+   // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
++  // WP5-UX-B3-01: re-showing it while another modal dialog is open (a label review, the clock-out
++  // dialog) would stack the editor above that dialog and take its focus and its Escape. The switch then
++  // waits until no other modal dialog is left (closed or removed), so the open dialog keeps both.
+   useEffect(() => {
+     const element = dialog.current;
+     if (element === null) return;
+-    if (element.open) {
+-      if (element.matches(':modal') === modal) return;
+-      element.close();
++    const apply = () => {
++      if (element.open) {
++        if (element.matches(':modal') === modal) return;
++        element.close();
++      }
++      if (modal) element.showModal();
++      else element.show();
++      heading.current?.focus();
++    };
++    if (!element.open || !otherModalOpen(element)) {
++      apply();
++      return;
+     }
+-    if (modal) element.showModal();
+-    else element.show();
+-    heading.current?.focus();
++    const observer = new MutationObserver(() => {
++      if (otherModalOpen(element)) return;
++      observer.disconnect();
++      apply();
++    });
++    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
++    return () => observer.disconnect();
+   }, [modal]);
+ 
+   // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested

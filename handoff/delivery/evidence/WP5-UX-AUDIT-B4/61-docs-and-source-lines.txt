@@ -1,0 +1,25 @@
+docs/04 EN line 55:
+- Toolbar: "Open a day" (any date, also outside the displayed period), "Show details" and "Change several days". Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
+docs/04 VI line 55:
+- Thanh công cụ: "Open a day" (mọi ngày, kể cả ngoài kỳ đang hiển thị), "Show details" và "Change several days". Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
+docs/04 EN line 16:
+Use hours/minutes, never 1.30 for 1h30. Display current viewing zone and saved accounting date. Keep ordinary flows free of DB/job terminology. Actual clock values are not seeded from a schedule.
+docs/04 EN line 48:
+- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. The first screen shows the period card (with "<" and ">" beside the title), the one-row clock card and the compact tools, so the first day row is fully visible above the tab bar at 390x844; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with an "Edit {date}" button (or "View {date}" when read-only).
+docs/04 EN line 59:
+- From 1200px: a non-modal panel in its own column beside the sheet, so the sheet stays visible and usable. From 768 to 1199px: a modal side panel at the right edge with the page behind it inert (focus stays inside the panel), so it never covers a control that can take focus. Phones (below 768px): a modal bottom sheet of at most 86% of the screen height. Focus moves to the panel heading on open; Escape closes the panel wherever focus is (a nested dialog takes Escape first), as does Close, and focus returns to the day's date button.
+docs/04 VI line 59:
+- Từ 1200px: bảng bên không chặn trang, nằm trong cột riêng cạnh bảng timesheet nên bảng timesheet vẫn thấy được và dùng được. Từ 768 đến 1199px: bảng bên dạng modal ở mép phải, trang phía sau bị vô hiệu (tiêu điểm ở lại trong bảng) nên bảng không bao giờ che một điều khiển còn nhận được tiêu điểm. Điện thoại (dưới 768px): bottom sheet dạng modal cao tối đa 86% màn hình. Tiêu điểm chuyển tới tiêu đề của bảng khi mở; Escape đóng bảng dù tiêu điểm đang ở đâu (hộp thoại lồng bên trong nhận Escape trước), Close cũng vậy, và tiêu điểm trở về nút ngày của ngày đó.
+docs/04 EN line 79:
+- Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring.
+docs/12 release identity section (lines 5-12):
+## Release identity
+
+- **Release commit and source digest.** The release is the WP5 package-final freeze commit. Its SHA, its source digest (`npm run digest`, which excludes `handoff/`) and its file count are recorded in the [WP5 handoff](../handoff/delivery/WP5_HANDOFF.md) and in the gate record. They are not written here, because a document cannot contain the digest of the tree that holds it. Before these notes were added the source was commit `8e99d2c6375f71ac94faff9eb859b9b7bcf3e741` with digest `1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c` over 777 files.
+- **Version.** `package.json` says `0.1.0`, the same value as the earlier WP3 build. The version does not identify the release; the commit and the digest do (R-B5-1).
+- **Image ID.** Record the image ID when the image is built on the host: `docker image inspect --format '{{.Id}}' <image>` ([runbook](11_OPERATIONS_RUNBOOK.md) section 1 step 8). A rebuild of the same source gave different image IDs in the independent review although the application files were identical, so the tag `timesheet:<release-commit>` is never reused for a rebuild (R-B5-1).
+- **Base image.** The Dockerfile pins the Node base image by its multi-architecture digest. The review found the pin one Debian rebuild behind the tag on 2026-10-06; decide on the refresh before the pilot build ([runbook](11_OPERATIONS_RUNBOOK.md) section 9; R-B5-2).
+- **Declaration.** No release has been declared and no tag exists. The first release is declared at the owner's pilot authorization; from then on fixes go through branches and pull requests ([08 AI workflow](08_AI_WORKFLOW_AND_BUDGET.md)). Recommended; owner decision pending (D-14). Agents create no tag.
+
+OpenDay control (no min/max):
+16:        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />

@@ -1,0 +1,12 @@
+// WP5-UX-AUDIT-B4: crude HTML to text for reading a saved W3C page. Usage: node html2text.mjs <in.html> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let html = readFileSync(input, 'utf8');
+html = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+html = html.replace(/<(h[1-6]|p|li|dt|dd|div|section|br|tr|figcaption)[^>]*>/gi, '\n');
+html = html.replace(/<[^>]+>/g, '');
+html = html.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&rsquo;/g, "'").replace(/&ldquo;|&rdquo;/g, '"');
+html = html.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n');
+writeFileSync(output, html);
+console.log(`${output}: ${html.length} chars`);

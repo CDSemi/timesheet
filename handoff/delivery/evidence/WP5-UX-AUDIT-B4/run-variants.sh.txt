@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B4: (1) the new B3-01 e2e tests on the a2ea7a4 DayEditor (clone-old), desktop, no retries;
+# (2) the date-field tests with soft assertions on the 589bcff open-day rules (clone-o5), mobile, no retries;
+# (3) the edaaa85 date-field tests with soft assertions unmutated would be the control: the full e2e run already
+#     passed them, so only the mutated run is needed here.
+source <task>/env.sh
+S="$T/variants-run-summary.txt"
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$S"
+cd "$T/clone-old" || exit 9
+export E2E_SCREENSHOT_DIR="$T/e2e-screens-old"
+mkdir -p "$E2E_SCREENSHOT_DIR"
+"$N24" node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --project=desktop -g "WP5-UX-B3-01" --retries=0 > "$T/variant-old-b3-01.txt" 2>&1
+echo "old B3-01 tests exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+cd "$T/clone-o5" || exit 9
+export E2E_SCREENSHOT_DIR="$T/e2e-screens-o5"
+mkdir -p "$E2E_SCREENSHOT_DIR"
+"$N24" node_modules/@playwright/test/cli.js test tests/e2e/timesheet.spec.ts --project=mobile -g "the Open a day date field shows a full date" --retries=0 > "$T/variant-o5-date-field.txt" 2>&1
+echo "o5 date-field tests exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

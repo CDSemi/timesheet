@@ -1,0 +1,30 @@
+// WP5-UX-AUDIT-B4: whole-document EN/VI parity of a review pair (line wrapping differs, so not line-aligned):
+// heading levels in order, table rows, bullet count, and the multisets of code spans and numbers.
+// Usage: node doc-parity.mjs <en> <vi>
+import { readFileSync } from 'node:fs';
+
+const [enPath, viPath] = process.argv.slice(2);
+const shape = (path) => {
+  const text = readFileSync(path, 'utf8');
+  const lines = text.split(/\r?\n/);
+  const headings = lines.filter((line) => /^#{1,6}\s/.test(line)).map((line) => /^(#+)/.exec(line)[1].length);
+  const rows = lines.filter((line) => /^\|/.test(line)).length;
+  const bullets = lines.filter((line) => /^\s*([-*]|\d+\.)\s/.test(line)).length;
+  const code = [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]).sort();
+  const numbers = [...text.replace(/`[^`]+`/g, '').replace(/(\d),(\d)/g, '$1.$2').matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0]).sort();
+  return { headings, rows, bullets, code, numbers };
+};
+const en = shape(enPath);
+const vi = shape(viPath);
+const diffMultiset = (a, b) => {
+  const count = new Map();
+  for (const item of a) count.set(item, (count.get(item) ?? 0) + 1);
+  for (const item of b) count.set(item, (count.get(item) ?? 0) - 1);
+  return [...count.entries()].filter(([, n]) => n !== 0).map(([item, n]) => `${item} (${n > 0 ? `EN+${n}` : `VI+${-n}`})`);
+};
+console.log(`headings EN ${JSON.stringify(en.headings)} | VI ${JSON.stringify(vi.headings)} equal=${JSON.stringify(en.headings) === JSON.stringify(vi.headings)}`);
+console.log(`table rows EN ${en.rows} | VI ${vi.rows}; bullets EN ${en.bullets} | VI ${vi.bullets}`);
+const codeDiff = diffMultiset(en.code, vi.code);
+const numberDiff = diffMultiset(en.numbers, vi.numbers);
+console.log(`code spans EN ${en.code.length} | VI ${vi.code.length}; differences ${codeDiff.length}: ${codeDiff.join('; ')}`);
+console.log(`numbers EN ${en.numbers.length} | VI ${vi.numbers.length}; differences ${numberDiff.length}: ${numberDiff.join('; ')}`);

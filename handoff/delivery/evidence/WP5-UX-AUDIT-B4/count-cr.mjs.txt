@@ -1,0 +1,19 @@
+// WP5-UX-AUDIT-B4: counts CR bytes in text files (LF check). Usage: node count-cr.mjs <file|dir> [...]
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+let files = 0;
+let withCr = 0;
+for (const arg of process.argv.slice(2)) {
+  const list = statSync(arg).isDirectory() ? readdirSync(arg).filter((name) => !name.endsWith('.png')).map((name) => join(arg, name)) : [arg];
+  for (const file of list) {
+    const bytes = readFileSync(file);
+    const cr = bytes.filter((byte) => byte === 13).length;
+    files += 1;
+    if (cr > 0) {
+      withCr += 1;
+      console.log(`${file}: ${cr} CR`);
+    }
+  }
+}
+console.log(`files checked: ${files}; files with CR: ${withCr}`);

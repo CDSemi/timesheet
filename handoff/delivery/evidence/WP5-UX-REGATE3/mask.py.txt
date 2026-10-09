@@ -1,0 +1,61 @@
+import re
+import shutil
+from pathlib import Path
+
+T = Path(r"<task>")
+EV = Path(r"<repo>\handoff\delivery\evidence\WP5-UX-REGATE3")
+EV.mkdir(parents=True, exist_ok=True)
+
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+SUBS = [
+    (re.compile(r"D:[\\/]\.claude-tmp[\\/]timesheet[\\/]WP5-UX-REGATE3", re.I), "<task>"),
+    (re.compile(r"/d/\.claude-tmp/timesheet/WP5-UX-REGATE3", re.I), "<task>"),
+    (re.compile(r"D:[\\/]Dropbox[\\/]Work\.CDSemi[\\/]timesheet", re.I), "<repo>"),
+    (re.compile(r"/d/Dropbox/Work\.CDSemi/timesheet", re.I), "<repo>"),
+    (re.compile(r"<user>", re.I), "<user>"),
+]
+
+
+def mask(text: str) -> str:
+    text = ANSI.sub("", text).replace("\r\n", "\n").replace("\r", "\n")
+    for pat, rep in SUBS:
+        text = pat.sub(rep, text)
+    return text
+
+
+out = T / "out"
+skip = {"ex-files.txt", "ex-hashes.txt", "ex-sorted.txt", "ex-files-before.txt", "lstree-sorted.txt", "keys-run.bak"}
+for p in sorted(out.iterdir()):
+    if p.is_file() and p.suffix == ".txt" and p.name not in skip:
+        (EV / p.name).write_bytes(mask(p.read_text(encoding="utf-8", errors="replace")).encode("utf-8"))
+
+for src, dst in [
+    (T / "contrast.mjs", "contrast.mjs.txt"),
+    (T / "run-tz.mjs", "run-tz.mjs.txt"),
+    (T / "ux-regate3.spec.ts.keep", "ux-regate3.spec.ts.txt"),
+    (T / "ux-regate3-b.spec.ts.keep", "ux-regate3-b.spec.ts.txt"),
+    (T / "ux-regate3-c.spec.ts.keep", "ux-regate3-c.spec.ts.txt"),
+    (T / "ux-regate3-d.spec.ts.keep", "ux-regate3-d.spec.ts.txt"),
+    (T / "tzprobe.test.ts.keep", "tzprobe.test.ts.txt"),
+    (T / "exdigest.sh", "exdigest.sh.txt"),
+    (T / "keys.sh", "keys.sh.txt"),
+    (T / "mask.py", "mask.py.txt"),
+    (T / "env.sh", "env.sh.txt"),
+]:
+    (EV / dst).write_bytes(mask(src.read_text(encoding="utf-8")).encode("utf-8"))
+
+keep = [
+    "review-on-top-w1024-after-resize-synthetic.png",
+    "review-on-top-w1280-after-return-synthetic.png",
+    "open-day-nonote-w390-synthetic.png",
+    "open-day-nonote-w375-synthetic.png",
+    "open-day-nonote-w360-synthetic.png",
+    "open-day-nonote-w320-synthetic.png",
+    "first-screen-note-w390-synthetic.png",
+    "first-screen-nonote-w320-synthetic.png",
+    "editor-w1024-synthetic.png",
+    "timesheet-phone-light-synthetic.png",
+]
+for name in keep:
+    shutil.copyfile(T / "shots" / name, EV / name)
+print(len(keep), len(list(EV.iterdir())))

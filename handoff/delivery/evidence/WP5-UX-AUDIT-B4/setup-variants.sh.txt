@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B4: three scratch clones in the task folder (never the repository):
+#   clone-probe  edaaa85 unchanged, built, with the auditor probe folder (excluded from git)
+#   clone-old    edaaa85 with src/client/DayEditor.tsx put back to a2ea7a4 (the B3-01 behaviour), built
+#   clone-o5     edaaa85 with the 589bcff phone open-day rules and the date-field test softened, built
+source <task>/env.sh
+S="$T/variants-summary.txt"
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ) node $("$N24" --version)" > "$S"
+for variant in probe old o5; do
+  C="$T/clone-$variant"
+  if [ ! -d "$C/.git" ]; then
+    git clone --no-hardlinks "$P" "$C" > "$T/clone-$variant.log" 2>&1
+    echo "$variant clone exit=$?" >> "$S"
+  fi
+  cd "$C" || exit 9
+  git checkout --detach "$REV" >> "$T/clone-$variant.log" 2>&1
+  echo "$variant checkout exit=$? HEAD=$(git rev-parse HEAD)" >> "$S"
+  if [ "$variant" = old ]; then
+    git show "$OLD:src/client/DayEditor.tsx" > src/client/DayEditor.tsx
+    echo "old: DayEditor.tsx from $OLD" >> "$S"
+  fi
+  if [ "$variant" = o5 ]; then
+    "$N24" "$T/mutate-o5.mjs" "$C" >> "$S" 2>&1
+    echo "o5 mutate exit=$?" >> "$S"
+  fi
+  git diff --stat >> "$S"
+  git diff > "$T/variant-$variant.diff.txt"
+  mkdir -p audit-probe
+  cp "$T/ux4.probe.ts" "$T/probe.config.ts" audit-probe/
+  grep -q '^audit-probe/$' .git/info/exclude || echo 'audit-probe/' >> .git/info/exclude
+  echo "$variant git status --short:" >> "$S"
+  git status --short >> "$S"
+  npmr ci > "$T/variant-$variant-npm-ci.txt" 2>&1
+  echo "$variant npm ci exit=$?" >> "$S"
+  npmr run build > "$T/variant-$variant-build.txt" 2>&1
+  echo "$variant build exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+done
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

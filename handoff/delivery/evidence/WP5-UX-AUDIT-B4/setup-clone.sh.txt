@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B4: scratch clone at edaaa85 (task folder only), digest in the clone, npm ci.
+source <task>/env.sh
+S="$T/setup-summary.txt"
+{
+  echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node: $("$N24" --version)"
+} > "$S"
+if [ ! -d "$T/clone/.git" ]; then
+  git clone --no-hardlinks "$P" "$T/clone" > "$T/clone.log" 2>&1
+  echo "clone exit=$?" >> "$S"
+fi
+cd "$T/clone" || exit 9
+git checkout --detach "$REV" >> "$T/clone.log" 2>&1
+echo "checkout exit=$? HEAD=$(git rev-parse HEAD)" >> "$S"
+echo "git status --short (expect empty):" >> "$S"
+git status --short >> "$S"
+"$N24" scripts/source-digest.mjs >> "$S" 2>&1
+echo "digest exit=$?" >> "$S"
+npmr ci > "$T/npm-ci.raw.txt" 2>&1
+echo "npm ci exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

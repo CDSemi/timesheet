@@ -1,0 +1,45 @@
+name: ts-wp5-uxregate3
+services:
+  timesheet:
+    build:
+      context: <task>\cfgproj
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    environment:
+      APP_ORIGINS: https://timesheet.example.invalid
+      DATA_DIR: /data/private-data
+      DATABASE_PATH: /data/timesheet.db
+      HOST: 0.0.0.0
+      MAIL_FROM: timesheet@example.invalid
+      NODE_ENV: production
+      OUTBOUND_MODE: capture
+      PORT: "3000"
+      PUBLIC_BASE_URL: https://timesheet.example.invalid
+      TRUSTED_PROXY_ADDRESSES: ""
+    image: timesheet:aaaaaaa
+    init: true
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: <task>/cfgproj/data
+        target: /data
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: ts-wp5-uxregate3_default

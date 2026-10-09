@@ -1,0 +1,25 @@
+// WP5-UX-AUDIT-B4: per-project counts of a Playwright list-reporter log. Usage: node summarize.mjs <log>
+import { readFileSync } from 'node:fs';
+
+const [path] = process.argv.slice(2);
+const text = readFileSync(path, 'utf8').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+const counts = {};
+const failed = [];
+const skipped = [];
+for (const line of text.split(/\r?\n/)) {
+  const m = /^\s*(✓|ok|✘|x|-|°)\s+\d+\s+\[(desktop|mobile)\]\s+›\s+(.*)$/.exec(line);
+  if (m === null) continue;
+  const [, mark, project, title] = m;
+  const kind = mark === '✓' || mark === 'ok' ? 'passed' : mark === '-' ? 'skipped' : mark === '°' ? 'flaky' : 'failed';
+  counts[project] ??= { passed: 0, skipped: 0, failed: 0, flaky: 0 };
+  counts[project][kind] += 1;
+  if (kind === 'failed') failed.push(`${project} ${title}`);
+  if (kind === 'skipped') skipped.push(`${project} ${title.replace(/\s+\(\d.*$/, '')}`);
+}
+console.log(JSON.stringify(counts));
+const totals = Object.values(counts).reduce((sum, c) => ({ passed: sum.passed + c.passed, skipped: sum.skipped + c.skipped, failed: sum.failed + c.failed, flaky: sum.flaky + c.flaky }), { passed: 0, skipped: 0, failed: 0, flaky: 0 });
+console.log(`total ${totals.passed + totals.skipped + totals.failed + totals.flaky}: passed ${totals.passed}, skipped ${totals.skipped}, failed ${totals.failed}, flaky ${totals.flaky}`);
+const summary = text.split(/\r?\n/).filter((line) => /^\s+\d+ (passed|skipped|failed|flaky|did not run)/.test(line));
+console.log(`reporter summary: ${summary.map((line) => line.trim()).join(' | ')}`);
+if (failed.length > 0) console.log(`failed:\n  ${failed.join('\n  ')}`);
+console.log(`skipped (${skipped.length}):\n  ${skipped.join('\n  ')}`);

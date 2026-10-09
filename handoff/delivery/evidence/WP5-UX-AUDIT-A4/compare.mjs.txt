@@ -1,0 +1,153 @@
+// WP5-UX-AUDIT-A4: compares the request bodies captured on edaaa85 with 014bd47 and the bodies of
+// the saves made after a deferred mode switch with their controls.
+// 1. Leave entries: PUT /api/days/:date bodies of the same entries (expected_version excluded).
+// 2. Clock in/out, sign-off, batch (old period with reason), the editor's day fields and new session.
+// 3. Deferred-switch saves vs the same saves without the switch and vs 014bd47.
+// Usage: node compare.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+let mismatches = 0;
+const sortKeys = (value) =>
+  Array.isArray(value)
+    ? value.map(sortKeys)
+    : value !== null && typeof value === 'object'
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, sortKeys(v)]))
+      : value;
+const text = (value) => JSON.stringify(sortKeys(value));
+const without = (body, ...keys) => Object.fromEntries(Object.entries(body ?? {}).filter(([k]) => !keys.includes(k)));
+const datesOut = (value) => JSON.parse(JSON.stringify(value).replace(/\d{4}-\d{2}-\d{2}/g, '<date>'));
+function same(label, x, y) {
+  const ok = x !== undefined && y !== undefined && text(x) === text(y);
+  if (!ok) mismatches += 1;
+  console.log(`  ${ok ? 'SAME     ' : 'DIFFERENT'} ${label}${ok ? `: ${text(x)}` : `\n      A=${text(x)}\n      B=${text(y)}`}`);
+  return ok;
+}
+
+console.log('== 1. Leave entries: PUT count, leave_minutes sent, stored after, page message');
+const leave = {};
+for (const name of ['edaaa85-desktop', 'edaaa85-tablet', 'edaaa85-mobile', '014bd47-desktop', '014bd47-mobile']) {
+  const file = `leave-${name}.json`;
+  if (!existsSync(join(dir, file))) continue;
+  const data = load(file);
+  leave[name] = data;
+  console.log(`-- ${name} (workDate ${data.workDate})${data.editor_layout ? ` editor modal=${data.editor_layout.modal} class=${data.editor_layout.className}` : ''}`);
+  for (const r of data.results) {
+    const puts = r.put_bodies ?? [];
+    const sent = puts.map((b) => b.leave_minutes).join(',') || '-';
+    const after = typeof r.stored_after === 'object' ? r.stored_after.leave_minutes : r.stored_after;
+    const msg = (r.alert_texts ?? r.alerts ?? []).join(' | ') || '-';
+    const native = r.state ? ` formValid=${r.state.formValid} badInput=${r.state.badInput}` : '';
+    const marks = r.hours_attrs ? ` aria-invalid h=${r.hours_attrs.ariaInvalid ?? '-'} m=${r.minutes_attrs.ariaInvalid ?? '-'}` : '';
+    console.log(`  ${r.case}: PUTs=${puts.length} sent=${sent} stored=${after}${native}${marks} msg=${msg}`);
+  }
+}
+const pairs = [
+  ['empty hours and minutes', 'empty'],
+  ['valid 2h 30m', 'valid 150 (2h 30m)'],
+  ['valid 4h 00m typed', 'valid 240 typed (4h 00m)'],
+  ['valid 0h 45m (hours empty)', 'valid 45 (0h 45m)'],
+  ['valid 8h 00m (the required day)', 'valid 480 (8h 00m)'],
+  ['client-valid 24h 00m, refused by the server rule', 'client-valid 1440, refused by the server rule'],
+];
+console.log('\n-- valid entries: body at edaaa85 (hours + minutes) vs 014bd47 (minutes), expected_version excluded');
+for (const [now, then] of [['edaaa85-desktop', '014bd47-desktop'], ['edaaa85-tablet', '014bd47-desktop'], ['edaaa85-mobile', '014bd47-mobile']]) {
+  for (const [a, b] of pairs) {
+    const x = leave[now].results.find((r) => r.case === a)?.put_bodies?.[0];
+    const y = leave[then].results.find((r) => r.case === b)?.put_bodies?.[0];
+    same(`${now} "${a}" vs ${then} "${b}"`, without(x, 'expected_version'), without(y, 'expected_version'));
+  }
+}
+const refused = Object.entries(leave)
+  .filter(([label]) => label.startsWith('edaaa85'))
+  .flatMap(([label, data]) => data.results.filter((r) => (r.alert_texts ?? []).some((t) => t.startsWith('Enter leave'))).map((r) => ({ label, case: r.case, puts: r.put_bodies.length, changed: r.stored_after.version !== r.stored_before.version })));
+console.log(`-- edaaa85 refused entries with the page message: ${refused.length}; with a PUT: ${refused.filter((r) => r.puts > 0).length}; with a stored change: ${refused.filter((r) => r.changed).length}`);
+const malformed014 = Object.entries(leave)
+  .filter(([label]) => label.startsWith('014bd47'))
+  .flatMap(([label, data]) => data.results.filter((r) => /malformed|fraction|negative/.test(r.case)).map((r) => `${label}: ${r.case} PUTs=${r.put_bodies.length} formValid=${r.state.formValid}`));
+console.log(`-- 014bd47 malformed/fraction/negative entries: ${malformed014.length}; ${malformed014.join('; ')}`);
+
+console.log('\n== 2. Clock, sign-off, batch, editor day fields and new session: edaaa85 vs 014bd47');
+const keysOf = (body) => (body === null || typeof body !== 'object' ? String(body) : Object.keys(body).sort().join(','));
+for (const [now, then] of [['desktop', 'desktop'], ['tablet', 'desktop'], ['mobile', 'mobile']]) {
+  const A = load(`bodies-edaaa85-${now}.json`);
+  const B = load(`bodies-014bd47-${then}.json`);
+  console.log(`-- edaaa85 ${now} vs 014bd47 ${then}`);
+  for (const path of ['POST /api/clock/in', 'POST /api/clock/out']) {
+    const x = A.clock.find((c) => c.call === path)?.body;
+    const y = B.clock.find((c) => c.call === path)?.body;
+    same(`${path} keys`, keysOf(x), keysOf(y));
+    same(`${path} run-independent values`, without(x, 'expected_version'), without(y, 'expected_version'));
+  }
+  const sA = A.signoff.at(-1);
+  const sB = B.signoff.at(-1);
+  const signPath = (p) => p.replace(/\/api\/timesheets\/[^/]+\//, '/api/timesheets/:p/');
+  same('sign-off call', signPath(sA.call), signPath(sB.call));
+  same('sign-off keys', keysOf(sA.body), keysOf(sB.body));
+  same('sign-off run-independent values', without(sA.body, 'reviewed_hash', 'expected_version'), without(sB.body, 'reviewed_hash', 'expected_version'));
+  console.log(`  sign-off binding edaaa85: reviewed_hash = payload_hash ${sA.body.reviewed_hash === A.review_binding.payload_hash}, expected_version = ${sA.body.expected_version === A.review_binding.expected_version}; status ${A.signoff_status}; 014bd47 status ${B.signoff_status}; other writes on the review page ${A.signoff.length - 1} vs ${B.signoff.length - 1}`);
+  same('batch days', A.batch_days, B.batch_days);
+  same('batch preview and commit bodies', A.batch.map((w) => w.body), B.batch.map((w) => w.body));
+  same('editor day dates', A.editor_days, B.editor_days);
+  same('editor writes (calls)', A.editor.map((w) => w.call), B.editor.map((w) => w.call));
+  same('editor day-fields PUT body', A.editor[0]?.body, B.editor[0]?.body);
+  same('editor new-session POST body', A.editor[1]?.body, B.editor[1]?.body);
+}
+
+console.log('\n== 3. Saves made after a deferred mode switch vs the same saves without it, and vs 014bd47');
+const d = (name) => load(`deferred-${name}.json`);
+const A = d('A');
+const A0 = d('A0-control');
+const A1 = d('A1-control');
+const F = d('F');
+const putOf = (r) => r.writes.find((w) => w.call.startsWith('PUT /api/days/'));
+console.log(`-- A (1280 -> 1024 deferred, Escape, Save): writes ${A.writes.map((w) => w.call).join(', ')}`);
+console.log(`-- A0 (no resize): writes ${A0.writes.map((w) => w.call).join(', ')}`);
+console.log(`-- A1 (1024 modal from the start): writes ${A1.writes.map((w) => w.call).join(', ')}`);
+console.log(`-- F (1280 -> 1024 -> 1280, Escape, Save): writes ${F.writes.map((w) => w.call).join(', ')}`);
+same('A PUT /api/days body vs A0 (path and body)', { call: putOf(A).call, body: putOf(A).body }, { call: putOf(A0).call, body: putOf(A0).body });
+same('A PUT /api/days body vs A1', { call: putOf(A).call, body: putOf(A).body }, { call: putOf(A1).call, body: putOf(A1).body });
+same('F PUT /api/days body vs A0', { call: putOf(F).call, body: putOf(F).body }, { call: putOf(A0).call, body: putOf(A0).body });
+same('A preview body vs A0 preview body', A.writes[0].body, A0.writes[0].body);
+const B014 = load('bodies-014bd47-desktop.json');
+same('A PUT body vs 014bd47 day-fields PUT (same day, same leave/kind/WFH; notes excluded)', without(putOf(A).body, 'notes'), without(B014.editor[0].body, 'notes'));
+console.log(`  A PUT path ${putOf(A).call} vs 014bd47 ${B014.editor[0].call}; A notes = typed text: ${putOf(A).body.notes === A.typed.notes}`);
+const D = d('D');
+const D0 = d('D0-control');
+const postOf = (r) => r.writes.find((w) => w.call.endsWith('/sessions'));
+same('D session POST (after a deferred switch and a conflict commit) vs D0 (no switch)', { call: postOf(D).call, body: postOf(D).body }, { call: postOf(D0).call, body: postOf(D0).body });
+same('D session POST vs 014bd47 new-session POST (dates masked)', datesOut(postOf(D).body), datesOut(B014.editor[1].body));
+const H = d('H-deferred');
+const H0 = d('H0-control');
+same('H one-tap confirmation and delete (after a deferred switch) vs H0 (no switch)', H.writes, H0.writes);
+const E = d('E');
+// E ran with the browser zone America/Los_Angeles, the 014bd47 body probe with Asia/Ho_Chi_Minh: the
+// clock-in body carries the display zone, so its keys are compared and its value checked against the zone.
+same('E clock-in keys (clock-out deferred) vs 014bd47', keysOf(E.writes[0].body), keysOf(B014.clock[0].body));
+same('E clock-in input_zone = the browser zone of the run', E.writes[0].body.input_zone, 'America/Los_Angeles');
+same('E clock-out keys and values vs 014bd47 (expected_version excluded)', without(E.writes[1].body, 'expected_version'), without(B014.clock[1].body, 'expected_version'));
+const Bd = d('B');
+console.log(`-- B (old period, review committed while deferred): ${Bd.writes.map((w) => `${w.call} ${text(w.body)}`).join(' | ')}`);
+console.log(`-- C (stale after the deferral): ${d('C').writes.map((w) => `${w.call} mode=${JSON.stringify(w.body?.mode)} expected_version=${JSON.stringify(w.body !== null && 'expected_version' in w.body ? w.body.expected_version : w.body?.entries?.[0]?.expected_version)}`).join(' | ')}; server version behind ${d('C').server_version_behind}, after ${d('C').after_version}`);
+console.log(`-- G (unmount while deferred): writes ${d('G').writes.map((w) => w.call).join(', ')}; stored ${text(d('G').stored)}; observers ${text(d('G').after_unmount.observers)}`);
+// Every /api request of the page (reads too), deferred vs control: same sequence, or at least the same
+// multiset (parallel reads of one reload may race).
+const counts = (list) => {
+  const m = new Map();
+  for (const x of list) m.set(x, (m.get(x) ?? 0) + 1);
+  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+};
+for (const [deferred, control] of [['A', 'A0-control'], ['F', 'A0-control'], ['H-deferred', 'H0-control']]) {
+  const x = d(deferred).apiCalls;
+  const y = d(control).apiCalls;
+  const exact = JSON.stringify(x) === JSON.stringify(y);
+  const multiset = JSON.stringify(counts(x)) === JSON.stringify(counts(y));
+  if (!multiset) mismatches += 1;
+  console.log(`  ${multiset ? 'SAME     ' : 'DIFFERENT'} every /api request ${deferred} vs ${control}: ${x.length} vs ${y.length} requests; exact order ${exact ? 'equal' : 'differs'}; multiset ${multiset ? 'equal' : 'differs'}`);
+  if (!exact) console.log(`      ${deferred}: ${x.join(', ')}\n      ${control}: ${y.join(', ')}`);
+}
+const errors = ['A', 'A0-control', 'A1-control', 'B', 'C', 'D', 'D0-control', 'E', 'F', 'G', 'H-deferred', 'H0-control'].map((n) => [n, d(n).errors === undefined ? 'not recorded (asserted 0 in the spec)' : d(n).errors.length]);
+console.log(`-- uncaught page errors per scenario: ${errors.map(([n, c]) => `${n}=${c}`).join(' ')}`);
+console.log(`\nmismatches=${mismatches}`);

@@ -1,0 +1,22 @@
+// WP5-UX-AUDIT-A4 comparison probes on the accepted build 014bd47 (auditor-owned). The runner is
+// export014's own @playwright/test CLI and the specs import export014's own fixtures.
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+export default {
+  testDir: here,
+  testMatch: '**/probe014-a4-*.spec.ts',
+  outputDir: join(here, '..', 'tmp', 'probe014-output'),
+  workers: 1,
+  reporter: 'list',
+  forbidOnly: true,
+  timeout: 180_000,
+  expect: { timeout: 10_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+};

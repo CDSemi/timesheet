@@ -1,0 +1,43 @@
+// Prints the key facts of the per-layout probe results on edaaa85 (AC-04, AC-16/AC-01, R-07,
+// privacy, phone controls), for the evidence. Usage: node summary.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+const j = (v) => JSON.stringify(v);
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  console.log(`==== ${project}`);
+  const a = load(`ac04-${project}.json`);
+  console.log(`AC-04 editor layout: modal=${a.editor_layout.modal} class=${a.editor_layout.className} box=${j(a.editor_layout.box)}`);
+  console.log(`  picker preview ${j(a.picker_preview_body)}`);
+  console.log(`  picker commit with reason ${j(a.picker_reason_commit)}`);
+  console.log(`  editor PUT with reason ${a.editor_reason_put.path} ${j(a.editor_reason_put.body)}`);
+  console.log(`  history reasons ${j(a.history_reasons.map((e) => `${e.operation}: ${e.reason}`))}`);
+  console.log(`  picker stale: modes ${j(a.picker_stale_modes)}; editor day-fields stale ${j(a.editor_fields_stale)}`);
+  console.log(`  one-tap stale ${j(a.quick_stale)}; Delete then Escape leaves sessions=${a.delete_then_escape_sessions}`);
+  console.log(`  conflict commit ${j(a.picker_conflict_commit)}`);
+  const s = load(`sharing-${project}.json`);
+  console.log(`AC-16 view-only controls ${j(s.view_only_controls)}`);
+  console.log(`  view-only editor ${j(s.view_only_editor)} layout modal=${s.view_only_editor_layout.modal}; requests outside the share ${j(s.view_only_outside_requests)}`);
+  console.log(`  edit grantee controls ${j(s.edit_controls)}; writes ${j(s.edit_writes.map((w) => w.replace(/\/api\/shared\/[^/]+\//, '/api/shared/<owner>/')))}`);
+  console.log(`  open-a-day row at ${s.edit_open_day_row.width}px: field ${j({ visible: s.edit_open_day_row.field.visible, inside: s.edit_open_day_row.field.inside, notCovered: s.edit_open_day_row.field.notCovered, w: s.edit_open_day_row.field.box.w })}, button ${j({ visible: s.edit_open_day_row.button.visible, inside: s.edit_open_day_row.button.inside, notCovered: s.edit_open_day_row.button.notCovered, disabled: s.edit_open_day_row.button.disabled })}`);
+  console.log(`  owner history via share: ${s.owner_history_via_share.length} events by ${j([...new Set(s.owner_history_via_share.map((e) => e.actor_display_name))])}`);
+  console.log(`AC-01 third user ${j(s.isolation)}`);
+  if (project === 'mobile') console.log(`R5 view-only first screen ${j(s.view_only_first_screen)}`);
+  const r = load(`r07-${project}.json`);
+  console.log(`R-07 reporting zone ${r.reporting_zone}; checks ${j(r.checks)}`);
+  for (const run of r.runs) console.log(`  ${run.zone}: period bar "${run.periodZone}", zone note ${run.zoneNote}, total ${run.total}, cells ${j(run.sessionCells.map((d) => `${d.date}: ${d.ranges.map((x) => `${x.startDate ?? ''}${x.text}`).join(' ')}`))}; review ${j(run.reviewSessionCells.map((d) => `${d.date}: ${d.ranges.map((x) => x.text).join(' ')}`))}`);
+  const p = load(`privacy-${project}.json`);
+  console.log(`Privacy timesheet before ${j(p.timesheet_before)}; review ${j({ images: p.review.images, image_src: p.review.image_src.replace(/[0-9a-f-]{36}/, '<id>'), image_inside_sheet: p.review.image_inside_sheet })}; timesheet after ${j(p.timesheet_after)}`);
+}
+if (existsSync(join(dir, 'phone-controls-mobile.json'))) {
+  const ph = load('phone-controls-mobile.json');
+  console.log('==== phone controls (FIX5 tokens)');
+  for (const size of ph.sizes) {
+    const bad = [...size.controls, size.open_day.save, size.open_day.close, size.review.reviewConflicts, size.review.confirmBox, size.review.confirmButton].filter((c) => !(c.count > 0 && c.visible && c.inside && c.notCovered));
+    const field = size.controls.find((c) => c.name === 'Open a day field');
+    const button = size.controls.find((c) => c.name === 'Open day button');
+    console.log(`  ${size.width}px: ${size.controls.length + 5} controls checked, failing ${bad.length}; horizontal overflow ${size.horizontal_overflow_px}px; Open a day field w=${field.box.w}; Open day button x=${button.box.x} w=${button.box.w}; Open day opened ${size.open_day.editorDate} modal=${size.open_day.editorModal}; writes ${j(size.writes)}`);
+  }
+}

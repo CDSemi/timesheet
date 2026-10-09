@@ -1,0 +1,73 @@
+// WP5-UX-AUDIT-B4 (method of WP5-UX-AUDIT-B3): the built server of the scratch clone with Node deprecation tracing, on port 48134, with
+// DATA_DIR and DATABASE_PATH inside the task folder. A few synthetic requests (the page, health, sign-in, the
+// current period, its timesheet and one day), then the server is stopped through its child handle. Prints the
+// count of deprecation lines on stderr/stdout. Run by path: node runtime-deprecation.mjs <clone> <workdir>
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [clone, work] = process.argv.slice(2);
+mkdirSync(join(work, 'private-data'), { recursive: true });
+const port = 48134;
+const origin = `http://127.0.0.1:${port}`;
+const password = randomBytes(18).toString('base64url');
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  NODE_OPTIONS: '--trace-deprecation --pending-deprecation',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  DATABASE_PATH: join(work, 'timesheet.db'),
+  DATA_DIR: join(work, 'private-data'),
+  APP_ORIGINS: origin,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: 'timesheet-capture@example.invalid',
+  SEED_ADMIN_PASSWORD: randomBytes(18).toString('base64url'),
+  SEED_EMPLOYEE_PASSWORD: password,
+};
+let output = '';
+for (const command of ['migrate', 'seed']) {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: clone, env, encoding: 'utf8' });
+  output += result.stdout + result.stderr;
+  console.log(`cli ${command} exit=${result.status}`);
+}
+const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: clone, env, stdio: ['ignore', 'pipe', 'pipe'] });
+child.stdout.on('data', (chunk) => (output += chunk));
+child.stderr.on('data', (chunk) => (output += chunk));
+const exited = new Promise((done) => child.once('exit', (code, signal) => done({ code, signal })));
+try {
+  let healthy = false;
+  for (let attempt = 0; attempt < 150 && !healthy; attempt += 1) {
+    try {
+      healthy = (await fetch(`${origin}/api/health`)).ok;
+    } catch {
+      await new Promise((done) => setTimeout(done, 100));
+    }
+  }
+  console.log(`healthy=${healthy}`);
+  const page = await fetch(`${origin}/`);
+  console.log(`GET / ${page.status}`);
+  const login = await fetch(`${origin}/api/auth/login`, {
+    method: 'POST',
+    headers: { origin, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'employee@example.invalid', password }),
+  });
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  console.log(`POST /api/auth/login ${login.status}`);
+  const headers = { origin, cookie };
+  const periods = await fetch(`${origin}/api/periods/current`, { headers });
+  const current = await periods.json();
+  console.log(`GET /api/periods/current ${periods.status}`);
+  const sheet = await fetch(`${origin}/api/timesheets/${current.current.payroll_date}`, { headers });
+  console.log(`GET /api/timesheets/{current} ${sheet.status}`);
+  const day = await fetch(`${origin}/api/days/${current.today_local}`, { headers });
+  console.log(`GET /api/days/{today} ${day.status}`);
+} finally {
+  child.kill();
+  const result = await exited;
+  console.log(`server stopped: ${JSON.stringify(result)}`);
+}
+const lines = output.split(/\r?\n/).filter((line) => /deprecat/i.test(line));
+console.log(`deprecation lines in server and CLI output: ${lines.length}`);
+for (const line of lines) console.log(`  ${line}`);

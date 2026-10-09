@@ -1,0 +1,79 @@
+// WP5-UX-AUDIT-A4 scope 1 (CSS): with the FIX5 token values (--date-field-min 8.5rem,
+// --open-day-label-min 14.25rem) every control an employee needs on the phone is present, visible,
+// inside the width and not covered at 390, 375, 360 and 320px wide; "Open day" with a typed date
+// opens the editor and writes nothing; the editor's reason field, Save and the label review's
+// confirmation controls are reachable. Mobile project only. Synthetic data only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { inspectControl, recordWrites, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('phone controls with the FIX5 tokens at 390, 375, 360 and 320px', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Phone widths only');
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Phone Probe', signature: 'none' });
+  const [openDate = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(workedDay);
+  const writes = recordWrites(page);
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const sizes: Array<Record<string, unknown>> = [];
+  for (const width of [390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate('window.scrollTo(0, 0)');
+    await page.waitForTimeout(300);
+    const day = page.locator(`[data-day="${openDate}"]`);
+    const controls = [
+      await inspectControl(page, 'Clock in', page.getByRole('button', { name: 'Clock in', exact: true })),
+      await inspectControl(page, 'Open a day field', page.getByLabel('Open a day')),
+      await inspectControl(page, 'Open day button', page.getByRole('button', { name: 'Open day', exact: true })),
+      await inspectControl(page, 'Review & sign off', page.getByRole('link', { name: /Review & sign off/ }).or(page.getByRole('button', { name: /Review & sign off/ }))),
+      await inspectControl(page, 'Previous period', page.getByRole('button', { name: 'Previous period' })),
+      await inspectControl(page, 'Next period', page.getByRole('button', { name: 'Next period' })),
+      await inspectControl(page, 'Show details', page.getByRole('button', { name: 'Show details' })),
+      await inspectControl(page, 'Change several days', page.getByRole('button', { name: 'Change several days' })),
+      await inspectControl(page, 'Edit day button', day.getByRole('button', { name: `Edit ${openDate}`, exact: true })),
+      await inspectControl(page, 'Label picker', page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) })),
+    ];
+    const horizontal = await page.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth');
+    // Open day with a typed date: the modal editor of that date, nothing written.
+    await page.getByLabel('Open a day').fill(openDate);
+    const before = writes.length;
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const editorDate = await editor.getAttribute('data-day-editor');
+    const editorModal = await editor.evaluate((element: Element) => element.matches(':modal'));
+    const save = await inspectControl(page, 'Save day fields', editor.getByRole('button', { name: 'Save day fields' }));
+    const close = await inspectControl(page, 'Close', editor.getByRole('button', { name: 'Close' }));
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    // The label review's confirmation controls on this width.
+    await page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) }).click();
+    await page.getByRole('listbox', { name: `Label for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+    const review = page.getByRole('dialog', { name: `Review label change for ${workedDay}` });
+    await expect(review).toBeVisible();
+    const reviewConflicts = await inspectControl(page, 'Review conflicts', review.getByRole('button', { name: 'Review conflicts' }));
+    await review.getByRole('button', { name: 'Review conflicts' }).click();
+    const confirmBox = await inspectControl(page, 'I confirm checkbox', page.getByLabel('I confirm the label change for these dates'));
+    const confirmButton = await inspectControl(page, 'Confirm and commit', page.getByRole('button', { name: 'Confirm and commit' }));
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const wrote = writes.slice(before).map((w) => `${w.call} ${w.body?.mode ?? ''}`.trim());
+    sizes.push({ width, controls, horizontal_overflow_px: horizontal, open_day: { editorDate, editorModal, save, close }, review: { reviewConflicts, confirmBox, confirmButton }, writes: wrote });
+    for (const control of [...controls, save, close, reviewConflicts, confirmBox, confirmButton]) {
+      expect(control.count, `${width}: ${control.name} present`).toBeGreaterThan(0);
+      expect(control.visible, `${width}: ${control.name} visible`).toBe(true);
+      expect(control.inside, `${width}: ${control.name} inside the width`).toBe(true);
+      expect(control.notCovered, `${width}: ${control.name} not covered`).toBe(true);
+    }
+    expect(horizontal, `${width}: no horizontal scroll`).toBeLessThanOrEqual(0);
+    expect(editorDate).toBe(openDate);
+    expect(editorModal).toBe(true);
+    expect(wrote, `${width}: only the label preview was sent`).toEqual(['POST /api/days/batch preview']);
+    await page.getByLabel('Open a day').fill('');
+  }
+  expect((await person.api.dayView(workedDay)).category).toBe('Worked');
+  expect((await person.api.dayView(openDate)).entry ?? null).toBeNull();
+  writeResult('phone-controls-mobile.json', { openDate, workedDay, sizes });
+});

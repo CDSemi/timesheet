@@ -1,0 +1,11 @@
+. <task>/env.sh
+cd $T/export
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > $T/out/ex-files.txt
+: > $T/out/ex-hashes.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $T/out/ex-hashes.txt
+done < $T/out/ex-files.txt
+LC_ALL=C sort $T/out/ex-hashes.txt > $T/out/ex-sorted.txt
+sha256sum $T/out/ex-sorted.txt
+wc -l $T/out/ex-sorted.txt

@@ -1,0 +1,22 @@
+// WP5-UX-AUDIT-B4: one-line-per-step digest of the Q1/Q2 probe JSON files. Usage: node digest-q1.mjs <probe-out> <tag>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag] = process.argv.slice(2);
+const line = (label, s) => {
+  if (s === undefined || s === null) return `  ${label}: (none)`;
+  const dialogs = (s.dialogs ?? []).map((d) => `[${d.name.replace(/ \d{4}-\d{2}-\d{2}$/, '').replace(/ for$/, '')} modal=${d.modal} focus=${d.focusInside} top=${d.onTop} x=${d.left}]`).join(' ');
+  const extra = [];
+  for (const key of ['cancelHit', 'category', 'editorOpen', 'dayButtonFocused', 'alert', 'ariaInvalid', 'leaveMinutes', 'sessionStillRunning']) if (key in s) extra.push(`${key}=${JSON.stringify(s[key])}`);
+  if ('tabWalk40' in s) extra.push(`tab40=${JSON.stringify(s.tabWalk40)}`);
+  if ('writes' in s) extra.push(`writes=${JSON.stringify(s.writes.filter((w) => !w.endsWith('/api/auth/login')))}`);
+  return `  ${label}: w=${s.width} active="${s.active}" body=${s.activeIsBody} pageFocus=${s.documentHasFocus} ${dialogs} ${extra.join(' ')}`;
+};
+for (const file of readdirSync(dir).filter((name) => name.startsWith(`${tag}-Q1`) || name.startsWith(`${tag}-Q2`)).sort()) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  console.log(file);
+  if (data.steps !== undefined) for (const [key, value] of Object.entries(data.steps)) console.log(line(key, value));
+  for (const key of ['open1280', 'at1024', 'afterFirst', 'afterSecond', 'afterEscape']) if (key in data) console.log(line(key, data[key]));
+  if ('tabWalkAfterFirst' in data) console.log(`  tabWalkAfterFirst: ${JSON.stringify(data.tabWalkAfterFirst)}`);
+  if ('editorStillOpenInBatch' in data) console.log(`  editorStillOpenInBatch: ${data.editorStillOpenInBatch}`);
+}

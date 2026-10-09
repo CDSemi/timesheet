@@ -1,0 +1,21 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { defineConfig } from '@playwright/test';
+
+// WP5-UX-AUDIT-B4 probe configuration: the same browser, viewports and projects as playwright.config.ts.
+// The probes start their own built server on PROBE_PORT_BASE (desktop) and PROBE_PORT_BASE + 1 (mobile),
+// with DATA_DIR and DATABASE_PATH inside the task folder.
+export default defineConfig({
+  testDir: '.',
+  testMatch: '*.probe.ts',
+  outputDir: join(tmpdir(), 'wp5-ux-audit-b4-probe-output'),
+  workers: 1,
+  reporter: 'list',
+  timeout: 180_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+});

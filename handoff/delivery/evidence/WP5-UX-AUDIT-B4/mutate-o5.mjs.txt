@@ -1,0 +1,83 @@
+// WP5-UX-AUDIT-B4 mutation (scratch clone clone-o5 only). Two edits:
+// 1. src/client/styles.css: keep the edaaa85 tokens but put back the 589bcff phone "Open a day" rules (nowrap row,
+//    label and input with min-width 0): the clipped-date behaviour of B2-01.
+// 2. tests/e2e/timesheet.spec.ts: inside the "the Open a day date field shows a full date" test only, every
+//    `expect(` after the field lookup becomes `expect.soft(`, so the run reports EACH failing sub-assertion
+//    (in particular the O-5 replacement "the date value is not clipped (its measured need)").
+// Usage: node mutate-o5.mjs <clone>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [clone] = process.argv.slice(2);
+const cssPath = join(clone, 'src/client/styles.css');
+const css = readFileSync(cssPath, 'utf8').replace(/\r\n/g, '\n');
+const fixed = `  /* The label sits beside its date field, so the row stays one control high where it fits. */
+  .tools .open-day {
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+  }
+
+  /* The label keeps a full date beside it; when that and the button do not fit, the button wraps below. */
+  .tools .open-day label {
+    flex: 1 1 var(--open-day-label-min);
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: var(--open-day-label-min);
+    white-space: nowrap;
+  }
+
+  .tools .open-day input {
+    flex: 1;
+    min-width: var(--date-field-min);
+  }
+`;
+const before = `  .tools .open-day {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  /* The label sits beside its date field, so the row stays one control high. */
+  .tools .open-day label {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .tools .open-day input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tools .open-day {
+    align-items: center;
+  }
+`;
+const count = css.split(fixed).length - 1;
+if (count !== 1) {
+  console.log(`expected the edaaa85 open-day block exactly once, found ${count}`);
+  process.exit(2);
+}
+writeFileSync(cssPath, css.replace(fixed, before));
+console.log('styles.css: 589bcff open-day rules restored; tokens unchanged');
+
+const specPath = join(clone, 'tests/e2e/timesheet.spec.ts');
+const lines = readFileSync(specPath, 'utf8').replace(/\r\n/g, '\n').split('\n');
+const start = lines.findIndex((line) => line.includes("const field = page.getByLabel('Open a day');"));
+const end = lines.findIndex((line, index) => index > start && line.includes('testInfo.annotations.push'));
+if (start < 0 || end < 0) {
+  console.log(`test body not found: start ${start} end ${end}`);
+  process.exit(3);
+}
+let softened = 0;
+for (let index = start; index < end; index += 1) {
+  const replaced = lines[index].replace(/\bexpect\(/g, 'expect.soft(');
+  if (replaced !== lines[index]) softened += 1;
+  lines[index] = replaced;
+}
+writeFileSync(specPath, lines.join('\n'));
+console.log(`timesheet.spec.ts: ${softened} lines softened between lines ${start + 1} and ${end + 1}`);

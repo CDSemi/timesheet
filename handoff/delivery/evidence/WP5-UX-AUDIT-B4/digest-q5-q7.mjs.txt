@@ -1,0 +1,43 @@
+// WP5-UX-AUDIT-B4: digest of the Q5 (Tab order), Q6 (contrast, focus ring) and Q7 (carried items) probe JSON.
+// Usage: node digest-q5-q7.mjs <probe-out> <tag>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag] = process.argv.slice(2);
+const read = (name) => {
+  const path = join(dir, `${tag}-${name}.json`);
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+};
+for (const project of ['desktop', 'mobile']) {
+  const q5 = read(`Q5-tab-order-${project}`);
+  if (q5 !== null) {
+    for (const [width, data] of Object.entries(q5)) {
+      console.log(`Q5 ${project} ${width}px: ${data.count} stops, days in order ${data.daysInOrder}, distinct days ${data.distinctDays}, first day names ${JSON.stringify(data.dayNames)}`);
+      const regionsOrder = data.all.map((line) => line.split('\t')[0]).slice(0, 14);
+      console.log(`  first 14 stops: ${regionsOrder.join(' | ')}`);
+    }
+  }
+  const q6 = read(`Q6-contrast-${project}`);
+  if (q6 !== null) {
+    for (const scheme of ['light', 'dark']) {
+      const text = q6[`text-${scheme}`];
+      console.log(`Q6 ${project} text ${scheme}: ${text.count} text nodes, min ${text.min}, under 4.5: ${text.below45}; lowest ${JSON.stringify(text.lowest.slice(0, 3))}`);
+      for (const ring of q6[`focus-${scheme}`]) {
+        if (ring.missing) {
+          console.log(`  ring ${scheme} ${ring.selector}: not present`);
+          continue;
+        }
+        console.log(`  ring ${scheme} ${ring.selector} "${ring.name}": focus-visible ${ring.focusVisible}, inset ${ring.inset}, ring vs adjacent ${ring.ringVsAdjacent}, vs own fill ${ring.ringVsOwnFill}; box-shadow ${ring.boxShadow}; outline ${ring.outline}`);
+      }
+    }
+  }
+  const q7 = read(`Q7-carried-${project}`);
+  if (q7 !== null) {
+    console.log(`Q7 ${project}: legend ${JSON.stringify(q7.legend)}; review header ${JSON.stringify(q7.header)}; days with a Check ${q7.withCheck}, every one with words and shape ${q7.everyCheckHasWordsAndShape}`);
+    console.log(`  checks: ${q7.status.filter((row) => row.check !== null).map((row) => `${row.day}:${row.check}:"${row.words}":${row.shape}`).join(' ')}`);
+  }
+}
+for (const label of ['zone-equal', 'zone-note']) {
+  const a = read(`Q7-A2R5-${label}`);
+  if (a !== null) console.log(`A2 R5 ${label}: ${JSON.stringify(a)}`);
+}

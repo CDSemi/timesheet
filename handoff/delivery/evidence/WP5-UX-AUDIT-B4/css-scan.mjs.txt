@@ -1,0 +1,112 @@
+// WP5-UX-AUDIT-B4 (method of WP5-UX-AUDIT-B3, rerun at edaaa85): read-only scan of src/client/styles.css (method of the B2 scan, rerun at a2ea7a4).
+// 1. Outside the token blocks (:root, the dark-scheme block, the reduced-motion block): hard-coded colour, radius,
+//    shadow, duration, transition, animation, font and url values; custom properties defined outside the blocks.
+// 2. var() references never defined, and the shared radius/transition tokens.
+// 3. Every declaration ADDED in a unified diff of styles.css (argv[3]) that carries a numeric literal outside var().
+// Usage: node css-scan.mjs <styles.css> [<diff>]
+import { readFileSync } from 'node:fs';
+
+const [path, diffPath] = process.argv.slice(2);
+const text = readFileSync(path, 'utf8');
+const lines = text.split(/\r?\n/);
+
+function blockEnd(start) {
+  let depth = 0;
+  for (let index = start; index < lines.length; index += 1) {
+    for (const char of lines[index]) {
+      if (char === '{') depth += 1;
+      if (char === '}') {
+        depth -= 1;
+        if (depth === 0) return index;
+      }
+    }
+  }
+  return lines.length - 1;
+}
+
+const tokenRanges = [];
+for (let index = 0; index < lines.length; index += 1) {
+  const line = lines[index];
+  if (/^:root\s*\{/.test(line) || /^@media \(prefers-color-scheme: dark\)/.test(line) || /^@media \(prefers-reduced-motion: reduce\)/.test(line)) {
+    const end = blockEnd(index);
+    tokenRanges.push([index + 1, end + 1]);
+    index = end;
+  }
+}
+const inToken = (lineNo) => tokenRanges.some(([a, b]) => lineNo >= a && lineNo <= b);
+const stripped = text.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+const slines = stripped.split(/\r?\n/);
+
+const colour = /#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|hwb|color-mix)\(|\b(white|black|red|green|blue|gray|grey|orange|yellow|silver|navy|teal|purple)\b/;
+const findings = [];
+const keywords = [];
+const defsOutside = [];
+for (let index = 0; index < slines.length; index += 1) {
+  const lineNo = index + 1;
+  const line = slines[index];
+  const decl = /^\s*([a-z-]+)\s*:\s*(.+?);?\s*$/.exec(line);
+  if (decl === null) continue;
+  const [, prop, value] = decl;
+  if (prop.startsWith('--')) {
+    if (!inToken(lineNo)) defsOutside.push(`${lineNo}\t${line.trim()}`);
+    continue;
+  }
+  if (inToken(lineNo)) continue;
+  const v = value.trim();
+  const noVars = v.replace(/var\([^)]*\)/g, '');
+  const add = (kind) => findings.push(`${kind}\t${lineNo}\t${line.trim()}`);
+  if (colour.test(noVars)) add('colour-literal');
+  if (/\b(transparent|currentColor)\b/.test(noVars)) keywords.push(`${lineNo}\t${line.trim()}`);
+  if (prop === 'border-radius' && !/^(var\(--radius\)( var\(--radius\))?( 0 0)?|0|var\(--shape-round\)|inherit)$/.test(v)) add('radius');
+  if (prop === 'box-shadow' && /\d+px|rgb|#/.test(noVars)) add('shadow-literal');
+  if (prop === 'transition' && v !== 'var(--transition)' && v !== 'none') add('transition');
+  if (/^transition-/.test(prop)) add('transition-sub');
+  if (/^animation/.test(prop)) add('animation');
+  if (/\b\d+(\.\d+)?m?s\b/.test(noVars)) add('duration');
+  if (prop === 'font-family' && !/^var\(--font-[a-z]+\)(, monospace)?$|^inherit$/.test(v)) add('font-family');
+  if (/url\(/.test(v)) add('url');
+  if (/!important/.test(v)) add('important');
+}
+for (let index = 0; index < slines.length; index += 1) {
+  if (/@keyframes|@font-face|@import/.test(slines[index])) findings.push(`at-rule\t${index + 1}\t${slines[index].trim()}`);
+}
+console.log(`file: styles.css, ${lines.length} lines`);
+console.log(`token blocks (lines): ${tokenRanges.map(([a, b]) => `${a}-${b}`).join(', ')}`);
+console.log(`findings outside the token blocks (colour, radius, shadow, transition, animation, duration, font, url, !important, at-rules): ${findings.length}`);
+for (const item of findings) console.log(`  ${item}`);
+console.log(`transparent/currentColor keyword uses outside the token blocks: ${keywords.length}`);
+console.log(`custom properties defined outside the token blocks: ${defsOutside.length}`);
+for (const item of defsOutside) console.log(`  ${item}`);
+
+const defined = new Set([...stripped.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((match) => match[1]));
+const used = new Set([...stripped.matchAll(/var\((--[a-z0-9-]+)/g)].map((match) => match[1]));
+const undefinedRefs = [...used].filter((name) => !defined.has(name));
+const unused = [...defined].filter((name) => !used.has(name));
+console.log(`var() names used: ${used.size}; defined: ${defined.size}; used but never defined: ${undefinedRefs.length} ${undefinedRefs.join(' ')}`);
+console.log(`defined but never used in styles.css: ${unused.length} ${unused.join(' ')}`);
+const radius = /--radius:\s*([^;]+);/.exec(text)?.[1];
+const transition = /--transition:\s*([^;]+);/.exec(text)?.[1];
+console.log(`--radius=${radius}; --transition=${transition}`);
+const transitions = slines.filter((line) => /^\s*transition\s*:/.test(line));
+console.log(`transition declarations: ${transitions.length}; all var(--transition) or none: ${transitions.every((line) => /transition:\s*(var\(--transition\)|none)/.test(line))}`);
+for (const name of ['--date-field-min', '--open-day-label-min', '--tap-min', '--focus-ring', '--shadow-panel', '--shadow-overlay', '--scrim', '--space-2']) {
+  const defs = [...text.matchAll(new RegExp(`${name}:\\s*([^;]+);`, 'g'))].map((match) => match[1]);
+  console.log(`token ${name} = ${defs.length === 0 ? 'UNDEFINED' : defs.join(' | ')}`);
+}
+const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/.exec(text)?.[0] ?? '';
+console.log(`reduced-motion block present: ${reduced !== ''}; lines: ${reduced.split('\n').length}`);
+
+if (diffPath !== undefined) {
+  const diff = readFileSync(diffPath, 'utf8').split(/\r?\n/);
+  const added = diff.filter((line) => line.startsWith('+') && !line.startsWith('+++'));
+  const decls = added.filter((line) => /^\+\s*[a-z-]+\s*:/.test(line));
+  const literal = decls.filter((line) => /\d/.test(line.replace(/var\([^)]*\)/g, '').replace(/^\+\s*[a-z-]+\s*:/, '')));
+  console.log(`added lines in the diff: ${added.length}; added declarations: ${decls.length}; with a numeric literal outside var(): ${literal.length}`);
+  for (const line of literal) console.log(`  ${line}`);
+  const tokenDefs = added.filter((line) => /^\+\s*--[a-z0-9-]+\s*:/.test(line));
+  console.log(`added custom-property definitions: ${tokenDefs.length}`);
+  for (const line of tokenDefs) console.log(`  ${line}`);
+  const media = added.filter((line) => /@media/.test(line));
+  console.log(`added @media lines: ${media.length}`);
+  for (const line of media) console.log(`  ${line}`);
+}

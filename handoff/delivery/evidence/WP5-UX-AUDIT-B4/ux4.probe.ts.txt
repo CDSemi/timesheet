@@ -1,0 +1,1023 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { test as base, expect, type Page } from '@playwright/test';
+import { newPerson, type Person, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B4 independent probes (auditor-written; not part of the reviewed source; kept out of git
+ * through .git/info/exclude of the scratch clone). Synthetic data only. Each project starts its own built
+ * server (dist/) on a fixed port of the task range (desktop PROBE_PORT_BASE, mobile PROBE_PORT_BASE + 1)
+ * with DATA_DIR and DATABASE_PATH inside the task folder, and stops it through the child handle. Each probe
+ * records what it measured as JSON in PROBE_OUT; hard expectations only guard the measurement itself.
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const OUT = process.env.PROBE_OUT ?? join(process.cwd(), 'probe-out');
+const WORK = process.env.PROBE_WORK ?? join(process.cwd(), 'probe-work');
+const SHOTS = process.env.PROBE_SHOTS ?? OUT;
+const PORT_BASE = Number(process.env.PROBE_PORT_BASE ?? '48130');
+const TAG = process.env.PROBE_TAG ?? 'edaaa85';
+mkdirSync(OUT, { recursive: true });
+mkdirSync(WORK, { recursive: true });
+mkdirSync(SHOTS, { recursive: true });
+
+function record(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${TAG}-${name}.json`), `${JSON.stringify(data, null, 2)}\n`);
+}
+function shot(name: string): string {
+  if (!name.endsWith('-synthetic.png')) throw new Error('screenshot names end in -synthetic.png');
+  return join(SHOTS, `${TAG}-${name}`);
+}
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+interface ProbeServer {
+  origin: string;
+  employee: Credentials;
+  admin: Credentials;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+const test = base.extend<
+  { seed: SeedClient; adminSeed: SeedClient; signIn: () => Promise<void>; signInAs: (who: Credentials, hash?: string) => Promise<void>; person: (name: string) => Promise<Person> },
+  { server: ProbeServer }
+>({
+  server: [
+    async ({}, use, workerInfo) => {
+      const port = workerInfo.project.name === 'desktop' ? PORT_BASE : PORT_BASE + 1;
+      const work = mkdtempSync(join(WORK, `${TAG}-${workerInfo.project.name}-`));
+      const origin = `http://127.0.0.1:${port}`;
+      const employee = { email: 'employee@example.invalid', password: randomBytes(18).toString('base64url') };
+      const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NODE_ENV: 'development',
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        DATABASE_PATH: join(work, 'timesheet.db'),
+        DATA_DIR: join(work, 'private-data'),
+        APP_ORIGINS: origin,
+        OUTBOUND_MODE: 'capture',
+        MAIL_FROM: 'timesheet-capture@example.invalid',
+        SEED_ADMIN_PASSWORD: admin.password,
+        SEED_EMPLOYEE_PASSWORD: employee.password,
+      };
+      for (const command of ['migrate', 'seed']) {
+        const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+        if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+      }
+      const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: 'ignore' });
+      try {
+        await waitHealthy(origin, child);
+        await use({ origin, employee, admin });
+      } finally {
+        if (child.exitCode === null) {
+          const exited = new Promise((done) => child.once('exit', done));
+          child.kill();
+          await exited;
+        }
+        writeFileSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stopped.json`), `${JSON.stringify({ port, exitCode: child.exitCode, signal: child.signalCode })}\n`);
+      }
+    },
+    { scope: 'worker', timeout: 90_000 },
+  ],
+  baseURL: async ({ server }, use) => {
+    await use(server.origin);
+  },
+  seed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.employee.email, server.employee.password));
+  },
+  adminSeed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.admin.email, server.admin.password));
+  },
+  person: async ({ server, adminSeed }, use) => {
+    // newPerson only reads `origin` from the server object.
+    await use((name) => newPerson(adminSeed, { origin: server.origin } as never, { displayName: name, signature: 'none' }));
+  },
+  signInAs: async ({ page }, use) => {
+    await use(async (who, hash) => {
+      await page.goto(hash === undefined ? '/' : `/${hash}`);
+      await page.getByLabel('Email').fill(who.email);
+      await page.getByLabel('Password').fill(who.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+    });
+  },
+  signIn: async ({ server, signInAs }, use) => {
+    await use(() => signInAs(server.employee));
+  },
+});
+
+const consoleLines: string[] = [];
+test.beforeEach(async ({ page }) => {
+  page.on('console', (message) => {
+    if (message.type() === 'warning' || message.type() === 'error') consoleLines.push(`${message.type()}: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => consoleLines.push(`pageerror: ${error.message}`));
+});
+test.afterAll(async ({}, workerInfo) => {
+  record(`console-${workerInfo.project.name}`, consoleLines);
+});
+
+/* ---- helpers ---------------------------------------------------------------------------------- */
+
+/** Open dialogs (name, modal, focus inside, on top at its own centre) and where focus is. */
+function dialogState(page: Page) {
+  return page.evaluate(() => {
+    const nameOf = (dialog: Element) => {
+      const id = dialog.getAttribute('aria-labelledby');
+      const heading = id === null ? null : document.getElementById(id);
+      return (heading?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    };
+    const dialogs = [...document.querySelectorAll('dialog[open]')].map((dialog) => {
+      const box = dialog.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + Math.min(box.height / 2, 80));
+      return {
+        name: nameOf(dialog),
+        modal: dialog.matches(':modal'),
+        focusInside: dialog.contains(document.activeElement),
+        onTop: hit !== null && dialog.contains(hit),
+        left: Math.round(box.left),
+        width: Math.round(box.width),
+      };
+    });
+    const active = document.activeElement;
+    const activeText =
+      active === null
+        ? 'null'
+        : active === document.body
+          ? 'BODY'
+          : `${active.tagName} ${(active.getAttribute('aria-label') ?? (active as HTMLElement).innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 50)}`;
+    const activeDialog = active?.closest('dialog');
+    return {
+      width: window.innerWidth,
+      withEditorClass: document.querySelector('.sheet-area')?.classList.contains('with-editor') ?? null,
+      dialogs,
+      active: activeText,
+      activeIsBody: active === null || active === document.body,
+      // False while focus is in the browser's own UI (a Tab past the last control of a modal dialog).
+      documentHasFocus: document.hasFocus(),
+      activeInDialog: activeDialog === null || activeDialog === undefined ? null : nameOf(activeDialog),
+    };
+  });
+}
+
+/** Waits until React has rendered the new width (the sheet-area class) and its effects ran. */
+async function resizeTo(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 800 });
+  const area = page.locator('.sheet-area');
+  if (width >= 1200) await expect(area).toHaveClass(/with-editor/);
+  else await expect(area).not.toHaveClass(/with-editor/);
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 200)))));
+}
+
+async function settle(page: Page, ms = 300) {
+  await page.evaluate((wait) => new Promise((done) => requestAnimationFrame(() => setTimeout(done, wait))), ms);
+}
+
+function writesOf(page: Page) {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') {
+      const path = new URL(request.url()).pathname;
+      let mode = '';
+      if (path === '/api/days/batch') {
+        try {
+          mode = ` mode=${String((request.postDataJSON() as { mode?: string }).mode)}`;
+        } catch {
+          mode = '';
+        }
+      }
+      writes.push(`${request.method()} ${path}${mode}`);
+    }
+  });
+  return writes;
+}
+
+/* ---- Q1: B3-01, a modal dialog over the editor while the window crosses 1200px ------------------ */
+
+test.describe('Q1 nested dialog across 1200px', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop project');
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  const paths: Array<{ id: string; widths: number[]; close: 'escape' | 'cancel' }> = [
+    { id: 'S1-1280-1024', widths: [1024], close: 'escape' },
+    { id: 'S2-1280-1024-1280', widths: [1024, 1280], close: 'escape' },
+    { id: 'S3-1280-1024-768-1280-1024', widths: [1024, 768, 1280, 1024], close: 'escape' },
+    { id: 'S4-1280-1024-cancel-click', widths: [1024], close: 'cancel' },
+    { id: 'S4b-1280-1199-1200-1199', widths: [1199, 1200, 1199], close: 'escape' },
+  ];
+  for (const path of paths) {
+    test(`Q1 ${path.id}: label review over the editor`, async ({ page, person, signInAs }) => {
+      test.setTimeout(120_000);
+      const someone = await person(`Synthetic B4 ${path.id}`);
+      const free = await someone.api.displayedPeriodFreeWorkdays();
+      expect(free.length).toBeGreaterThanOrEqual(2);
+      const [editDay = '', worked = ''] = free;
+      await someone.api.seedCompleteDay(worked);
+      const writes = writesOf(page);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await signInAs(someone.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      await page.getByRole('button', { name: new RegExp(`^Label for ${worked}`) }).click();
+      await page.getByRole('listbox', { name: `Label for ${worked}` }).getByRole('option', { name: 'Off', exact: true }).click();
+      const review = page.getByRole('dialog', { name: `Review label change for ${worked}` });
+      await expect(review).toBeVisible();
+      await settle(page);
+      const steps: Record<string, unknown> = { open1280: await dialogState(page) };
+      for (const [index, width] of path.widths.entries()) {
+        await resizeTo(page, width);
+        const cancelBox = await review.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+        const cancelHit =
+          cancelBox === null
+            ? null
+            : await page.evaluate(
+                ([x, y]) => document.elementFromPoint(x, y)?.closest('dialog')?.getAttribute('aria-labelledby') ?? document.elementFromPoint(x, y)?.tagName ?? null,
+                [cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2],
+              );
+        steps[`step${index + 1}-w${width}`] = { ...(await dialogState(page)), cancelHit };
+        if (path.id.startsWith('S1') && width === 1024) await page.screenshot({ path: shot('q1-s1-review-on-top-w1024-synthetic.png'), animations: 'disabled' });
+        if (path.id.startsWith('S3') && width === 768) await page.screenshot({ path: shot('q1-s3-review-on-top-w768-synthetic.png'), animations: 'disabled' });
+      }
+      if (path.close === 'escape') await page.keyboard.press('Escape');
+      else await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(review).toHaveCount(0);
+      await settle(page, 400);
+      const afterFirst = { ...(await dialogState(page)), category: (await someone.api.dayView(worked)).category, writes: [...writes] };
+      if (path.id.startsWith('S1')) await page.screenshot({ path: shot('q1-s1-after-first-escape-w1024-synthetic.png'), animations: 'disabled' });
+      // A short Tab walk: does focus stay in the (now modal) editor below 1200px?
+      let outside = 0;
+      let bodyStops = 0;
+      let bodyWithPageFocus = 0;
+      for (let step = 0; step < 25; step += 1) {
+        await page.keyboard.press('Tab');
+        const where = await dialogState(page);
+        if (where.activeIsBody) {
+          bodyStops += 1;
+          if (where.documentHasFocus) bodyWithPageFocus += 1;
+        } else if (where.activeInDialog === null) outside += 1;
+      }
+      // Back to the heading so the next Escape starts from inside the editor.
+      await editor.getByRole('heading', { level: 2 }).focus();
+      await page.keyboard.press('Escape');
+      await settle(page, 400);
+      const afterSecond = {
+        ...(await dialogState(page)),
+        editorOpen: (await editor.count()) === 1,
+        dayButtonFocused: await dayButton.evaluate((element) => element === document.activeElement),
+        category: (await someone.api.dayView(worked)).category,
+        writes: [...writes],
+      };
+      record(`Q1-${path.id}`, { editDay, worked, steps, afterFirst, tabWalkAfterFirst: { presses: 25, outside, bodyStops, bodyWithPageFocus }, afterSecond });
+    });
+  }
+
+  test('Q1 S5 batch "Review category change" over the editor, 1280 to 1024', async ({ page, person, signInAs }) => {
+    test.setTimeout(120_000);
+    const someone = await person('Synthetic B4 S5');
+    const free = await someone.api.displayedPeriodFreeWorkdays();
+    expect(free.length).toBeGreaterThanOrEqual(2);
+    const [editDay = '', worked = ''] = free;
+    await someone.api.seedCompleteDay(worked);
+    const writes = writesOf(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInAs(someone.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+    await dayButton.click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await page.getByRole('button', { name: 'Change several days' }).click();
+    const editorStillOpenInBatch = (await editor.count()) === 1;
+    await page.getByLabel(`Select ${worked}`).check();
+    await page.getByLabel('Category for selected days').selectOption('Off');
+    await page.getByRole('button', { name: 'Preview changes' }).click();
+    const review = page.getByRole('dialog', { name: 'Review category change' });
+    await expect(review).toBeVisible();
+    await settle(page);
+    const open1280 = await dialogState(page);
+    await resizeTo(page, 1024);
+    const at1024 = await dialogState(page);
+    await page.keyboard.press('Escape');
+    await expect(review).toHaveCount(0);
+    await settle(page, 400);
+    const afterFirst = { ...(await dialogState(page)), category: (await someone.api.dayView(worked)).category, writes: [...writes] };
+    await page.keyboard.press('Escape');
+    await settle(page, 400);
+    const afterSecond = {
+      ...(await dialogState(page)),
+      editorOpen: (await editor.count()) === 1,
+      dayButtonFocused: await dayButton.evaluate((element) => element === document.activeElement),
+      category: (await someone.api.dayView(worked)).category,
+      writes: [...writes],
+    };
+    record('Q1-S5-batch-review', { editDay, worked, editorStillOpenInBatch, open1280, at1024, afterFirst, afterSecond });
+  });
+
+  test('Q1 S6 Clock out dialog over the editor, 1280 to 1024', async ({ page, person, signInAs }) => {
+    test.setTimeout(120_000);
+    const someone = await person('Synthetic B4 S6');
+    const free = await someone.api.displayedPeriodFreeWorkdays();
+    expect(free.length).toBeGreaterThanOrEqual(1);
+    const [editDay = ''] = free;
+    const clockedIn = await someone.api.call<{ session: { id: string; work_date: string } }>('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+    const writes = writesOf(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInAs(someone.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.getByRole('button', { name: 'Clock out' })).toBeVisible();
+    const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+    await dayButton.click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await page.getByRole('button', { name: 'Clock out' }).click();
+    const clockOut = page.getByRole('dialog', { name: 'Clock out' });
+    await expect(clockOut).toBeVisible();
+    await settle(page);
+    const open1280 = await dialogState(page);
+    await resizeTo(page, 1024);
+    const at1024 = await dialogState(page);
+    await page.keyboard.press('Escape');
+    await expect(clockOut).toHaveCount(0);
+    await settle(page, 400);
+    const running = (await someone.api.dayView(clockedIn.session.work_date)).sessions.find((session) => session.id === clockedIn.session.id);
+    const afterFirst = { ...(await dialogState(page)), sessionStillRunning: running !== undefined && (running as { end_utc?: string | null }).end_utc === null, writes: [...writes] };
+    await page.keyboard.press('Escape');
+    await settle(page, 400);
+    const afterSecond = {
+      ...(await dialogState(page)),
+      editorOpen: (await editor.count()) === 1,
+      dayButtonFocused: await dayButton.evaluate((element) => element === document.activeElement),
+      writes: [...writes],
+    };
+    record('Q1-S6-clock-out', { editDay, open1280, at1024, afterFirst, afterSecond });
+  });
+});
+
+/* ---- Q2: the editor alone and with the leave alert while resizing ------------------------------- */
+
+test.describe('Q2 editor resize', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop project');
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test('Q2 editor alone: 1280, 1024, 768, 1280, 1200, 1199, 1280; Tab walk; Escape and focus return', async ({ page, person, signInAs }) => {
+    test.setTimeout(120_000);
+    const someone = await person('Synthetic B4 Q2');
+    const [editDay = ''] = await someone.api.displayedPeriodFreeWorkdays();
+    const writes = writesOf(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInAs(someone.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+    await dayButton.click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+    await settle(page);
+    const steps: Record<string, unknown> = { open1280: await dialogState(page) };
+    for (const width of [1024, 768, 1280, 1200, 1199, 1280]) {
+      await resizeTo(page, width);
+      const state = await dialogState(page);
+      let outside = 0;
+      let body = 0;
+      let bodyWithPageFocus = 0;
+      for (let step = 0; step < 40; step += 1) {
+        await page.keyboard.press('Tab');
+        const where = await dialogState(page);
+        if (where.activeIsBody) {
+          body += 1;
+          if (where.documentHasFocus) bodyWithPageFocus += 1;
+        } else if (where.activeInDialog === null) outside += 1;
+      }
+      steps[`w${width}-${Object.keys(steps).length}`] = { ...state, tabWalk40: { outside, body, bodyWithPageFocus } };
+      await editor.getByRole('heading', { level: 2 }).focus();
+    }
+    await page.keyboard.press('Escape');
+    await settle(page, 400);
+    const afterEscape = { ...(await dialogState(page)), editorOpen: (await editor.count()) === 1, dayButtonFocused: await dayButton.evaluate((element) => element === document.activeElement), writes: [...writes] };
+    record('Q2-editor-alone', { editDay, steps, afterEscape });
+  });
+
+  for (const start of [1280, 1024] as const) {
+    test(`Q2 leave alert showing from ${start}px: resize steps, nothing saved, Escape`, async ({ page, person, signInAs }) => {
+      test.setTimeout(120_000);
+      const someone = await person(`Synthetic B4 leave ${start}`);
+      const [editDay = ''] = await someone.api.displayedPeriodFreeWorkdays();
+      const writes = writesOf(page);
+      await page.setViewportSize({ width: start, height: 800 });
+      await signInAs(someone.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+      // The A-01 input: "2-" typed into Leave hours (a number field keeps it as a bad-input flag) with 30 minutes.
+      await editor.getByLabel('Leave hours').fill('');
+      await editor.getByLabel('Leave hours').pressSequentially('2-');
+      await editor.getByLabel('Leave minutes').fill('30');
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      const alert = editor.getByRole('alert').filter({ hasText: /Enter leave/ });
+      await expect(alert).toBeVisible();
+      await editor.getByLabel('Leave hours').focus();
+      await settle(page);
+      const steps: Record<string, unknown> = {
+        start: { ...(await dialogState(page)), alert: (await alert.count()) === 1, leaveHoursValue: await editor.getByLabel('Leave hours').inputValue().catch(() => 'n/a') },
+      };
+      const sequence = start === 1280 ? [1024, 768, 1280] : [1280, 768, 1024];
+      for (const width of sequence) {
+        await resizeTo(page, width);
+        steps[`w${width}`] = {
+          ...(await dialogState(page)),
+          alert: (await alert.count()) === 1,
+          ariaInvalid: await editor.getByLabel('Leave hours').getAttribute('aria-invalid'),
+        };
+      }
+      await page.keyboard.press('Escape');
+      await settle(page, 400);
+      const day = await someone.api.dayView(editDay);
+      const afterEscape = {
+        ...(await dialogState(page)),
+        editorOpen: (await editor.count()) === 1,
+        dayButtonFocused: await dayButton.evaluate((element) => element === document.activeElement),
+        leaveMinutes: (day as { leave_minutes?: number }).leave_minutes ?? null,
+        entry: (day as { entry?: unknown }).entry ?? null,
+        writes: [...writes],
+      };
+      if (start === 1280) await page.screenshot({ path: shot('q2-leave-alert-closed-synthetic.png'), animations: 'disabled' });
+      record(`Q2-leave-alert-from-${start}`, { editDay, steps, afterEscape });
+    });
+  }
+});
+
+/* ---- Q3: R-7 on the phone: the field and the first-row budget at 390/375/360/320 ---------------- */
+
+test.describe('Q3 phone open-day field and budget', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+  for (const [label, zone] of [
+    ['zone-equal', 'America/Los_Angeles'],
+    ['zone-note', 'Asia/Ho_Chi_Minh'],
+  ] as const) {
+    test.describe(label, () => {
+      test.use({ locale: 'en-US', timezoneId: zone });
+      test(`Q3 ${label}: 390, 375, 360 and 320px`, async ({ page, signIn }) => {
+        test.setTimeout(120_000);
+        await signIn();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        const result: Record<string, unknown> = {};
+        for (const width of [390, 375, 360, 320]) {
+          await page.setViewportSize({ width, height: 844 });
+          await page.reload();
+          await expect(page.locator('[data-day]')).toHaveCount(14);
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await settle(page);
+          const budget = await page.evaluate(() => {
+            const first = document.querySelector('[data-day]')?.getBoundingClientRect();
+            const tabs = document.querySelector('.shell-tabs')?.getBoundingClientRect();
+            return {
+              firstDayBottom: first === undefined ? null : +first.bottom.toFixed(2),
+              tabBarTop: tabs === undefined ? null : +tabs.top.toFixed(2),
+              fits: first !== undefined && tabs !== undefined && first.bottom <= tabs.top + 0.5,
+              zoneNote: document.querySelector('[data-zone-note]') !== null,
+              scrollY: window.scrollY,
+            };
+          });
+          const field = page.getByLabel('Open a day');
+          const measure = () =>
+            page.evaluate(() => {
+              const input = document.querySelector('.tools .open-day input') as HTMLInputElement;
+              const label = input.closest('label') as HTMLLabelElement;
+              const style = getComputedStyle(input);
+              // Independent need: a hidden copy sized to its content by the browser (field-sizing: content).
+              const copy = input.cloneNode() as HTMLInputElement;
+              copy.value = input.value;
+              copy.removeAttribute('id');
+              copy.tabIndex = -1;
+              copy.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;field-sizing:content;min-width:0;width:auto;max-width:none;flex:none';
+              label.append(copy);
+              const browserNeed = copy.getBoundingClientRect().width;
+              copy.remove();
+              // The FIX5 test formula: glyphs + padding + borders + 23.5.
+              const probe = document.createElement('span');
+              Object.assign(probe.style, { position: 'absolute', whiteSpace: 'pre', fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontVariantNumeric: style.fontVariantNumeric, letterSpacing: style.letterSpacing });
+              const formula = (text: string) => {
+                probe.textContent = text;
+                document.body.append(probe);
+                const glyphs = probe.getBoundingClientRect().width;
+                probe.remove();
+                return glyphs + ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].reduce((sum, side) => sum + parseFloat(style.getPropertyValue(side.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`))), 0) + 23.5;
+              };
+              const token = document.createElement('div');
+              token.style.width = 'var(--date-field-min)';
+              document.body.append(token);
+              const dateFieldMin = token.getBoundingClientRect().width;
+              token.remove();
+              const box = input.getBoundingClientRect();
+              const button = (input.closest('form') as HTMLFormElement).querySelector('button') as HTMLButtonElement;
+              return {
+                value: input.value,
+                fieldWidth: +box.width.toFixed(2),
+                browserNeed: +browserNeed.toFixed(2),
+                formulaNeedValue: +formula('10/09/2026').toFixed(2),
+                formulaNeedPlaceholder: +formula('mm/dd/yyyy').toFixed(2),
+                dateFieldMin: +dateFieldMin.toFixed(2),
+                wholeByBrowserNeed: box.width + 0.5 >= browserNeed,
+                scrollVsClient: `${input.scrollWidth}/${input.clientWidth}`,
+                buttonBesideField: Math.abs(button.getBoundingClientRect().top - box.top) < 8,
+                pageScroll: `${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`,
+              };
+            });
+          const empty = await measure();
+          await field.fill('2026-10-09');
+          const filled = await measure();
+          await page.locator('.tools .open-day').screenshot({ path: shot(`q3-open-day-${label}-w${width}-synthetic.png`), animations: 'disabled' });
+          await field.fill('');
+          result[String(width)] = { budget, empty, filled };
+        }
+        await page.setViewportSize({ width: 390, height: 844 });
+        record(`Q3-${label}`, result);
+      });
+    });
+  }
+
+  test.describe('need threshold', () => {
+    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+    test('Q3b the date field forced to widths around the measured need (screenshots)', async ({ page, signIn }) => {
+      await signIn();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const field = page.getByLabel('Open a day');
+      const result: Record<string, unknown> = {};
+      for (const value of ['', '2026-10-09']) {
+        await field.fill(value);
+        for (const width of [115, 117, 118, 120, 124, 125, 126, 128]) {
+          await field.evaluate((input, w) => {
+            (input as HTMLElement).style.cssText = `min-width:0;max-width:none;flex:none;width:${w}px`;
+          }, width);
+          await settle(page, 100);
+          const box = await field.boundingBox();
+          result[`${value === '' ? 'empty' : 'value'}@${width}`] = box?.width ?? null;
+          await field.screenshot({ path: shot(`q3b-${value === '' ? 'empty' : 'value'}-w${width}-synthetic.png`), animations: 'disabled' });
+        }
+        await field.evaluate((input) => {
+          (input as HTMLElement).style.cssText = '';
+        });
+      }
+      record('Q3b-threshold', result);
+    });
+  });
+});
+
+/* ---- Q4: phone targets, reflow and the bottom sheet ---------------------------------------------- */
+
+test.describe('Q4 phone targets and reflow', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+  test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+  test('Q4 390, 375, 360, 320: default, filled, batch, editor, review; bottom sheet focus', async ({ page, seed, signIn }) => {
+    test.setTimeout(180_000);
+    const { currentPayrollDate } = await seed.today();
+    await signIn();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const measure = () =>
+      page.evaluate(() => {
+        const vw = document.documentElement.clientWidth;
+        const dialog = document.querySelector('dialog[open]');
+        const scope = dialog ?? document.querySelector('main') ?? document.body;
+        const overflowing = [...scope.querySelectorAll('*')]
+          .filter((element) => {
+            const style = getComputedStyle(element);
+            if (style.clipPath !== 'none' || style.display === 'contents' || style.position === 'fixed') return false;
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && (box.right > vw + 0.5 || box.left < -0.5);
+          })
+          .slice(0, 10)
+          .map((element) => `${element.tagName}.${(element.getAttribute('class') ?? '').replace(/\s+/g, '.')} r=${element.getBoundingClientRect().right.toFixed(1)}`);
+        const selector = 'button, a[href], input:not([type="checkbox"]):not([type="radio"]), select, textarea, label.pick, label.inline';
+        const pool = dialog === null ? [...document.querySelectorAll(`main :is(${selector}), nav.shell-tabs :is(a, button)`)] : [...dialog.querySelectorAll(selector)];
+        const controls = pool.filter((element) => {
+          const box = element.getBoundingClientRect();
+          return box.width > 0 && box.height > 0 && getComputedStyle(element).visibility !== 'hidden' && element.closest('[aria-hidden="true"]') === null;
+        });
+        const small = controls
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return box.width < 44 || box.height < 44;
+          })
+          .map((element) => `${element.tagName} ${(element.getAttribute('aria-label') ?? (element as HTMLElement).innerText ?? '').trim().slice(0, 30)} ${element.getBoundingClientRect().width.toFixed(1)}x${element.getBoundingClientRect().height.toFixed(1)}`);
+        return { scroll: `${document.documentElement.scrollWidth}/${vw}`, sideways: document.documentElement.scrollWidth > vw, overflowing, controls: controls.length, small };
+      });
+    const result: Record<string, unknown> = {};
+    for (const width of [390, 375, 360, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await settle(page);
+      result[`${width}-default`] = await measure();
+      await page.getByLabel('Open a day').fill('2026-10-09');
+      result[`${width}-filled`] = await measure();
+      await page.getByLabel('Open a day').fill('');
+      await page.getByRole('button', { name: 'Change several days' }).click();
+      result[`${width}-batch`] = await measure();
+      await page.getByRole('button', { name: 'Done' }).click();
+      const firstDay = (await page.locator('[data-day]').nth(1).getAttribute('data-day')) ?? '';
+      const button = page.locator(`[data-day="${firstDay}"]`).getByRole('button', { name: new RegExp(`^(Edit|View) ${firstDay}$`) });
+      await button.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
+      result[`${width}-editor`] = await measure();
+      const sheet = await page.evaluate(() => {
+        const dialog = document.querySelector('dialog[open]');
+        const box = dialog?.getBoundingClientRect();
+        return { modal: dialog?.matches(':modal') ?? null, heightShare: box === undefined ? null : +(box.height / window.innerHeight).toFixed(3), bottom: box?.bottom ?? null, innerHeight: window.innerHeight };
+      });
+      let outside = 0;
+      let body = 0;
+      let bodyWithPageFocus = 0;
+      for (const key of ['Tab', 'Shift+Tab']) {
+        for (let step = 0; step < 50; step += 1) {
+          await page.keyboard.press(key);
+          const where = await dialogState(page);
+          if (where.activeIsBody) {
+            body += 1;
+            if (where.documentHasFocus) bodyWithPageFocus += 1;
+          } else if (where.activeInDialog === null) outside += 1;
+        }
+      }
+      if (width === 320) await page.screenshot({ path: shot('q4-phone-w320-editor-synthetic.png'), animations: 'disabled' });
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      const returned = await button.evaluate((element) => element === document.activeElement);
+      result[`${width}-bottom-sheet`] = { ...sheet, walk100: { outside, body, bodyWithPageFocus }, focusReturned: returned };
+    }
+    await page.goto(`/#/review/${currentPayrollDate}`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    for (const width of [390, 375, 360, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await settle(page);
+      result[`${width}-review`] = await measure();
+    }
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.screenshot({ path: shot('q4-phone-w320-review-synthetic.png'), animations: 'disabled', fullPage: false });
+    record('Q4-phone-targets', result);
+  });
+});
+
+/* ---- Q5: keyboard order and names ---------------------------------------------------------------- */
+
+test.describe('Q5 keyboard order', () => {
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  test('Q5 Tab sequence on the Timesheet page', async ({ page, signIn }, testInfo) => {
+    test.setTimeout(120_000);
+    await signIn();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const widths = testInfo.project.name === 'mobile' ? [390, 320] : [1280];
+    const result: Record<string, unknown> = {};
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: testInfo.project.name === 'mobile' ? 844 : 800 });
+      await page.evaluate(() => {
+        (document.activeElement as HTMLElement | null)?.blur();
+        window.scrollTo(0, 0);
+      });
+      const stops: Array<{ name: string; day: string | null; top: number; left: number }> = [];
+      for (let step = 0; step < 200; step += 1) {
+        await page.keyboard.press('Tab');
+        const stop = await page.evaluate(() => {
+          const active = document.activeElement as HTMLElement | null;
+          if (active === null || active === document.body) return { name: 'BODY', day: null, top: 0, left: 0 };
+          const box = active.getBoundingClientRect();
+          return {
+            name: `${active.tagName} ${(active.getAttribute('aria-label') ?? active.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 40)}`,
+            day: active.closest('[data-day]')?.getAttribute('data-day') ?? null,
+            top: +(box.top + window.scrollY).toFixed(1),
+            left: +box.left.toFixed(1),
+          };
+        });
+        if (stops.length > 3 && stop.name === stops[0]?.name) break;
+        stops.push(stop);
+      }
+      const days = stops.filter((stop) => stop.day !== null).map((stop) => stop.day ?? '');
+      const dayFirstStops = [...new Set(days)];
+      result[String(width)] = {
+        count: stops.length,
+        daysInOrder: days.every((date, index) => index === 0 || date >= (days[index - 1] ?? '')),
+        distinctDays: dayFirstStops.length,
+        dayNames: stops.filter((stop) => stop.day !== null).slice(0, 4).map((stop) => stop.name),
+        all: stops.map((stop) => `${stop.name}\t${stop.day ?? ''}\t${stop.top}\t${stop.left}`),
+      };
+    }
+    record(`Q5-tab-order-${testInfo.project.name}`, result);
+  });
+});
+
+/* ---- Q6: focus indicator contrast (R-1) and text contrast ---------------------------------------- */
+
+test.describe('Q6 contrast', () => {
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  test('Q6 focus ring per control type and text contrast, light and dark', async ({ page, seed, signIn }, testInfo) => {
+    test.setTimeout(120_000);
+    await signIn();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const result: Record<string, unknown> = {};
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await settle(page, 500);
+      result[`text-${scheme}`] = await page.evaluate(() => {
+        const parse = (value: string) => {
+          const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,/ ]+([\d.]+))?\)/.exec(value);
+          return m === null ? null : { r: +m[1]!, g: +m[2]!, b: +m[3]!, a: m[4] === undefined ? 1 : +m[4] };
+        };
+        const lum = (c: { r: number; g: number; b: number }) => {
+          const f = (v: number) => {
+            const s = v / 255;
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+        };
+        const background = (element: Element | null) => {
+          for (let node = element; node !== null; node = node.parentElement) {
+            const bg = parse(getComputedStyle(node).backgroundColor);
+            if (bg !== null && bg.a >= 0.99) return bg;
+          }
+          return { r: 255, g: 255, b: 255, a: 1 };
+        };
+        const rows: Array<{ text: string; ratio: number }> = [];
+        const walker = document.createTreeWalker(document.querySelector('main') ?? document.body, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+          const text = (node.textContent ?? '').trim();
+          const parent = node.parentElement;
+          if (text === '' || parent === null) continue;
+          const style = getComputedStyle(parent);
+          const box = parent.getBoundingClientRect();
+          if (box.width <= 2 || box.height <= 2 || style.visibility === 'hidden' || style.clipPath !== 'none') continue;
+          if (parent.closest('button:disabled, [aria-disabled="true"]') !== null) continue;
+          const fg = parse(style.color);
+          if (fg === null) continue;
+          const bg = background(parent);
+          const blended = { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) };
+          const [l1, l2] = [lum(blended), lum(bg)].sort((x, y) => y - x);
+          rows.push({ text: text.slice(0, 40), ratio: +((l1! + 0.05) / (l2! + 0.05)).toFixed(2) });
+        }
+        rows.sort((x, y) => x.ratio - y.ratio);
+        return { count: rows.length, min: rows[0]?.ratio ?? null, below45: rows.filter((row) => row.ratio < 4.5).length, lowest: rows.slice(0, 5) };
+      });
+      // Keyboard modality, then each control type focused; the ring colour blended over the colour around it.
+      await page.keyboard.press('Tab');
+      const targets =
+        testInfo.project.name === 'mobile'
+          ? ['.shell-tabs a', '.period-bar button', '.clock-panel button', '.tools button.secondary', '.tools .open-day input', '[data-day] button']
+          : ['.shell-bar nav a', '.period-bar button', '.period-bar [data-review-link]', '.clock-panel button', '.tools button.secondary', '.tools .open-day input', '[data-day] .sheet-date', '[data-day] .label-trigger'];
+      const rings: unknown[] = [];
+      for (const selector of targets) {
+        const target = page.locator(selector).first();
+        if ((await target.count()) === 0 || !(await target.isVisible())) {
+          rings.push({ selector, missing: true });
+          continue;
+        }
+        await target.focus();
+        await settle(page, 400);
+        rings.push(
+          await target.evaluate((element, sel) => {
+            const parse = (value: string) => {
+              const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,/ ]+([\d.]+))?\)/.exec(value);
+              return m === null ? null : { r: +m[1]!, g: +m[2]!, b: +m[3]!, a: m[4] === undefined ? 1 : +m[4] };
+            };
+            const lum = (c: { r: number; g: number; b: number }) => {
+              const f = (v: number) => {
+                const s = v / 255;
+                return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+              };
+              return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+            };
+            const ratio = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) => {
+              const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x);
+              return +((l1! + 0.05) / (l2! + 0.05)).toFixed(2);
+            };
+            const background = (start: Element | null) => {
+              for (let node = start; node !== null; node = node.parentElement) {
+                const bg = parse(getComputedStyle(node).backgroundColor);
+                if (bg !== null && bg.a >= 0.99) return bg;
+              }
+              return { r: 255, g: 255, b: 255, a: 1 };
+            };
+            const style = getComputedStyle(element);
+            const inset = style.boxShadow.includes('inset');
+            const ring = parse(style.boxShadow);
+            const around = inset ? background(element) : background(element.parentElement);
+            const blended = ring === null ? null : { r: ring.r * ring.a + around.r * (1 - ring.a), g: ring.g * ring.a + around.g * (1 - ring.a), b: ring.b * ring.a + around.b * (1 - ring.a) };
+            const own = parse(style.backgroundColor);
+            return {
+              selector: sel,
+              name: (element.getAttribute('aria-label') ?? (element as HTMLElement).innerText ?? '').trim().slice(0, 30),
+              focusVisible: element.matches(':focus-visible'),
+              boxShadow: style.boxShadow,
+              outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+              inset,
+              ringVsAdjacent: blended === null ? null : ratio(blended, around),
+              ringVsOwnFill: blended === null || own === null || own.a < 0.99 ? null : ratio(blended, own),
+            };
+          }, selector),
+        );
+      }
+      result[`focus-${scheme}`] = rings;
+      if (scheme === 'light' && testInfo.project.name === 'desktop') {
+        await page.locator('.clock-panel button').first().focus();
+        await settle(page, 400);
+        await page.locator('.clock-panel').screenshot({ path: shot('q6-focus-ring-clock-light-synthetic.png'), animations: 'disabled' });
+        await page.locator('[data-day] .sheet-date').first().focus();
+        await settle(page, 400);
+        await page.locator('[data-day]').first().screenshot({ path: shot('q6-focus-ring-sheet-date-light-synthetic.png'), animations: 'disabled' });
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    record(`Q6-contrast-${testInfo.project.name}`, result);
+  });
+});
+
+/* ---- Q8: O-4, the 390x844 first screen in later states (information; the rule names the load state) -- */
+
+test.describe('Q8 first-screen states', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+  for (const [label, zone] of [
+    ['zone-equal', 'America/Los_Angeles'],
+    ['zone-note', 'Asia/Ho_Chi_Minh'],
+  ] as const) {
+    test.describe(label, () => {
+      test.use({ locale: 'en-US', timezoneId: zone });
+      test(`Q8 ${label}: load, clocked in, after clock out, batch on`, async ({ page, person, signInAs }) => {
+        test.setTimeout(120_000);
+        const someone = await person(`Synthetic B4 Q8 ${label}`);
+        await page.setViewportSize({ width: 390, height: 844 });
+        await signInAs(someone.account, '#/timesheet');
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        const take = () =>
+          page.evaluate(() => {
+            window.scrollTo(0, 0);
+            const first = document.querySelector('[data-day]')?.getBoundingClientRect();
+            const tabs = document.querySelector('.shell-tabs')?.getBoundingClientRect();
+            return { firstDayBottom: first === undefined ? null : +first.bottom.toFixed(2), tabBarTop: tabs?.top ?? null, fits: first !== undefined && tabs !== undefined && first.bottom <= tabs.top + 0.5 };
+          });
+        const result: Record<string, unknown> = { load: await take() };
+        await page.getByRole('button', { name: 'Clock in' }).click();
+        await expect(page.getByRole('button', { name: 'Clock out' })).toBeVisible();
+        result.clockedIn = await take();
+        await page.waitForTimeout(1_200);
+        await page.getByRole('button', { name: 'Clock out' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Clock out' });
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+        await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+        await expect(dialog).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+        result.afterClockOut = await take();
+        await page.getByRole('button', { name: 'Change several days' }).click();
+        result.batchOn = await take();
+        record(`Q8-first-screen-${label}`, result);
+      });
+    });
+  }
+});
+
+/* ---- Q9: the 390x844 first screen against the length of the employee's display name ---------------- */
+
+test.describe('Q9 name length', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone only');
+  for (const [label, zone] of [
+    ['zone-equal', 'America/Los_Angeles'],
+    ['zone-note', 'Asia/Ho_Chi_Minh'],
+  ] as const) {
+    test.describe(label, () => {
+      test.use({ locale: 'en-US', timezoneId: zone });
+      test(`Q9 ${label}: display names of 16 to 40 characters`, async ({ page, person, signInAs }) => {
+        test.setTimeout(180_000);
+        const names = ['Synthetic Person', 'Synthetic Person Nguyen', 'Synthetic Tran Thi Phuong', 'Synthetic Nguyen Hoang Bao Ngoc', 'Synthetic Nguyen Thi Phuong Thao Anh', 'Synthetic Nguyen Hoang Bao Ngoc Phuong Anh'];
+        const result: Record<string, unknown> = {};
+        for (const name of names) {
+          const someone = await person(name);
+          await page.setViewportSize({ width: 390, height: 844 });
+          // A full reload per person: clear the session cookie and leave the single-page app first.
+          await page.context().clearCookies();
+          await page.goto('about:blank');
+          await signInAs(someone.account, '#/timesheet');
+          await expect(page.locator('[data-day]')).toHaveCount(14);
+          await settle(page);
+          result[`${name.length} chars`] = await page.evaluate(() => {
+            window.scrollTo(0, 0);
+            const first = document.querySelector('[data-day]')?.getBoundingClientRect();
+            const tabs = document.querySelector('.shell-tabs')?.getBoundingClientRect();
+            const head = document.querySelector('.form-head')?.getBoundingClientRect();
+            return { firstDayBottom: first === undefined ? null : +first.bottom.toFixed(2), tabBarTop: tabs?.top ?? null, formHeadHeight: head === undefined ? null : +head.height.toFixed(2), fits: first !== undefined && tabs !== undefined && first.bottom <= tabs.top + 0.5 };
+          });
+          if (name.length >= 40) await page.screenshot({ path: shot(`q9-name-${name.length}-${label}-synthetic.png`), animations: 'disabled' });
+        }
+        record(`Q9-name-length-${label}`, result);
+      });
+    });
+  }
+});
+
+/* ---- Q7: carried items R-2, R-4, R-5, status words, A2 R5 ----------------------------------------- */
+
+test.describe('Q7 carried items', () => {
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+  test('Q7 review header, legend, status words and shapes', async ({ page, seed, signIn }, testInfo) => {
+    test.setTimeout(120_000);
+    const free = await seed.displayedPeriodFreeWorkdays();
+    expect(free.length).toBeGreaterThanOrEqual(2);
+    const [complete = '', pending = ''] = free;
+    await seed.seedCompleteDay(complete);
+    await seed.seedUnconfirmedBreaksDay(pending);
+    try {
+      const { currentPayrollDate } = await seed.today();
+      await signIn();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const status = await page.locator('[data-day]').evaluateAll((elements) =>
+        elements.map((row) => {
+          const check = row.querySelector('[data-check]');
+          return { day: row.getAttribute('data-day'), check: check?.getAttribute('data-check') ?? null, words: check === null ? '' : (check as HTMLElement).innerText.trim(), shape: check?.querySelector('.shape') !== null && check !== null };
+        }),
+      );
+      const legend = await page.locator('.legend, [data-legend]').first().innerText().catch(() => null);
+      await page.goto(`/#/review/${currentPayrollDate}`);
+      await expect(page.locator('[data-review-day]')).toHaveCount(14);
+      const header = await page.evaluate(() => ({
+        h1: document.querySelector('main h1')?.textContent ?? null,
+        headerLine: document.querySelector('.review-screen header p')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+        formHeader: document.querySelector('.sheet-review .form-head, .form-head')?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 200) ?? null,
+      }));
+      const withCheck = status.filter((row) => row.check !== null);
+      record(`Q7-carried-${testInfo.project.name}`, { complete, pending, legend, header, withCheck: withCheck.length, everyCheckHasWordsAndShape: withCheck.every((row) => row.words !== '' && row.shape), status });
+    } finally {
+      await seed.clearSessions(complete);
+      await seed.clearSessions(pending);
+    }
+  });
+
+  test.describe('A2 R5 grantee', () => {
+    test.skip(({ isMobile }) => !isMobile, 'phone only');
+    for (const [label, zone] of [
+      ['zone-equal', 'America/Los_Angeles'],
+      ['zone-note', 'Asia/Ho_Chi_Minh'],
+    ] as const) {
+      test.describe(label, () => {
+        test.use({ locale: 'en-US', timezoneId: zone });
+        test(`Q7 A2 R5 ${label}: view and edit shares on a 390x844 phone; read-only editor`, async ({ page, seed, server, signInAs }) => {
+          test.setTimeout(120_000);
+          const me = await seed.call<{ user: { id: string } }>('GET', '/api/auth/me');
+          const result: Record<string, unknown> = {};
+          for (const timesheets of ['view', 'edit'] as const) {
+            const granted = await seed.call<{ share: { id: string } }>('POST', '/api/shares', { grantee_email: server.admin.email, items: { timesheets, ot_read: false, pdf_download: false } }, 201);
+            try {
+              await signInAs(server.admin);
+              await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+              await page.goto(`/#/shared/${me.user.id}/timesheet`);
+              await expect(page.locator('[data-day]')).toHaveCount(14);
+              await page.evaluate(() => window.scrollTo(0, 0));
+              await settle(page);
+              const v = await page.evaluate(() => {
+                const first = document.querySelector('[data-day]')?.getBoundingClientRect();
+                const tabs = document.querySelector('.shell-tabs')?.getBoundingClientRect();
+                return { firstDayBottom: first?.bottom ?? null, tabBarTop: tabs?.top ?? null, zoneNote: document.querySelector('[data-zone-note]') !== null };
+              });
+              let readOnlyNone: unknown = null;
+              if (timesheets === 'view' && label === 'zone-equal') {
+                const day = (await page.locator('[data-day]').nth(1).getAttribute('data-day')) ?? '';
+                await page.locator(`[data-day="${day}"]`).getByRole('button', { name: `View ${day}`, exact: true }).click();
+                const editor = page.getByRole('dialog', { name: /^Day / });
+                await expect(editor).toBeVisible();
+                await expect(editor.locator('[data-day-fields="read-only"]')).toBeVisible();
+                readOnlyNone = await editor.locator('[data-day-fields="read-only"]').innerText();
+                await page.keyboard.press('Escape');
+                await expect(editor).toHaveCount(0);
+              }
+              result[timesheets] = { ...v, readOnlyNone };
+              await page.context().clearCookies();
+            } finally {
+              await seed.call('POST', `/api/shares/${granted.share.id}/revoke`, { reason: 'probe cleanup' });
+            }
+          }
+          record(`Q7-A2R5-${label}`, result);
+        });
+      });
+    }
+  });
+});

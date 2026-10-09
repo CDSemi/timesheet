@@ -1,0 +1,350 @@
+diff --git a/tests/e2e/history-settings.spec.ts b/tests/e2e/history-settings.spec.ts
+index a364f3f..b8a04c2 100644
+--- a/tests/e2e/history-settings.spec.ts
++++ b/tests/e2e/history-settings.spec.ts
+@@ -250,7 +250,7 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+   if (outcome === undefined) throw new Error(`unexpected first delivery state ${firstState}`);
+   expect(firstState, 'a configured capture sender: the first attempt is accepted').toBe('accepted');
+ 
+-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
++  // The period status is the one status group of the period bar (above the clock and the sheet), not repeated in the sheet.
+   await signInPageAs(person.account, '#/timesheet');
+   const status = page.locator('[data-grid-status="line"]');
+   await expect(status).toHaveCount(1);
+@@ -258,8 +258,14 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+   await expect(status.locator('[data-grid-status="revision"]')).toHaveText('Revision 1');
+   await expect(status.locator('[data-grid-status="pdf"]')).toHaveText('PDF ready');
+   await expect(status.locator('[data-grid-status="delivery"]')).toHaveText(outcome.badge);
+-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
+-  else await expect(page.locator('table.grid')).toHaveCount(0);
++  const layout = project === 'desktop' ? 'desktop' : 'phone';
++  await expect(page.locator('.period-bar [data-grid-status="line"]')).toHaveCount(1);
++  await expect(page.locator('[data-sheet] [data-grid-status="line"]')).toHaveCount(0);
++  await expect(page.locator(`[data-sheet="${layout}"]`)).toHaveCount(1);
++  await expect(page.locator(`[data-sheet]:not([data-sheet="${layout}"])`)).toHaveCount(0);
++  // The signature line of the sheet names the signer; never an image on the Timesheet page.
++  await expect(page.locator('[data-signature="employee"]')).toContainText('Signed by');
++  await expect(page.locator('[data-sheet] img')).toHaveCount(0);
+   await page.screenshot({ path: screenshotPath(`history-grid-status-${project}-synthetic.png`) });
+   await status.getByRole('link', { name: 'Open in History' }).click();
+   await expect(page).toHaveURL(/#\/history$/);
+diff --git a/tests/e2e/import.spec.ts b/tests/e2e/import.spec.ts
+index bc320a9..1f53c32 100644
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -90,6 +90,18 @@ async function decisionsFor(person: Person, id: string, importDays: readonly str
+   }));
+ }
+ 
++/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
++function isPhone(page: Page): boolean {
++  return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
++}
++
++/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
++async function openMoreOnPhone(page: Page) {
++  if (!isPhone(page)) return;
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ test('upload, preview with source cells, decide, confirm and commit; the same workbook is already imported', async (
+   { page, context, builtServer, adminSeed, signInPageAs },
+   testInfo,
+@@ -100,7 +112,9 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
+   await signInPageAs(person.account, '#/import');
+ 
+   const nav = page.getByRole('navigation', { name: 'Main' });
+-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
++  // Import is its own entry under "More" on a phone; the desktop bar marks Settings, the screen it is reached from.
++  await openMoreOnPhone(page);
++  await expect(nav.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
+   await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
+ 
+   // 1. Upload: only a file is needed; nothing is stored until it is sent.
+@@ -197,13 +211,18 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+   await expect(page.locator('[data-review-link-disabled]')).toBeDisabled();
+   await expect(page.getByRole('link', { name: /Review/ })).toHaveCount(0);
+   await expect(page.locator('[data-grid-status="line"]')).toHaveCount(0);
++  // An imported period has no signature lines and no review link on the sheet.
++  await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+ 
++  await expect(page.getByRole('button', { name: 'Change several days' })).toBeDisabled();
+   const batch = page.getByRole('group', { name: 'Batch category edit' });
+   await expect(batch.getByRole('button', { name: 'Select all' })).toBeDisabled();
+   await expect(batch.getByRole('button', { name: 'Preview changes' })).toBeDisabled();
+   await expect(batch.getByLabel('Category for selected days')).toBeDisabled();
+   await expect(page.getByRole('checkbox', { name: `Select ${layout.cacheDay}` })).toBeDisabled();
+   await expect(page.locator(`[data-day="${layout.cacheDay}"]`)).toContainText('Holiday');
++  // Imported days are read-only history: the label cells carry no in-cell picker.
++  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+ 
+   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
+   await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
+@@ -363,8 +382,19 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
+ test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {
+   await signInPageAs(builtServer.credentials.admin, '#/admin');
+   const nav = page.getByRole('navigation', { name: 'Main' });
++  await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
+-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  // The Admin view itself (both projects) has no import or opening-balance controls.
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
++  await expect(page.locator('main')).not.toContainText('Opening OT balance');
++  if (isPhone(page)) {
++    await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  } else {
++    // The desktop bar reaches Import through the "Import from Excel" link in Settings.
++    await nav.getByRole('link', { name: 'Settings' }).click();
++    await expect(page.getByRole('link', { name: 'Import from Excel' })).toBeVisible();
++  }
+   await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
+   await expect(page.locator('main')).not.toContainText('Opening OT balance');
+ });
+diff --git a/tests/e2e/isolation.spec.ts b/tests/e2e/isolation.spec.ts
+index 134a154..1b271f2 100644
+--- a/tests/e2e/isolation.spec.ts
++++ b/tests/e2e/isolation.spec.ts
+@@ -1,4 +1,5 @@
+ import { randomBytes } from 'node:crypto';
++import { type Page } from '@playwright/test';
+ import {
+   type CreatedAccount,
+   createAccountByAdminApi,
+@@ -39,6 +40,14 @@ interface Owner {
+ }
+ 
+ /** Employee 1 gets a complete day and a private note; the helper undoes it afterwards. */
++/** On a phone Settings, Import, Admin and Sign out sit under "More" in the tab bar; opens it when shown and closed. */
++async function openMoreOnPhone(page: Page) {
++  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if (!(await more.isVisible())) return;
++  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
++}
++
+ async function seedOwner(employee: SeedClient): Promise<Owner> {
+   const [workDate] = await employee.pastFreeWorkdays();
+   expect(workDate, 'a past free workday').toBeDefined();
+@@ -95,7 +104,8 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
+     // Employee 1's date is in the displayed period for employee 2 too, with nothing recorded.
+     const row = page.locator(`[data-day="${owner.workDate}"]`);
+     await expect(row).toBeVisible();
+-    await expect(row).not.toContainText('complete');
++    await expect(row).not.toContainText('Complete');
++    await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
+     await expect(page.locator('main')).not.toContainText(owner.note);
+ 
+     // Hash swap: no route takes an id, and the admin route falls back to the employee's own timesheet.
+@@ -139,6 +149,7 @@ test('an admin cannot open employee data through any admin screen', async (
+   const owner = await seedOwner(employeeSeed);
+   try {
+     await signInPageAs(builtServer.credentials.admin);
++    await openMoreOnPhone(page);
+     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
+     await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+     await expect(page.locator('li.user-row').first()).toBeVisible();
+@@ -174,7 +185,8 @@ test('an admin cannot open employee data through any admin screen', async (
+     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Timesheet' }).click();
+     await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+     await expect(page.locator('main')).not.toContainText(owner.note);
+-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
+ 
+     const intact = await employeeSeed.dayView(owner.workDate);
+     expect(intact.sessions).toHaveLength(1);
+@@ -187,6 +199,7 @@ test('an admin cannot open employee data through any admin screen', async (
+ test('an employee sees no Admin entry and the server refuses the admin routes', async ({ page, signInThroughUi }) => {
+   await signInThroughUi();
+   const nav = page.getByRole('navigation', { name: 'Main' });
++  await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible();
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveCount(0);
+   await page.evaluate("window.location.hash = '#/admin'");
+diff --git a/tests/e2e/ot-leave.spec.ts b/tests/e2e/ot-leave.spec.ts
+index 6af02ea..e914667 100644
+--- a/tests/e2e/ot-leave.spec.ts
++++ b/tests/e2e/ot-leave.spec.ts
+@@ -94,7 +94,7 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
+   seedCredit(builtServer, 600);
+ 
+   await signInThroughUi();
+-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
++  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime' }).click();
+   await expect(page).toHaveURL(/#\/ot$/);
+   await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
+   await expectBalancesMatchApi(page, employeeSeed);
+diff --git a/tests/e2e/review.spec.ts b/tests/e2e/review.spec.ts
+index 0ba76ec..ad7f148 100644
+--- a/tests/e2e/review.spec.ts
++++ b/tests/e2e/review.spec.ts
+@@ -1,7 +1,7 @@
+ import { crc32, deflateSync } from 'node:zlib';
+ import { type Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
++import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+ import {
+   type BuiltServer,
+   type CreatedAccount,
+@@ -128,7 +128,7 @@ async function newReviewer(adminSeed: SeedClient, server: BuiltServer, options:
+ 
+ interface ApiReview {
+   payload: {
+-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
++    days: Array<{ work_date: string; completeness: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+     totals: { credited_minutes: number; pending_days: number };
+     ot_proposals: Array<{ work_date: string; credited_minutes: number }>;
+     deficit_proposals: Array<{ work_date: string; mode: string; deficit_minutes: number }>;
+@@ -195,20 +195,26 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+   await expect(page.locator('[data-review-day]')).toHaveCount(14);
+   for (const day of api.payload.days) {
+     const row = page.locator(`[data-review-day="${day.work_date}"]`);
+-    for (const [label, minutes] of [
+-      ['Regular', day.calculation?.regular_minutes ?? null],
+-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
+-      ['Credit', day.calculation?.credited_minutes ?? null],
++    // The detail rows are always on in the review: worked on a workday / on a day off, as h:mm.
++    for (const [detail, minutes] of [
++      ['regular', day.calculation?.regular_minutes ?? null],
++      ['off-calendar', day.calculation?.nonworking_minutes ?? null],
+     ] as const) {
+-      const cell = row.locator(`td[data-label="${label}"]`);
+-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
++      const cell = page.locator(`[data-detail="${detail}"][data-detail-day="${day.work_date}"]`);
++      await expect(cell, `${day.work_date} ${detail}`).toHaveText(minutes === null ? '' : formatHoursMinutes(minutes));
+     }
++    // The OT cell follows the PDF rule: the credit of a complete day, "pending" while evidence is open, else blank.
++    const credited = day.calculation?.credited_minutes ?? null;
++    const ot = row.locator('[data-ot]');
++    if (day.completeness === 'complete' && credited !== null) await expect(ot, `${day.work_date} OT`).toHaveText(formatHoursMinutes(credited));
++    else if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') await expect(ot, `${day.work_date} OT`).toHaveText('pending');
++    else await expect(ot, `${day.work_date} OT`).toHaveCount(0);
+   }
+   const completeRow = page.locator(`[data-review-day="${completeDay}"]`);
+-  await expect(completeRow).toContainText('complete');
++  await expect(completeRow).toContainText('Complete');
+   await expect(completeRow).toContainText('3 breaks');
+   const pendingRow = page.locator(`[data-review-day="${pendingDay}"]`);
+-  await expect(pendingRow).toContainText('breaks unconfirmed');
++  await expect(pendingRow).toContainText('breaks not confirmed');
+   await expect(page.locator('[data-total="credited"] dd')).toHaveAttribute('data-minutes', String(api.payload.totals.credited_minutes));
+ 
+   // Missing evidence, recipients and the rendered email, the signature preview.
+@@ -348,7 +354,7 @@ test('a period finalized in another window reloads with a clear message and no s
+   await reviewer.api.seedCompleteDay(day);
+ 
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+   await signOffElsewhere(reviewer);
+ 
+   // A different request than the one already recorded (another name): refused, never a second revision.
+@@ -373,7 +379,7 @@ test('an identical sign-off repeated from a second window is recognised and crea
+   await reviewer.api.seedCompleteDay(day);
+ 
+   await signInAt(page, reviewer, `#/review/${reviewer.payrollDate}`);
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+   await signOffElsewhere(reviewer);
+ 
+   await page.getByLabel('Your name').fill('Synthetic Reviewer');
+@@ -481,7 +487,10 @@ test('mobile: the review fits the width and every control is at least 44px', asy
+   await expect(page.locator(`[data-deficit="${shortDay}"]`)).toBeVisible();
+   await expectNoSidewaysScroll(page);
+ 
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
++  // Only rendered controls are tap targets: the desktop bar (display none below 768px) is excluded.
++  const targets = page
++    .locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline')
++    .filter({ visible: true });
+   const count = await targets.count();
+   expect(count).toBeGreaterThan(5);
+   for (let index = 0; index < count; index += 1) {
+diff --git a/tests/e2e/setup.spec.ts b/tests/e2e/setup.spec.ts
+index fdbd4e5..beb96fa 100644
+--- a/tests/e2e/setup.spec.ts
++++ b/tests/e2e/setup.spec.ts
+@@ -157,10 +157,14 @@ test('first-time setup creates the administrator once and never returns', async
+     await page.getByLabel('Password').fill(password);
+     await page.getByRole('button', { name: 'Sign in' }).click();
+     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++    // The desktop bar shows Sign out in the banner; on a phone it sits under "More" in the tab bar.
++    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++    const signOut = (await more.isVisible()) ? page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign out' }) : page.getByRole('banner').getByRole('button', { name: 'Sign out' });
++    if (await more.isVisible()) await more.click();
++    await expect(signOut).toBeVisible();
+ 
+     // Setup is closed for good: a fresh visit shows the sign-in form, and the status says so.
+-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
++    await signOut.click();
+     await page.goto(`${server.origin}/`);
+     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+     await expect(page.getByRole('heading', { name: 'First-time setup' })).toHaveCount(0);
+diff --git a/tests/e2e/shell.spec.ts b/tests/e2e/shell.spec.ts
+index 20e2036..493f8d5 100644
+--- a/tests/e2e/shell.spec.ts
++++ b/tests/e2e/shell.spec.ts
+@@ -28,10 +28,32 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+   await signInThroughUi();
+ 
+   const nav = page.getByRole('navigation', { name: 'Main' });
+-  await expect(nav.getByRole('link')).toHaveCount(5);
+   await expect(nav.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
+   await expect(page).toHaveURL(/#\/timesheet$/);
+-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  if (project === 'mobile') {
++    // Phone: three tabs and "More"; the less frequent entries and Sign out open from it.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
++    const more = nav.getByRole('button', { name: 'More' });
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await more.click();
++    await expect(more).toHaveAttribute('aria-expanded', 'true');
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
++    await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
++    await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
++    await page.keyboard.press('Escape');
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await expect(more).toBeFocused();
++    // Each tab is at least 56x44 px.
++    for (const tab of [...(await nav.getByRole('link').all()), more]) {
++      const box = await tab.boundingBox();
++      expect(box?.height ?? 0).toBeGreaterThanOrEqual(56);
++      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
++    }
++  } else {
++    // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
++    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  }
+ });
+ 
+ test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {
+@@ -51,9 +73,12 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+   await signInThroughUi();
+   await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+   const row = page.locator(`[data-day="${workDate}"]`);
+-  await expect(row).toContainText('complete');
+-  await expect(row).toContainText('8h 00m');
++  await expect(row).toContainText('Complete');
++  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+   await expect(page.locator('[data-day]')).toHaveCount(14);
++  // The worked minutes of the sheet's detail row (Show details), as h:mm.
++  await page.getByRole('button', { name: 'Show details' }).click();
++  await expect(page.locator(`[data-detail="regular"][data-detail-day="${workDate}"]`)).toHaveText('8:00');
+ 
+   await page.screenshot({ path: screenshotPath(`timesheet-${testInfo.project.name}-synthetic.png`), fullPage: true });
+ });
+@@ -68,7 +93,8 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
+   );
+   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
+ 
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
++  // Only rendered controls are tap targets: the desktop bar is not displayed on a phone.
++  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline').filter({ visible: true });
+   const count = await targets.count();
+   expect(count).toBeGreaterThan(4);
+   for (let index = 0; index < count; index += 1) {

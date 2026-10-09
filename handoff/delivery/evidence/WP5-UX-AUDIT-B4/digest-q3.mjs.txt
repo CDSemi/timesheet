@@ -1,0 +1,19 @@
+// WP5-UX-AUDIT-B4: table of the Q3 (R-7) and Q3b probe JSON. Usage: node digest-q3.mjs <probe-out> <tag>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag] = process.argv.slice(2);
+for (const label of ['zone-equal', 'zone-note']) {
+  const data = JSON.parse(readFileSync(join(dir, `${tag}-Q3-${label}.json`), 'utf8'));
+  console.log(`${label}: width | first row bottom vs tab bar top (fits) | zone note | empty field (browser need, formula placeholder need) | filled field (browser need, formula value need) | token | button beside | page scroll`);
+  for (const [width, row] of Object.entries(data)) {
+    const b = row.budget;
+    const e = row.empty;
+    const f = row.filled;
+    console.log(
+      `  ${width} | ${b.firstDayBottom} vs ${b.tabBarTop} (${b.fits}) | ${b.zoneNote} | ${e.fieldWidth} (${e.browserNeed}, ${e.formulaNeedPlaceholder}) whole=${e.wholeByBrowserNeed} | ${f.fieldWidth} (${f.browserNeed}, ${f.formulaNeedValue}) whole=${f.wholeByBrowserNeed} sw/cw=${f.scrollVsClient} | ${f.dateFieldMin} | ${f.buttonBesideField} | ${f.pageScroll}`,
+    );
+  }
+}
+const threshold = JSON.parse(readFileSync(join(dir, `${tag}-Q3b-threshold.json`), 'utf8'));
+console.log(`Q3b forced widths (rendered box width): ${JSON.stringify(threshold)}`);

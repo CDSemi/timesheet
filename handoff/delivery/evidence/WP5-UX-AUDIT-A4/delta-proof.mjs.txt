@@ -1,0 +1,182 @@
+// WP5-UX-AUDIT-A4 scope 1: static delta proof for a2ea7a4..edaaa85 (FIX5).
+// 1. DayEditor.tsx: everything outside the mode-switch effect (and the new helper) is identical;
+//    the new apply() runs exactly the statements of the old effect body; the added lines call no
+//    request, state setter, callback prop, submit or click.
+// 2. styles.css: rule-level diff, the rules using the changed tokens, and a check that no changed or
+//    token-using declaration can hide, move, clip or block a control.
+// 3. tests: the a2ea7a4 lines of each changed spec are kept in order (or listed when not), expect() counts.
+// Usage: node delta-proof.mjs <export-a2ea7a4> <export-edaaa85>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [oldRoot, newRoot] = process.argv.slice(2);
+const read = (root, file) => readFileSync(join(root, file), 'utf8').replace(/\r\n/g, '\n');
+let problems = 0;
+const fail = (text) => {
+  problems += 1;
+  console.log(`PROBLEM: ${text}`);
+};
+
+/* ---- 1. DayEditor.tsx ---- */
+console.log('== 1. src/client/DayEditor.tsx');
+const oldEditor = read(oldRoot, 'src/client/DayEditor.tsx');
+const newEditor = read(newRoot, 'src/client/DayEditor.tsx');
+const EFFECT_START = '  // Opens the panel (non-modal) or the bottom sheet (modal)';
+const EFFECT_END = '  }, [modal]);\n';
+function cutEffect(text, label) {
+  const start = text.indexOf(EFFECT_START);
+  const end = text.indexOf(EFFECT_END, start);
+  if (start < 0 || end < 0) {
+    fail(`${label}: effect block not found`);
+    return { rest: text, block: '' };
+  }
+  return { rest: text.slice(0, start) + '<EFFECT>\n' + text.slice(end + EFFECT_END.length), block: text.slice(start, end + EFFECT_END.length) };
+}
+const HELPER = /\/\*\* True while a modal dialog other than the editor itself is open[^\n]*\n function otherModalOpen[\s\S]*?\n}\n\n/;
+const newWithoutHelper = newEditor.replace(/\/\*\* True while a modal dialog other than the editor itself is open[^\n]*\nfunction otherModalOpen\(editor: HTMLDialogElement\): boolean \{\n[^\n]*\n\}\n\n/, '');
+void HELPER;
+if (newWithoutHelper === newEditor) fail('helper otherModalOpen not found in the new file');
+const a = cutEffect(oldEditor, 'a2ea7a4');
+const b = cutEffect(newWithoutHelper, 'edaaa85');
+console.log(`file lines: a2ea7a4 ${oldEditor.split('\n').length}, edaaa85 ${newEditor.split('\n').length}`);
+console.log(`outside the effect and the helper: ${a.rest === b.rest ? 'IDENTICAL' : 'DIFFERENT'} (${a.rest.length} vs ${b.rest.length} chars)`);
+if (a.rest !== b.rest) {
+  fail('DayEditor.tsx differs outside the mode-switch effect');
+  const al = a.rest.split('\n');
+  const bl = b.rest.split('\n');
+  for (let i = 0; i < Math.max(al.length, bl.length); i += 1) if (al[i] !== bl[i]) console.log(`  line ${i + 1}: - ${al[i]}\n  line ${i + 1}: + ${bl[i]}`);
+}
+console.log('--- a2ea7a4 effect block');
+console.log(a.block);
+console.log('--- edaaa85 effect block');
+console.log(b.block);
+const helperText = newEditor.match(/\/\*\* True while a modal dialog[\s\S]*?\n\}\n/)?.[0] ?? '';
+console.log('--- edaaa85 new helper');
+console.log(helperText);
+
+// Statements: old effect body after the null check vs new apply() body.
+const code = (s) =>
+  s
+    .split('\n')
+    .map((l) => l.replace(/\/\/.*$/, '').trim())
+    .filter((l) => l !== '');
+const oldBody = code(a.block);
+const oldStatements = oldBody.slice(oldBody.indexOf('if (element === null) return;') + 1, oldBody.lastIndexOf('}, [modal]);'));
+const newBody = code(b.block);
+const applyStart = newBody.indexOf('const apply = () => {');
+let depth = 0;
+let applyEnd = applyStart;
+for (let i = applyStart; i < newBody.length; i += 1) {
+  depth += (newBody[i].match(/\{/g) ?? []).length - (newBody[i].match(/\}/g) ?? []).length;
+  if (depth === 0) {
+    applyEnd = i;
+    break;
+  }
+}
+const applyStatements = newBody.slice(applyStart + 1, applyEnd);
+console.log('--- old effect statements after the null check');
+for (const l of oldStatements) console.log(`  ${l}`);
+console.log('--- new apply() statements');
+for (const l of applyStatements) console.log(`  ${l}`);
+const same = JSON.stringify(oldStatements) === JSON.stringify(applyStatements);
+console.log(`old effect statements equal apply() statements: ${same}`);
+if (!same) fail('apply() differs from the old effect body');
+
+// Added lines: no request, state change, callback prop, submit or click.
+const added = code(b.block).filter((l) => !code(a.block).includes(l)).concat(code(helperText));
+console.log('--- added code lines (comments removed)');
+for (const l of added) console.log(`  ${l}`);
+const FORBIDDEN = /\brequest\b|\bapi\(|fetch\(|onSaved|onChanged|onClose|onStale|\bset[A-Z]\w*\(|submit|requestSubmit|\.click\(|dispatchEvent|\bload\(|reload\(|remove\(|confirmQuick|reason|setTimeout|setInterval/;
+const hits = added.filter((l) => FORBIDDEN.test(l));
+console.log(`added lines calling a request, a setter, a callback prop, submit, click, load, reason or a timer: ${hits.length}`);
+for (const h of hits) fail(`added line: ${h}`);
+const disconnects = (b.block.match(/observer\.disconnect\(\)/g) ?? []).length;
+console.log(`observer.disconnect() calls in the effect: ${disconnects} (one before apply in the callback, one in the cleanup)`);
+console.log(`cleanup returns the disconnect: ${/return \(\) => observer\.disconnect\(\);/.test(b.block)}`);
+console.log(`effect dependency list unchanged ([modal]): ${a.block.trimEnd().endsWith('}, [modal]);') && b.block.trimEnd().endsWith('}, [modal]);')}`);
+
+/* ---- 2. styles.css ---- */
+console.log('\n== 2. src/client/styles.css');
+function rules(css) {
+  const out = [];
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const stack = [];
+  let buffer = '';
+  for (const ch of text) {
+    if (ch === '{') {
+      stack.push(buffer.trim());
+      buffer = '';
+    } else if (ch === '}') {
+      const body = buffer.trim();
+      const selector = stack.pop();
+      if (body !== '') out.push({ context: stack.join(' > '), selector, declarations: body.split(';').map((d) => d.trim()).filter((d) => d !== '') });
+      buffer = '';
+    } else buffer += ch;
+  }
+  return out;
+}
+const oldRules = rules(read(oldRoot, 'src/client/styles.css'));
+const newRules = rules(read(newRoot, 'src/client/styles.css'));
+const key = (r) => `${r.context} | ${r.selector}`;
+const oldMap = new Map(oldRules.map((r) => [key(r), r]));
+const newMap = new Map(newRules.map((r) => [key(r), r]));
+console.log(`rules: a2ea7a4 ${oldRules.length}, edaaa85 ${newRules.length}`);
+const changedDecls = [];
+for (const [k, r] of newMap) {
+  const o = oldMap.get(k);
+  if (o === undefined) {
+    console.log(`  added rule ${k}: ${r.declarations.join('; ')}`);
+    changedDecls.push(...r.declarations.map((d) => ({ rule: k, decl: d })));
+    continue;
+  }
+  const removed = o.declarations.filter((d) => !r.declarations.includes(d));
+  const addedDecls = r.declarations.filter((d) => !o.declarations.includes(d));
+  if (removed.length + addedDecls.length > 0) {
+    console.log(`  changed rule ${k}: - ${removed.join('; ')} + ${addedDecls.join('; ')}`);
+    changedDecls.push(...addedDecls.map((d) => ({ rule: k, decl: d })));
+  }
+}
+for (const k of oldMap.keys()) if (!newMap.has(k)) console.log(`  removed rule ${k}`);
+const changedTokens = changedDecls.map((c) => c.decl.split(':')[0].trim()).filter((p) => p.startsWith('--'));
+console.log(`changed custom properties: ${changedTokens.join(', ')}`);
+const users = newRules.filter((r) => r.declarations.some((d) => changedTokens.some((t) => d.includes(`var(${t})`))));
+console.log('rules using them:');
+for (const r of users) console.log(`  ${key(r)}: ${r.declarations.filter((d) => changedTokens.some((t) => d.includes(`var(${t})`))).join('; ')}`);
+const HIDING = /^(display|visibility|opacity|position|overflow|overflow-x|overflow-y|clip|clip-path|height|max-height|max-width|width|z-index|pointer-events|order|transform|inset|top|left|right|bottom|content-visibility|mask)$/;
+const risky = [
+  ...changedDecls.filter((c) => !c.decl.startsWith('--')).map((c) => c.decl),
+  ...users.flatMap((r) => r.declarations.filter((d) => changedTokens.some((t) => d.includes(`var(${t})`)))),
+].filter((d) => HIDING.test(d.split(':')[0].trim()));
+console.log(`changed or token-using declarations with a hide/move/clip/block property: ${risky.length}`);
+for (const d of risky) fail(`css ${d}`);
+
+/* ---- 3. tests ---- */
+console.log('\n== 3. tests/e2e');
+for (const file of ['tests/e2e/day-editor.spec.ts', 'tests/e2e/timesheet.spec.ts']) {
+  const ol = read(oldRoot, file).split('\n');
+  const nl = read(newRoot, file).split('\n');
+  // Longest common subsequence: which old lines are kept in order.
+  const m = ol.length;
+  const n = nl.length;
+  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
+  for (let i = m - 1; i >= 0; i -= 1) for (let j = n - 1; j >= 0; j -= 1) dp[i][j] = ol[i] === nl[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const removed = [];
+  let i = 0;
+  let j = 0;
+  while (i < m && j < n) {
+    if (ol[i] === nl[j]) {
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      removed.push(`${i + 1}: ${ol[i]}`);
+      i += 1;
+    } else j += 1;
+  }
+  while (i < m) removed.push(`${i + 1}: ${ol[i++]}`);
+  const expects = (lines) => lines.filter((l) => /\bexpect(\.poll)?\(/.test(l)).length;
+  console.log(`${file}: lines ${m} -> ${n}; a2ea7a4 lines kept in order ${dp[0][0]}; removed or changed ${removed.length}; expect lines ${expects(ol)} -> ${expects(nl)}`);
+  for (const r of removed) console.log(`  - ${r}`);
+  const skips = (lines) => lines.filter((l) => /test\.(skip|fixme|only)\(|\.skip\(/.test(l)).length;
+  console.log(`  skip/fixme/only lines ${skips(ol)} -> ${skips(nl)}`);
+}
+console.log(`\nproblems=${problems}`);

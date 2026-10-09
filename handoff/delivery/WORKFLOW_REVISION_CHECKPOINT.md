@@ -168,8 +168,26 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   docs/04 line 55; O-5 meaningful assertion; R-7 tokens 8.5/14.25rem (375px first row now
   above the tab bar); nine resize paths self-checked; e2e desktop 84/0/9, mobile 86/0/7;
   verify exit 0; digest b7bbcbc0.
-- Running: WP5-UX-FIX5-FREEZE (committer; also carries REGATE2, A3/B3 and FIX4-FREEZE
-  records since a2ea7a4).
+- WP5-UX-FIX5-FREEZE done: edaaa85 on main, pushed (302 files, digest b7bbcbc0).
+- WP5-UX-REGATE3 PASS on edaaa85 (NAS NOT VERIFIED): digest b7bbcbc0 in three forms;
+  verify 1820; e2e 170/0/16; AC-13 x3 and two zones; drill 208/0, image
+  sha256:1332b6d5ac7bbbc127b0b64f56814373088e989508137f6760640a7d5abc6af2 (removed after
+  the run); B3-01 holds on three resize paths; B3-02, R-7 (full date at 390/375/360/320)
+  and earlier fixes hold.
+- Board: current_source_digest b7bbcbc0; WP5-RECHECK, WP5-UX-AUDIT-A2 and -A3
+  superseded_by WP5-UX-AUDIT-A4.
+- WP5-UX-AUDIT-A4 PASS on edaaa85 / b7bbcbc0, no findings (deferred switch never
+  changes what is saved; 12 post-switch saves equal to 014bd47; checks green).
+- WP5-UX-AUDIT-B4 FIX REQUIRED on edaaa85: B3-01 closed on 7 paths, B3-02, O-5, R-7
+  done, no weakened assertion; new B4-01 (Medium, re-judged R-1: focus ring 1.72:1 /
+  2.46:1, WCAG 1.4.11) and B4-02 (Low, ISO due time in the zone note vs docs/04 line 45).
+- Per the 2026-10-09 decision, owner question WP5-UX-Q1 instead of another loop;
+  WP5-UX-FIX6 brief prepared as pending (recommended option a).
+- Running: WP5-UX-CKPT2 (checkpoint commit of the REGATE3, A4, B4 records and the pending
+  FIX6 brief). After it, the board is set to `blocked` on WP5-UX-Q1 (uncommitted flip).
+- Next action: if both PASS, the WP5 re-accept (pilot packet identity refresh to
+  edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, accept commit);
+  if area B fails again, an owner question instead of another loop.
 - Next: WP5-UX-REGATE3, then fresh B4 and A4 (A2, A3 and WP5-RECHECK superseded_by A4).
   If area B fails again after this round, raise an owner question instead of looping.
 - Next action: if both PASS, the WP5 re-accept: a docs task refreshes the pilot packet
