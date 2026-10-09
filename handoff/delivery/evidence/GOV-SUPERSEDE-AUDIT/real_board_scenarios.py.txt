@@ -1,0 +1,96 @@
+"""GOV-SUPERSEDE-AUDIT: the intended WP5 use on COPIES of the working-tree board and STATE (task folder),
+validated with validate() of the reviewed validator (repository file loaded read-only, no bytecode)."""
+import copy
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+TASK = Path(__file__).resolve().parent
+REPO = Path(r"<project>")
+spec = importlib.util.spec_from_file_location("validator", REPO / "handoff/delivery/validate_orchestration.py")
+v = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(v)
+configured = v.profiles()
+BOARD = json.loads((TASK / "worktree_ORCHESTRATION.json").read_text(encoding="utf-8"))
+STATE = json.loads((TASK / "worktree_STATE.json").read_text(encoding="utf-8"))
+NEW = "f" * 64
+EVIDENCE = "handoff/delivery/evidence/WP5-RECHECK/00-README.txt"
+
+
+def task(board, name):
+    return next(item for item in board["tasks"] if item["id"] == name)
+
+
+def placeholder(name, kind, deps):
+    profile = configured["timesheet-verifier" if kind == "gate" else "timesheet-auditor"]
+    path = f"handoff/delivery/tasks/{name}.md"
+    return {"id": name, "package": "WP5", "kind": kind, "status": "pending", "depends_on": deps,
+            "profile": profile["name"], "requested_model": profile["model"], "requested_effort": profile["effort"],
+            "model_override_reason": None, "actual_model": None, "actual_source": None, "actual_effort": None,
+            "agent_id": None, "attempt": 0, "owned_paths": [path], "prompt": "handoff/prompts/ORCHESTRATE.md",
+            "report": path, "evidence": [], "next_action": "synthetic", "reviewed_digest": None}
+
+
+def scenario_a():
+    board = copy.deepcopy(BOARD)
+    board["current_source_digest"] = NEW
+    board["tasks"] += [placeholder("WP5-UX-GATE", "gate", ["WP5-UX-FIX1-FREEZE"]),
+                       placeholder("WP5-UX-AUDIT", "audit", ["WP5-UX-GATE"])]
+    task(board, "WP5-RECHECK")["superseded_by"] = "WP5-UX-AUDIT"
+    board.update(status="running")
+    return board
+
+
+def finish_gate_and_audit(board, decision):
+    gate, audit = task(board, "WP5-UX-GATE"), task(board, "WP5-UX-AUDIT")
+    for item, agent in ((gate, "synthetic-ux-gate"), (audit, "synthetic-ux-audit")):
+        # a done task needs an existing report file; reuse an existing task record path (copy only)
+        item.update(status="done", attempt=1, agent_id=agent, evidence=[EVIDENCE], source_digest=NEW,
+                    report="handoff/delivery/tasks/WP5-RECHECK.md", owned_paths=["handoff/delivery/tasks/WP5-RECHECK.md"])
+    gate["decision"] = "PASS"
+    audit["decision"] = decision
+    if decision == "PASS":
+        audit["reviewed_digest"] = NEW
+
+
+def run(label, board, state=STATE):
+    try:
+        result = v.validate(board, state, configured)
+        return f"{label}: ACCEPT ({result['tasks']} tasks, {result['active_tasks']} active)"
+    except ValueError as error:
+        return f"{label}: REJECT {error}"
+
+
+lines = [run("live board copy as is", copy.deepcopy(BOARD))]
+lines.append(run("a) new digest, pending WP5-UX-GATE/AUDIT, WP5-RECHECK superseded_by WP5-UX-AUDIT", scenario_a()))
+board = scenario_a()
+task(board, "WP5-RECHECK").pop("superseded_by")
+lines.append(run("b) same without superseded_by", board))
+board = scenario_a()
+board.update(status="software_ready", next_task_id=None)
+lines.append(run("c) a) with status software_ready while WP5-UX-AUDIT is pending", board))
+board = scenario_a()
+finish_gate_and_audit(board, "PASS")
+lines.append(run("d) WP5-UX-GATE and WP5-UX-AUDIT done PASS at the new digest; WP5-ACCREC still depends on WP5-RECHECK",
+                 board))
+board = scenario_a()
+finish_gate_and_audit(board, "FIX REQUIRED")
+lines.append(run("e) WP5-UX-AUDIT done FIX REQUIRED while running", board))
+board["status"] = "software_ready"
+board["next_task_id"] = None
+lines.append(run("f) e) at software_ready", board))
+board = scenario_a()
+finish_gate_and_audit(board, "PASS")
+task(board, "WP5-UX-AUDIT")["agent_id"] = task(board, "WP5-UX-T04")["agent_id"]
+lines.append(run("g) d) with the re-audit run by the WP5-UX-T04 author", board))
+board = scenario_a()
+finish_gate_and_audit(board, "PASS")
+task(board, "WP5-UX-AUDIT").update(requested_model="sonnet", model_override_reason="fallback_unavailable",
+                                    actual_model="claude-sonnet-5-5", actual_source="self_reported")
+lines.append(run("h) d) with a Sonnet re-audit (WP5-UX-T02/T04 requested opus)", board))
+board = scenario_a()
+task(board, "WP5-RECHECK")["superseded_by"] = "WP5-FINAL-AUDIT"
+lines.append(run("i) WP5-RECHECK superseded_by an older FIX REQUIRED audit WP5-FINAL-AUDIT (while running)", board))
+print("\n".join(lines))

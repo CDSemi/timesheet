@@ -1,0 +1,11 @@
+"""Read-only listing of WP5-UX tasks on a board copy (id, kind, status, depends_on, decision)."""
+import json
+import sys
+from pathlib import Path
+
+board = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+for task in board["tasks"]:
+    if task["id"].startswith("WP5-UX") or task["id"].startswith("WP5-ACC"):
+        print(task["id"], task["kind"], task["status"], task["depends_on"], task.get("decision") if task["kind"] in {"gate", "audit"} else "",
+              task.get("requested_model"), task.get("requested_effort"), task["profile"])
+print("phases", json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))["phases"])

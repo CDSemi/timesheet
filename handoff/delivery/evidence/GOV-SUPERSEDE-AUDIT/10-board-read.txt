@@ -1,0 +1,382 @@
+# GOV-SUPERSEDE-AUDIT evidence: 10-board-read.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+## read-only board extract (working tree at audit start)
+$ C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe <task>/board_extract.py <project>/handoff/delivery/ORCHESTRATION.json
+exit=0
+{
+  "coordinator_decisions_matching": [
+    {
+      "date": "2026-10-08",
+      "basis": "validate_orchestration.py: every done PASS audit of the active package must match current_source_digest (stale-PASS check), and a done task may depend only on a done PASS audit. WP5-RECHECK is the only WP5 PASS audit (150420e7) and the done WP5-ACCREC depends on it. The UX round changes WP5 source, so its gate moves current_source_digest; WP5-RECHECK can then neither stay done PASS (stale) nor be reset or cancelled (breaks WP5-ACCREC). docs/08: 'Changed source identity invalidates an old audit pass'; validator and docs/08 are governance paths.",
+      "decision": "Before WP5-UX-GATE, run a GOV cycle GOV-SUPERSEDE (worker-high fix, GOV freeze, verifier gate, fresh opus audit): add an optional audit field `superseded_by` naming a later audit task of the same package. A done PASS audit with it keeps its PASS for dependency purposes (history), is exempt from the stale-PASS check, and requires the named audit to exist, be of kind audit in the same package and not be itself superseded; docs/08 (+ vi) gains one sentence. WP5-RECHECK then gets superseded_by WP5-UX-AUDIT when the gate records the new digest. T01..T06 and their freezes do not move current_source_digest, so they may proceed first. STATE.json keeps WP5 accepted at 014bd47 until WP5-UX-AUDIT PASS. Reversible by the owner."
+    },
+    {
+      "date": "2026-10-08",
+      "basis": "Owner UI request of 2026-10-08; validate_orchestration.py allows only WP1-WP5 and GOV packages; WP5 is the active package and the pilot is not activated; the pilot packet already foresees owner-driven fix rounds (fix, freeze, gate, independent audit) before activation; docs/08 'Changed source identity invalidates an old audit pass'. The desktop app asked for a Design artifact, but this coordinator session has no Artifact tool.",
+      "decision": "Run the redesign as an owner-requested WP5 change round, not a new package (a new package would need a GOV change first). Step 1 is WP5-UX-PLAN: a read-only opus planner (override reason novelty) diagnoses the current UI, maps the Excel timesheet layout to app data, and delivers a self-contained static HTML mockup under handoff/delivery/design/WP5-UX/ in place of the Design artifact. Implementation starts only after the owner confirms the design. Once source changes, the accepted WP5 digest 150420e7 is superseded: the round needs a freeze, a verifier gate and a fresh independent audit on the new digest; how earlier WP5 PASS audits are recorded (kept as history at their digest) is settled before the first freeze. STATE.json keeps WP5 accepted at 014bd47 until then. Reversible by the owner."
+    },
+    {
+      "date": "2026-10-02",
+      "basis": "WP1_REVIEW F-01 already names file, function, reproduction, fix and tests",
+      "decision": "Cancel WP1-F01-PLAN; the worker reproduces first. S-size fix audits may include the gate.",
+      "superseded_by": "2026-10-02 refinement after WF-AUDIT/WF-AUDIT2 (WF-A-10): gate_included only for intermediate S-size fixes; package-final snapshots, including FIX REQUIRED rechecks that unlock the next package (the WP1 F-01 recheck), keep a separate verifier gate."
+    }
+  ],
+  "WP5-RECHECK": {
+    "id": "WP5-RECHECK",
+    "package": "WP5",
+    "kind": "audit",
+    "status": "done",
+    "reviewed_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+    "depends_on": [
+      "WP5-REGATE2",
+      "WP5-PKTID"
+    ],
+    "profile": "timesheet-auditor",
+    "requested_model": "opus",
+    "requested_effort": "xhigh",
+    "model_override_reason": null,
+    "routing": {
+      "size": "M",
+      "risk": "M",
+      "novelty": false
+    },
+    "actual_model": "claude-opus-5-5",
+    "actual_source": "self_reported",
+    "actual_effort": null,
+    "agent_id": "a0c919348e6a91d64",
+    "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/WP5_RECHECK.md",
+      "handoff/delivery/WP5_RECHECK.vi.md",
+      "handoff/delivery/tasks/WP5-RECHECK.md",
+      "handoff/delivery/evidence/WP5-RECHECK"
+    ],
+    "prompt": "handoff/delivery/tasks/WP5-RECHECK.md",
+    "report": "handoff/delivery/tasks/WP5-RECHECK.md",
+    "evidence": [
+      "handoff/delivery/WP5_RECHECK.md",
+      "handoff/delivery/evidence/WP5-RECHECK/00-README.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/00-baseline.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/01-delta.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/05-verify.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/06-ac13.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/07-dist-compare.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/08-probe-log.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/08-status-screen-text.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/08-refusal-table.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/08-reminder-alice.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/09-grep-flag-check.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/10-parity.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/12-packet-identity.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/98-process-listing.txt",
+      "handoff/delivery/evidence/WP5-RECHECK/99-digest-after.txt"
+    ],
+    "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+    "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+    "reviewed_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+    "author_agent_ids": [],
+    "decision": "PASS",
+    "findings": [],
+    "notes": [
+      "Digest 150420e7 (779 files) before and after in the repo, ls-tree form and a clean export; HEAD = origin/main = 014bd47. Delta since 74d5bfe: only docs/11 EN/VI; dist of 74d5bfe and 014bd47 byte-identical (230 files); npm ci, verify (1759 tests, smoke) and AC-13 pass.",
+      "WP5-F-01 and WP5-A2-01 resolved: on the live app the admin screen and JSON show only 'Sender address' and 'Outbound mode', no flag; grep -c prints 0 or 1; without the flag the server, backup and restore refuse, other commands do not. WP5-A2-02 resolved: the deep link asks for sign-in then opens the review; the first reminder link matches the reviewLink form. WP5-F-02 resolved: packet section 8 matches the board blocking text. Small-risk fixes R-A2-1, R-A2-2/R-F1, R-F4, R-F5, R-F6 accurate. Packet identity 014bd47 / 150420e7 / dev image bd17d061 with the docs-only note and the NAS image-ID rule; EN/VI parity holds.",
+      "Overall: software ready, pilot pending (NAS NOT VERIFIED, no owner permission, no pilot result). Risks, all optional Info: R-RC-1 the grep -c check matches only the canonical line; R-RC-2 step 6/7 ordering of the first-reminder link check; R-RC-3 packet section 8 names only D-8 as a differing recommendation; R-RC-4 section 6 step 3 still says the restored instance runs in capture mode (residual R-F1); R-RC-5 the root note covers sections 13-16 only; R-RC-6 sections 3 and 5 cite WP5-REGATE2 for dist identity, which compared 9bcdd88 with 014bd47. Preflight and precommit pass; nothing left running."
+    ],
+    "next_action": "None; WP5 accepted on 014bd47. WP5-ACCREC, then WP5-ACCEPT."
+  },
+  "WP5-ACCREC": {
+    "id": "WP5-ACCREC",
+    "package": "WP5",
+    "kind": "documentation",
+    "status": "done",
+    "depends_on": [
+      "WP5-RECHECK"
+    ],
+    "profile": "timesheet-light",
+    "requested_model": "sonnet",
+    "requested_effort": "low",
+    "model_override_reason": null,
+    "routing": {
+      "size": "S",
+      "risk": "L",
+      "novelty": false
+    },
+    "actual_model": "claude-sonnet-5-5",
+    "actual_source": "self_reported",
+    "actual_effort": null,
+    "agent_id": "a7b6cd3080756f5dd",
+    "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/WP5_HANDOFF.md",
+      "handoff/delivery/WP5_HANDOFF.vi.md",
+      "handoff/delivery/tasks/WP5-ACCREC.md",
+      "handoff/delivery/evidence/WP5-ACCREC"
+    ],
+    "prompt": "handoff/delivery/tasks/WP5-ACCREC.md",
+    "report": "handoff/delivery/tasks/WP5-ACCREC.md",
+    "evidence": [
+      "handoff/delivery/evidence/WP5-ACCREC/00-checks.txt"
+    ],
+    "baseline_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
+    "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+    "reviewed_digest": null,
+    "author_agent_ids": [],
+    "decision": "done: WP5_HANDOFF acceptance record filled (EN and VI) and the stale snapshot parts refreshed (title, intro, commits and digest, status, next action, provenance); accepted source 014bd47, digest 150420e7 (779 files); figures from the board and reviews, nothing re-run; O-1 corrected (WP5-B-01 Medium in three places); three outcomes separated (software readiness accepted, NAS NOT VERIFIED; owner permission not requested; no pilot result); the uncommitted WP5-PKTID packet changes noted. EN/VI parity equal; preflight 0; precommit 0 on a private temporary index (4254 files, 0 findings). Not committed.",
+    "next_action": "None; WP5-ACCEPT."
+  },
+  "GOV-SUPERSEDE-FIX": {
+    "id": "GOV-SUPERSEDE-FIX",
+    "package": "GOV",
+    "kind": "fix",
+    "status": "done",
+    "depends_on": [
+      "WP5-UX-FIX1-FREEZE"
+    ],
+    "profile": "timesheet-worker-high",
+    "requested_model": "sonnet",
+    "requested_effort": "high",
+    "model_override_reason": null,
+    "routing": {
+      "size": "M",
+      "risk": "M",
+      "novelty": false
+    },
+    "actual_model": "claude-sonnet-5-5",
+    "actual_source": "self_reported",
+    "actual_effort": null,
+    "agent_id": "a4028da41457e419d",
+    "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/validate_orchestration.py",
+      "handoff/delivery/check_recovery.py",
+      "docs/08_AI_WORKFLOW_AND_BUDGET.md",
+      "docs/08_AI_WORKFLOW_AND_BUDGET.vi.md",
+      ".claude/agents/timesheet-auditor.md",
+      ".claude/agents/timesheet-committer.md",
+      ".claude/agents/timesheet-expert.md",
+      ".claude/agents/timesheet-light.md",
+      ".claude/agents/timesheet-planner.md",
+      ".claude/agents/timesheet-verifier.md",
+      ".claude/agents/timesheet-worker.md",
+      ".claude/agents/timesheet-worker-high.md",
+      "handoff/delivery/tasks/GOV-SUPERSEDE-FIX.md",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX"
+    ],
+    "prompt": "handoff/delivery/tasks/GOV-SUPERSEDE-FIX.md",
+    "report": "handoff/delivery/tasks/GOV-SUPERSEDE-FIX.md",
+    "evidence": [
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/base-head.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/repro-before.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/repro-after.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/repro_superseded.py.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/recovery-before.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/recovery-after.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/validator-before.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/validator-after.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/preflight.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/verify.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FIX/digest.txt"
+    ],
+    "baseline_commit": "4def605d6bffd71b789214a03202a3122939406e",
+    "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+    "reviewed_digest": null,
+    "author_agent_ids": [],
+    "decision": "fixed: validate_orchestration.py gains validate_superseded (six rules) and the stale-PASS exemption for superseded done PASS audits; check_recovery.py probes 87 -> 106 (+19), exit 0; reproduced first (stale PASS rejected before, accepted with superseded_by after); real board validator exit 0 before and after; docs/08 (+vi) describe superseded_by (docs/08 has no agent runtime-rule list, so that optional sentence was skipped); the eight non-coordinator profiles gain the no-stdin/no-head-tail runtime line, no frontmatter change. Preflight and verify exit 0; digest 3d274c9e. One 'ls | head -3' slip on a directory listing (nothing fed to python or node).",
+    "next_action": "GOV-SUPERSEDE-FREEZE commits and pushes; then GOV-SUPERSEDE-GATE and a fresh opus GOV-SUPERSEDE-AUDIT."
+  },
+  "GOV-SUPERSEDE-FREEZE": {
+    "id": "GOV-SUPERSEDE-FREEZE",
+    "package": "GOV",
+    "kind": "commit",
+    "status": "done",
+    "depends_on": [
+      "GOV-SUPERSEDE-FIX"
+    ],
+    "profile": "timesheet-committer",
+    "requested_model": "sonnet",
+    "requested_effort": "medium",
+    "model_override_reason": null,
+    "routing": {
+      "size": "S",
+      "risk": "L",
+      "novelty": false
+    },
+    "actual_model": "claude-sonnet-5-5",
+    "actual_source": "self_reported",
+    "actual_effort": null,
+    "agent_id": "abbeae301c662bceb",
+    "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/tasks/GOV-SUPERSEDE-FREEZE.md",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FREEZE"
+    ],
+    "prompt": "handoff/delivery/tasks/GOV-SUPERSEDE-FREEZE.md",
+    "report": "handoff/delivery/tasks/GOV-SUPERSEDE-FREEZE.md",
+    "evidence": [
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FREEZE/checks.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-FREEZE/commit-message.txt"
+    ],
+    "baseline_commit": "4def605d6bffd71b789214a03202a3122939406e",
+    "branch": "main",
+    "commit_sha": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "pushed": true,
+    "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+    "reviewed_digest": null,
+    "author_agent_ids": [],
+    "decision": "committed and pushed: 31 files (docs/08 + vi, eight profiles, validator, check_recovery and handoff records; coordinator profile unchanged); working-tree and new-HEAD digests 3d274c9e; node v24.21.0; precommit PASS (31 files, 0 findings), diff-check, JSON parse, new validator PASS (283 tasks), check_recovery PASS (106 probes) and preflight exit 0; remote main = 831f760.",
+    "next_action": "None; GOV-SUPERSEDE-GATE on 831f760."
+  },
+  "GOV-SUPERSEDE-GATE": {
+    "id": "GOV-SUPERSEDE-GATE",
+    "package": "GOV",
+    "kind": "gate",
+    "status": "done",
+    "freeze_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "depends_on": [
+      "GOV-SUPERSEDE-FREEZE"
+    ],
+    "profile": "timesheet-verifier",
+    "requested_model": "sonnet",
+    "requested_effort": "medium",
+    "model_override_reason": null,
+    "routing": {
+      "size": "S",
+      "risk": "M",
+      "novelty": false
+    },
+    "actual_model": "claude-sonnet-5-5",
+    "actual_source": "self_reported",
+    "actual_effort": null,
+    "agent_id": "a1a1da5eddac0cf6a",
+    "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/tasks/GOV-SUPERSEDE-GATE.md",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE"
+    ],
+    "prompt": "handoff/delivery/tasks/GOV-SUPERSEDE-GATE.md",
+    "report": "handoff/delivery/tasks/GOV-SUPERSEDE-GATE.md",
+    "evidence": [
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/results.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/scope.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/check_recovery.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/scenarios.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/scenarios.py.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/profile-diffstat.txt",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-GATE/profile-frontmatter.txt"
+    ],
+    "baseline_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+    "reviewed_digest": null,
+    "author_agent_ids": [],
+    "decision": "PASS",
+    "gate_notes": "Scope 4def605..831f760: only validate_orchestration.py, check_recovery.py, docs/08 (+vi) and eight profiles; coordinator profile and settings.json unchanged; profile frontmatter byte-identical, nine profiles parse. check_recovery exit 0, 106 probes; real-board validator exit 0 (284 tasks). Scenarios on copies: (a) superseded_by on WP5-RECHECK with a new digest and a pending WP5-UX-AUDIT accepted; (b) without it rejected 'Stale PASS: WP5-RECHECK'; (c) software_ready with the target pending rejected 'superseded_by target must be a done PASS audit when software_ready'. Preflight and precommit self-test exit 0. Digest 3d274c9e at start and end.",
+    "next_action": "None; fresh opus GOV-SUPERSEDE-AUDIT on 831f760."
+  },
+  "GOV-SUPERSEDE-AUDIT": {
+    "id": "GOV-SUPERSEDE-AUDIT",
+    "package": "GOV",
+    "kind": "audit",
+    "status": "running",
+    "reviewed_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "depends_on": [
+      "GOV-SUPERSEDE-GATE"
+    ],
+    "profile": "timesheet-auditor",
+    "requested_model": "opus",
+    "requested_effort": "xhigh",
+    "model_override_reason": null,
+    "routing": {
+      "size": "M",
+      "risk": "M",
+      "novelty": false
+    },
+    "actual_model": null,
+    "actual_source": null,
+    "actual_effort": null,
+    "agent_id": "adabc5e2628c312be",
+    "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+    "attempt": 1,
+    "owned_paths": [
+      "handoff/delivery/GOV_SUPERSEDE_REVIEW.md",
+      "handoff/delivery/GOV_SUPERSEDE_REVIEW.vi.md",
+      "handoff/delivery/tasks/GOV-SUPERSEDE-AUDIT.md",
+      "handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT"
+    ],
+    "prompt": "handoff/delivery/tasks/GOV-SUPERSEDE-AUDIT.md",
+    "report": "handoff/delivery/tasks/GOV-SUPERSEDE-AUDIT.md",
+    "evidence": [],
+    "baseline_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "source_digest": null,
+    "reviewed_digest": null,
+    "author_agent_ids": [
+      "a4028da41457e419d"
+    ],
+    "decision": null,
+    "next_action": "Fresh auditor checks the six rules, no weakening (probe comparison and mutants), loopholes, docs/08 parity, profiles and scope at 831f760; writes GOV_SUPERSEDE_REVIEW (+vi)."
+  },
+  "tasks_with_superseded_by": [],
+  "status": "running",
+  "active_package": "WP5",
+  "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+  "next_task_id": "GOV-SUPERSEDE-AUDIT",
+  "wp5_audits": [
+    [
+      "WP5-ASSESS-A",
+      "done",
+      "FIX REQUIRED",
+      "0a64a75f"
+    ],
+    [
+      "WP5-ASSESS-B",
+      "done",
+      "FIX REQUIRED",
+      "26fcc969"
+    ],
+    [
+      "WP5-FINAL-AUDIT",
+      "done",
+      "FIX REQUIRED",
+      "0a64a75f"
+    ],
+    [
+      "WP5-RECHECK",
+      "done",
+      "PASS",
+      "150420e7"
+    ]
+  ],
+  "dependents_of_WP5_RECHECK": [
+    "WP5-ACCREC"
+  ]
+}
+
+## WP5-UX tasks and STATE phases (copies)
+$ C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe <task>/board_ux_tasks.py <task>/worktree_ORCHESTRATION.json <task>/worktree_STATE.json
+exit=0
+WP5-ACCREC documentation done ['WP5-RECHECK']  sonnet low timesheet-light
+WP5-ACCEPT commit done ['WP5-ACCREC']  sonnet medium timesheet-committer
+WP5-UX-PLAN plan done []  opus high timesheet-planner
+WP5-UX-CKPT commit done ['WP5-UX-PLAN']  sonnet medium timesheet-committer
+WP5-UX-T01 implement done ['WP5-UX-PLAN']  sonnet medium timesheet-worker
+WP5-UX-T01-FREEZE commit done ['WP5-UX-T01']  sonnet medium timesheet-committer
+WP5-UX-T02 implement done ['WP5-UX-T01-FREEZE']  opus high timesheet-worker-high
+WP5-UX-T02-FREEZE commit done ['WP5-UX-T02']  sonnet medium timesheet-committer
+WP5-UX-T03 implement done ['WP5-UX-T02-FREEZE']  sonnet medium timesheet-worker
+WP5-UX-T03-FREEZE commit done ['WP5-UX-T03']  sonnet medium timesheet-committer
+WP5-UX-T04 implement done ['WP5-UX-T03-FREEZE']  opus high timesheet-worker-high
+WP5-UX-T04-FREEZE commit done ['WP5-UX-T04']  sonnet medium timesheet-committer
+WP5-UX-T05 implement done ['WP5-UX-T04-FREEZE']  sonnet medium timesheet-worker
+WP5-UX-T05-FREEZE commit done ['WP5-UX-T05']  sonnet medium timesheet-committer
+WP5-UX-T06 documentation done ['WP5-UX-T05-FREEZE']  sonnet medium timesheet-worker
+WP5-UX-T06-FREEZE commit done ['WP5-UX-T06']  sonnet medium timesheet-committer
+WP5-UX-FIX1 fix done ['WP5-UX-T06-FREEZE']  sonnet medium timesheet-worker
+WP5-UX-FIX1-FREEZE commit done ['WP5-UX-FIX1']  sonnet medium timesheet-committer
+phases [{'id': 'WP1', 'implementation': 'implemented', 'independent_review': 'passed', 'review_date': '2026-10-03', 'review': 'handoff/delivery/WP1_RECHECK.md', 'review_history': ['handoff/delivery/WP1_REVIEW.md'], 'reviewed_commit': '68bbb31435543329b6c51f29703d9e2e7a4290bf', 'reviewed_digest': 'c6e24381253c02ac74d1690b7b15aa7e6ac5b31bcd7ee8b8b8d19ca7d7d29c59', 'unresolved_findings': [], 'carried_risks': ['Unconfirmed partial break list semantics at Clock out', 'Open sessions accept future break rows; unconfirmed Clock out before them returns 422', 'Clock out lacks expected_version'], 'handoff': 'handoff/delivery/WP1_HANDOFF.md'}, {'id': 'WP2', 'implementation': 'implemented', 'independent_review': 'passed', 'review_date': '2026-10-04', 'review': 'handoff/delivery/WP2_RECHECK_B4.md', 'final_reviews': ['handoff/delivery/WP2_RECHECK_A4.md', 'handoff/delivery/WP2_RECHECK_B4.md'], 'review_history': ['handoff/delivery/WP2_ADV_LEDGER_REVIEW.md', 'handoff/delivery/WP2_REVIEW_A.md', 'handoff/delivery/WP2_REVIEW_B.md', 'handoff/delivery/WP2_RECHECK_A.md', 'handoff/delivery/WP2_RECHECK_B.md', 'handoff/delivery/WP2_RECHECK_A3.md', 'handoff/delivery/WP2_RECHECK_B3.md'], 'gate': 'WP2-GATE4 PASS (handoff/delivery/tasks/WP2-GATE4.md)', 'reviewed_commit': '5fafeaee72509c6110a907458643bf7582dad81a', 'reviewed_digest': 'e61fa9145dd5786495bba80435e6e27ecec02bf102e1c2e0582330e9000114df', 'unresolved_findings': [], 'carried_risks': ['R1: postCorrection duplicate ignores sourceRef; WP3 should make correction keys revision-specific', "R2: a policy note with a leading space before '=' is exported raw (outside the specified trigger list)", 'R3: 409 calendar_in_use reveals whether an account has data (accepted CALFIX decision)', 'R4/carry-forward: WP3 must handle and persist the CorrectionResult/DeficitDebitResult pending variant and drop provisional minutes at finalization', 'A3-01: the payroll_exception.create audit record keeps refreshed_pay_period; hide it in any future admin audit view', 'A4-01: smoke exits 13 without a FAIL line when its port is taken', 'ADV-A-05: otLeave duplicates the ledger append path (optional consolidation)', 'F1: the insufficient-balance e2e writes no screenshot (covered by WP2-AUDIT-B evidence)', 'Owner option: prospective calendar reassignment for users with data (currently refused with 409)'], 'handoff': 'handoff/delivery/WP2_HANDOFF.md'}, {'id': 'WP3', 'implementation': 'implemented', 'independent_review': 'passed', 'review_date': '2026-10-05', 'review': 'handoff/delivery/WP3_RECHECK_BC3.md', 'final_reviews': ['handoff/delivery/WP3_RECHECK_A3.md', 'handoff/delivery/WP3_RECHECK_BC3.md'], 'review_history': ['handoff/delivery/WP3_REVIEW_A.md', 'handoff/delivery/WP3_REVIEW_B.md', 'handoff/delivery/WP3_REVIEW_C.md', 'handoff/delivery/WP3_RECHECK_A.md', 'handoff/delivery/WP3_RECHECK_BC.md', 'handoff/delivery/WP3_RECHECK_A2.md', 'handoff/delivery/WP3_RECHECK_BC2.md'], 'gate': 'WP3-REGATE3 PASS (handoff/delivery/tasks/WP3-REGATE3.md)', 'reviewed_commit': '49651c8bb91d56bf6c6966405257537ec7ca474b', 'reviewed_digest': 'c31c300c06ae4c750bf0080f304d3f87eae0a00280110d1a8eb6eb37ecf4ec72', 'unresolved_findings': [], 'carried_risks': ['R1: long holiday labels are truncated with an ellipsis in the PDF (no rule requires the full text)', 'R2: the signature-count limit is checked outside the transaction', 'R4: the reviewed hash includes the OT balance, so OT changes elsewhere make a review stale', 'R5: sign-off before the period end is allowed', 'R6: the review hint and the payload are read in separate transactions; the hint read has no time bound', "R7/carry to WP4: audit rows lack a recorded 'through a share' marker; required before any non-shared route writes day or session rows for another person (including import)", 'R8: never-configured accounts still get before-due reminders to their own address; they get no overdue warning and the deadline scan re-checks their periods on every pass', 'R9: seed events without an actor show as automatic in History', 'The review hint shows a count, not dates; a HEAD request on the shared PDF writes a download audit', 'Real SMTP: a reminder may repeat after a crash; a TLS verification failure is classified temporary; a send claimed before its PDF consumes a job attempt', 'Test gaps (Low): the activation instant cleared mid-scan; the not_active guard alone; before_account alone', 'F-Q6 open (WP2-A-01 kept); ADV-A-05 and the WP2 B4 optional items'], 'handoff': 'handoff/delivery/WP3_HANDOFF.md'}, {'id': 'WP4', 'implementation': 'implemented', 'independent_review': 'passed', 'review_date': '2026-10-06', 'review': 'handoff/delivery/WP4_RECHECK_B4.md', 'final_reviews': ['handoff/delivery/WP4_RECHECK_A4.md', 'handoff/delivery/WP4_RECHECK_B4.md'], 'review_history': ['handoff/delivery/WP4_REVIEW_A.md', 'handoff/delivery/WP4_REVIEW_B.md', 'handoff/delivery/WP4_RECHECK_A.md', 'handoff/delivery/WP4_RECHECK_B.md', 'handoff/delivery/WP4_RECHECK_A2.md', 'handoff/delivery/WP4_RECHECK_B2.md', 'handoff/delivery/WP4_RECHECK_A3.md', 'handoff/delivery/WP4_RECHECK_B3.md'], 'gate': 'WP4-REGATE4 PASS (handoff/delivery/tasks/WP4-REGATE4.md)', 'reviewed_commit': '546cddaf6747aef85e8b6d9b7712de9e28f138bf', 'reviewed_digest': '26fcc9691c34d408e85da4cc52fb0a113b0d75a39c34d4c5ef87bcd7339d9081', 'unresolved_findings': [], 'carried_risks': ['R-A2: concurrent openers of a brand-new database file can hit SQLITE_BUSY (WP1 code; backlog)', 'R-A3: rollback residual limit; the owner chooses the JOB_RUNNER=off rule or clearing the activation instant on --confirm before the WP5 pilot', 'R-A6: relaxed job-count pins in automation.spec (backlog)', 'R-A8: CLI maintenance commands fall back to the dev database without DATABASE_PATH (backlog)', 'WP4_REVIEW_B R2: mark imported dates in planBatch (backlog)', 'R-RA1..R-RA9: same-second prune tie, same-day pre-upgrade backup prune, pdf-lib maps in node_modules (never served), far-future backup blocks prune, drill deprecation check vacuous on a cached build, dev-only source-map-js advisory, drill label nit, early 413 with connection reuse, restore onto a dangling junction', 'R-B4-1: lenient handling of a misplaced or malformed XML encoding declaration', 'R-B4-2/I-5: no per-user import preview quota (owner question open); NAS target NOT VERIFIED', 'R-B4-3: workbooks with more than 64 sheets are refused', 'R-B4-4: the derived parse bound covers the 61 measured unit families', 'Owner questions WP4-I-1..I-5 open; safe defaults in force'], 'handoff': 'handoff/delivery/WP4_HANDOFF.md'}, {'id': 'WP5', 'implementation': 'implemented', 'independent_review': 'passed', 'review_date': '2026-10-06', 'review': 'handoff/delivery/WP5_RECHECK.md', 'final_reviews': ['handoff/delivery/WP5_RECHECK.md', 'handoff/delivery/WP5_REVIEW_FINAL.md', 'handoff/delivery/WP5_REVIEW_A2.md'], 'review_history': ['handoff/delivery/WP5_REVIEW_A.md', 'handoff/delivery/WP5_REVIEW_B.md', 'handoff/delivery/WP5_REVIEW_A2.md', 'handoff/delivery/WP5_REVIEW_FINAL.md'], 'gate': 'WP5-REGATE PASS on 9bcdd88 (full) and WP5-REGATE2 PASS on 014bd47 (documentation delta)', 'reviewed_commit': '014bd47a8d906c944d2781eba4f2b91c5a532419', 'reviewed_digest': '150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61', 'unresolved_findings': [], 'pilot_packet': 'handoff/delivery/WP5_PILOT_PACKET.md', 'pilot_status': 'software ready; owner permission not requested yet; no pilot result; NAS NOT VERIFIED', 'carried_risks': ['Owner decisions D-1..D-15 pending; D-1 (R-A3 rollback), D-7 (reminder at-least-once), D-8 (TLS failure class) and D-13 (NAS host) must be answered before activation', 'NAS target NOT VERIFIED until the owner runs the docs/11 checklist and the target restore form', 'R-B5-1/R-F3: image IDs differ per build; record the NAS-built image ID (dist content is byte-identical)', 'R-B5-2/R-F7: base image pin one Debian rebuild behind its tag; decide the refresh before the pilot build', "R-WA1..R-WA3, R-WA8: recovery notice wording, partial leave not on the PDF, never-configured accounts get before-due reminders, automatic PDFs print 'Worked' for empty days", 'R-F2: no documented promotion of restored data to live or re-upgrade after a rollback (not needed for the first period)', 'R-A2-4/R-A2-5: overdue warning may trail its record by one reminder bucket; optional AC-13 test additions', 'R-RC-1..R-RC-6: optional Info wording items from the closing recheck', 'Pilot-relevant WP1-WP4 items per WP5-PLAN section F (break confirmation, stale review after OT changes, sign-off before period end, explicit CLI paths, pre-upgrade backup prune, new restore folder)'], 'handoff': 'handoff/delivery/WP5_HANDOFF.md'}]
+

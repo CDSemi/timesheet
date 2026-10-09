@@ -1,0 +1,54 @@
+"""GOV-SUPERSEDE-GATE scenario check on COPIES of the board and STATE (read-only for the repository)."""
+import copy
+import importlib.util
+import json
+from pathlib import Path
+
+ROOT = Path("D:/Dropbox/Work.CDSemi/timesheet")
+W = Path("D:/.claude-tmp/timesheet/GOV-SUPERSEDE-GATE")
+spec = importlib.util.spec_from_file_location("vo", ROOT / "handoff/delivery/validate_orchestration.py")
+vo = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(vo)
+board0 = json.loads((W / "ORCHESTRATION.copy.json").read_text(encoding="utf-8"))
+state = json.loads((W / "STATE.copy.json").read_text(encoding="utf-8"))
+configured = vo.profiles()
+REPORT = "handoff/delivery/tasks/WP5-UX-AUDIT.md"
+
+
+def pending(name, kind, profile_name, depends_on):
+    profile = configured[profile_name]
+    return {"id": name, "package": "WP5", "kind": kind, "status": "pending", "depends_on": depends_on,
+            "profile": profile_name, "requested_model": profile["model"],
+            "requested_effort": profile["effort"], "model_override_reason": None,
+            "actual_model": None, "actual_source": None, "actual_effort": None, "agent_id": None,
+            "attempt": 0, "owned_paths": [REPORT], "prompt": "handoff/prompts/ORCHESTRATE.md",
+            "report": REPORT, "evidence": [], "next_action": "synthetic pending",
+            "reviewed_digest": None}
+
+
+def build(with_field, status="running"):
+    board = copy.deepcopy(board0)
+    board["current_source_digest"] = "e" * 64
+    gate = pending("WP5-UX-GATE", "gate", "timesheet-verifier", [])
+    del gate["reviewed_digest"]
+    audit = pending("WP5-UX-AUDIT", "audit", "timesheet-auditor", ["WP5-UX-GATE"])
+    board["tasks"] += [gate, audit]
+    board["status"] = status
+    board["next_task_id"] = "WP5-UX-GATE"
+    if with_field:
+        for task in board["tasks"]:
+            if task["id"] == "WP5-RECHECK":
+                task["superseded_by"] = "WP5-UX-AUDIT"
+    return board
+
+
+for label, with_field, status in [
+    ("a accepted: superseded_by on WP5-RECHECK, status running", True, "running"),
+    ("b rejected: no superseded_by on WP5-RECHECK", False, "running"),
+    ("c rejected: status software_ready while WP5-UX-AUDIT pending", True, "software_ready"),
+]:
+    try:
+        result = vo.validate(build(with_field, status), state, configured)
+        print(f"{label}: ACCEPTED {json.dumps(result)}")
+    except ValueError as error:
+        print(f"{label}: REJECTED ({error})")

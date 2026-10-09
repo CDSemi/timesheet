@@ -1,0 +1,75 @@
+# GOV-SUPERSEDE-AUDIT evidence: 99-final.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+## final checks after writing the review pair, the brief results and this evidence
+$ (see each command below)
+2026-10-09T06:05:42Z
+$ <workflow-python> handoff/delivery/validate_package.py --preflight
+{
+  "status": "PASS",
+  "mode": "preflight",
+  "translation_pairs": 93,
+  "local_links": 2114,
+  "ot_scenarios": 33,
+  "time_scenarios": 32,
+  "deficit_scenarios": 16,
+  "ledger_accounting_scenarios": 10,
+  "scenario_total": 91,
+  "application_tests_executed": false
+}
+exit=0
+$ <workflow-python> handoff/delivery/check_recovery.py  (status and count lines only)
+exit=0
+2:  "status": "PASS",
+111:  "count": 106,
+$ <workflow-python> handoff/delivery/validate_orchestration.py
+{
+  "status": "PASS",
+  "profiles": 9,
+  "tasks": 285,
+  "active_tasks": 1,
+  "application_acceptance_verified": false,
+  "claude_runtime_verified": false
+}
+exit=0
+$ git rev-parse HEAD origin/main
+831f760838950a59f0e5c880f0bbefda15fe0c61
+831f760838950a59f0e5c880f0bbefda15fe0c61
+$ node scripts/source-digest.mjs
+3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9  (789 files, handoff/ excluded)
+exit=0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9 *-
+$ git diff --quiet 831f760 -- handoff/delivery/validate_orchestration.py handoff/delivery/check_recovery.py docs .claude src scripts
+exit=0
+$ git status --porcelain -uall -- ':!handoff/delivery/evidence/GOV-SUPERSEDE-FREEZE' ':!handoff/delivery/evidence/GOV-SUPERSEDE-GATE'
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-SUPERSEDE-FREEZE.md
+?? handoff/delivery/GOV_SUPERSEDE_REVIEW.md
+?? handoff/delivery/GOV_SUPERSEDE_REVIEW.vi.md
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/01-before.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/02-scope.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/03-real-checks.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/04-probe-compare.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/05-mutants.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/06-loopholes.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/07-wp5-board-copy.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/08-profiles.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/09-docs08.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/10-board-read.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/11-after-probes.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/audit_lib.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/board_extract.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/board_ux_tasks.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/docs_check.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/loopholes.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/mask_copy.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/mutants.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/probe_compare.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/profile_check.py.txt
+?? handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/real_board_scenarios.py.txt
+?? handoff/delivery/tasks/GOV-SUPERSEDE-AUDIT.md
+?? handoff/delivery/tasks/GOV-SUPERSEDE-GATE.md
+

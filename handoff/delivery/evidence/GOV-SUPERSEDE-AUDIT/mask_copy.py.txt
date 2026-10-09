@@ -1,0 +1,109 @@
+"""GOV-SUPERSEDE-AUDIT: compose masked LF evidence files from task-folder raw logs and copy helper scripts
+as *.py.txt into handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT/ (the only repository path written)."""
+import os
+import re
+import sys
+from pathlib import Path
+
+TASK = Path(__file__).resolve().parent
+REPO = Path(r"<project>")
+OUT = REPO / "handoff/delivery/evidence/GOV-SUPERSEDE-AUDIT"
+USER = os.environ.get("USERNAME", "")
+PY = r"C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+NODE = r"%LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe"
+
+
+def mask(text):
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    for task in (str(TASK), str(TASK).replace("\\", "/"), "<task>"):
+        text = text.replace(task, "<task>")
+    for repo in (str(REPO), str(REPO).replace("\\", "/"), "<project>"):
+        text = text.replace(repo, "<project>")
+    text = re.sub(r"(Users[\\/])[^\\/\s'\"]+", r"\1<user>", text)
+    if USER:
+        text = re.sub(re.escape(USER), "<user>", text, flags=re.I)
+    return text if text.endswith("\n") else text + "\n"
+
+
+def section(title, command, raw, exit_code=None):
+    body = (TASK / raw).read_text(encoding="utf-8", errors="replace")
+    head = f"## {title}\n$ {command}\n" + (f"exit={exit_code}\n" if exit_code is not None else "")
+    return head + body.rstrip("\n") + "\n\n"
+
+
+FILES = {
+    "01-before.txt": [
+        ("identity and digest before any probe (first records of the audit)",
+         "date -u; git rev-parse HEAD; git rev-parse origin/main; git ls-tree -r --format='%(path) %(objectname)' HEAD "
+         "| grep -v '^handoff/' | LC_ALL=C sort | sha256sum", "digest_before.raw"),
+        ("repository digest script", f"{NODE} scripts/source-digest.mjs", "digest_script_before.raw"),
+        ("working tree", "git status --porcelain", "status_before.raw"),
+    ],
+    "02-scope.txt": [("scope and identity 4def605..831f760", "(see each command below)", "scope.raw")],
+    "03-real-checks.txt": [
+        ("check_recovery.py on the real (working-tree) board", f"{PY} handoff/delivery/check_recovery.py",
+         "real_check_recovery.raw", 0),
+        ("validate_orchestration.py on the real board", f"{PY} handoff/delivery/validate_orchestration.py",
+         "real_validate.raw", 0),
+        ("package preflight", f"{PY} handoff/delivery/validate_package.py --preflight", "preflight.raw", 0),
+        ("precommit self-test", f"{NODE} scripts/precommit-check.mjs --self-test", "precommit_selftest.raw", 0),
+    ],
+    "04-probe-compare.txt": [("probe lists 4def605 vs 831f760 (recording harness, real runs) and line diffs",
+                              f"{PY} <task>/probe_compare.py", "probe_compare.raw", 0)],
+    "05-mutants.txt": [("validator mutants on task-folder copies (harness of the reviewed check_recovery.py, HEAD board copy)",
+                        f"{PY} <task>/mutants.py", "mutants.raw", 0)],
+    "06-loopholes.txt": [("independent synthetic scenarios through the reviewed validator",
+                          f"{PY} <task>/loopholes.py", "loopholes.raw", 0)],
+    "07-wp5-board-copy.txt": [("intended WP5 use on copies of the working-tree board and STATE",
+                               f"{PY} <task>/real_board_scenarios.py", "real_board_scenarios.raw", 0)],
+    "08-profiles.txt": [("nine profiles: frontmatter identity, inserted body text, parse",
+                         f"{PY} <task>/profile_check.py", "profile_check.raw", 0)],
+    "09-docs08.txt": [
+        ("docs/08 EN and VI at 4def605 and 831f760", f"{PY} <task>/docs_check.py", "docs_check.raw", 0),
+        ("docs/08 lines naming runtime rules", "git grep -n -i -e runtime -e 'Git Bash' -e cmd.exe -e pipe 831f760 -- "
+         "docs/08_AI_WORKFLOW_AND_BUDGET.md", "doc08_runtime_grep.raw", 0),
+    ],
+    "10-board-read.txt": [("read-only board extract (working tree at audit start)",
+                           f"{PY} <task>/board_extract.py <project>/handoff/delivery/ORCHESTRATION.json",
+                           "board_extract_worktree.raw", 0),
+                          ("WP5-UX tasks and STATE phases (copies)",
+                           f"{PY} <task>/board_ux_tasks.py <task>/worktree_ORCHESTRATION.json <task>/worktree_STATE.json",
+                           "board_ux_tasks.raw", 0)],
+    "11-after-probes.txt": [("identity and digest after all probes", "(see each command below)", "after_probes.raw")],
+    "99-final.txt": [("final checks after writing the review pair, the brief results and this evidence",
+                      "(see each command below)", "final.raw")],
+}
+NOTES = {
+    "06-loopholes.txt": "Note: the first run of loopholes.py reported 6 mismatches caused by my own synthetic data "
+                        "(done FIX REQUIRED / NOT VERIFIED audits without the required source_digest, rejected by the "
+                        "existing 'Gate/audit lacks digest/execution evidence' rule). I added source_digest to those "
+                        "audits; S39 was also re-pointed so that A1 names A9. The run below is the corrected one.\n\n",
+    "07-wp5-board-copy.txt": "Note: the first run rejected d)-h) with 'Durable English brief/result missing: "
+                             "WP5-UX-GATE' because my done placeholders named report files that do not exist; the "
+                             "corrected copy points them at an existing task record. The run below is the corrected one.\n\n",
+}
+SCRIPTS = ["audit_lib.py", "probe_compare.py", "mutants.py", "loopholes.py", "real_board_scenarios.py",
+           "profile_check.py", "docs_check.py", "board_extract.py", "board_ux_tasks.py", "mask_copy.py"]
+
+OUT.mkdir(parents=True, exist_ok=True)
+only = set(sys.argv[1:])
+written = []
+for name, parts in FILES.items():
+    if (only and name not in only) or (not only and name == "99-final.txt"):
+        continue
+    text = f"# GOV-SUPERSEDE-AUDIT evidence: {name}\n# workflow Python: {PY} (3.12.14); Node: {NODE} (v24.21.0)\n\n"
+    text += NOTES.get(name, "")
+    for part in parts:
+        text += section(*part)
+    (OUT / name).write_bytes(mask(text).encode("utf-8"))
+    written.append(name)
+for script in SCRIPTS:
+    if only and f"{script}.txt" not in only:
+        continue
+    source = TASK / script
+    if source.exists():
+        (OUT / f"{script}.txt").write_bytes(mask(source.read_text(encoding="utf-8")).encode("utf-8"))
+        written.append(f"{script}.txt")
+for name in written:
+    data = (OUT / name).read_bytes()
+    print(f"{name}: {len(data)} bytes, CR={data.count(b'\r')}, account name present={USER.lower().encode() in data.lower() if USER else 'n/a'}")

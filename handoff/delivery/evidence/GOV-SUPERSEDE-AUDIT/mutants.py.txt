@@ -1,0 +1,131 @@
+"""GOV-SUPERSEDE-AUDIT scope 2: validator mutants. Each mutant is a COPY of the reviewed validator
+(task-folder new/validate_orchestration.py, equal to 831f760) with one textual change, written to
+mutants/; the recording harness of the reviewed check_recovery.py runs against it. The repository
+file is never written."""
+from pathlib import Path
+
+from audit_lib import TASK, build_harness, run_harness
+
+SOURCE = (TASK / "new" / "validate_orchestration.py").read_text(encoding="utf-8")
+HARNESS = build_harness(TASK / "new" / "check_recovery.py", TASK / "harness_new.py")
+BOARD, STATE = TASK / "new" / "ORCHESTRATION.json", TASK / "new" / "STATE.json"
+
+RULE5 = 'check(not software_ready or (later["status"] == "done" and later.get("decision") == "PASS"),'
+MUTANTS = [
+    # New rules (superseded_by)
+    ("N1", "rule 1: drop the audit-kind check",
+     'check(task["kind"] == "audit", f"superseded_by is only for audit tasks: {name}")',
+     'check(True, f"superseded_by is only for audit tasks: {name}")'),
+    ("N2", "rule 1: drop the done+PASS check",
+     'check(task["status"] == "done" and task.get("decision") == "PASS",',
+     'check(True,'),
+    ("N2a", "rule 1: done of any decision",
+     'check(task["status"] == "done" and task.get("decision") == "PASS",',
+     'check(task["status"] == "done",'),
+    ("N2b", "rule 1: PASS of any status",
+     'check(task["status"] == "done" and task.get("decision") == "PASS",',
+     'check(task.get("decision") == "PASS",'),
+    ("N3", "rule 2: drop the existence test (later may be None)",
+     'check(later is not None and later["kind"] == "audit"',
+     'check(later is None or later["kind"] == "audit"'),
+    ("N3a", "rule 2: target of any kind",
+     'later is not None and later["kind"] == "audit" and later["package"]',
+     'later is not None and later["package"]'),
+    ("N3b", "rule 2: target in any package",
+     ' and later["package"] == task["package"]\n', '\n'),
+    ("N3c", "rule 2: self target allowed",
+     '\n              and target != name,', ','),
+    ("N3d", "rule 2: target may also be in GOV",
+     'later["package"] == task["package"]', 'later["package"] in (task["package"], "GOV")'),
+    ("N3e", "rule 2: non-string target looked up without the type guard",
+     'later = by_id.get(target) if isinstance(target, str) else None',
+     'later = by_id.get(str(target))'),
+    ("N4", "rule 2: chains allowed",
+     'check(later.get("superseded_by") is None, f"superseded_by must not chain: {name}")',
+     'check(True, f"superseded_by must not chain: {name}")'),
+    ("N5", "rule 4: equal digests allowed",
+     'check(later.get("reviewed_digest") is None or later["reviewed_digest"] != task.get("reviewed_digest"),',
+     'check(True,'),
+    ("N6", "rule 5: dropped", RULE5, 'check(True,'),
+    ("N6a", "rule 5: done target of any decision", RULE5,
+     'check(not software_ready or later["status"] == "done",'),
+    ("N6b", "rule 5: PASS target of any status", RULE5,
+     'check(not software_ready or later.get("decision") == "PASS",'),
+    ("N6c", "rule 5: applied before software_ready too", RULE5,
+     'check(later["status"] == "done" and later.get("decision") == "PASS",'),
+    ("N7", "rule 3: every PASS exempt from the stale check",
+     'if task["package"] == active and task.get("superseded_by") is None:', 'if False:'),
+    ("N7a", "rule 3: exemption by key presence (explicit null exempts)",
+     'task.get("superseded_by") is None:', '"superseded_by" not in task:'),
+    ("N7b", "rule 3: no exemption (old behaviour)",
+     ' and task.get("superseded_by") is None:', ':'),
+    ("N7c", "rule 3: the stale check exempts the target instead of the superseded audit",
+     'if task["package"] == active and task.get("superseded_by") is None:',
+     'if task["package"] == active and not any(item.get("superseded_by") == name for item in tasks):'),
+    ("N8", "validate_superseded never called",
+     '    validate_superseded(tasks, by_id, board["status"] == "software_ready")\n', ''),
+    ("N9", "rule 3: superseded PASS no longer satisfies dependencies",
+     'check(by_id[dependency].get("decision") == "PASS", f"Dependency audit not PASS: {name}")',
+     'check(by_id[dependency].get("decision") == "PASS" and by_id[dependency].get("superseded_by") is None, '
+     'f"Dependency audit not PASS: {name}")'),
+    # Existing rules (no weakening): old probes must still kill these
+    ("E1", "author separation dropped",
+     'check(task.get("agent_id") and task["agent_id"] not in authors,', 'check(True,'),
+    ("E2", "audit strength dropped",
+     'check(model_rank(task) >= max(model_rank(item) for item in authors),', 'check(True,'),
+    ("E3", "gate/audit commit binding dropped",
+     'check(reviewed is None or gate.get("freeze_commit") is None or gate["freeze_commit"] == reviewed,',
+     'check(True,'),
+    ("E4", "GOV audit gate binding dropped",
+     'check(any(is_sha(gate.get("freeze_commit")) and gate["freeze_commit"] == reviewed for gate in gates),',
+     'check(True,'),
+    ("E5", "addresses_audit dependency rule dropped",
+     'check(target not in task["depends_on"], f"Fix must not depend on its addresses_audit: {name}")',
+     'check(True, f"Fix must not depend on its addresses_audit: {name}")'),
+    ("E6", "commit-on-main-after-release rule dropped",
+     'check(not (release_declared and task["branch"] == "main"),', 'check(True,'),
+    ("E7", "gate/audit snapshot binding dropped",
+     'check(by_id[dependency]["source_digest"] == task["reviewed_digest"],', 'check(True,'),
+    ("E8", "stale check limited to GOV (active package never checked)",
+     'if task["package"] == active and task.get("superseded_by") is None:',
+     'if task["package"] == GOVERNANCE and task.get("superseded_by") is None:'),
+]
+
+out_dir = TASK / "mutants"
+out_dir.mkdir(exist_ok=True)
+lines = []
+baseline = run_harness(HARNESS, TASK / "new" / "validate_orchestration.py", BOARD, STATE)
+base_wp1 = baseline["results"]["WP1"]
+lines.append(f"BASELINE (unmutated copy): real_board={baseline['real_board']} WP1 passed={len(base_wp1['passed'])} "
+             f"failures={len(base_wp1['failures'])} WP3 passed={len(baseline['results']['WP3']['passed'])}")
+survivors = []
+for ident, label, old, new in MUTANTS:
+    count = SOURCE.count(old)
+    if count != 1:
+        lines.append(f"{ident} BUILD ERROR: pattern found {count} times")
+        continue
+    path = out_dir / f"{ident}_validate_orchestration.py"
+    path.write_text(SOURCE.replace(old, new), encoding="utf-8", newline="\n")
+    data = run_harness(HARNESS, path, BOARD, STATE)
+    if data["exit"] != 0:
+        lines.append(f"{ident} ({label}): KILLED at load, harness exit {data['exit']}: {data['stderr'][-300:]}")
+        continue
+    wp1, wp3 = data["results"]["WP1"], data["results"]["WP3"]
+    killers = [item["probe"] for item in wp1["failures"]]
+    if wp1["aborted"]:
+        killers.append(f"ABORT {wp1['aborted']['error']} at `{wp1['aborted']['line']}`")
+    if data["real_board"] != "PASS":
+        killers.insert(0, f"current board is valid ({data['real_board']})")
+    same = [item["probe"] for item in wp3["failures"]] == [item["probe"] for item in wp1["failures"]]
+    verdict = "KILLED" if killers else "SURVIVED"
+    if not killers:
+        survivors.append(ident)
+    lines.append(f"{ident} ({label}): {verdict}; failing probes {len(killers)}; WP3 rerun same failures: {same}")
+    for item in wp1["failures"]:
+        lines.append(f"    - {item['probe']} -> {item['error'][:160]}")
+    if wp1["aborted"]:
+        lines.append(f"    - ABORT {wp1['aborted']}")
+    if data["real_board"] != "PASS":
+        lines.append(f"    - current board is valid -> {data['real_board']}")
+lines.append(f"mutants: {len(MUTANTS)}; survivors: {survivors}")
+print("\n".join(lines))

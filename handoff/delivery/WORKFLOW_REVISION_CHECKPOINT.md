@@ -88,9 +88,16 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - GOV-SUPERSEDE-FIX done: validate_superseded (six rules) and the stale-PASS exemption;
   probes 87 -> 106; real board passes; docs/08 (+vi); runtime line in eight profiles;
   preflight and verify exit 0; digest 3d274c9e. One harmless `ls | head` slip.
-- Running: GOV-SUPERSEDE-FREEZE (committer) on base 4def605.
-- Next action: on the freeze result, GOV-SUPERSEDE-GATE (verifier) on the freeze commit,
-  then a fresh opus GOV-SUPERSEDE-AUDIT; then WP5-UX-GATE and WP5-UX-AUDIT.
+- GOV-SUPERSEDE-FREEZE done: 831f760 on main, pushed (31 files, digest 3d274c9e, new
+  validator PASS on 283 tasks, 106 probes).
+- GOV-SUPERSEDE-GATE PASS on 831f760 (106 probes; scenarios accepted/rejected as
+  expected; digest 3d274c9e).
+- GOV-SUPERSEDE-AUDIT PASS (fresh opus, no findings; 48 scenarios, 85 earlier probes kept,
+  27/30 mutants killed; R1/R2 optional in the governance backlog; R3 coordinator
+  discipline) at 831f760 / 3d274c9e.
+- Running: GOV-SUPERSEDE-ACCEPT (committer; handoff records only).
+- Next action: write the WP5-UX-GATE brief (full gate on a clean export of 831f760,
+  digest 3d274c9e) and dispatch it; then a fresh opus WP5-UX-AUDIT.
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

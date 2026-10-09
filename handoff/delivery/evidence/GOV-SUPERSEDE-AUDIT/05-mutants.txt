@@ -1,0 +1,144 @@
+# GOV-SUPERSEDE-AUDIT evidence: 05-mutants.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+## validator mutants on task-folder copies (harness of the reviewed check_recovery.py, HEAD board copy)
+$ C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe <task>/mutants.py
+exit=0
+BASELINE (unmutated copy): real_board=PASS WP1 passed=104 failures=0 WP3 passed=104
+N1 (rule 1: drop the audit-kind check): KILLED; failing probes 2; WP3 rerun same failures: True
+    - superseded_by on a non-audit task rejected -> unexpected failure: superseded_by is only for done PASS audits: S-PLAN
+    - superseded_by on a gate rejected -> invalid workflow accepted
+N2 (rule 1: drop the done+PASS check): KILLED; failing probes 2; WP3 rerun same failures: True
+    - superseded_by on a non-PASS audit rejected -> invalid workflow accepted
+    - superseded_by on an unfinished audit rejected -> invalid workflow accepted
+N2a (rule 1: done of any decision): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by on a non-PASS audit rejected -> invalid workflow accepted
+N2b (rule 1: PASS of any status): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by on an unfinished audit rejected -> invalid workflow accepted
+N3 (rule 2: drop the existence test (later may be None)): KILLED; failing probes 2; WP3 rerun same failures: True
+    - superseded_by naming a unknown target rejected -> crash AttributeError: 'NoneType' object has no attribute 'get'
+    - superseded_by naming a non-string target rejected -> crash AttributeError: 'NoneType' object has no attribute 'get'
+N3a (rule 2: target of any kind): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by naming a gate target rejected -> invalid workflow accepted
+N3b (rule 2: target in any package): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by naming an audit of another package rejected -> invalid workflow accepted
+N3c (rule 2: self target allowed): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by naming a self target rejected -> unexpected failure: superseded_by must not chain: S-AUDIT
+N3d (rule 2: target may also be in GOV): SURVIVED; failing probes 0; WP3 rerun same failures: True
+N3e (rule 2: non-string target looked up without the type guard): SURVIVED; failing probes 0; WP3 rerun same failures: True
+N4 (rule 2: chains allowed): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by chain rejected -> invalid workflow accepted
+N5 (rule 4: equal digests allowed): KILLED; failing probes 1; WP3 rerun same failures: True
+    - superseded_by target with the same reviewed digest rejected -> invalid workflow accepted
+N6 (rule 5: dropped): KILLED; failing probes 2; WP3 rerun same failures: True
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Required tasks remain
+    - software_ready with a non-PASS superseded_by target rejected -> invalid workflow accepted
+N6a (rule 5: done target of any decision): KILLED; failing probes 1; WP3 rerun same failures: True
+    - software_ready with a non-PASS superseded_by target rejected -> invalid workflow accepted
+N6b (rule 5: PASS target of any status): KILLED; failing probes 1; WP3 rerun same failures: True
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Required tasks remain
+N6c (rule 5: applied before software_ready too): KILLED; failing probes 2; WP3 rerun same failures: True
+    - superseded_by naming a pending audit accepted before software_ready -> ValueError: superseded_by target must be a done PASS audit when software_ready: S-AUDIT
+    - superseded_by naming a non-PASS audit accepted before software_ready -> ValueError: superseded_by target must be a done PASS audit when software_ready: S-AUDIT
+N7 (rule 3: every PASS exempt from the stale check): KILLED; failing probes 3; WP3 rerun same failures: True
+    - stale audit PASS -> invalid workflow accepted
+    - stale PASS without superseded_by still rejected -> invalid workflow accepted
+    - current PASS target stale against the current digest rejected -> invalid workflow accepted
+N7a (rule 3: exemption by key presence (explicit null exempts)): SURVIVED; failing probes 0; WP3 rerun same failures: True
+N7b (rule 3: no exemption (old behaviour)): KILLED; failing probes 17; WP3 rerun same failures: True
+    - superseded done PASS audit with a stale digest beside a current PASS audit accepted -> ValueError: Stale PASS: S-AUDIT
+    - current PASS target stale against the current digest rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a pending audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    - superseded_by naming a non-PASS audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    - superseded_by on a non-audit task rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on a gate rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on a non-PASS audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on an unfinished audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a unknown target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a gate target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a non-string target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a self target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming an audit of another package rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by chain rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - software_ready with a superseded audit and a done PASS target accepted -> ValueError: Stale PASS: S-AUDIT
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - software_ready with a non-PASS superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+N7c (rule 3: the stale check exempts the target instead of the superseded audit): KILLED; failing probes 16; WP3 rerun same failures: True
+    - superseded done PASS audit with a stale digest beside a current PASS audit accepted -> ValueError: Stale PASS: S-AUDIT
+    - current PASS target stale against the current digest rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a pending audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    - superseded_by naming a non-PASS audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    - superseded_by on a non-audit task rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on a gate rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on a non-PASS audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by on an unfinished audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a unknown target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a gate target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming a non-string target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by naming an audit of another package rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - superseded_by chain rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - software_ready with a superseded audit and a done PASS target accepted -> ValueError: Stale PASS: S-AUDIT
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    - software_ready with a non-PASS superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+N8 (validate_superseded never called): KILLED; failing probes 13; WP3 rerun same failures: True
+    - superseded_by on a non-audit task rejected -> invalid workflow accepted
+    - superseded_by on a gate rejected -> invalid workflow accepted
+    - superseded_by on a non-PASS audit rejected -> invalid workflow accepted
+    - superseded_by on an unfinished audit rejected -> invalid workflow accepted
+    - superseded_by naming a unknown target rejected -> invalid workflow accepted
+    - superseded_by naming a gate target rejected -> invalid workflow accepted
+    - superseded_by naming a non-string target rejected -> invalid workflow accepted
+    - superseded_by naming a self target rejected -> invalid workflow accepted
+    - superseded_by naming an audit of another package rejected -> invalid workflow accepted
+    - superseded_by chain rejected -> invalid workflow accepted
+    - superseded_by target with the same reviewed digest rejected -> invalid workflow accepted
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Required tasks remain
+    - software_ready with a non-PASS superseded_by target rejected -> invalid workflow accepted
+N9 (rule 3: superseded PASS no longer satisfies dependencies): KILLED; failing probes 17; WP3 rerun same failures: True
+    - superseded done PASS audit with a stale digest beside a current PASS audit accepted -> ValueError: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a pending audit accepted before software_ready -> ValueError: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a non-PASS audit accepted before software_ready -> ValueError: Dependency audit not PASS: S-COMMIT
+    - superseded_by on a non-audit task rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by on a gate rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by on a non-PASS audit rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by on an unfinished audit rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a unknown target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a gate target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a non-string target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming a self target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by naming an audit of another package rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by chain rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - superseded_by target with the same reviewed digest rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - software_ready with a superseded audit and a done PASS target accepted -> ValueError: Dependency audit not PASS: S-COMMIT
+    - software_ready with a pending superseded_by target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+    - software_ready with a non-PASS superseded_by target rejected -> unexpected failure: Dependency audit not PASS: S-COMMIT
+E1 (author separation dropped): KILLED; failing probes 3; WP3 rerun same failures: True
+    - self audit -> invalid workflow accepted
+    - documentation author auditing its own change rejected without author_agent_ids -> invalid workflow accepted
+    - previous-attempt author auditing the package rejected -> invalid workflow accepted
+E2 (audit strength dropped): KILLED; failing probes 5; WP3 rerun same failures: True
+    - audit weaker than author rejected -> invalid workflow accepted
+    - fallback_unavailable cannot bypass audit strength for an Opus author -> invalid workflow accepted
+    - Opus planner/documentation author also protects audit strength -> invalid workflow accepted
+    - requested-model rank also protects audit strength -> invalid workflow accepted
+    - Opus documentation author raises the audit strength floor -> invalid workflow accepted
+E3 (gate/audit commit binding dropped): KILLED; failing probes 2; WP3 rerun same failures: True
+    - done GOV audit whose gate freeze_commit differs (same digest) rejected -> unexpected failure: Governance audit needs a gate dependency whose freeze_commit equals reviewed_commit: S-AUDIT
+    - work-package audit and gate with different commits rejected -> invalid workflow accepted
+E4 (GOV audit gate binding dropped): KILLED; failing probes 2; WP3 rerun same failures: True
+    - done GOV audit whose gate lacks freeze_commit rejected -> invalid workflow accepted
+    - done GOV audit with gate_included and no gate dependency rejected -> invalid workflow accepted
+E5 (addresses_audit dependency rule dropped): KILLED; failing probes 1; WP3 rerun same failures: True
+    - fix depending on the audit it addresses rejected -> invalid workflow accepted
+E6 (commit-on-main-after-release rule dropped): KILLED; failing probes 1; WP3 rerun same failures: True
+    - commit on main after release_declared rejected -> invalid workflow accepted
+E7 (gate/audit snapshot binding dropped): KILLED; failing probes 1; WP3 rerun same failures: True
+    - gate and audit on different snapshots -> invalid workflow accepted
+E8 (stale check limited to GOV (active package never checked)): KILLED; failing probes 5; WP3 rerun same failures: True
+    - stale audit PASS -> invalid workflow accepted
+    - GOV PASS is not invalidated by a changed source digest -> ValueError: Stale PASS: S-AUDIT
+    - stale PASS without superseded_by still rejected -> invalid workflow accepted
+    - current PASS target stale against the current digest rejected -> invalid workflow accepted
+    - current board is valid -> ValueError: Stale PASS: WF-AUDIT3
+mutants: 30; survivors: ['N3d', 'N3e', 'N7a']
+

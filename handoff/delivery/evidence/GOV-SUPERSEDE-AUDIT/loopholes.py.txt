@@ -1,0 +1,404 @@
+"""GOV-SUPERSEDE-AUDIT scopes 1 and 3: independent synthetic boards (own builders, not check_recovery's)
+run through the reviewed validator (repository file, loaded read-only without bytecode). Each scenario
+records the observed outcome and the outcome expected from the GOV-SUPERSEDE-FIX rules. No repo write."""
+import copy
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+TASK = Path(__file__).resolve().parent
+REPO = Path(r"<project>")
+spec = importlib.util.spec_from_file_location("validator", REPO / "handoff/delivery/validate_orchestration.py")
+v = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(v)
+configured = v.profiles()
+HEAD_BOARD = json.loads((TASK / "new" / "ORCHESTRATION.json").read_text(encoding="utf-8"))
+HEAD_STATE = json.loads((TASK / "new" / "STATE.json").read_text(encoding="utf-8"))
+REPORT = "handoff/delivery/WP1_HANDOFF.md"
+EVIDENCE = "handoff/delivery/evidence/WP1-review-codex/typecheck.txt"
+PROMPT = "handoff/prompts/ORCHESTRATE.md"
+PROFILE_OF = {"plan": "timesheet-planner", "implement": "timesheet-worker-high", "fix": "timesheet-worker-high",
+              "gate": "timesheet-verifier", "audit": "timesheet-auditor", "documentation": "timesheet-worker",
+              "commit": "timesheet-committer"}
+A, B, C, X, Y = "a" * 64, "b" * 64, "c" * 64, "1" * 40, "2" * 40
+D1, D2 = "d" * 64, "e" * 64
+
+
+def mk(name, kind, deps, package="WP5", **fields):
+    profile = configured[PROFILE_OF[kind]]
+    task = {"id": name, "package": package, "kind": kind, "status": "pending", "depends_on": deps,
+            "profile": profile["name"], "requested_model": profile["model"], "requested_effort": profile["effort"],
+            "model_override_reason": None, "actual_model": None, "actual_source": None, "actual_effort": None,
+            "agent_id": None, "attempt": 0, "owned_paths": [REPORT], "prompt": PROMPT, "report": REPORT,
+            "evidence": [], "next_action": "synthetic"}
+    task.update(fields)
+    return task
+
+
+def done(task, agent, **fields):
+    task.update(status="done", attempt=1, agent_id=agent, **fields)
+    if task["kind"] in {"gate", "audit"}:
+        task.setdefault("evidence", [])
+        task["evidence"] = [EVIDENCE]
+    return task
+
+
+def state_for(ready=False):
+    value = copy.deepcopy(HEAD_STATE)
+    value["active_work_package"] = "WP5"
+    value["phases"] = [{"id": name, "independent_review": "passed" if ready or name != "WP5" else "not_started"}
+                       for name in v.PACKAGES]
+    return value
+
+
+def base():
+    """WP5 active. A1 accepted digest A; D1 (like WP5-ACCREC) depends on A1; a later change I2 is gated
+    at digest B (current); the re-audit A2 is pending; A1.superseded_by = A2."""
+    tasks = [
+        done(mk("P", "plan", []), "a-plan"),
+        done(mk("I1", "implement", ["P"]), "a-impl1"),
+        done(mk("G1", "gate", ["I1"]), "a-g1", decision="PASS", source_digest=A),
+        done(mk("A1", "audit", ["G1"]), "a-aud1", decision="PASS", source_digest=A, reviewed_digest=A,
+             superseded_by="A2"),
+        done(mk("D1", "documentation", ["A1"]), "a-doc"),
+        done(mk("C1", "commit", ["D1"]), "a-c1", commit_sha=X, pushed=True, branch="main"),
+        done(mk("I2", "implement", ["C1"]), "a-impl2"),
+        done(mk("G2", "gate", ["I2"]), "a-g2", decision="PASS", source_digest=B),
+        mk("A2", "audit", ["G2"]),
+        mk("N", "plan", ["A2"]),
+    ]
+    board = copy.deepcopy(HEAD_BOARD)
+    board.update(status="running", tasks=tasks, auxiliary_lookups=[], active_package="WP5", next_task_id="A2",
+                 current_source_digest=B,
+                 git={"branch": "main", "release_declared": False, "last_commit": X, "unpushed": []})
+    return board, state_for()
+
+
+def t(board, name):
+    return next(task for task in board["tasks"] if task["id"] == name)
+
+
+def a2_pass(board, digest=B, agent="a-aud2"):
+    done(t(board, "A2"), agent, decision="PASS", source_digest=digest, reviewed_digest=digest)
+
+
+def ready(board):
+    for task in board["tasks"]:
+        if task["status"] not in {"done", "cancelled"}:
+            task["status"] = "cancelled"
+    board.update(status="software_ready", next_task_id=None)
+    return state_for(ready=True)
+
+
+def gov(board, same_digest=False):
+    board["tasks"] += [
+        done(mk("GI1", "implement", [], package="GOV"), "g-impl"),
+        done(mk("GG1", "gate", ["GI1"], package="GOV"), "g-g1", decision="PASS", source_digest=D1, freeze_commit=X),
+        done(mk("GA1", "audit", ["GG1"], package="GOV"), "g-a1", decision="PASS", source_digest=D1,
+             reviewed_digest=D1, reviewed_commit=X),
+        done(mk("GG2", "gate", ["GI1"], package="GOV"), "g-g2", decision="PASS",
+             source_digest=D1 if same_digest else D2, freeze_commit=Y),
+        done(mk("GA2", "audit", ["GG2"], package="GOV"), "g-a2", decision="PASS",
+             source_digest=D1 if same_digest else D2, reviewed_digest=D1 if same_digest else D2, reviewed_commit=Y),
+    ]
+
+
+SCENARIOS = []
+
+
+def scenario(code, label, expected):
+    def wrap(func):
+        SCENARIOS.append((code, label, expected, func))
+        return func
+    return wrap
+
+
+@scenario("S00", "rule 3 accepted: stale A1 superseded by pending A2; D1 (depends on A1) stays valid", "ACCEPT")
+def _(b, s):
+    pass
+
+
+@scenario("S01", "no weakening: same board without superseded_by", "Stale PASS: A1")
+def _(b, s):
+    t(b, "A1").pop("superseded_by")
+
+
+@scenario("S02", "explicit null superseded_by is treated as absent", "Stale PASS: A1")
+def _(b, s):
+    t(b, "A1")["superseded_by"] = None
+
+
+@scenario("S03", "target never runs: A2 cancelled while running (spec: only checked at software_ready)", "ACCEPT")
+def _(b, s):
+    t(b, "A2")["status"] = "cancelled"
+    t(b, "N")["depends_on"] = []
+    b["next_task_id"] = "N"
+
+
+@scenario("S04", "target blocked while running", "ACCEPT")
+def _(b, s):
+    t(b, "A2")["status"] = "blocked"
+
+
+@scenario("S05", "target interrupted while running", "ACCEPT")
+def _(b, s):
+    t(b, "A2").update(status="interrupted", attempt=1, agent_id="a-aud2")
+
+
+@scenario("S06", "target running", "ACCEPT")
+def _(b, s):
+    t(b, "A2").update(status="running", attempt=1, agent_id="a-aud2")
+
+
+@scenario("S07", "rule 5 accepted: software_ready with A2 done PASS at the current digest", "ACCEPT")
+def _(b, s):
+    a2_pass(b)
+    return ready(b)
+
+
+@scenario("S08", "rule 5: software_ready with A2 cancelled", "superseded_by target must be a done PASS audit when software_ready: A1")
+def _(b, s):
+    t(b, "N")["depends_on"] = []
+    return ready(b)
+
+
+@scenario("S09", "rule 5: software_ready with A2 done FIX REQUIRED", "superseded_by target must be a done PASS audit when software_ready: A1")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="FIX REQUIRED", source_digest=B)
+    t(b, "N")["depends_on"] = []
+    return ready(b)
+
+
+@scenario("S10", "rule 5: software_ready with A2 done NOT VERIFIED", "superseded_by target must be a done PASS audit when software_ready: A1")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="NOT VERIFIED", source_digest=B)
+    t(b, "N")["depends_on"] = []
+    return ready(b)
+
+
+@scenario("S11", "rule 5: software_ready with A2 still pending (rule 5 fires before 'Required tasks remain')", "superseded_by target must be a done PASS audit when software_ready: A1")
+def _(b, s):
+    b.update(status="software_ready", next_task_id=None)
+    t(b, "N")["status"] = "cancelled"
+    return state_for(ready=True)
+
+
+@scenario("S12", "re-audit failed then passed: A1 re-pointed to A3 (done PASS, digest C) at software_ready", "ACCEPT")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="FIX REQUIRED", source_digest=B)
+    b["tasks"] += [done(mk("F3", "fix", [], addresses_audit="A2"), "a-fix3"),
+                   done(mk("G3", "gate", ["F3"]), "a-g3", decision="PASS", source_digest=C),
+                   done(mk("A3", "audit", ["G3"]), "a-aud3", decision="PASS", source_digest=C, reviewed_digest=C)]
+    t(b, "A1")["superseded_by"] = "A3"
+    t(b, "N")["depends_on"] = ["A3"]
+    b["current_source_digest"] = C
+    return ready(b)
+
+
+@scenario("S12b", "same as S12 but A1 still names the failed A2", "superseded_by target must be a done PASS audit when software_ready: A1")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="FIX REQUIRED", source_digest=B)
+    b["tasks"] += [done(mk("F3", "fix", [], addresses_audit="A2"), "a-fix3"),
+                   done(mk("G3", "gate", ["F3"]), "a-g3", decision="PASS", source_digest=C),
+                   done(mk("A3", "audit", ["G3"]), "a-aud3", decision="PASS", source_digest=C, reviewed_digest=C)]
+    t(b, "N")["depends_on"] = ["A3"]
+    b["current_source_digest"] = C
+    return ready(b)
+
+
+for code, target in [("S13", "G2"), ("S14", "I2"), ("S15", "D1"), ("S16", "C1"), ("S17", ""), ("S18", 5),
+                     ("S19", "N"), ("S19b", "MISSING"), ("S19c", "A1")]:
+    def _(b, s, target=target):
+        t(b, "A1")["superseded_by"] = target
+    scenario(code, f"rule 2: target {target!r}", "superseded_by must name another existing audit of the same package: A1")(_)
+
+
+@scenario("S20", "rule 2 chain: A1 -> A2 (done PASS, current) -> A3 (pending)", "superseded_by must not chain: A1")
+def _(b, s):
+    a2_pass(b)
+    t(b, "A2")["superseded_by"] = "A3"
+    b["tasks"].append(mk("A3", "audit", ["G2"]))
+    t(b, "N")["depends_on"] = ["A3"]
+    b["next_task_id"] = "A3"
+
+
+@scenario("S21", "rule 2 cycle: A1 -> A2 and A2 -> A1", "superseded_by must not chain: A1")
+def _(b, s):
+    a2_pass(b)
+    t(b, "A2")["superseded_by"] = "A1"
+    b["next_task_id"] = "N"
+
+
+@scenario("S22", "fan-in: two old PASS audits superseded by the same A2", "ACCEPT")
+def _(b, s):
+    extra = copy.deepcopy(t(b, "A1"))
+    extra.update(id="A0", agent_id="a-aud0")
+    b["tasks"].insert(4, extra)
+
+
+@scenario("S23", "chain through a third audit: X0 -> A1 (itself superseded)", "superseded_by must not chain: X0")
+def _(b, s):
+    extra = copy.deepcopy(t(b, "A1"))
+    extra.update(id="X0", agent_id="a-audx", superseded_by="A1")
+    b["tasks"].insert(4, extra)
+
+
+@scenario("S24", "rule 4: A2 done PASS at the superseded digest A (current A)", "superseded_by target must review a different digest: A1")
+def _(b, s):
+    t(b, "G2")["source_digest"] = A
+    a2_pass(b, digest=A)
+    b["current_source_digest"] = A
+    b["next_task_id"] = "N"
+
+
+@scenario("S25", "rule 4: A2 pending with a pre-recorded reviewed_digest equal to A1's", "superseded_by target must review a different digest: A1")
+def _(b, s):
+    t(b, "A2")["reviewed_digest"] = A
+
+
+@scenario("S26", "GOV: GA1 superseded by GA2 (distinct digests and commits)", "ACCEPT")
+def _(b, s):
+    gov(b)
+    t(b, "GA1")["superseded_by"] = "GA2"
+
+
+@scenario("S27", "GOV: GA1 and GA2 share a digest (handoff-only change), commits differ; rule 4 applies to digests", "superseded_by target must review a different digest: GA1")
+def _(b, s):
+    gov(b, same_digest=True)
+    t(b, "GA1")["superseded_by"] = "GA2"
+
+
+@scenario("S28", "rule 2: WP5 audit superseded by a GOV audit", "superseded_by must name another existing audit of the same package: A1")
+def _(b, s):
+    gov(b)
+    t(b, "A1")["superseded_by"] = "GA2"
+
+
+@scenario("S29", "rule 2: GOV audit superseded by a WP5 audit", "superseded_by must name another existing audit of the same package: GA1")
+def _(b, s):
+    gov(b)
+    a2_pass(b)
+    t(b, "GA1")["superseded_by"] = "A2"
+    b["next_task_id"] = "N"
+
+
+@scenario("S30", "author separation unchanged: the re-audit A2 run by an author of the package", "Auditor is author or identity unknown: A2")
+def _(b, s):
+    a2_pass(b, agent="a-impl2")
+    b["next_task_id"] = "N"
+
+
+@scenario("S31", "same auditor identity for A1 and A2 (not an author)", "ACCEPT")
+def _(b, s):
+    a2_pass(b, agent="a-aud1")
+    b["next_task_id"] = "N"
+
+
+@scenario("S32", "audit strength unchanged: Sonnet re-audit with an Opus author", "Audit model weaker than author model: A2")
+def _(b, s):
+    t(b, "I2").update(actual_model="claude-opus-5-5", actual_source="self_reported")
+    a2_pass(b)
+    t(b, "A2").update(actual_model="claude-sonnet-5-5", actual_source="self_reported")
+    b["next_task_id"] = "N"
+
+
+@scenario("S33", "new dependent D2 on the superseded A1 while A2 is FIX REQUIRED (rule 3 counts it as PASS)", "ACCEPT")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="FIX REQUIRED", source_digest=B)
+    t(b, "N")["depends_on"] = []
+    b["tasks"].append(done(mk("D2", "documentation", ["A1"]), "a-doc2"))
+    b["next_task_id"] = "N"
+
+
+@scenario("S34", "new commit depending on the superseded A1 while A2 is pending", "ACCEPT")
+def _(b, s):
+    b["tasks"].append(done(mk("C2", "commit", ["A1"]), "a-c2", commit_sha=Y, pushed=True, branch="main"))
+
+
+@scenario("S35", "non-active package: WP4 PASS superseded by a WP4 PASS at a non-current digest, software_ready", "ACCEPT")
+def _(b, s):
+    b["tasks"] += [done(mk("W4I", "implement", [], package="WP4"), "w4-impl"),
+                   done(mk("W4G1", "gate", ["W4I"], package="WP4"), "w4-g1", decision="PASS", source_digest=D1),
+                   done(mk("W4A1", "audit", ["W4G1"], package="WP4"), "w4-a1", decision="PASS", source_digest=D1,
+                        reviewed_digest=D1, superseded_by="W4A2"),
+                   done(mk("W4G2", "gate", ["W4I"], package="WP4"), "w4-g2", decision="PASS", source_digest=D2),
+                   done(mk("W4A2", "audit", ["W4G2"], package="WP4"), "w4-a2", decision="PASS", source_digest=D2,
+                        reviewed_digest=D2)]
+    a2_pass(b)
+    return ready(b)
+
+
+@scenario("S36", "superseded audit that is not stale (A1 digest = current) with a pending target", "ACCEPT")
+def _(b, s):
+    b["current_source_digest"] = A
+    t(b, "G2")["source_digest"] = A
+
+
+@scenario("S37", "rule 1: superseded_by on a pending audit", "superseded_by is only for done PASS audits: A9")
+def _(b, s):
+    b["tasks"].append(mk("A9", "audit", ["G2"], superseded_by="A2"))
+
+
+@scenario("S38", "rule 1: superseded_by on a running audit", "superseded_by is only for done PASS audits: A2")
+def _(b, s):
+    t(b, "A1").pop("superseded_by")
+    b["tasks"].append(done(mk("A9", "audit", ["G2"]), "a-aud9", decision="PASS", source_digest=B, reviewed_digest=B))
+    t(b, "A1")["superseded_by"] = "A9"
+    t(b, "A2").update(status="running", attempt=1, agent_id="a-aud2", superseded_by="A9")
+
+
+@scenario("S39", "rule 1: superseded_by on a done FIX REQUIRED audit", "superseded_by is only for done PASS audits: A2")
+def _(b, s):
+    done(t(b, "A2"), "a-aud2", decision="FIX REQUIRED", source_digest=B, superseded_by="A9")
+    t(b, "A1")["superseded_by"] = "A9"
+    t(b, "N")["depends_on"] = []
+    b["tasks"].append(mk("A9", "audit", ["G2"]))
+    b["next_task_id"] = "A9"
+
+
+@scenario("S40", "rule 1: superseded_by on a done gate", "superseded_by is only for audit tasks: G1")
+def _(b, s):
+    t(b, "G1")["superseded_by"] = "A2"
+
+
+@scenario("S41", "existing PASS-digest rule still binds the superseded audit", "PASS digest mismatch: A1")
+def _(b, s):
+    t(b, "A1")["source_digest"] = C
+
+
+@scenario("S42", "existing gate/audit snapshot rule still binds the superseded audit", "Gate/audit snapshot mismatch: A1")
+def _(b, s):
+    t(b, "G1")["source_digest"] = C
+
+
+@scenario("S43", "software_ready: target done PASS but stale against the current digest", "Stale PASS: A2")
+def _(b, s):
+    a2_pass(b)
+    b["current_source_digest"] = C
+    return ready(b)
+
+
+@scenario("S44", "dependency on a superseded audit that was not PASS is impossible (rule 1 first)", "superseded_by is only for done PASS audits: A1")
+def _(b, s):
+    t(b, "A1")["decision"] = "NOT VERIFIED"
+    t(b, "D1")["depends_on"] = []
+
+
+results = []
+mismatch = 0
+for code, label, expected, func in SCENARIOS:
+    board, state = base()
+    new_state = func(board, state)
+    state = new_state or state
+    try:
+        v.validate(board, state, configured)
+        observed = "ACCEPT"
+    except ValueError as error:
+        observed = f"REJECT: {error}"
+    ok = observed == "ACCEPT" if expected == "ACCEPT" else (observed.startswith("REJECT") and expected in observed)
+    mismatch += not ok
+    results.append(f"{code} {'OK ' if ok else 'MISMATCH'} expected={expected!r} observed={observed!r} :: {label}")
+print("\n".join(results))
+print(f"scenarios={len(SCENARIOS)} mismatches={mismatch}")

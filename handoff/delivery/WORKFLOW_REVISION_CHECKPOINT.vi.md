@@ -87,9 +87,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - GOV-SUPERSEDE-FIX xong: validate_superseded (sáu quy tắc) và miễn kiểm tra stale-PASS;
   probe 87 -> 106; board thật vẫn đạt; docs/08 (+vi); dòng quy tắc trong tám profile;
   preflight và verify exit 0; digest 3d274c9e. Một lần lỡ `ls | head`, vô hại.
-- Đang chạy: GOV-SUPERSEDE-FREEZE (committer) trên gốc 4def605.
-- Bước kế tiếp: khi có kết quả freeze, GOV-SUPERSEDE-GATE (verifier) trên commit freeze,
-  rồi audit opus độc lập GOV-SUPERSEDE-AUDIT; sau đó WP5-UX-GATE và WP5-UX-AUDIT.
+- GOV-SUPERSEDE-FREEZE xong: 831f760 trên main, đã push (31 file, digest 3d274c9e,
+  validator mới PASS trên 283 task, 106 probe).
+- GOV-SUPERSEDE-GATE PASS trên 831f760 (106 probe; các tình huống chấp nhận/từ chối đúng
+  dự kiến; digest 3d274c9e).
+- GOV-SUPERSEDE-AUDIT PASS (opus mới, không có finding; 48 tình huống, giữ 85 probe cũ,
+  diệt 27/30 mutant; R1/R2 tùy chọn trong governance backlog; R3 là kỷ luật của
+  coordinator) tại 831f760 / 3d274c9e.
+- Đang chạy: GOV-SUPERSEDE-ACCEPT (committer; chỉ bản ghi handoff).
+- Bước kế tiếp: viết brief WP5-UX-GATE (gate đầy đủ trên bản export sạch của 831f760,
+  digest 3d274c9e) và giao; sau đó audit opus độc lập WP5-UX-AUDIT.
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

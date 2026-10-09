@@ -1,0 +1,68 @@
+# GOV-SUPERSEDE-AUDIT evidence: 04-probe-compare.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+## probe lists 4def605 vs 831f760 (recording harness, real runs) and line diffs
+$ C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe <task>/probe_compare.py
+exit=0
+old_suite+old_validator+old_board [WP1]: real_board=PASS passed=85 failures=0 aborted=None
+old_suite+old_validator+old_board [WP3]: real_board=PASS passed=85 failures=0 aborted=None
+new_suite+new_validator+head_board [WP1]: real_board=PASS passed=104 failures=0 aborted=None
+new_suite+new_validator+head_board [WP3]: real_board=PASS passed=104 failures=0 aborted=None
+new_suite+new_validator+worktree_board [WP1]: real_board=PASS passed=104 failures=0 aborted=None
+new_suite+new_validator+worktree_board [WP3]: real_board=PASS passed=104 failures=0 aborted=None
+old_suite+new_validator+head_board [WP1]: real_board=PASS passed=85 failures=0 aborted=None
+old_suite+new_validator+head_board [WP3]: real_board=PASS passed=85 failures=0 aborted=None
+new_suite+old_validator+old_board [WP1]: real_board=PASS passed=86 failures=18 aborted=None
+new_suite+old_validator+old_board [WP3]: real_board=PASS passed=86 failures=18 aborted=None
+    WP1 failure: superseded done PASS audit with a stale digest beside a current PASS audit accepted -> ValueError: Stale PASS: S-AUDIT
+    WP1 failure: current PASS target stale against the current digest rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a pending audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a non-PASS audit accepted before software_ready -> ValueError: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by on a non-audit task rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by on a gate rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by on a non-PASS audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by on an unfinished audit rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a unknown target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a gate target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a non-string target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming a self target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by naming an audit of another package rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by chain rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: superseded_by target with the same reviewed digest rejected -> invalid workflow accepted
+    WP1 failure: software_ready with a superseded audit and a done PASS target accepted -> ValueError: Stale PASS: S-AUDIT
+    WP1 failure: software_ready with a pending superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+    WP1 failure: software_ready with a non-PASS superseded_by target rejected -> unexpected failure: Stale PASS: S-AUDIT
+
+recorded accepts/rejects probes per suite run: old=78 new=97; duplicates old=0 new=0
+passed probes per suite run (all kinds): old=85 new=104
+old probes missing in new: 0 []
+old probes with a changed kind or expected text: 0 []
+old order kept in new: True
+old passed names (incl. non-accepts/rejects probes) missing in new: []
+added probes: 19
+  + accepts: superseded done PASS audit with a stale digest beside a current PASS audit accepted
+  + rejects: stale PASS without superseded_by still rejected  [expects: Stale PASS: S-AUDIT]
+  + rejects: current PASS target stale against the current digest rejected  [expects: Stale PASS: S-AUDIT2]
+  + accepts: superseded_by naming a pending audit accepted before software_ready
+  + accepts: superseded_by naming a non-PASS audit accepted before software_ready
+  + rejects: superseded_by on a non-audit task rejected  [expects: superseded_by is only for audit tasks]
+  + rejects: superseded_by on a gate rejected  [expects: superseded_by is only for audit tasks]
+  + rejects: superseded_by on a non-PASS audit rejected  [expects: superseded_by is only for done PASS audits]
+  + rejects: superseded_by on an unfinished audit rejected  [expects: superseded_by is only for done PASS audits]
+  + rejects: superseded_by naming a unknown target rejected  [expects: superseded_by must name another existing audit of the same package]
+  + rejects: superseded_by naming a gate target rejected  [expects: superseded_by must name another existing audit of the same package]
+  + rejects: superseded_by naming a non-string target rejected  [expects: superseded_by must name another existing audit of the same package]
+  + rejects: superseded_by naming a self target rejected  [expects: superseded_by must name another existing audit of the same package]
+  + rejects: superseded_by naming an audit of another package rejected  [expects: superseded_by must name another existing audit of the same package]
+  + rejects: superseded_by chain rejected  [expects: superseded_by must not chain: S-AUDIT]
+  + rejects: superseded_by target with the same reviewed digest rejected  [expects: superseded_by target must review a different digest]
+  + accepts: software_ready with a superseded audit and a done PASS target accepted
+  + rejects: software_ready with a pending superseded_by target rejected  [expects: superseded_by target must be a done PASS audit when software_ready]
+  + rejects: software_ready with a non-PASS superseded_by target rejected  [expects: superseded_by target must be a done PASS audit when software_ready]
+
+real check_recovery.py run: status=PASS count=106; harness WP3 list equals real list[1:-1]: True
+check_recovery.py 4def605 -> 831f760 non-equal opcodes (tag, old lines, new lines): [('insert', 354, 353, 354, 444)]
+validate_orchestration.py 4def605 -> 831f760 non-equal opcodes (tag, old lines, new lines): [('insert', 192, 191, 192, 214), ('replace', 294, 294, 317, 317), ('insert', 324, 323, 347, 347)]
+    old 294:                 if task["package"] == active:
+    new 317:                 if task["package"] == active and task.get("superseded_by") is None:
+

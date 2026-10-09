@@ -1,0 +1,23 @@
+"""Read-only extraction of board entries relevant to GOV-SUPERSEDE-AUDIT (no writes to the repo)."""
+import json
+import sys
+from pathlib import Path
+
+board_path = Path(sys.argv[1])
+board = json.loads(board_path.read_text(encoding="utf-8"))
+out = {}
+decisions = board.get("coordinator_decisions", [])
+out["coordinator_decisions_matching"] = [item for item in decisions if "superseded" in json.dumps(item)]
+by_id = {task["id"]: task for task in board["tasks"]}
+for name in ["WP5-RECHECK", "WP5-ACCREC", "GOV-SUPERSEDE-FIX", "GOV-SUPERSEDE-FREEZE", "GOV-SUPERSEDE-GATE",
+             "GOV-SUPERSEDE-AUDIT"]:
+    out[name] = by_id.get(name)
+out["tasks_with_superseded_by"] = [task["id"] for task in board["tasks"] if "superseded_by" in task]
+out["status"] = board.get("status")
+out["active_package"] = board.get("active_package")
+out["current_source_digest"] = board.get("current_source_digest")
+out["next_task_id"] = board.get("next_task_id")
+out["wp5_audits"] = [(task["id"], task["status"], task.get("decision"), (task.get("reviewed_digest") or "")[:8])
+                     for task in board["tasks"] if task["package"] == "WP5" and task["kind"] == "audit"]
+out["dependents_of_WP5_RECHECK"] = [task["id"] for task in board["tasks"] if "WP5-RECHECK" in task["depends_on"]]
+print(json.dumps(out, indent=2, ensure_ascii=False))

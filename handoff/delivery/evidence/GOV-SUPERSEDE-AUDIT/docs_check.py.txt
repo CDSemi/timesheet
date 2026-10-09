@@ -1,0 +1,31 @@
+"""GOV-SUPERSEDE-AUDIT scope 4: docs/08 EN/VI at 4def605 (old/) and 831f760 (new/): the changed lines,
+the added sentences side by side and the Vietnamese terms used for 'package' and 'stale PASS'."""
+import difflib
+from pathlib import Path
+
+TASK = Path(__file__).resolve().parent
+out = []
+for name in ("doc08.md", "doc08.vi.md"):
+    old = (TASK / "old" / name).read_text(encoding="utf-8").splitlines()
+    new = (TASK / "new" / name).read_text(encoding="utf-8").splitlines()
+    ops = [op for op in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes() if op[0] != "equal"]
+    out.append(f"{name}: lines old={len(old)} new={len(new)}; non-equal opcodes={[(o[0], o[1] + 1, o[2], o[3] + 1, o[4]) for o in ops]}")
+    for tag, i1, i2, j1, j2 in ops:
+        for index in range(j1, j2):
+            before = old[i1 + (index - j1)] if tag == "replace" and i1 + (index - j1) < i2 else ""
+            # print only the inserted span: the common prefix and suffix with the old line are removed
+            prefix = 0
+            while prefix < min(len(before), len(new[index])) and before[prefix] == new[index][prefix]:
+                prefix += 1
+            suffix = 0
+            while (suffix < min(len(before), len(new[index])) - prefix and
+                   before[len(before) - 1 - suffix] == new[index][len(new[index]) - 1 - suffix]):
+                suffix += 1
+            out.append(f"  line {index + 1} inserted span: {new[index][prefix:len(new[index]) - suffix]!r}")
+vi = (TASK / "new" / "doc08.vi.md").read_text(encoding="utf-8")
+en = (TASK / "new" / "doc08.md").read_text(encoding="utf-8")
+out.append("")
+out.append(f"VI doc 831f760: 'giai đoạn' occurrences={vi.count('giai đoạn')}; 'package' occurrences={vi.count('package')}; "
+           f"'kiểm PASS cũ' occurrences={vi.count('kiểm PASS cũ')}; 'stale-PASS' occurrences={vi.count('stale-PASS')}")
+out.append(f"EN doc 831f760: 'package' occurrences={en.count('package')}; 'stale-PASS' occurrences={en.count('stale-PASS')}")
+print("\n".join(out))

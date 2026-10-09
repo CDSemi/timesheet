@@ -138,4 +138,8 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 4def605d6bffd71b789214a03202a3122939406e; commit 831f760838950a59f0e5c880f0bbefda15fe0c61 (post-HEAD).
+- Pushed: yes, remote SHA 831f760838950a59f0e5c880f0bbefda15fe0c61 (main).
+- Digest before add and ls-tree digest of HEAD: both 3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9. Staged: 31 files.
+- Checks (Node v24.21.0): precommit 0 (31 files, 0 findings); diff --cached --check 0; JSON parse 0; validate_orchestration 0 (PASS); check_recovery 0 (106 probes); validate_package --preflight 0 (PASS).
+- No fixes applied; nothing stopped. timesheet-coordinator.md unchanged. Evidence: evidence/GOV-SUPERSEDE-FREEZE/ (unstaged).

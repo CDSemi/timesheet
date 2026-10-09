@@ -1,0 +1,58 @@
+# GOV-SUPERSEDE-AUDIT evidence: 06-loopholes.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+Note: the first run of loopholes.py reported 6 mismatches caused by my own synthetic data (done FIX REQUIRED / NOT VERIFIED audits without the required source_digest, rejected by the existing 'Gate/audit lacks digest/execution evidence' rule). I added source_digest to those audits; S39 was also re-pointed so that A1 names A9. The run below is the corrected one.
+
+## independent synthetic scenarios through the reviewed validator
+$ C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe <task>/loopholes.py
+exit=0
+S00 OK  expected='ACCEPT' observed='ACCEPT' :: rule 3 accepted: stale A1 superseded by pending A2; D1 (depends on A1) stays valid
+S01 OK  expected='Stale PASS: A1' observed='REJECT: Stale PASS: A1' :: no weakening: same board without superseded_by
+S02 OK  expected='Stale PASS: A1' observed='REJECT: Stale PASS: A1' :: explicit null superseded_by is treated as absent
+S03 OK  expected='ACCEPT' observed='ACCEPT' :: target never runs: A2 cancelled while running (spec: only checked at software_ready)
+S04 OK  expected='ACCEPT' observed='ACCEPT' :: target blocked while running
+S05 OK  expected='ACCEPT' observed='ACCEPT' :: target interrupted while running
+S06 OK  expected='ACCEPT' observed='ACCEPT' :: target running
+S07 OK  expected='ACCEPT' observed='ACCEPT' :: rule 5 accepted: software_ready with A2 done PASS at the current digest
+S08 OK  expected='superseded_by target must be a done PASS audit when software_ready: A1' observed='REJECT: superseded_by target must be a done PASS audit when software_ready: A1' :: rule 5: software_ready with A2 cancelled
+S09 OK  expected='superseded_by target must be a done PASS audit when software_ready: A1' observed='REJECT: superseded_by target must be a done PASS audit when software_ready: A1' :: rule 5: software_ready with A2 done FIX REQUIRED
+S10 OK  expected='superseded_by target must be a done PASS audit when software_ready: A1' observed='REJECT: superseded_by target must be a done PASS audit when software_ready: A1' :: rule 5: software_ready with A2 done NOT VERIFIED
+S11 OK  expected='superseded_by target must be a done PASS audit when software_ready: A1' observed='REJECT: superseded_by target must be a done PASS audit when software_ready: A1' :: rule 5: software_ready with A2 still pending (rule 5 fires before 'Required tasks remain')
+S12 OK  expected='ACCEPT' observed='ACCEPT' :: re-audit failed then passed: A1 re-pointed to A3 (done PASS, digest C) at software_ready
+S12b OK  expected='superseded_by target must be a done PASS audit when software_ready: A1' observed='REJECT: superseded_by target must be a done PASS audit when software_ready: A1' :: same as S12 but A1 still names the failed A2
+S13 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'G2'
+S14 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'I2'
+S15 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'D1'
+S16 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'C1'
+S17 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target ''
+S18 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 5
+S19 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'N'
+S19b OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'MISSING'
+S19c OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: target 'A1'
+S20 OK  expected='superseded_by must not chain: A1' observed='REJECT: superseded_by must not chain: A1' :: rule 2 chain: A1 -> A2 (done PASS, current) -> A3 (pending)
+S21 OK  expected='superseded_by must not chain: A1' observed='REJECT: superseded_by must not chain: A1' :: rule 2 cycle: A1 -> A2 and A2 -> A1
+S22 OK  expected='ACCEPT' observed='ACCEPT' :: fan-in: two old PASS audits superseded by the same A2
+S23 OK  expected='superseded_by must not chain: X0' observed='REJECT: superseded_by must not chain: X0' :: chain through a third audit: X0 -> A1 (itself superseded)
+S24 OK  expected='superseded_by target must review a different digest: A1' observed='REJECT: superseded_by target must review a different digest: A1' :: rule 4: A2 done PASS at the superseded digest A (current A)
+S25 OK  expected='superseded_by target must review a different digest: A1' observed='REJECT: superseded_by target must review a different digest: A1' :: rule 4: A2 pending with a pre-recorded reviewed_digest equal to A1's
+S26 OK  expected='ACCEPT' observed='ACCEPT' :: GOV: GA1 superseded by GA2 (distinct digests and commits)
+S27 OK  expected='superseded_by target must review a different digest: GA1' observed='REJECT: superseded_by target must review a different digest: GA1' :: GOV: GA1 and GA2 share a digest (handoff-only change), commits differ; rule 4 applies to digests
+S28 OK  expected='superseded_by must name another existing audit of the same package: A1' observed='REJECT: superseded_by must name another existing audit of the same package: A1' :: rule 2: WP5 audit superseded by a GOV audit
+S29 OK  expected='superseded_by must name another existing audit of the same package: GA1' observed='REJECT: superseded_by must name another existing audit of the same package: GA1' :: rule 2: GOV audit superseded by a WP5 audit
+S30 OK  expected='Auditor is author or identity unknown: A2' observed='REJECT: Auditor is author or identity unknown: A2' :: author separation unchanged: the re-audit A2 run by an author of the package
+S31 OK  expected='ACCEPT' observed='ACCEPT' :: same auditor identity for A1 and A2 (not an author)
+S32 OK  expected='Audit model weaker than author model: A2' observed='REJECT: Audit model weaker than author model: A2' :: audit strength unchanged: Sonnet re-audit with an Opus author
+S33 OK  expected='ACCEPT' observed='ACCEPT' :: new dependent D2 on the superseded A1 while A2 is FIX REQUIRED (rule 3 counts it as PASS)
+S34 OK  expected='ACCEPT' observed='ACCEPT' :: new commit depending on the superseded A1 while A2 is pending
+S35 OK  expected='ACCEPT' observed='ACCEPT' :: non-active package: WP4 PASS superseded by a WP4 PASS at a non-current digest, software_ready
+S36 OK  expected='ACCEPT' observed='ACCEPT' :: superseded audit that is not stale (A1 digest = current) with a pending target
+S37 OK  expected='superseded_by is only for done PASS audits: A9' observed='REJECT: superseded_by is only for done PASS audits: A9' :: rule 1: superseded_by on a pending audit
+S38 OK  expected='superseded_by is only for done PASS audits: A2' observed='REJECT: superseded_by is only for done PASS audits: A2' :: rule 1: superseded_by on a running audit
+S39 OK  expected='superseded_by is only for done PASS audits: A2' observed='REJECT: superseded_by is only for done PASS audits: A2' :: rule 1: superseded_by on a done FIX REQUIRED audit
+S40 OK  expected='superseded_by is only for audit tasks: G1' observed='REJECT: superseded_by is only for audit tasks: G1' :: rule 1: superseded_by on a done gate
+S41 OK  expected='PASS digest mismatch: A1' observed='REJECT: PASS digest mismatch: A1' :: existing PASS-digest rule still binds the superseded audit
+S42 OK  expected='Gate/audit snapshot mismatch: A1' observed='REJECT: Gate/audit snapshot mismatch: A1' :: existing gate/audit snapshot rule still binds the superseded audit
+S43 OK  expected='Stale PASS: A2' observed='REJECT: Stale PASS: A2' :: software_ready: target done PASS but stale against the current digest
+S44 OK  expected='superseded_by is only for done PASS audits: A1' observed='REJECT: superseded_by is only for done PASS audits: A1' :: dependency on a superseded audit that was not PASS is impossible (rule 1 first)
+scenarios=48 mismatches=0
+

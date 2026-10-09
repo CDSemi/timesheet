@@ -1,0 +1,80 @@
+"""GOV-SUPERSEDE-AUDIT scope 2: compare the probe lists of check_recovery.py at 4def605 and 831f760 by real
+runs (recording harness) and by a line diff. Reads repo copies from the task folder; writes only here."""
+import difflib
+import json
+from pathlib import Path
+
+from audit_lib import TASK, build_harness, run_harness
+
+OLD, NEW = TASK / "old", TASK / "new"
+harness_old = build_harness(OLD / "check_recovery.py", TASK / "harness_old.py")
+harness_new = build_harness(NEW / "check_recovery.py", TASK / "harness_new.py")
+runs = {
+    "old_suite+old_validator+old_board": run_harness(harness_old, OLD / "validate_orchestration.py",
+                                                     OLD / "ORCHESTRATION.json", OLD / "STATE.json"),
+    "new_suite+new_validator+head_board": run_harness(harness_new, NEW / "validate_orchestration.py",
+                                                      NEW / "ORCHESTRATION.json", NEW / "STATE.json"),
+    "new_suite+new_validator+worktree_board": run_harness(harness_new, NEW / "validate_orchestration.py",
+                                                          TASK / "worktree_ORCHESTRATION.json",
+                                                          TASK / "worktree_STATE.json"),
+    "old_suite+new_validator+head_board": run_harness(harness_old, NEW / "validate_orchestration.py",
+                                                      NEW / "ORCHESTRATION.json", NEW / "STATE.json"),
+    "new_suite+old_validator+old_board": run_harness(harness_new, OLD / "validate_orchestration.py",
+                                                     OLD / "ORCHESTRATION.json", OLD / "STATE.json"),
+}
+lines = []
+for label, data in runs.items():
+    if data["exit"] != 0:
+        lines.append(f"{label}: harness exit {data['exit']} {data.get('stderr')}")
+        continue
+    for base in ("WP1", "WP3"):
+        result = data["results"][base]
+        lines.append(f"{label} [{base}]: real_board={data['real_board']} passed={len(result['passed'])} "
+                     f"failures={len(result['failures'])} aborted={result['aborted']}")
+    for failure in data["results"]["WP1"]["failures"]:
+        lines.append(f"    WP1 failure: {failure['probe']} -> {failure['error']}")
+
+old = runs["old_suite+old_validator+old_board"]["results"]["WP1"]
+new = runs["new_suite+new_validator+head_board"]["results"]["WP1"]
+old_names = [item[0] for item in old["record"]]
+new_names = [item[0] for item in new["record"]]
+old_set = {item[0]: (item[1], item[2]) for item in old["record"]}
+new_set = {item[0]: (item[1], item[2]) for item in new["record"]}
+missing = [name for name in old_names if name not in new_set]
+changed = [name for name in old_names if name in new_set and old_set[name] != new_set[name]]
+order_kept = [name for name in new_names if name in old_set] == old_names
+added = [name for name in new_names if name not in old_set]
+lines.append("")
+lines.append(f"recorded accepts/rejects probes per suite run: old={len(old_names)} new={len(new_names)}; "
+             f"duplicates old={len(old_names) - len(set(old_names))} new={len(new_names) - len(set(new_names))}")
+lines.append(f"passed probes per suite run (all kinds): old={len(old['passed'])} new={len(new['passed'])}")
+lines.append(f"old probes missing in new: {len(missing)} {missing}")
+lines.append(f"old probes with a changed kind or expected text: {len(changed)} {changed}")
+lines.append(f"old order kept in new: {order_kept}")
+old_passed_missing = [name for name in old["passed"] if name not in new["passed"]]
+lines.append(f"old passed names (incl. non-accepts/rejects probes) missing in new: {old_passed_missing}")
+lines.append(f"added probes: {len(added)}")
+for name in added:
+    kind, expected = new_set[name]
+    lines.append(f"  + {kind}: {name}" + (f"  [expects: {expected}]" if expected else ""))
+
+# Equivalence of the harness with the real script: the real run's list minus its first and last marker
+real = json.loads((TASK / "real_check_recovery.raw").read_text(encoding="utf-8"))
+wt = runs["new_suite+new_validator+worktree_board"]["results"]["WP3"]["passed"]
+lines.append("")
+lines.append(f"real check_recovery.py run: status={real['status']} count={real['count']}; "
+             f"harness WP3 list equals real list[1:-1]: {real['synthetic_checks'][1:-1] == wt}")
+
+for name in ("check_recovery.py", "validate_orchestration.py"):
+    a = (OLD / name).read_text(encoding="utf-8").splitlines()
+    b = (NEW / name).read_text(encoding="utf-8").splitlines()
+    ops = [(tag, i1 + 1, i2, j1 + 1, j2) for tag, i1, i2, j1, j2 in
+           difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if tag != "equal"]
+    lines.append(f"{name} 4def605 -> 831f760 non-equal opcodes (tag, old lines, new lines): {ops}")
+    for tag, i1, i2, j1, j2 in ops:
+        if tag in ("replace", "delete"):
+            for index in range(i1 - 1, i2):
+                lines.append(f"    old {index + 1}: {a[index]}")
+            for index in range(j1 - 1, j2):
+                lines.append(f"    new {index + 1}: {b[index]}")
+print("\n".join(lines))

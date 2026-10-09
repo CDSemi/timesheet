@@ -1,0 +1,97 @@
+"""GOV-SUPERSEDE-AUDIT helpers: build a recording harness from a check_recovery.py source and run it
+against a chosen validator copy, board copy and STATE copy. Writes only inside the task folder."""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+TASK = Path(__file__).resolve().parent
+REPO = Path(r"<project>")
+PYTHON = sys.executable
+
+RECORDING = '''FAILURES = []
+RECORD = []
+
+
+def accepts(name, value, expected_state=None):
+    RECORD.append([name, "accepts", None])
+    try:
+        module.validate(value, expected_state or state, configured)
+    except Exception as error:  # audit harness: record and continue
+        FAILURES.append({"probe": name, "kind": "accepts", "error": f"{type(error).__name__}: {error}"})
+        return
+    passed.append(name)
+
+
+def rejects(name, value, expected, expected_state=None):
+    RECORD.append([name, "rejects", expected])
+    try:
+        module.validate(value, expected_state or state, configured)
+    except ValueError as error:
+        if expected not in str(error):
+            FAILURES.append({"probe": name, "kind": "rejects", "error": f"unexpected failure: {error}"})
+            return
+        passed.append(name)
+        return
+    except Exception as error:  # audit harness: a crash is a failed probe
+        FAILURES.append({"probe": name, "kind": "rejects", "error": f"crash {type(error).__name__}: {error}"})
+        return
+    FAILURES.append({"probe": name, "kind": "rejects", "error": "invalid workflow accepted"})
+'''
+
+DRIVER = '''import traceback
+results = {}
+try:
+    module.validate(real_board, live_state, configured)
+    real_ok = "PASS"
+except Exception as error:
+    real_ok = f"{type(error).__name__}: {error}"
+for base in ("WP1", "WP3"):
+    passed.clear()
+    FAILURES.clear()
+    RECORD.clear()
+    use_base(base)
+    aborted = None
+    try:
+        suite()
+    except Exception as error:
+        frames = [frame for frame in traceback.extract_tb(error.__traceback__) if frame.filename == __file__]
+        aborted = {"error": f"{type(error).__name__}: {error}", "line": (frames[-1].line or "").strip() if frames else ""}
+    results[base] = {"passed": list(passed), "failures": list(FAILURES), "record": list(RECORD), "aborted": aborted}
+print(json.dumps({"real_board": real_ok, "results": results}))
+'''
+
+
+def replace_once(text, old, new):
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"harness build: expected one occurrence, found {count}: {old[:60]!r}")
+    return text.replace(old, new)
+
+
+def build_harness(source_path, out_path):
+    text = Path(source_path).read_text(encoding="utf-8")
+    text = replace_once(text, "ROOT = Path(__file__).resolve().parents[2]",
+                        'ROOT = Path(os.environ["AUDIT_REPO_ROOT"])')
+    text = replace_once(text, 'ROOT / "handoff/delivery/validate_orchestration.py")', 'os.environ["AUDIT_VALIDATOR"])')
+    text = replace_once(text, "spec.loader.exec_module(module)\n", "spec.loader.exec_module(module)\nmodule.ROOT = ROOT\n")
+    start = text.index("def accepts(name, value, expected_state=None):")
+    end_marker = 'raise AssertionError(f"{name}: invalid workflow accepted")\n'
+    end = text.index(end_marker, start) + len(end_marker)
+    text = text[:start] + RECORDING + text[end:]
+    tail = text.index("# One acceptance probe validates the live board and STATE exactly as they are.")
+    text = text[:tail] + DRIVER
+    Path(out_path).write_text(text, encoding="utf-8", newline="\n")
+    return out_path
+
+
+def run_harness(harness, validator, board, state):
+    env = dict(os.environ, AUDIT_REPO_ROOT=str(REPO), AUDIT_VALIDATOR=str(validator),
+               CHECK_RECOVERY_BOARD=str(board), CHECK_RECOVERY_STATE=str(state), PYTHONDONTWRITEBYTECODE="1")
+    proc = subprocess.run([PYTHON, str(harness)], env=env, capture_output=True, text=True, encoding="utf-8")
+    if proc.returncode != 0:
+        return {"exit": proc.returncode, "stderr": proc.stderr[-2000:]}
+    data = json.loads(proc.stdout)
+    data["exit"] = 0
+    return data

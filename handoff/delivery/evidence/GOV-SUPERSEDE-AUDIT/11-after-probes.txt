@@ -1,0 +1,29 @@
+# GOV-SUPERSEDE-AUDIT evidence: 11-after-probes.txt
+# workflow Python: C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe (3.12.14); Node: %LOCALAPPDATA%\timesheet-dev\node-24.21.0\node_modules\node\bin\node.exe (v24.21.0)
+
+## identity and digest after all probes
+$ (see each command below)
+$ node --version  (portable Node 24 by full path; also the first shell call of this audit)
+v24.21.0
+exit=0
+2026-10-09T06:00:59Z
+$ git rev-parse HEAD origin/main
+831f760838950a59f0e5c880f0bbefda15fe0c61
+831f760838950a59f0e5c880f0bbefda15fe0c61
+$ node scripts/source-digest.mjs
+3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9  (789 files, handoff/ excluded)
+exit=0
+$ git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort | sha256sum
+3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9 *-
+$ git diff --quiet 831f760 -- handoff/delivery/validate_orchestration.py handoff/delivery/check_recovery.py docs .claude src scripts
+exit=0
+$ git status --porcelain
+ M handoff/delivery/ORCHESTRATION.json
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md
+ M handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md
+ M handoff/delivery/tasks/GOV-SUPERSEDE-FREEZE.md
+?? handoff/delivery/evidence/GOV-SUPERSEDE-FREEZE/
+?? handoff/delivery/evidence/GOV-SUPERSEDE-GATE/
+?? handoff/delivery/tasks/GOV-SUPERSEDE-AUDIT.md
+?? handoff/delivery/tasks/GOV-SUPERSEDE-GATE.md
+
