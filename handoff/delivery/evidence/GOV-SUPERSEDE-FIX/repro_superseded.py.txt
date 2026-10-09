@@ -1,0 +1,60 @@
+"""Reproduction: a stale done PASS audit beside a newer PASS audit of the same package.
+
+Synthetic in-memory board only. Run with the workflow Python on this script file.
+Expected before the fix: the stale PASS is rejected even when `superseded_by` names the newer audit.
+Expected after the fix: rejected without the field, accepted with it.
+"""
+import copy
+import importlib.util
+import json
+from pathlib import Path
+
+ROOT = Path("D:/Dropbox/Work.CDSemi/timesheet")
+spec = importlib.util.spec_from_file_location("workflow", ROOT / "handoff/delivery/validate_orchestration.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+board = json.loads((ROOT / "handoff/delivery/ORCHESTRATION.json").read_text(encoding="utf-8"))
+live_state = json.loads((ROOT / "handoff/delivery/STATE.json").read_text(encoding="utf-8"))
+configured = module.profiles()
+REPORT = "handoff/delivery/WP1_HANDOFF.md"
+EVIDENCE = "handoff/delivery/evidence/WP1-review-codex/typecheck.txt"
+PROFILE_OF = {"plan": "timesheet-planner", "gate": "timesheet-verifier", "audit": "timesheet-auditor"}
+
+
+def make(name, kind, depends_on):
+    profile = configured[PROFILE_OF[kind]]
+    return {"id": name, "package": "WP1", "kind": kind, "status": "done", "depends_on": depends_on,
+            "profile": profile["name"], "requested_model": profile["model"],
+            "requested_effort": profile["effort"], "model_override_reason": None,
+            "actual_model": None, "actual_source": None, "actual_effort": None, "agent_id": f"agent-{name}",
+            "attempt": 1, "owned_paths": [REPORT], "prompt": "handoff/prompts/ORCHESTRATE.md",
+            "report": REPORT, "evidence": [], "next_action": "synthetic"}
+
+
+def build(with_field):
+    plan = make("S-PLAN", "plan", [])
+    gate1, audit1 = make("S-GATE1", "gate", ["S-PLAN"]), make("S-AUDIT1", "audit", ["S-GATE1"])
+    gate2, audit2 = make("S-GATE2", "gate", ["S-PLAN"]), make("S-AUDIT2", "audit", ["S-GATE2"])
+    nxt = make("S-NEXT", "plan", ["S-AUDIT1"])
+    nxt["status"] = "pending"
+    for gate, audit, digest in [(gate1, audit1, "a" * 64), (gate2, audit2, "b" * 64)]:
+        gate.update(source_digest=digest, decision="PASS", evidence=[EVIDENCE])
+        audit.update(source_digest=digest, reviewed_digest=digest, decision="PASS", evidence=[EVIDENCE])
+    if with_field:
+        audit1["superseded_by"] = "S-AUDIT2"
+    value = copy.deepcopy(board)
+    value.update(status="running", tasks=[plan, gate1, audit1, gate2, audit2, nxt], auxiliary_lookups=[],
+                 active_package="WP1", next_task_id="S-NEXT", current_source_digest="b" * 64,
+                 git={"branch": "main", "release_declared": False, "last_commit": "c" * 40, "unpushed": []})
+    return value
+
+
+state = copy.deepcopy(live_state)
+state["active_work_package"] = "WP1"
+state["phases"] = [{"id": name, "independent_review": "not_started"} for name in module.PACKAGES]
+for label, with_field in [("stale PASS without superseded_by", False), ("stale PASS with superseded_by", True)]:
+    try:
+        module.validate(build(with_field), state, configured)
+        print(f"{label}: ACCEPTED")
+    except ValueError as error:
+        print(f"{label}: REJECTED ({error})")

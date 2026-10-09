@@ -16,6 +16,10 @@ below.
 Run every Node command with the Node 24 runtime named in document 08, never the system
 Node, and record `node --version` in your commit evidence.
 
+Runtime: never feed a script to python or node through stdin (no heredocs, no `| node`,
+`| python`, `node -` or `python -`); write a file and run it. Never pipe output into
+head or tail; redirect to a file and read it.
+
 Evidence masking: if `node scripts/precommit-check.mjs` reports `profile-path` for staged
 evidence logs, you may replace only the account segment of the concrete user-profile
 path with `<user>` in those staged evidence files. Record each masked file and rerun all

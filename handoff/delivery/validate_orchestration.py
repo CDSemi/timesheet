@@ -189,6 +189,29 @@ def validate_addresses(tasks, by_id):
         check(target not in task["depends_on"], f"Fix must not depend on its addresses_audit: {name}")
 
 
+def validate_superseded(tasks, by_id, software_ready):
+    """Optional `superseded_by` on a done PASS audit: the old PASS stays as history (it still satisfies
+    dependency checks and is exempt from the stale-PASS check) and names the later audit that replaces
+    it as current acceptance."""
+    for task in tasks:
+        target = task.get("superseded_by")
+        if target is None:
+            continue
+        name = task["id"]
+        check(task["kind"] == "audit", f"superseded_by is only for audit tasks: {name}")
+        check(task["status"] == "done" and task.get("decision") == "PASS",
+              f"superseded_by is only for done PASS audits: {name}")
+        later = by_id.get(target) if isinstance(target, str) else None
+        check(later is not None and later["kind"] == "audit" and later["package"] == task["package"]
+              and target != name,
+              f"superseded_by must name another existing audit of the same package: {name}")
+        check(later.get("superseded_by") is None, f"superseded_by must not chain: {name}")
+        check(later.get("reviewed_digest") is None or later["reviewed_digest"] != task.get("reviewed_digest"),
+              f"superseded_by target must review a different digest: {name}")
+        check(not software_ready or (later["status"] == "done" and later.get("decision") == "PASS"),
+              f"superseded_by target must be a done PASS audit when software_ready: {name}")
+
+
 def validate_commits(tasks, lookups, release_declared):
     running = [task for task in tasks if task["status"] == "running"]
     for task in tasks:
@@ -291,7 +314,7 @@ def validate(board, state, configured):
             check(task.get("agent_id") and task["agent_id"] not in authors, f"Auditor is author or identity unknown: {name}")
             if task["decision"] == "PASS":
                 check(task.get("reviewed_digest") == task["source_digest"], f"PASS digest mismatch: {name}")
-                if task["package"] == active:
+                if task["package"] == active and task.get("superseded_by") is None:
                     check(task["reviewed_digest"] == board.get("current_source_digest"), f"Stale PASS: {name}")
     visited, visiting = set(), set()
 
@@ -321,6 +344,7 @@ def validate(board, state, configured):
         visit(name)
     validate_audits(tasks, by_id)
     validate_addresses(tasks, by_id)
+    validate_superseded(tasks, by_id, board["status"] == "software_ready")
     running = [task for task in tasks if task["status"] == "running"]
     validate_commits(tasks, lookups, release_declared)
     active_lookups = sum(1 for item in lookups if item.get("status") == "running")

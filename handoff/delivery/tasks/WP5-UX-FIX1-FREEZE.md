@@ -131,4 +131,11 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD abe68025af4b0fdbc0d73731d9eda04c729e4c18; commit and post-HEAD
+  4def605d6bffd71b789214a03202a3122939406e; pushed to origin main; remote SHA same.
+- Digests: working tree and HEAD ls-tree both 2565b1e82d4aa5f8d55f71feb45b7180b35e169ea3f4376a2a96db8271f63444.
+- Staged: 23 files. All 6 source/test/docs paths were changed. Nothing was staged beforehand.
+- Checks, all exit 0: node v24.21.0; digest; git add; precommit (23 files, 0 findings);
+  diff --cached --check; JSON parse; validate_orchestration; check_recovery;
+  validate_package --preflight; post-commit ls-tree digest.
+- No fix applied. No stop. Evidence: evidence/WP5-UX-FIX1-FREEZE/checks.txt.

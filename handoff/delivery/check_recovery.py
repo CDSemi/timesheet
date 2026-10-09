@@ -351,6 +351,97 @@ def suite():
     task_of(value, "S-NEXT")["addresses_audit"] = "S-AUDIT"
     rejects("addresses_audit on a non-fix task rejected", value, "addresses_audit is only for fix tasks")
 
+    # superseded_by (optional, done PASS audits only): the old PASS stays as history beside a later audit.
+    def superseded():
+        board = finished()
+        gate = make_task("S-GATE2", "gate", ["S-IMPL"])
+        later = make_task("S-AUDIT2", "audit", ["S-GATE2"])
+        for item in (gate, later):
+            item.update(status="done", attempt=1, agent_id=f"synthetic-{item['id'].lower()}", evidence=[EVIDENCE])
+        gate.update(source_digest="b" * 64, decision="PASS")
+        later.update(source_digest="b" * 64, reviewed_digest="b" * 64, decision="PASS")
+        board["tasks"].extend([gate, later])
+        board["current_source_digest"] = "b" * 64
+        task_of(board, "S-AUDIT")["superseded_by"] = "S-AUDIT2"
+        return board
+
+    def old_audit(board):  # an unreferenced second old PASS audit, so its own status can change freely
+        extra = copy.deepcopy(task_of(board, "S-AUDIT"))
+        extra.update(id="S-OLD-AUDIT", agent_id="synthetic-old-audit", superseded_by="S-AUDIT2")
+        board["tasks"].append(extra)
+        return extra
+
+    value = superseded()
+    accepts("superseded done PASS audit with a stale digest beside a current PASS audit accepted", value)
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT").pop("superseded_by")
+    rejects("stale PASS without superseded_by still rejected", invalid, "Stale PASS: S-AUDIT")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT2")["reviewed_digest"] = "c" * 64
+    task_of(invalid, "S-AUDIT2")["source_digest"] = "c" * 64
+    task_of(invalid, "S-GATE2")["source_digest"] = "c" * 64
+    rejects("current PASS target stale against the current digest rejected", invalid, "Stale PASS: S-AUDIT2")
+    assert "S-AUDIT" in task_of(value, "S-COMMIT")["depends_on"]  # the done dependent stays valid (accepted above)
+    value2 = copy.deepcopy(value)
+    task_of(value2, "S-AUDIT2").update(status="pending", agent_id=None, attempt=0)
+    accepts("superseded_by naming a pending audit accepted before software_ready", value2)
+    value2 = copy.deepcopy(value)
+    task_of(value2, "S-AUDIT2")["decision"] = "FIX REQUIRED"
+    accepts("superseded_by naming a non-PASS audit accepted before software_ready", value2)
+
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-PLAN")["superseded_by"] = "S-AUDIT2"
+    rejects("superseded_by on a non-audit task rejected", invalid, "superseded_by is only for audit tasks")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-GATE")["superseded_by"] = "S-AUDIT2"
+    rejects("superseded_by on a gate rejected", invalid, "superseded_by is only for audit tasks")
+    invalid = copy.deepcopy(value)
+    extra = old_audit(invalid)
+    extra["decision"] = "FIX REQUIRED"
+    rejects("superseded_by on a non-PASS audit rejected", invalid, "superseded_by is only for done PASS audits")
+    invalid = copy.deepcopy(value)
+    extra = old_audit(invalid)
+    extra["status"] = "interrupted"
+    rejects("superseded_by on an unfinished audit rejected", invalid, "superseded_by is only for done PASS audits")
+    for label, target in [("unknown", "S-MISSING"), ("gate", "S-GATE2"), ("non-string", ["S-AUDIT2"]),
+                          ("self", "S-AUDIT")]:
+        invalid = copy.deepcopy(value)
+        task_of(invalid, "S-AUDIT")["superseded_by"] = target
+        rejects(f"superseded_by naming a {label} target rejected", invalid,
+                "superseded_by must name another existing audit of the same package")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT2")["package"] = NEXT_PACKAGE
+    rejects("superseded_by naming an audit of another package rejected", invalid,
+            "superseded_by must name another existing audit of the same package")
+    invalid = copy.deepcopy(value)
+    third = copy.deepcopy(task_of(invalid, "S-AUDIT2"))
+    third.update(id="S-AUDIT3", gate_included=True, depends_on=["S-IMPL"], agent_id="synthetic-audit3",
+                 source_digest="c" * 64, reviewed_digest="c" * 64)
+    invalid["tasks"].append(third)
+    invalid["current_source_digest"] = "c" * 64
+    task_of(invalid, "S-AUDIT2")["superseded_by"] = "S-AUDIT3"
+    rejects("superseded_by chain rejected", invalid, "superseded_by must not chain: S-AUDIT")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT")["reviewed_digest"] = "b" * 64
+    task_of(invalid, "S-AUDIT")["source_digest"] = "b" * 64
+    task_of(invalid, "S-GATE")["source_digest"] = "b" * 64
+    rejects("superseded_by target with the same reviewed digest rejected", invalid,
+            "superseded_by target must review a different digest")
+
+    ready = superseded()
+    task_of(ready, "S-NEXT").update(status="cancelled")
+    ready.update(status="software_ready", next_task_id=None)
+    ready_passed = synthetic_state(BASE)
+    for phase in ready_passed["phases"]:
+        phase["independent_review"] = "passed"
+    accepts("software_ready with a superseded audit and a done PASS target accepted", ready, ready_passed)
+    for label, update in [("pending", {"status": "pending", "agent_id": None, "attempt": 0}),
+                          ("non-PASS", {"decision": "FIX REQUIRED"})]:
+        invalid = copy.deepcopy(ready)
+        task_of(invalid, "S-AUDIT2").update(update)
+        rejects(f"software_ready with a {label} superseded_by target rejected", invalid,
+                "superseded_by target must be a done PASS audit when software_ready", ready_passed)
+
     # Profile validation: effort max needs an owner decision; nested delegation prohibited.
     profile_text = (ROOT / ".claude/agents/timesheet-worker.md").read_text(encoding="utf-8")
     module.parse_profile(profile_text, "timesheet-worker.md")

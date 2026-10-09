@@ -83,11 +83,14 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - FIX1 done: "Times in <zone>" always shown, note added when zones differ; unit 1817;
   full e2e exit 0 (desktop 77/0/3, mobile 78/0/2); preflight and verify exit 0; digest
   2565b1e8. No deviation.
-- Running: WP5-UX-FIX1-FREEZE (committer) on base abe6802.
-- Next action: on the freeze result, write the GOV-SUPERSEDE-FIX brief (validator field
-  `superseded_by` with probes and docs/08 + vi; profile runtime rule against stdin
-  scripts and head/tail pipes), then its freeze, gate and fresh opus audit; then
-  WP5-UX-GATE and WP5-UX-AUDIT.
+- WP5-UX-FIX1-FREEZE done: 4def605 on main, pushed (23 files, digest 2565b1e8, all checks
+  exit 0). All UI redesign source is frozen.
+- GOV-SUPERSEDE-FIX done: validate_superseded (six rules) and the stale-PASS exemption;
+  probes 87 -> 106; real board passes; docs/08 (+vi); runtime line in eight profiles;
+  preflight and verify exit 0; digest 3d274c9e. One harmless `ls | head` slip.
+- Running: GOV-SUPERSEDE-FREEZE (committer) on base 4def605.
+- Next action: on the freeze result, GOV-SUPERSEDE-GATE (verifier) on the freeze commit,
+  then a fresh opus GOV-SUPERSEDE-AUDIT; then WP5-UX-GATE and WP5-UX-AUDIT.
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

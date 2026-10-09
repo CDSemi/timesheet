@@ -82,11 +82,14 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - FIX1 xong: luôn hiện "Times in <zone>", thêm ghi chú khi múi giờ khác nhau; unit 1817;
   toàn bộ e2e exit 0 (desktop 77/0/3, mobile 78/0/2); preflight và verify exit 0; digest
   2565b1e8. Không có sai lệch.
-- Đang chạy: WP5-UX-FIX1-FREEZE (committer) trên gốc abe6802.
-- Bước kế tiếp: khi có kết quả freeze, viết brief GOV-SUPERSEDE-FIX (trường
-  `superseded_by` trong validator kèm probe và docs/08 + vi; quy tắc trong profile cấm
-  script qua stdin và pipe vào head/tail), rồi freeze, gate và audit opus độc lập; sau đó
-  WP5-UX-GATE và WP5-UX-AUDIT.
+- WP5-UX-FIX1-FREEZE xong: 4def605 trên main, đã push (23 file, digest 2565b1e8, mọi
+  kiểm tra exit 0). Toàn bộ mã nguồn của vòng làm lại UI đã freeze.
+- GOV-SUPERSEDE-FIX xong: validate_superseded (sáu quy tắc) và miễn kiểm tra stale-PASS;
+  probe 87 -> 106; board thật vẫn đạt; docs/08 (+vi); dòng quy tắc trong tám profile;
+  preflight và verify exit 0; digest 3d274c9e. Một lần lỡ `ls | head`, vô hại.
+- Đang chạy: GOV-SUPERSEDE-FREEZE (committer) trên gốc 4def605.
+- Bước kế tiếp: khi có kết quả freeze, GOV-SUPERSEDE-GATE (verifier) trên commit freeze,
+  rồi audit opus độc lập GOV-SUPERSEDE-AUDIT; sau đó WP5-UX-GATE và WP5-UX-AUDIT.
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

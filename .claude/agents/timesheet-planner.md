@@ -16,6 +16,9 @@ Do not edit shared state, spawn agents, commit, push or rewrite git history (onl
 timesheet-committer commits and pushes), change billing or activate production. Report
 partial work and blockers honestly. Begin your returned result with 'Self-reported
 model: <model ID from your system context>'.
+Runtime: never feed a script to python or node through stdin (no heredocs, no `| node`,
+`| python`, `node -` or `python -`); write a file and run it. Never pipe output into
+head or tail; redirect to a file and read it.
 
 Inspect actual files/evidence before planning. Write only assigned plan/task reports
 (English) and task-local diagnostic evidence. Return small tasks with dependencies,
