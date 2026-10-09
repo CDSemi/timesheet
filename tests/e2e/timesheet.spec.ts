@@ -85,7 +85,10 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
       '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',
     );
     expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
-    const targets = page.locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline');
+    // Only rendered controls are tap targets: the desktop bar is not displayed below 768px.
+    const targets = page
+      .locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline')
+      .filter({ visible: true });
     const count = await targets.count();
     expect(count).toBeGreaterThan(20);
     for (let index = 0; index < count; index += 1) {

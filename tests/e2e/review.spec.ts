@@ -481,7 +481,10 @@ test('mobile: the review fits the width and every control is at least 44px', asy
   await expect(page.locator(`[data-deficit="${shortDay}"]`)).toBeVisible();
   await expectNoSidewaysScroll(page);
 
-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
+  // Only rendered controls are tap targets: the desktop bar (display none below 768px) is excluded.
+  const targets = page
+    .locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline')
+    .filter({ visible: true });
   const count = await targets.count();
   expect(count).toBeGreaterThan(5);
   for (let index = 0; index < count; index += 1) {

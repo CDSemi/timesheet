@@ -130,8 +130,16 @@ async function givenShareId(owner: Person): Promise<string> {
 const grantByApi = (owner: Person, grantee: Person, items: ApiShare['items']) =>
   owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items }, 201);
 
+/** On a phone Settings and Sign out sit under "More" in the tab bar; opens it when it is shown and closed. */
+async function openMoreOnPhone(page: Page) {
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if (!(await more.isVisible())) return;
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+}
+
 /** Signs the current person out and signs the next one in; an optional hash is the first screen. */
 async function switchUser(page: Page, signIn: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, who: { email: string; password: string }, startHash: string) {
+  await openMoreOnPhone(page);
   const signOut = page.getByRole('button', { name: 'Sign out' });
   if (await signOut.isVisible()) {
     await signOut.click();
@@ -267,6 +275,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await expect(page.locator('[data-shared-view="ot"]')).toHaveCount(0);
 
   // Leaving takes effect on the next request and removes the switcher.
+  await openMoreOnPhone(page);
   await page.getByRole('link', { name: 'Settings' }).click();
   const received = page.getByRole('list', { name: 'Shares I received' });
   await expect(received.getByText('Timesheets: view only')).toBeVisible();

@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-awaiting-owner",
+  "phase": "ux-change-round-implementation",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-CKPT",
+  "next_task_id": "WP5-UX-T01-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-08",
+      "observation": "WP5-UX-T01 (worker, sonnet) reported one stray empty heredoc despite the capitalised no-stdin rule in both the brief and the dispatch prompt (fifth such incident); the agent reported no effect. Addendum 2 asks it to confirm that no background task is left waiting on stdin."
+    },
     {
       "date": "2026-10-06",
       "observation": "WP5-PILOT worker ran `python - <<'EOF'` (an empty heredoc on stdin) despite the capitalised no-stdin rule; the background task b4fr6819n looped writing errors (about 1 GB, growing 2 MB/s) into the session tasks folder. The coordinator TaskStopped the task and the agent. The owner is asked to delete D:\\.claude-tmp\\claude\\D--Dropbox-Work-CDSemi-timesheet\\44e3451e-da20-4a12-94bb-6b94fc5f531e\\tasks\\b4fr6819n.output. This is the fourth stdin incident; later briefs repeat the rule and add: do not call python at all unless the brief names a script file."
@@ -127,7 +131,9 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": {
+  "pending_owner_question_2": null,
+  "answered_owner_question_ux": {
+    "answered": "2026-10-08 (all as recommended; see owner_decisions)",
     "id": "WP5-UX-E-1..E-7",
     "asked": "2026-10-08",
     "source": "WP5-UX-PLAN section E (handoff/delivery/tasks/WP5-UX-PLAN.md); mockup handoff/delivery/design/WP5-UX/mockup.html",
@@ -165,7 +171,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
+    "last_commit": "5faa0b6f046568dae300331790a9dd168685427b",
     "unpushed": []
   },
   "owner_decisions": [
@@ -274,9 +280,25 @@
       "source": "owner chat, direct request typed by the owner (new session started from the desktop app's Design template)",
       "verbatim": "Thiết kế UI hiện tại khó hiểu và quá khó sử dụng. Tôi muốn một thiết kế đẹp và thân thiện hơn. Đặc biệt page Timesheet nên có phần layout giống như timesheet layout trong file excel mẫu để những người quen sử dụng bản excel không bị bở ngỡ khi xài app này",
       "decision": "Owner-requested UI redesign before pilot activation: a more beautiful and friendly UI, and a Timesheet page laid out like the timesheet in the sample Excel workbook. Business behaviour is unchanged unless the owner decides otherwise."
+    },
+    {
+      "date": "2026-10-08",
+      "source": "owner chat, direct reply typed by the owner to pending question WP5-UX-E-1..E-7",
+      "verbatim": "OK theo khuyến nghị. Ngoài ra, file WP5_PILOT_PACKET.vi.md bị thay đổi là vì tôi đang trả lời mấy câu hỏi trong WP5_PILOT_PACKET.vi.md, nhưng tôi trả lời trực tiếp trong WP5_PILOT_PACKET.vi.md có đúng quy trình ko hay là nên tạo 1 task riêng để trả lời? Tôi đã phục hồi file này lại như cũ. chờ câu trả lời của bạn rồi mới tính.",
+      "decision": "E-1..E-7 all as recommended in WP5-UX-PLAN section E: E-1 (a) Excel rows plus a Check row, detail rows behind 'Show details' on the Timesheet and always on the Review; E-2 (a) one hatched tint for every non-working day from the server calendar, holiday name in the label cell; E-3 (a) side panel on desktop, bottom sheet on phones, label pickable in the cell; E-4 US dates, h:mm, 24-hour as on the PDF; E-5 (a) Timesheet, Overtime, History, Settings (+ Admin), Import under Settings/More, 'OT' renamed 'Overtime'; E-6 (a) show the empty labelled manager signature line; E-7 (a) shell/tokens, Timesheet, day editor and Review in this round. Label wording keeps the app categories (no Excel 'Sick Day' / 'Off Day (Overtime Used)'). The WP5_PILOT_PACKET.vi.md change was the owner's draft of D answers, now reverted by the owner."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-08",
+      "basis": "validate_orchestration.py: every done PASS audit of the active package must match current_source_digest (stale-PASS check), and a done task may depend only on a done PASS audit. WP5-RECHECK is the only WP5 PASS audit (150420e7) and the done WP5-ACCREC depends on it. The UX round changes WP5 source, so its gate moves current_source_digest; WP5-RECHECK can then neither stay done PASS (stale) nor be reset or cancelled (breaks WP5-ACCREC). docs/08: 'Changed source identity invalidates an old audit pass'; validator and docs/08 are governance paths.",
+      "decision": "Before WP5-UX-GATE, run a GOV cycle GOV-SUPERSEDE (worker-high fix, GOV freeze, verifier gate, fresh opus audit): add an optional audit field `superseded_by` naming a later audit task of the same package. A done PASS audit with it keeps its PASS for dependency purposes (history), is exempt from the stale-PASS check, and requires the named audit to exist, be of kind audit in the same package and not be itself superseded; docs/08 (+ vi) gains one sentence. WP5-RECHECK then gets superseded_by WP5-UX-AUDIT when the gate records the new digest. T01..T06 and their freezes do not move current_source_digest, so they may proceed first. STATE.json keeps WP5 accepted at 014bd47 until WP5-UX-AUDIT PASS. Reversible by the owner."
+    },
+    {
+      "date": "2026-10-08",
+      "basis": "Owner asked whether pilot answers D-1..D-15 should be written directly into WP5_PILOT_PACKET.vi.md or in a separate task. AGENTS rules 1 and 4, docs/08 (owner decisions come from owner chat and are recorded verbatim by the coordinator; English is authoritative with a matching .vi.md), D-11 (real values only in a private owner copy outside git).",
+      "decision": "The owner answers D-1..D-15 in chat (for example 'D-1: a, D-7: a, ...' or 'OK theo khuyến nghị'), not by editing the tracked packet and not through a separate owner task file. The coordinator records them verbatim in owner_decisions; a docs worker then writes the answers into WP5_PILOT_PACKET.md and .vi.md together, and any answer that differs from the default opens a fix round. Real hostnames, addresses or credentials never go into chat or tracked files; they stay in the owner's private copy outside git."
+    },
     {
       "date": "2026-10-08",
       "basis": "Owner UI request of 2026-10-08; validate_orchestration.py allows only WP1-WP5 and GOV packages; WP5 is the active package and the pilot is not activated; the pilot packet already foresees owner-driven fix rounds (fix, freeze, gate, independent audit) before activation; docs/08 'Changed source identity invalidates an old audit pass'. The desktop app asked for a Design artifact, but this coordinator session has no Artifact tool.",
@@ -14214,7 +14236,7 @@
       "id": "WP5-UX-CKPT",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "history": [
         "attempt 1 (agent adb0de9fbe201c889, self-reported claude-sonnet-5-5): stopped before staging on three unlisted handoff paths (WP5_PILOT_PACKET.vi.md modified, GOV-RECOVERY-ACCEPT.md modified, GOV-RECOVERY-ACCEPT/commit-message.txt untracked); no commit, HEAD fe67f94. Coordinator: stage the two GOV-RECOVERY-ACCEPT records (the board lists that evidence); leave WP5_PILOT_PACKET.vi.md unstaged (unknown origin, owner asked)."
       ],
@@ -14242,13 +14264,111 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX-CKPT.md",
       "report": "handoff/delivery/tasks/WP5-UX-CKPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-CKPT/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-CKPT/commit-message.txt"
+      ],
       "baseline_commit": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
+      "branch": "main",
+      "commit_sha": "5faa0b6f046568dae300331790a9dd168685427b",
+      "pushed": true,
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed on attempt 2: 18 handoff paths (brief set plus the GOV-RECOVERY-ACCEPT record and evidence); WP5_PILOT_PACKET.vi.md left unstaged; node v24.21.0, working-tree and HEAD digests 150420e7, precommit PASS (18 files, 0 findings), diff-check, JSON parse, validator, check_recovery and preflight exit 0; remote main = 5faa0b6.",
+      "next_action": "None; the owner answers E-1..E-7 and says whether the WP5_PILOT_PACKET.vi.md change is his."
+    },
+    {
+      "id": "WP5-UX-T01",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX-PLAN"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a36bd4ddef59632b6",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/styles.css",
+        "src/client/components/AppShell.tsx",
+        "src/client/App.tsx",
+        "src/client/SettingsScreen.tsx",
+        "tests/e2e/shell.spec.ts",
+        "tests/e2e/admin.spec.ts",
+        "tests/e2e/import.spec.ts",
+        "tests/e2e/ot-leave.spec.ts",
+        "tests/e2e/sharing.spec.ts",
+        "tests/e2e/isolation.spec.ts",
+        "tests/e2e/setup.spec.ts",
+        "tests/e2e/review.spec.ts",
+        "tests/e2e/timesheet.spec.ts",
+        "handoff/delivery/tasks/WP5-UX-T01.md",
+        "handoff/delivery/evidence/WP5-UX-T01"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T01.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T01.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T01/e2e-listed-specs.txt",
+        "handoff/delivery/evidence/WP5-UX-T01/e2e-other-specs-mobile.txt",
+        "handoff/delivery/evidence/WP5-UX-T01/e2e-full-suite.txt",
+        "handoff/delivery/evidence/WP5-UX-T01/e2e-full-suite-final.txt"
+      ],
+      "baseline_commit": "5faa0b6f046568dae300331790a9dd168685427b",
+      "source_digest": "b5cdb2d469506b978847eadf41815b8b9fe72c0e585602b99f81d350cc96a41b",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented (3 hand-backs: base, addendum 1, addendum 2): tokens light/dark, button variants, desktop nav and mobile bottom tab bar with More, OT renamed Overtime, Settings 'Import from Excel' link; App.tsx unchanged; e2e specs shell, admin, import, ot-leave, sharing, isolation, setup, review and timesheet (tap-target loops filter visible controls with the previous lower bounds kept). Final full e2e exit 0: desktop 72 passed / 0 failed / 3 skipped, mobile 73 / 0 / 2; typecheck, lint, verify exit 0; digest b5cdb2d4 (779 files). Precommit read 0 staged files (worker may not stage); manual grep found no profile paths or emails. One stray empty heredoc, no effect; no background task left.",
+      "next_action": "WP5-UX-T01-FREEZE commits and pushes the slice; then WP5-UX-T02."
+    },
+    {
+      "id": "WP5-UX-T01-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-T01"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T01-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T01-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "5faa0b6f046568dae300331790a9dd168685427b",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the listed handoff paths, runs the checks, commits on main and pushes; then the coordinator records the result and returns the board to software_ready pending the owner's E-1..E-7 answers."
+      "next_action": "Committer stages the T01 slice and the listed handoff records, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-T02 brief."
     }
   ],
   "future_packages": [

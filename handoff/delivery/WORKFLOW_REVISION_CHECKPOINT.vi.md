@@ -21,8 +21,27 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   2). `handoff/delivery/WP5_PILOT_PACKET.vi.md` có thay đổi chưa commit không rõ nguồn;
   để nguyên, không stage, cho đến khi chủ dự án xác nhận có phải của mình không. Sau đó board về lại `software_ready` (snapshot WP5 đã nghiệm thu không
   đổi); lần chuyển cuối này để chưa commit.
-- Bước kế tiếp: chủ dự án xem mockup và trả lời E-1..E-7; sau đó coordinator viết brief
-  WP5-UX-T01.
+- Đã commit: WP5-UX-CKPT lần 2 = 5faa0b6f046568dae300331790a9dd168685427b trên main, đã
+  push (18 đường dẫn, mọi kiểm tra exit 0, digest 150420e7). Chưa commit sau đó: kết quả
+  trên board và lần chuyển về `software_ready`, cập nhật này (+ en), kết quả và evidence
+  của WP5-UX-CKPT, và `WP5_PILOT_PACKET.vi.md` (không rõ nguồn, không đụng tới).
+- Chủ dự án trả lời E-1..E-7 "OK theo khuyến nghị". Câu trả lời D trả lời trong chat,
+  coordinator ghi nguyên văn, rồi worker tài liệu cập nhật packet EN+VI; chủ dự án đã
+  hoàn lại bản nháp trong `WP5_PILOT_PACKET.vi.md`.
+- Dự kiến vòng GOV-SUPERSEDE trước WP5-UX-GATE (trường audit `superseded_by`, để
+  WP5-RECHECK vẫn là PASS lịch sử khi digest đổi; xem coordinator_decisions).
+- Đang chạy: WP5-UX-T01 (worker, sonnet; token và khung app), gốc 5faa0b6 / 150420e7.
+  Thứ tự: T01 → T01-FREEZE → … → T06, GOV-SUPERSEDE, WP5-UX-GATE, WP5-UX-AUDIT.
+- T01 bàn giao lần đầu: khung app, token, link trong Settings và bốn spec đã xong;
+  typecheck, lint, unit và verify exit 0; e2e mobile lỗi 3 test vì Sign out/Settings
+  chuyển vào More. Phụ lục 1 mở rộng owned paths sang các spec sharing, isolation, setup
+  và review (chỉ sửa test) và yêu cầu chạy toàn bộ e2e; tiếp tục cùng agent.
+- T01 xong sau phụ lục 2: toàn bộ e2e exit 0 (desktop 72/0/3, mobile 73/0/2);
+  typecheck, lint, verify exit 0; digest b5cdb2d4 (779 file). Một heredoc rỗng lỡ chạy
+  (không ảnh hưởng, không còn task treo).
+- Đang chạy: WP5-UX-T01-FREEZE (committer) trên gốc 5faa0b6.
+- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T02 (bảng
+  kiểu Excel; worker-high, opus, novelty).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

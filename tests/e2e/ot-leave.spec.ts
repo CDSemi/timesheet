@@ -94,7 +94,7 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
   seedCredit(builtServer, 600);
 
   await signInThroughUi();
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime' }).click();
   await expect(page).toHaveURL(/#\/ot$/);
   await expect(page.getByRole('heading', { name: 'Overtime balance and leave' })).toBeVisible();
   await expectBalancesMatchApi(page, employeeSeed);

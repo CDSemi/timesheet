@@ -90,6 +90,18 @@ async function decisionsFor(person: Person, id: string, importDays: readonly str
   }));
 }
 
+/** Below 768px the shell shows the bottom tab bar, where Settings, Import, Admin and Sign out sit under "More". */
+function isPhone(page: Page): boolean {
+  return (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < 768;
+}
+
+/** Opens "More" on a phone (once; an open panel stays open). The desktop bar has nothing to open. */
+async function openMoreOnPhone(page: Page) {
+  if (!isPhone(page)) return;
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+}
+
 test('upload, preview with source cells, decide, confirm and commit; the same workbook is already imported', async (
   { page, context, builtServer, adminSeed, signInPageAs },
   testInfo,
@@ -100,7 +112,9 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
   await signInPageAs(person.account, '#/import');
 
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
+  // Import is its own entry under "More" on a phone; the desktop bar marks Settings, the screen it is reached from.
+  await openMoreOnPhone(page);
+  await expect(nav.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('heading', { name: 'Import and opening balance' })).toBeVisible();
 
   // 1. Upload: only a file is needed; nothing is stored until it is sent.
@@ -363,8 +377,15 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
 test('the Import entry is for the signed-in person and is not part of the administrator views', async ({ page, builtServer, signInPageAs }) => {
   await signInPageAs(builtServer.credentials.admin, '#/admin');
   const nav = page.getByRole('navigation', { name: 'Main' });
+  await openMoreOnPhone(page);
   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
+  if (isPhone(page)) {
+    await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
+  } else {
+    // The desktop bar reaches Import through the "Import from Excel" link in Settings.
+    await nav.getByRole('link', { name: 'Settings' }).click();
+    await expect(page.getByRole('link', { name: 'Import from Excel' })).toBeVisible();
+  }
   await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText('Opening OT balance');
 });

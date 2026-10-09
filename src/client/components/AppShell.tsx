@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, type ReceivedShare, type User } from '../api.ts';
 import { parseReviewHash, reviewHash } from './reviewModel.ts';
 import { SharingSwitcher } from './SharingSwitcher.tsx';
@@ -8,21 +8,34 @@ import { parseSharedHash, type SharedView } from './sharingModel.ts';
  * The screens reachable from the navigation. Import (the person's own workbook and opening
  * balance, F-1) and Settings are for everyone; Admin is listed for administrators only. Hiding
  * the entry is a convenience: the server answers 403 on every admin route, so an employee who
- * types #/admin gets the timesheet and no data.
+ * types #/admin gets the timesheet and no data. `tab` marks the entries of the phone's bottom tab
+ * bar; the others sit under "More". `desktop` is false for Import, which the desktop bar reaches
+ * through a link in Settings (the `#/import` route works everywhere).
  */
 export const ROUTES = [
-  { id: 'timesheet', hash: '#/timesheet', label: 'Timesheet', adminOnly: false },
-  { id: 'ot', hash: '#/ot', label: 'OT', adminOnly: false },
-  { id: 'history', hash: '#/history', label: 'History', adminOnly: false },
-  { id: 'import', hash: '#/import', label: 'Import', adminOnly: false },
-  { id: 'settings', hash: '#/settings', label: 'Settings', adminOnly: false },
-  { id: 'admin', hash: '#/admin', label: 'Admin', adminOnly: true },
+  { id: 'timesheet', hash: '#/timesheet', label: 'Timesheet', adminOnly: false, tab: true, desktop: true },
+  { id: 'ot', hash: '#/ot', label: 'Overtime', adminOnly: false, tab: true, desktop: true },
+  { id: 'history', hash: '#/history', label: 'History', adminOnly: false, tab: true, desktop: true },
+  { id: 'settings', hash: '#/settings', label: 'Settings', adminOnly: false, tab: false, desktop: true },
+  { id: 'import', hash: '#/import', label: 'Import', adminOnly: false, tab: false, desktop: false },
+  { id: 'admin', hash: '#/admin', label: 'Admin', adminOnly: true, tab: false, desktop: true },
 ] as const;
 
 export type RouteId = (typeof ROUTES)[number]['id'];
 
 export function routesFor(role: User['role']) {
   return ROUTES.filter((route) => !route.adminOnly || role === 'admin');
+}
+
+/** The entries of the desktop top bar. */
+export function desktopRoutesFor(role: User['role']) {
+  return routesFor(role).filter((route) => route.desktop);
+}
+
+/** The entries of the phone's tab bar, then those under "More" (Settings, Import, Admin for administrators). */
+export function mobileRoutesFor(role: User['role']) {
+  const all = routesFor(role);
+  return { tabs: all.filter((route) => route.tab), more: all.filter((route) => !route.tab) };
 }
 
 /**
@@ -98,9 +111,40 @@ export function AppShell({
   onSignedOut: () => void;
   children: ReactNode;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
+  const { tabs, more } = mobileRoutesFor(user.role);
+  // Import belongs under Settings on the desktop bar; on the phone it is its own entry under "More".
+  const desktopCurrent = route === 'import' ? 'settings' : route;
+  const moreCurrent = more.some((item) => item.id === route);
+
   async function signOut() {
     await api('POST', '/api/auth/logout', {}).catch(() => undefined);
     onSignedOut();
+  }
+
+  // Leaving for another screen closes the panel (the address is the single source of truth for the screen).
+  useEffect(() => {
+    const close = () => setMoreOpen(false);
+    window.addEventListener('hashchange', close);
+    return () => window.removeEventListener('hashchange', close);
+  }, []);
+
+  // A touch or click outside the tab bar closes the panel.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || tabsRef.current?.contains(event.target) !== true) setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [moreOpen]);
+
+  function closeOnEscape(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Escape' || !moreOpen) return;
+    setMoreOpen(false);
+    moreButton.current?.focus();
   }
 
   return (
@@ -108,8 +152,8 @@ export function AppShell({
       <header className="shell-bar">
         <span className="shell-brand">C&amp;D Semi</span>
         <nav className="shell-nav" aria-label="Main">
-          {routesFor(user.role).map((item) => (
-            <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === route ? 'page' : undefined}>
+          {desktopRoutesFor(user.role).map((item) => (
+            <a key={item.id} className="nav-link" href={item.hash} aria-current={item.id === desktopCurrent ? 'page' : undefined}>
               {item.label}
             </a>
           ))}
@@ -133,6 +177,43 @@ export function AppShell({
         )}
         {children}
       </main>
+      <nav ref={tabsRef} className="shell-tabs" aria-label="Main" onKeyDown={closeOnEscape}>
+        {tabs.map((item) => (
+          <a key={item.id} className="tab" href={item.hash} aria-current={item.id === route ? 'page' : undefined}>
+            {item.label}
+          </a>
+        ))}
+        <button
+          ref={moreButton}
+          type="button"
+          className="tab"
+          aria-expanded={moreOpen}
+          aria-controls="more-panel"
+          aria-current={moreCurrent ? 'true' : undefined}
+          onClick={() => setMoreOpen((open) => !open)}
+        >
+          More
+        </button>
+        {moreOpen && (
+          <div id="more-panel" className="more-panel">
+            <span className="more-who muted">{user.display_name}</span>
+            {more.map((item) => (
+              <a
+                key={item.id}
+                className="nav-link"
+                href={item.hash}
+                aria-current={item.id === route ? 'page' : undefined}
+                onClick={() => setMoreOpen(false)}
+              >
+                {item.label}
+              </a>
+            ))}
+            <button type="button" className="more-action" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        )}
+      </nav>
     </>
   );
 }

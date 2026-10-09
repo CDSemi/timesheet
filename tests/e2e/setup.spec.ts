@@ -157,10 +157,14 @@ test('first-time setup creates the administrator once and never returns', async 
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+    // The desktop bar shows Sign out in the banner; on a phone it sits under "More" in the tab bar.
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    const signOut = (await more.isVisible()) ? page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign out' }) : page.getByRole('banner').getByRole('button', { name: 'Sign out' });
+    if (await more.isVisible()) await more.click();
+    await expect(signOut).toBeVisible();
 
     // Setup is closed for good: a fresh visit shows the sign-in form, and the status says so.
-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
+    await signOut.click();
     await page.goto(`${server.origin}/`);
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'First-time setup' })).toHaveCount(0);

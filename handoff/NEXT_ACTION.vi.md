@@ -12,8 +12,8 @@
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án
   duyệt. Chưa xin phép chủ dự án, chưa có kết quả pilot, NAS chưa được kiểm.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08): kế hoạch và mockup tĩnh đã sẵn
-  (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án trả lời
-  E-1..E-7 (board `pending_owner_question_2`) trước khi triển khai. Khi thiết kế mới vào
+  (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). Chủ dự án đã chấp
+  nhận E-1..E-7 theo khuyến nghị (2026-10-08); đang triển khai T01..T06. Khi thiết kế mới vào
   code, snapshot WP5 phải chạy lại gate và audit độc lập, và định danh release trong
   pilot packet được cập nhật.
 

@@ -82,6 +82,42 @@
   --signature-max-height: 6rem;
   --mail-body-max-height: 18rem;
 
+  /* Sheet rules and heads (the Excel-style form); state is always paired with text or a shape */
+  --sheet-rule: #cdd5df;
+  --sheet-rule-soft: #e3e8ee;
+  --sheet-rule-strong: #8d9aab;
+  --sheet-head: #e9eef5;
+  --sheet-head-off: #e1e6ee;
+  --day-nonworking: #f0f2f5;
+  --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.045) 7px 8px);
+  --day-hover: rgb(31 95 191 / 0.04);
+  --day-selected: rgb(31 95 191 / 0.09);
+  --attention-bg: #fff4dc;
+  --attention-ink: #7a4f00;
+
+  /* Buttons: primary hover and the secondary border */
+  --accent-strong: #184e9e;
+  --accent-line: rgb(31 95 191 / 0.45);
+  --control-height: 36px;
+
+  /* Sheet geometry */
+  --editor-width: 400px;
+  --sheet-label-col: 92px;
+  --row-day: 30px;
+  --row-date: 30px;
+  --row-label: 64px;
+  --row-time: 54px;
+  --row-ot: 34px;
+  --row-check: 30px;
+
+  /* App shell: desktop top bar, mobile compact bar and bottom tab bar */
+  --bar-height: 56px;
+  --bar-height-compact: 52px;
+  --tabbar-height: 56px;
+  --layer-bar: 3;
+  --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
+  --more-width: 16rem;
+
   /* Type: the system stack only (the CSP allows no web fonts) */
   --root-font-size: 15px;
   --root-line-height: 1.45;
@@ -89,6 +125,9 @@
   --letter-spacing-tight: -0.01em;
   --font-size-h1: 1.4rem;
   --font-size-base: 1rem;
+  --font-weight-heavy: 700;
+  --font-size-2xs: 0.72rem;
+  --font-size-display: 1.5rem;
   --font-size-xs: 0.8rem;
   --font-size-sm: 0.9rem;
   --font-size-md: 1.05rem;
@@ -121,6 +160,20 @@
     --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45),
       0 24px 64px rgb(4 8 14 / 0.4);
     --focus-ring: 0 0 0 3px rgb(110 168 255 / 0.45);
+    --sheet-rule: #36404d;
+    --sheet-rule-soft: #29313c;
+    --sheet-rule-strong: #5d6a7b;
+    --sheet-head: #222a35;
+    --sheet-head-off: #283140;
+    --day-nonworking: #1e252f;
+    --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+    --day-hover: rgb(110 168 255 / 0.06);
+    --day-selected: rgb(110 168 255 / 0.14);
+    --attention-bg: #33290f;
+    --attention-ink: #f0c25a;
+    --accent-strong: #8dbbff;
+    --accent-line: rgb(110 168 255 / 0.5);
+    --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(4 8 14 / 0.3);
   }
 }
 
@@ -155,33 +208,49 @@ body {
 
 /* ---- Shell ---------------------------------------------------------------- */
 
+/*
+ * Mobile first: a compact top bar (brand, "Shared with me" switcher) and a bottom tab bar
+ * (Timesheet, Overtime, History, More). From 768px the top bar carries the navigation, the
+ * person and Sign out, and the tab bar is gone. The current entry is marked by a rule and a
+ * heavier weight as well as by colour.
+ */
 .shell-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--layer-bar);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-5);
+  min-height: var(--bar-height-compact);
   padding: var(--space-2) var(--space-4);
   background: var(--card);
   box-shadow: var(--shadow-panel);
 }
 
 .shell-brand {
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-strong);
   letter-spacing: var(--letter-spacing-tight);
 }
 
+.shell-nav,
+.shell-user {
+  display: none;
+}
+
 .shell-nav {
-  display: flex;
   flex: 1;
-  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
 .nav-link {
   display: inline-flex;
   align-items: center;
+  min-height: var(--control-height);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius);
+  border-bottom: var(--rule) solid transparent;
   color: var(--muted);
   text-decoration: none;
   transition: var(--transition);
@@ -194,14 +263,120 @@ body {
 
 .nav-link[aria-current='page'] {
   background: var(--off);
+  border-bottom-color: var(--accent);
   color: var(--accent);
   font-weight: var(--font-weight-strong);
 }
 
 .shell-user {
-  display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+.shell-tabs {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--layer-bar);
+  display: grid;
+  grid-template-columns: repeat(var(--cols-4), var(--track));
+  background: var(--card);
+  box-shadow: var(--shadow-tabbar);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.shell-tabs .tab {
+  display: grid;
+  place-items: center;
+  min-width: var(--tap-min);
+  min-height: var(--tabbar-height);
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  border-top: var(--rule) solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+  text-decoration: none;
+  box-shadow: none;
+}
+
+.shell-tabs .tab:hover:not(:disabled) {
+  background: var(--off);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.shell-tabs .tab:focus-visible {
+  box-shadow: inset var(--focus-ring);
+}
+
+.shell-tabs .tab[aria-current] {
+  border-top-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The "More" panel rises above the tab bar and holds the less frequent entries. */
+.more-panel {
+  position: absolute;
+  right: var(--space-2);
+  bottom: 100%;
+  display: flex;
+  flex-direction: column;
+  width: var(--more-width);
+  max-width: calc(100vw - 2 * var(--space-2));
+  margin-bottom: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+}
+
+.more-who {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+}
+
+.more-panel .nav-link,
+.more-panel .more-action {
+  justify-content: flex-start;
+  min-height: var(--tap-min);
+  width: 100%;
+}
+
+.more-panel .more-action {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  text-align: left;
+}
+
+.more-panel .more-action:hover:not(:disabled) {
+  background: var(--off);
+  box-shadow: none;
+}
+
+@media (max-width: 767px) {
+  html {
+    scroll-padding-bottom: calc(var(--tabbar-height) + var(--space-2));
+  }
+}
+
+@media (min-width: 768px) {
+  .shell-bar {
+    min-height: var(--bar-height);
+  }
+
+  .shell-nav,
+  .shell-user {
+    display: flex;
+  }
+
+  .shell-tabs {
+    display: none;
+  }
 }
 
 /* ---- Layout and surfaces -------------------------------------------------- */
@@ -210,6 +385,13 @@ body {
   max-width: var(--page-max);
   margin: 0 auto;
   padding: var(--space-4);
+}
+
+/* Room for the fixed tab bar below the last control of every screen. */
+@media (max-width: 767px) {
+  .page {
+    padding-bottom: calc(var(--tabbar-height) + var(--space-5) + env(safe-area-inset-bottom));
+  }
 }
 
 .narrow {
@@ -276,8 +458,11 @@ input[type='radio'] {
   accent-color: var(--accent);
 }
 
+/* Buttons: primary (accent fill, the default), secondary (card and accent border) and quiet (accent text only). */
 button {
   font: inherit;
+  font-weight: var(--font-weight-strong);
+  min-height: var(--control-height);
   padding: var(--space-2) var(--button-pad-x);
   border-radius: var(--radius);
   border: var(--hairline) solid var(--accent);
@@ -288,6 +473,8 @@ button {
 }
 
 button:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
   box-shadow: var(--shadow-panel);
 }
 
@@ -295,13 +482,32 @@ button:active:not(:disabled) {
   transform: translateY(var(--press-offset));
 }
 
+button:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
 button.secondary {
-  background: transparent;
+  background: var(--card);
+  border-color: var(--accent-line);
   color: var(--accent);
 }
 
 button.secondary:hover:not(:disabled) {
   background: var(--off);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+button.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+}
+
+button.quiet:hover:not(:disabled) {
+  background: var(--off);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 button:disabled {

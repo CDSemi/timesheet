@@ -153,3 +153,15 @@ Unlisted changed/untracked paths found (all under handoff/, not in the brief's s
 
 The brief says any other changed or untracked path stops the commit. The coordinator must
 either add these to the stage list or tell the committer to leave them unstaged.
+
+### Attempt 2 result
+- Node v24.21.0. Pre-HEAD fe67f9400e59ae7c10b9ac8871b4dea10b83860d; commit
+  5faa0b6f046568dae300331790a9dd168685427b; post-HEAD = same.
+- Pushed yes to origin main; remote SHA 5faa0b6f046568dae300331790a9dd168685427b.
+- Digests: working tree and HEAD ls-tree both 150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61.
+- Staged count 18. Left unstaged: handoff/delivery/WP5_PILOT_PACKET.vi.md.
+- Checks, all exit 0: node --version, digests, git add, precommit-check (18 files, 0 findings),
+  git diff --cached --check, ORCHESTRATION.json parse, validate_orchestration.py (PASS),
+  check_recovery.py, validate_package.py --preflight (PASS). Privacy counts: emails 1 each
+  (example.invalid), profile paths/secrets 0.
+- No fixes applied. Evidence: handoff/delivery/evidence/WP5-UX-CKPT/ (unstaged).

@@ -23,8 +23,27 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   evidence (attempt 2). `handoff/delivery/WP5_PILOT_PACKET.vi.md` has an uncommitted
   change of unknown origin; it stays unstaged until the owner says whether it is his. After it, the board returns to `software_ready` (the
   accepted WP5 snapshot is unchanged); that last flip stays uncommitted.
-- Next action: the owner views the mockup and answers E-1..E-7; then the coordinator
-  writes the WP5-UX-T01 brief.
+- Committed: WP5-UX-CKPT attempt 2 = 5faa0b6f046568dae300331790a9dd168685427b on main,
+  pushed (18 paths, all checks exit 0, digest 150420e7). Uncommitted afterwards: the board
+  result and `software_ready` flip, this update (+ vi), the WP5-UX-CKPT results and
+  evidence, and `WP5_PILOT_PACKET.vi.md` (unknown origin, untouched).
+- Owner answered E-1..E-7 "OK theo khuyến nghị" (all recommended). The D answers go in
+  chat, recorded verbatim, then a docs worker updates the packet EN+VI (coordinator
+  decision); the owner reverted his draft edit of `WP5_PILOT_PACKET.vi.md`.
+- Planned GOV-SUPERSEDE cycle before WP5-UX-GATE (audit field `superseded_by` so that
+  WP5-RECHECK stays a historical PASS when the digest moves; see coordinator_decisions).
+- Running: WP5-UX-T01 (worker, sonnet; tokens and shell), base 5faa0b6 / 150420e7.
+  Order: T01 → T01-FREEZE → … → T06, GOV-SUPERSEDE, WP5-UX-GATE, WP5-UX-AUDIT.
+- T01 first hand-back: shell, tokens, Settings link and four specs done; typecheck, lint,
+  unit and verify exit 0; mobile e2e 3 failures because Sign out/Settings moved under
+  More. Addendum 1 extends owned paths to the sharing, isolation, setup and review specs
+  (test updates only) and requires the full e2e suite; the same agent was resumed.
+- T01 done after addendum 2: full e2e exit 0 (desktop 72/0/3, mobile 73/0/2);
+  typecheck, lint, verify exit 0; digest b5cdb2d4 (779 files). One stray empty heredoc
+  (no effect, no task left).
+- Running: WP5-UX-T01-FREEZE (committer) on base 5faa0b6.
+- Next action: on the freeze result, record commit/push, then write the WP5-UX-T02 brief
+  (sheet; worker-high, opus, novelty).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

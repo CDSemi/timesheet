@@ -28,10 +28,32 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
   await signInThroughUi();
 
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('aria-current', 'page');
   await expect(page).toHaveURL(/#\/timesheet$/);
-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+  if (project === 'mobile') {
+    // Phone: three tabs and "More"; the less frequent entries and Sign out open from it.
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
+    const more = nav.getByRole('button', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await more.click();
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
+    await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
+    await page.keyboard.press('Escape');
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await expect(more).toBeFocused();
+    // Each tab is at least 56x44 px.
+    for (const tab of [...(await nav.getByRole('link').all()), more]) {
+      const box = await tab.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(56);
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    }
+  } else {
+    // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
+    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
+  }
 });
 
 test('an unknown hash falls back to the timesheet route', async ({ page, signInThroughUi }) => {
@@ -68,7 +90,8 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
   );
   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
 
-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
+  // Only rendered controls are tap targets: the desktop bar is not displayed on a phone.
+  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline').filter({ visible: true });
   const count = await targets.count();
   expect(count).toBeGreaterThan(4);
   for (let index = 0; index < count; index += 1) {

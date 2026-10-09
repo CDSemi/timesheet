@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { type Page } from '@playwright/test';
 import {
   type CreatedAccount,
   createAccountByAdminApi,
@@ -39,6 +40,14 @@ interface Owner {
 }
 
 /** Employee 1 gets a complete day and a private note; the helper undoes it afterwards. */
+/** On a phone Settings, Import, Admin and Sign out sit under "More" in the tab bar; opens it when shown and closed. */
+async function openMoreOnPhone(page: Page) {
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if (!(await more.isVisible())) return;
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+}
+
 async function seedOwner(employee: SeedClient): Promise<Owner> {
   const [workDate] = await employee.pastFreeWorkdays();
   expect(workDate, 'a past free workday').toBeDefined();
@@ -139,6 +148,7 @@ test('an admin cannot open employee data through any admin screen', async (
   const owner = await seedOwner(employeeSeed);
   try {
     await signInPageAs(builtServer.credentials.admin);
+    await openMoreOnPhone(page);
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' }).click();
     await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
     await expect(page.locator('li.user-row').first()).toBeVisible();
@@ -187,6 +197,7 @@ test('an admin cannot open employee data through any admin screen', async (
 test('an employee sees no Admin entry and the server refuses the admin routes', async ({ page, signInThroughUi }) => {
   await signInThroughUi();
   const nav = page.getByRole('navigation', { name: 'Main' });
+  await openMoreOnPhone(page);
   await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveCount(0);
   await page.evaluate("window.location.hash = '#/admin'");

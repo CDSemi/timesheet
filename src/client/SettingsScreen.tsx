@@ -157,6 +157,15 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
       <h1>Settings</h1>
       <SubmissionSettingsSection />
       <SharingSection onChanged={onSharesChanged} />
+      <section className="card stack" aria-label="Import from Excel">
+        <h2>Import from Excel</h2>
+        <p className="hint muted">Bring in your own workbook and set your opening overtime balance.</p>
+        <div className="button-row">
+          <a className="button-link" href="#/import">
+            Import from Excel
+          </a>
+        </div>
+      </section>
       <section className="card stack" aria-label="Current policy versions">
         <h2>Your work policy</h2>
         <p className="hint muted">
