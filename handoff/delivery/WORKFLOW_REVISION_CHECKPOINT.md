@@ -78,9 +78,16 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   PASS; verify exit 0; digest 46a3a0c6. Contradiction found: docs/04:16 "Display current
   viewing zone" versus the period bar showing the zone only when it differs. Coordinator
   decision: keep the rule, fix the UI in WP5-UX-FIX1.
-- Running: WP5-UX-T06-FREEZE (committer) on base 6cbe5d6.
-- Next action: on the freeze result, write and dispatch WP5-UX-FIX1; then
-  GOV-SUPERSEDE, WP5-UX-GATE and WP5-UX-AUDIT.
+- WP5-UX-T06-FREEZE done: abe6802 on main, pushed (17 files, digest 46a3a0c6, all checks
+  exit 0; head/tail piping deviation, harmless).
+- FIX1 done: "Times in <zone>" always shown, note added when zones differ; unit 1817;
+  full e2e exit 0 (desktop 77/0/3, mobile 78/0/2); preflight and verify exit 0; digest
+  2565b1e8. No deviation.
+- Running: WP5-UX-FIX1-FREEZE (committer) on base abe6802.
+- Next action: on the freeze result, write the GOV-SUPERSEDE-FIX brief (validator field
+  `superseded_by` with probes and docs/08 + vi; profile runtime rule against stdin
+  scripts and head/tail pipes), then its freeze, gate and fresh opus audit; then
+  WP5-UX-GATE and WP5-UX-AUDIT.
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

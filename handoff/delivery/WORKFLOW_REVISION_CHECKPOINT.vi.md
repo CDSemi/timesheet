@@ -77,8 +77,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   preflight PASS; verify exit 0; digest 46a3a0c6. Phát hiện mâu thuẫn: docs/04:16 "Display
   current viewing zone" so với thanh kỳ lương chỉ hiện múi giờ khi khác múi giờ báo cáo.
   Quyết định coordinator: giữ quy tắc, sửa UI ở WP5-UX-FIX1.
-- Đang chạy: WP5-UX-T06-FREEZE (committer) trên gốc 6cbe5d6.
-- Bước kế tiếp: khi có kết quả freeze, viết và giao WP5-UX-FIX1; sau đó GOV-SUPERSEDE,
+- WP5-UX-T06-FREEZE xong: abe6802 trên main, đã push (17 file, digest 46a3a0c6, mọi kiểm
+  tra exit 0; lỡ pipe vào head/tail, vô hại).
+- FIX1 xong: luôn hiện "Times in <zone>", thêm ghi chú khi múi giờ khác nhau; unit 1817;
+  toàn bộ e2e exit 0 (desktop 77/0/3, mobile 78/0/2); preflight và verify exit 0; digest
+  2565b1e8. Không có sai lệch.
+- Đang chạy: WP5-UX-FIX1-FREEZE (committer) trên gốc abe6802.
+- Bước kế tiếp: khi có kết quả freeze, viết brief GOV-SUPERSEDE-FIX (trường
+  `superseded_by` trong validator kèm probe và docs/08 + vi; quy tắc trong profile cấm
+  script qua stdin và pipe vào head/tail), rồi freeze, gate và audit opus độc lập; sau đó
   WP5-UX-GATE và WP5-UX-AUDIT.
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.

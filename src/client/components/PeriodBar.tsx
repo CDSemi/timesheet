@@ -3,14 +3,15 @@ import { reviewStatus } from './dayModel.ts';
 import { gridStatus } from './deliveryModel.ts';
 import { instantText, usDate } from './format.ts';
 import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
-import { dueInWords, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { dueInWords, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
 import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
 import { SubmissionStatusLine } from './SubmissionStatus.tsx';
 
 /**
  * The period bar: which period, when it is due, its one status group and the way to review and sign.
  * The reporting zone owns the accounting dates and the due time; the display zone is only where this
- * browser shows instants, so the zone note appears only when the two differ.
+ * browser shows instants. The bar always names the display zone ("Times in ..."); the longer zone note
+ * with both zones appears only when the two differ.
  */
 export function PeriodBar({
   view,
@@ -54,6 +55,7 @@ export function PeriodBar({
           <span data-period-due={period.payroll_date}>
             <b>{dueInWords(period, view.reporting_zone)}</b>
           </span>
+          <span data-period-zone={zone}>{viewingZoneText(zone)}</span>
         </p>
         {zoneNoteVisible(view.reporting_zone, zone) && (
           <div className="zone-note" data-zone-note>

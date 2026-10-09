@@ -37,6 +37,26 @@ function need(days: string[], count: number): string[] {
   return days;
 }
 
+test.describe('viewing zone equals the reporting zone', () => {
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test('the period bar still names the viewing zone, without the longer zone note', async ({ page, employeeSeed, signInThroughUi }) => {
+    await page.goto('/');
+    const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    const { reportingZone } = await employeeSeed.today();
+    expect(displayZone).toBe(reportingZone);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator('.period-bar [data-period-zone]')).toHaveText(`Times in ${displayZone}`);
+    await expect(page.locator('[data-zone-note]')).toHaveCount(0);
+    // Each day is still named by its saved accounting date.
+    const first = page.locator('[data-day]').first();
+    await expect(first).toHaveAccessibleName(/\d{4}-\d{2}-\d{2}$/);
+    // The bar fits the viewport: no horizontal scroll.
+    expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')).toBe(true);
+  });
+});
+
 test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({
   page,
   employeeSeed,
@@ -83,6 +103,9 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(page.getByText(`Due, your time (${displayZone})`)).toBeVisible();
   // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
   await expect(page.locator('[data-zone-note]')).toBeVisible();
+  // The period bar names the viewing zone compactly, and the reporting zone stays in the note.
+  await expect(page.locator('.period-bar [data-period-zone]')).toHaveText(`Times in ${displayZone}`);
+  await page.locator('.period-bar').screenshot({ path: screenshotPath(`zone-${project}-synthetic.png`), animations: 'disabled' });
   const dueIso = sheet.period.due_local_date;
   await expect(page.locator('[data-period-due]')).toContainText(`${dueIso.slice(5, 7)}/${dueIso.slice(8, 10)}/${dueIso.slice(0, 4)}`);
   await expect(page.locator('[data-period-due]')).toContainText(reportingZone);

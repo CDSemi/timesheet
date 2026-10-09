@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayView, Session } from '../../src/client/api.ts';
-import { clockedInText, dueInWords, runningSessionOf, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+import { clockedInText, dueInWords, runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
 
 function session(id: string, start: string, end: string | null): Session {
   return { id, work_date: '2026-12-03', start_utc: start, end_utc: end, input_zone: 'America/Los_Angeles', source: 'clock', breaks_confirmed: false, version: 1, breaks: [] };
@@ -23,6 +23,13 @@ describe('dueInWords', () => {
     expect(dueInWords({ due_local_date: '2026-12-08', due_local_time: '17:00' }, 'America/Los_Angeles')).toBe(
       'Due Tue 12/08/2026, 17:00 (America/Los_Angeles)',
     );
+  });
+});
+
+describe('viewingZoneText', () => {
+  it('always names the display zone, whether or not it equals the reporting zone', () => {
+    expect(viewingZoneText('America/Los_Angeles')).toBe('Times in America/Los_Angeles');
+    expect(viewingZoneText('Asia/Ho_Chi_Minh')).toBe('Times in Asia/Ho_Chi_Minh');
   });
 });
 

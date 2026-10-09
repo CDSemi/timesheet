@@ -24,7 +24,12 @@ export function dueInWords(period: Pick<Period, 'due_local_date' | 'due_local_ti
   return `Due ${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`;
 }
 
-/** The zone note shows only when the browser's display zone differs from the saved reporting zone. */
+/** The compact line that always names the zone this browser shows times in, for example `Times in Asia/Saigon`. */
+export function viewingZoneText(displayZone: string): string {
+  return `Times in ${displayZone}`;
+}
+
+/** The longer zone note (both zones and the accounting-date explanation) shows only when the browser's display zone differs from the saved reporting zone. */
 export function zoneNoteVisible(reportingZone: string, displayZone: string): boolean {
   return reportingZone !== displayZone;
 }
