@@ -183,8 +183,13 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   2.46:1, WCAG 1.4.11) and B4-02 (Low, ISO due time in the zone note vs docs/04 line 45).
 - Per the 2026-10-09 decision, owner question WP5-UX-Q1 instead of another loop;
   WP5-UX-FIX6 brief prepared as pending (recommended option a).
-- Running: WP5-UX-CKPT2 (checkpoint commit of the REGATE3, A4, B4 records and the pending
-  FIX6 brief). After it, the board is set to `blocked` on WP5-UX-Q1 (uncommitted flip).
+- WP5-UX-CKPT2 done: c24d634 on main, pushed (300 handoff files, digest b7bbcbc0).
+- Board: status `blocked`, next_task_id WP5-UX-FIX6 (pending), waiting for the owner's
+  answer to WP5-UX-Q1. Uncommitted: this flip, the CKPT2 results and evidence, and this
+  checkpoint update (+ vi).
+- Next action: on the owner's answer, record it verbatim; with (a) dispatch WP5-UX-FIX6
+  as written, then freeze, WP5-UX-REGATE4, fresh B5 and an area-A delta A5; with (b) or
+  (c) adjust the plan and record the decision in docs/10 (+ vi) through a docs task.
 - Next action: if both PASS, the WP5 re-accept (pilot packet identity refresh to
   edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, accept commit);
   if area B fails again, an owner question instead of another loop.

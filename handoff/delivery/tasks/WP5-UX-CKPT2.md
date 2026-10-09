@@ -131,3 +131,12 @@ Push per the profile. Append to this brief:
 ## Results
 
 (committer appends here)
+
+Attempt 1 (committer, Sonnet 5.5):
+- Pre-HEAD edaaa852370128ca9bdf206d730f3849346ba994 (= origin/main); post-HEAD and commit
+  c24d6342fb55ee68a368109db6f3e9421059d681; pushed yes; remote SHA the same.
+- Digest before add and ls-tree digest of HEAD: both b7bbcbc0a5bbb097a5547b441d1228f20963445e86b0429169cb7ab47980a873.
+- Staged 300 files: REGATE3 76, AUDIT-A4 85, AUDIT-B4 122, FIX5-FREEZE 2, plus 15 other handoff files.
+- Checks: node v24.21.0; digest 0; add 0; precommit PASS 0; diff --check 0; JSON 0;
+  validate_orchestration 0; check_recovery 0 (106); validate_package --preflight 0.
+- No fix applied; no stop. Evidence: evidence/WP5-UX-CKPT2/checks.txt (unstaged).

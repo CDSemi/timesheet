@@ -187,8 +187,13 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   múi giờ so với docs/04 dòng 45).
 - Theo quyết định 2026-10-09, hỏi chủ dự án WP5-UX-Q1 thay vì lặp tiếp; đã chuẩn bị brief
   WP5-UX-FIX6 ở trạng thái pending (khuyến nghị phương án a).
-- Đang chạy: WP5-UX-CKPT2 (commit checkpoint các bản ghi REGATE3, A4, B4 và brief FIX6
-  đang chờ). Sau đó board chuyển `blocked` chờ WP5-UX-Q1 (lần chuyển này chưa commit).
+- WP5-UX-CKPT2 xong: c24d634 trên main, đã push (300 file handoff, digest b7bbcbc0).
+- Board: status `blocked`, next_task_id WP5-UX-FIX6 (pending), chờ chủ dự án trả lời
+  WP5-UX-Q1. Chưa commit: lần chuyển trạng thái này, kết quả và evidence của CKPT2, và
+  cập nhật checkpoint này (+ en).
+- Bước kế tiếp: khi chủ dự án trả lời, ghi nguyên văn; nếu (a) giao WP5-UX-FIX6 như brief,
+  rồi freeze, WP5-UX-REGATE4, B5 mới và A5 kiểm phần thay đổi; nếu (b) hoặc (c) điều chỉnh
+  kế hoạch và ghi quyết định vào docs/10 (+ vi) qua một task tài liệu.
 - Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet
   thành edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, commit
   nghiệm thu); nếu phần B lại không đạt, hỏi chủ dự án thay vì lặp tiếp.
