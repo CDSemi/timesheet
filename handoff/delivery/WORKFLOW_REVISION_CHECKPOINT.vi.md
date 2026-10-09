@@ -2,11 +2,33 @@
 
 Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 
+## Cập nhật 2026-10-08: vòng thay đổi UI theo yêu cầu chủ dự án (WP5)
+
+- Chủ dự án yêu cầu UI đẹp, dễ dùng hơn; trang Timesheet bố cục giống bảng timesheet
+  trong file Excel mẫu. Nguyên văn ở `owner_decisions` trên board.
+- Quyết định coordinator: chạy như một vòng thay đổi WP5 trước khi kích hoạt pilot,
+  không tạo package mới.
+- Xong: WP5-UX-PLAN (planner, tự báo claude-opus-5-5, chỉ đọc; HEAD fe67f94 và digest
+  150420e7 không đổi). Kế hoạch mục A-G trong `handoff/delivery/tasks/WP5-UX-PLAN.md`;
+  mockup `handoff/delivery/design/WP5-UX/mockup.html` (artboard A1-A7) và tám ảnh chụp
+  dữ liệu giả. Không đổi server/API, chỉ thêm hàm định dạng h:mm để hiển thị trong
+  `src/domain/format.ts`; chia việc WP5-UX-T01..T06, một người ghi, rồi WP5-UX-GATE và
+  audit opus độc lập trên digest mới.
+- Phiên coordinator này không có công cụ Artifact (Design); mockup HTML thay thế.
+- Câu hỏi chờ chủ dự án: `pending_owner_question_2` (E-1..E-7), chặn WP5-UX-T01.
+- Commit checkpoint WP5-UX-CKPT (committer) lưu kế hoạch, mockup, ảnh, board, checkpoint
+  và NEXT_ACTION, cùng bản ghi kết quả và evidence còn sót của GOV-RECOVERY-ACCEPT (lần
+  2). `handoff/delivery/WP5_PILOT_PACKET.vi.md` có thay đổi chưa commit không rõ nguồn;
+  để nguyên, không stage, cho đến khi chủ dự án xác nhận có phải của mình không. Sau đó board về lại `software_ready` (snapshot WP5 đã nghiệm thu không
+  đổi); lần chuyển cuối này để chưa commit.
+- Bước kế tiếp: chủ dự án xem mockup và trả lời E-1..E-7; sau đó coordinator viết brief
+  WP5-UX-T01.
+
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
   được. Session 44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: nhánh main.
-  - HEAD = origin/main = dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc (WP5-ACCEPT, hồ sơ nghiệm thu WP5; source được nghiệm thu là 014bd47, digest 150420e7).
+  - HEAD = origin/main = fe67f9400e59ae7c10b9ac8871b4dea10b83860d (GOV-RECOVERY-ACCEPT, commit chốt; source WP5 được nghiệm thu là 014bd47, digest 150420e7). Lần chuyển board cuối sang `software_ready` và dòng này chưa được commit cho đến lần commit kế tiếp.
     WP3 được nghiệm thu tại b103923, trên mã nguồn 49651c8 với digest c31c300c…. Commit
     đóng băng GOV-SKILL là 3bdffbe.
     Commit nghiệm thu WP2 là 3ead61e; mã nguồn WP2 được nghiệm thu là
@@ -1113,10 +1135,12 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
          - Giữ nguyên cả 82 probe cũ, thêm 5 probe mới.
          - Các đột biến validator V1–V6 đều bị bắt.
          - Rủi ro tùy chọn R1–R4 chuyển vào backlog quản trị.
-       - Đang chạy: GOV-RECOVERY-ACCEPT (committer), commit chốt.
-       - Sau đó coordinator đặt board sang `software_ready`. Cụ thể:
-         - `next_task_id` để trống và phase là `complete-pilot-pending`;
-         - thay đổi cuối cùng của board chưa được commit cho đến lần commit kế tiếp.
+       - GOV-RECOVERY-ACCEPT đã commit và push fe67f94, commit chốt: 39 đường dẫn, 87
+         probe, Grep bí mật ra 0, mọi kiểm tra trả 0, không tạo tag.
+       - Board giờ ở trạng thái `software_ready`.
+         - `next_task_id` để trống, và phase là `complete-pilot-pending`.
+         - Không còn task nào đang chạy hay đang chờ.
+         - Thay đổi cuối cùng này của board chưa được commit.
        - **Trạng thái mission: độ sẵn sàng phần mềm WP1–WP5 đã hoàn tất. Pilot packet cụ
          thể đang chờ chủ dự án.**
        - Sau đó: commit đóng băng, chạy lại gate cho phần docs thay đổi, WP5-PKTID,

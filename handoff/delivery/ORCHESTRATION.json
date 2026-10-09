@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "mission-close",
+  "phase": "ux-change-round-awaiting-owner",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,7 +28,7 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "GOV-RECOVERY-ACCEPT",
+  "next_task_id": "WP5-UX-CKPT",
   "runtime_observations": [
     {
       "date": "2026-10-06",
@@ -127,7 +127,13 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": null,
+  "pending_owner_question_2": {
+    "id": "WP5-UX-E-1..E-7",
+    "asked": "2026-10-08",
+    "source": "WP5-UX-PLAN section E (handoff/delivery/tasks/WP5-UX-PLAN.md); mockup handoff/delivery/design/WP5-UX/mockup.html",
+    "question": "Confirm the redesign direction after viewing the mockup; recommendations in brackets. E-1 sheet rows: [a] Excel rows (Day, Date, Label, Time, OT) plus a Check status row, detail rows behind 'Show details' on the Timesheet and always on the Review; b Excel rows only; c detail rows always. E-2 weekend/holiday colour: [a] one hatched tint for every non-working day from the server calendar, holiday name in the label cell; b separate holiday tint; c Excel header colours only. E-3 editing: [a] side panel (desktop) / bottom sheet (phone), label pickable in the cell; b restyled modal; c typing times in cells (not recommended). E-4 formats: [US dates, h:mm, 24-hour, as on the PDF]. E-5 navigation: [a] Timesheet, Overtime, History, Settings (+ Admin), Import under Settings/More, 'OT' renamed 'Overtime'; b keep six items. E-6 manager signature line: [a] show the empty labelled line; b omit. E-7 scope: [a] shell/tokens, Timesheet, day editor, Review now; b also Overtime/History/Settings; c Timesheet only. Label wording keeps the app categories; Excel's 'Sick Day' and 'Off Day (Overtime Used)' are not reintroduced unless the owner asks.",
+    "blocking": "WP5-UX-T01 and later implementation tasks. Software readiness of the accepted WP5 snapshot is unaffected."
+  },
   "pending_owner_question": {
     "id": "WP5-D-1..D-15",
     "asked": "2026-10-06",
@@ -155,11 +161,11 @@
   "wp2_plan": "handoff/delivery/tasks/WP2-PLAN.md",
   "wp3_plan": "handoff/delivery/tasks/WP3-PLAN.md",
   "checkpoint": "handoff/delivery/WORKFLOW_REVISION_CHECKPOINT.md",
-  "updated_at": "2026-10-05",
+  "updated_at": "2026-10-08",
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
+    "last_commit": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
     "unpushed": []
   },
   "owner_decisions": [
@@ -262,9 +268,20 @@
       "source": "owner chat, direct reply typed by the owner to the readme-md clarification (A = fix with defaults, B = remove)",
       "verbatim": "B",
       "decision": "Option B, reverses H-Q3 (a): remove the skill .claude/skills/readme-md/ (SKILL.md, references/markdown.md, references/outlines.md) from the repository instead of fixing it. GOV-SKILL-AUDIT findings GOV-SKILL-01..04 and note N1 are resolved by removal. The removal is a governance-path change and goes through a GOV cycle (removal, freeze, verifier gate, fresh audit)."
+    },
+    {
+      "date": "2026-10-08",
+      "source": "owner chat, direct request typed by the owner (new session started from the desktop app's Design template)",
+      "verbatim": "Thiết kế UI hiện tại khó hiểu và quá khó sử dụng. Tôi muốn một thiết kế đẹp và thân thiện hơn. Đặc biệt page Timesheet nên có phần layout giống như timesheet layout trong file excel mẫu để những người quen sử dụng bản excel không bị bở ngỡ khi xài app này",
+      "decision": "Owner-requested UI redesign before pilot activation: a more beautiful and friendly UI, and a Timesheet page laid out like the timesheet in the sample Excel workbook. Business behaviour is unchanged unless the owner decides otherwise."
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-08",
+      "basis": "Owner UI request of 2026-10-08; validate_orchestration.py allows only WP1-WP5 and GOV packages; WP5 is the active package and the pilot is not activated; the pilot packet already foresees owner-driven fix rounds (fix, freeze, gate, independent audit) before activation; docs/08 'Changed source identity invalidates an old audit pass'. The desktop app asked for a Design artifact, but this coordinator session has no Artifact tool.",
+      "decision": "Run the redesign as an owner-requested WP5 change round, not a new package (a new package would need a GOV change first). Step 1 is WP5-UX-PLAN: a read-only opus planner (override reason novelty) diagnoses the current UI, maps the Excel timesheet layout to app data, and delivers a self-contained static HTML mockup under handoff/delivery/design/WP5-UX/ in place of the Design artifact. Implementation starts only after the owner confirms the design. Once source changes, the accepted WP5 digest 150420e7 is superseded: the round needs a freeze, a verifier gate and a fresh independent audit on the new digest; how earlier WP5 PASS audits are recorded (kept as history at their digest) is settled before the first freeze. STATE.json keeps WP5 accepted at 014bd47 until then. Reversible by the owner."
+    },
     {
       "date": "2026-10-06",
       "basis": "Area B has needed four rechecks on the workbook parse budget (WP4-B-01, RB-01, RB2-01, RB3-01); each fresh auditor found a new shape (unusual tag names, attribute floods, double decoding, now incompressible content) because the budget was claimed from searched shapes rather than derived; real timesheet workbooks are tens of KB (template 26 KB; a 60-dated-sheet workbook previews in ~70 ms)",
@@ -429,6 +446,18 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "TEST-ACCOUNTS",
+      "agent_type": "Explore",
+      "agent_id": "ae2c42b7ae5c84f2a",
+      "status": "done",
+      "writes": [],
+      "purpose": "Read-only lookup for an owner question (2026-10-07, 'which account is used to run tests'): how automated tests obtain users, and how the owner signs in to a local synthetic instance (bootstrap, seed, setup token), with the exact documented commands and env vars; no credential values copied.",
+      "result": {
+        "automated_tests": "No pre-existing account, real SMTP or external service. Vitest (tests/support/testApp.ts:66-96), e2e (tests/e2e/fixtures.ts:82-127), smoke (scripts/smoke-built-server.mjs) and the container drill create synthetic example.invalid users in temporary databases with run-time random passwords; fixed synthetic literals exist only in some vitest files against temp databases. npm test fails if PRODUCTION_SENDING_ENABLED is set (tests/integration/delivery.test.ts:787).",
+        "manual_local": "npm run seed (after npm run build) creates admin@, employee@ and employee2@example.invalid; passwords from SEED_ADMIN_PASSWORD / SEED_EMPLOYEE_PASSWORD / SEED_EMPLOYEE2_PASSWORD (12+ chars) or printed once when generated (seed.ts:270-271); a rerun prints no passwords. Production-style path: cli.js bootstrap --config <file> prints a single-use setup token (60 min) for the First-time setup screen; bootstrap and seed cannot share a database. Ordinary users only via the admin screen with a temporary password; no self-registration and no self-service password change (E-11, D-9). Set DATABASE_PATH and DATA_DIR explicitly outside Dropbox (DATA_DIR inside Dropbox is refused); otherwise the CLI uses %LOCALAPPDATA%\\timesheet-dev. OUTBOUND_MODE defaults to capture; MAIL_FROM needed to avoid sender_missing."
+      }
+    },
     {
       "id": "WF-CAPS",
       "agent_type": "claude-code-guide",
@@ -13163,7 +13192,7 @@
       "id": "GOV-RECOVERY-ACCEPT",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "GOV-RECOVERY-AUDIT"
       ],
@@ -13176,10 +13205,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "a47ef052fa5b8fed6",
       "session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
       "attempt": 1,
       "owned_paths": [
@@ -13188,16 +13217,18 @@
       ],
       "prompt": "handoff/delivery/tasks/GOV-RECOVERY-ACCEPT.md",
       "report": "handoff/delivery/tasks/GOV-RECOVERY-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/GOV-RECOVERY-ACCEPT/commit-message.txt"
+      ],
       "baseline_commit": "7f750e9e5127eef23b96f18b37d4caee83baa414",
       "branch": "main",
-      "commit_sha": null,
-      "pushed": false,
+      "commit_sha": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
+      "pushed": true,
       "source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
       "reviewed_digest": null,
       "author_agent_ids": [],
-      "decision": null,
-      "next_action": "Commit and push the GOV-RECOVERY gate and audit records and the final STATE, NEXT_ACTION and checkpoint (closing commit of the software-readiness mission)."
+      "decision": "committed and pushed, the closing commit of the software-readiness mission: parent 7f750e9, remote SHA identical; source digest 150420e7; nothing pre-staged; 39 paths staged as briefed; 87 probes; secrets Grep 0; precommit, diff --check, JSON parse, validate_orchestration, check_recovery and preflight all 0; no tag. The checks log was kept in the brief's results; only commit-message.txt was saved as evidence.",
+      "next_action": "None; mission software_ready. Owner pilot review next."
     },
     {
       "id": "WP4-RECHECK-B4",
@@ -14133,6 +14164,91 @@
       "author_agent_ids": [],
       "decision": "committed and pushed on attempt 2: 8 handoff paths; precommit, diff-check, JSON parse and validator exit 0.",
       "next_action": "None; mission paused for owner decisions."
+    },
+    {
+      "id": "WP5-UX-PLAN",
+      "package": "WP5",
+      "kind": "plan",
+      "status": "done",
+      "depends_on": [],
+      "profile": "timesheet-planner",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aec5a290490907629",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-PLAN.md",
+        "handoff/delivery/design/WP5-UX"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-PLAN.md",
+      "report": "handoff/delivery/tasks/WP5-UX-PLAN.md",
+      "evidence": [
+        "handoff/delivery/design/WP5-UX/mockup.html",
+        "handoff/delivery/design/WP5-UX/current-timesheet-desktop-synthetic.png",
+        "handoff/delivery/design/WP5-UX/current-timesheet-mobile-synthetic.png",
+        "handoff/delivery/design/WP5-UX/current-day-editor-desktop-synthetic.png",
+        "handoff/delivery/design/WP5-UX/mockup-a1-light-synthetic.png",
+        "handoff/delivery/design/WP5-UX/mockup-a1-dark-synthetic.png",
+        "handoff/delivery/design/WP5-UX/mockup-a2-light-synthetic.png",
+        "handoff/delivery/design/WP5-UX/mockup-a3-light-synthetic.png",
+        "handoff/delivery/design/WP5-UX/mockup-a4-light-synthetic.png"
+      ],
+      "baseline_commit": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "plan delivered (sections A-G): no server/API change except a display-only h:mm formatter in src/domain/format.ts; mockup artboards A1-A7; owner decisions E-1..E-7; slicing WP5-UX-T01..T06 with one writer, WP5-UX-GATE and a fresh opus audit. Read-only: HEAD fe67f94 and digest 150420e7 observed unchanged at start and end (Node v24.21.0).",
+      "next_action": "Owner answers E-1..E-7 after viewing the mockup; then the coordinator writes the WP5-UX-T01 brief."
+    },
+    {
+      "id": "WP5-UX-CKPT",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "history": [
+        "attempt 1 (agent adb0de9fbe201c889, self-reported claude-sonnet-5-5): stopped before staging on three unlisted handoff paths (WP5_PILOT_PACKET.vi.md modified, GOV-RECOVERY-ACCEPT.md modified, GOV-RECOVERY-ACCEPT/commit-message.txt untracked); no commit, HEAD fe67f94. Coordinator: stage the two GOV-RECOVERY-ACCEPT records (the board lists that evidence); leave WP5_PILOT_PACKET.vi.md unstaged (unknown origin, owner asked)."
+      ],
+      "depends_on": [
+        "WP5-UX-PLAN"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "adb0de9fbe201c889",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 2,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-CKPT.md",
+        "handoff/delivery/evidence/WP5-UX-CKPT"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-CKPT.md",
+      "report": "handoff/delivery/tasks/WP5-UX-CKPT.md",
+      "evidence": [],
+      "baseline_commit": "fe67f9400e59ae7c10b9ac8871b4dea10b83860d",
+      "source_digest": null,
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": null,
+      "next_action": "Committer stages the listed handoff paths, runs the checks, commits on main and pushes; then the coordinator records the result and returns the board to software_ready pending the owner's E-1..E-7 answers."
     }
   ],
   "future_packages": [

@@ -106,4 +106,11 @@ Return at most 120 words, beginning with your self-reported model.
 
 ## Results
 
-(Committer appends here.)
+- Pre-HEAD 7f750e9e5127eef23b96f18b37d4caee83baa414; post-HEAD/commit
+  fe67f9400e59ae7c10b9ac8871b4dea10b83860d; pushed yes; remote SHA the same.
+- Node v24.21.0; digest 150420e7...6533e61 (matches); staged 39; nothing pre-staged.
+- New paths: REVIEW (+vi), ACCEPT brief, all evidence files. Modified: the other
+  listed tasks, boards, NEXT_ACTION, checkpoints.
+- Probes 87; secrets Grep count on staged evidence folders 0.
+- Exit codes: precommit 0 (39 files), diff --check 0, JSON 0, orchestration 0,
+  check_recovery 0, preflight 0, push 0. check_recovery.py unchanged. Blockers: none.

@@ -2,11 +2,35 @@
 
 Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 
+## Update 2026-10-08: owner-requested UI change round (WP5)
+
+- The owner asked for a more beautiful, easier UI, with the Timesheet page laid out like
+  the timesheet in the sample Excel workbook. Verbatim request in the board's
+  `owner_decisions`.
+- Coordinator decision: run it as a WP5 change round before pilot activation (no new
+  package). The board moved from `software_ready` to `running`; `next_task_id` is
+  WP5-UX-PLAN.
+- Done: WP5-UX-PLAN (planner, self-reported claude-opus-5-5, read-only; HEAD fe67f94 and
+  digest 150420e7 unchanged at start and end). Plan sections A-G in
+  `handoff/delivery/tasks/WP5-UX-PLAN.md`; mockup `handoff/delivery/design/WP5-UX/mockup.html`
+  (artboards A1-A7) with eight synthetic screenshots. No server/API change except a
+  display-only h:mm formatter in `src/domain/format.ts`; slicing WP5-UX-T01..T06, one
+  writer, then WP5-UX-GATE and a fresh opus audit on the new digest.
+- This coordinator session has no Artifact (Design) tool; the HTML mockup replaces it.
+- Pending owner question: board `pending_owner_question_2` (E-1..E-7). Blocks WP5-UX-T01.
+- Checkpoint commit WP5-UX-CKPT (committer) stores the plan, mockup, screenshots, board,
+  checkpoints and NEXT_ACTION, plus the leftover GOV-RECOVERY-ACCEPT result record and
+  evidence (attempt 2). `handoff/delivery/WP5_PILOT_PACKET.vi.md` has an uncommitted
+  change of unknown origin; it stays unstaged until the owner says whether it is his. After it, the board returns to `software_ready` (the
+  accepted WP5 snapshot is unchanged); that last flip stays uncommitted.
+- Next action: the owner views the mockup and answers E-1..E-7; then the coordinator
+  writes the WP5-UX-T01 brief.
+
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session
   44e3451e-da20-4a12-94bb-6b94fc5f531e.
 - Repository: branch main.
-  - HEAD = origin/main = dd0c7d1a9ddde1db1af46bc33a446f0e8c17e4fc (WP5-ACCEPT, the WP5 acceptance records; accepted source 014bd47, digest 150420e7).
+  - HEAD = origin/main = fe67f9400e59ae7c10b9ac8871b4dea10b83860d (GOV-RECOVERY-ACCEPT, the closing commit; accepted WP5 source 014bd47, digest 150420e7). The board's final flip to `software_ready` and this line are uncommitted until the next commit.
     WP3 was accepted at b103923, on source 49651c8 with digest c31c300c…. The GOV-SKILL
     freeze is 3bdffbe.
     WP2 accept commit 3ead61e; accepted WP2 source 5fafeaee72509c6110a907458643bf7582dad81a.
@@ -1060,10 +1084,12 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
          - All 82 old probes are kept, and 5 new ones are added.
          - Validator mutants V1–V6 are killed.
          - Optional risks R1–R4 go to the governance backlog.
-       - Running: GOV-RECOVERY-ACCEPT (committer), the closing commit.
-       - After it, the coordinator sets the board to `software_ready`. That means:
-         - `next_task_id` null and the phase `complete-pilot-pending`;
-         - the final board change stays uncommitted until the next commit.
+       - GOV-RECOVERY-ACCEPT committed and pushed fe67f94, the closing commit: 39
+         paths, 87 probes, secrets Grep 0, all checks 0, no tag.
+       - The board is now `software_ready`.
+         - `next_task_id` is null, and the phase is `complete-pilot-pending`.
+         - No task is running or pending.
+         - This last board change is uncommitted.
        - **Mission state: WP1–WP5 software readiness is complete. The concrete pilot
          packet waits for the owner.**
        - Then: a freeze, a docs-delta regate, WP5-PKTID, WP5-RECHECK (fresh opus),

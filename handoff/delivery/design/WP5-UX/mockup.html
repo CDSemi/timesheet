@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WP5-UX mockup: Timesheet redesign (synthetic data)</title>
+<style>
+/*
+ * WP5-UX-PLAN static mockup. Self-contained: no network fonts, scripts or images. Synthetic data only.
+ * Tokens: the existing names from src/client/styles.css keep their values; the block marked NEW lists the
+ * custom properties this redesign would add. System font stack only (the app CSP allows no web fonts).
+ */
+:root {
+  color-scheme: light dark;
+  /* existing tokens (same values as src/client/styles.css) */
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1c2430;
+  --muted: #5b6675;
+  --line: #d9dee5;
+  --line-soft: #e8ecf1;
+  --off: #eef1f5;
+  --accent: #1f5fbf;
+  --on-accent: #ffffff;
+  --error: #b42318;
+  --ok: #1a7f4b;
+  --warn: #8a5a00;
+  --radius: 4px;
+  --duration: 300ms;
+  --ease: ease-out;
+  --transition: all var(--duration) var(--ease);
+  --shadow-panel: 0 0 0 1px rgb(28 36 48 / 0.06), 0 1px 2px rgb(28 36 48 / 0.04), 0 4px 12px rgb(28 36 48 / 0.05), 0 12px 32px rgb(28 36 48 / 0.04);
+  --shadow-overlay: 0 0 0 1px rgb(28 36 48 / 0.1), 0 2px 4px rgb(28 36 48 / 0.08), 0 8px 24px rgb(28 36 48 / 0.1), 0 24px 64px rgb(28 36 48 / 0.08);
+  --focus-ring: 0 0 0 3px rgb(31 95 191 / 0.35);
+  --scrim: rgb(18 22 28 / 0.5);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --press-offset: 1px;
+  --tap-min: 44px;
+  --font-size-xs: 0.8rem;
+  --font-size-sm: 0.9rem;
+  --font-size-md: 1.05rem;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+
+  /* NEW: sheet (the Excel form) */
+  --sheet-rule: #cdd5df;
+  --sheet-rule-soft: #e3e8ee;
+  --sheet-rule-strong: #8d9aab;
+  --sheet-head: #e9eef5;
+  --sheet-head-off: #e1e6ee;
+  --sheet-label-col: 92px;
+  --row-day: 30px;
+  --row-date: 30px;
+  --row-label: 64px;
+  --row-time: 54px;
+  --row-ot: 34px;
+  --row-check: 30px;
+  /* NEW: day states (always paired with text or a shape) */
+  --day-nonworking: #f0f2f5;
+  --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(28 36 48 / 0.045) 7px 8px);
+  --day-hover: rgb(31 95 191 / 0.04);
+  --day-selected: rgb(31 95 191 / 0.09);
+  --day-today: var(--accent);
+  --attention-bg: #fff4dc;
+  --attention-ink: #7a4f00;
+  --live: var(--ok);
+  /* NEW: buttons and type */
+  --accent-strong: #184e9e;
+  --accent-line: rgb(31 95 191 / 0.45);
+  --font-size-2xs: 0.72rem;
+  --font-size-display: 1.5rem;
+  --font-weight-strong: 600;
+  --font-weight-heavy: 700;
+  --control-height: 36px;
+  --editor-width: 400px;
+  --desk: #dde2e9;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161c; --card: #1a2029; --text: #e6e9ee; --muted: #9aa5b4; --line: #2c3440; --line-soft: #232a34;
+    --off: #202733; --accent: #6ea8ff; --on-accent: #0b1220; --error: #ff8a80; --ok: #5fd29a; --warn: #e3b341;
+    --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3), 0 12px 32px rgb(4 8 14 / 0.25);
+    --shadow-overlay: 0 0 0 1px rgb(4 8 14 / 0.6), 0 2px 4px rgb(4 8 14 / 0.4), 0 8px 24px rgb(4 8 14 / 0.45), 0 24px 64px rgb(4 8 14 / 0.4);
+    --focus-ring: 0 0 0 3px rgb(110 168 255 / 0.45);
+    --sheet-rule: #36404d; --sheet-rule-soft: #29313c; --sheet-rule-strong: #5d6a7b; --sheet-head: #222a35; --sheet-head-off: #283140;
+    --day-nonworking: #1e252f; --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+    --day-hover: rgb(110 168 255 / 0.06); --day-selected: rgb(110 168 255 / 0.14);
+    --attention-bg: #33290f; --attention-ink: #f0c25a; --accent-strong: #8dbbff; --accent-line: rgb(110 168 255 / 0.5); --desk: #0b0e12;
+  }
+}
+@media (prefers-reduced-motion: reduce) { :root { --duration: 0.01ms; } }
+
+/* forced dark sample for the token board */
+.theme-dark {
+  --bg: #12161c; --card: #1a2029; --text: #e6e9ee; --muted: #9aa5b4; --line: #2c3440; --line-soft: #232a34;
+  --off: #202733; --accent: #6ea8ff; --on-accent: #0b1220; --ok: #5fd29a; --warn: #e3b341;
+  --sheet-rule: #36404d; --sheet-rule-soft: #29313c; --sheet-rule-strong: #5d6a7b; --sheet-head: #222a35; --sheet-head-off: #283140;
+  --day-nonworking: #1e252f; --hatch: repeating-linear-gradient(135deg, transparent 0 7px, rgb(230 233 238 / 0.04) 7px 8px);
+  --day-selected: rgb(110 168 255 / 0.14); --attention-bg: #33290f; --attention-ink: #f0c25a; --accent-line: rgb(110 168 255 / 0.5);
+  --shadow-panel: 0 0 0 1px rgb(4 8 14 / 0.4), 0 1px 2px rgb(4 8 14 / 0.3), 0 4px 12px rgb(4 8 14 / 0.3), 0 12px 32px rgb(4 8 14 / 0.25);
+  color: var(--text);
+  background: var(--bg);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--text); }
+:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: var(--focus-ring); }
+.mono { font-family: var(--font-mono), monospace; }
+.muted { color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+h1, h2, h3, h4 { margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; }
+
+/* ---- Document around the artboards (not part of the app) ---------------------------------- */
+.doc { max-width: 1360px; margin: 0 auto; padding: 40px 24px 80px; }
+.doc-head { display: grid; gap: 12px; margin-bottom: 40px; max-width: 78ch; }
+.doc-head h1 { font-size: 1.6rem; }
+.doc-index { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.doc-index a { display: inline-block; padding: 6px 10px; border-radius: var(--radius); background: var(--card); color: var(--accent); text-decoration: none; box-shadow: var(--shadow-panel); transition: var(--transition); }
+.doc-index a:hover { background: var(--off); }
+.artboard { margin: 56px 0 0; display: grid; gap: 14px; }
+.artboard-head { display: grid; gap: 6px; max-width: 86ch; }
+.artboard-head h2 { font-size: 1.15rem; }
+.artboard-head .id { font-family: var(--font-mono), monospace; color: var(--muted); font-size: var(--font-size-sm); }
+.caption-vi { padding: 12px 16px; border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-panel); border-left: 3px solid var(--accent); }
+.scroller { overflow-x: auto; padding: 6px 6px 18px; }
+.frame { background: var(--bg); border-radius: var(--radius); box-shadow: var(--shadow-overlay); overflow: hidden; position: relative; }
+.frame-desktop { width: 1280px; }
+.frame-mobile { width: 390px; height: 844px; overflow-y: auto; }
+.phones { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+.phone-note { max-width: 300px; font-size: var(--font-size-sm); color: var(--muted); display: grid; gap: 8px; }
+
+/* ---- Buttons and controls ------------------------------------------------------------------ */
+.btn { font: inherit; font-weight: var(--font-weight-strong); display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--control-height); padding: 0 14px; border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none; transition: var(--transition); }
+.btn:active { transform: translateY(var(--press-offset)); }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { background: var(--accent-strong); box-shadow: var(--shadow-panel); }
+.btn-secondary { background: var(--card); color: var(--accent); border-color: var(--accent-line); }
+.btn-secondary:hover { background: var(--off); border-color: var(--accent); }
+.btn-quiet { background: transparent; color: var(--accent); }
+.btn-quiet:hover { background: var(--off); }
+.btn-lg { min-height: 48px; padding: 0 20px; font-size: var(--font-size-md); }
+.btn-block { width: 100%; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+.icon-btn { font: inherit; width: var(--control-height); height: var(--control-height); display: inline-grid; place-items: center; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 1.2rem; cursor: pointer; transition: var(--transition); }
+.icon-btn:hover { background: var(--off); border-color: var(--muted); }
+label.field { display: grid; gap: 4px; font-size: var(--font-size-sm); font-weight: var(--font-weight-strong); }
+label.field .hint, .hint { font-weight: 400; font-size: var(--font-size-xs); color: var(--muted); }
+input[type='text'], input[type='time'], input[type='number'], input[type='date'], select, textarea {
+  font: inherit; font-weight: 400; min-height: var(--control-height); padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); color: var(--text); transition: var(--transition); width: 100%;
+}
+input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+textarea { min-height: 64px; resize: vertical; }
+label.check { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); }
+input[type='checkbox'], input[type='radio'] { width: 1.15rem; height: 1.15rem; accent-color: var(--accent); margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-size-xs); padding: 1px 8px; border-radius: var(--radius); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip-current { color: var(--ok); border-color: var(--ok); }
+.chip-accent { color: var(--accent); border-color: var(--accent-line); }
+.chip-warn { color: var(--attention-ink); border-color: var(--attention-ink); background: var(--attention-bg); }
+
+/* status shapes (as in the app: a shape is never the only signal) */
+.st { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.shape { width: 0.62rem; height: 0.62rem; display: inline-block; background: currentColor; flex: none; }
+.shape-circle { border-radius: 50%; }
+.shape-diamond { transform: rotate(45deg) scale(0.85); }
+.shape-square { background: transparent; border: 2px solid currentColor; }
+.shape-bar { height: 2px; }
+.st-ok { color: var(--ok); }
+.st-warn { color: var(--attention-ink); }
+.st-muted { color: var(--muted); }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 rgb(26 127 75 / 0.5); animation: live 2.4s ease-out infinite; flex: none; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 rgb(26 127 75 / 0.45); } 70% { box-shadow: 0 0 0 7px rgb(26 127 75 / 0); } 100% { box-shadow: 0 0 0 0 rgb(26 127 75 / 0); } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* ---- App shell (desktop) ------------------------------------------------------------------- */
+.shell { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 32px; height: 56px; padding: 0 24px; background: var(--card); box-shadow: var(--shadow-panel); position: relative; z-index: 1; }
+.brand { display: inline-flex; align-items: baseline; gap: 10px; font-weight: var(--font-weight-heavy); letter-spacing: -0.01em; }
+.brand .product { font-weight: 400; color: var(--muted); padding-left: 10px; border-left: 1px solid var(--line); }
+.nav { display: flex; gap: 2px; height: 100%; }
+.nav a { display: inline-flex; align-items: center; padding: 0 14px; color: var(--muted); text-decoration: none; transition: var(--transition); box-shadow: inset 0 -2px 0 transparent; }
+.nav a:hover { color: var(--text); background: var(--off); }
+.nav a[aria-current='page'] { color: var(--text); font-weight: var(--font-weight-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.user { display: inline-flex; align-items: center; gap: 10px; font-size: var(--font-size-sm); }
+.avatar { width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: var(--radius); background: var(--sheet-head); font-weight: var(--font-weight-strong); font-size: var(--font-size-xs); }
+
+/* ---- Timesheet page (desktop) -------------------------------------------------------------- */
+.page { padding: 20px 24px 28px; display: grid; gap: 14px; }
+.workbar { display: grid; grid-template-columns: 1fr auto; gap: 14px; }
+.panel { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-panel); }
+.period { padding: 14px 18px; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; }
+.period-main { display: grid; gap: 4px; }
+.period-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.period-title h1 { font-size: var(--font-size-display); font-weight: var(--font-weight-heavy); }
+.period-meta { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: var(--font-size-sm); color: var(--muted); }
+.period-meta b { color: var(--text); font-weight: var(--font-weight-strong); }
+.period-actions { display: flex; gap: 8px; align-items: center; }
+.clock { padding: 14px 18px; display: grid; grid-template-columns: auto auto; gap: 18px; align-items: center; }
+.clock-state { display: grid; gap: 2px; }
+.clock-state .now { display: inline-flex; align-items: center; gap: 8px; font-weight: var(--font-weight-strong); }
+.clock-state .sub { font-size: var(--font-size-xs); color: var(--muted); }
+.tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.tools-left, .tools-right { display: flex; align-items: center; gap: 8px; }
+.tools .open-day { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); color: var(--muted); }
+.tools .open-day input { width: 150px; min-height: 32px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); }
+.switch .track { width: 32px; height: 18px; border-radius: 9px; background: var(--line); position: relative; transition: var(--transition); }
+.switch .track::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgb(28 36 48 / 0.3); transition: var(--transition); }
+.switch.on .track { background: var(--accent); }
+.switch.on .track::after { transform: translateX(14px); }
+
+/* ---- The sheet: the Excel form ------------------------------------------------------------- */
+.sheet { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-panel); padding: 22px 26px 26px; }
+.form-head { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; padding-bottom: 14px; border-bottom: 2px solid var(--sheet-rule-strong); }
+.company { font-size: 1.12rem; font-weight: var(--font-weight-heavy); letter-spacing: 0.01em; }
+.form-title { font-size: var(--font-size-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.form-fields { display: grid; grid-template-columns: auto auto auto auto auto auto; gap: 2px 10px; font-size: var(--font-size-sm); align-items: baseline; margin: 0; }
+.form-fields dt { color: var(--muted); }
+.form-fields dd { margin: 0 14px 0 0; font-weight: var(--font-weight-strong); }
+.week { margin-top: 18px; }
+.week-bar { display: flex; align-items: baseline; gap: 16px; padding: 5px 10px; background: var(--sheet-head); border: 1px solid var(--sheet-rule); border-bottom: 0; font-size: var(--font-size-sm); }
+.week-bar strong { letter-spacing: 0.04em; }
+.week-grid { display: grid; grid-template-columns: var(--sheet-label-col) repeat(7, minmax(0, 1fr)); grid-template-rows: var(--row-day) var(--row-date) var(--row-label) var(--row-time) var(--row-ot) var(--row-check); border: 1px solid var(--sheet-rule); }
+.week-grid.with-details { grid-template-rows: var(--row-day) var(--row-date) var(--row-label) var(--row-time) var(--row-ot) var(--row-check) 28px 28px; }
+.row-labels { grid-column: 1; grid-row: 1 / -1; display: grid; grid-template-rows: subgrid; background: var(--sheet-head); border-right: 1px solid var(--sheet-rule); }
+.row-labels > div { display: flex; align-items: center; padding: 0 10px; font-size: var(--font-size-2xs); font-weight: var(--font-weight-strong); color: var(--muted); border-bottom: 1px solid var(--sheet-rule-soft); }
+.row-labels > div:last-child, .day > :last-child { border-bottom: 0; }
+.day { grid-row: 1 / -1; display: grid; grid-template-rows: subgrid; border-right: 1px solid var(--sheet-rule); position: relative; transition: var(--transition); cursor: pointer; min-width: 0; }
+.day:last-child { border-right: 0; }
+.day:hover { background-color: var(--day-hover); }
+.day > div { border-bottom: 1px solid var(--sheet-rule-soft); padding: 3px 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; min-width: 0; gap: 1px; }
+.d-day { background: var(--sheet-head); font-weight: var(--font-weight-heavy); font-size: var(--font-size-sm); flex-direction: row !important; gap: 6px !important; }
+.d-date button { font: inherit; font-family: var(--font-mono), monospace; font-size: var(--font-size-sm); background: none; border: 0; color: var(--text); padding: 2px 6px; border-radius: var(--radius); cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: var(--transition); }
+.day:hover .d-date button, .d-date button:hover { color: var(--accent); text-decoration-color: currentColor; }
+.d-label { font-weight: var(--font-weight-strong); font-size: var(--font-size-sm); line-height: 1.25; position: relative; }
+.d-label .sub, .d-time .sub { font-weight: 400; font-size: var(--font-size-2xs); color: var(--muted); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.d-label .caret { position: absolute; right: 5px; top: 5px; font-size: 0.7rem; color: var(--muted); opacity: 0; transition: var(--transition); }
+.day:hover .d-label .caret { opacity: 1; }
+.d-label .note { font-size: var(--font-size-2xs); font-weight: var(--font-weight-strong); color: var(--accent); }
+.d-time { font-family: var(--font-mono), monospace; font-size: 0.86rem; }
+.d-ot { font-family: var(--font-mono), monospace; font-weight: var(--font-weight-heavy); font-size: var(--font-size-md); }
+.d-ot .pending { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 400; font-size: var(--font-size-xs); color: var(--attention-ink); }
+.d-check { font-size: var(--font-size-2xs); }
+.d-detail { font-family: var(--font-mono), monospace; font-size: var(--font-size-xs); color: var(--muted); }
+.day.nonworking { background-color: var(--day-nonworking); background-image: var(--hatch); }
+.day.nonworking .d-day { background: var(--sheet-head-off); }
+.day.today { box-shadow: inset 0 3px 0 var(--day-today); }
+.today-tag { font-size: 0.66rem; font-weight: var(--font-weight-strong); color: var(--on-accent); background: var(--accent); border-radius: var(--radius); padding: 0 5px; }
+.day .attention { background: var(--attention-bg); }
+.day.selected { background-color: var(--day-selected); box-shadow: inset 0 0 0 2px var(--accent); }
+.day.active { background-color: var(--day-selected); box-shadow: inset 0 0 0 2px var(--accent); }
+.pick-box { display: inline-flex; align-items: center; gap: 6px; }
+.sheet-foot { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; margin-top: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--font-size-xs); color: var(--muted); align-items: center; }
+.legend .swatch { width: 16px; height: 12px; border: 1px solid var(--sheet-rule); display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.legend .sw-off { background-color: var(--day-nonworking); background-image: var(--hatch); }
+.legend .sw-today { box-shadow: inset 0 3px 0 var(--accent); background: var(--card); }
+.legend .sw-attn { background: var(--attention-bg); }
+.foot-notes { display: grid; gap: 8px; }
+.pending-note { font-size: var(--font-size-sm); color: var(--attention-ink); }
+.ot-total { display: grid; grid-template-columns: auto auto auto; gap: 12px; align-items: baseline; padding: 10px 16px; border: 2px solid var(--sheet-rule-strong); background: var(--sheet-head); border-radius: var(--radius); }
+.ot-total .label { font-weight: var(--font-weight-heavy); }
+.ot-total .value { font-family: var(--font-mono), monospace; font-size: 1.45rem; font-weight: var(--font-weight-heavy); }
+.ot-total .unit { color: var(--muted); font-size: var(--font-size-sm); }
+.signatures { display: grid; grid-template-columns: 1.6fr 1fr; gap: 22px 48px; margin-top: 26px; }
+.sig { display: grid; gap: 4px; }
+.sig-line { min-height: 38px; border-bottom: 1px solid var(--sheet-rule-strong); display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 2px 4px; font-size: var(--font-size-sm); }
+.sig-cap { font-size: var(--font-size-xs); color: var(--muted); }
+.sig-line .state { color: var(--muted); }
+
+/* the inline label picker (Excel-like dropdown in the cell) */
+.picker { position: absolute; top: calc(100% - 4px); left: 4px; z-index: 2; min-width: 180px; text-align: left; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-overlay); padding: 4px; display: grid; font-weight: 400; }
+.picker span { padding: 6px 10px; border-radius: var(--radius); font-size: var(--font-size-sm); }
+.picker span[aria-selected='true'] { background: var(--day-selected); color: var(--accent); font-weight: var(--font-weight-strong); }
+.picker hr { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; }
+
+/* ---- Day editor (desktop side panel) ------------------------------------------------------- */
+.with-editor { display: grid; grid-template-columns: minmax(0, 1fr) var(--editor-width); gap: 16px; align-items: start; }
+.with-editor .sheet { padding: 18px 18px 20px; }
+.with-editor .week-grid { --sheet-label-col: 70px; }
+.with-editor .d-time { font-size: 0.78rem; }
+.editor { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-overlay); display: grid; }
+.editor > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 18px 12px; }
+.editor > header h2 { font-size: 1.15rem; }
+.editor section { padding: 14px 18px; border-top: 1px solid var(--line-soft); display: grid; gap: 10px; }
+.editor section h3 { font-size: var(--font-size-sm); text-transform: none; display: flex; justify-content: space-between; align-items: center; }
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius); background: var(--attention-bg); color: var(--attention-ink); font-size: var(--font-size-sm); margin: 0 18px 12px; }
+.session-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: var(--radius); background: var(--bg); }
+.session-row .t { font-family: var(--font-mono), monospace; font-weight: var(--font-weight-strong); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg label { display: grid; place-items: center; text-align: center; padding: 6px 4px; font-size: var(--font-size-xs); font-weight: var(--font-weight-strong); color: var(--muted); cursor: pointer; transition: var(--transition); min-height: var(--control-height); }
+.seg label + label { border-left: 1px solid var(--line); }
+.seg label:hover { background: var(--off); }
+.seg label.on { background: var(--day-selected); color: var(--accent); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.break-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.break-list li { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; font-size: var(--font-size-sm); }
+.break-list .bt { font-family: var(--font-mono), monospace; padding: 6px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.zone-line { font-size: var(--font-size-xs); color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.zone-line a { color: var(--accent); }
+.figures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0; }
+.figures div { display: grid; gap: 1px; }
+.figures dt { font-size: var(--font-size-xs); color: var(--muted); }
+.figures dd { margin: 0; font-family: var(--font-mono), monospace; font-weight: var(--font-weight-strong); }
+.row-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ---- Batch mode ---------------------------------------------------------------------------- */
+.batchbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 12px 16px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-overlay); border-left: 3px solid var(--accent); }
+.batchbar .count { font-weight: var(--font-weight-heavy); align-self: center; margin-right: 8px; }
+.batchbar label.field { min-width: 210px; }
+.batchbar .spacer { flex: 1; }
+.d-day .sel { width: 1rem; height: 1rem; }
+
+/* ---- Review -------------------------------------------------------------------------------- */
+.review { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.review .sheet { padding: 18px 18px 20px; }
+.review .week-grid { --sheet-label-col: 70px; --row-label: 54px; --row-time: 46px; }
+.review .d-time { font-size: 0.78rem; }
+.checklist { display: grid; gap: 0; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-panel); }
+.checklist section { padding: 14px 16px; border-top: 1px solid var(--line-soft); display: grid; gap: 8px; }
+.checklist section:first-child { border-top: 0; }
+.checklist h3 { font-size: var(--font-size-sm); display: flex; align-items: center; gap: 8px; }
+.step { width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: var(--radius); background: var(--sheet-head); font-size: var(--font-size-xs); font-weight: var(--font-weight-heavy); }
+.step.done { background: var(--ok); color: var(--on-accent); }
+.issue { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: var(--font-size-sm); }
+.issue .d { font-family: var(--font-mono), monospace; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: var(--font-size-sm); margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--font-mono), monospace; overflow-wrap: anywhere; }
+.sig-box { height: 64px; border: 1px dashed var(--line); border-radius: var(--radius); display: grid; place-items: center; color: var(--muted); font-size: var(--font-size-xs); background: var(--bg); }
+.section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.section-title h2 { font-size: 1rem; }
+
+/* ---- Mobile ---------------------------------------------------------------------------------- */
+.m-top { position: sticky; top: 0; z-index: 3; height: 52px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; background: var(--card); box-shadow: var(--shadow-panel); }
+.m-top .brand { font-size: var(--font-size-md); }
+.m-top .avatar { width: var(--tap-min); height: var(--tap-min); }
+.m-page { padding: 12px 12px 20px; display: grid; gap: 12px; }
+.m-period { padding: 10px 6px; display: grid; grid-template-columns: var(--tap-min) 1fr var(--tap-min); align-items: center; text-align: center; gap: 4px; }
+.m-period .icon-btn { width: var(--tap-min); height: var(--tap-min); }
+.m-period h1 { font-size: 1.12rem; }
+.m-period .chips { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.m-clock { padding: 14px; display: grid; gap: 10px; }
+.m-clock-row { display: grid; gap: 2px; }
+.m-clock .now { display: flex; align-items: center; gap: 8px; font-weight: var(--font-weight-strong); }
+.m-sheet { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-panel); overflow: hidden; }
+.m-sheet-head { padding: 12px 14px 10px; border-bottom: 2px solid var(--sheet-rule-strong); display: grid; gap: 2px; }
+.m-sheet-head .company { font-size: var(--font-size-sm); }
+.m-week-bar { display: flex; justify-content: space-between; padding: 6px 12px; background: var(--sheet-head); border-bottom: 1px solid var(--sheet-rule); font-size: var(--font-size-xs); }
+.m-week-bar strong { letter-spacing: 0.04em; }
+table.m-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.m-table th { font-size: var(--font-size-2xs); color: var(--muted); font-weight: var(--font-weight-strong); text-align: left; padding: 6px 8px; background: var(--sheet-head); border-bottom: 1px solid var(--sheet-rule); }
+.m-table td { padding: 8px 8px; border-bottom: 1px solid var(--sheet-rule-soft); vertical-align: middle; height: 54px; }
+.m-table th:last-child, .m-table td:last-child { text-align: right; }
+.m-table tr.nonworking td { background-color: var(--day-nonworking); background-image: var(--hatch); }
+.m-table tr.today td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.m-table .dd { display: grid; gap: 1px; }
+.m-table .dd b { font-size: var(--font-size-sm); }
+.m-table .dd .mono { font-size: var(--font-size-xs); color: var(--muted); }
+.m-table .lbl { font-weight: var(--font-weight-strong); line-height: 1.2; }
+.m-table .lbl .sub { display: block; font-weight: 400; font-size: var(--font-size-2xs); color: var(--muted); }
+.m-table .tm { font-family: var(--font-mono), monospace; font-size: var(--font-size-xs); line-height: 1.3; }
+.m-table .tm .sub { display: block; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: var(--font-size-2xs); color: var(--muted); }
+.m-table .ot { font-family: var(--font-mono), monospace; font-weight: var(--font-weight-heavy); }
+.m-table .ot .pending { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 400; font-size: var(--font-size-2xs); color: var(--attention-ink); }
+.m-table td.attention { background: var(--attention-bg); }
+.m-foot { padding: 12px; display: grid; gap: 10px; }
+.m-foot .ot-total { grid-template-columns: 1fr auto auto; }
+.m-sign { padding: 14px; display: grid; gap: 10px; }
+.m-tabbar { position: sticky; bottom: 0; z-index: 3; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); box-shadow: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06); }
+.m-tabbar a { min-height: 56px; display: grid; place-items: center; text-decoration: none; color: var(--muted); font-size: var(--font-size-xs); font-weight: var(--font-weight-strong); transition: var(--transition); box-shadow: inset 0 2px 0 transparent; }
+.m-tabbar a[aria-current='page'] { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.m-dim { position: absolute; inset: 0; background: var(--scrim); z-index: 4; }
+.m-sheet-modal { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 86%; overflow-y: auto; background: var(--card); border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow-overlay); }
+.m-sheet-modal .handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 2px; }
+.m-sheet-modal header { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px 10px; }
+.m-sheet-modal section { padding: 12px 16px; border-top: 1px solid var(--line-soft); display: grid; gap: 10px; }
+.m-sheet-modal input, .m-sheet-modal select { min-height: var(--tap-min); }
+.m-sheet-modal .btn { min-height: var(--tap-min); }
+.m-sheet-modal .seg label { min-height: var(--tap-min); }
+.frame-mobile .btn { min-height: var(--tap-min); }
+
+/* ---- Token board ----------------------------------------------------------------------------- */
+.tokens { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.tokens > div { padding: 22px; display: grid; gap: 18px; align-content: start; }
+.tokens h3 { font-size: var(--font-size-sm); }
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.sw { display: grid; gap: 4px; font-size: var(--font-size-2xs); }
+.sw i { display: block; height: 40px; border-radius: var(--radius); box-shadow: inset 0 0 0 1px rgb(28 36 48 / 0.12); }
+.sw code { font-family: var(--font-mono), monospace; color: var(--muted); }
+.states { display: flex; flex-wrap: wrap; gap: 8px; }
+.state-cell { width: 108px; height: 64px; border: 1px solid var(--sheet-rule); border-radius: var(--radius); display: grid; place-items: center; text-align: center; font-size: var(--font-size-xs); background: var(--card); }
+.state-cell.nonworking { background-color: var(--day-nonworking); background-image: var(--hatch); }
+.state-cell.today { box-shadow: inset 0 3px 0 var(--accent); }
+.state-cell.selected { background: var(--day-selected); box-shadow: inset 0 0 0 2px var(--accent); }
+.state-cell.attention { background: var(--attention-bg); color: var(--attention-ink); }
+.btn-states { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn.is-hover { background: var(--accent-strong); box-shadow: var(--shadow-panel); }
+.btn.is-focus { box-shadow: var(--focus-ring); }
+.btn.is-pressed { transform: translateY(var(--press-offset)); }
+.type-scale { display: grid; gap: 6px; }
+.type-scale div { display: flex; gap: 14px; align-items: baseline; }
+.type-scale code { font-family: var(--font-mono), monospace; font-size: var(--font-size-2xs); color: var(--muted); width: 150px; flex: none; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header class="doc-head">
+  <h1>Timesheet redesign mockup (WP5-UX-PLAN)</h1>
+  <p class="muted">Static design mockup with synthetic data only (Example Employee, example.invalid addresses). Not connected to the app. UI labels stay in English, as in the app; the captions for the owner are in Vietnamese.</p>
+  <p lang="vi"><strong>Bản phác thảo giao diện mới.</strong> Mở trực tiếp file này trong trình duyệt. Mỗi khung (artboard) có một chú thích tiếng Việt giải thích điều gì thay đổi và vì sao. Dữ liệu đều là dữ liệu giả. Mọi con số giờ làm và OT trên màn hình vẫn do máy chủ tính, giao diện chỉ hiển thị.</p>
+  <ul class="doc-index">
+    <li><a href="#a1">A1 Timesheet, desktop</a></li>
+    <li><a href="#a2">A2 Timesheet, mobile</a></li>
+    <li><a href="#a3">A3 Edit a day, desktop</a></li>
+    <li><a href="#a4">A4 Edit a day, mobile</a></li>
+    <li><a href="#a5">A5 Change several days</a></li>
+    <li><a href="#a6">A6 Review and sign off</a></li>
+    <li><a href="#a7">A7 Visual system</a></li>
+  </ul>
+</header>
+
+<!-- =================================================================================== A1 -->
+<section class="artboard" id="a1" aria-labelledby="a1-title">
+  <div class="artboard-head">
+    <span class="id">A1, 1280px desktop</span>
+    <h2 id="a1-title">App shell and the Timesheet page in the Excel layout (one full period)</h2>
+    <p class="caption-vi" lang="vi">Trang Timesheet được sắp xếp giống tờ Excel mẫu: mỗi tuần là một khối 7 cột từ Thứ Hai đến Chủ Nhật, các hàng Day, Date, Label (nhãn ngày), Time (giờ vào và ra), OT theo đúng thứ tự trong file. Ô "Overtime Total" nằm ở góc phải dưới và các dòng chữ ký ở cuối trang như bản Excel và bản PDF. Ngày nghỉ, cuối tuần và ngày lễ có nền gạch chéo; tên ngày lễ nằm ngay trong ô nhãn. Phần đầu trang gọn lại: chỉ còn kỳ lương, hạn nộp, trạng thái chấm công và một nút "Review &amp; sign off". Thông tin múi giờ chỉ hiện khi múi giờ của máy khác múi giờ báo cáo. Tổng OT giờ tính cả Chủ Nhật và hiển thị dạng giờ:phút (bản Excel cũ bỏ sót Chủ Nhật và dùng số thập phân).</p>
+  </div>
+  <div class="scroller">
+  <div class="frame frame-desktop">
+    <header class="shell">
+      <span class="brand">C&amp;D Semi</span>
+      <nav class="nav" aria-label="Main">
+        <a href="#a1" aria-current="page">Timesheet</a>
+        <a href="#a1">Overtime</a>
+        <a href="#a1">History</a>
+        <a href="#a1">Settings</a>
+      </nav>
+      <div class="user"><span class="avatar" aria-hidden="true">EE</span><span>Example Employee</span><button class="btn btn-quiet" type="button">Sign out</button></div>
+    </header>
+
+    <main class="page">
+      <div class="workbar">
+        <section class="panel period" aria-label="Pay period">
+          <button class="icon-btn" type="button" aria-label="Previous period">&#8249;</button>
+          <div class="period-main">
+            <div class="period-title">
+              <h1>Nov 23 to Dec 6, 2026</h1>
+              <span class="chip chip-current">Current</span>
+              <span class="chip">Draft</span>
+            </div>
+            <div class="period-meta">
+              <span>Payroll date <b>Fri 12/11/2026</b></span>
+              <span>Due <b>Tue 12/08/2026, 17:00</b> (Los Angeles)</span>
+              <span>OT so far <b class="mono">5:30</b></span>
+            </div>
+          </div>
+          <div class="period-actions">
+            <a class="btn btn-secondary" href="#a6">Review &amp; sign off</a>
+            <button class="icon-btn" type="button" aria-label="Next period">&#8250;</button>
+          </div>
+        </section>
+        <section class="panel clock" aria-label="Clock">
+          <div class="clock-state">
+            <span class="now"><span class="live-dot" aria-hidden="true"></span>Clocked in at 08:12</span>
+            <span class="sub">Thu 12/03, session running</span>
+          </div>
+          <button class="btn btn-primary btn-lg" type="button">Clock out</button>
+        </section>
+      </div>
+
+      <div class="tools">
+        <div class="tools-left">
+          <label class="open-day">Open a day <input type="date" value="2026-12-03"></label>
+        </div>
+        <div class="tools-right">
+          <span class="switch" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Show details</span>
+          <a class="btn btn-quiet" href="#a5">Change several days</a>
+        </div>
+      </div>
+
+      <article class="sheet" aria-label="Timesheet form">
+        <header class="form-head">
+          <div>
+            <div class="company">C&amp;D Semiconductor Services, Inc.</div>
+            <div class="form-title">Time sheet for salaried exempt employees</div>
+          </div>
+          <dl class="form-fields">
+            <dt>Employee:</dt><dd>Example Employee</dd>
+            <dt>Payroll Date:</dt><dd class="mono">12/11/2026</dd>
+            <dt>Period:</dt><dd class="mono">11/23/2026 - 12/06/2026</dd>
+          </dl>
+        </header>
+
+        <!-- Week 1 -->
+        <section class="week" aria-label="Week 1, Nov 23 to Nov 29">
+          <div class="week-bar"><strong>WEEK 1</strong><span class="muted mono">11/23/2026 - 11/29/2026</span></div>
+          <div class="week-grid">
+            <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT (h:mm)</div><div>Check</div></div>
+            <div class="day" data-day="2026-11-23">
+              <div class="d-day">Mon</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-23">11/23</button></div>
+              <div class="d-label">Worked<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">08:00-17:00<span class="sub">3 breaks</span></div>
+              <div class="d-ot">0:00</div>
+              <div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div>
+            </div>
+            <div class="day" data-day="2026-11-24">
+              <div class="d-day">Tue</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-24">11/24</button></div>
+              <div class="d-label">Worked<span class="note">Note</span><span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">07:30-17:45<span class="sub">3 breaks</span></div>
+              <div class="d-ot">1:00</div>
+              <div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div>
+            </div>
+            <div class="day" data-day="2026-11-25">
+              <div class="d-day">Wed</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-25">11/25</button></div>
+              <div class="d-label">Work from home<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time attention">08:00-17:00<span class="sub">breaks not confirmed</span></div>
+              <div class="d-ot"><span class="pending">pending</span></div>
+              <div class="d-check"><span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>Confirm breaks</span></div>
+            </div>
+            <div class="day nonworking" data-day="2026-11-26">
+              <div class="d-day">Thu</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-26">11/26</button></div>
+              <div class="d-label">Thanksgiving Day<span class="sub">Holiday</span><span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"></div>
+            </div>
+            <div class="day nonworking" data-day="2026-11-27">
+              <div class="d-day">Fri</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-27">11/27</button></div>
+              <div class="d-label">Floating Holiday<span class="sub">Holiday</span><span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">10:00-12:30<span class="sub">no breaks</span></div>
+              <div class="d-ot">2:30</div>
+              <div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div>
+            </div>
+            <div class="day nonworking" data-day="2026-11-28">
+              <div class="d-day">Sat</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-28">11/28</button></div>
+              <div class="d-label">Off<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"></div>
+            </div>
+            <div class="day nonworking" data-day="2026-11-29">
+              <div class="d-day">Sun</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-29">11/29</button></div>
+              <div class="d-label">Off<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">09:00-11:00<span class="sub">no breaks</span></div>
+              <div class="d-ot">2:00</div>
+              <div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Week 2 -->
+        <section class="week" aria-label="Week 2, Nov 30 to Dec 6">
+          <div class="week-bar"><strong>WEEK 2</strong><span class="muted mono">11/30/2026 - 12/06/2026</span></div>
+          <div class="week-grid">
+            <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT (h:mm)</div><div>Check</div></div>
+            <div class="day" data-day="2026-11-30">
+              <div class="d-day">Mon</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-11-30">11/30</button></div>
+              <div class="d-label">Worked<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time attention"><span class="sub">no times yet</span></div>
+              <div class="d-ot"></div>
+              <div class="d-check"><span class="st st-warn"><span class="shape shape-square" aria-hidden="true"></span>No times</span></div>
+            </div>
+            <div class="day" data-day="2026-12-01">
+              <div class="d-day">Tue</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-01">12/01</button></div>
+              <div class="d-label">Vacation<span class="sub">8:00 leave</span><span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"></div>
+            </div>
+            <div class="day" data-day="2026-12-02">
+              <div class="d-day">Wed</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-02">12/02</button></div>
+              <div class="d-label">Worked<span class="sub">OT leave 4:00</span><span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">08:00-12:00<span class="sub">no breaks</span></div>
+              <div class="d-ot">0:00</div>
+              <div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div>
+            </div>
+            <div class="day today" data-day="2026-12-03">
+              <div class="d-day">Thu <span class="today-tag">Today</span></div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-03">12/03</button></div>
+              <div class="d-label">Worked<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time">08:12<span class="sub">running</span></div>
+              <div class="d-ot"><span class="pending">pending</span></div>
+              <div class="d-check"><span class="st st-ok"><span class="live-dot" aria-hidden="true"></span>Running</span></div>
+            </div>
+            <div class="day" data-day="2026-12-04">
+              <div class="d-day">Fri</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-04">12/04</button></div>
+              <div class="d-label">Worked<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"><span class="st st-muted"><span class="shape shape-bar" aria-hidden="true"></span>Upcoming</span></div>
+            </div>
+            <div class="day nonworking" data-day="2026-12-05">
+              <div class="d-day">Sat</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-05">12/05</button></div>
+              <div class="d-label">Off<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"></div>
+            </div>
+            <div class="day nonworking" data-day="2026-12-06">
+              <div class="d-day">Sun</div>
+              <div class="d-date"><button type="button" aria-label="Edit 2026-12-06">12/06</button></div>
+              <div class="d-label">Off<span class="caret" aria-hidden="true">&#9662;</span></div>
+              <div class="d-time"></div>
+              <div class="d-ot"></div>
+              <div class="d-check"></div>
+            </div>
+          </div>
+        </section>
+
+        <div class="sheet-foot">
+          <div class="foot-notes">
+            <p class="pending-note">2 days with OT pending are not in the total.</p>
+            <div class="legend" aria-label="Legend">
+              <span><i class="swatch sw-off" aria-hidden="true"></i>Weekend or holiday</span>
+              <span><i class="swatch sw-today" aria-hidden="true"></i>Today</span>
+              <span><i class="swatch sw-attn" aria-hidden="true"></i>Needs your input</span>
+              <span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span>
+              <span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>OT pending</span>
+            </div>
+          </div>
+          <div class="ot-total" aria-label="Overtime total"><span class="label">Overtime Total :</span><span class="value">5:30</span><span class="unit">h:mm</span></div>
+        </div>
+
+        <div class="signatures">
+          <div class="sig"><div class="sig-line"><span class="state">Not signed yet</span><a class="btn btn-quiet" href="#a6">Review &amp; sign off</a></div><span class="sig-cap">Employee Signature</span></div>
+          <div class="sig"><div class="sig-line"></div><span class="sig-cap">Date</span></div>
+          <div class="sig"><div class="sig-line"><span class="state">Not used yet</span></div><span class="sig-cap">Manager Signature</span></div>
+          <div class="sig"><div class="sig-line"></div><span class="sig-cap">Date</span></div>
+        </div>
+      </article>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A2 -->
+<section class="artboard" id="a2" aria-labelledby="a2-title">
+  <div class="artboard-head">
+    <span class="id">A2, 390px mobile (scroll inside the phone frame)</span>
+    <h2 id="a2-title">The same Timesheet page at a narrow width</h2>
+    <p class="caption-vi" lang="vi">Trên điện thoại không đủ chỗ cho 7 cột, nên mỗi tuần được "xoay" thành bảng dọc: mỗi dòng là một ngày, các cột vẫn là Label, Time, OT như tờ Excel, không phải cuộn ngang. Nút chấm công to và chỉ hiện nút cần bấm (đang làm thì chỉ có "Clock out"). Menu chuyển xuống thanh dưới đáy màn hình. Ngày đầu tiên hiện ngay trong màn hình đầu (hiện nay phải cuộn hơn một màn hình mới thấy). Tổng OT và trạng thái chữ ký ở cuối, giống tờ Excel.</p>
+  </div>
+  <div class="phones">
+  <div class="frame frame-mobile">
+    <header class="m-top"><span class="brand">C&amp;D Semi</span><button class="icon-btn avatar" type="button" aria-label="Account, Example Employee">EE</button></header>
+    <main class="m-page">
+      <section class="panel m-period" aria-label="Pay period">
+        <button class="icon-btn" type="button" aria-label="Previous period">&#8249;</button>
+        <div>
+          <h1>Nov 23 to Dec 6</h1>
+          <div class="chips"><span class="chip chip-current">Current</span><span class="chip">Draft</span><span class="chip">Due Tue 12/08, 17:00</span></div>
+        </div>
+        <button class="icon-btn" type="button" aria-label="Next period">&#8250;</button>
+      </section>
+      <section class="panel m-clock" aria-label="Clock">
+        <div class="m-clock-row">
+          <span class="now"><span class="live-dot" aria-hidden="true"></span>Clocked in at 08:12</span>
+          <span class="hint">Thu 12/03, session running</span>
+        </div>
+        <button class="btn btn-primary btn-lg btn-block" type="button">Clock out</button>
+      </section>
+
+      <article class="m-sheet" aria-label="Timesheet form">
+        <header class="m-sheet-head">
+          <span class="company">C&amp;D Semiconductor Services, Inc.</span>
+          <span class="hint">Employee: Example Employee. Payroll Date: 12/11/2026</span>
+        </header>
+        <div class="m-week-bar"><strong>WEEK 1</strong><span class="mono muted">11/23 - 11/29</span></div>
+        <table class="m-table">
+          <thead><tr><th scope="col">Day</th><th scope="col">Label</th><th scope="col">Time</th><th scope="col">OT</th></tr></thead>
+          <tbody>
+            <tr data-day="2026-11-23"><td><span class="dd"><b>Mon</b><span class="mono">11/23</span></span></td><td class="lbl">Worked</td><td class="tm">08:00-17:00<span class="sub">3 breaks</span></td><td class="ot">0:00</td></tr>
+            <tr data-day="2026-11-24"><td><span class="dd"><b>Tue</b><span class="mono">11/24</span></span></td><td class="lbl">Worked<span class="sub">Note</span></td><td class="tm">07:30-17:45<span class="sub">3 breaks</span></td><td class="ot">1:00</td></tr>
+            <tr data-day="2026-11-25"><td><span class="dd"><b>Wed</b><span class="mono">11/25</span></span></td><td class="lbl">Work from home</td><td class="tm attention">08:00-17:00<span class="sub">confirm breaks</span></td><td class="ot"><span class="pending">pending</span></td></tr>
+            <tr class="nonworking" data-day="2026-11-26"><td><span class="dd"><b>Thu</b><span class="mono">11/26</span></span></td><td class="lbl">Thanksgiving Day<span class="sub">Holiday</span></td><td class="tm"></td><td class="ot"></td></tr>
+            <tr class="nonworking" data-day="2026-11-27"><td><span class="dd"><b>Fri</b><span class="mono">11/27</span></span></td><td class="lbl">Floating Holiday<span class="sub">Holiday</span></td><td class="tm">10:00-12:30<span class="sub">no breaks</span></td><td class="ot">2:30</td></tr>
+            <tr class="nonworking" data-day="2026-11-28"><td><span class="dd"><b>Sat</b><span class="mono">11/28</span></span></td><td class="lbl">Off</td><td class="tm"></td><td class="ot"></td></tr>
+            <tr class="nonworking" data-day="2026-11-29"><td><span class="dd"><b>Sun</b><span class="mono">11/29</span></span></td><td class="lbl">Off</td><td class="tm">09:00-11:00<span class="sub">no breaks</span></td><td class="ot">2:00</td></tr>
+          </tbody>
+        </table>
+        <div class="m-week-bar"><strong>WEEK 2</strong><span class="mono muted">11/30 - 12/06</span></div>
+        <table class="m-table">
+          <thead><tr><th scope="col">Day</th><th scope="col">Label</th><th scope="col">Time</th><th scope="col">OT</th></tr></thead>
+          <tbody>
+            <tr data-day="2026-11-30"><td><span class="dd"><b>Mon</b><span class="mono">11/30</span></span></td><td class="lbl">Worked</td><td class="tm attention"><span class="sub">no times yet</span></td><td class="ot"></td></tr>
+            <tr data-day="2026-12-01"><td><span class="dd"><b>Tue</b><span class="mono">12/01</span></span></td><td class="lbl">Vacation<span class="sub">8:00 leave</span></td><td class="tm"></td><td class="ot"></td></tr>
+            <tr data-day="2026-12-02"><td><span class="dd"><b>Wed</b><span class="mono">12/02</span></span></td><td class="lbl">Worked<span class="sub">OT leave 4:00</span></td><td class="tm">08:00-12:00<span class="sub">no breaks</span></td><td class="ot">0:00</td></tr>
+            <tr class="today" data-day="2026-12-03"><td><span class="dd"><b>Thu</b><span class="mono">Today</span></span></td><td class="lbl">Worked</td><td class="tm">08:12<span class="sub">running</span></td><td class="ot"><span class="pending">pending</span></td></tr>
+            <tr data-day="2026-12-04"><td><span class="dd"><b>Fri</b><span class="mono">12/04</span></span></td><td class="lbl">Worked</td><td class="tm"><span class="sub">upcoming</span></td><td class="ot"></td></tr>
+            <tr class="nonworking" data-day="2026-12-05"><td><span class="dd"><b>Sat</b><span class="mono">12/05</span></span></td><td class="lbl">Off</td><td class="tm"></td><td class="ot"></td></tr>
+            <tr class="nonworking" data-day="2026-12-06"><td><span class="dd"><b>Sun</b><span class="mono">12/06</span></span></td><td class="lbl">Off</td><td class="tm"></td><td class="ot"></td></tr>
+          </tbody>
+        </table>
+        <div class="m-foot">
+          <div class="ot-total"><span class="label">Overtime Total :</span><span class="value">5:30</span><span class="unit">h:mm</span></div>
+          <p class="pending-note">2 days with OT pending are not in the total.</p>
+        </div>
+      </article>
+      <section class="panel m-sign" aria-label="Signature">
+        <span class="sig-cap">Employee Signature</span>
+        <span>Not signed yet. Due Tue 12/08, 17:00 (Los Angeles).</span>
+        <a class="btn btn-secondary btn-block" href="#a6">Review &amp; sign off</a>
+      </section>
+    </main>
+    <nav class="m-tabbar" aria-label="Main">
+      <a href="#a2" aria-current="page">Timesheet</a><a href="#a2">Overtime</a><a href="#a2">History</a><a href="#a2">More</a>
+    </nav>
+  </div>
+  <div class="phone-note">
+    <p><strong>Narrow layout rules</strong></p>
+    <p>Below 768px each week is a 4-column table: Day, Label, Time, OT. Rows are at least 54px tall, so the whole row is a 44px+ tap target that opens the day.</p>
+    <p>The tab bar keeps Timesheet, Overtime, History and More (Settings, Import, Admin, Sign out).</p>
+    <p lang="vi">Thanh menu dưới đáy giữ 4 mục; các mục ít dùng (Settings, Import, Admin, Sign out) nằm trong "More".</p>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A3 -->
+<section class="artboard" id="a3" aria-labelledby="a3-title">
+  <div class="artboard-head">
+    <span class="id">A3, 1280px desktop</span>
+    <h2 id="a3-title">Editing one day: side panel, with the label picked in the cell</h2>
+    <p class="caption-vi" lang="vi">Sửa một ngày: bấm vào cột ngày, bảng chỉnh sửa mở bên phải và tờ timesheet vẫn nhìn thấy (hiện nay là một hộp thoại che hết trang). Nhãn ngày có thể chọn ngay trong ô giống ô dropdown của Excel (ví dụ ô Thứ Hai 11/30 ở hình). Giờ vào và ra nhập bằng giờ:phút; giờ nghỉ được gợi ý theo giờ đến và chỉ cần bấm "Confirm suggested breaks". Phép nghỉ nhập bằng giờ và phút thay vì số phút. Hai nút lưu được đặt ngay trong từng phần (giờ làm, thông tin ngày) để không nhầm. Các con số OT và giờ làm vẫn do máy chủ tính.</p>
+  </div>
+  <div class="scroller">
+  <div class="frame frame-desktop">
+    <header class="shell">
+      <span class="brand">C&amp;D Semi</span>
+      <nav class="nav" aria-label="Main"><a href="#a3" aria-current="page">Timesheet</a><a href="#a3">Overtime</a><a href="#a3">History</a><a href="#a3">Settings</a></nav>
+      <div class="user"><span class="avatar" aria-hidden="true">EE</span><span>Example Employee</span><button class="btn btn-quiet" type="button">Sign out</button></div>
+    </header>
+    <main class="page">
+      <div class="with-editor">
+        <article class="sheet" aria-label="Timesheet form">
+          <section class="week" style="margin-top:0" aria-label="Week 1">
+            <div class="week-bar"><strong>WEEK 1</strong><span class="muted mono">11/23/2026 - 11/29/2026</span></div>
+            <div class="week-grid">
+              <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT</div><div>Check</div></div>
+              <div class="day"><div class="d-day">Mon</div><div class="d-date"><button type="button">11/23</button></div><div class="d-label">Worked</div><div class="d-time">08:00-17:00<span class="sub">3 breaks</span></div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+              <div class="day"><div class="d-day">Tue</div><div class="d-date"><button type="button">11/24</button></div><div class="d-label">Worked<span class="note">Note</span></div><div class="d-time">07:30-17:45<span class="sub">3 breaks</span></div><div class="d-ot">1:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+              <div class="day active" aria-current="true"><div class="d-day">Wed</div><div class="d-date"><button type="button">11/25</button></div><div class="d-label">Work from home</div><div class="d-time attention">08:00-17:00<span class="sub">confirm breaks</span></div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>Breaks</span></div></div>
+              <div class="day nonworking"><div class="d-day">Thu</div><div class="d-date"><button type="button">11/26</button></div><div class="d-label">Thanksgiving Day<span class="sub">Holiday</span></div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Fri</div><div class="d-date"><button type="button">11/27</button></div><div class="d-label">Floating Holiday<span class="sub">Holiday</span></div><div class="d-time">10:00-12:30<span class="sub">no breaks</span></div><div class="d-ot">2:30</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+              <div class="day nonworking"><div class="d-day">Sat</div><div class="d-date"><button type="button">11/28</button></div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Sun</div><div class="d-date"><button type="button">11/29</button></div><div class="d-label">Off</div><div class="d-time">09:00-11:00<span class="sub">no breaks</span></div><div class="d-ot">2:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+            </div>
+          </section>
+          <section class="week" aria-label="Week 2">
+            <div class="week-bar"><strong>WEEK 2</strong><span class="muted mono">11/30/2026 - 12/06/2026</span></div>
+            <div class="week-grid">
+              <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT</div><div>Check</div></div>
+              <div class="day"><div class="d-day">Mon</div><div class="d-date"><button type="button">11/30</button></div>
+                <div class="d-label" style="box-shadow: inset 0 0 0 2px var(--accent); overflow: visible;"><span class="pick-box">Worked <span aria-hidden="true">&#9662;</span></span>
+                  <div class="picker" role="listbox" aria-label="Label for 11/30">
+                    <span role="option" aria-selected="true">Worked</span><span role="option">Off</span><span role="option">Vacation</span><span role="option">Sick</span><span role="option">Holiday</span><span role="option">Shutdown</span><hr><span role="option">Work from home</span>
+                  </div>
+                </div>
+                <div class="d-time attention"><span class="sub">no times yet</span></div><div class="d-ot"></div><div class="d-check"><span class="st st-warn"><span class="shape shape-square" aria-hidden="true"></span>No times</span></div></div>
+              <div class="day"><div class="d-day">Tue</div><div class="d-date"><button type="button">12/01</button></div><div class="d-label">Vacation<span class="sub">8:00 leave</span></div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day"><div class="d-day">Wed</div><div class="d-date"><button type="button">12/02</button></div><div class="d-label">Worked<span class="sub">OT leave 4:00</span></div><div class="d-time">08:00-12:00<span class="sub">no breaks</span></div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+              <div class="day today"><div class="d-day">Thu</div><div class="d-date"><button type="button">12/03</button></div><div class="d-label">Worked</div><div class="d-time">08:12<span class="sub">running</span></div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-ok"><span class="live-dot" aria-hidden="true"></span>Running</span></div></div>
+              <div class="day"><div class="d-day">Fri</div><div class="d-date"><button type="button">12/04</button></div><div class="d-label">Worked</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"><span class="st st-muted"><span class="shape shape-bar" aria-hidden="true"></span>Upcoming</span></div></div>
+              <div class="day nonworking"><div class="d-day">Sat</div><div class="d-date"><button type="button">12/05</button></div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Sun</div><div class="d-date"><button type="button">12/06</button></div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+            </div>
+          </section>
+          <div class="sheet-foot"><p class="pending-note">2 days with OT pending are not in the total.</p><div class="ot-total"><span class="label">Overtime Total :</span><span class="value">5:30</span><span class="unit">h:mm</span></div></div>
+        </article>
+
+        <aside class="editor" role="dialog" aria-labelledby="ed-title">
+          <header>
+            <div>
+              <h2 id="ed-title">Day editor <span class="mono">Wed 2026-11-25</span></h2>
+              <p class="hint">Current period, no reason needed.</p>
+            </div>
+            <button class="btn btn-quiet" type="button">Close</button>
+          </header>
+          <div class="banner" role="status"><span class="shape shape-diamond" aria-hidden="true" style="margin-top:6px"></span><span>Breaks are not confirmed yet. OT for this day stays pending until you confirm them.</span></div>
+
+          <section aria-label="Times">
+            <h3>Times <span class="hint">times in America/Los_Angeles</span></h3>
+            <form class="stack" aria-label="Edit session" style="display:grid; gap:10px">
+              <div class="grid-2">
+                <label class="field">Start time<input type="time" value="08:00"></label>
+                <label class="field">End time<input type="time" value="17:00"></label>
+              </div>
+              <label class="check"><input type="checkbox"> Ends the next day</label>
+              <div class="field" role="group" aria-label="Breaks">
+                <span style="font-size:var(--font-size-sm); font-weight:600">Breaks</span>
+                <div class="seg">
+                  <label class="on"><input type="radio" name="b" checked>Not confirmed yet</label>
+                  <label><input type="radio" name="b">As listed</label>
+                  <label><input type="radio" name="b">No breaks taken</label>
+                </div>
+              </div>
+              <ul class="break-list" aria-label="Suggested breaks">
+                <li><span class="bt">10:00-10:15</span><span class="hint">suggested</span><button class="btn btn-quiet" type="button">Remove</button></li>
+                <li><span class="bt">12:00-12:30</span><span class="hint">suggested</span><button class="btn btn-quiet" type="button">Remove</button></li>
+                <li><span class="bt">14:30-14:45</span><span class="hint">suggested</span><button class="btn btn-quiet" type="button">Remove</button></li>
+              </ul>
+              <div class="row-actions" style="justify-content:space-between">
+                <button class="btn btn-secondary" type="button">Confirm suggested breaks</button>
+                <button class="btn btn-quiet" type="button">Add break</button>
+              </div>
+              <div class="zone-line">Typed in America/Los_Angeles <a href="#a3">Change zone</a></div>
+              <div class="row-actions"><button class="btn btn-quiet" type="button">Cancel</button><button class="btn btn-primary" type="button">Save time</button></div>
+            </form>
+            <button class="btn btn-quiet" type="button" style="justify-self:start">+ Add another time</button>
+          </section>
+
+          <section aria-label="Day fields">
+            <h3>Label and leave</h3>
+            <div class="grid-2">
+              <label class="field">Label<select><option>Worked</option><option>Off</option><option>Vacation</option><option>Sick</option><option>Holiday</option><option>Shutdown</option></select></label>
+              <label class="check" style="align-self:end; min-height:36px"><input type="checkbox" checked> Worked from home (WFH)</label>
+            </div>
+            <div class="grid-3">
+              <label class="field">Leave hours<input type="number" value="0" min="0" max="24"></label>
+              <label class="field">Minutes<input type="number" value="0" min="0" max="59"></label>
+              <label class="field">Leave kind<select><option>Not set</option><option>Vacation</option><option>Sick</option><option>OT</option></select></label>
+            </div>
+            <label class="field">Notes<textarea></textarea></label>
+            <div class="row-actions"><button class="btn btn-primary" type="button">Save day</button></div>
+          </section>
+
+          <section aria-label="Day figures">
+            <h3>Figures <span class="hint">computed by the server</span></h3>
+            <dl class="figures">
+              <div><dt>Worked on a workday</dt><dd>pending</dd></div>
+              <div><dt>Worked on a day off</dt><dd>0:00</dd></div>
+              <div><dt>OT credit</dt><dd>pending</dd></div>
+              <div><dt>Expected finish</dt><dd>17:00</dd></div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A4 -->
+<section class="artboard" id="a4" aria-labelledby="a4-title">
+  <div class="artboard-head">
+    <span class="id">A4, 390px mobile</span>
+    <h2 id="a4-title">Editing one day on a phone: bottom sheet</h2>
+    <p class="caption-vi" lang="vi">Trên điện thoại, phần sửa ngày mở dạng tấm trượt từ dưới lên, các ô bấm cao tối thiểu 44px. Thứ tự giống bản máy tính: cảnh báo (nếu có), giờ làm, nhãn và phép, rồi các con số. Ở ví dụ này người dùng chỉ cần bấm một nút để xác nhận giờ nghỉ gợi ý.</p>
+  </div>
+  <div class="phones">
+  <div class="frame frame-mobile" style="overflow:hidden">
+    <header class="m-top"><span class="brand">C&amp;D Semi</span><span class="avatar" aria-hidden="true">EE</span></header>
+    <main class="m-page">
+      <section class="panel m-period"><span></span><h1>Nov 23 to Dec 6</h1><span></span></section>
+      <article class="m-sheet"><div class="m-week-bar"><strong>WEEK 1</strong><span class="mono muted">11/23 - 11/29</span></div>
+        <table class="m-table"><tbody>
+          <tr><td><span class="dd"><b>Mon</b><span class="mono">11/23</span></span></td><td class="lbl">Worked</td><td class="tm">08:00-17:00</td><td class="ot">0:00</td></tr>
+          <tr><td><span class="dd"><b>Tue</b><span class="mono">11/24</span></span></td><td class="lbl">Worked</td><td class="tm">07:30-17:45</td><td class="ot">1:00</td></tr>
+          <tr><td><span class="dd"><b>Wed</b><span class="mono">11/25</span></span></td><td class="lbl">Work from home</td><td class="tm attention">08:00-17:00</td><td class="ot"><span class="pending">pending</span></td></tr>
+        </tbody></table>
+      </article>
+    </main>
+    <div class="m-dim" aria-hidden="true"></div>
+    <div class="m-sheet-modal" role="dialog" aria-labelledby="m-ed-title">
+      <div class="handle" aria-hidden="true"></div>
+      <header><h2 id="m-ed-title" style="font-size:1.05rem">Day editor <span class="mono">Wed 11/25</span></h2><button class="btn btn-quiet" type="button">Close</button></header>
+      <div class="banner" role="status" style="margin:0 16px 10px">Breaks are not confirmed yet. OT stays pending until you confirm them.</div>
+      <section aria-label="Times">
+        <div class="session-row"><span class="t">08:00-17:00</span><button class="btn btn-quiet" type="button">Edit</button></div>
+        <ul class="break-list"><li><span class="bt">10:00-10:15</span><span class="bt">12:00-12:30</span><span class="bt">14:30-14:45</span></li></ul>
+        <button class="btn btn-primary btn-block" type="button">Confirm suggested breaks</button>
+        <button class="btn btn-secondary btn-block" type="button">No breaks taken</button>
+      </section>
+      <section aria-label="Day fields">
+        <label class="field">Label<select><option>Worked</option></select></label>
+        <label class="check" style="min-height:44px"><input type="checkbox" checked> Worked from home (WFH)</label>
+        <div class="grid-2"><label class="field">Leave hours<input type="number" value="0"></label><label class="field">Minutes<input type="number" value="0"></label></div>
+        <button class="btn btn-secondary btn-block" type="button">Save day</button>
+      </section>
+    </div>
+  </div>
+  <div class="phone-note">
+    <p><strong>Same contracts as today</strong></p>
+    <p>Confirm suggested breaks sends the same session update as the current form (breaks listed, breaks_confirmed true). Save day sends the same day update. No new endpoint.</p>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A5 -->
+<section class="artboard" id="a5" aria-labelledby="a5-title">
+  <div class="artboard-head">
+    <span class="id">A5, 1280px desktop, one week shown</span>
+    <h2 id="a5-title">Change several days (batch label change)</h2>
+    <p class="caption-vi" lang="vi">Đổi nhãn cho nhiều ngày một lúc: thanh chọn hàng loạt không còn chiếm chỗ thường xuyên trên trang. Bấm "Change several days", các ô ngày hiện ô chọn, chọn các ngày rồi chọn nhãn và bấm "Preview changes" để xem trước, giống cách làm hiện nay (vẫn cảnh báo khi ngày đã có giờ làm).</p>
+  </div>
+  <div class="scroller">
+  <div class="frame frame-desktop">
+    <main class="page">
+      <div class="batchbar" role="group" aria-label="Batch category edit">
+        <span class="count" aria-live="polite">3 days selected</span>
+        <label class="field">Category for selected days<select><option>Vacation</option></select></label>
+        <button class="btn btn-quiet" type="button">Select all</button>
+        <button class="btn btn-quiet" type="button">Clear</button>
+        <span class="spacer"></span>
+        <button class="btn btn-secondary" type="button">Done</button>
+        <button class="btn btn-primary" type="button">Preview changes</button>
+      </div>
+      <article class="sheet" aria-label="Timesheet form, selection mode">
+        <section class="week" style="margin-top:0" aria-label="Week 2">
+          <div class="week-bar"><strong>WEEK 2</strong><span class="muted mono">11/30/2026 - 12/06/2026</span></div>
+          <div class="week-grid">
+            <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT (h:mm)</div><div>Check</div></div>
+            <div class="day"><div class="d-day"><input class="sel" type="checkbox" aria-label="Select 2026-11-30">Mon</div><div class="d-date"><button type="button">11/30</button></div><div class="d-label">Worked</div><div class="d-time attention"><span class="sub">no times yet</span></div><div class="d-ot"></div><div class="d-check"><span class="st st-warn"><span class="shape shape-square" aria-hidden="true"></span>No times</span></div></div>
+            <div class="day selected"><div class="d-day"><input class="sel" type="checkbox" checked aria-label="Select 2026-12-01">Tue</div><div class="d-date"><button type="button">12/01</button></div><div class="d-label">Vacation<span class="sub">8:00 leave</span></div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+            <div class="day"><div class="d-day"><input class="sel" type="checkbox" aria-label="Select 2026-12-02">Wed</div><div class="d-date"><button type="button">12/02</button></div><div class="d-label">Worked<span class="sub">OT leave 4:00</span></div><div class="d-time">08:00-12:00</div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>Complete</span></div></div>
+            <div class="day today"><div class="d-day"><input class="sel" type="checkbox" aria-label="Select 2026-12-03">Thu</div><div class="d-date"><button type="button">12/03</button></div><div class="d-label">Worked</div><div class="d-time">08:12<span class="sub">running</span></div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-ok"><span class="live-dot" aria-hidden="true"></span>Running</span></div></div>
+            <div class="day selected"><div class="d-day"><input class="sel" type="checkbox" checked aria-label="Select 2026-12-04">Fri</div><div class="d-date"><button type="button">12/04</button></div><div class="d-label">Worked</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"><span class="st st-muted"><span class="shape shape-bar" aria-hidden="true"></span>Upcoming</span></div></div>
+            <div class="day nonworking selected"><div class="d-day"><input class="sel" type="checkbox" checked aria-label="Select 2026-12-05">Sat</div><div class="d-date"><button type="button">12/05</button></div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+            <div class="day nonworking"><div class="d-day"><input class="sel" type="checkbox" aria-label="Select 2026-12-06">Sun</div><div class="d-date"><button type="button">12/06</button></div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+          </div>
+        </section>
+      </article>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A6 -->
+<section class="artboard" id="a6" aria-labelledby="a6-title">
+  <div class="artboard-head">
+    <span class="id">A6, 1280px desktop</span>
+    <h2 id="a6-title">Review and sign off: the same form, then a short checklist</h2>
+    <p class="caption-vi" lang="vi">Trang "Review &amp; sign off" dùng lại đúng tờ timesheet dạng Excel, cũng chính là bố cục của file PDF sẽ gửi đi, nên người dùng thấy rõ mình đang ký cái gì. Bên phải là danh sách việc cần làm theo thứ tự: xử lý các ngày còn thiếu, kiểm tra email và PDF, rồi ký. Trang ngắn hơn nhiều so với hiện nay (hiện dài khoảng 2.400px trên máy tính và 5.700px trên điện thoại). Nội dung pháp lý của bước ký không thay đổi.</p>
+  </div>
+  <div class="scroller">
+  <div class="frame frame-desktop">
+    <header class="shell">
+      <span class="brand">C&amp;D Semi</span>
+      <nav class="nav" aria-label="Main"><a href="#a6" aria-current="page">Timesheet</a><a href="#a6">Overtime</a><a href="#a6">History</a><a href="#a6">Settings</a></nav>
+      <div class="user"><span class="avatar" aria-hidden="true">EE</span><span>Example Employee</span><button class="btn btn-quiet" type="button">Sign out</button></div>
+    </header>
+    <main class="page">
+      <div class="section-title">
+        <div><h1 style="font-size:var(--font-size-display)">Review and sign off</h1><p class="muted">Nov 23 to Dec 6, 2026. Payroll date 12/11/2026. Submission TS-20261211-a41c</p></div>
+        <div style="display:flex; gap:8px"><span class="chip">Draft</span><a class="btn btn-quiet" href="#a1">Back to the timesheet</a></div>
+      </div>
+      <div class="review">
+        <article class="sheet" aria-label="What you sign">
+          <header class="form-head">
+            <div><div class="company">C&amp;D Semiconductor Services, Inc.</div><div class="form-title">What you sign (same layout as the PDF)</div></div>
+            <dl class="form-fields"><dt>Employee:</dt><dd>Example Employee</dd><dt>Payroll Date:</dt><dd class="mono">12/11/2026</dd></dl>
+          </header>
+          <section class="week" aria-label="Week 1">
+            <div class="week-bar"><strong>WEEK 1</strong><span class="muted mono">11/23 - 11/29</span></div>
+            <div class="week-grid">
+              <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT</div><div>Check</div></div>
+              <div class="day"><div class="d-day">Mon</div><div class="d-date">11/23</div><div class="d-label">Worked</div><div class="d-time">08:00-17:00</div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+              <div class="day"><div class="d-day">Tue</div><div class="d-date">11/24</div><div class="d-label">Worked</div><div class="d-time">07:30-17:45</div><div class="d-ot">1:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+              <div class="day"><div class="d-day">Wed</div><div class="d-date">11/25</div><div class="d-label">Work from home</div><div class="d-time attention">08:00-17:00</div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>Breaks</span></div></div>
+              <div class="day nonworking"><div class="d-day">Thu</div><div class="d-date">11/26</div><div class="d-label">Thanksgiving Day</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Fri</div><div class="d-date">11/27</div><div class="d-label">Floating Holiday</div><div class="d-time">10:00-12:30</div><div class="d-ot">2:30</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+              <div class="day nonworking"><div class="d-day">Sat</div><div class="d-date">11/28</div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Sun</div><div class="d-date">11/29</div><div class="d-label">Off</div><div class="d-time">09:00-11:00</div><div class="d-ot">2:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+            </div>
+          </section>
+          <section class="week" aria-label="Week 2">
+            <div class="week-bar"><strong>WEEK 2</strong><span class="muted mono">11/30 - 12/06</span></div>
+            <div class="week-grid">
+              <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT</div><div>Check</div></div>
+              <div class="day"><div class="d-day">Mon</div><div class="d-date">11/30</div><div class="d-label">Worked</div><div class="d-time attention"><span class="sub">no times</span></div><div class="d-ot"></div><div class="d-check"><span class="st st-warn"><span class="shape shape-square" aria-hidden="true"></span>No times</span></div></div>
+              <div class="day"><div class="d-day">Tue</div><div class="d-date">12/01</div><div class="d-label">Vacation</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day"><div class="d-day">Wed</div><div class="d-date">12/02</div><div class="d-label">Worked<span class="sub">OT leave 4:00</span></div><div class="d-time">08:00-12:00</div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+              <div class="day"><div class="d-day">Thu</div><div class="d-date">12/03</div><div class="d-label">Worked</div><div class="d-time">08:12<span class="sub">running</span></div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>Open</span></div></div>
+              <div class="day"><div class="d-day">Fri</div><div class="d-date">12/04</div><div class="d-label">Worked</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"><span class="st st-muted"><span class="shape shape-bar" aria-hidden="true"></span>Upcoming</span></div></div>
+              <div class="day nonworking"><div class="d-day">Sat</div><div class="d-date">12/05</div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+              <div class="day nonworking"><div class="d-day">Sun</div><div class="d-date">12/06</div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+            </div>
+          </section>
+          <div class="sheet-foot"><p class="pending-note">2 days with OT pending are not in the total.</p><div class="ot-total"><span class="label">Overtime Total :</span><span class="value">5:30</span><span class="unit">h:mm</span></div></div>
+        </article>
+
+        <aside class="checklist" aria-label="Before you sign">
+          <section>
+            <h3><span class="step">1</span>Days that need attention</h3>
+            <div class="issue"><span class="d">11/25</span><span>Breaks not confirmed</span><a class="btn btn-quiet" href="#a3">Fix</a></div>
+            <div class="issue"><span class="d">12/03</span><span>Session still running</span><a class="btn btn-quiet" href="#a3">Fix</a></div>
+            <div class="issue"><span class="d">11/30</span><span>No record on a day with expected attendance</span><a class="btn btn-quiet" href="#a3">Fix</a></div>
+            <label class="check" style="align-items:flex-start"><input type="checkbox"> <span>I acknowledge the incomplete evidence above. OT stays pending for those days and I submit my attendance anyway.</span></label>
+          </section>
+          <section>
+            <h3><span class="step done">2</span>Email and PDF</h3>
+            <dl class="kv"><dt>To</dt><dd>payroll@example.invalid</dd><dt>Cc</dt><dd>manager@example.invalid</dd><dt>OT rows</dt><dd>shown on the PDF</dd></dl>
+            <a class="btn btn-quiet" href="#a6" style="justify-self:start">Show the email text</a>
+          </section>
+          <section>
+            <h3><span class="step">3</span>Sign</h3>
+            <div class="sig-box">Your saved signature image appears here</div>
+            <label class="field">Your name<input type="text" value=""><span class="hint">Type your name as it should appear on the PDF. Name on file: Example Employee.</span></label>
+            <button class="btn btn-primary btn-lg" type="button">Sign off &amp; Submit</button>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- =================================================================================== A7 -->
+<section class="artboard" id="a7" aria-labelledby="a7-title">
+  <div class="artboard-head">
+    <span class="id">A7, visual system</span>
+    <h2 id="a7-title">Tokens, day states and control states (light and dark)</h2>
+    <p class="caption-vi" lang="vi">Hệ thống màu và trạng thái: giữ màu xanh chủ đạo, bo góc 4px, bóng mờ nhiều lớp và hiệu ứng chuyển 300ms như hiện tại; chỉ thêm màu cho các trạng thái ngày (ngày nghỉ, hôm nay, cần xử lý, đang chọn) và cho lưới của tờ timesheet. Trạng thái luôn có chữ và hình đi kèm, không chỉ dựa vào màu, để người khó phân biệt màu vẫn đọc được. Có cả chế độ tối.</p>
+  </div>
+  <div class="scroller">
+  <div class="frame frame-desktop">
+    <div class="tokens">
+      <div>
+        <h3>Light</h3>
+        <div class="swatches">
+          <span class="sw"><i style="background:#f6f7f9"></i>--bg<code>#f6f7f9</code></span>
+          <span class="sw"><i style="background:#ffffff"></i>--card<code>#ffffff</code></span>
+          <span class="sw"><i style="background:#1c2430"></i>--text<code>#1c2430</code></span>
+          <span class="sw"><i style="background:#1f5fbf"></i>--accent<code>#1f5fbf</code></span>
+          <span class="sw"><i style="background:#e9eef5"></i>--sheet-head (new)<code>#e9eef5</code></span>
+          <span class="sw"><i style="background:#cdd5df"></i>--sheet-rule (new)<code>#cdd5df</code></span>
+          <span class="sw"><i style="background:#f0f2f5; background-image:var(--hatch)"></i>--day-nonworking (new)<code>#f0f2f5 + hatch</code></span>
+          <span class="sw"><i style="background:#fff4dc"></i>--attention-bg (new)<code>#fff4dc</code></span>
+        </div>
+        <h3>Day states</h3>
+        <div class="states">
+          <div class="state-cell">Workday</div>
+          <div class="state-cell nonworking">Weekend or holiday</div>
+          <div class="state-cell today">Today</div>
+          <div class="state-cell attention">Needs input</div>
+          <div class="state-cell selected">Selected</div>
+        </div>
+        <h3>Buttons (default, hover, focus, pressed, disabled)</h3>
+        <div class="btn-states">
+          <button class="btn btn-primary" type="button">Clock out</button>
+          <button class="btn btn-primary is-hover" type="button">Hover</button>
+          <button class="btn btn-primary is-focus" type="button">Focus</button>
+          <button class="btn btn-primary is-pressed" type="button">Pressed</button>
+          <button class="btn btn-primary" type="button" disabled>Disabled</button>
+        </div>
+        <div class="btn-states">
+          <button class="btn btn-secondary" type="button">Review &amp; sign off</button>
+          <button class="btn btn-quiet" type="button">Change several days</button>
+          <span class="chip chip-current">Current</span><span class="chip">Draft</span><span class="chip chip-warn">Needs input</span>
+        </div>
+        <h3>Type scale (system font stack, numbers in the mono stack)</h3>
+        <div class="type-scale">
+          <div><code>--font-size-display</code><span style="font-size:var(--font-size-display); font-weight:700">Nov 23 to Dec 6, 2026</span></div>
+          <div><code>--font-size-md mono</code><span class="mono" style="font-size:var(--font-size-md); font-weight:700">5:30</span></div>
+          <div><code>1rem body</code><span>Clocked in at 08:12</span></div>
+          <div><code>--font-size-sm</code><span style="font-size:var(--font-size-sm)">Payroll date Fri 12/11/2026</span></div>
+          <div><code>--font-size-2xs (new)</code><span style="font-size:var(--font-size-2xs)">breaks not confirmed</span></div>
+        </div>
+      </div>
+      <div class="theme-dark">
+        <h3>Dark (prefers-color-scheme)</h3>
+        <div class="swatches">
+          <span class="sw"><i style="background:#12161c"></i>--bg<code>#12161c</code></span>
+          <span class="sw"><i style="background:#1a2029"></i>--card<code>#1a2029</code></span>
+          <span class="sw"><i style="background:#e6e9ee"></i>--text<code>#e6e9ee</code></span>
+          <span class="sw"><i style="background:#6ea8ff"></i>--accent<code>#6ea8ff</code></span>
+          <span class="sw"><i style="background:#222a35"></i>--sheet-head<code>#222a35</code></span>
+          <span class="sw"><i style="background:#36404d"></i>--sheet-rule<code>#36404d</code></span>
+          <span class="sw"><i style="background:#1e252f; background-image:var(--hatch)"></i>--day-nonworking<code>#1e252f + hatch</code></span>
+          <span class="sw"><i style="background:#33290f"></i>--attention-bg<code>#33290f</code></span>
+        </div>
+        <h3>Day states</h3>
+        <div class="states">
+          <div class="state-cell">Workday</div>
+          <div class="state-cell nonworking">Weekend or holiday</div>
+          <div class="state-cell today">Today</div>
+          <div class="state-cell attention">Needs input</div>
+          <div class="state-cell selected">Selected</div>
+        </div>
+        <h3>A week band in dark mode</h3>
+        <div class="week-grid" style="--row-label:44px; --row-time:40px">
+          <div class="row-labels" aria-hidden="true"><div>Day</div><div>Date</div><div>Label</div><div>Time</div><div>OT</div><div>Check</div></div>
+          <div class="day"><div class="d-day">Mon</div><div class="d-date">11/23</div><div class="d-label">Worked</div><div class="d-time">08:00-17:00</div><div class="d-ot">0:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+          <div class="day"><div class="d-day">Tue</div><div class="d-date">11/24</div><div class="d-label">Worked</div><div class="d-time">07:30-17:45</div><div class="d-ot">1:00</div><div class="d-check"><span class="st st-ok"><span class="shape shape-circle" aria-hidden="true"></span>OK</span></div></div>
+          <div class="day"><div class="d-day">Wed</div><div class="d-date">11/25</div><div class="d-label">WFH</div><div class="d-time attention">08:00-17:00</div><div class="d-ot"><span class="pending">pending</span></div><div class="d-check"><span class="st st-warn"><span class="shape shape-diamond" aria-hidden="true"></span>Breaks</span></div></div>
+          <div class="day nonworking"><div class="d-day">Thu</div><div class="d-date">11/26</div><div class="d-label">Thanks&shy;giving</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+          <div class="day nonworking"><div class="d-day">Fri</div><div class="d-date">11/27</div><div class="d-label">Floating</div><div class="d-time">10:00-12:30</div><div class="d-ot">2:30</div><div class="d-check"></div></div>
+          <div class="day nonworking"><div class="d-day">Sat</div><div class="d-date">11/28</div><div class="d-label">Off</div><div class="d-time"></div><div class="d-ot"></div><div class="d-check"></div></div>
+          <div class="day nonworking"><div class="d-day">Sun</div><div class="d-date">11/29</div><div class="d-label">Off</div><div class="d-time">09:00-11:00</div><div class="d-ot">2:00</div><div class="d-check"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

@@ -12,6 +12,11 @@
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
   review. Owner permission has not been requested, there is no pilot result, and the
   NAS is NOT VERIFIED.
+- UI change round (owner request 2026-10-08): the plan and a static mockup are ready
+  (task WP5-UX-PLAN; `handoff/delivery/design/WP5-UX/mockup.html`). The owner answers
+  E-1..E-7 (board `pending_owner_question_2`) before implementation. When the redesign
+  lands, the WP5 snapshot is re-gated and re-audited, and the pilot packet's release
+  identity is refreshed.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),
