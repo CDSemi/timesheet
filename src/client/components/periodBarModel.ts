@@ -24,6 +24,13 @@ export function dueInWords(period: Pick<Period, 'due_local_date' | 'due_local_ti
   return `Due ${weekdayName(period.due_local_date)} ${usDate(period.due_local_date)}, ${period.due_local_time} (${reportingZone})`;
 }
 
+/** The due instant in the display zone, formatted like the bar: `Wed 10/14/2026, 07:00`. Display only; the instant and zone are unchanged. */
+export function dueInZoneText(dueAtUtc: string, zone: string): string {
+  const local = formatInZone(zone, parseUtcInstant(dueAtUtc));
+  const date = local.slice(0, 10);
+  return `${weekdayName(date)} ${usDate(date)}, ${local.slice(11, 16)}`;
+}
+
 /** The compact line that always names the zone this browser shows times in, for example `Times in Asia/Saigon`. */
 export function viewingZoneText(displayZone: string): string {
   return `Times in ${displayZone}`;

@@ -76,7 +76,7 @@ Plain CSS custom properties in `src/client/styles.css`; system font stack only (
 
 - Shape and depth: 4px corner radius (`--radius`); panels and cards use layered, diffuse soft shadows (`--shadow-panel`, `--shadow-overlay`) rather than hard borders.
 - Motion: one shared transition token (`--transition`, 300 ms ease-out) on hover, active and focus states of buttons and links; a pressed button moves by a small token offset. No entrance or scroll animation; reduced-motion preferences are honored and the running-session dot is static.
-- Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring.
+- Buttons: primary (accent fill), secondary (card with accent border) and quiet (accent text), each with a visible focus ring (one shared token: a solid accent ring with a card-coloured gap, at least 3:1 against every surface in both themes).
 - Touch: controls are at least 44px (`--tap-min`) below 768px and with a coarse pointer.
 - Day-state colour roles (sheet rules and heads, non-working tint with hatching, today, needs input, selected, running) have light and dark values. State is never colour alone: every state also has words or a shape.
 - High-density, mobile-first layout; light and dark themes follow the device.

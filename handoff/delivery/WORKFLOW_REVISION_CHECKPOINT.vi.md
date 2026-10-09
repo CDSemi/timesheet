@@ -191,9 +191,17 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - Board: status `blocked`, next_task_id WP5-UX-FIX6 (pending), chờ chủ dự án trả lời
   WP5-UX-Q1. Chưa commit: lần chuyển trạng thái này, kết quả và evidence của CKPT2, và
   cập nhật checkpoint này (+ en).
-- Bước kế tiếp: khi chủ dự án trả lời, ghi nguyên văn; nếu (a) giao WP5-UX-FIX6 như brief,
-  rồi freeze, WP5-UX-REGATE4, B5 mới và A5 kiểm phần thay đổi; nếu (b) hoặc (c) điều chỉnh
-  kế hoạch và ghi quyết định vào docs/10 (+ vi) qua một task tài liệu.
+- Chủ dự án trả lời WP5-UX-Q1 "a" (2026-10-09, đã ghi nguyên văn). Board về lại `running`.
+- WP5-UX-FIX6 xong: vòng focus 5.2-7.5:1 trên mọi nền ở cả hai giao diện (thêm test e2e
+  focus-ring), ngày hạn nộp kiểu Mỹ trong ghi chú múi giờ; unit 1821; toàn bộ e2e
+  174/0/16; verify exit 0; digest 07c3ca00.
+- Đối chiếu (WP5-UX-RECON1): HEAD = origin/main = 49a3ff0, một commit chỉ chứa handoff do
+  chủ dự án tự commit sau c24d634 (kết quả CKPT2, lần chuyển trạng thái board, checkpoint);
+  mã nguồn không đổi.
+- Đang chạy: WP5-UX-FIX6-FREEZE (committer) trên gốc 49a3ff0.
+- Tiếp theo: FIX6-FREEZE, WP5-UX-REGATE4, B5 mới và A5 kiểm phần thay đổi (A2, A3, A4 và
+  WP5-RECHECK có superseded_by A5), rồi nghiệm thu lại WP5. Quyết định Q1 được ghi vào
+  docs/10 trong task tài liệu lúc nghiệm thu.
 - Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet
   thành edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, commit
   nghiệm thu); nếu phần B lại không đạt, hỏi chủ dự án thay vì lặp tiếp.

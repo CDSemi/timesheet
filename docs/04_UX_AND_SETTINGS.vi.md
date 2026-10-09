@@ -76,7 +76,7 @@ CSS custom properties thuần trong `src/client/styles.css`; chỉ dùng bộ fo
 
 - Hình dạng và độ sâu: bo góc 4px (`--radius`); panel và card dùng bóng đổ mềm nhiều lớp, khuếch tán (`--shadow-panel`, `--shadow-overlay`) thay cho viền cứng.
 - Chuyển động: một token transition dùng chung (`--transition`, 300 ms ease-out) cho trạng thái hover, active và focus của nút và liên kết; nút đang nhấn dịch một khoảng nhỏ theo token. Không có animation khi vào hay cuộn; tôn trọng tùy chọn giảm chuyển động và chấm ca đang chạy là tĩnh.
-- Nút: primary (nền màu nhấn), secondary (card viền màu nhấn) và quiet (chữ màu nhấn), mỗi loại có vòng focus nhìn thấy được.
+- Nút: primary (nền màu nhấn), secondary (card viền màu nhấn) và quiet (chữ màu nhấn), mỗi loại có vòng focus nhìn thấy được (một token dùng chung: vòng màu nhấn đặc với khe màu card, độ tương phản tối thiểu 3:1 trên mọi bề mặt ở cả hai giao diện).
 - Chạm: điều khiển cao ít nhất 44px (`--tap-min`) dưới 768px và với con trỏ thô.
 - Các vai trò màu theo trạng thái ngày (đường kẻ và đầu bảng, nền ngày không làm việc kèm sọc, hôm nay, cần nhập, đang chọn, đang chạy) có giá trị sáng và tối. Trạng thái không bao giờ chỉ bằng màu: luôn có chữ hoặc hình.
 - Bố cục mật độ cao, ưu tiên mobile; giao diện sáng và tối theo thiết bị.

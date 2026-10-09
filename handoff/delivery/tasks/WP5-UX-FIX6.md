@@ -1,7 +1,7 @@
 # WP5-UX-FIX6 dispatch brief
 
-- Status: PENDING the owner's answer to WP5-UX-Q1 (board `pending_owner_question_2`).
-  Do not start until the coordinator dispatches this task.
+- Status: dispatched 2026-10-09 after the owner answered WP5-UX-Q1 with option (a)
+  (fix both findings; board `owner_decisions`).
 - Mission/task: timesheet-software-readiness / WP5-UX-FIX6; package WP5; kind fix;
   attempt 1; addresses audit WP5-UX-AUDIT-B4 (FIX REQUIRED); depends on WP5-UX-REGATE3
   (PASS).
@@ -118,4 +118,40 @@ files, the background-task confirmation, and any stop or deviation.
 
 ## Results
 
-(worker appends here)
+Model: claude-sonnet-5-5. Base: HEAD = origin/main = 49a3ff0 (the brief said c24d634; 49a3ff0 only
+adds handoff checkpoint files, src/tests unchanged since edaaa85). `git status --short` at start: only
+the four expected handoff/ files (ORCHESTRATION.json, WORKFLOW_REVISION_CHECKPOINT(.vi).md, this brief).
+
+Reproductions at base (evidence `03-repro-base.txt`, Node v24.21.0):
+- B4-01: new `tests/e2e/focus-ring.spec.ts` failed on all four runs: `--focus-ring rgba(31,95,191,0.35)`
+  against `--card` = 1.72:1 (light), `rgba(110,168,255,0.45)` = 2.46:1 (dark).
+- B4-02: `timesheet.spec.ts` zone-note assertion failed on both projects: expected
+  "Wed 10/14/2026, 07:00", received "2026-10-14 07:00".
+
+Fix:
+- `src/client/styles.css`: `--focus-ring: 0 0 0 1px var(--card), 0 0 0 3px var(--accent)` (C40 two-colour
+  ring, same 3px extent) and new `--focus-ring-inset` for the phone tab; dark override removed (accent
+  and card already switch). Shared `--transition` unchanged.
+- `periodBarModel.ts` `dueInZoneText`, used by `PeriodBar.tsx` (display only; unit test added).
+- `docs/04_UX_AND_SETTINGS.md` and `.vi.md` line 79: focus ring description.
+
+Ring contrast (outer accent ring vs surface, light / dark): card 6.09 / 6.79, page 5.68 / 7.52,
+sheet head 5.23 / 6.00, sheet head off 4.86 / 5.43, non-working 5.43 / 6.40, off (tab hover)
+5.38 / 6.22, attention 5.58 / 5.94. Real controls (button, link, phone tab, sheet date) measured
+6.09 light and 6.79 dark. Phone tab bar is the card surface.
+
+Checks: typecheck 0, lint 0, `npm test` 82 files / 1821 tests passed; build 0; full e2e both projects:
+174 passed, 16 skipped, 0 failed (87 desktop and 88 mobile ok lines, includes 4 new focus-ring tests);
+`validate_package.py --preflight` exit 0 (python under C:\Users\<user>\.cache\codex-runtimes\...);
+`npm run verify` exit 0 (SMOKE_PORT 48171, DATA_DIR and DATABASE_PATH in the task folder).
+Privacy grep over evidence and changed files: 0 profile paths, 0 real emails (2 synthetic
+example.invalid lines in the verify log). Screenshots: six `fix6-focus-*-synthetic.png`.
+
+Files changed: src/client/styles.css, src/client/components/PeriodBar.tsx, periodBarModel.ts,
+tests/e2e/focus-ring.spec.ts (new), tests/e2e/timesheet.spec.ts, tests/client/periodBarModel.test.ts,
+docs/04_UX_AND_SETTINGS.md, docs/04_UX_AND_SETTINGS.vi.md, this brief, evidence folder
+`handoff/delivery/evidence/WP5-UX-FIX6/`.
+
+Digest: see the return message (final value recorded there).
+
+Status: done

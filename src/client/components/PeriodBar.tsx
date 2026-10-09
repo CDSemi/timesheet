@@ -1,9 +1,9 @@
 import type { TimesheetView } from '../api.ts';
 import { reviewStatus } from './dayModel.ts';
 import { gridStatus } from './deliveryModel.ts';
-import { instantText, usDate } from './format.ts';
+import { usDate } from './format.ts';
 import { ImportedBadge, ImportedNote } from './ImportStatus.tsx';
-import { dueInWords, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
+import { dueInWords, dueInZoneText, viewingZoneText, weekdayName, zoneNoteVisible } from './periodBarModel.ts';
 import { type PeriodState, ReviewLink } from './ReviewStatus.tsx';
 import { SubmissionStatusLine } from './SubmissionStatus.tsx';
 
@@ -70,7 +70,7 @@ export function PeriodBar({
               </div>
               <div>
                 <dt>Due, your time ({zone})</dt>
-                <dd>{instantText(period.due_at_utc, zone)}</dd>
+                <dd>{dueInZoneText(period.due_at_utc, zone)}</dd>
               </div>
             </dl>
             <p className="muted hint">Dates are accounting dates in the reporting zone. Session times are shown in the display zone.</p>

@@ -187,9 +187,17 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - Board: status `blocked`, next_task_id WP5-UX-FIX6 (pending), waiting for the owner's
   answer to WP5-UX-Q1. Uncommitted: this flip, the CKPT2 results and evidence, and this
   checkpoint update (+ vi).
-- Next action: on the owner's answer, record it verbatim; with (a) dispatch WP5-UX-FIX6
-  as written, then freeze, WP5-UX-REGATE4, fresh B5 and an area-A delta A5; with (b) or
-  (c) adjust the plan and record the decision in docs/10 (+ vi) through a docs task.
+- Owner answered WP5-UX-Q1 "a" (2026-10-09, recorded verbatim). Board back to `running`.
+- WP5-UX-FIX6 done: focus ring 5.2-7.5:1 on every surface in both themes (new
+  focus-ring e2e check), US due date in the zone note; unit 1821; full e2e 174/0/16;
+  verify exit 0; digest 07c3ca00.
+- Reconciled (WP5-UX-RECON1): HEAD = origin/main = 49a3ff0, a handoff-only commit the
+  owner made himself after c24d634 (CKPT2 results, board flip, checkpoint); source
+  unchanged.
+- Running: WP5-UX-FIX6-FREEZE (committer) on base 49a3ff0.
+- Next: FIX6-FREEZE, WP5-UX-REGATE4, fresh B5 and an area-A delta A5 (A2, A3, A4 and
+  WP5-RECHECK superseded_by A5), then the WP5 re-accept. Docs/10 gets the Q1 owner
+  decision in the re-accept docs task.
 - Next action: if both PASS, the WP5 re-accept (pilot packet identity refresh to
   edaaa85 / b7bbcbc0 / image 1332b6d5…, STATE, NEXT_ACTION, WP5 handoff, accept commit);
   if area B fails again, an owner question instead of another loop.

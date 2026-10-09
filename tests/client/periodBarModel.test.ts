@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayView, Session } from '../../src/client/api.ts';
-import { clockedInText, dueInWords, runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
+import { clockedInText, dueInWords, dueInZoneText,runningSessionOf, viewingZoneText, weekdayName, zoneNoteVisible } from '../../src/client/components/periodBarModel.ts';
 
 function session(id: string, start: string, end: string | null): Session {
   return { id, work_date: '2026-12-03', start_utc: start, end_utc: end, input_zone: 'America/Los_Angeles', source: 'clock', breaks_confirmed: false, version: 1, breaks: [] };
@@ -23,6 +23,14 @@ describe('dueInWords', () => {
     expect(dueInWords({ due_local_date: '2026-12-08', due_local_time: '17:00' }, 'America/Los_Angeles')).toBe(
       'Due Tue 12/08/2026, 17:00 (America/Los_Angeles)',
     );
+  });
+});
+
+describe('dueInZoneText', () => {
+  it('prints the due instant in the display zone in the US form of the bar', () => {
+    // 2026-10-14T00:00:00Z is 17:00 on Tue 10/13 in Los Angeles and 07:00 on Wed 10/14 in Ho Chi Minh City.
+    expect(dueInZoneText('2026-10-14T00:00:00Z', 'Asia/Ho_Chi_Minh')).toBe('Wed 10/14/2026, 07:00');
+    expect(dueInZoneText('2026-10-14T00:00:00Z', 'America/Los_Angeles')).toBe('Tue 10/13/2026, 17:00');
   });
 });
 

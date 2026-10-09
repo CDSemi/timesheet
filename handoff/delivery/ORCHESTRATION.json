@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mission_id": "timesheet-software-readiness",
-  "status": "blocked",
+  "status": "running",
   "authorized_scope": [
     "WP1",
     "WP2",
@@ -14,7 +14,7 @@
     "production_activation"
   ],
   "active_package": "WP5",
-  "phase": "ux-change-round-owner-question-q1",
+  "phase": "ux-change-round-fix6",
   "coordinator_session_id": "44e3451e-da20-4a12-94bb-6b94fc5f531e",
   "coordinator_runtime": {
     "profile": "timesheet-coordinator",
@@ -28,8 +28,12 @@
   "current_source_digest": "b7bbcbc0a5bbb097a5547b441d1228f20963445e86b0429169cb7ab47980a873",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-FIX6",
+  "next_task_id": "WP5-UX-FIX6-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-09",
+      "observation": "The owner committed the coordinator's uncommitted post-CKPT2 records himself (49a3ff0, handoff-only, pushed, reusing the WP5-UX-CKPT2 message) while the board waited for WP5-UX-Q1. Reconciled by the read-only lookup WP5-UX-RECON1; source identity unchanged (digest b7bbcbc0). Later freeze briefs use 49a3ff0 as the expected HEAD."
+    },
     {
       "date": "2026-10-09",
       "observation": "WP5-UX-AUDIT-A3 (auditor, opus) left a second stray file outside its task folder, D:\\canedit.txt (public source lines, no personal data), despite the brief's 'create files only in the task or evidence folder' rule; the owner is asked to delete it together with D:\\raw-r07.txt. Pipes into head and /dev/null redirects keep recurring in auditors and verifiers although the profiles now carry the runtime line (GOV-SUPERSEDE); a client restart may be needed for the profile bodies to take effect."
@@ -147,7 +151,9 @@
       "observation": "WP4-DEC: the worker bundled evidence writing, the brief-results heredoc and 'cmd.exe /c \"npm run digest\"' in one backgrounded Bash call. The cmd.exe step hung, the heredoc append never landed, and the worker's hand-back wrongly said results were appended. The coordinator stopped the background task and resumed the worker to append the results with the Edit tool. Briefs now forbid cmd.exe entirely (with or without /c) and ask for npm or node to be run from Git Bash with Node 24 first on PATH, and for task records to be written with the Edit tool, not shell heredocs."
     }
   ],
-  "pending_owner_question_2": {
+  "pending_owner_question_2": null,
+  "answered_owner_question_ux_q1": {
+    "answered": "2026-10-09, owner chat 'a' (fix both in WP5-UX-FIX6); see owner_decisions",
     "id": "WP5-UX-Q1",
     "asked": "2026-10-09",
     "source": "WP5-UX-AUDIT-B4 FIX REQUIRED on edaaa85 (handoff/delivery/WP5_UX_REVIEW_B4.md) and the coordinator decision of 2026-10-09 to ask the owner if area B failed again after WP5-UX-FIX5.",
@@ -195,7 +201,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "c24d6342fb55ee68a368109db6f3e9421059d681",
+    "last_commit": "49a3ff04a9cb68d8a5f565b43fa52129bca0fd6c",
     "unpushed": []
   },
   "owner_decisions": [
@@ -310,6 +316,12 @@
       "source": "owner chat, direct reply typed by the owner to pending question WP5-UX-E-1..E-7",
       "verbatim": "OK theo khuyến nghị. Ngoài ra, file WP5_PILOT_PACKET.vi.md bị thay đổi là vì tôi đang trả lời mấy câu hỏi trong WP5_PILOT_PACKET.vi.md, nhưng tôi trả lời trực tiếp trong WP5_PILOT_PACKET.vi.md có đúng quy trình ko hay là nên tạo 1 task riêng để trả lời? Tôi đã phục hồi file này lại như cũ. chờ câu trả lời của bạn rồi mới tính.",
       "decision": "E-1..E-7 all as recommended in WP5-UX-PLAN section E: E-1 (a) Excel rows plus a Check row, detail rows behind 'Show details' on the Timesheet and always on the Review; E-2 (a) one hatched tint for every non-working day from the server calendar, holiday name in the label cell; E-3 (a) side panel on desktop, bottom sheet on phones, label pickable in the cell; E-4 US dates, h:mm, 24-hour as on the PDF; E-5 (a) Timesheet, Overtime, History, Settings (+ Admin), Import under Settings/More, 'OT' renamed 'Overtime'; E-6 (a) show the empty labelled manager signature line; E-7 (a) shell/tokens, Timesheet, day editor and Review in this round. Label wording keeps the app categories (no Excel 'Sick Day' / 'Off Day (Overtime Used)'). The WP5_PILOT_PACKET.vi.md change was the owner's draft of D answers, now reverted by the owner."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "owner chat, direct reply typed by the owner to pending question WP5-UX-Q1",
+      "verbatim": "a",
+      "decision": "WP5-UX-Q1 option (a): fix both area-B findings of WP5-UX-AUDIT-B4 in one small round, WP5-UX-FIX6: B4-01 a stronger shared focus-ring token with at least 3:1 against every adjacent surface in both themes plus an automated contrast check; B4-02 the display-zone due time in the US date format promised by docs/04. Then freeze, regate, a fresh area-B recheck and an area-A delta recheck before WP5 re-acceptance."
     }
   ],
   "coordinator_decisions": [
@@ -522,6 +534,20 @@
     }
   ],
   "auxiliary_lookups": [
+    {
+      "id": "WP5-UX-RECON1",
+      "agent_type": "timesheet-light",
+      "agent_id": "a05ea9ed575ce14f5",
+      "status": "done",
+      "writes": [],
+      "purpose": "Read-only reconciliation after WP5-UX-FIX6 observed base HEAD 49a3ff0 instead of the board's last commit c24d634: list the commits after c24d634 (author, date, message, files changed, pushed or not) and the working-tree status, without changing anything.",
+      "result": {
+        "head": "HEAD = origin/main = 49a3ff04a9cb68d8a5f565b43fa52129bca0fd6c, pushed, not ahead or behind.",
+        "extra_commit": "Exactly one commit after c24d634: 49a3ff0 by the owner (author name huysrc), 2026-10-09 14:49:40 -0700, reusing the WP5-UX-CKPT2 message; 6 paths, all under handoff/delivery/: ORCHESTRATION.json (the blocked flip and CKPT2 result), the checkpoint pair, evidence/WP5-UX-CKPT2/checks.txt and commit-message.txt, tasks/WP5-UX-CKPT2.md (results). No path outside handoff/.",
+        "working_tree": "Modified in handoff/: ORCHESTRATION.json, the checkpoint pair, tasks/WP5-UX-FIX6.md; untracked evidence/WP5-UX-FIX6/. Outside handoff/: modified docs/04 EN and VI, PeriodBar.tsx, periodBarModel.ts, styles.css, tests/client/periodBarModel.test.ts, tests/e2e/timesheet.spec.ts; untracked tests/e2e/focus-ring.spec.ts (all from WP5-UX-FIX6).",
+        "source_identity": "src, tests and docs identical between c24d634 and 49a3ff0."
+      }
+    },
     {
       "id": "TEST-ACCOUNTS",
       "agent_type": "Explore",
@@ -16462,9 +16488,9 @@
       "id": "WP5-UX-FIX6",
       "package": "WP5",
       "kind": "fix",
-      "status": "pending",
+      "status": "done",
       "addresses_audit": "WP5-UX-AUDIT-B4",
-      "blocked_by": "owner question WP5-UX-Q1",
+      "unblocked_by": "owner answer WP5-UX-Q1 (a), 2026-10-09",
       "depends_on": [
         "WP5-UX-REGATE3"
       ],
@@ -16477,12 +16503,12 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
-      "session_id": null,
-      "attempt": 0,
+      "agent_id": "aa20021a02e3399e7",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
       "owned_paths": [
         "src/client/styles.css",
         "src/client/components/PeriodBar.tsx",
@@ -16497,13 +16523,63 @@
       ],
       "prompt": "handoff/delivery/tasks/WP5-UX-FIX6.md",
       "report": "handoff/delivery/tasks/WP5-UX-FIX6.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX6/00-node.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/02-status.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/03-repro-base.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/11-fixed-focused.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/20-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/20-lint.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/20-test.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/21-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/30-preflight.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/40-verify.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/50-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX6/fix6-focus-sheet-date-light-synthetic.png"
+      ],
       "baseline_commit": "edaaa852370128ca9bdf206d730f3849346ba994",
+      "source_digest": "07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "fixed: reproduced at base (focus-ring spec failed at 1.72:1 light / 2.46:1 dark; zone-note test got '2026-10-14 07:00' instead of 'Wed 10/14/2026, 07:00'); --focus-ring is a solid 2px accent ring with a 1px card gap (WCAG C40) plus a --focus-ring-inset token for the phone tab; new dueInZoneText feeds the zone note; docs/04 EN and VI line 79 updated. Ring contrast light/dark: card 6.09/6.79, page 5.68/7.52, sheet head 5.23/6.00, non-working 5.43/6.40, attention 5.58/5.94. Files: styles.css, PeriodBar.tsx, periodBarModel.ts, tests/e2e/focus-ring.spec.ts (new), tests/e2e/timesheet.spec.ts, tests/client/periodBarModel.test.ts, docs/04 EN and VI. Unit 82 files / 1821; full e2e 174 passed / 16 skipped / 0 failed; preflight and verify exit 0; digest 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635. Worker observed base HEAD 49a3ff0 (not the recorded c24d634; it reportedly adds only handoff files) with only the 4 expected handoff files changed at start: reconciliation WP5-UX-RECON1 before the freeze.",
+      "next_action": "WP5-UX-FIX6-FREEZE commits and pushes on top of 49a3ff0; then WP5-UX-REGATE4 and fresh rechecks B5 and A5."
+    },
+    {
+      "id": "WP5-UX-FIX6-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-FIX6"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX6-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX6-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX6-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX6-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "49a3ff04a9cb68d8a5f565b43fa52129bca0fd6c",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Waits for the owner's answer to WP5-UX-Q1; with option a, dispatch as written (focus-ring token with an automated 3:1 check, US date in the zone note)."
+      "next_action": "Committer stages the FIX6 change and the listed handoff records, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-REGATE4 brief."
     },
     {
       "id": "WP5-UX-CKPT2",

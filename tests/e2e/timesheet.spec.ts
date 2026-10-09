@@ -200,7 +200,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await employeeSeed.seedUnconfirmedBreaksDay(pendingDay);
   const { reportingZone, currentPayrollDate } = await employeeSeed.today();
   const sheet = await employeeSeed.call<{
-    period: { due_local_date: string; period_start: string };
+    period: { due_local_date: string; period_start: string; due_at_utc: string };
     totals: { provisional_credited_minutes: number; pending_days: number };
   }>('GET', `/api/timesheets/${currentPayrollDate}`);
   const complete = await employeeSeed.dayView(completeDay);
@@ -229,6 +229,14 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(page.locator('.facts')).toContainText(reportingZone);
   await expect(page.locator('.facts')).toContainText(displayZone);
   await expect(page.getByText(`Due, your time (${displayZone})`)).toBeVisible();
+  // WP5-UX-B4-02: the display-zone due time is in the US format of the bar ("Wed 10/14/2026, 07:00"), computed here by the test runtime.
+  const dueParts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: displayZone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(sheet.period.due_at_utc))
+      .map((part) => [part.type, part.value]),
+  );
+  const dueInDisplayZone = `${dueParts.weekday} ${dueParts.month}/${dueParts.day}/${dueParts.year}, ${dueParts.hour}:${dueParts.minute}`;
+  await expect(page.locator('[data-zone-note] dd').nth(2)).toHaveText(dueInDisplayZone);
   // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
   await expect(page.locator('[data-zone-note]')).toBeVisible();
   // The period bar names the viewing zone compactly, and the reporting zone stays in the note.
