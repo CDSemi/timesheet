@@ -1,0 +1,33 @@
+// Compares the phone probe of 589bcff (before FIX4) with a2ea7a4 (after FIX4), size by size and
+// control by control: presence, visibility, inside the width, not covered, disabled; and the
+// "Open a day" row geometry. Usage: node phone-compare.mjs <before.json> <after.json>
+import { readFileSync } from 'node:fs';
+
+const before = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const after = JSON.parse(readFileSync(process.argv[3], 'utf8'));
+const flags = (c) => (c === undefined ? 'absent' : `count=${c.count} visible=${c.visible} inside=${c.inside} notCovered=${c.notCovered} disabled=${c.disabled}`);
+let regressions = 0;
+for (const a of after.layouts) {
+  const b = before.layouts.find((l) => l.size.width === a.size.width && l.size.height === a.size.height);
+  console.log(`== ${a.size.width}x${a.size.height}${a.size.asserted ? '' : ' (information only)'}`);
+  for (const ca of a.controls) {
+    const cb = b?.controls.find((c) => c.name === ca.name);
+    const fa = flags(ca);
+    const fb = flags(cb);
+    const worse = ['visible', 'inside', 'notCovered'].some((k) => cb?.[k] === true && ca[k] !== true) || (cb?.count ?? 0) > ca.count;
+    if (worse && a.size.asserted) regressions += 1;
+    console.log(`  ${ca.name}: ${fa === fb ? `same (${fa})` : `589bcff ${fb} -> a2ea7a4 ${fa}`}${worse ? '  <-- WORSE' : ''}`);
+  }
+  for (const key of ['button_after_fill', 'field_after_fill']) {
+    const ca = a[key];
+    const cb = b?.[key];
+    const worse = ['visible', 'inside', 'notCovered'].some((k) => cb?.[k] === true && ca?.[k] !== true);
+    if (worse && a.size.asserted) regressions += 1;
+    console.log(`  ${key} (centred): 589bcff ${flags(cb)} -> a2ea7a4 ${flags(ca)}${worse ? '  <-- WORSE' : ''}`);
+  }
+  const ra = a.open_day_row;
+  const rb = b?.open_day_row;
+  console.log(`  Open a day field width: 589bcff ${rb?.input.w}px clipped=${rb?.value_clipped} -> a2ea7a4 ${ra.input.w}px clipped=${ra.value_clipped}; row height ${rb?.form.h} -> ${ra.form.h}; button below field ${rb?.button_below_field} -> ${ra.button_below_field}; page scrollWidth ${rb?.page_scroll_width} -> ${ra.page_scroll_width} (innerWidth ${ra.inner_width})`);
+  console.log(`  editor opened via the row: 589bcff ${JSON.stringify(b?.opened)} -> a2ea7a4 ${JSON.stringify(a.opened)}; writes by opening: ${JSON.stringify(b?.writes_by_open_day)} -> ${JSON.stringify(a.writes_by_open_day)}`);
+}
+console.log(`regressions (a control present/visible/inside/not covered at 589bcff but not at a2ea7a4, asserted sizes): ${regressions}`);

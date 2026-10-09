@@ -1,0 +1,99 @@
+// Compares the probe results of a2ea7a4 with 014bd47:
+// 1. the PUT /api/days/:date bodies of the same leave entries (expected_version excluded);
+// 2. the clock-in, clock-out and sign-off request bodies (keys, and values that do not depend on
+//    the run: zone, break choice, signer name, choices, acknowledgement).
+// Usage: node compare.mjs <results-dir>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+const sets = {
+  'a2ea7a4 desktop': load('leave-a2ea7a4-desktop.json'),
+  'a2ea7a4 tablet': load('leave-a2ea7a4-tablet.json'),
+  'a2ea7a4 mobile': load('leave-a2ea7a4-mobile.json'),
+  '014bd47 desktop': load('leave-014bd47-desktop.json'),
+  '014bd47 mobile': load('leave-014bd47-mobile.json'),
+};
+
+console.log('== 1. Leave entries: PUT count, leave_minutes sent, stored after, page message');
+for (const [label, data] of Object.entries(sets)) {
+  console.log(`-- ${label} (workDate ${data.workDate})${data.editor_layout ? ` editor modal=${data.editor_layout.modal}` : ''}`);
+  for (const r of data.results) {
+    const puts = r.put_bodies ?? [];
+    const sent = puts.map((b) => b.leave_minutes).join(',') || '-';
+    const after = typeof r.stored_after === 'object' ? r.stored_after.leave_minutes : r.stored_after;
+    const msg = (r.alert_texts ?? r.alerts ?? []).join(' | ') || '-';
+    const native = r.state ? ` formValid=${r.state.formValid} badInput=${r.state.badInput}` : '';
+    const marks = r.hours_attrs ? ` aria-invalid h=${r.hours_attrs.ariaInvalid ?? '-'} m=${r.minutes_attrs.ariaInvalid ?? '-'}` : '';
+    console.log(`  ${r.case}: PUTs=${puts.length} sent=${sent} stored=${after}${native}${marks} msg=${msg}`);
+  }
+}
+const strip = (body) => {
+  const { expected_version: _ignored, ...rest } = body;
+  return JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b))));
+};
+const pairs = [
+  ['empty hours and minutes', 'empty', 0],
+  ['valid 2h 30m', 'valid 150 (2h 30m)', 150],
+  ['valid 4h 00m typed', 'valid 240 typed (4h 00m)', 240],
+  ['valid 0h 45m (hours empty)', 'valid 45 (0h 45m)', 45],
+  ['valid 8h 00m (the required day)', 'valid 480 (8h 00m)', 480],
+  ['client-valid 24h 00m, refused by the server rule', 'client-valid 1440, refused by the server rule', 1440],
+];
+let mismatches = 0;
+console.log('\n-- valid entries: body at a2ea7a4 (hours + minutes) vs 014bd47 (minutes), expected_version excluded');
+for (const project of ['desktop', 'mobile']) {
+  const now = sets[`a2ea7a4 ${project}`];
+  const then = sets[`014bd47 ${project}`];
+  for (const [a, b, minutes] of pairs) {
+    const x = now.results.find((r) => r.case === a)?.put_bodies?.[0];
+    const y = then.results.find((r) => r.case === b)?.put_bodies?.[0];
+    const same = x !== undefined && y !== undefined && strip(x) === strip(y);
+    if (!same) mismatches += 1;
+    console.log(`  ${project} ${minutes}: ${same ? 'SAME' : 'DIFFERENT'} a2ea7a4=${x === undefined ? 'none' : strip(x)} 014bd47=${y === undefined ? 'none' : strip(y)}`);
+  }
+}
+const refusedNow = Object.entries(sets)
+  .filter(([label]) => label.startsWith('a2ea7a4'))
+  .flatMap(([label, data]) => data.results.filter((r) => (r.alert_texts ?? []).some((t) => t.startsWith('Enter leave')) ).map((r) => `${label}: ${r.case} PUTs=${r.put_bodies.length}`));
+console.log(`-- a2ea7a4 refused entries with the page message: ${refusedNow.length}; with a PUT: ${refusedNow.filter((l) => !l.endsWith('PUTs=0')).length}`);
+console.log(`leave mismatches=${mismatches}`);
+
+console.log('\n== 2. Clock and sign-off bodies');
+const keysOf = (body) => (body === null || typeof body !== 'object' ? String(body) : Object.keys(body).sort().join(','));
+let bodyMismatch = 0;
+for (const project of ['desktop', 'mobile']) {
+  const now = load(`bodies-a2ea7a4-${project}.json`);
+  const then = load(`bodies-014bd47-${project}.json`);
+  const clockNow = now.clock;
+  const clockThen = then.clock;
+  console.log(`-- ${project}`);
+  console.log(`  clock calls a2ea7a4: ${clockNow.map((c) => c.path).join(', ')}; 014bd47: ${clockThen.map((c) => c.path).join(', ')}`);
+  for (const path of ['/api/clock/in', '/api/clock/out']) {
+    const x = clockNow.find((c) => c.path === path)?.body;
+    const y = clockThen.find((c) => c.path === path)?.body;
+    const sameKeys = keysOf(x) === keysOf(y);
+    const stable = (b) => JSON.stringify({ input_zone: b?.input_zone, breaks: b?.breaks, breaks_confirmed: b?.breaks_confirmed, end_zone: b?.end?.zone, reason: b?.reason });
+    const sameStable = stable(x) === stable(y);
+    if (!sameKeys || !sameStable) bodyMismatch += 1;
+    console.log(`  ${path}: keys ${sameKeys ? 'SAME' : 'DIFFERENT'} [${keysOf(x)}] vs [${keysOf(y)}]; run-independent values ${sameStable ? 'SAME' : 'DIFFERENT'} ${stable(x)} vs ${stable(y)}`);
+  }
+  console.log(`  clock sessions a2ea7a4 ${JSON.stringify(now.clock_session)}; 014bd47 ${JSON.stringify(then.clock_session)}`);
+  const sNow = now.signoff.at(-1);
+  const sThen = then.signoff.at(-1);
+  const signPath = (p) => p.replace(/\/api\/timesheets\/[^/]+\//, '/api/timesheets/:p/');
+  const sameSignPath = signPath(sNow.path) === signPath(sThen.path);
+  const sameSignKeys = keysOf(sNow.body) === keysOf(sThen.body);
+  const stableSign = (b) => JSON.stringify({ signer_name: b.signer_name, deficit_choices: b.deficit_choices, incomplete_evidence_acknowledged: b.incomplete_evidence_acknowledged, reason: b.reason, send_email: b.send_email });
+  const sameSignValues = stableSign(sNow.body) === stableSign(sThen.body);
+  if (!sameSignPath || !sameSignKeys || !sameSignValues) bodyMismatch += 1;
+  console.log(`  sign-off ${sNow.method} ${signPath(sNow.path)} vs ${sThen.method} ${signPath(sThen.path)}: path ${sameSignPath ? 'SAME' : 'DIFFERENT'}; keys ${sameSignKeys ? 'SAME' : 'DIFFERENT'} [${keysOf(sNow.body)}]; run-independent values ${sameSignValues ? 'SAME' : 'DIFFERENT'} ${stableSign(sNow.body)}`);
+  console.log(`  sign-off binding a2ea7a4: reviewed_hash equals payload_hash ${sNow.body.reviewed_hash === now.review_binding.payload_hash}, expected_version equals ${sNow.body.expected_version === now.review_binding.expected_version}; status ${now.signoff_status}; 014bd47 status ${then.signoff_status}`);
+  console.log(`  other writes in the sign-off page a2ea7a4: ${now.signoff.length - 1}; 014bd47: ${then.signoff.length - 1}`);
+  const batchText = (data) => JSON.stringify(data.batch.map((w) => w.body), (key, value) => (key === 'work_date' ? (value === data.batch_days[0] ? '<d1>' : value === data.batch_days[1] ? '<d2>' : value) : value));
+  const sameBatch = batchText(now) === batchText(then) && JSON.stringify(now.batch_days) === JSON.stringify(then.batch_days);
+  if (!sameBatch) bodyMismatch += 1;
+  console.log(`  batch (Change several days, old period, reason): ${sameBatch ? 'SAME' : 'DIFFERENT'} days ${JSON.stringify(now.batch_days)} vs ${JSON.stringify(then.batch_days)}; bodies ${batchText(now)}${sameBatch ? '' : ` vs ${batchText(then)}`}`);
+}
+console.log(`body mismatches=${bodyMismatch}`);

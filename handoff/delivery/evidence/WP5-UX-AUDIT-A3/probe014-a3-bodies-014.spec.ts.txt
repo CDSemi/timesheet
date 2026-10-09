@@ -1,0 +1,94 @@
+// WP5-UX-AUDIT-A3: the same clock and sign-off flow on the accepted build 014bd47, for the body
+// comparison with probe-a3-bodies.spec.ts on a2ea7a4. Synthetic only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { expect, newPerson, test } from '../export014/tests/e2e/fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+async function signIn(page: any, account: { email: string; password: string }, hash: string): Promise<void> {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+test('write bodies of the clock and the sign-off (014bd47)', async ({ page, browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const writes: Array<{ method: string; path: string; body: unknown }> = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) writes.push({ method: request.method(), path: pathname, body: request.postDataJSON() });
+  });
+  const result: Record<string, unknown> = { commit: '014bd47', project: testInfo.project.name };
+
+  const clocker = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Clock Probe', signature: 'none' });
+  await signIn(page, clocker.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Clock in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Clock out', exact: true })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  result.clock = writes.filter((w) => w.path.startsWith('/api/clock/'));
+  result.clock_session = (await clocker.api.call<any>('GET', `/api/timesheets/${clocker.payrollDate}`)).days.flatMap((d: any) => d.sessions.map((s: any) => ({ work_date: d.work_date, input_zone: s.input_zone, breaks_confirmed: s.breaks_confirmed, ended: s.end_utc !== null })));
+
+  const signer = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Signer Probe' });
+  const [day = ''] = await signer.api.displayedPeriodFreeWorkdays();
+  await signer.api.seedCompleteDay(day);
+  const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: 'Asia/Ho_Chi_Minh', locale: 'en-US', viewport: (testInfo.project.use as any).viewport, isMobile: (testInfo.project.use as any).isMobile ?? false, hasTouch: (testInfo.project.use as any).hasTouch ?? false });
+  const second = await context.newPage();
+  const signWrites: Array<{ method: string; path: string; body: unknown }> = [];
+  second.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) signWrites.push({ method: request.method(), path: pathname, body: request.postDataJSON() });
+  });
+  await signIn(second, signer.account, `#/review/${signer.payrollDate}`);
+  await expect(second.getByLabel('Your name')).toBeVisible();
+  const review = await signer.api.call<any>('GET', `/api/timesheets/${signer.payrollDate}/review`);
+  await second.getByLabel('Your name').fill('Synthetic Signer Probe');
+  const acknowledgement = second.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if ((await acknowledgement.count()) > 0) await acknowledgement.check();
+  const response = second.waitForResponse((r: any) => r.request().method() === 'POST' && new URL(r.url()).pathname.startsWith(`/api/timesheets/${signer.payrollDate}/`));
+  await second.getByRole('button', { name: 'Sign off & Submit' }).click();
+  const answered = await response;
+  result.signoff = signWrites;
+  result.signoff_status = answered.status();
+  result.review_binding = { payload_hash: review.payload_hash, expected_version: review.expected_version };
+  const body = signWrites.at(-1)?.body as any;
+  expect(body.reviewed_hash).toBe(review.payload_hash);
+  expect(answered.status()).toBeLessThan(300);
+  await context.close();
+
+  // Batch in an old period: two days to Sick, preview, reason, commit (014bd47 shows the boxes always).
+  writes.length = 0;
+  await page.evaluate("window.location.hash = '#/timesheet'");
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const d1 = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const d2 = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+  await page.getByLabel(`Select ${d1}`).check();
+  await page.getByLabel(`Select ${d2}`).check();
+  await page.getByLabel('Category for selected days').selectOption('Sick');
+  await page.getByRole('button', { name: 'Preview changes' }).click();
+  const batchDialog = page.getByRole('dialog');
+  const batchReason = batchDialog.getByLabel(/Reason for editing an old or finalized period/);
+  await expect(batchReason).toBeVisible();
+  await expect(batchDialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  await batchReason.fill('Audit A3 batch reason (synthetic)');
+  await batchDialog.getByRole('button', { name: 'Commit changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 2 days.');
+  result.batch_days = [d1, d2];
+  result.batch = writes.filter((w) => w.path.includes('/days/batch'));
+  expect(writes.map((w) => `${w.method} ${w.path}`)).toEqual(['POST /api/days/batch', 'POST /api/days/batch']);
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, `bodies-014bd47-${testInfo.project.name}.json`), `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+});

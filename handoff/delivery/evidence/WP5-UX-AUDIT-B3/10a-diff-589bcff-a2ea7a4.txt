@@ -1,0 +1,126 @@
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index 2a968d7..5a4049d 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | App shell | Desktop top bar: Timesheet, Overtime, History, Settings and, for administrators, Admin, with the user and Sign out. Phone: compact top bar and a bottom tab bar with Timesheet, Overtime, History and More; More holds Settings, Import, Admin (administrators only) and Sign out. Import (the person's own workbook and opening balance) is reached from a link in Settings on the desktop and from More on a phone; its address keeps working. The Review belongs under Timesheet and has no entry of its own |
+ | Timesheet | The form people know from the Excel workbook and the PDF (see "Timesheet sheet"): period bar, clock panel, a toolbar (Open a day, Show details, Change several days), the sheet, Overtime Total and signature lines |
+-| Day editor | A side panel beside the sheet on desktop and a bottom sheet on phones: actual intervals, end date, confirmed breaks, label, leave in hours and minutes with `leave_kind` (vacation, sick, ot), WFH, notes, raw/eligible/credited figures computed by the server (see "Day editor") |
++| Day editor | A side panel beside the sheet from 1200px and a modal panel (a bottom sheet on phones) below 1200px: actual intervals, end date, confirmed breaks, label, leave in hours and minutes with `leave_kind` (vacation, sick, ot), WFH, notes, raw/eligible/credited figures computed by the server (see "Day editor") |
+ | Review | "What you sign": the same sheet in read-only mode with the detail rows on, beside a three-step checklist (days that need attention with acknowledgement and deficit choices, email and PDF with recipients, sign). Exact content, OT proposals, missing evidence, signature preview, explicit Sign off & Submit |
+ | Overtime (ledger/leave) | Posted/provisional/reserved/available balance, daily evidence, adjustments; record permission, reserve, "record use" (explicit, idempotent, on or after the leave date, partial allowed), cancel/reverse |
+ | History | Immutable revisions/PDFs, manual/auto origin, delivery attempts, reasoned correction and explicit resend |
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index 86be221..ffd701c 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Khung ứng dụng | Desktop: thanh trên cùng gồm Timesheet, Overtime, History, Settings và, với admin, Admin, kèm tên người dùng và Sign out. Điện thoại: thanh trên gọn và thanh tab dưới gồm Timesheet, Overtime, History và More; More chứa Settings, Import, Admin (chỉ admin) và Sign out. Import (workbook và số dư đầu của chính người dùng) mở từ một liên kết trong Settings trên desktop và từ More trên điện thoại; địa chỉ cũ vẫn dùng được. Review thuộc mục Timesheet và không có mục riêng |
+ | Timesheet | Biểu mẫu quen thuộc từ workbook Excel và PDF (xem "Bảng Timesheet"): thanh kỳ, bảng đồng hồ, thanh công cụ (Open a day, Show details, Change several days), bảng timesheet, Overtime Total và các dòng chữ ký |
+-| Sửa ngày | Bảng bên cạnh trên desktop và bottom sheet trên điện thoại: ca thực, ngày kết thúc, nghỉ xác nhận, nhãn, phút nghỉ nhập theo giờ và phút kèm `leave_kind` (vacation, sick, ot), WFH, ghi chú, các số gốc/đủ điều kiện/ghi do server tính (xem "Sửa ngày (Day editor)") |
++| Sửa ngày | Bảng bên cạnh bảng timesheet từ 1200px và bảng modal (bottom sheet trên điện thoại) dưới 1200px: ca thực, ngày kết thúc, nghỉ xác nhận, nhãn, phút nghỉ nhập theo giờ và phút kèm `leave_kind` (vacation, sick, ot), WFH, ghi chú, các số gốc/đủ điều kiện/ghi do server tính (xem "Sửa ngày (Day editor)") |
+ | Review | "What you sign": cùng bảng timesheet ở chế độ chỉ đọc với các dòng chi tiết luôn bật, cạnh checklist ba bước (ngày cần chú ý kèm xác nhận và lựa chọn trừ, email và PDF kèm người nhận, ký). Nội dung chính xác, OT dự kiến, bằng chứng thiếu, preview chữ ký, Sign off & Submit rõ |
+ | Sổ OT/phép (Overtime) | Số dư đã ghi/tạm/giữ/khả dụng, bằng chứng ngày, điều chỉnh; ghi cho phép, giữ chỗ, "ghi đã dùng" (record use: rõ ràng, idempotent, vào hoặc sau ngày nghỉ, cho phép một phần), hủy/đảo |
+ | Lịch sử | Revision/PDF bất biến, nguồn tay/tự động, lượt gửi, sửa có lý do và gửi lại rõ |
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index 15744e8..7acdceb 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -81,7 +81,7 @@ export function DayEditor({
+   const firstRefresh = useRef(refresh);
+ 
+   // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+-  // between the two while open (the window crossed 768px) re-opens the same element in the other mode.
++  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
+   useEffect(() => {
+     const element = dialog.current;
+     if (element === null) return;
+diff --git a/src/client/styles.css b/src/client/styles.css
+index 80a9614..d38d1d4 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -59,6 +59,8 @@
+   --cols-4: 4;
+   --order-first: -1;
+   --tap-min: 44px;
++  --date-field-min: 9.5rem;
++  --open-day-label-min: 15.25rem;
+   --control-check-size: 1.25rem;
+   --shape-size: 0.7rem;
+   --shape-round: 50%;
+@@ -1078,28 +1080,26 @@ textarea {
+     display: none;
+   }
+ 
++  /* The label sits beside its date field, so the row stays one control high where it fits. */
+   .tools .open-day {
+-    flex-wrap: nowrap;
++    flex-wrap: wrap;
++    align-items: center;
+     width: 100%;
+   }
+ 
+-  /* The label sits beside its date field, so the row stays one control high. */
++  /* The label keeps a full date beside it; when that and the button do not fit, the button wraps below. */
+   .tools .open-day label {
+-    flex: 1;
++    flex: 1 1 var(--open-day-label-min);
+     flex-direction: row;
+     align-items: center;
+     gap: var(--space-2);
+-    min-width: 0;
++    min-width: var(--open-day-label-min);
+     white-space: nowrap;
+   }
+ 
+   .tools .open-day input {
+     flex: 1;
+-    min-width: 0;
+-  }
+-
+-  .tools .open-day {
+-    align-items: center;
++    min-width: var(--date-field-min);
+   }
+ 
+   .tools-right {
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 762d282..8f354d4 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -119,6 +119,33 @@ test.describe('phone first screen', () => {
+     await expect(page.locator('[data-zone-note]')).toBeVisible();
+     await expectFirstDayAboveTabBar(page);
+   });
++
++  /*
++   * WP5-UX-B2-01: the "Open a day" date field keeps at least a full date wide (--date-field-min)
++   * on narrow phones; the row wraps instead of squeezing the value ("10/09/202", "10/0").
++   */
++  for (const width of [390, 360, 320]) {
++    test(`the Open a day date field shows a full date at ${width}px`, async ({ page, signInThroughUi }, testInfo) => {
++      await page.setViewportSize({ width, height: 844 });
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const field = page.getByLabel('Open a day');
++      await field.fill('2026-10-09');
++      await expect(field).toHaveValue('2026-10-09');
++      const box = await field.boundingBox();
++      expect(box, 'date field box').not.toBeNull();
++      const minimum = await page.evaluate<number>(
++        "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
++      );
++      expect(minimum, 'the --date-field-min token resolves to a width').toBeGreaterThanOrEqual(135);
++      expect(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
++      expect(await field.evaluate((input) => input.scrollWidth <= input.clientWidth), 'the date value is not clipped').toBe(true);
++      expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
++      const tools = await page.locator('.tools .open-day').boundingBox();
++      await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`fix4-open-day-w${width}-synthetic.png`) });
++      testInfo.annotations.push({ type: 'open-day-field', description: `width ${width}: field ${box?.width}px, row bottom ${(tools?.y ?? 0) + (tools?.height ?? 0)}` });
++    });
++  }
+ });
+ 
+ test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({

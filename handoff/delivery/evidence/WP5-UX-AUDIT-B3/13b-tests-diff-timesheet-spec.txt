@@ -1,0 +1,339 @@
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 7ac3a96..8f354d4 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -1,11 +1,13 @@
+ import type { Page } from '@playwright/test';
++import { formatHoursMinutes } from '../../src/domain/format.ts';
+ import { expect, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+- * Two-week grid (desktop), day list (mobile) and batch category edit, on both projects.
++ * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
++ * category edit, on both projects.
+  * The browser zone differs from the reporting zone on purpose, so both zones are visible.
+  * Data are synthetic and relative to today; every assertion derives its dates from the API.
+  */
+ test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+ 
+ test.beforeEach(({ page }) => {
+@@ -21,18 +23,134 @@ test.beforeEach(({ page }) => {
+ });
+ 
+ function dayRow(page: Page, workDate: string) {
+   return page.locator(`[data-day="${workDate}"]`);
+ }
+ 
++/** HH:MM of a UTC instant in a zone, computed by the test runtime (an oracle independent of the app). */
++function clockText(instant: string, zone: string): string {
++  return new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(instant));
++}
++
+ /** Picks the days to select, failing clearly when the period has too few past workdays. */
+ function need(days: string[], count: number): string[] {
+   expect(days.length, 'past free workdays in the displayed period').toBeGreaterThanOrEqual(count);
+   return days;
+ }
+ 
++test.describe('viewing zone equals the reporting zone', () => {
++  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++  test('the period bar still names the viewing zone, without the longer zone note', async ({ page, employeeSeed, signInThroughUi }) => {
++    await page.goto('/');
++    const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
++    const { reportingZone } = await employeeSeed.today();
++    expect(displayZone).toBe(reportingZone);
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await expect(page.locator('.period-bar [data-period-zone]')).toHaveText(`Times in ${displayZone}`);
++    await expect(page.locator('[data-zone-note]')).toHaveCount(0);
++    // Each day is still named by its saved accounting date.
++    const first = page.locator('[data-day]').first();
++    await expect(first).toHaveAccessibleName(/\d{4}-\d{2}-\d{2}$/);
++    // The bar fits the viewport: no horizontal scroll.
++    expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')).toBe(true);
++  });
++});
++
++/**
++ * WP5-UX-B-01: on a phone the first day row must be fully visible on the first screen, above the
++ * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
++ * the viewing zone equal to the reporting zone and with the longer zone note shown.
++ */
++async function expectFirstDayAboveTabBar(page: Page) {
++  const first = page.locator('[data-day]').first();
++  await expect(first).toBeVisible();
++  const tabs = await page.locator('.shell-tabs').boundingBox();
++  const row = await first.boundingBox();
++  const viewport = page.viewportSize();
++  expect(tabs, 'tab bar box').not.toBeNull();
++  expect(row, 'first day row box').not.toBeNull();
++  expect(viewport, 'viewport').not.toBeNull();
++  expect((row?.y ?? 0) + (row?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
++  expect(tabs?.y ?? 0, 'the tab bar sits on the bottom edge').toBeGreaterThan((viewport?.height ?? 0) / 2);
++  // Nothing was scrolled to get here.
++  expect(await page.evaluate('window.scrollY')).toBe(0);
++}
++
++test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
++  await signInThroughUi();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  const bar = page.locator('.period-bar');
++  const previous = bar.getByRole('button', { name: 'Previous period' });
++  const next = bar.getByRole('button', { name: 'Next period' });
++  const review = bar.locator('[data-review-link]');
++  await previous.focus();
++  await page.keyboard.press('Tab');
++  await expect(next).toBeFocused();
++  await page.keyboard.press('Tab');
++  await expect(review).toBeFocused();
++  // Visual order: top to bottom, then left to right (no overlap of rows is assumed within 4px).
++  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
++  for (const box of boxes) expect(box, 'control box').not.toBeNull();
++  const [a, b, c] = boxes;
++  const before = (first: typeof a, second: typeof a) =>
++    (first?.y ?? 0) + 4 < (second?.y ?? 0) || (Math.abs((first?.y ?? 0) - (second?.y ?? 0)) <= 4 && (first?.x ?? 0) < (second?.x ?? 0));
++  expect(before(a, b), 'Previous comes before Next visually').toBe(true);
++  expect(before(b, c), 'Next comes before Review visually').toBe(true);
++});
++
++test.describe('phone first screen', () => {
++  test.skip(({ isMobile }) => !isMobile, 'The first-screen budget is the 390x844 phone');
++
++  test.describe('viewing zone equals the reporting zone', () => {
++    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++    test('the first day row is fully visible above the tab bar', async ({ page, signInThroughUi }) => {
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      await expect(page.locator('[data-zone-note]')).toHaveCount(0);
++      await expectFirstDayAboveTabBar(page);
++    });
++  });
++
++  test('the first day row is fully visible above the tab bar with the zone note shown', async ({ page, signInThroughUi }) => {
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await expect(page.locator('[data-zone-note]')).toBeVisible();
++    await expectFirstDayAboveTabBar(page);
++  });
++
++  /*
++   * WP5-UX-B2-01: the "Open a day" date field keeps at least a full date wide (--date-field-min)
++   * on narrow phones; the row wraps instead of squeezing the value ("10/09/202", "10/0").
++   */
++  for (const width of [390, 360, 320]) {
++    test(`the Open a day date field shows a full date at ${width}px`, async ({ page, signInThroughUi }, testInfo) => {
++      await page.setViewportSize({ width, height: 844 });
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const field = page.getByLabel('Open a day');
++      await field.fill('2026-10-09');
++      await expect(field).toHaveValue('2026-10-09');
++      const box = await field.boundingBox();
++      expect(box, 'date field box').not.toBeNull();
++      const minimum = await page.evaluate<number>(
++        "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
++      );
++      expect(minimum, 'the --date-field-min token resolves to a width').toBeGreaterThanOrEqual(135);
++      expect(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
++      expect(await field.evaluate((input) => input.scrollWidth <= input.clientWidth), 'the date value is not clipped').toBe(true);
++      expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
++      const tools = await page.locator('.tools .open-day').boundingBox();
++      await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`fix4-open-day-w${width}-synthetic.png`) });
++      testInfo.annotations.push({ type: 'open-day-field', description: `width ${width}: field ${box?.width}px, row bottom ${(tools?.y ?? 0) + (tools?.height ?? 0)}` });
++    });
++  }
++});
++
+ test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({
+   page,
+   employeeSeed,
+   signInThroughUi,
+ }, testInfo) => {
+   const project = testInfo.project.name;
+@@ -41,65 +159,121 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+   const displayZone = await page.evaluate<string>('Intl.DateTimeFormat().resolvedOptions().timeZone');
+   const free = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+   const [completeDay, pendingDay] = [free[0] ?? '', free[1] ?? ''];
+   await employeeSeed.seedCompleteDay(completeDay);
+   await employeeSeed.seedUnconfirmedBreaksDay(pendingDay);
+   const { reportingZone, currentPayrollDate } = await employeeSeed.today();
+-  const sheet = await employeeSeed.call<{ period: { due_local_date: string; period_start: string } }>(
+-    'GET',
+-    `/api/timesheets/${currentPayrollDate}`,
+-  );
++  const sheet = await employeeSeed.call<{
++    period: { due_local_date: string; period_start: string };
++    totals: { provisional_credited_minutes: number; pending_days: number };
++  }>('GET', `/api/timesheets/${currentPayrollDate}`);
++  const complete = await employeeSeed.dayView(completeDay);
++  const completeSession = complete.sessions[0];
++  expect(completeSession?.end_utc, 'the seeded complete day has one ended session').toBeTruthy();
+ 
+   await signInThroughUi();
+   await expect(page.locator('[data-day]')).toHaveCount(14);
+ 
+-  // Exactly one of the grid and the list renders, chosen by the 768px media query.
++  // Exactly one of the two sheet layouts renders, chosen by the 768px media query.
+   const isDesktop = project === 'desktop';
+-  await expect(page.locator('table.grid')).toHaveCount(isDesktop ? 1 : 0);
+-  await expect(page.locator('.day-list')).toHaveCount(isDesktop ? 0 : 1);
++  await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(isDesktop ? 1 : 0);
++  await expect(page.locator('[data-sheet="phone"]')).toHaveCount(isDesktop ? 0 : 1);
++  // The Excel form: company header, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
++  const form = page.getByRole('article', { name: 'Timesheet form' });
++  await expect(form).toContainText('C&D Semiconductor Services, Inc.');
++  const weeks = form.locator('section.sheet-week');
++  await expect(weeks).toHaveCount(2);
++  for (const index of [0, 1]) await expect(weeks.nth(index).locator('[data-day]')).toHaveCount(7);
++  await expect(form.locator('[data-ot-total]')).toHaveText(formatHoursMinutes(sheet.totals.provisional_credited_minutes));
++  await expect(form.getByRole('region', { name: 'Signatures' })).toContainText('Manager Signature');
+ 
+   // Zones, due date in both zones, accounting dates, and the server-provided review status.
+   await expect(page.getByText('Reporting zone', { exact: true })).toBeVisible();
+   await expect(page.getByText('Display zone', { exact: true })).toBeVisible();
+   await expect(page.locator('.facts')).toContainText(reportingZone);
+   await expect(page.locator('.facts')).toContainText(displayZone);
+   await expect(page.getByText(`Due, your time (${displayZone})`)).toBeVisible();
+-  await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
++  // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
++  await expect(page.locator('[data-zone-note]')).toBeVisible();
++  // The period bar names the viewing zone compactly, and the reporting zone stays in the note.
++  await expect(page.locator('.period-bar [data-period-zone]')).toHaveText(`Times in ${displayZone}`);
++  await page.locator('.period-bar').screenshot({ path: screenshotPath(`zone-${project}-synthetic.png`), animations: 'disabled' });
++  const dueIso = sheet.period.due_local_date;
++  await expect(page.locator('[data-period-due]')).toContainText(`${dueIso.slice(5, 7)}/${dueIso.slice(8, 10)}/${dueIso.slice(0, 4)}`);
++  await expect(page.locator('[data-period-due]')).toContainText(reportingZone);
+   await expect(page.locator('.period-title')).toContainText('Draft');
++  // One status group in the period bar; the sheet no longer repeats it.
++  await expect(page.locator('[data-grid-status="line"]')).toHaveCount(1);
++  await expect(page.locator('.period-bar [data-grid-status="line"]')).toHaveCount(1);
++  await expect(page.locator('[data-sheet] [data-grid-status]')).toHaveCount(0);
++  // Batch mode is off: no selection boxes and no batch bar until "Change several days".
++  await expect(page.getByRole('checkbox')).toHaveCount(0);
++  await expect(page.getByRole('group', { name: 'Batch category edit' })).toHaveCount(0);
++  await expect(page.getByRole('button', { name: 'Change several days' })).toHaveAttribute('aria-pressed', 'false');
++  // The top of the page: period bar, clock panel and toolbar (synthetic data).
++  await page.screenshot({ path: screenshotPath(`period-${project}-clocked-out-synthetic.png`), animations: 'disabled' });
+   await expect(page.locator('.period-title .badge.current')).toBeVisible();
+-  await expect(dayRow(page, sheet.period.period_start)).toContainText(sheet.period.period_start);
++  // Each day is named by its accounting date (the ISO date); its date cell prints the US form date.
++  const start = sheet.period.period_start;
++  await expect(dayRow(page, start)).toHaveAccessibleName(new RegExp(`${start}$`));
++  await expect(dayRow(page, start)).toContainText(`${start.slice(5, 7)}/${start.slice(8, 10)}`);
++  await expect(dayRow(page, start).getByRole('button', { name: `Edit ${start}`, exact: true })).toBeVisible();
+   await expect(page.getByText('accounting dates', { exact: false }).first()).toBeVisible();
+ 
+-  // A complete day shows complete and 8h 00m; unconfirmed breaks show pending OT.
+-  await expect(dayRow(page, completeDay)).toContainText('complete');
+-  await expect(dayRow(page, completeDay)).toContainText('8h 00m');
+-  await expect(dayRow(page, completeDay)).not.toContainText('pending OT');
+-  await expect(dayRow(page, pendingDay)).toContainText('confirm breaks');
+-  await expect(dayRow(page, pendingDay)).toContainText('pending OT');
++  // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).
++  const range = `${clockText(completeSession?.start_utc ?? '', displayZone)}-${clockText(completeSession?.end_utc ?? '', displayZone)}`;
++  await expect(dayRow(page, completeDay)).toContainText(range);
++  await expect(dayRow(page, completeDay)).not.toContainText('09:00-18:00');
++
++  // A complete day shows Complete, its server OT as h:mm and, under Show details, 8:00 worked on a workday;
++  // unconfirmed breaks show Confirm breaks and pending OT.
++  await expect(dayRow(page, completeDay)).toContainText('Complete');
++  await expect(dayRow(page, completeDay).locator('[data-ot]')).toHaveText(formatHoursMinutes(complete.calculation?.credited_minutes ?? -1));
++  await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
++  await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
++  await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
++  const details = page.getByRole('button', { name: 'Show details' });
++  await expect(details).toHaveAttribute('aria-pressed', 'false');
++  await expect(page.locator('[data-detail]')).toHaveCount(0);
++  await details.click();
++  await expect(details).toHaveAttribute('aria-pressed', 'true');
++  const regular = page.locator(`[data-detail="regular"][data-detail-day="${completeDay}"]`);
++  await expect(regular).toHaveText(formatHoursMinutes(complete.calculation?.regular_minutes ?? -1));
++  await expect(regular).toHaveText('8:00');
++  await expect(page.locator('[data-detail="regular"]')).toHaveCount(14);
+   // Status is text plus a shape, never colour alone.
+   await expect(dayRow(page, pendingDay).locator('.status .shape').first()).toBeAttached();
+-  // No em dash or en dash placeholder anywhere on the screen.
++  // No em dash or en dash placeholder anywhere on the screen, and no "none" placeholder on the sheet.
+   expect(await page.locator('main').innerText()).not.toMatch(/[–—]/);
++  expect(await form.innerText()).not.toMatch(/\bnone\b/i);
+ 
+   if (!isDesktop) {
+     const widths = await page.evaluate<{ scroll: number; inner: number }>(
+       '({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })',
+     );
+     expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
+-    const targets = page.locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline');
++    // Only rendered controls are tap targets: the desktop bar is not displayed below 768px.
++    const targets = page
++      .locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline')
++      .filter({ visible: true });
+     const count = await targets.count();
+     expect(count).toBeGreaterThan(20);
+     for (let index = 0; index < count; index += 1) {
+       const box = await targets.nth(index).boundingBox();
+       expect(box, `target ${index}`).not.toBeNull();
+       expect(box?.height ?? 0, `target ${index} height`).toBeGreaterThanOrEqual(44);
+       expect(box?.width ?? 0, `target ${index} width`).toBeGreaterThanOrEqual(44);
+     }
+   }
+ 
+   await page.screenshot({ path: screenshotPath(`timesheet-view-${project}-synthetic.png`), fullPage: true });
++  // The sheet in both themes (synthetic data), for the visual record.
++  // `animations: 'disabled'` finishes the colour transitions of the theme switch before the capture.
++  await page.screenshot({ path: screenshotPath(`sheet-${project}-light-synthetic.png`), fullPage: true, animations: 'disabled' });
++  await page.emulateMedia({ colorScheme: 'dark' });
++  await page.screenshot({ path: screenshotPath(`sheet-${project}-dark-synthetic.png`), fullPage: true, animations: 'disabled' });
+ });
+ 
+ test('batch edit: preview, conflict dialog for a clock session, confirmed commit', async ({
+   page,
+   employeeSeed,
+   signInThroughUi,
+@@ -113,14 +287,17 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
+   await signInThroughUi();
+   // Today can sit in the next period when the current one is the earlier, still unpaid one.
+   await expect(page.locator('[data-day]')).toHaveCount(14);
+   if ((await dayRow(page, workDate).count()) === 0) await page.getByRole('button', { name: 'Next period' }).click();
+   await expect(dayRow(page, workDate)).toBeVisible();
+ 
++  await page.getByRole('button', { name: 'Change several days' }).click();
+   await page.getByLabel(`Select ${workDate}`).check();
+   await expect(page.getByText('1 day selected')).toBeVisible();
++  await page.evaluate('window.scrollTo(0, 0)');
++  await page.screenshot({ path: screenshotPath(`batch-mode-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
+   await page.getByLabel('Category for selected days').selectOption('Vacation');
+   await page.getByRole('button', { name: 'Preview changes' }).click();
+ 
+   const dialog = page.getByRole('dialog');
+   await expect(dialog.getByRole('heading', { name: 'Review category change' })).toBeVisible();
+   await expect(dialog.locator(`[data-preview-date="${workDate}"]`)).toContainText('to Vacation');
+@@ -154,12 +331,13 @@ test('batch edit: an old period asks for a reason and commits with it', async ({
+   await expect(page.locator('.period-title .badge.old')).toBeVisible();
+   await expect(page.getByText('Edits to this period require a reason.')).toBeVisible();
+ 
+   const target = page.locator('[data-day]').nth(2);
+   const workDate = (await target.getAttribute('data-day')) ?? '';
+   expect(workDate).not.toBe('');
++  await page.getByRole('button', { name: 'Change several days' }).click();
+   await page.getByLabel(`Select ${workDate}`).check();
+   await page.getByLabel('Category for selected days').selectOption('Sick');
+   await page.getByRole('button', { name: 'Preview changes' }).click();
+ 
+   const dialog = page.getByRole('dialog');
+   const reason = dialog.getByLabel(/Reason for editing an old or finalized period/);
+@@ -181,12 +359,13 @@ test('batch edit: a stale version shows the reload message naming the date', asy
+   employeeSeed,
+   signInThroughUi,
+ }) => {
+   const free = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+   const workDate = free.at(-1) ?? '';
+   await signInThroughUi();
++  await page.getByRole('button', { name: 'Change several days' }).click();
+   await page.getByLabel(`Select ${workDate}`).check();
+   await page.getByLabel('Category for selected days').selectOption('Sick');
+   await page.getByRole('button', { name: 'Preview changes' }).click();
+ 
+   const dialog = page.getByRole('dialog');
+   const commit = dialog.getByRole('button', { name: 'Commit changes' });

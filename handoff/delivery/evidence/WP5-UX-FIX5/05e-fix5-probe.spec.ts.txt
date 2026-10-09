@@ -1,0 +1,284 @@
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, test } from './fixtures.ts';
+
+// TEMPORARY WP5-UX-FIX5 measurement probe (removed before the final checks). Mobile project only.
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+const OUT = 'D:\\.claude-tmp\\timesheet\\WP5-UX-FIX5\\probe';
+
+function log(line: string) {
+  appendFileSync(`${OUT}\\probe.txt`, `${line}\n`);
+}
+
+async function measure(page: Page, label: string, width: number, signIn: () => Promise<void>) {
+  await page.setViewportSize({ width, height: 844 });
+  await signIn();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const firstEmpty = await page.locator('[data-day]').first().boundingBox();
+  const field = page.getByLabel('Open a day');
+  await field.fill('2026-10-09');
+  const values = await page.evaluate(`(() => {
+    const input = document.querySelector('.tools .open-day input');
+    const label = document.querySelector('.tools .open-day label');
+    const button = document.querySelector('.tools .open-day button');
+    const clone = input.cloneNode(true);
+    clone.value = input.value;
+    clone.style.fieldSizing = 'content';
+    clone.style.minWidth = '0';
+    clone.style.width = 'auto';
+    clone.style.flex = 'none';
+    clone.style.position = 'absolute';
+    clone.style.visibility = 'hidden';
+    label.append(clone);
+    const sized = clone.getBoundingClientRect().width;
+    const supported = CSS.supports('field-sizing', 'content');
+    clone.remove();
+    const cs = getComputedStyle(input);
+    const canvas = document.createElement('canvas').getContext('2d');
+    canvas.font = cs.font;
+    const text = canvas.measureText('10/09/2026').width;
+    const probe = document.createElement('div');
+    probe.style.width = 'var(--date-field-min)';
+    document.body.append(probe);
+    const token = probe.getBoundingClientRect().width;
+    probe.style.width = 'var(--open-day-label-min)';
+    const labelToken = probe.getBoundingClientRect().width;
+    probe.remove();
+    const tabs = document.querySelector('.shell-tabs').getBoundingClientRect();
+    const first = document.querySelector('[data-day]').getBoundingClientRect();
+    const i = input.getBoundingClientRect();
+    const b = button.getBoundingClientRect();
+    const l = label.getBoundingClientRect();
+    const labelText = [...label.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('');
+    const range = document.createRange();
+    const textNode = [...label.childNodes].find((n) => n.nodeType === 3);
+    let labelTextWidth = -1;
+    if (textNode) { range.selectNodeContents(textNode); labelTextWidth = range.getBoundingClientRect().width; }
+    return {
+      fieldSizingSupported: supported, sizedByContent: sized, textWidth: text, font: cs.font,
+      padding: cs.paddingLeft + ' ' + cs.paddingRight, border: cs.borderLeftWidth + ' ' + cs.borderRightWidth,
+      token, labelToken, fieldWidth: i.width, labelWidth: l.width, labelText, labelTextWidth, labelGap: getComputedStyle(label).columnGap,
+      buttonBelow: b.top >= i.bottom - 1, tabTop: tabs.top, firstBottom: first.bottom, scrollX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      rootFont: getComputedStyle(document.documentElement).fontSize,
+    };
+  })()`);
+  log(`${label} w${width} ${JSON.stringify({ firstBottomEmpty: (firstEmpty?.y ?? 0) + (firstEmpty?.height ?? 0), ...(values as object) })}`);
+  await page.locator('.tools .open-day').screenshot({ path: `${OUT}\\${label}-w${width}-synthetic.png` });
+}
+
+async function state(page: Page): Promise<string> {
+  return JSON.stringify(
+    await page.evaluate(`(() => {
+      const nameOf = (d) => { const h = document.getElementById(d.getAttribute('aria-labelledby') ?? ''); return (h?.textContent ?? '').replace(/\\s+/g, ' ').trim(); };
+      const dialogs = [...document.querySelectorAll('dialog[open]')].map((d) => {
+        const b = d.getBoundingClientRect();
+        const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        return { name: nameOf(d).slice(0, 40), modal: d.matches(':modal'), focus: d.contains(document.activeElement), onTop: hit !== null && d.contains(hit) };
+      });
+      const a = document.activeElement;
+      const alert = document.querySelector('dialog[open] form [role="alert"]');
+      return { w: innerWidth, dialogs, active: a === null ? 'none' : (a.tagName + ' ' + (a.getAttribute('aria-label') ?? (a.textContent ?? '').replace(/\\s+/g, ' ').trim()).slice(0, 40)), leaveAlert: alert === null ? null : alert.textContent.slice(0, 40) };
+    })()`),
+  );
+}
+
+test.describe('selfcheck', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop only');
+
+  for (const scenario of ['editor', 'review', 'leave'] as const) {
+    for (const path of [[1024], [1024, 768], [1024, 768, 1280]]) {
+      test(`selfcheck ${scenario} ${path.join('-')}`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
+        test.setTimeout(60_000);
+        const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Selfcheck', signature: 'none' });
+        const [editDay = '', workedDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+        await person.api.seedCompleteDay(workedDay);
+        const writes: string[] = [];
+        page.on('request', (request) => {
+          if (request.method() !== 'GET') writes.push(`${request.method()} ${new URL(request.url()).pathname} ${request.postData() ?? ''}`.slice(0, 120));
+        });
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await signInPageAs(person.account, '#/timesheet');
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        writes.length = 0;
+        const tag = `selfcheck ${scenario} ${path.join('>')}`;
+        const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+        await dayButton.click();
+        const editor = page.getByRole('dialog', { name: /Day editor/ });
+        await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+        if (scenario === 'review') {
+          await page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) }).click();
+          await page.getByRole('listbox', { name: `Label for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+          await expect(page.getByRole('dialog', { name: /Review label change/ })).toBeVisible();
+        }
+        if (scenario === 'leave') {
+          const fields = editor.getByRole('form', { name: 'Day fields' });
+          await fields.getByLabel('Leave hours').fill('');
+          await fields.getByLabel('Leave hours').pressSequentially('2-');
+          await fields.getByRole('button', { name: 'Save day fields' }).click();
+          await expect(fields.getByRole('alert')).toHaveCount(1);
+          await fields.getByLabel('Leave minutes').focus();
+        }
+        log(`${tag} w1280 start ${await state(page)}`);
+        for (const width of path) {
+          await page.setViewportSize({ width, height: 800 });
+          await page.waitForTimeout(400);
+          log(`${tag} w${width} ${await state(page)}`);
+        }
+        for (let press = 1; press <= 3; press += 1) {
+          if ((await page.locator('dialog[open]').count()) === 0) break;
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+          log(`${tag} after Escape ${press} ${await state(page)}`);
+        }
+        const dayFocused = await dayButton.evaluate((button) => button === document.activeElement);
+        log(`${tag} end dayButtonFocused=${dayFocused} writes=${JSON.stringify(writes.filter((w) => !w.includes('"mode":"preview"')))} workedCategory=${(await person.api.dayView(workedDay)).category} editLeave=${(await person.api.dayView(editDay)).leave_minutes}`);
+        if (scenario === 'review' && path.length === 1) await page.screenshot({ path: `${OUT}\\selfcheck-review-1024-final-synthetic.png` });
+      });
+    }
+  }
+});
+
+test.describe('probe', () => {
+  test.skip(({ isMobile }) => !isMobile, 'mobile only');
+
+  test.describe('zone equal', () => {
+    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+    for (const width of [390, 375, 360, 320]) {
+      test(`measure zone equal ${width}`, async ({ page, signInThroughUi }) => {
+        await measure(page, 'equal', width, signInThroughUi);
+      });
+    }
+  });
+
+  for (const width of [390, 375, 360, 320]) {
+    test(`measure zone note ${width}`, async ({ page, signInThroughUi }) => {
+      await measure(page, 'note', width, signInThroughUi);
+    });
+  }
+
+  test('o5 demo at 360 with the 589bcff field rule (no min-width)', async ({ page, signInThroughUi }) => {
+    await page.setViewportSize({ width: 360, height: 844 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const field = page.getByLabel('Open a day');
+    await field.fill('2026-10-09');
+    const result = await field.evaluate((input) => {
+      const measure = (text: string) => {
+        const style = getComputedStyle(input);
+        const probe = document.createElement('span');
+        Object.assign(probe.style, { position: 'absolute', whiteSpace: 'pre', fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontVariantNumeric: style.fontVariantNumeric, letterSpacing: style.letterSpacing });
+        probe.textContent = text;
+        document.body.append(probe);
+        const glyphs = probe.getBoundingClientRect().width;
+        probe.remove();
+        return glyphs + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth) + 23.5;
+      };
+      const before = input.getBoundingClientRect().width;
+      const label = input.closest('label') as HTMLElement;
+      label.style.minWidth = '0';
+      label.style.flexBasis = 'auto';
+      input.style.minWidth = '0';
+      const row = input.closest('.open-day') as HTMLElement;
+      row.style.flexWrap = 'nowrap';
+      const after = input.getBoundingClientRect().width;
+      return { before, after, valueNeed: measure('10/09/2026'), placeholderNeed: measure('mm/dd/yyyy'), oldVacuous: `${input.scrollWidth}/${input.clientWidth}` };
+    });
+    log(`o5demo ${JSON.stringify(result)}`);
+    await page.locator('.tools .open-day').screenshot({ path: `${OUT}\\o5demo-w360-synthetic.png` });
+  });
+
+  for (const width of [390, 375, 360, 320]) {
+    test(`o5 mutation: the new checks on the 589bcff-like field rules at ${width}`, async ({ page, signInThroughUi }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      // Mutation: the field and its label lose their minimum widths and the row does not wrap (the 589bcff rules).
+      const field = page.getByLabel('Open a day');
+      await field.evaluate((input) => {
+        (input.closest('.open-day') as HTMLElement).style.setProperty('flex-wrap', 'nowrap', 'important');
+        const label = input.closest('label') as HTMLElement;
+        label.style.setProperty('min-width', '0', 'important');
+        label.style.setProperty('flex', '1 1 auto', 'important');
+        input.style.setProperty('min-width', '0', 'important');
+      });
+      const needed = (text: string) =>
+        field.evaluate(
+          (input, args) => {
+            const style = getComputedStyle(input);
+            const probe = document.createElement('span');
+            Object.assign(probe.style, { position: 'absolute', whiteSpace: 'pre', fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontVariantNumeric: style.fontVariantNumeric, letterSpacing: style.letterSpacing });
+            probe.textContent = args.text;
+            document.body.append(probe);
+            const glyphs = probe.getBoundingClientRect().width;
+            probe.remove();
+            const frame = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'] as const;
+            return glyphs + frame.reduce((sum, side) => sum + parseFloat(style[side]), 0) + args.chrome;
+          },
+          { text, chrome: 23.5 },
+        );
+      const placeholderNeed = await needed('mm/dd/yyyy');
+      const valueNeed = await needed('10/09/2026');
+      const empty = (await field.boundingBox())?.width ?? 0;
+      await field.fill('2026-10-09');
+      const filled = (await field.boundingBox())?.width ?? 0;
+      const vacuous = await field.evaluate((input) => input.scrollWidth <= input.clientWidth);
+      log(`o5mut w${width} ${JSON.stringify({ empty, filled, placeholderNeed, valueNeed, emptyCheck: empty >= placeholderNeed ? 'pass' : 'FAIL', valueCheck: filled >= valueNeed ? 'pass' : 'FAIL', oldScrollWidthCheck: vacuous ? 'pass' : 'FAIL' })}`);
+      await page.locator('.tools .open-day').screenshot({ path: `${OUT}\\o5mut-w${width}-synthetic.png` });
+    });
+  }
+
+  test('clip threshold', async ({ page, signInThroughUi }) => {
+    test.setTimeout(120_000);
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const field = page.getByLabel('Open a day');
+    for (const value of ['', '2026-10-09']) {
+      await field.fill(value);
+      for (let px = value === '' ? 123 : 115; px <= (value === '' ? 128 : 120); px += 1) {
+        await field.evaluate((input, w) => {
+          input.style.flex = 'none';
+          input.style.minWidth = '0';
+          input.style.width = `${w}px`;
+        }, px);
+        await field.screenshot({ path: `${OUT}\\clip2-${value === '' ? 'empty' : value}-${px}-synthetic.png` });
+      }
+    }
+    const info = await field.evaluate((input) => {
+      const ind = getComputedStyle(input, '::-webkit-calendar-picker-indicator');
+      const cs = getComputedStyle(input);
+      const span = document.createElement('span');
+      span.style.font = 'inherit';
+      span.style.fontFamily = cs.fontFamily;
+      span.style.fontSize = cs.fontSize;
+      span.style.fontWeight = cs.fontWeight;
+      span.style.letterSpacing = cs.letterSpacing;
+      span.style.fontVariantNumeric = cs.fontVariantNumeric;
+      span.style.whiteSpace = 'pre';
+      span.style.position = 'absolute';
+      document.body.append(span);
+      const widths: Record<string, number> = {};
+      for (const text of ['10/09/2026', '08/28/2028', '11/11/2011', 'mm/dd/yyyy']) {
+        span.textContent = text;
+        widths[text] = span.getBoundingClientRect().width;
+      }
+      span.remove();
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.className = input.className;
+      text.value = '10/09/2026';
+      text.style.fieldSizing = 'content';
+      text.style.minWidth = '0';
+      text.style.flex = 'none';
+      input.parentElement?.append(text);
+      const textInput = text.getBoundingClientRect().width;
+      text.remove();
+      return {
+        widths,
+        textInput,
+        font: `${cs.fontFamily} ${cs.fontSize} ${cs.fontWeight} ${cs.fontVariantNumeric}`,
+        indicator: { width: ind.width, height: ind.height, ms: ind.marginInlineStart, me: ind.marginInlineEnd, pad: ind.padding, display: ind.display },
+      };
+    });
+    log(`info ${JSON.stringify(info)}`);
+  });
+});

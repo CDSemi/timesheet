@@ -1,0 +1,20 @@
+// Prints a compact table of phone-controls-mobile.json (one line per size and control).
+// Usage: node phone-summary.mjs <json>
+import { readFileSync } from 'node:fs';
+
+const data = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+console.log(`--date-field-min resolves to ${data.date_field_min_px}px`);
+for (const layout of data.layouts) {
+  const s = layout.size;
+  console.log(`== ${s.width}x${s.height}${s.asserted ? '' : ' (information only)'}`);
+  for (const c of layout.controls) {
+    console.log(`  ${c.name}: count=${c.count} visible=${c.visible} inside=${c.inside} notCovered=${c.notCovered} hit=${c.hit} disabled=${c.disabled} box=${JSON.stringify(c.box)}`);
+  }
+  const b = layout.button_after_fill;
+  console.log(`  Open day (date filled): visible=${b.visible} inside=${b.inside} notCovered=${b.notCovered} hit=${b.hit} disabled=${b.disabled} box=${JSON.stringify(b.box)}`);
+  const r = layout.open_day_row;
+  console.log(`  row: form=${JSON.stringify(r.form)} label=${JSON.stringify(r.label)} input=${JSON.stringify(r.input)} button=${JSON.stringify(r.button)} button_below_field=${r.button_below_field}`);
+  console.log(`  row: style=${JSON.stringify(r.form_style)} input_style=${JSON.stringify(r.input_style)} label_text=${r.label_text} accessible_label=${r.input_accessible_label} value=${r.input_value} clipped=${r.value_clipped} scrollWidth=${r.page_scroll_width} innerWidth=${r.inner_width}`);
+  console.log(`  opened=${JSON.stringify(layout.opened)} writes_by_open_day=${JSON.stringify(layout.writes_by_open_day)} page_head_controls=${layout.pageHead?.controls}`);
+}
+console.log(`actions=${JSON.stringify(data.actions)}`);

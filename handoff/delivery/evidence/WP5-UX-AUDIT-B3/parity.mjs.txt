@@ -1,0 +1,37 @@
+// WP5-UX-AUDIT-B3: structural EN/VI parity of document pairs (method of the B2 check, rerun at a2ea7a4).
+// Line by line (the pairs are line-aligned, with an optional offset for a translation-note line in the VI file):
+// the heading level, the bullet marker, the code spans, the double-quoted strings and the numbers must match.
+// Numbers are compared after mapping the Vietnamese decimal comma (8,5) to a point. Read-only.
+// Usage: node parity.mjs <en> <vi> <viOffset> [<en> <vi> <viOffset> ...]
+import { readFileSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+let total = 0;
+for (let index = 0; index < args.length; index += 3) {
+  const en = readFileSync(args[index], 'utf8').split(/\r?\n/);
+  const viAll = readFileSync(args[index + 1], 'utf8').split(/\r?\n/);
+  const offset = Number(args[index + 2] ?? '0');
+  const vi = [...viAll.slice(0, 1), ...viAll.slice(1 + offset)];
+  const shape = (line) => {
+    const head = /^(#{1,6})\s/.exec(line)?.[1] ?? '';
+    const bullet = /^(\s*)([-*]|\d+\.)\s/.exec(line);
+    const code = [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1]).sort();
+    const noCode = line.replace(/`[^`]+`/g, '');
+    const quoted = [...noCode.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    const numbers = [...noCode.replace(/(\d),(\d)/g, '$1.$2').matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0]).sort();
+    return { head, bullet: bullet === null ? '' : `${bullet[1].length}${bullet[2]}`, code, quoted, numbers, blank: line.trim() === '' };
+  };
+  const diffs = [];
+  const max = Math.max(en.length, vi.length);
+  for (let line = 0; line < max; line += 1) {
+    const a = shape(en[line] ?? '');
+    const b = shape(vi[line] ?? '');
+    for (const key of ['head', 'bullet', 'blank', 'code', 'quoted', 'numbers']) {
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) diffs.push(`EN line ${line + 1} ${key}: EN ${JSON.stringify(a[key])} | VI ${JSON.stringify(b[key])}`);
+    }
+  }
+  total += diffs.length;
+  console.log(`${args[index]} (${en.length} lines) vs ${args[index + 1]} (${viAll.length} lines, offset ${offset}): ${diffs.length} differences`);
+  for (const item of diffs) console.log(`  ${item}`);
+}
+console.log(`total differences: ${total}`);

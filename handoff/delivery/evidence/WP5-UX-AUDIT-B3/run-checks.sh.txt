@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B3 mandatory checks in the scratch clone at a2ea7a4: typecheck, lint, unit/integration tests,
+# then the FULL e2e suite on both projects (npm run test:e2e = build + playwright test).
+source <task>/env.sh
+cd "$T/clone" || exit 9
+S="$T/checks-summary.txt"
+{
+  echo "node: $("$N24" --version)"
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$S"
+
+npmr run typecheck > "$T/typecheck.raw.txt" 2>&1
+echo "typecheck exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+
+npmr run lint > "$T/lint.raw.txt" 2>&1
+echo "lint exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+
+npmr test > "$T/test.raw.txt" 2>&1
+echo "test exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+
+export E2E_SCREENSHOT_DIR="$T/e2e-screens"
+mkdir -p "$E2E_SCREENSHOT_DIR"
+npmr run test:e2e > "$T/e2e.raw.txt" 2>&1
+echo "e2e exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+echo "git status --short after checks:" >> "$S"
+git status --short >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

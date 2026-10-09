@@ -1,0 +1,14 @@
+// Masks a log for the evidence folder: user-profile paths and e-mail addresses, ANSI colours, CRLF to LF.
+// Usage: node mask.mjs <input> <output>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+if (input === undefined || output === undefined) throw new Error('usage: node mask.mjs <input> <output>');
+const profile = /([A-Za-z]:[\\/]+Users[\\/]+|\/[a-z]\/Users\/|\/Users\/|\/home\/)([^\\/\s"']+)/gi;
+const text = readFileSync(input, 'utf8')
+  .replace(/\r\n?/g, '\n')
+  // eslint-disable-next-line no-control-regex
+  .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')
+  .replace(profile, (_match, prefix) => `${prefix}<user>`)
+  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>');
+writeFileSync(output, text.endsWith('\n') ? text : `${text}\n`);

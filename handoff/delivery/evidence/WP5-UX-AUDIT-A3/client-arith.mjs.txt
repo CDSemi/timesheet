@@ -1,0 +1,30 @@
+// Scans the client files changed since 014bd47 (list file) for arithmetic on business-looking values:
+// a line (comments removed) with an arithmetic operator or Math.* call and an identifier about
+// minutes, credit, OT, leave, breaks or totals. Every hit is printed for manual judgement.
+// Usage: node client-arith.mjs <tree> <name-status-file>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [tree, listFile] = process.argv.slice(2);
+const files = readFileSync(listFile, 'utf8')
+  .split(/\r?\n/)
+  .filter((l) => /^[AM]\t/.test(l))
+  .map((l) => l.slice(2))
+  .filter((f) => /\.(ts|tsx)$/.test(f));
+const BUSINESS = /minute|credit|eligib|overtime|\bot\b|_ot|ot_|leave|break|total|deficit|balance|raw_|hours/i;
+const ARITH = /(?<![=!<>])[-+*/%](?![=>])\s*[\w(]|Math\.(floor|ceil|round|trunc|max|min|abs)|\breduce\(/;
+let hits = 0;
+for (const file of files) {
+  const path = join(tree, file);
+  if (!existsSync(path)) continue;
+  const text = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+  text.split('\n').forEach((raw, index) => {
+    const line = raw.replace(/\/\/.*$/, '');
+    const code = line.replace(/'[^']*'/g, "''").replace(/`[^`]*`/g, (m) => m.replace(/[^$}{]/g, ''));
+    if (BUSINESS.test(code) && ARITH.test(code)) {
+      hits += 1;
+      console.log(`${file}:${index + 1}: ${raw.trim()}`);
+    }
+  });
+}
+console.log(`files scanned ${files.length}; hits ${hits}`);

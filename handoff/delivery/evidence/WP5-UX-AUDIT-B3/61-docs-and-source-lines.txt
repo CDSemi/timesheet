@@ -1,0 +1,46 @@
+docs/04 line 55 (EN) and the VI line, the OpenDay component and its input attributes:
+55:- Toolbar: "Open a day" (any date of the period), "Show details" and "Change several days". Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
+55:- Thanh công cụ: "Open a day" (mọi ngày trong kỳ), "Show details" và "Change several days". Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
+3:/** Opens the day editor for any accounting date, including dates outside the displayed period. */
+16:        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+git log of OpenDay.tsx (unchanged since WP2-T10):
+26fa7c9 Add the day editor with DST-aware manual sessions and Clock-out breaks (WP2-T10)
+docs/04 line 59 (EN) - the Escape and focus-return rule:
+- From 1200px: a non-modal panel in its own column beside the sheet, so the sheet stays visible and usable. From 768 to 1199px: a modal side panel at the right edge with the page behind it inert (focus stays inside the panel), so it never covers a control that can take focus. Phones (below 768px): a modal bottom sheet of at most 86% of the screen height. Focus moves to the panel heading on open; Escape closes the panel wherever focus is (a nested dialog takes Escape first), as does Close, and focus returns to the day's date button.
+src/client/DayEditor.tsx:83-109 (mode switch while open; Escape for the non-modal panel):
+  // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
+  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
+  useEffect(() => {
+    const element = dialog.current;
+    if (element === null) return;
+    if (element.open) {
+      if (element.matches(':modal') === modal) return;
+      element.close();
+    }
+    if (modal) element.showModal();
+    else element.show();
+    heading.current?.focus();
+  }, [modal]);
+
+  // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested
+  // modal dialog (a review, the clock-out dialog) takes Escape first, and so does a control that
+  // already used the key (an open label picker). A modal editor closes through its own handlers.
+  useEffect(() => {
+    if (modal) return;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('dialog:modal') !== null) return;
+      onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [modal, onClose]);
+docs/04 line 48 (EN) - phone first screen:
+- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. The first screen shows the period card (with "<" and ">" beside the title), the one-row clock card and the compact tools, so the first day row is fully visible above the tab bar at 390x844; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with an "Edit {date}" button (or "View {date}" when read-only).
+docs/04 line 9 (EN, VI) - O-1:
+| Day editor | A side panel beside the sheet from 1200px and a modal panel (a bottom sheet on phones) below 1200px: actual intervals, end date, confirmed breaks, label, leave in hours and minutes with `leave_kind` (vacation, sick, ot), WFH, notes, raw/eligible/credited figures computed by the server (see "Day editor") |
+| Sửa ngày | Bảng bên cạnh bảng timesheet từ 1200px và bảng modal (bottom sheet trên điện thoại) dưới 1200px: ca thực, ngày kết thúc, nghỉ xác nhận, nhãn, phút nghỉ nhập theo giờ và phút kèm `leave_kind` (vacation, sick, ot), WFH, ghi chú, các số gốc/đủ điều kiện/ghi do server tính (xem "Sửa ngày (Day editor)") |
+styles.css phone block .tools .open-day declarations (O-3: one rule in the phone block 987-1129):
+1084:   .tools .open-day {
+1091:   .tools .open-day label {
+1100:   .tools .open-day input {

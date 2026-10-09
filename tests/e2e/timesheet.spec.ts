@@ -123,13 +123,50 @@ test.describe('phone first screen', () => {
   /*
    * WP5-UX-B2-01: the "Open a day" date field keeps at least a full date wide (--date-field-min)
    * on narrow phones; the row wraps instead of squeezing the value ("10/09/202", "10/0").
+   * WP5-UX-B3 O-5 and R-7: the width a full date needs is measured, not assumed. A date input's
+   * scrollWidth never exceeds its clientWidth in Chromium, so the clipping is checked against the
+   * text width of the shown value (and of the empty field's "mm/dd/yyyy") in the field's own font,
+   * plus its padding and borders, plus DATE_FIELD_CHROME: the date input's inner field padding and
+   * calendar icon, measured in Edge (15px font) as the narrowest field that shows the text whole
+   * (10/09/2026: clipped at 117px, whole at 118px; mm/dd/yyyy: clipped at 125px, whole at 126px).
    */
-  for (const width of [390, 360, 320]) {
+  const DATE_FIELD_CHROME = 23.5;
+  for (const width of [390, 375, 360, 320]) {
     test(`the Open a day date field shows a full date at ${width}px`, async ({ page, signInThroughUi }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
       await signInThroughUi();
       await expect(page.locator('[data-day]')).toHaveCount(14);
       const field = page.getByLabel('Open a day');
+      // The width a text needs inside this field: its glyphs in the field's font, padding, borders and the date chrome.
+      const needed = (text: string) =>
+        page.evaluate<number>(`(() => {
+          const input = document.querySelector('.tools .open-day input');
+          const style = getComputedStyle(input);
+          const probe = document.createElement('span');
+          Object.assign(probe.style, {
+            position: 'absolute',
+            whiteSpace: 'pre',
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontWeight: style.fontWeight,
+            fontVariantNumeric: style.fontVariantNumeric,
+            letterSpacing: style.letterSpacing,
+          });
+          probe.textContent = ${JSON.stringify(text)};
+          document.body.append(probe);
+          const glyphs = probe.getBoundingClientRect().width;
+          probe.remove();
+          const frame = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'];
+          return glyphs + frame.reduce((sum, side) => sum + parseFloat(style[side]), 0) + ${DATE_FIELD_CHROME};
+        })()`);
+      const shownValue = new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(Date.UTC(2026, 9, 9));
+      expect(shownValue).toBe('10/09/2026');
+      const placeholderNeed = await needed('mm/dd/yyyy');
+      const valueNeed = await needed(shownValue);
+      expect(valueNeed, 'the measured need of a full date').toBeGreaterThan(100);
+      const empty = await field.boundingBox();
+      expect(empty, 'empty date field box').not.toBeNull();
+      expect(empty?.width ?? 0, 'the empty field shows "mm/dd/yyyy" whole').toBeGreaterThanOrEqual(placeholderNeed);
       await field.fill('2026-10-09');
       await expect(field).toHaveValue('2026-10-09');
       const box = await field.boundingBox();
@@ -137,9 +174,9 @@ test.describe('phone first screen', () => {
       const minimum = await page.evaluate<number>(
         "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
       );
-      expect(minimum, 'the --date-field-min token resolves to a width').toBeGreaterThanOrEqual(135);
+      expect(minimum, 'the --date-field-min token covers the measured need of the empty field and of a full date').toBeGreaterThanOrEqual(Math.max(placeholderNeed, valueNeed));
       expect(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
-      expect(await field.evaluate((input) => input.scrollWidth <= input.clientWidth), 'the date value is not clipped').toBe(true);
+      expect(box?.width ?? 0, 'the date value is not clipped (its measured need)').toBeGreaterThanOrEqual(valueNeed);
       expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
       const tools = await page.locator('.tools .open-day').boundingBox();
       await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`fix4-open-day-w${width}-synthetic.png`) });

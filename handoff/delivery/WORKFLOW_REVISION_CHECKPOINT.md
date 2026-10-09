@@ -150,8 +150,32 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - WP5-UX-FIX4 done: full date in the phone Open-a-day field (220px at 360, 180px at 320;
   390 layout unchanged); O-1..O-3; unit 1820; full e2e 167/0/13; verify exit 0; digest
   0b8428fd.
-- Running: WP5-UX-FIX4-FREEZE (committer; also carries the regate, A2/B2 and FIX3-FREEZE
-  records since 589bcff).
+- WP5-UX-FIX4-FREEZE done: a2ea7a4 on main, pushed (246 files, digest 0b8428fd).
+- WP5-UX-REGATE2 PASS on a2ea7a4 (NAS NOT VERIFIED): digest 0b8428fd in three forms;
+  verify 1820; e2e 167/0/13; AC-13 x3 and two zones; drill 208/0, image
+  sha256:410209b0d74225b7e20337279bccd6ab4bb0173a7437fa2e879344e2fac4ac9e (removed after
+  the run); B2-01 closed (146/220/180px); B-01 659.02 (757.97 with zone note) <= 788;
+  A-01, B-02, tab order hold.
+- Board: current_source_digest 0b8428fd; WP5-UX-AUDIT-A2 and WP5-RECHECK superseded_by
+  WP5-UX-AUDIT-A3.
+- WP5-UX-AUDIT-A3 PASS on a2ea7a4 / 0b8428fd (FIX4 delta comment/CSS only; bodies equal
+  to 014bd47; checks green). Stray file D:\canedit.txt left by the auditor (owner to
+  delete, with D:\raw-r07.txt).
+- WP5-UX-AUDIT-B3 FIX REQUIRED: B3-01 (Low) nested review dialog loses Escape and focus
+  across the 1200px mode switch; B3-02 (Low) docs/04 line 55; B2-01 closed; optional O-5
+  (vacuous sub-assertion) and R-7 (token tuning).
+- WP5-UX-FIX5 done (opus): editor defers the mode switch while another modal is open;
+  docs/04 line 55; O-5 meaningful assertion; R-7 tokens 8.5/14.25rem (375px first row now
+  above the tab bar); nine resize paths self-checked; e2e desktop 84/0/9, mobile 86/0/7;
+  verify exit 0; digest b7bbcbc0.
+- Running: WP5-UX-FIX5-FREEZE (committer; also carries REGATE2, A3/B3 and FIX4-FREEZE
+  records since a2ea7a4).
+- Next: WP5-UX-REGATE3, then fresh B4 and A4 (A2, A3 and WP5-RECHECK superseded_by A4).
+  If area B fails again after this round, raise an owner question instead of looping.
+- Next action: if both PASS, the WP5 re-accept: a docs task refreshes the pilot packet
+  identity (EN+VI) to a2ea7a4 / 0b8428fd / image 410209b0…, then the coordinator updates
+  STATE, NEXT_ACTION (+vi), the WP5 handoff (+vi) and the board, and the accept commit
+  follows.
 - Next action: FIX4-FREEZE, WP5-UX-REGATE2, fresh rechecks WP5-UX-AUDIT-B3 (area B) and
   WP5-UX-AUDIT-A3 (area-A delta); then A2 and WP5-RECHECK get superseded_by A3.
 - Next action: if both PASS, the WP5 re-accept (STATE, NEXT_ACTION, WP5 handoff,

@@ -152,8 +152,31 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - WP5-UX-FIX4 xong: ô Open a day trên điện thoại hiện đủ ngày (220px ở 360, 180px ở 320;
   bố cục 390 không đổi); O-1..O-3; unit 1820; toàn bộ e2e 167/0/13; verify exit 0;
   digest 0b8428fd.
-- Đang chạy: WP5-UX-FIX4-FREEZE (committer; mang theo các bản ghi regate, A2/B2 và
-  FIX3-FREEZE từ sau 589bcff).
+- WP5-UX-FIX4-FREEZE xong: a2ea7a4 trên main, đã push (246 file, digest 0b8428fd).
+- WP5-UX-REGATE2 PASS trên a2ea7a4 (NAS chưa kiểm): digest 0b8428fd ở ba dạng; verify
+  1820; e2e 167/0/13; AC-13 ba lần và hai múi giờ; drill 208/0, image
+  sha256:410209b0d74225b7e20337279bccd6ab4bb0173a7437fa2e879344e2fac4ac9e (đã xóa sau khi
+  chạy); B2-01 đã đóng (146/220/180px); B-01 659.02 (757.97 khi có ghi chú múi giờ) <=
+  788; A-01, B-02, thứ tự Tab vẫn đúng.
+- Board: current_source_digest 0b8428fd; WP5-UX-AUDIT-A2 và WP5-RECHECK có superseded_by
+  WP5-UX-AUDIT-A3.
+- WP5-UX-AUDIT-A3 PASS trên a2ea7a4 / 0b8428fd (thay đổi FIX4 chỉ là comment/CSS; body
+  giống 014bd47; các kiểm tra đều đạt). Auditor để lại file thừa D:\canedit.txt (chủ dự
+  án xóa cùng D:\raw-r07.txt).
+- WP5-UX-AUDIT-B3 FIX REQUIRED: B3-01 (Low) hộp xác nhận lồng bên trong mất Esc và focus
+  khi đổi chế độ ở mốc 1200px; B3-02 (Low) docs/04 dòng 55; B2-01 đã đóng; tùy chọn O-5
+  (assertion con không bao giờ fail) và R-7 (chỉnh token).
+- WP5-UX-FIX5 xong (opus): panel sửa ngày hoãn đổi chế độ khi còn hộp thoại khác đang
+  mở; docs/04 dòng 55; O-5 thành assertion có thể fail; R-7 token 8.5/14.25rem (ở 375px
+  dòng đầu nay nằm trên thanh tab); tự kiểm 9 đường thay đổi kích thước; e2e desktop
+  84/0/9, mobile 86/0/7; verify exit 0; digest b7bbcbc0.
+- Đang chạy: WP5-UX-FIX5-FREEZE (committer; mang theo các bản ghi REGATE2, A3/B3 và
+  FIX4-FREEZE từ sau a2ea7a4).
+- Tiếp theo: WP5-UX-REGATE3, rồi B4 và A4 mới (A2, A3 và WP5-RECHECK có superseded_by
+  A4). Nếu phần B lại không đạt sau vòng này, hỏi chủ dự án thay vì lặp tiếp.
+- Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5: một task tài liệu cập nhật định
+  danh pilot packet (EN+VI) thành a2ea7a4 / 0b8428fd / image 410209b0…, rồi coordinator
+  cập nhật STATE, NEXT_ACTION (+vi), WP5 handoff (+vi) và board, sau đó commit nghiệm thu.
 - Bước kế tiếp: FIX4-FREEZE, WP5-UX-REGATE2, kiểm tra lại độc lập WP5-UX-AUDIT-B3 (phần
   B) và WP5-UX-AUDIT-A3 (phần A, phần thay đổi); sau đó A2 và WP5-RECHECK có
   superseded_by A3.

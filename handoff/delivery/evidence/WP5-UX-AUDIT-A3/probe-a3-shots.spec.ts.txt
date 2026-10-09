@@ -1,0 +1,27 @@
+// WP5-UX-AUDIT-A3: two synthetic screenshots on the phone (a2ea7a4): the view-only grantee's first
+// screen at 390x844 (A2 risk R5) and an edit grantee's wrapped "Open a day" row at 320px (FIX4).
+import { join } from 'node:path';
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { OUT, signIn } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+test('synthetic screenshots of the grantee phone views', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Phone screenshots');
+  const ownerP = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner A' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee B', signature: 'none' });
+  await ownerP.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signIn(page, grantee.account, `#/shared/${ownerP.account.id}/timesheet`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.screenshot({ path: join(OUT, '..', 'shots', 'a3-phone-grantee-view-only-390-synthetic.png'), animations: 'disabled' });
+  const { given } = await ownerP.api.call<any>('GET', '/api/shares');
+  await ownerP.api.call('PUT', `/api/shares/${given[0].id}`, { items: { timesheets: 'edit', ot_read: false, pdf_download: false } });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const [day = ''] = await ownerP.api.displayedPeriodFreeWorkdays();
+  await page.getByLabel('Open a day').fill(day);
+  await page.locator('.tools').evaluate((el: Element) => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: join(OUT, '..', 'shots', 'a3-phone-grantee-edit-open-day-320-synthetic.png'), animations: 'disabled' });
+});

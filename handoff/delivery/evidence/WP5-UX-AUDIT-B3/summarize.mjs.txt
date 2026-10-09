@@ -1,0 +1,35 @@
+// WP5-UX-AUDIT-B3: compact tables from the probe JSON files (read-only). Usage: node summarize.mjs <probe-out dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir] = process.argv.slice(2);
+const load = (name) => (existsSync(join(dir, name)) ? JSON.parse(readFileSync(join(dir, name), 'utf8')) : null);
+
+console.log('== PC1 "Open a day" field (value typed; width in CSS px; clip test = input.scrollWidth vs clientWidth) ==');
+console.log('tag\tcase\tfield.w\ttoken\tbuttonOnRow\trow.bottom\tsw/cw\tneeded(field-sizing)');
+for (const tag of ['a2ea7a4', '589bcff', 'v2mut']) {
+  const data = load(`${tag}-PC1-open-day-field.json`);
+  if (data === null) continue;
+  for (const [key, v] of Object.entries(data)) {
+    console.log(`${tag}\t${key}\t${v.field.w}\t${v.dateFieldMinPx}\t${v.buttonOnFieldRow}\t${v.row.bottom}\t${v.inputScrollWidth}/${v.inputClientWidth}\t${v.neededForWholeValue}\tscroll ${v.pageScrollWidth}/${v.pageClientWidth}`);
+  }
+}
+
+console.log('\n== PC2 phone first screen: first [data-day] bottom vs tab bar top (390x844 unless @width) ==');
+console.log('tag\tzone\tstate\tfirstDayBottom\ttabBarTop\tmargin\tabove\tscrollY\tnoSidewaysScroll\tnotice');
+for (const tag of ['a2ea7a4', '589bcff']) {
+  for (const zone of ['zone-equal', 'zone-note']) {
+    const data = load(`${tag}-PC2-${zone}.json`);
+    if (data === null) continue;
+    for (const [state, v] of Object.entries(data.verdict)) {
+      console.log(`${tag}\t${zone}\t${state}\t${v.firstDayBottom}\t${v.tabBarTop}\t${v.margin}\t${v.firstDayFullyAboveTabBar}\t${v.scrollY}\t${v.noSidewaysScroll}\t${(v.notice ?? []).join(' / ')}`);
+    }
+  }
+}
+
+console.log('\n== PC10 grantee (view-only share) on a 390x844 phone ==');
+for (const tag of ['a2ea7a4', '589bcff']) {
+  const data = load(`${tag}-PC10-grantee-phone.json`);
+  if (data === null) continue;
+  console.log(`${tag}\t${JSON.stringify(data.verdict)}\tshareBar=${JSON.stringify(data.state.shareBar)}\tperiodCard=${JSON.stringify(data.state.periodCard)}\tclock=${JSON.stringify(data.state.clockCard)}\ttools=${JSON.stringify(data.state.toolsCard)}`);
+}

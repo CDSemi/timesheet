@@ -1,0 +1,7 @@
+WP5-UX-REGATE2 evidence. freeze_commit a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb; HEAD = origin/main = the same before and after (non-handoff diff since freeze: none, nonhandoff-since-freeze.txt empty).
+Node v24.21.0 portable (first call on the portable PATH via env.sh.txt), Git Bash, workflow Python (codex runtime, user <user>) for the validators. Machine zone America/Los_Angeles.
+Digest of record 0b8428fdbfc40598ba0c468486b4aa62367434727709ce62461a8984f130b77d (789 files, handoff/ excluded): exdigest-before.txt and exdigest-after.txt (clean git archive export, git hash-object --no-filters), lstree-sha.txt (git ls-tree form), repo-digest.txt (npm run digest).
+Scripts: contrast.mjs.txt, run-tz.mjs.txt, tzprobe.test.ts.txt, ux-regate2.spec.ts.txt, ux-regate2-b.spec.ts.txt and ux-regate2-c.spec.ts.txt (scratch, run only in the task-local export, removed before the final digest), exdigest.sh.txt, keys.sh.txt, mask.py.txt, env.sh.txt.
+obs-desktop.txt, obs-phone.txt (A-01, B-01, B-02, tab order, tap targets), obs-b2.txt (B2-01 at 390/360/320 and B-01 with and without the zone note) and obs-targets.txt (44px and overflow at 390/360/320) hold the direct observations.
+Screenshots are synthetic (example.invalid accounts, run-time passwords); ten kept of fourteen produced.
+Slips against the no-/dev/null rule (no file written there): one command with `> /dev/null 2>&1` (a sed that did nothing useful) and one with a stray `tail -0 /dev/stdin 2>/dev/null` appended to the background e2e command.

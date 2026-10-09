@@ -1249,3 +1249,123 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   expect(batch.at(-1)).toMatchObject({ mode: 'commit', reason: 'Corrected label (synthetic)', entries: [{ work_date: oldDay, category: 'Sick' }] });
   expect((await person.api.dayView(oldDay)).category).toBe('Sick');
 });
+
+/* ---- WP5-UX-B3-01: the editor switches mode across 1200px while a review dialog is open ---------- */
+
+/** What the open dialogs look like: which one holds focus and which one is on top at its own centre. */
+type DialogState = { name: string; modal: boolean; focus: boolean; onTop: boolean };
+
+function dialogStates(page: Page): Promise<{ dialogs: DialogState[]; active: string }> {
+  return page.evaluate(`(() => {
+    const nameOf = (dialog) => {
+      const id = dialog.getAttribute('aria-labelledby');
+      const heading = id === null ? null : document.getElementById(id);
+      return (heading?.textContent ?? '').replace(/\\s+/g, ' ').trim();
+    };
+    const dialogs = [...document.querySelectorAll('dialog[open]')].map((dialog) => {
+      const box = dialog.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return { name: nameOf(dialog), modal: dialog.matches(':modal'), focus: dialog.contains(document.activeElement), onTop: hit !== null && dialog.contains(hit) };
+    });
+    const active = document.activeElement;
+    return { dialogs, active: active === null ? 'none' : active.tagName };
+  })()`);
+}
+
+/** Waits until React has rendered the new width and its effects have run (two frames and a task). */
+async function settleAfterResize(page: Page, wide: boolean) {
+  const area = page.locator('.sheet-area');
+  if (wide) await expect(area).toHaveClass(/with-editor/);
+  else await expect(area).not.toHaveClass(/with-editor/);
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))))');
+}
+
+test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape and focus when the window crosses 1200px', () => {
+  test.skip(({ isMobile }) => isMobile, 'Crossing 1200px is a desktop-project layout change');
+
+  for (const path of [
+    { name: '1280 to 1024', widths: [1024], endsWide: false },
+    { name: '1024 back to 1280', widths: [1024, 1280], endsWide: true },
+  ]) {
+    test(`${path.name}: the review stays on top and focused, Escape closes it first and then the editor`, async ({
+      page,
+      adminSeed,
+      builtServer,
+      signInPageAs,
+    }) => {
+      test.setTimeout(60_000);
+      // A fresh person, so the review touches no other test's days.
+      const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Resize', signature: 'none' });
+      const free = await person.api.displayedPeriodFreeWorkdays();
+      expect(free.length, 'two past free workdays in the displayed period').toBeGreaterThanOrEqual(2);
+      const [editDay = '', workedDay = ''] = free;
+      await person.api.seedCompleteDay(workedDay);
+      const batch: Array<Record<string, unknown>> = [];
+      page.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/api/days/batch') batch.push(request.postDataJSON() as Record<string, unknown>);
+      });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await signInPageAs(person.account, '#/timesheet');
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
+
+      // The non-modal editor beside the sheet, then a label pick on a worked day opens the review over it.
+      await dayButton.click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+      expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+      await page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) }).click();
+      await page.getByRole('listbox', { name: `Label for ${workedDay}` }).getByRole('option', { name: 'Off', exact: true }).click();
+      const review = page.getByRole('dialog', { name: `Review label change for ${workedDay}` });
+      await expect(review).toBeVisible();
+      await expect.poll(async () => review.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+
+      for (const width of path.widths) {
+        await page.setViewportSize({ width, height: 800 });
+        await settleAfterResize(page, width >= 1200);
+        const state = await dialogStates(page);
+        const reviewState = state.dialogs.find((dialog) => dialog.name.startsWith('Review label change'));
+        const editorState = state.dialogs.find((dialog) => dialog.name.startsWith('Day editor'));
+        expect(editorState, `the editor is still open at ${width}px`).toBeDefined();
+        expect(reviewState, `the review stays open, modal, on top and focused at ${width}px`).toMatchObject({ modal: true, focus: true, onTop: true });
+        expect(editorState?.focus, `the editor does not take focus from the review at ${width}px`).toBe(false);
+        // The review's own button is what a pointer reaches, not the editor above it.
+        const cancel = await review.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+        expect(cancel, 'Cancel box').not.toBeNull();
+        const x = (cancel?.x ?? 0) + (cancel?.width ?? 0) / 2;
+        const y = (cancel?.y ?? 0) + (cancel?.height ?? 0) / 2;
+        const hitInReview = await page.evaluate<boolean>(
+          `document.elementFromPoint(${x}, ${y})?.closest('dialog')?.getAttribute('aria-labelledby') === 'batch-title'`,
+        );
+        expect(hitInReview, `the review's Cancel button is on top at ${width}px`).toBe(true);
+      }
+      if (path.endsWide) await page.screenshot({ path: screenshotPath('fix5-review-on-top-w1280-synthetic.png'), animations: 'disabled' });
+      else await page.screenshot({ path: screenshotPath('fix5-review-on-top-w1024-synthetic.png'), animations: 'disabled' });
+
+      // The first Escape closes only the review; nothing is saved and the editor stays open.
+      await page.keyboard.press('Escape');
+      await expect(review).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      if (path.endsWide) {
+        // From 1200px the editor is the non-modal panel; focus is back on the picker that opened the review.
+        expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+        await expect(page.getByRole('button', { name: new RegExp(`^Label for ${workedDay}`) })).toBeFocused();
+      } else {
+        // Below 1200px the editor now is the modal panel and holds focus; the page behind is inert.
+        await expect.poll(async () => editor.evaluate((element) => element.matches(':modal'))).toBe(true);
+        await expect.poll(async () => editor.evaluate((element) => element.matches(':focus-within'))).toBe(true);
+      }
+      expect(batch.map((body) => body.mode)).toEqual(['preview']);
+      expect((await person.api.dayView(workedDay)).category).toBe('Worked');
+
+      // The next Escape closes the editor and focus returns to the day's own button.
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(dayButton).toBeFocused();
+      expect(batch.map((body) => body.mode)).toEqual(['preview']);
+      expect((await person.api.dayView(workedDay)).category).toBe('Worked');
+    });
+  }
+});

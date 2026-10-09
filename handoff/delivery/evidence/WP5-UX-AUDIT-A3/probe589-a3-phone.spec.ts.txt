@@ -1,0 +1,153 @@
+// WP5-UX-AUDIT-A3 comparison copy run on the 589bcff build (information only, A3_INFO_ONLY=1). Original header:
+// WP5-UX-AUDIT-A3 scope 1 (the FIX4 CSS): the "Open a day" row that FIX4 restyled must not hide,
+// move off-screen, cover or disable an edit, clock, reason or confirmation control. On the phone
+// project at 390x844, 360x844, 320x844, 360x740 and 320x640 (280x653 recorded as information only):
+// every control an employee needs exists, is visible, lies inside the viewport width and is not
+// covered at its centre; the "Open a day" field keeps its accessible name, shows a full date and its
+// button works at every width, and opening a day writes nothing. Synthetic data only.
+import { expect, newPerson, test } from '../export589/tests/e2e/fixtures.ts';
+import { inspectControl, signIn, writeResult } from '../probe/common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const CONTROLS: Array<[string, (page: any) => any]> = [
+  ['Clock in/out', (page) => page.locator('.clock-panel .clock-button')],
+  ['Open a day (date field)', (page) => page.getByLabel('Open a day')],
+  ['Open day (button)', (page) => page.getByRole('button', { name: 'Open day', exact: true })],
+  ['Review & sign off', (page) => page.locator('.period-bar [data-review-link]')],
+  ['Previous period', (page) => page.getByRole('button', { name: 'Previous period' })],
+  ['Next period', (page) => page.getByRole('button', { name: 'Next period' })],
+  ['Show details', (page) => page.getByRole('button', { name: 'Show details' })],
+  ['Change several days', (page) => page.getByRole('button', { name: 'Change several days' })],
+  ['first day Edit', (page) => page.locator('[data-day] button[aria-label^="Edit "]').first()],
+  ['first label picker', (page) => page.locator('[data-label-picker] button').first()],
+];
+
+const SIZES = [
+  { width: 390, height: 844, asserted: true },
+  { width: 360, height: 844, asserted: true },
+  { width: 320, height: 844, asserted: true },
+  { width: 360, height: 740, asserted: true },
+  { width: 320, height: 640, asserted: true },
+  { width: 280, height: 653, asserted: false },
+];
+
+test('phone: the Open a day row and every needed control are present, visible, inside the screen and work', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'The compact phone layout');
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Phone Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  const writes: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) writes.push(`${request.method()} ${pathname}`);
+  });
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('.clock-panel[data-clock="out"]')).toHaveCount(1);
+  const tokenPx = await page.evaluate<number>("(() => { const p = document.createElement('div'); p.style.width = 'var(--date-field-min)'; document.body.append(p); const w = p.getBoundingClientRect().width; p.remove(); return w; })()");
+
+  const layouts: any[] = [];
+  for (const size of SIZES) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.evaluate('window.scrollTo(0, 0)');
+    await page.waitForTimeout(300);
+    await page.getByLabel('Open a day').fill('');
+    const controls = [];
+    for (const [name, make] of CONTROLS) controls.push(await inspectControl(page, name, make(page)));
+    const field = page.getByLabel('Open a day');
+    await field.fill(workDate);
+    const row = await page.evaluate(`(() => {
+      const form = document.querySelector('.tools .open-day');
+      const label = form.querySelector('label');
+      const input = form.querySelector('input');
+      const button = form.querySelector('button');
+      const box = (el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+      const s = getComputedStyle(form);
+      return {
+        form: box(form), label: box(label), input: box(input), button: box(button),
+        form_style: { display: s.display, flexWrap: s.flexWrap, overflow: s.overflow, visibility: s.visibility },
+        input_style: { display: getComputedStyle(input).display, visibility: getComputedStyle(input).visibility, minWidth: getComputedStyle(input).minWidth },
+        label_text: label.firstChild.textContent.trim(),
+        input_accessible_label: input.labels[0] === label,
+        input_value: input.value,
+        value_clipped: input.scrollWidth > input.clientWidth,
+        button_disabled: button.disabled,
+        button_below_field: button.getBoundingClientRect().top >= input.getBoundingClientRect().bottom - 0.5,
+        page_scroll_width: document.documentElement.scrollWidth,
+        inner_width: window.innerWidth,
+      };
+    })()`);
+    // Measured twice: as A2 measured (scrollIntoViewIfNeeded; an element above the viewport lands
+    // under the sticky app bar, information only) and scrolled to the centre (asserted).
+    const buttonAfterFillTopAligned = await inspectControl(page, 'Open day (button, date filled, top-aligned)', page.getByRole('button', { name: 'Open day', exact: true }));
+    const buttonAfterFill = await inspectControl(page, 'Open day (button, date filled)', page.getByRole('button', { name: 'Open day', exact: true }), { center: true });
+    const fieldAfterFill = await inspectControl(page, 'Open a day (field, date filled)', page.getByLabel('Open a day'), { center: true });
+    const pageHead = await page.evaluate(`(() => {
+      const head = document.querySelector('.page-head');
+      return head === null ? null : { controls: head.querySelectorAll('button, a, input, select, textarea').length };
+    })()`);
+    // Use the row: the editor opens (modal) for the typed date; close it; nothing is written.
+    const before = writes.length;
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const opened = await editor.evaluate((d: Element) => ({ modal: d.matches(':modal'), title: d.querySelector('h2')?.textContent ?? '' }));
+    await editor.getByRole('button', { name: 'Close' }).click();
+    await expect(editor).toHaveCount(0);
+    layouts.push({ size, controls, open_day_row: row, button_after_fill: buttonAfterFill, field_after_fill: fieldAfterFill, button_after_fill_top_aligned: buttonAfterFillTopAligned, pageHead, opened, writes_by_open_day: writes.slice(before) });
+  }
+
+  // The other controls work (on the 390 phone): Clock in, the Clock out dialog, the period steps, the review link.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate('window.scrollTo(0, 0)');
+  const actions: Record<string, unknown> = {};
+  await page.locator('.clock-panel .clock-button').click();
+  await expect(page.locator('.clock-panel[data-clock="in"]')).toHaveCount(1);
+  actions.clock_in = 'running';
+  await page.waitForTimeout(1_500);
+  await page.locator('.clock-panel .clock-button').click();
+  const clockOut = page.getByRole('dialog').filter({ hasText: /Clock out/ });
+  await expect(clockOut).toBeVisible();
+  actions.clock_out_dialog = 'opened';
+  await page.keyboard.press('Escape');
+  await expect(clockOut).toHaveCount(0);
+  const title = page.locator('.period-title');
+  const titleBefore = (await title.textContent()) ?? '';
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(title).not.toHaveText(titleBefore);
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(title).toHaveText(titleBefore);
+  actions.period_steps = 'previous and next work';
+  await page.locator('.period-bar [data-review-link]').click();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  actions.review_link = await page.evaluate('window.location.hash');
+  actions.writes = writes;
+
+  writeResult(`phone-controls-589bcff-${testInfo.project.name}.json`, { date_field_min_px: tokenPx, layouts, actions });
+  if (process.env.A3_INFO_ONLY === "1") return;
+  for (const layout of layouts) {
+    if (!layout.size.asserted) continue;
+    const w = `${layout.size.width}x${layout.size.height}`;
+    for (const control of layout.controls) {
+      expect(control.count, `${w}: ${control.name} present`).toBeGreaterThan(0);
+      expect(control.visible, `${w}: ${control.name} visible`).toBe(true);
+      expect(control.inside, `${w}: ${control.name} inside the screen width`).toBe(true);
+      expect(control.notCovered, `${w}: ${control.name} not covered (${control.hit})`).toBe(true);
+    }
+    expect(layout.button_after_fill.disabled, `${w}: Open day enabled once a date is typed`).toBe(false);
+    expect(layout.button_after_fill.inside && layout.button_after_fill.notCovered && layout.button_after_fill.visible, `${w}: Open day button usable (${layout.button_after_fill.hit})`).toBe(true);
+    expect(layout.field_after_fill.inside && layout.field_after_fill.notCovered && layout.field_after_fill.visible, `${w}: Open a day field usable (${layout.field_after_fill.hit})`).toBe(true);
+    expect(layout.open_day_row.label_text).toBe('Open a day');
+    expect(layout.open_day_row.input_accessible_label).toBe(true);
+    expect(layout.open_day_row.input_value).toBe(workDate);
+    expect(layout.open_day_row.value_clipped, `${w}: the date value is not clipped`).toBe(false);
+    expect(layout.open_day_row.input.w, `${w}: the field is at least --date-field-min wide`).toBeGreaterThanOrEqual(tokenPx - 0.5);
+    expect(layout.open_day_row.page_scroll_width, `${w}: no horizontal scroll`).toBeLessThanOrEqual(layout.open_day_row.inner_width);
+    expect(layout.opened.modal, `${w}: the editor opened modal`).toBe(true);
+    expect(layout.opened.title).toContain(workDate);
+    expect(layout.writes_by_open_day, `${w}: opening a day writes nothing`).toEqual([]);
+    expect(layout.pageHead?.controls ?? 0, 'the visually hidden page heading holds no control').toBe(0);
+  }
+  expect(writes.filter((w) => !w.startsWith('POST /api/clock/in')), 'only the clock-in was written').toEqual([]);
+});

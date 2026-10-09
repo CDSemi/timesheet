@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B3: Node deprecation tracing on lint, npm test and the build (scratch clone at a2ea7a4; the audit
+# probe folder is excluded from lint by an ignore pattern), then a short runtime check of the built server.
+source <task>/env.sh
+cd "$T/clone" || exit 9
+S="$T/deprecation-summary.txt"
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ) HEAD=$(git rev-parse HEAD)" > "$S"
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+npmr run lint -- --ignore-pattern audit-probe/ > "$T/dep-lint.txt" 2>&1
+echo "lint exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-lint.txt")" >> "$S"
+npmr test > "$T/dep-test.txt" 2>&1
+echo "npm test exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-test.txt")" >> "$S"
+npmr run build > "$T/dep-build.txt" 2>&1
+echo "build exit=$? deprecation lines=$(grep -ci deprecat "$T/dep-build.txt")" >> "$S"
+unset NODE_OPTIONS
+mkdir -p "$T/runtime-work"
+"$N24" "$T/runtime-deprecation.mjs" "$T/clone" "$T/runtime-work" > "$T/dep-runtime.txt" 2>&1
+echo "runtime check exit=$?" >> "$S"
+echo "git status --short:" >> "$S"
+git status --short >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

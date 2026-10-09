@@ -1,0 +1,146 @@
+// WP5-UX-AUDIT-A3 scope 2: A-01 still closed on a2ea7a4? The first audit's leave-input cases, typed
+// key by key into the day editor (opened through the "Open a day" row that FIX4 restyled on phones),
+// on the 1280 panel, the 1024 modal panel and the 390 phone sheet. For each case: what the fields
+// hold, which PUT /api/days/:date bodies leave the page, the page's alert and invalid-state
+// attributes, and what the server stored. Synthetic data only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { editorLayout, openDay, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+interface Field {
+  keys?: string;
+  fill?: string;
+}
+interface Case {
+  name: string;
+  hours: Field;
+  minutes: Field;
+  meant: number | null;
+  expect: { refused: true; marked: { hours: boolean; minutes: boolean } } | { refused: false; leave: number; serverCode?: string };
+}
+
+const CASES: Case[] = [
+  { name: 'A-01 hours typed "2-", minutes 30', hours: { keys: '2-' }, minutes: { fill: '30' }, meant: 150, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'A-01 hours 4, minutes typed "3-"', hours: { fill: '4' }, minutes: { keys: '3-' }, meant: 243, expect: { refused: true, marked: { hours: false, minutes: true } } },
+  { name: 'A-01 hours typed "2-", minutes 0', hours: { keys: '2-' }, minutes: { fill: '0' }, meant: 120, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'hours typed "e", minutes 30', hours: { keys: 'e' }, minutes: { fill: '30' }, meant: null, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'hours 2, minutes typed "e"', hours: { fill: '2' }, minutes: { keys: 'e' }, meant: null, expect: { refused: true, marked: { hours: false, minutes: true } } },
+  { name: 'hours typed "1.5", minutes 0', hours: { keys: '1.5' }, minutes: { fill: '0' }, meant: 90, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'hours 1, minutes typed "1.5"', hours: { fill: '1' }, minutes: { keys: '1.5' }, meant: null, expect: { refused: true, marked: { hours: false, minutes: true } } },
+  { name: 'hours typed "-1", minutes 30', hours: { keys: '-1' }, minutes: { fill: '30' }, meant: null, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'hours 1, minutes typed "-1"', hours: { fill: '1' }, minutes: { keys: '-1' }, meant: null, expect: { refused: true, marked: { hours: false, minutes: true } } },
+  { name: 'hours 0, minutes 60 (out of range)', hours: { fill: '0' }, minutes: { fill: '60' }, meant: 60, expect: { refused: true, marked: { hours: false, minutes: true } } },
+  { name: 'hours 25 (out of range)', hours: { fill: '25' }, minutes: { fill: '' }, meant: 1500, expect: { refused: true, marked: { hours: true, minutes: false } } },
+  { name: 'hours 24, minutes 1 (over 24h 00m)', hours: { fill: '24' }, minutes: { fill: '1' }, meant: 1441, expect: { refused: true, marked: { hours: true, minutes: true } } },
+  { name: 'empty hours and minutes', hours: { fill: '' }, minutes: { fill: '' }, meant: 0, expect: { refused: false, leave: 0 } },
+  { name: 'valid 2h 30m', hours: { fill: '2' }, minutes: { fill: '30' }, meant: 150, expect: { refused: false, leave: 150 } },
+  { name: 'valid 4h 00m typed', hours: { keys: '4' }, minutes: { keys: '0' }, meant: 240, expect: { refused: false, leave: 240 } },
+  { name: 'valid 0h 45m (hours empty)', hours: { fill: '' }, minutes: { fill: '45' }, meant: 45, expect: { refused: false, leave: 45 } },
+  { name: 'valid 8h 00m (the required day)', hours: { fill: '8' }, minutes: { fill: '0' }, meant: 480, expect: { refused: false, leave: 480 } },
+  { name: 'client-valid 24h 00m, refused by the server rule', hours: { fill: '24' }, minutes: { fill: '0' }, meant: 1440, expect: { refused: false, leave: 1440, serverCode: 'leave_exceeds_required' } },
+];
+
+async function setField(box: any, field: Field) {
+  await box.fill('');
+  if (field.fill !== undefined) await box.fill(field.fill);
+  else {
+    await box.click();
+    await box.pressSequentially(field.keys ?? '');
+  }
+}
+
+test('A-01: malformed leave input is refused with an accessible error and no PUT; valid input sends the same leave minutes', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(600_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Leave Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  expect(workDate, 'a past free workday').not.toBe('');
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+
+  const results: Array<Record<string, unknown>> = [];
+  let layout: Record<string, unknown> = {};
+  for (const item of CASES) {
+    const puts: Array<Record<string, unknown>> = [];
+    const listener = (request: any) => {
+      if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${workDate}`) puts.push(request.postDataJSON());
+    };
+    page.on('request', listener);
+    try {
+      const editor = await openDay(page, workDate);
+      layout = await editorLayout(page);
+      const form = editor.getByRole('form', { name: 'Day fields' });
+      const hours = form.getByLabel('Leave hours');
+      const minutes = form.getByLabel('Leave minutes');
+      await setField(hours, item.hours);
+      await setField(minutes, item.minutes);
+      await form.getByLabel('Leave kind').selectOption('vacation');
+      const before = await person.api.dayView(workDate);
+      const typed = await form.evaluate((element: HTMLFormElement) =>
+        [...element.querySelectorAll('input[type="number"]')].map((input) => {
+          const box = input as HTMLInputElement;
+          return { label: box.labels?.[0]?.textContent?.trim() ?? '', value: box.value, badInput: box.validity.badInput };
+        }),
+      );
+      await form.getByRole('button', { name: 'Save day fields' }).click();
+      if (item.expect.refused || item.expect.serverCode !== undefined) {
+        await expect(form.getByRole('alert')).toHaveCount(1);
+        await page.waitForTimeout(800);
+      } else {
+        await expect(editor.getByText('Day fields saved.')).toBeVisible();
+      }
+      const alert = form.getByRole('alert');
+      const alertCount = await alert.count();
+      const alertId = alertCount === 1 ? await alert.getAttribute('id') : null;
+      const attrs = async (box: any) => ({ ariaInvalid: await box.getAttribute('aria-invalid'), describedBy: await box.getAttribute('aria-describedby') });
+      const hoursAttrs = await attrs(hours);
+      const minutesAttrs = await attrs(minutes);
+      const after = await person.api.dayView(workDate);
+      const record = {
+        case: item.name,
+        meant_minutes: item.meant,
+        typed,
+        put_bodies: puts,
+        alert_texts: alertCount === 1 ? [await alert.innerText()] : [],
+        alert_id: alertId,
+        hours_attrs: hoursAttrs,
+        minutes_attrs: minutesAttrs,
+        stored_before: { leave_minutes: before.leave_minutes, leave_kind: before.leave_kind, version: before.entry?.version ?? null },
+        stored_after: { leave_minutes: after.leave_minutes, leave_kind: after.leave_kind, version: after.entry?.version ?? null },
+      };
+      results.push(record);
+      if (item.expect.refused) {
+        expect(puts, `${item.name}: no PUT`).toEqual([]);
+        expect(alertCount, `${item.name}: one alert`).toBe(1);
+        expect(record.alert_texts[0]).toContain('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
+        expect(after.leave_minutes, `${item.name}: nothing stored`).toBe(before.leave_minutes);
+        expect(after.entry?.version ?? null, `${item.name}: version unchanged`).toBe(before.entry?.version ?? null);
+        for (const [part, attr] of [['hours', hoursAttrs], ['minutes', minutesAttrs]] as const) {
+          if (item.expect.marked[part]) {
+            expect(attr.ariaInvalid, `${item.name}: ${part} aria-invalid`).toBe('true');
+            expect(attr.describedBy, `${item.name}: ${part} described by the alert`).toBe(alertId);
+          } else {
+            expect(attr.ariaInvalid, `${item.name}: ${part} not marked`).toBeNull();
+          }
+        }
+      } else {
+        expect(puts.length, `${item.name}: one PUT`).toBe(1);
+        expect(puts[0]).toMatchObject({ leave_minutes: item.expect.leave, leave_kind: item.expect.leave > 0 ? 'vacation' : null });
+        expect(Object.keys(puts[0] ?? {}).sort()).toEqual(['category', 'expected_version', 'leave_kind', 'leave_minutes', 'notes', 'wfh']);
+        if (item.expect.serverCode === undefined) {
+          expect(after.leave_minutes).toBe(item.expect.leave);
+        } else {
+          expect(record.alert_texts[0], `${item.name}: the server's refusal is shown`).toContain(item.expect.serverCode);
+          expect(after.leave_minutes, `${item.name}: the server stored nothing`).toBe(before.leave_minutes);
+        }
+      }
+    } finally {
+      page.off('request', listener);
+      await person.api.resetDay(workDate);
+      await page.reload();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+    }
+  }
+
+  writeResult(`leave-a2ea7a4-${testInfo.project.name}.json`, { commit: 'a2ea7a4', project: testInfo.project.name, workDate, editor_layout: layout, results });
+});

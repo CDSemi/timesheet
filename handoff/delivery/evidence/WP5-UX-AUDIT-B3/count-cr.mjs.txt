@@ -1,0 +1,17 @@
+// WP5-UX-AUDIT-B3: counts CR bytes (0x0D) in every .txt file of a folder plus extra files given by path. Read-only.
+// Usage: node count-cr.mjs <folder> [<file> ...]
+import { readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [folder, ...extra] = process.argv.slice(2);
+const files = [...readdirSync(folder).filter((name) => name.endsWith('.txt')).map((name) => join(folder, name)), ...extra];
+let total = 0;
+for (const file of files) {
+  const bytes = readFileSync(file);
+  let count = 0;
+  for (const byte of bytes) if (byte === 0x0d) count += 1;
+  total += count;
+  if (count > 0) console.log(`${basename(file)}: ${count} CR bytes`);
+}
+console.log(`files checked: ${files.length}; CR bytes in total: ${total}`);
+process.exitCode = total === 0 ? 0 : 1;

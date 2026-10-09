@@ -1,0 +1,260 @@
+$ git diff 014bd47..a2ea7a4 -- src/client/ReviewScreen.tsx src/client/components/reviewModel.ts
+diff --git a/src/client/ReviewScreen.tsx b/src/client/ReviewScreen.tsx
+index b7159c5..41c39b7 100644
+--- a/src/client/ReviewScreen.tsx
++++ b/src/client/ReviewScreen.tsx
+@@ -12,6 +12,7 @@ import { loadPeriodState, type PeriodState, ReviewBadges } from './components/Re
+ import {
+   type Blocker,
+   buildSubmitBody,
++  checklistSteps,
+   classifySubmitError,
+   type FieldKey,
+   type FormState,
+@@ -157,6 +158,7 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
+ 
+   const { payload } = review;
+   const mode = reviewMode(period?.finalization.revision ?? null);
++  const steps = checklistSteps(payload, form, imported).filter((step) => step.key !== 'sign' || done === null);
+   return (
+     <div className="review-screen stack">
+       <header className="toolbar">
+@@ -224,49 +226,68 @@ export function ReviewScreen({ payrollDate }: { payrollDate: string }) {
+         </section>
+       )}
+ 
+-      <ReviewDays days={payload.days} zone={payload.reporting_zone} totalCredited={payload.totals.credited_minutes} pendingDays={payload.totals.pending_days} />
+-      <ReviewOtProposals payload={payload} />
+-      <ReviewDeficits
+-        proposals={payload.deficit_proposals}
+-        choices={form.choices}
+-        onChoose={(workDate, choice) => setForm({ ...form, choices: { ...form.choices, [workDate]: choice } })}
+-        error={errors.deficit_choices ?? null}
+-      />
+-      <ReviewEvidence
+-        payload={payload}
+-        acknowledged={form.acknowledged}
+-        onAcknowledge={(value) => setForm({ ...form, acknowledged: value })}
+-        error={errors.acknowledgement ?? null}
+-      />
+-      <ReviewReservations payload={payload} />
+-      <ReviewEnvelope payload={payload} error={errors.signature ?? null} />
++      <div className="review-layout">
++        <ReviewDays payload={payload} />
+ 
+-      {done === null && imported && (
+-        <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
+-          <h2 id="review-imported-title">Sign off</h2>
+-          <ImportedNote id="imported-reason" />
+-          <div className="button-row">
+-            <button type="button" disabled aria-describedby="imported-reason">
+-              Sign off &amp; Submit
+-            </button>
+-            <a className="button-link" href="#/timesheet">
+-              Back to the timesheet
+-            </a>
+-          </div>
+-        </section>
+-      )}
+-
+-      {done === null && !imported && (
+-        <ReviewSignoff
+-          mode={mode}
+-          employeeName={payload.employee.name}
+-          form={form}
+-          errors={errors}
+-          busy={busy}
+-          onChange={setForm}
+-          onSubmit={() => void submit()}
+-        />
+-      )}
++        <aside className="review-checklist" aria-label="Before you sign">
++          <ol className="review-steps plain">
++            {steps.map((step, index) => (
++              <li key={step.key} className="review-step card stack" data-step={step.key}>
++                <p className="step-head">
++                  <span className="step-title">
++                    Step {index + 1}: {step.title}
++                  </span>
++                  <span className="step-state">{step.state}</span>
++                </p>
++                {step.key === 'attention' && (
++                  <>
++                    <ReviewOtProposals payload={payload} />
++                    <ReviewDeficits
++                      proposals={payload.deficit_proposals}
++                      choices={form.choices}
++                      onChoose={(workDate, choice) => setForm({ ...form, choices: { ...form.choices, [workDate]: choice } })}
++                      error={errors.deficit_choices ?? null}
++                    />
++                    <ReviewEvidence
++                      payload={payload}
++                      acknowledged={form.acknowledged}
++                      onAcknowledge={(value) => setForm({ ...form, acknowledged: value })}
++                      error={errors.acknowledgement ?? null}
++                    />
++                    <ReviewReservations payload={payload} />
++                  </>
++                )}
++                {step.key === 'email' && <ReviewEnvelope payload={payload} error={errors.signature ?? null} />}
++                {step.key === 'sign' && done === null && imported && (
++                  <section className="card stack" aria-labelledby="review-imported-title" data-imported-lock>
++                    <h2 id="review-imported-title">Sign off</h2>
++                    <ImportedNote id="imported-reason" />
++                    <div className="button-row">
++                      <button type="button" disabled aria-describedby="imported-reason">
++                        Sign off &amp; Submit
++                      </button>
++                      <a className="button-link" href="#/timesheet">
++                        Back to the timesheet
++                      </a>
++                    </div>
++                  </section>
++                )}
++                {step.key === 'sign' && done === null && !imported && (
++                  <ReviewSignoff
++                    mode={mode}
++                    employeeName={payload.employee.name}
++                    form={form}
++                    errors={errors}
++                    busy={busy}
++                    onChange={setForm}
++                    onSubmit={() => void submit()}
++                  />
++                )}
++              </li>
++            ))}
++          </ol>
++        </aside>
++      </div>
+     </div>
+   );
+ }
+diff --git a/src/client/components/reviewModel.ts b/src/client/components/reviewModel.ts
+index 3d1dc84..3248271 100644
+--- a/src/client/components/reviewModel.ts
++++ b/src/client/components/reviewModel.ts
+@@ -8,6 +8,7 @@ import type {
+   SnapshotSession,
+   SnapshotUnresolved,
+ } from '../../domain/snapshot.ts';
++import { formatHoursMinutes } from '../../domain/format.ts';
+ import { formatInZone } from '../../domain/zones.ts';
+ import {
+   ApiRequestError,
+@@ -18,7 +19,9 @@ import {
+   type RevisionSummary,
+ } from '../api.ts';
+ import { describeError } from './errors.ts';
+-import { minutesText } from './format.ts';
++import { WEEKDAYS } from './dayModel.ts';
++import { minutesText, usShortDate } from './format.ts';
++import { breaksNote, hm, type SheetCheck, type SheetDay, type SheetOt, type SheetWeek, sessionRange, sheetLabel, weeksOf } from './sheetModel.ts';
+ 
+ /*
+  * Pure logic for the review and sign-off screen. Every business value on that screen (minutes,
+@@ -401,3 +404,103 @@ export function reviewDayRow(day: SnapshotDay, zone: string): ReviewDayRow {
+     status: dayStatus(day),
+   };
+ }
++
++/* ---- The checklist beside the sheet ------------------------------------------------------ */
++
++export interface ChecklistStep {
++  key: 'attention' | 'email' | 'sign';
++  title: string;
++  /** The state in words (never colour alone). */
++  state: string;
++}
++
++/**
++ * The three steps of the review in order, each with its state in words. Only counts and presence
++ * checks of the payload and the form: the person's choices, no business figure.
++ */
++export function checklistSteps(payload: ReviewSnapshot, form: FormState, imported: boolean): ChecklistStep[] {
++  const evidence = payload.unresolved_inputs.length;
++  const undecided = deficitChoiceDays(payload).filter((item) => form.choices[item.work_date] === undefined).length;
++  let attention = 'Nothing to resolve';
++  if (evidence > 0 && !form.acknowledged) attention = evidence === 1 ? '1 day needs your acknowledgement' : `${evidence} days need your acknowledgement`;
++  else if (undecided > 0) attention = undecided === 1 ? '1 deficit day needs your choice' : `${undecided} deficit days need your choice`;
++  else if (evidence > 0) attention = 'Acknowledged';
++  const email =
++    payload.signature === null ? 'No signature image saved' : payload.recipients.to.length === 0 ? 'No recipient set' : 'Recipients and signature ready';
++  return [
++    { key: 'attention', title: 'Days that need attention', state: attention },
++    { key: 'email', title: 'Email and PDF', state: email },
++    { key: 'sign', title: 'Sign', state: imported ? 'Locked: imported history' : 'Waiting for your signature' },
++  ];
++}
++
++/* ---- The review payload on the sheet ------------------------------------------------------- */
++
++/** The Check cell of a payload day: the same words and shapes as the Timesheet page, from the payload's own status. */
++function reviewCheck(day: SnapshotDay): SheetCheck | null {
++  if (day.calculation_error !== null) return { key: 'error', text: 'Calculation problem', shape: 'triangle' };
++  switch (day.completeness) {
++    case 'complete':
++      return { key: 'complete', text: 'Complete', shape: 'circle' };
++    case 'incomplete':
++      return day.sessions.some((session) => session.end_utc === null)
++        ? { key: 'running', text: 'Running', shape: 'live' }
++        : { key: 'open_session', text: 'Open session', shape: 'diamond' };
++    case 'incomplete_breaks':
++      return { key: 'confirm_breaks', text: 'Confirm breaks', shape: 'diamond' };
++    default:
++      if (!day.attendance_expected) return null;
++      return { key: 'missing', text: day.sessions.length === 0 ? 'No times' : 'Missing record', shape: 'square' };
++  }
++}
++
++/** The OT cell by the PDF rule, from the payload: credited h:mm of a complete day, "pending", "n/a" or blank. */
++function reviewOt(day: SnapshotDay): SheetOt {
++  if (day.calculation_error !== null) return { kind: 'na', text: 'n/a' };
++  const credited = day.calculation?.credited_minutes ?? null;
++  if (day.completeness === 'complete' && credited !== null) return { kind: 'minutes', text: formatHoursMinutes(credited) };
++  if (day.completeness === 'incomplete' || day.completeness === 'incomplete_breaks') return { kind: 'pending', text: 'pending' };
++  return { kind: 'blank', text: '' };
++}
++
++/**
++ * One day of the review payload as a sheet day: dates are the accounting dates, session times the
++ * reporting zone (the zone of the PDF), every minute figure is the payload's own number as h:mm.
++ * The note is shown in full here because the person signs what the note says.
++ */
++export function reviewSheetDay(day: SnapshotDay, zone: string): SheetDay {
++  const weekday = WEEKDAYS[isoWeekday(day.work_date) - 1] ?? '';
++  const check = reviewCheck(day);
++  const noTimes = check?.key === 'missing' && day.sessions.length === 0;
++  const label = sheetLabel({
++    category: day.category,
++    classification: day.day_class === null ? null : { name: day.holiday_name },
++    wfh: day.wfh,
++    leave_minutes: day.leave_minutes,
++    leave_kind: day.leave_kind,
++    entry: null,
++  });
++  return {
++    workDate: day.work_date,
++    weekday,
++    dateText: usShortDate(day.work_date),
++    name: `${weekday} ${day.work_date}`,
++    today: false,
++    nonworking: day.day_class === 'nonworking',
++    label,
++    time: {
++      ranges: day.sessions.map((session) => sessionRange(session, day.work_date, zone)),
++      note: noTimes ? 'no times yet' : breaksNote(day.sessions),
++      attention: check?.key === 'missing' || check?.key === 'confirm_breaks',
++    },
++    ot: reviewOt(day),
++    check,
++    details: { regular: hm(day.calculation?.regular_minutes), offCalendar: hm(day.calculation?.nonworking_minutes) },
++    noteText: day.notes,
++  };
++}
++
++/** The payload's days in Monday to Sunday weeks, as the sheet shows them. */
++export function reviewSheetWeeks(days: readonly SnapshotDay[], zone: string): SheetWeek[] {
++  return weeksOf(days, (day) => reviewSheetDay(day, zone));
++}
+exit=0

@@ -1,0 +1,13 @@
+// Prints the top-aligned (scrollIntoViewIfNeeded) measurement of the Open day button after the date
+// is filled, per size, for the phone probe JSON files given. Usage: node topaligned.mjs <json>...
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+
+for (const file of process.argv.slice(2)) {
+  const data = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`-- ${basename(file)}`);
+  for (const l of data.layouts) {
+    const c = l.button_after_fill_top_aligned;
+    console.log(`  ${l.size.width}x${l.size.height}: top-aligned box=${JSON.stringify(c?.box)} notCovered=${c?.notCovered} hit=${c?.hit}; centred notCovered=${l.button_after_fill?.notCovered} hit=${l.button_after_fill?.hit}`);
+  }
+}

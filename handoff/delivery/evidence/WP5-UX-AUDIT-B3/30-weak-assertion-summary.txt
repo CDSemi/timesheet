@@ -1,0 +1,73 @@
+WP5-UX-AUDIT-B3: do the FIX4 assertions fail on the 589bcff behaviour? (scratch clones in the task folder only)
+V1 = clone at 589bcff + a2ea7a4 tests/e2e/timesheet.spec.ts (the whole 589bcff client; the --date-field-min token is absent there)
+V2 = clone at a2ea7a4 with only the phone 'Open a day' rules put back to 589bcff (tokens kept; mutate-openday.mjs.txt, 30c-…)
+Command per variant: playwright test tests/e2e/timesheet.spec.ts --project=mobile -g 'the Open a day date field shows a full date|the first day row is fully visible above the tab bar' --retries=0
+
+start: 2026-10-09T09:56:10Z
+node: v24.21.0
+v1 clone exit=0
+v1 checkout 589bcff exit=0 HEAD=589bcff5541a603abad696a3303dbea11cccb4a7
+v1 copied a2ea7a4 tests/e2e/timesheet.spec.ts
+v1 git status --short:
+ M tests/e2e/timesheet.spec.ts
+v1 npm ci exit=0
+v1 build exit=0
+v1 e2e exit=1 at 09:56:42Z
+v2 clone exit=0
+v2 checkout a2ea7a4 exit=0 HEAD=a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb
+mutated: 589bcff open-day rules restored; a2ea7a4 tokens kept: true
+v2 mutate exit=0
+ src/client/styles.css | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+v2 git status --short:
+ M src/client/styles.css
+v2 npm ci exit=0
+v2 build exit=0
+v2 e2e exit=1 at 09:57:05Z
+end: 2026-10-09T09:57:05Z
+
+--- V1 result lines ---
+  ok 1 [mobile] › tests\e2e\timesheet.spec.ts:108:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar (845ms)
+  ok 2 [mobile] › tests\e2e\timesheet.spec.ts:116:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown (507ms)
+  x  3 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 390px (577ms)
+  x  4 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 360px (741ms)
+  x  5 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 320px (774ms)
+    Expected: >= 389.5
+    Received:    146.234375
+    Expected: >= 359.5
+    Received:    116.234375
+    Expected: >= 319.5
+    Received:    76.234375
+  3 failed
+  2 passed (14.8s)
+
+--- V2 result lines ---
+  ok 1 [mobile] › tests\e2e\timesheet.spec.ts:108:5 › phone first screen › viewing zone equals the reporting zone › the first day row is fully visible above the tab bar (742ms)
+  ok 2 [mobile] › tests\e2e\timesheet.spec.ts:116:3 › phone first screen › the first day row is fully visible above the tab bar with the zone note shown (504ms)
+  ok 3 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 390px (577ms)
+  x  4 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 360px (533ms)
+  x  5 [mobile] › tests\e2e\timesheet.spec.ts:128:5 › phone first screen › the Open a day date field shows a full date at 320px (691ms)
+    Expected: >= 142
+    Received:    116.234375
+    Expected: >= 142
+    Received:    76.234375
+  2 failed
+  3 passed (9.5s)
+
+--- clip sub-assertion check (input.scrollWidth vs clientWidth) on the behaviour that visibly clips (PC1 probe, value 2026-10-09) ---
+a2ea7a4	2026-10-09@390	146.2	142.5	true	388.4	144/144	153	scroll 390/390
+a2ea7a4	2026-10-09@375	235	142.5	false	440.4	233/233	153	scroll 375/375
+a2ea7a4	2026-10-09@360	220	142.5	false	440.4	218/218	153	scroll 360/360
+a2ea7a4	2026-10-09@344	204	142.5	false	463.2	202/202	153	scroll 344/344
+a2ea7a4	2026-10-09@320	180	142.5	false	480.6	178/178	153	scroll 320/320
+589bcff	2026-10-09@390	146.2	390	true	388.4	144/144	153	scroll 390/390
+589bcff	2026-10-09@375	131.2	375	true	388.4	129/129	153	scroll 375/375
+589bcff	2026-10-09@360	116.2	360	true	388.4	114/114	153	scroll 360/360
+589bcff	2026-10-09@344	100.2	344	true	411.2	98/98	153	scroll 344/344
+589bcff	2026-10-09@320	76.2	320	true	428.6	74/74	153	scroll 320/320
+v2mut	2026-10-09@390	146.2	142.5	true	388.4	144/144	153	scroll 390/390
+v2mut	2026-10-09@375	131.2	142.5	true	388.4	129/129	153	scroll 375/375
+v2mut	2026-10-09@360	116.2	142.5	true	388.4	114/114	153	scroll 360/360
+v2mut	2026-10-09@344	100.2	142.5	true	411.2	98/98	153	scroll 344/344
+v2mut	2026-10-09@320	76.2	142.5	true	428.6	74/74	153	scroll 320/320
+Reading: at 589bcff 360/320px the value is visibly clipped (589bcff-pc1-open-day-value-w360-synthetic.png) yet scrollWidth equals clientWidth (114/114, 74/74), so 'the date value is not clipped' cannot fail for a Chromium date input; the width assertion carries the check (V2: 390 passes, 360 and 320 fail).

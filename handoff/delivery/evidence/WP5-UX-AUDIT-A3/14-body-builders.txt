@@ -1,0 +1,32 @@
+$ node body-builders.mjs <task>/export014 <task>/export 014bd47 a2ea7a4
+buildSessionRequest (src/client/components/sessionModel.ts): IDENTICAL (13 -> 13 lines)
+buildClockOutRequest (src/client/components/sessionModel.ts): IDENTICAL (9 -> 9 lines)
+buildDayEntryRequest (src/client/components/sessionModel.ts): DIFFERENT (18 -> 16 lines)
+   -   const text = draft.leaveMinutes.trim();
+   -   const minutes = text === '' ? 0 : Number(text);
+   -   if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+   -     return { ok: false, message: 'Enter leave as whole minutes from 0 to 1440.' };
+   +   const parsed = parseLeaveInput(draft.leave);
+   +   if (!parsed.ok) return { ok: false, message: parsed.message };
+   +   const minutes = parsed.minutes;
+batchEntries (src/client/components/dayModel.ts): IDENTICAL (5 -> 5 lines)
+modeEndpoint (src/client/components/reviewModel.ts): IDENTICAL (5 -> 5 lines)
+buildSubmitBody (src/client/components/reviewModel.ts): IDENTICAL (18 -> 18 lines)
+quickBreaksRequest (src/client/components/dayEditorModel.ts): 014bd47 absent, a2ea7a4 present
+labelEntry (src/client/components/labelPickerModel.ts): 014bd47 absent, a2ea7a4 present
+parseLeaveInput (src/client/components/leaveInputModel.ts): 014bd47 absent, a2ea7a4 present
+api (src/client/api.ts): IDENTICAL (14 -> 14 lines)
+--- a2ea7a4 src/client/components/dayEditorModel.ts quickBreaksRequest
+export function quickBreaksRequest(session: Session, quick: QuickBreaks, choice: 'confirm' | 'none', reason: string): SessionRequest {
+  const draft = draftFromSession(session);
+  const confirmed = choice === 'confirm' ? { breaks: quick.rows, mode: 'confirmed' as const } : { breaks: [], mode: 'none' as const };
+  return buildSessionRequest({ ...draft, ...confirmed }, { expectedVersion: session.version, reason });
+}
+--- a2ea7a4 src/client/components/labelPickerModel.ts labelEntry
+export function labelEntry(day: DayView, choice: LabelChoice): DayBatchEntry {
+  const base = { work_date: day.work_date, expected_version: day.entry?.version ?? null };
+  if (choice === WORK_FROM_HOME) return { ...base, category: 'Worked', wfh: true };
+  if (choice === 'Worked') return { ...base, category: 'Worked', wfh: false };
+  return { ...base, category: choice };
+}
+exit=0

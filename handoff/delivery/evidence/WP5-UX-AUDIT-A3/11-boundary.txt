@@ -1,0 +1,44 @@
+$ git diff --stat 014bd47..a2ea7a4 -- src/server src/domain
+ src/domain/format.ts | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+exit=0
+$ git diff 014bd47..a2ea7a4 -- src/domain
+diff --git a/src/domain/format.ts b/src/domain/format.ts
+index c617331..018c98d 100644
+--- a/src/domain/format.ts
++++ b/src/domain/format.ts
+@@ -6,3 +6,16 @@ export function formatDuration(minutes: number): string {
+   const rest = total % 60;
+   return hours === 0 ? `${sign}${rest}m` : `${sign}${hours}h ${String(rest).padStart(2, '0')}m`;
+ }
++
++/**
++ * Whole minutes as `h:mm`, the form the timesheet PDF prints (90 -> "1:30", 5 -> "0:05"). Display
++ * only: it formats a value the server computed and computes none. For every whole, non-negative
++ * minute count the text equals the PDF's `formatHoursMinutes`; a negative value (the sheet never
++ * receives one) keeps its sign as `formatDuration` does, and a fraction is truncated, so a
++ * screen never fails on an unexpected value.
++ */
++export function formatHoursMinutes(minutes: number): string {
++  const sign = minutes < 0 ? '−' : '';
++  const total = Math.abs(Math.trunc(minutes));
++  return `${sign}${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
++}
+$ git diff --stat 014bd47..a2ea7a4 -- src/client/api.ts (empty = unchanged)
+exit=0
+$ git diff --stat 014bd47..a2ea7a4 -- src/server/pdf tests/e2e/pdf-visual.spec.ts (empty = unchanged)
+exit=0
+$ git diff --stat 589bcff..a2ea7a4 -- src/server src/domain src/client/api.ts src/client --  (only client files touched by FIX4)
+ src/client/DayEditor.tsx |  2 +-
+ src/client/styles.css    | 18 +++++++++---------
+ 2 files changed, 10 insertions(+), 10 deletions(-)
+exit=0
+$ git diff --numstat 589bcff..a2ea7a4 -- tests (added deleted path)
+27	0	tests/e2e/timesheet.spec.ts
+$ git diff --numstat 589bcff..a2ea7a4 -- src docs
+1	1	docs/04_UX_AND_SETTINGS.md
+1	1	docs/04_UX_AND_SETTINGS.vi.md
+1	1	src/client/DayEditor.tsx
+9	9	src/client/styles.css
+$ git diff --stat 589bcff..a2ea7a4 -- package.json package-lock.json vite.config.ts vitest.config.ts playwright.config.ts tsconfig*.json eslint.config.js scripts (empty = unchanged)
+exit=0

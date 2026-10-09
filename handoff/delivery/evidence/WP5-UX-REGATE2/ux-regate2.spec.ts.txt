@@ -1,0 +1,237 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE probe (scratch only, never committed): direct observation of A-01, B-01, B-02, B-04,
+ * the phone tab order, tap targets and overflow, and the synthetic screenshots.
+ */
+const OUT = process.env.UXREGATE_OUT ?? '';
+
+function note(tag: string, line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, `obs-${tag}.txt`), `${line}\n`);
+}
+
+interface Small {
+  name: string;
+  w: number;
+  h: number;
+}
+
+async function targetsOf(page: Page): Promise<{ count: number; small: Small[]; scroll: number; inner: number }> {
+  return page.evaluate(() => {
+    const sel = 'button, a[href], select, input:not([type="checkbox"]):not([type="hidden"]), label.pick, label.inline, [role="button"], [role="tab"]';
+    const small: Array<{ name: string; w: number; h: number }> = [];
+    let count = 0;
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (r.width === 0 || r.height === 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+      count += 1;
+      if (r.width < 44 || r.height < 44) {
+        small.push({ name: (el.textContent ?? '').trim().slice(0, 30) || el.getAttribute('aria-label') || el.tagName, w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    }
+    return { count, small, scroll: document.documentElement.scrollWidth, inner: window.innerWidth };
+  });
+}
+
+function hiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boolean; name: string }> {
+  return page.evaluate(`(() => {
+    const active = document.activeElement;
+    const panel = document.querySelector('dialog[open]');
+    if (active === null || active === document.body || panel === null) return { hidden: false, outside: false, name: '' };
+    const name = active.tagName + ' ' + (active.getAttribute('aria-label') ?? (active.textContent ?? '').slice(0, 30));
+    if (panel.contains(active)) return { hidden: false, outside: false, name };
+    const a = active.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    const hidden = a.left >= p.left && a.right <= p.right && a.top >= p.top && a.bottom <= p.bottom;
+    return { hidden, outside: true, name };
+  })()`);
+}
+
+test('ux regate: direct observation of the fixed findings', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(180_000);
+  const phone = testInfo.project.name === 'mobile';
+  const tag = phone ? 'phone' : 'desktop';
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer' });
+  const days = await person.api.displayedPeriodFreeWorkdays();
+  expect(days.length).toBeGreaterThanOrEqual(6);
+  const [d1 = '', d2 = '', d3 = '', d4 = '', d5 = '', d6 = ''] = days;
+  await person.api.seedCompleteDay(d1);
+  await person.api.seedCompleteDay(d2);
+  await person.api.seedCompleteDay(d3);
+  await person.api.seedUnconfirmedBreaksDay(d4);
+
+  const puts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/days/')) puts.push(`${new URL(request.url()).pathname} ${request.postData() ?? ''}`);
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.waitForTimeout(400);
+
+  // Timesheet screenshots (the phone one is the first screen at 390x844, scrollY 0).
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.screenshot({ path: screenshotPath(`timesheet-${tag}-light-synthetic.png`), animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: screenshotPath(`timesheet-${tag}-dark-synthetic.png`), animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'light' });
+
+  // B-01: first day row against the tab bar (phone).
+  const viewport = page.viewportSize();
+  note(tag, `viewport ${JSON.stringify(viewport)} scrollY=${await page.evaluate('window.scrollY')}`);
+  if (phone) {
+    const tabs = await page.locator('.shell-tabs').boundingBox();
+    const row = await page.locator('[data-day]').first().boundingBox();
+    const rowBottom = (row?.y ?? 0) + (row?.height ?? 0);
+    note(tag, `B-01 first [data-day] row top=${row?.y} bottom=${rowBottom} ; tab bar top=${tabs?.y} ; bottom<=top: ${rowBottom <= (tabs?.y ?? 0) + 0.5}`);
+    expect(rowBottom).toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+  }
+
+  // Tab order of the period card: previous, next, review (all projects), with visual positions.
+  {
+    const bar = page.locator('.period-bar');
+    const previous = bar.getByRole('button', { name: 'Previous period' });
+    const next = bar.getByRole('button', { name: 'Next period' });
+    const review = bar.locator('[data-review-link]');
+    await previous.focus();
+    await page.keyboard.press('Tab');
+    const second = await next.evaluate((el) => el === document.activeElement);
+    await page.keyboard.press('Tab');
+    const third = await review.evaluate((el) => el === document.activeElement);
+    const pb = await previous.boundingBox();
+    const nb = await next.boundingBox();
+    const rb = await review.boundingBox();
+    note(tag, `tab order: previous -> next focused=${second}; next -> review focused=${third}; boxes prev(x=${pb?.x},y=${pb?.y}) next(x=${nb?.x},y=${nb?.y}) review(x=${rb?.x},y=${rb?.y})`);
+    expect(second).toBe(true);
+    expect(third).toBe(true);
+  }
+
+  // B-04: Check words and batch category in the built UI.
+  const freeRow = await page.locator(`[data-day="${d6}"]`).innerText();
+  const unseeded = await page.locator(`[data-day="${d5}"]`).innerText();
+  note(tag, `B-04 Check text of an unseeded workday ${d5}: ${JSON.stringify(unseeded)}`);
+  note(tag, `B-04 Check text of another unseeded workday ${d6}: ${JSON.stringify(freeRow)}`);
+  const t0 = await targetsOf(page);
+  note(tag, `timesheet ${tag}: controls=${t0.count} below44=${t0.small.length} scrollWidth=${t0.scroll} innerWidth=${t0.inner} ${JSON.stringify(t0.small)}`);
+
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByLabel(`Select ${d1}`).check();
+  await page.getByLabel(`Select ${d2}`).check();
+  await expect(page.getByText('2 days selected')).toBeVisible();
+  const categoryLabelCount = await page.getByLabel('Category for selected days').count();
+  note(tag, `B-04 control labelled "Category for selected days" count=${categoryLabelCount}; "Preview changes" button count=${await page.getByRole('button', { name: 'Preview changes' }).count()}`);
+  expect(categoryLabelCount).toBeGreaterThan(0);
+  await page.evaluate('window.scrollTo(0, 0)');
+  if (phone) await page.screenshot({ path: screenshotPath('batch-phone-synthetic.png'), animations: 'disabled' });
+  const t2 = await targetsOf(page);
+  note(tag, `batch ${tag}: controls=${t2.count} below44=${t2.small.length} scrollWidth=${t2.scroll} innerWidth=${t2.inner} ${JSON.stringify(t2.small)}`);
+  await page.getByRole('button', { name: 'Done' }).click();
+
+  // A-01: malformed leave input in the day editor.
+  await page.getByLabel('Open a day').fill(d5);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const fields = editor.getByRole('form', { name: 'Day fields' });
+  const hours = fields.getByLabel('Leave hours');
+  const minutes = fields.getByLabel('Leave minutes');
+  const save = fields.getByRole('button', { name: 'Save day fields' });
+  await fields.getByLabel('Leave kind').selectOption('vacation');
+  if (phone) await page.screenshot({ path: screenshotPath('editor-sheet-phone-synthetic.png'), animations: 'disabled' });
+  else await page.screenshot({ path: screenshotPath('editor-panel-desktop-synthetic.png'), animations: 'disabled' });
+  const t1 = await targetsOf(page);
+  note(tag, `editor ${tag}: controls=${t1.count} below44=${t1.small.length} scrollWidth=${t1.scroll} innerWidth=${t1.inner} ${JSON.stringify(t1.small)}`);
+
+  const cases: Array<[string, string, string]> = [['2-', '30', 'hours "2-" with minutes 30'], ['4', '3-', 'hours 4 with minutes "3-"']];
+  for (const [h, m, label] of cases) {
+    const before = puts.length;
+    await hours.fill('');
+    await minutes.fill('');
+    if (h.endsWith('-')) await hours.pressSequentially(h);
+    else await hours.fill(h);
+    if (m.endsWith('-')) await minutes.pressSequentially(m);
+    else await minutes.fill(m);
+    await save.click();
+    const alert = fields.getByRole('alert');
+    await expect(alert).toHaveCount(1);
+    const text = (await alert.innerText()).trim();
+    const role = await alert.getAttribute('role');
+    const live = await alert.getAttribute('aria-live');
+    const invalid = [await hours.getAttribute('aria-invalid'), await minutes.getAttribute('aria-invalid')];
+    const sent = puts.length - before;
+    const stored = await person.api.dayView(d5);
+    note(tag, `A-01 ${label}: alert visible=${await alert.isVisible()} role=${role} aria-live=${live} text=${JSON.stringify(text)} aria-invalid(hours,minutes)=${JSON.stringify(invalid)} PUT sent=${sent} stored leave_minutes=${stored.leave_minutes}`);
+    expect(sent).toBe(0);
+    expect(stored.leave_minutes).toBe(0);
+  }
+  await hours.fill('2');
+  await minutes.fill('30');
+  await save.click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  note(tag, `A-01 valid 2 h 30 m: PUT bodies ${JSON.stringify(puts.slice(-1))} stored leave_minutes=${(await person.api.dayView(d5)).leave_minutes}`);
+  expect((await person.api.dayView(d5)).leave_minutes).toBe(150);
+  await hours.fill('');
+  await minutes.fill('');
+  await save.click();
+  await expect.poll(() => puts.length).toBeGreaterThanOrEqual(2);
+  note(tag, `A-01 empty fields: PUT body ${JSON.stringify(puts.slice(-1))} stored leave_minutes=${(await person.api.dayView(d5)).leave_minutes}`);
+  expect((await person.api.dayView(d5)).leave_minutes).toBe(0);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+
+  // B-02 (desktop project only): 768, 1024, 1280.
+  if (!phone) {
+    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+    for (const width of [1024, 768, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.evaluate('window.scrollTo(0, 0)');
+      await dayButton(d1).click();
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+      const modal = await editor.evaluate((el) => el.matches(':modal'));
+      const box = await editor.boundingBox();
+      const sheetBox = await page.locator('[data-day]').first().boundingBox();
+      const inert = await page.evaluate(() => Array.from(document.querySelectorAll('[inert]')).map((el) => el.tagName + '.' + el.className));
+      if (width === 1024) await page.screenshot({ path: screenshotPath('editor-w1024-synthetic.png'), animations: 'disabled' });
+      let hiddenCount = 0;
+      let outsideFocus = 0;
+      for (const key of ['Tab', 'Shift+Tab']) {
+        for (let step = 0; step < 70; step += 1) {
+          await page.keyboard.press(key);
+          const state = await hiddenByPanel(page);
+          if (state.hidden) hiddenCount += 1;
+          if (state.outside) outsideFocus += 1;
+        }
+      }
+      await dayButton(d2).focus();
+      const activeAfterFocus = await page.evaluate(() => (document.activeElement ? document.activeElement.tagName + ' ' + (document.activeElement.getAttribute('aria-label') ?? '') : 'none'));
+      await page.keyboard.press('Escape');
+      const closed = (await editor.count()) === 0;
+      const returned = await dayButton(d1).evaluate((el) => el === document.activeElement);
+      note(tag, `B-02 width=${width}: panel :modal=${modal} panel box=${JSON.stringify(box)} first sheet row box=${JSON.stringify(sheetBox)} inert elements=${JSON.stringify(inert)} ; 140 Tab/Shift+Tab presses: focus entirely under panel=${hiddenCount}, focus outside panel=${outsideFocus} ; focus() on another day button -> active=${JSON.stringify(activeAfterFocus)} ; Escape closed=${closed} focus returned to the day's button=${returned}`);
+      expect(hiddenCount).toBe(0);
+      expect(closed).toBe(true);
+      expect(returned).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
+
+  // Review.
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: screenshotPath(`review-${tag}-synthetic.png`), animations: 'disabled' });
+  const t3 = await targetsOf(page);
+  note(tag, `review ${tag}: controls=${t3.count} below44=${t3.small.length} scrollWidth=${t3.scroll} innerWidth=${t3.inner} ${JSON.stringify(t3.small)}`);
+  if (phone) for (const t of [t0, t1, t2, t3]) expect(t.scroll).toBeLessThanOrEqual(t.inner);
+});

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Copies masked LF logs of WP5-UX-FIX5 into the evidence folder.
+source /d/.claude-tmp/timesheet/WP5-UX-FIX5/env.sh
+E="$R/handoff/delivery/evidence/WP5-UX-FIX5"
+mkdir -p "$E"
+m() { node "$T/mask.mjs" "$T/$1" "$E/$2"; }
+m 00-base.txt 00-base-node-head-digest.txt
+m 02-repro-base.raw.txt 02-repro-B3-01-failing-at-base.txt
+m 03-fixed-targeted.raw.txt 03-fixed-targeted-desktop.txt
+m checks-summary.txt 04-checks-summary.txt
+m typecheck.raw.txt 04a-typecheck.txt
+m lint.raw.txt 04b-lint.txt
+m test.raw.txt 04c-npm-test.txt
+m e2e.raw.txt 04d-e2e-full.txt
+m counts.txt 04e-counts.txt
+m probe/selfcheck.txt 05-selfcheck-resize-desktop.txt
+m probe/probe.txt 05a-probe-phone-measurements.txt
+m probe-run5.txt 05b-probe-run-measure-new-tokens.txt
+m probe-run7.txt 05c-probe-run-o5-mutation.txt
+m probe-run8.txt 05d-probe-run-selfcheck.txt
+m fix5-probe.spec.ts.txt 05e-fix5-probe.spec.ts.txt
+m docs-parity.raw.txt 06-docs-parity.txt
+m preflight.raw.txt 06a-preflight.txt
+m mask.mjs mask.mjs.txt
+m run-checks.sh run-checks.sh.txt
+m env.sh env.sh.txt
+m copy-evidence.sh copy-evidence.sh.txt
+cp "$T/e2e-screens/fix5-review-on-top-w1024-synthetic.png" "$E/fix5-review-on-top-w1024-synthetic.png"
+cp "$T/probe/note-w375-synthetic.png" "$E/fix5-open-day-w375-zone-note-synthetic.png"
+cp "$T/probe/note-w320-synthetic.png" "$E/fix5-open-day-w320-zone-note-synthetic.png"
+cp "$T/probe/o5mut-w320-synthetic.png" "$E/fix5-o5-mutation-clipped-w320-synthetic.png"
+ls -la "$E" > "$T/evidence-list.txt"

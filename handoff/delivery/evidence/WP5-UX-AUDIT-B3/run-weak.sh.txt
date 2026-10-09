@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B3: does the FIX4 assertion fail on the 589bcff behaviour? (scratch clones in the task folder only)
+# V1: clone at 589bcff with the a2ea7a4 timesheet.spec.ts copied over it (the whole 589bcff client).
+# V2: clone at a2ea7a4 with only the phone "Open a day" rules put back to 589bcff (tokens kept).
+# Each: npm ci, build, then the three B2-01 tests plus the two B-01 tests, mobile project, no retries.
+source <task>/env.sh
+S="$T/weak-summary.txt"
+{
+  echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "node: $("$N24" --version)"
+} > "$S"
+GREP='the Open a day date field shows a full date|the first day row is fully visible above the tab bar'
+for variant in v1 v2; do
+  C="$T/clone-$variant"
+  if [ ! -d "$C/.git" ]; then
+    git clone --no-hardlinks <project> "$C" > "$T/clone-$variant.log" 2>&1
+    echo "$variant clone exit=$?" >> "$S"
+  fi
+  cd "$C" || exit 9
+  if [ "$variant" = v1 ]; then
+    git checkout --detach 589bcff5541a603abad696a3303dbea11cccb4a7 >> "$T/clone-$variant.log" 2>&1
+    echo "$variant checkout 589bcff exit=$? HEAD=$(git rev-parse HEAD)" >> "$S"
+    git show a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb:tests/e2e/timesheet.spec.ts > tests/e2e/timesheet.spec.ts
+    echo "$variant copied a2ea7a4 tests/e2e/timesheet.spec.ts" >> "$S"
+  else
+    git checkout --detach a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb >> "$T/clone-$variant.log" 2>&1
+    echo "$variant checkout a2ea7a4 exit=$? HEAD=$(git rev-parse HEAD)" >> "$S"
+    "$N24" "$T/mutate-openday.mjs" src/client/styles.css >> "$S" 2>&1
+    echo "$variant mutate exit=$?" >> "$S"
+    git diff --stat >> "$S"
+    git diff > "$T/weak-v2-mutation.diff.txt"
+  fi
+  echo "$variant git status --short:" >> "$S"
+  git status --short >> "$S"
+  npmr ci > "$T/weak-$variant-npm-ci.txt" 2>&1
+  echo "$variant npm ci exit=$?" >> "$S"
+  npmr run build > "$T/weak-$variant-build.txt" 2>&1
+  echo "$variant build exit=$?" >> "$S"
+  export E2E_SCREENSHOT_DIR="$T/e2e-screens-$variant"
+  mkdir -p "$E2E_SCREENSHOT_DIR"
+  "$N24" node_modules/@playwright/test/cli.js test tests/e2e/timesheet.spec.ts --project=mobile -g "$GREP" --retries=0 > "$T/weak-$variant-e2e.txt" 2>&1
+  echo "$variant e2e exit=$? at $(date -u +%H:%M:%SZ)" >> "$S"
+done
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

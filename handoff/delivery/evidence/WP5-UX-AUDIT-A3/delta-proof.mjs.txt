@@ -1,0 +1,131 @@
+// WP5-UX-AUDIT-A3 delta proof for FIX4 (589bcff..a2ea7a4), run from the task folder:
+//   node delta-proof.mjs <task-folder>
+// 1. DayEditor.tsx: the two versions compile to the same JavaScript once comments are removed, and
+//    their TypeScript token streams without comments are identical (comment-only change).
+// 2. styles.css: every rule of both versions (with its @media context) is listed; the rules that
+//    differ are printed with their declarations, and their properties are checked against the set of
+//    properties that can hide, move, clip or block a control.
+// 3. tests: every line of the 589bcff spec is still present, in order, in the a2ea7a4 spec (pure
+//    insertion), and the expect( count per changed spec only grows.
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
+const task = process.argv[2];
+const require = createRequire(join(task, 'export', 'package.json'));
+const ts = require('typescript');
+const read = (name) => readFileSync(join(task, 'delta', name), 'utf8');
+
+console.log(`typescript ${ts.version}`);
+console.log('== 1. DayEditor.tsx 589bcff vs a2ea7a4');
+const before = read('DayEditor-589bcff.tsx');
+const after = read('DayEditor-a2ea7a4.tsx');
+const options = { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX, removeComments: true } };
+const jsBefore = ts.transpileModule(before, options).outputText;
+const jsAfter = ts.transpileModule(after, options).outputText;
+console.log(`source bytes ${before.length} -> ${after.length}; emitted JS bytes ${jsBefore.length} -> ${jsAfter.length}`);
+console.log(`emitted JavaScript without comments identical: ${jsBefore === jsAfter}`);
+function tokens(text) {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.JSX, text);
+  const list = [];
+  let comments = 0;
+  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    if (kind === ts.SyntaxKind.SingleLineCommentTrivia || kind === ts.SyntaxKind.MultiLineCommentTrivia) {
+      comments += 1;
+      continue;
+    }
+    list.push(`${kind}:${scanner.getTokenText()}`);
+  }
+  return { list, comments };
+}
+const tb = tokens(before);
+const ta = tokens(after);
+console.log(`non-comment tokens (scanner, trivia skipped) ${tb.list.length} -> ${ta.list.length}; identical: ${JSON.stringify(tb.list) === JSON.stringify(ta.list)}`);
+const linesBefore = before.split('\n');
+const linesAfter = after.split('\n');
+const changed = [];
+for (let i = 0; i < Math.max(linesBefore.length, linesAfter.length); i += 1) {
+  if (linesBefore[i] !== linesAfter[i]) changed.push({ line: i + 1, before: linesBefore[i], after: linesAfter[i] });
+}
+console.log(`lines ${linesBefore.length} -> ${linesAfter.length}; changed lines: ${changed.length}`);
+for (const c of changed) {
+  console.log(`  line ${c.line} before: ${c.before}`);
+  console.log(`  line ${c.line} after:  ${c.after}`);
+  console.log(`  both lines are // comments: ${/^\s*\/\//.test(c.before ?? '') && /^\s*\/\//.test(c.after ?? '')}`);
+}
+
+console.log('\n== 2. styles.css 589bcff vs a2ea7a4');
+function rules(css) {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const out = [];
+  const stack = [];
+  let buffer = '';
+  for (const ch of text) {
+    if (ch === '{') {
+      stack.push(buffer.trim().replace(/\s+/g, ' '));
+      buffer = '';
+    } else if (ch === '}') {
+      const selector = stack.pop();
+      if (buffer.trim() !== '' || !selector.startsWith('@')) {
+        const decls = buffer
+          .split(';')
+          .map((d) => d.trim().replace(/\s+/g, ' '))
+          .filter((d) => d !== '');
+        out.push({ context: stack.filter((s) => s.startsWith('@')).join(' / ') || '(top)', selector, decls });
+      }
+      buffer = '';
+    } else buffer += ch;
+  }
+  return out;
+}
+const rb = rules(read('styles-589bcff.css'));
+const ra = rules(read('styles-a2ea7a4.css'));
+const key = (r) => `${r.context} | ${r.selector} | ${r.decls.join('; ')}`;
+const setB = new Map();
+for (const r of rb) setB.set(key(r), (setB.get(key(r)) ?? 0) + 1);
+const setA = new Map();
+for (const r of ra) setA.set(key(r), (setA.get(key(r)) ?? 0) + 1);
+console.log(`rule blocks ${rb.length} -> ${ra.length}`);
+const removed = rb.filter((r) => (setA.get(key(r)) ?? 0) < (setB.get(key(r)) ?? 0));
+const added = ra.filter((r) => (setB.get(key(r)) ?? 0) < (setA.get(key(r)) ?? 0));
+const uniq = (list) => [...new Map(list.map((r) => [key(r), r])).values()];
+console.log('-- rule blocks only in 589bcff (removed or changed):');
+for (const r of uniq(removed)) console.log(`  [${r.context}] ${r.selector} { ${r.decls.join('; ')} }`);
+console.log('-- rule blocks only in a2ea7a4 (added or changed):');
+for (const r of uniq(added)) console.log(`  [${r.context}] ${r.selector} { ${r.decls.join('; ')} }`);
+const selectors = new Set([...removed, ...added].map((r) => r.selector));
+console.log(`-- selectors touched: ${[...selectors].join(' , ')}`);
+const contexts = new Set([...removed, ...added].map((r) => r.context));
+console.log(`-- @media contexts touched: ${[...contexts].join(' , ')}`);
+const declsOf = (list, selector) => new Set(list.filter((r) => r.selector === selector).flatMap((r) => r.decls));
+const HIDING = /^(display|visibility|opacity|position|inset|top|right|bottom|left|overflow|overflow-x|overflow-y|clip|clip-path|mask|height|max-height|max-width|z-index|pointer-events|order|transform|translate|scale|content|content-visibility|font-size|color|background|inert|user-select|touch-action|appearance)\s*:/;
+for (const selector of selectors) {
+  const b = declsOf(rb, selector);
+  const a = declsOf(ra, selector);
+  const gone = [...b].filter((d) => !a.has(d));
+  const fresh = [...a].filter((d) => !b.has(d));
+  console.log(`  ${selector}: declarations removed [${gone.join('; ')}] added [${fresh.join('; ')}]`);
+  const risky = [...gone, ...fresh].filter((d) => HIDING.test(d));
+  console.log(`    hide/move/clip/block properties among the changes: ${risky.length === 0 ? 'none' : risky.join('; ')}`);
+}
+const rootB = declsOf(rb, ':root');
+const rootA = declsOf(ra, ':root');
+console.log(`-- :root custom properties added: ${[...rootA].filter((d) => !rootB.has(d)).join('; ') || 'none'}; removed: ${[...rootB].filter((d) => !rootA.has(d)).join('; ') || 'none'}`);
+const tokenUse = (css, name) => (css.match(new RegExp(`var\\(${name}\\)`, 'g')) ?? []).length;
+for (const name of ['--date-field-min', '--open-day-label-min']) console.log(`   uses of var(${name}) in a2ea7a4: ${tokenUse(read('styles-a2ea7a4.css'), name)}`);
+
+console.log('\n== 3. tests/e2e/timesheet.spec.ts 589bcff vs a2ea7a4');
+const sb = read('timesheet-589bcff.spec.ts').split('\n');
+const sa = read('timesheet-a2ea7a4.spec.ts').split('\n');
+let j = 0;
+let kept = 0;
+for (const line of sb) {
+  while (j < sa.length && sa[j] !== line) j += 1;
+  if (j < sa.length) {
+    kept += 1;
+    j += 1;
+  }
+}
+console.log(`589bcff lines ${sb.length}, kept in order in a2ea7a4: ${kept} (pure insertion: ${kept === sb.length}); a2ea7a4 lines ${sa.length}`);
+const count = (lines, re) => lines.filter((l) => re.test(l)).length;
+console.log(`expect( lines ${count(sb, /expect\(/)} -> ${count(sa, /expect\(/)}; test( lines ${count(sb, /\btest\(/)} -> ${count(sa, /\btest\(/)}; .skip/.fixme/.only lines ${count(sb, /\.(skip|fixme|only)\(/)} -> ${count(sa, /\.(skip|fixme|only)\(/)}`);

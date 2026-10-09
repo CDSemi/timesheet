@@ -135,4 +135,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 589bcff5541a603abad696a3303dbea11cccb4a7 (= origin/main); post-HEAD and commit
+  a2ea7a48ca7dbb275f5d1f7c3a3003b1658080cb; pushed yes; remote SHA the same.
+- Digests: working tree and HEAD ls-tree both 0b8428fdbfc40598ba0c468486b4aa62367434727709ce62461a8984f130b77d.
+- Nothing was staged beforehand. All 5 non-handoff paths were changed (modified).
+- Staged 246 files; evidence counts: REGATE 65, AUDIT-A2 73, AUDIT-B2 75, FIX4 13,
+  FIX3-FREEZE 2. PNGs (all synthetic): REGATE 10, AUDIT-A2 2, AUDIT-B2 8, FIX4 3.
+- Checks (exit): node v24.21.0 (0); digest (0); git add (0); precommit PASS 246 files (0);
+  diff --cached --check (0); JSON parse (0); validate_orchestration PASS (0);
+  check_recovery PASS 106 probes (0); validate_package --preflight PASS (0).
+- No fix applied; no stop. Evidence: evidence/WP5-UX-FIX4-FREEZE/checks.txt.
