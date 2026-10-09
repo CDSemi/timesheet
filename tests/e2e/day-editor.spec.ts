@@ -480,6 +480,11 @@ test('Clock in then Clock out asks for break confirmation and sends the session 
   await signInThroughUi();
   await clockIn(page, employeeSeed, todayLocal);
 
+  // One state-aware button: clocked in shows only Clock out, with the running state in words.
+  await expect(page.getByRole('button', { name: 'Clock out' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clock in' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Clock' })).toContainText('Clocked in since');
+  await page.screenshot({ path: screenshotPath(`period-${project}-clocked-in-synthetic.png`), animations: 'disabled' });
   await page.getByRole('button', { name: 'Clock out' }).click();
   const dialog = page.getByRole('dialog', { name: 'Clock out' });
   await expect(dialog).toBeVisible();
@@ -501,6 +506,9 @@ test('Clock in then Clock out asks for break confirmation and sends the session 
   await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText('Clocked out.')).toBeVisible();
+  // After the clock out the panel offers Clock in again.
+  await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clock out' })).toHaveCount(0);
   const closed = (await employeeSeed.dayView(todayLocal)).sessions.filter((session) => session.source === 'clock').at(-1);
   expect(closed?.end_utc).not.toBeNull();
   expect(closed?.breaks_confirmed).toBe(true);

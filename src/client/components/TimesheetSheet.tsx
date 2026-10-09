@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import type { FinalizationResponse, TimesheetView } from '../api.ts';
-import type { GridStatus } from './deliveryModel.ts';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
 import { usDate } from './format.ts';
 import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
@@ -16,7 +14,6 @@ import {
   signatureLines,
 } from './sheetModel.ts';
 import { type DayActions, dayClass, dayVerb, openOnClick, SelectBox, SheetWeekTable } from './SheetWeekTable.tsx';
-import { SubmissionStatusLine } from './SubmissionStatus.tsx';
 
 /** A cell's row name for screen readers; the visual row-label column is hidden from them. */
 function RowName({ name }: { name: string }) {
@@ -199,7 +196,7 @@ export function TimesheetSheet({
   todayLocal,
   desktop,
   actions,
-  status,
+  details,
   finalization,
   signatures,
 }: {
@@ -210,14 +207,13 @@ export function TimesheetSheet({
   todayLocal: string | null;
   desktop: boolean;
   actions: DayActions;
-  /** The period's review and delivery status (own, not imported); null hides the line. */
-  status: GridStatus | null;
+  /** "Show details" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows. */
+  details: boolean;
   /** The period's finalization state for the signature lines; null while loading. */
   finalization: FinalizationResponse | null;
   /** False in a shared view and for an imported period: the signature lines and the review link are the owner's. */
   signatures: boolean;
 }) {
-  const [details, setDetails] = useState(false);
   const weeks = sheetWeeks(view.days, zone, todayLocal);
   const total = overtimeTotal(view.totals);
   const { period } = view;
@@ -245,13 +241,6 @@ export function TimesheetSheet({
           </div>
         </dl>
       </header>
-
-      <div className="sheet-tools">
-        <SubmissionStatusLine status={status} />
-        <button type="button" className="secondary sheet-toggle" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
-          Show details
-        </button>
-      </div>
 
       {weeks.map((week) =>
         desktop ? (

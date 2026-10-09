@@ -49,9 +49,16 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   exit 0; digest probe 1789a8be (781 file) vì `npm run digest` exit 1 khi việc xóa file
   chưa được stage (ghi trong backlog). Để gate xem: thanh trên cùng của điện thoại xuất
   hiện giữa ảnh chụp nguyên trang.
-- Đang chạy: WP5-UX-T02-FREEZE (committer; tính digest sau khi stage) trên gốc 3224474.
-- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T03 (thanh
-  kỳ lương, nút chấm công, chế độ sửa nhiều ngày; worker, sonnet).
+- WP5-UX-T02-FREEZE xong: 5edc548 trên main, đã push (41 file, digest 1789a8be sau khi
+  stage và trên HEAD, mọi kiểm tra exit 0).
+- T03 xong: PeriodBar, ClockPanel, periodBarModel (chấp nhận dù nằm ngoài owned paths đã
+  liệt kê), chế độ sửa nhiều ngày; unit 1790 (lần đầu một worker vitest crash native,
+  chạy lại sạch: cần theo dõi ở gate); toàn bộ e2e exit 0 (desktop 72/0/3, mobile
+  73/0/2); verify exit 0; digest probe 80bffa7e (783 file). Lần thứ sáu lỡ dùng heredoc
+  rỗng, không ảnh hưởng.
+- Đang chạy: WP5-UX-T03-FREEZE (committer; digest sau khi stage) trên gốc 5edc548.
+- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T04 (panel
+  sửa ngày và bottom sheet; worker-high, opus, novelty).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

@@ -81,8 +81,22 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(page.locator('.facts')).toContainText(reportingZone);
   await expect(page.locator('.facts')).toContainText(displayZone);
   await expect(page.getByText(`Due, your time (${displayZone})`)).toBeVisible();
-  await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
+  // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
+  await expect(page.locator('[data-zone-note]')).toBeVisible();
+  const dueIso = sheet.period.due_local_date;
+  await expect(page.locator('[data-period-due]')).toContainText(`${dueIso.slice(5, 7)}/${dueIso.slice(8, 10)}/${dueIso.slice(0, 4)}`);
+  await expect(page.locator('[data-period-due]')).toContainText(reportingZone);
   await expect(page.locator('.period-title')).toContainText('Draft');
+  // One status group in the period bar; the sheet no longer repeats it.
+  await expect(page.locator('[data-grid-status="line"]')).toHaveCount(1);
+  await expect(page.locator('.period-bar [data-grid-status="line"]')).toHaveCount(1);
+  await expect(page.locator('[data-sheet] [data-grid-status]')).toHaveCount(0);
+  // Batch mode is off: no selection boxes and no batch bar until "Change several days".
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Batch category edit' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Change several days' })).toHaveAttribute('aria-pressed', 'false');
+  // The top of the page: period bar, clock panel and toolbar (synthetic data).
+  await page.screenshot({ path: screenshotPath(`period-${project}-clocked-out-synthetic.png`), animations: 'disabled' });
   await expect(page.locator('.period-title .badge.current')).toBeVisible();
   // Each day is named by its accounting date (the ISO date); its date cell prints the US form date.
   const start = sheet.period.period_start;
@@ -103,7 +117,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
   await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
   await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
   await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
-  const details = form.getByRole('button', { name: 'Show details' });
+  const details = page.getByRole('button', { name: 'Show details' });
   await expect(details).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('[data-detail]')).toHaveCount(0);
   await details.click();
@@ -162,8 +176,11 @@ test('batch edit: preview, conflict dialog for a clock session, confirmed commit
   if ((await dayRow(page, workDate).count()) === 0) await page.getByRole('button', { name: 'Next period' }).click();
   await expect(dayRow(page, workDate)).toBeVisible();
 
+  await page.getByRole('button', { name: 'Change several days' }).click();
   await page.getByLabel(`Select ${workDate}`).check();
   await expect(page.getByText('1 day selected')).toBeVisible();
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.screenshot({ path: screenshotPath(`batch-mode-${testInfo.project.name}-synthetic.png`), animations: 'disabled' });
   await page.getByLabel('Category for selected days').selectOption('Vacation');
   await page.getByRole('button', { name: 'Preview changes' }).click();
 
@@ -203,6 +220,7 @@ test('batch edit: an old period asks for a reason and commits with it', async ({
   const target = page.locator('[data-day]').nth(2);
   const workDate = (await target.getAttribute('data-day')) ?? '';
   expect(workDate).not.toBe('');
+  await page.getByRole('button', { name: 'Change several days' }).click();
   await page.getByLabel(`Select ${workDate}`).check();
   await page.getByLabel('Category for selected days').selectOption('Sick');
   await page.getByRole('button', { name: 'Preview changes' }).click();
@@ -230,6 +248,7 @@ test('batch edit: a stale version shows the reload message naming the date', asy
   const free = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
   const workDate = free.at(-1) ?? '';
   await signInThroughUi();
+  await page.getByRole('button', { name: 'Change several days' }).click();
   await page.getByLabel(`Select ${workDate}`).check();
   await page.getByLabel('Category for selected days').selectOption('Sick');
   await page.getByRole('button', { name: 'Preview changes' }).click();

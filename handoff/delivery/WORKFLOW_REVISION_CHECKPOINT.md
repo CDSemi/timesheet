@@ -51,9 +51,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   probe digest 1789a8be (781 files) because `npm run digest` exits 1 on unstaged
   deletions (backlog note). Open for the gate: the fixed phone top bar appears mid-image
   in full-page captures.
-- Running: WP5-UX-T02-FREEZE (committer; digest computed after staging) on base 3224474.
-- Next action: on the freeze result, record commit/push, then write the WP5-UX-T03 brief
-  (period bar, clock panel, batch mode; worker, sonnet).
+- WP5-UX-T02-FREEZE done: 5edc548 on main, pushed (41 files, digest 1789a8be after
+  staging and on HEAD, all checks exit 0).
+- T03 done: PeriodBar, ClockPanel, periodBarModel (accepted outside the listed owned
+  paths), batch mode; unit 1790 (one native vitest worker crash on the first run, rerun
+  clean: watch at the gate); full e2e exit 0 (desktop 72/0/3, mobile 73/0/2); verify
+  exit 0; probe digest 80bffa7e (783 files). Sixth empty-heredoc incident, no effect.
+- Running: WP5-UX-T03-FREEZE (committer; digest after staging) on base 5edc548.
+- Next action: on the freeze result, record commit/push, then write the WP5-UX-T04 brief
+  (day editor side panel and bottom sheet; worker-high, opus, novelty).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

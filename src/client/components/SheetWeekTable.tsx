@@ -9,6 +9,8 @@ export interface DayActions {
   onEdit: (workDate: string) => void;
   /** False in a view-only shared view: no selection box, and the day only opens to read. */
   editable: boolean;
+  /** True in batch mode ("Change several days"): the selection boxes show; otherwise the days carry none. */
+  selecting: boolean;
   /** True for an imported period (F-2): the selection boxes are disabled and the day only opens to read. */
   locked: boolean;
 }
@@ -28,9 +30,9 @@ export function dayClass(day: SheetDay, selected: boolean, base: string): string
   return [base, day.nonworking ? 'nonworking' : '', day.today ? 'today' : '', selected ? 'selected' : ''].filter((part) => part !== '').join(' ');
 }
 
-/** The selection box of batch editing ("Select {date}"); absent in a view-only share. */
+/** The selection box of batch editing ("Select {date}"); only in batch mode, and absent in a view-only share. */
 export function SelectBox({ day, actions }: { day: SheetDay; actions: DayActions }) {
-  if (!actions.editable) return null;
+  if (!actions.editable || !actions.selecting) return null;
   return (
     <label className="pick">
       <input

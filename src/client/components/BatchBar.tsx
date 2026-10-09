@@ -1,7 +1,10 @@
 import { DAY_CATEGORIES } from '../../domain/attendance.ts';
 import type { DayCategory } from '../api.ts';
 
-/** Batch category edit controls: pick days, choose a label, preview before anything is saved. */
+/**
+ * Batch category edit controls, shown only in batch mode ("Change several days"): pick days, choose
+ * a label, preview before anything is saved. "Done" leaves the mode.
+ */
 export function BatchBar({
   selectedCount,
   category,
@@ -10,6 +13,7 @@ export function BatchBar({
   onSelectAll,
   onClear,
   onPreview,
+  onDone,
   locked = false,
 }: {
   selectedCount: number;
@@ -19,6 +23,8 @@ export function BatchBar({
   onSelectAll: () => void;
   onClear: () => void;
   onPreview: () => void;
+  /** Leaves batch mode and clears the selection. */
+  onDone: () => void;
   /** True for an imported period (F-2): every control is disabled; the reason is shown next to the period status. */
   locked?: boolean;
 }) {
@@ -44,6 +50,11 @@ export function BatchBar({
         <button type="button" className="secondary" onClick={onClear} disabled={locked || selectedCount === 0}>
           Clear
         </button>
+        {!locked && (
+          <button type="button" className="secondary" onClick={onDone}>
+            Done
+          </button>
+        )}
         <button type="button" onClick={onPreview} disabled={locked || selectedCount === 0 || busy}>
           Preview changes
         </button>

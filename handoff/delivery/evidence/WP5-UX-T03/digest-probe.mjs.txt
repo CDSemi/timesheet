@@ -1,0 +1,26 @@
+// Probe: same algorithm as scripts/source-digest.mjs, but skips paths deleted in the working
+// tree and not yet staged (git ls-files --deleted), which make `git hash-object --stdin-paths`
+// fail. Result equals the digest the script prints after the deletions are staged/committed.
+// Run from the repository root: node <task folder>/digest-probe.mjs
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+
+const list = (args) =>
+  execFileSync('git', args, { encoding: 'utf8' })
+    .split('\0')
+    .filter((path) => path !== '');
+const deleted = new Set(list(['ls-files', '--deleted', '-z']));
+const files = [...new Set(list(['ls-files', '--cached', '--others', '--exclude-standard', '-z']))]
+  .filter((path) => !path.startsWith('handoff/') && !deleted.has(path))
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const blobs = execFileSync('git', ['hash-object', '--stdin-paths'], {
+  input: `${files.join('\n')}\n`,
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+})
+  .trim()
+  .split('\n');
+if (blobs.length !== files.length) throw new Error('git hash-object returned an unexpected number of blob IDs');
+const lines = files.map((path, index) => `${path} ${blobs[index]}\n`).join('');
+console.log(`skipped unstaged deletions: ${[...deleted].sort().join(', ') || 'none'}`);
+console.log(`${createHash('sha256').update(lines).digest('hex')}  (${files.length} files, handoff/ excluded)`);

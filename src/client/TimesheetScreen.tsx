@@ -16,14 +16,14 @@ import {
 } from './api.ts';
 import { BatchBar } from './components/BatchBar.tsx';
 import { BatchDialog } from './components/BatchDialog.tsx';
-import { ClockBar } from './components/ClockBar.tsx';
 import { ClockOutDialog } from './components/ClockOutDialog.tsx';
+import { ClockPanel } from './components/ClockPanel.tsx';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
-import { gridStatus } from './components/deliveryModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
 import { OpenDay } from './components/OpenDay.tsx';
-import { PeriodHeader } from './components/PeriodHeader.tsx';
+import { PeriodBar } from './components/PeriodBar.tsx';
+import { runningSessionOf } from './components/periodBarModel.ts';
 import { usePeriodState } from './components/ReviewStatus.tsx';
 import { TimesheetSheet } from './components/TimesheetSheet.tsx';
 import { DayEditor } from './DayEditor.tsx';
@@ -41,6 +41,20 @@ function useDesktop(): boolean {
     },
     () => window.matchMedia(DESKTOP_QUERY).matches,
   );
+}
+
+/** Finds the running session in the shown period, else in the current and in-progress periods. */
+async function findRunningSession(shown: TimesheetView | null): Promise<Session | undefined> {
+  const inShown = shown === null ? undefined : runningSessionOf(shown);
+  if (inShown !== undefined) return inShown;
+  const known = await api<CurrentPeriods>('GET', '/api/periods/current');
+  const payrollDates = [...new Set([known.current.payroll_date, known.in_progress.payroll_date])];
+  for (const date of payrollDates) {
+    if (date === shown?.period.payroll_date) continue;
+    const found = runningSessionOf(await api<TimesheetView>('GET', `/api/timesheets/${date}`));
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /**
@@ -80,7 +94,14 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const imported = view?.timesheet.imported_unverified === true;
   // The same finalization and delivery reads as before; the sheet also takes its signature lines from them.
   const periodState = usePeriodState(view?.period.payroll_date ?? '', view?.timesheet.version, own && !imported && view !== null);
-  const periodStatus = periodState === null ? null : gridStatus(periodState);
+  /** "Show details" of the toolbar: the worked-on-a-workday and worked-on-a-day-off rows of the sheet. */
+  const [details, setDetails] = useState(false);
+  /** Batch mode ("Change several days"): the selection boxes and the batch bar show only while it is on. */
+  const [batchMode, setBatchMode] = useState(false);
+  // An imported period keeps its locked batch controls and the reason visible (F-2).
+  const batchOn = canEdit && (batchMode || imported);
+  /** The running session found in the loaded periods: undefined until the first check, null when clocked out. */
+  const [running, setRunning] = useState<Session | null | undefined>(undefined);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -106,6 +127,22 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   useEffect(load, [load]);
 
+  // The clock shows one button, chosen from the running session; it is looked up again with every load.
+  useEffect(() => {
+    if (!own || view === null) return;
+    let current = true;
+    findRunningSession(view)
+      .then((found) => {
+        if (current) setRunning(found ?? null);
+      })
+      .catch(() => {
+        if (current) setRunning(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [own, view]);
+
   async function move(direction: -1 | 1) {
     if (view === null) return;
     const date = direction < 0 ? addDays(view.period.period_start, -1) : addDays(view.period.period_end, 1);
@@ -118,22 +155,6 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     } catch (caught) {
       report(caught);
     }
-  }
-
-  /** Finds the running session in the loaded period, else in the current and in-progress periods. */
-  async function findRunningSession(): Promise<Session | undefined> {
-    const running = (sheet: TimesheetView) =>
-      sheet.days.flatMap((day) => day.sessions).find((session) => session.end_utc === null);
-    const shown = view === null ? undefined : running(view);
-    if (shown !== undefined) return shown;
-    const known = await api<CurrentPeriods>('GET', '/api/periods/current');
-    const payrollDates = [...new Set([known.current.payroll_date, known.in_progress.payroll_date])];
-    for (const date of payrollDates) {
-      if (date === view?.period.payroll_date) continue;
-      const found = running(await api<TimesheetView>('GET', `/api/timesheets/${date}`));
-      if (found !== undefined) return found;
-    }
-    return undefined;
   }
 
   async function clockIn() {
@@ -149,9 +170,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   async function openClockOut() {
     setMessage(null);
     try {
-      const running = await findRunningSession();
-      if (running === undefined) setMessage('No running session found; reload the page.');
-      else setClockOutSession(running);
+      const found = await findRunningSession(view);
+      if (found === undefined) setMessage('No running session found; reload the page.');
+      else setClockOutSession(found);
     } catch (caught) {
       report(caught);
     }
@@ -228,10 +249,37 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       </header>
 
       {view !== null && (
+        <div className="workbar">
+          <PeriodBar view={view} zone={displayZone} onMove={move} own={own} state={periodState} />
+          {own && <ClockPanel running={running} zone={displayZone} onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />}
+        </div>
+      )}
+
+      {view !== null && (
         <section className="card stack">
-          <PeriodHeader view={view} zone={displayZone} onMove={move} showStatus={own} />
-          {own && <ClockBar onClockIn={() => void clockIn()} onClockOut={() => void openClockOut()} />}
-          <OpenDay onOpen={setEditDate} />
+          <div className="tools">
+            <div className="tools-left">{canEdit && <OpenDay onOpen={setEditDate} />}</div>
+            <div className="tools-right">
+              <button type="button" className="quiet" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
+                Show details
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="quiet"
+                  aria-pressed={batchOn}
+                  disabled={imported}
+                  aria-describedby={imported ? 'imported-reason' : undefined}
+                  onClick={() => {
+                    setBatchMode((on) => !on);
+                    setSelected(new Set());
+                  }}
+                >
+                  Change several days
+                </button>
+              )}
+            </div>
+          </div>
           {message !== null && <p className="error">{message}</p>}
           {notice !== null && (
             <p className="notice-ok" role="status">
@@ -247,7 +295,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
             </div>
           )}
 
-          {canEdit && (
+          {batchOn && (
             <BatchBar
               selectedCount={selected.size}
               category={category}
@@ -256,6 +304,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
               onClear={() => setSelected(new Set())}
               onPreview={previewBatch}
+              onDone={() => {
+                setBatchMode(false);
+                setSelected(new Set());
+              }}
               locked={imported}
             />
           )}
@@ -266,8 +318,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
             zone={displayZone}
             todayLocal={todayLocal}
             desktop={desktop}
-            actions={{ selected, onToggle: toggle, onEdit: setEditDate, editable: canEdit, locked: imported }}
-            status={periodStatus}
+            actions={{ selected, onToggle: toggle, onEdit: setEditDate, editable: canEdit, selecting: batchOn, locked: imported }}
+            details={details}
             finalization={periodState?.finalization ?? null}
             signatures={own && !imported}
           />

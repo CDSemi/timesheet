@@ -235,9 +235,10 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   recorded.reset();
 
   // Nothing that changes data is on the page: absent, not disabled.
-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
+  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
     await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
   }
+  await expect(page.getByLabel('Open a day')).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
@@ -318,8 +319,13 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await switchUser(page, signInPageAs, grantee.account, `#/shared/${owner.account.id}/timesheet`);
   await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - can edit");
   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
-  // Edit rights show the edit controls, but still no Clock in/out and no review.
+  // Edit rights show the edit controls (batch mode is opened first), but still no Clock in/out and no review.
+  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Change several days' }).click();
   await expect(page.getByRole('button', { name: 'Preview changes' })).toBeVisible();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
+  await expect(page.getByLabel('Open a day')).toBeVisible();
   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);

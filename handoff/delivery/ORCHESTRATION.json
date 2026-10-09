@@ -28,8 +28,12 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-T02-FREEZE",
+  "next_task_id": "WP5-UX-T03-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-08",
+      "observation": "WP5-UX-T03 (worker, sonnet): another empty heredoc by mistake (sixth incident; created an empty scratch file in the task folder, no effect), and one native vitest worker crash (0xC0000005, access violation) in the unrelated opening-balance integration test on the first unit run; the rerun was clean. The gate brief must watch for a recurring native crash (possible flaky native module under parallel workers)."
+    },
     {
       "date": "2026-10-08",
       "observation": "WP5-UX-T01 (worker, sonnet) reported one stray empty heredoc despite the capitalised no-stdin rule in both the brief and the dispatch prompt (fifth such incident); the agent reported no effect. Addendum 2 asks it to confirm that no background task is left waiting on stdin."
@@ -172,7 +176,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
+    "last_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
     "unpushed": []
   },
   "owner_decisions": [
@@ -290,6 +294,11 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-08",
+      "basis": "WP5-UX-T03 created src/client/components/periodBarModel.ts, which its brief did not list (the brief said to stop and report instead). The file is new, pure display logic beside the owned PeriodBar/ClockPanel, unit-tested in the owned tests/client, and no other writer was active.",
+      "decision": "Accept the file retroactively and add it to WP5-UX-T03's owned paths; no rework. The WP5-UX audit must review it like any other slice file (no business-minute arithmetic, zones per R-07). Later briefs keep the stop-and-report rule."
+    },
     {
       "date": "2026-10-08",
       "basis": "validate_orchestration.py: every done PASS audit of the active package must match current_source_digest (stale-PASS check), and a done task may depend only on a done PASS audit. WP5-RECHECK is the only WP5 PASS audit (150420e7) and the done WP5-ACCREC depends on it. The UX round changes WP5 source, so its gate moves current_source_digest; WP5-RECHECK can then neither stay done PASS (stale) nor be reset or cancelled (breaks WP5-ACCREC). docs/08: 'Changed source identity invalidates an old audit pass'; validator and docs/08 are governance paths.",
@@ -14446,9 +14455,118 @@
       "id": "WP5-UX-T02-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX-T02"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "aa6ad25d1ebc0a76b",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T02-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T02-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-T02-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
+      "branch": "main",
+      "commit_sha": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
+      "pushed": true,
+      "source_digest": "1789a8be51e0339ecc96ddc26d3e59c0eabfa8a5ae362feb3144bdbbdd43b434",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 41 files (21 slice paths: 4 new, 2 deleted, 15 modified; 20 handoff records); digest after staging and on the new HEAD 1789a8be (781 files); node v24.21.0; precommit PASS (41 files, 0 findings), diff-check, JSON parse, validator (271 tasks), check_recovery (87) and preflight exit 0; remote main = 5edc548. The message carries an accurate 'Audit: none yet' line.",
+      "next_action": "None; WP5-UX-T03 follows."
+    },
+    {
+      "id": "WP5-UX-T03",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX-T02-FREEZE"
+      ],
+      "profile": "timesheet-worker",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a17b600b361941a31",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/periodBarModel.ts",
+        "src/client/components/PeriodHeader.tsx",
+        "src/client/components/ClockBar.tsx",
+        "src/client/components/OpenDay.tsx",
+        "src/client/components/BatchBar.tsx",
+        "src/client/components/SubmissionStatus.tsx",
+        "src/client/components/ReviewStatus.tsx",
+        "src/client/components/PeriodBar.tsx",
+        "src/client/components/ClockPanel.tsx",
+        "src/client/components/TimesheetSheet.tsx",
+        "src/client/components/SheetWeekTable.tsx",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/styles.css",
+        "tests/client",
+        "tests/e2e",
+        "handoff/delivery/tasks/WP5-UX-T03.md",
+        "handoff/delivery/evidence/WP5-UX-T03"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T03.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T03.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T03/typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/lint.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/unit.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/verify.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/digest.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/digest-probe.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/digest-probe.mjs.txt",
+        "handoff/delivery/evidence/WP5-UX-T03/period-desktop-clocked-out-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T03/period-desktop-clocked-in-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T03/period-mobile-clocked-out-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T03/period-mobile-clocked-in-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T03/batch-mode-desktop-synthetic.png"
+      ],
+      "baseline_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
+      "source_digest": "80bffa7ef2c6c140a7531c8e0b4cff1c4237fc6c314cf069de36a9789aa6b650",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented: added PeriodBar.tsx, ClockPanel.tsx, periodBarModel.ts (created outside the listed owned paths; accepted retroactively by the coordinator, see coordinator_decisions) and tests/client/periodBarModel.test.ts; deleted PeriodHeader.tsx and ClockBar.tsx; modified TimesheetScreen.tsx, SubmissionStatus.tsx (useGridStatus removed), BatchBar.tsx, TimesheetSheet.tsx, SheetWeekTable.tsx, styles.css and the timesheet, day-editor, sharing, import and history-settings e2e specs. Unit 79 files / 1790 tests (a first run had one native vitest worker crash 0xC0000005 in the unrelated opening-balance integration test; rerun clean). Full e2e exit 0: desktop 72/0/3, mobile 73/0/2; typecheck, lint, verify exit 0. npm run digest exit 1 on unstaged deletions; probe digest 80bffa7e (783 files). One empty heredoc by mistake (empty scratch file in the task folder, no effect); no background task left.",
+      "next_action": "WP5-UX-T03-FREEZE stages the slice (including the two deletions), confirms digest 80bffa7e after staging, commits and pushes; then WP5-UX-T04."
+    },
+    {
+      "id": "WP5-UX-T03-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-T03"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -14466,18 +14584,18 @@
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX-T02-FREEZE"
+        "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T03-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX-T02-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "32244744ff37835603a1c2685ef2eb4e4d78861f",
+      "baseline_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the T02 slice and the listed handoff records, computes the digest after staging, commits on main and pushes; then the coordinator writes the WP5-UX-T03 brief."
+      "next_action": "Committer stages the T03 slice and the listed handoff records, computes the digest after staging, commits on main and pushes; then the coordinator writes the WP5-UX-T04 brief."
     }
   ],
   "future_packages": [
