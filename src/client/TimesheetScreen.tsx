@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { addDays } from '../domain/dates.ts';
 import {
   api,
   ApiRequestError,
   type CurrentPeriods,
+  type DayBatchEntry,
   type DayBatchPreview,
   type DayBatchResult,
   type DayCategory,
@@ -21,6 +22,7 @@ import { ClockPanel } from './components/ClockPanel.tsx';
 import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
+import { currentLabelChoice, type LabelChoice, labelEntry, labelPreviewOutcome } from './components/labelPickerModel.ts';
 import { OpenDay } from './components/OpenDay.tsx';
 import { PeriodBar } from './components/PeriodBar.tsx';
 import { runningSessionOf } from './components/periodBarModel.ts';
@@ -42,6 +44,25 @@ function useDesktop(): boolean {
     () => window.matchMedia(DESKTOP_QUERY).matches,
   );
 }
+
+/**
+ * Moves focus back to a day's own button ("Edit {date}" or "View {date}") after the day editor
+ * closed; when that day is not on the sheet (opened through "Open a day"), to what opened it.
+ */
+function focusDay(workDate: string, opener: Element | null) {
+  const day = document.querySelector(`[data-day="${workDate}"]`);
+  const button = day?.querySelector<HTMLElement>(`button[aria-label="Edit ${workDate}"], button[aria-label="View ${workDate}"]`);
+  if (button !== null && button !== undefined) button.focus();
+  else if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+}
+
+/** Moves focus back to a day's label picker after its review dialog closed. */
+function focusLabelPicker(workDate: string) {
+  document.querySelector<HTMLElement>(`[data-label-picker="${workDate}"] button`)?.focus();
+}
+
+/** What the open batch review dialog commits: the batch selection, or the one entry of an in-cell label pick. */
+type PreviewSource = { kind: 'batch' } | { kind: 'label'; entry: DayBatchEntry };
 
 /** Finds the running session in the shown period, else in the current and in-progress periods. */
 async function findRunningSession(shown: TimesheetView | null): Promise<Session | undefined> {
@@ -102,6 +123,17 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const batchOn = canEdit && (batchMode || imported);
   /** The running session found in the loaded periods: undefined until the first check, null when clocked out. */
   const [running, setRunning] = useState<Session | null | undefined>(undefined);
+  /** What the open review dialog commits (the batch selection, or one in-cell label pick). */
+  const [previewSource, setPreviewSource] = useState<PreviewSource>({ kind: 'batch' });
+  /** The date whose in-cell label pick is being previewed or committed. */
+  const [labelBusy, setLabelBusy] = useState<string | null>(null);
+  /** Raised after a label or batch commit changed the day open in the editor, so the editor reloads it. */
+  const [editorRefresh, setEditorRefresh] = useState(0);
+  /** The element that opened the day editor, and the date whose button gets focus back when it closes. */
+  const editorOpener = useRef<Element | null>(null);
+  const returnFocusTo = useRef<string | null>(null);
+  /** The date whose label picker gets focus back when its review dialog closes. */
+  const returnToPicker = useRef<string | null>(null);
 
   const report = (caught: unknown) => setMessage(describeError(caught));
 
@@ -195,6 +227,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     setBusy(true);
     try {
       const entries = batchEntries(view.days, selected, category);
+      setPreviewSource({ kind: 'batch' });
       setPreview(await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries }));
     } catch (caught) {
       report(caught);
@@ -203,12 +236,14 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     }
   }
 
-  async function commitBatch(input: { reason: string; confirmConflicts: boolean }) {
-    if (view === null) return;
+  /**
+   * The batch commit, the same for the batch bar and an in-cell label pick. `inDialog` says where an
+   * error is shown: in the review dialog, or above the sheet for a pick committed straight away.
+   */
+  async function sendCommit(entries: DayBatchEntry[], input: { reason: string; confirmConflicts: boolean }, inDialog: boolean) {
     setDialogError(null);
     setBusy(true);
     try {
-      const entries = batchEntries(view.days, selected, category);
       const result = await request<DayBatchResult>('POST', '/days/batch', {
         mode: 'commit',
         entries,
@@ -218,18 +253,91 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       setPreview(null);
       setSelected(new Set());
       setNotice(`Saved ${result.changed.length} ${result.changed.length === 1 ? 'day' : 'days'}.`);
+      if (editDate !== null && result.changed.includes(editDate)) setEditorRefresh((value) => value + 1);
       load();
     } catch (caught) {
       if (caught instanceof ApiRequestError && caught.status === 409 && caught.code === 'stale_version') {
         setPreview(null);
         setStaleNotice(staleReloadMessage(staleDates(caught.details)));
-      } else {
+      } else if (inDialog) {
         setDialogError(describeError(caught));
+      } else {
+        report(caught);
       }
     } finally {
       setBusy(false);
     }
   }
+
+  async function commitBatch(input: { reason: string; confirmConflicts: boolean }) {
+    if (view === null) return;
+    if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
+    const entries = previewSource.kind === 'label' ? [previewSource.entry] : batchEntries(view.days, selected, category);
+    await sendCommit(entries, input, true);
+  }
+
+  /**
+   * An in-cell label pick (E-3 a): a one-entry batch preview, then the commit of the same entry. A
+   * date that needs a reason, has recorded work or cannot change opens the review dialog, which asks
+   * for the reason and the conflict confirmation exactly as for several days (docs/04, AC-04).
+   */
+  async function pickLabel(workDate: string, choice: LabelChoice) {
+    const day = view?.days.find((item) => item.work_date === workDate);
+    if (day === undefined) return;
+    const entry = labelEntry(day, choice);
+    setMessage(null);
+    setNotice(null);
+    setStaleNotice(null);
+    setDialogError(null);
+    setLabelBusy(workDate);
+    try {
+      const result = await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries: [entry] });
+      const outcome = labelPreviewOutcome(result);
+      if (outcome === 'unchanged') {
+        setNotice(`No change: ${workDate} is already ${choice}.`);
+      } else if (outcome === 'commit') {
+        await sendCommit([entry], { reason: '', confirmConflicts: false }, false);
+      } else {
+        setPreviewSource({ kind: 'label', entry });
+        setPreview(result);
+      }
+    } catch (caught) {
+      report(caught);
+    } finally {
+      setLabelBusy(null);
+    }
+  }
+
+  function closePreview() {
+    if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
+    setPreview(null);
+  }
+
+  // After a label pick's review dialog is gone (the page is no longer inert), focus goes back to the picker.
+  useEffect(() => {
+    const date = returnToPicker.current;
+    if (preview !== null || date === null) return;
+    returnToPicker.current = null;
+    focusLabelPicker(date);
+  }, [preview]);
+
+  function openEditor(workDate: string) {
+    editorOpener.current = document.activeElement;
+    setEditDate(workDate);
+  }
+
+  function closeEditor() {
+    if (editDate !== null) returnFocusTo.current = editDate;
+    setEditDate(null);
+  }
+
+  // After the editor is gone (a modal sheet no longer makes the page inert), focus goes back to the day.
+  useEffect(() => {
+    const date = returnFocusTo.current;
+    if (editDate !== null || date === null) return;
+    returnFocusTo.current = null;
+    focusDay(date, editorOpener.current);
+  }, [editDate]);
 
   function reload() {
     setStaleNotice(null);
@@ -256,74 +364,107 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       )}
 
       {view !== null && (
-        <section className="card stack">
-          <div className="tools">
-            <div className="tools-left">{canEdit && <OpenDay onOpen={setEditDate} />}</div>
-            <div className="tools-right">
-              <button type="button" className="quiet" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
-                Show details
-              </button>
-              {canEdit && (
-                <button
-                  type="button"
-                  className="quiet"
-                  aria-pressed={batchOn}
-                  disabled={imported}
-                  aria-describedby={imported ? 'imported-reason' : undefined}
-                  onClick={() => {
-                    setBatchMode((on) => !on);
-                    setSelected(new Set());
-                  }}
-                >
-                  Change several days
+        <div className={`sheet-area${editDate !== null && desktop ? ' with-editor' : ''}`}>
+          <section className="card stack">
+            <div className="tools">
+              <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
+              <div className="tools-right">
+                <button type="button" className="quiet" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
+                  Show details
                 </button>
-              )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="quiet"
+                    aria-pressed={batchOn}
+                    disabled={imported}
+                    aria-describedby={imported ? 'imported-reason' : undefined}
+                    onClick={() => {
+                      setBatchMode((on) => !on);
+                      setSelected(new Set());
+                    }}
+                  >
+                    Change several days
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          {message !== null && <p className="error">{message}</p>}
-          {notice !== null && (
-            <p className="notice-ok" role="status">
-              {notice}
-            </p>
-          )}
-          {staleNotice !== null && (
-            <div className="stale" role="alert">
-              <p>{staleNotice}</p>
-              <button type="button" onClick={reload}>
-                Reload period
-              </button>
-            </div>
-          )}
+            {message !== null && <p className="error">{message}</p>}
+            {notice !== null && (
+              <p className="notice-ok" role="status">
+                {notice}
+              </p>
+            )}
+            {staleNotice !== null && (
+              <div className="stale" role="alert">
+                <p>{staleNotice}</p>
+                <button type="button" onClick={reload}>
+                  Reload period
+                </button>
+              </div>
+            )}
 
-          {batchOn && (
-            <BatchBar
-              selectedCount={selected.size}
-              category={category}
-              busy={busy}
-              onCategory={setCategory}
-              onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
-              onClear={() => setSelected(new Set())}
-              onPreview={previewBatch}
-              onDone={() => {
-                setBatchMode(false);
-                setSelected(new Set());
+            {batchOn && (
+              <BatchBar
+                selectedCount={selected.size}
+                category={category}
+                busy={busy}
+                onCategory={setCategory}
+                onSelectAll={() => setSelected(new Set(view.days.map((day) => day.work_date)))}
+                onClear={() => setSelected(new Set())}
+                onPreview={previewBatch}
+                onDone={() => {
+                  setBatchMode(false);
+                  setSelected(new Set());
+                }}
+                locked={imported}
+              />
+            )}
+
+            <TimesheetSheet
+              view={view}
+              employeeName={shared === undefined ? user.display_name : shared.ownerName}
+              zone={displayZone}
+              todayLocal={todayLocal}
+              desktop={desktop}
+              actions={{
+                selected,
+                onToggle: toggle,
+                onEdit: openEditor,
+                editable: canEdit,
+                selecting: batchOn,
+                locked: imported,
+                label: {
+                  choiceOf: (workDate) => {
+                    const day = view.days.find((item) => item.work_date === workDate);
+                    return day === undefined ? null : currentLabelChoice(day);
+                  },
+                  onPick: (workDate, choice) => void pickLabel(workDate, choice),
+                  busyDate: labelBusy,
+                },
               }}
-              locked={imported}
+              details={details}
+              finalization={periodState?.finalization ?? null}
+              signatures={own && !imported}
+            />
+          </section>
+
+          {editDate !== null && (
+            <DayEditor
+              key={editDate}
+              workDate={editDate}
+              displayZone={displayZone}
+              reportingZone={view.reporting_zone}
+              todayLocal={todayLocal}
+              modal={!desktop}
+              refresh={editorRefresh}
+              onChanged={load}
+              onClose={closeEditor}
+              request={request}
+              readOnly={!canEdit || imported}
             />
           )}
-
-          <TimesheetSheet
-            view={view}
-            employeeName={shared === undefined ? user.display_name : shared.ownerName}
-            zone={displayZone}
-            todayLocal={todayLocal}
-            desktop={desktop}
-            actions={{ selected, onToggle: toggle, onEdit: setEditDate, editable: canEdit, selecting: batchOn, locked: imported }}
-            details={details}
-            finalization={periodState?.finalization ?? null}
-            signatures={own && !imported}
-          />
-        </section>
+        </div>
       )}
 
       {preview !== null && view !== null && (
@@ -333,22 +474,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
           zone={displayZone}
           error={dialogError}
           busy={busy}
+          title={previewSource.kind === 'label' ? `Review label change for ${previewSource.entry.work_date}` : undefined}
           onCommit={commitBatch}
-          onClose={() => setPreview(null)}
-        />
-      )}
-
-      {editDate !== null && view !== null && (
-        <DayEditor
-          key={editDate}
-          workDate={editDate}
-          displayZone={displayZone}
-          reportingZone={view.reporting_zone}
-          todayLocal={todayLocal}
-          onChanged={load}
-          onClose={() => setEditDate(null)}
-          request={request}
-          readOnly={!canEdit || imported}
+          onClose={closePreview}
         />
       )}
 

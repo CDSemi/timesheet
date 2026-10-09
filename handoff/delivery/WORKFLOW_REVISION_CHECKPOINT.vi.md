@@ -56,9 +56,18 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   chạy lại sạch: cần theo dõi ở gate); toàn bộ e2e exit 0 (desktop 72/0/3, mobile
   73/0/2); verify exit 0; digest probe 80bffa7e (783 file). Lần thứ sáu lỡ dùng heredoc
   rỗng, không ảnh hưởng.
-- Đang chạy: WP5-UX-T03-FREEZE (committer; digest sau khi stage) trên gốc 5edc548.
-- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T04 (panel
-  sửa ngày và bottom sheet; worker-high, opus, novelty).
+- WP5-UX-T03-FREEZE xong: b6324b7 trên main, đã push (38 file, digest 80bffa7e sau khi
+  stage và trên HEAD, mọi kiểm tra exit 0; một lần lỡ pipe `| node -e`, vô hại).
+- Đang chạy: WP5-UX-T04 (worker-high, opus, novelty; panel sửa ngày và bottom sheet,
+  nhập nghỉ phép theo giờ + phút, xác nhận giờ nghỉ một chạm, chọn nhãn ngay trong ô)
+  trên gốc b6324b7 / 80bffa7e.
+- T04 xong: panel bên, bottom sheet, nghỉ phép giờ + phút, xác nhận giờ nghỉ một chạm,
+  chọn nhãn trong ô (ba model thuần mới); unit 1808; toàn bộ e2e exit 0 (desktop
+  76/0/3, mobile 77/0/2); verify exit 0; digest 6f362af9 (789 file). Lần thứ tám vi
+  phạm quy tắc stdin (heredoc `cat` rỗng, không ảnh hưởng).
+- Đang chạy: WP5-UX-T04-FREEZE (committer) trên gốc b6324b7.
+- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T05 (làm
+  lại trang Review; worker, sonnet).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

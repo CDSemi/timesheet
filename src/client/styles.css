@@ -113,6 +113,16 @@
   --row-ot: 34px;
   --row-check: 30px;
 
+  /* Day editor (WP5-UX-T04): side panel beside the sheet, bottom sheet on a phone, in-cell label picker */
+  --editor-gap: var(--space-4);
+  --editor-sheet-max-height: 86dvh;
+  --layer-panel: 2;
+  --layer-popup: 2;
+  --sheet-handle-width: 40px;
+  --sheet-handle-height: 4px;
+  --picker-min: 11rem;
+  --caret-size: 4px;
+
   /* App shell: desktop top bar, mobile compact bar and bottom tab bar */
   --bar-height: 56px;
   --bar-height-compact: 52px;
@@ -1310,8 +1320,8 @@ textarea {
 
 /* Below 768px: one 4-column table per week, a row per day, no sideways scroll. */
 .sheet-table {
-  --col-day: 30%;
-  --col-label: 25%;
+  --col-day: 28%;
+  --col-label: 27%;
   --col-time: 28%;
   --col-ot: 17%;
   table-layout: fixed;
@@ -1724,6 +1734,403 @@ textarea {
   .break-row {
     grid-template-columns: var(--track) var(--track) auto auto;
     align-items: end;
+  }
+}
+
+/* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
+
+/*
+ * One native <dialog> for the day editor. From 768px it is a non-modal side panel: beside the
+ * sheet from 1200px (the sheet keeps its seven columns), fixed at the right edge below that. Below
+ * 768px it is a modal bottom sheet of at most 86% of the height. Inside: a sticky head, then the
+ * banner, the times, label and leave, and the figures, each section separated by a soft rule.
+ */
+.sheet-area {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track));
+  gap: var(--editor-gap);
+  align-items: start;
+}
+
+.day-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-overlay);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.day-panel-side {
+  position: fixed;
+  inset: calc(var(--bar-height) + var(--space-3)) var(--space-3) var(--space-3) auto;
+  z-index: var(--layer-panel);
+  width: min(var(--editor-width), calc(100vw - 2 * var(--space-3)));
+  height: auto;
+}
+
+@media (min-width: 1200px) {
+  .sheet-area.with-editor {
+    grid-template-columns: minmax(0, var(--track)) var(--editor-width);
+  }
+
+  /* The narrower sheet beside the panel stacks its form header instead of squeezing the company name. */
+  .sheet-area.with-editor .form-head {
+    grid-template-columns: var(--track);
+  }
+
+  .day-panel-side {
+    position: sticky;
+    inset: auto;
+    top: calc(var(--bar-height) + var(--space-3));
+    width: auto;
+    max-height: calc(100dvh - var(--bar-height) - 2 * var(--space-3));
+    box-shadow: var(--shadow-panel);
+  }
+}
+
+.day-panel-sheet {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: var(--editor-sheet-max-height);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.day-panel-sheet::backdrop {
+  background: var(--scrim);
+}
+
+.sheet-handle {
+  width: var(--sheet-handle-width);
+  height: var(--sheet-handle-height);
+  margin: var(--space-2) auto 0;
+  border-radius: var(--radius);
+  background: var(--sheet-rule);
+}
+
+.day-panel .editor-head {
+  position: sticky;
+  top: 0;
+  z-index: var(--layer-sticky);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  background: var(--card);
+  border-bottom: var(--hairline) solid var(--line-soft);
+}
+
+.day-panel .editor-head > button {
+  flex: none;
+}
+
+.editor-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.day-panel h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.day-panel h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.day-panel h3 .hint {
+  font-weight: normal;
+}
+
+/* Headings take focus only as the editor's starting point; they are not controls, so no ring. */
+.day-panel [tabindex='-1']:focus-visible {
+  box-shadow: none;
+}
+
+.editor-body {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.editor-section {
+  padding-top: var(--space-4);
+  border-top: var(--hairline) solid var(--line-soft);
+}
+
+.editor-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  font-size: var(--font-size-sm);
+}
+
+.editor-banner .shape {
+  margin-top: var(--space-1);
+}
+
+.banner-attention {
+  background: var(--attention-bg);
+  color: var(--attention-ink);
+}
+
+.banner-error {
+  background: var(--off);
+  color: var(--error);
+}
+
+.day-panel .session-item {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.session-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.session-time {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+}
+
+.quick-breaks {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--off);
+}
+
+.break-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.break-chip {
+  padding: var(--space-1) var(--space-2);
+  border: var(--hairline) dashed var(--sheet-rule-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: var(--font-size-sm);
+}
+
+/* Each action keeps its label on one line; they share a row when it fits and stack when it does not. */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.quick-actions button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+/* The panel is narrow: times, breaks and leave stack instead of sitting four abreast. */
+.day-panel .time-pair,
+.day-panel .break-row {
+  grid-template-columns: minmax(0, var(--track));
+}
+
+.day-panel .break-row > button {
+  justify-self: start;
+}
+
+.label-row {
+  display: grid;
+  grid-template-columns: minmax(0, var(--track)) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.leave-fields {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.leave-fields legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-strong);
+}
+
+.leave-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols-3), minmax(0, var(--track)));
+  gap: var(--space-3);
+}
+
+.leave-grid input,
+.leave-grid select,
+.label-row select {
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .label-row {
+    grid-template-columns: minmax(0, var(--track));
+  }
+
+  .leave-grid {
+    grid-template-columns: repeat(var(--cols-2), minmax(0, var(--track)));
+  }
+
+  .leave-grid label:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .quick-actions {
+    flex-direction: column;
+  }
+
+  .editor-actions button {
+    width: 100%;
+  }
+}
+
+/* In-cell label picker: the label cell is the dropdown, as in the Excel form. */
+.d-label.with-picker {
+  align-items: stretch;
+  padding: 0;
+}
+
+.label-picker {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* Words never break inside: the caret wraps under the label when a narrow cell needs it. */
+.sheet .label-trigger {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: var(--sheet-leading);
+  text-align: center;
+}
+
+.sheet-table .label-trigger {
+  justify-content: flex-start;
+  padding: var(--space-1);
+  text-align: left;
+}
+
+.sheet .label-trigger:hover:not(:disabled) {
+  background: var(--day-hover);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 var(--hairline) var(--accent-line);
+}
+
+.sheet .label-trigger:focus-visible,
+.label-picker.open .label-trigger {
+  box-shadow: inset 0 0 0 var(--rule) var(--accent);
+}
+
+.label-trigger[aria-busy='true'] {
+  cursor: progress;
+}
+
+.label-trigger-text {
+  overflow-wrap: normal;
+}
+
+.label-caret {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-inline: var(--caret-size) solid transparent;
+  border-top: var(--caret-size) solid var(--muted);
+}
+
+.label-list {
+  position: absolute;
+  top: calc(100% + var(--space-0));
+  left: 0;
+  z-index: var(--layer-popup);
+  min-width: max(100%, var(--picker-min));
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  font-weight: normal;
+  text-align: left;
+}
+
+.sheet-day:nth-last-child(-n + 2) .label-list {
+  right: 0;
+  left: auto;
+}
+
+.label-option {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.label-option.active {
+  background: var(--day-selected);
+}
+
+.label-option[aria-selected='true'] {
+  color: var(--accent);
+  font-weight: var(--font-weight-strong);
+}
+
+.label-option-extra {
+  margin-top: var(--space-1);
+  box-shadow: 0 calc(-1 * var(--hairline)) 0 var(--line-soft);
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .label-option {
+    min-height: var(--tap-min);
   }
 }
 

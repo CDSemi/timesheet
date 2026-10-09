@@ -13,7 +13,7 @@ import {
   sheetWeeks,
   signatureLines,
 } from './sheetModel.ts';
-import { type DayActions, dayClass, dayVerb, openOnClick, SelectBox, SheetWeekTable } from './SheetWeekTable.tsx';
+import { type DayActions, dayClass, dayVerb, LabelPicker, labelPickerOf, openOnClick, SelectBox, SheetWeekTable } from './SheetWeekTable.tsx';
 
 /** A cell's row name for screen readers; the visual row-label column is hidden from them. */
 function RowName({ name }: { name: string }) {
@@ -23,6 +23,7 @@ function RowName({ name }: { name: string }) {
 /** One day of the desktop sheet: a column of cells on the week's shared rows (CSS subgrid). */
 function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boolean; actions: DayActions }) {
   const verb = dayVerb(actions);
+  const picker = labelPickerOf(actions);
   const hasTime = day.time.ranges.length > 0 || day.time.note !== null;
   return (
     <div
@@ -42,9 +43,15 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
           {day.dateText}
         </button>
       </div>
-      <div className="d-label" data-cell="label">
-        {(day.label.main !== '' || day.label.lines.length > 0) && <RowName name={SHEET_ROWS.label} />}
-        <LabelContent label={day.label} />
+      <div className={`d-label${picker === null ? '' : ' with-picker'}`} data-cell="label">
+        {picker === null ? (
+          <>
+            {(day.label.main !== '' || day.label.lines.length > 0) && <RowName name={SHEET_ROWS.label} />}
+            <LabelContent label={day.label} />
+          </>
+        ) : (
+          <LabelPicker day={day} picker={picker} />
+        )}
       </div>
       <div className={`d-time${day.time.attention ? ' attention' : ''}`} data-cell="time">
         {hasTime && <RowName name={SHEET_ROWS.time} />}

@@ -1,6 +1,16 @@
-import type { MouseEvent } from 'react';
+import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
 import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
+import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
 import { DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+
+/** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
+export interface LabelPickerActions {
+  choiceOf: (workDate: string) => LabelChoice | null;
+  /** A one-entry batch preview, then its commit or the review dialog (the page decides). */
+  onPick: (workDate: string, choice: LabelChoice) => void;
+  /** The date whose pick is being saved; its picker ignores a second pick until the answer comes. */
+  busyDate: string | null;
+}
 
 /** What a day of the sheet can do; shared by the desktop sheet and the phone tables. */
 export interface DayActions {
@@ -13,6 +23,127 @@ export interface DayActions {
   selecting: boolean;
   /** True for an imported period (F-2): the selection boxes are disabled and the day only opens to read. */
   locked: boolean;
+  /** The label picker; absent, or unused while the day cannot change or batch mode is on. */
+  label?: LabelPickerActions;
+}
+
+/** The label picker of a day, or null when the label is plain text (view only, imported, batch mode). */
+export function labelPickerOf(actions: DayActions): LabelPickerActions | null {
+  return actions.label !== undefined && actions.editable && !actions.locked && !actions.selecting ? actions.label : null;
+}
+
+/**
+ * The day's label cell as a dropdown, like the Excel label cell: a button that shows the label and
+ * opens a list of the labels. Keyboard: Enter, Space or Arrow down opens it; the arrows, Home and
+ * End move; Enter or Space picks; Escape or Tab closes it and focus returns to the button.
+ */
+export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPickerActions }) {
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const [open, setOpen] = useState(false);
+  const current = picker.choiceOf(day.workDate);
+  const [active, setActive] = useState(0);
+  const busy = picker.busyDate === day.workDate;
+
+  function show() {
+    if (busy) return;
+    const index = current === null ? 0 : LABEL_CHOICES.indexOf(current);
+    setActive(Math.max(0, index));
+    setOpen(true);
+    // The list exists after this render; focus moves into it so the arrows work at once.
+    requestAnimationFrame(() => list.current?.focus());
+  }
+
+  function hide() {
+    setOpen(false);
+    button.current?.focus();
+  }
+
+  function pick(choice: LabelChoice) {
+    hide();
+    picker.onPick(day.workDate, choice);
+  }
+
+  function buttonKey(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      show();
+    }
+  }
+
+  function listKey(event: KeyboardEvent<HTMLUListElement>) {
+    const last = LABEL_CHOICES.length - 1;
+    const moves: Record<string, number> = { ArrowDown: Math.min(last, active + 1), ArrowUp: Math.max(0, active - 1), Home: 0, End: last };
+    const move = moves[event.key];
+    if (move !== undefined) {
+      event.preventDefault();
+      setActive(move);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const choice = LABEL_CHOICES[active];
+      if (choice !== undefined) pick(choice);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      hide();
+    } else if (event.key === 'Tab') {
+      setOpen(false);
+    }
+  }
+
+  const name = `Label for ${day.workDate}: ${day.label.main === '' ? 'not set' : day.label.main}`;
+  return (
+    // The picker acts by itself: a click inside never also opens the day editor.
+    <div className={`label-picker${open ? ' open' : ''}`} data-label-picker={day.workDate} onClick={(event) => event.stopPropagation()}>
+      <button
+        ref={button}
+        type="button"
+        className="label-trigger"
+        aria-label={name}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? `${id}-list` : undefined}
+        aria-busy={busy}
+        onClick={() => (open ? hide() : show())}
+        onKeyDown={buttonKey}
+      >
+        <span className="label-trigger-text">
+          <LabelContent label={day.label} />
+        </span>
+        <span className="label-caret" aria-hidden="true" />
+      </button>
+      {open && (
+        <ul
+          ref={list}
+          id={`${id}-list`}
+          className="label-list"
+          role="listbox"
+          tabIndex={-1}
+          aria-label={`Label for ${day.workDate}`}
+          aria-activedescendant={`${id}-option-${active}`}
+          onKeyDown={listKey}
+          onBlur={(event) => {
+            if (!(event.relatedTarget instanceof Node && event.currentTarget.parentElement?.contains(event.relatedTarget))) setOpen(false);
+          }}
+        >
+          {LABEL_CHOICES.map((choice, index) => (
+            <li
+              key={choice}
+              id={`${id}-option-${index}`}
+              role="option"
+              aria-selected={choice === current}
+              className={`label-option${index === active ? ' active' : ''}${choice === 'Work from home' ? ' label-option-extra' : ''}`}
+              onMouseMove={() => setActive(index)}
+              onClick={() => pick(choice)}
+            >
+              {choice}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /** "Edit" while the day can change, otherwise "View"; the stable accessible name of the day button. */
@@ -106,6 +237,7 @@ export function SheetWeekTable({ week, details, actions }: { week: SheetWeek; de
 }
 
 function DayRows({ day, details, actions, verb }: { day: SheetDay; details: boolean; actions: DayActions; verb: 'Edit' | 'View' }) {
+  const picker = labelPickerOf(actions);
   return (
     <>
       <tr
@@ -125,9 +257,7 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
           {day.today && <span className="today-tag">Today</span>}
           {day.check !== null && <CheckBadge check={day.check} />}
         </td>
-        <td className="t-label">
-          <LabelContent label={day.label} />
-        </td>
+        <td className="t-label">{picker === null ? <LabelContent label={day.label} /> : <LabelPicker day={day} picker={picker} />}</td>
         <td className={`t-time${day.time.attention ? ' attention' : ''}`}>
           <TimeContent time={day.time} />
         </td>

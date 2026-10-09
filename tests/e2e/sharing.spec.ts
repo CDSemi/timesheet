@@ -241,6 +241,9 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
   await expect(page.getByLabel('Open a day')).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
+  // The label cells are plain text: no in-cell label picker without edit rights.
+  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
   // The owner's signature lines and review state are not part of a shared view.
   await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
@@ -332,6 +335,18 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
   recorded.reset();
 
+  // The in-cell label picker writes through the share as well (a one-entry batch preview, then its
+  // commit, under /api/shared/:ownerId). It runs on the same day before the notes edit, which stays
+  // the newest change; "Work from home" keeps the category Worked, so no conflict review is needed.
+  await page.getByRole('button', { name: new RegExp(`^Label for ${workDay}`) }).click();
+  await page.getByRole('listbox', { name: `Label for ${workDay}` }).getByRole('option', { name: 'Work from home', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  expect(await owner.api.dayView(workDay)).toMatchObject({ category: 'Worked', wfh: true });
+  expect(recorded.list.filter((entry) => entry.endsWith('/days/batch'))).toEqual([
+    `POST /api/shared/${owner.account.id}/days/batch`,
+    `POST /api/shared/${owner.account.id}/days/batch`,
+  ]);
+
   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;
   await page.screenshot({ path: screenshotPath(`sharing-edit-${project}-synthetic.png`), animations: 'disabled' });
   await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
@@ -342,6 +357,8 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
   await expect(dialog.getByText('Day fields saved.')).toBeVisible();
   await page.screenshot({ path: screenshotPath(`sharing-edit-day-${project}-synthetic.png`), animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Close' }).click();
+  // Focus returns to the day's button.
+  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
   expectOnlySharedRequests(recorded.list, owner.account.id);
   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
   // The server also refuses the live clock for an edit share.

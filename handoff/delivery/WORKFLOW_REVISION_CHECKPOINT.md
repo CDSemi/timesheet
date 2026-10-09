@@ -57,9 +57,18 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   paths), batch mode; unit 1790 (one native vitest worker crash on the first run, rerun
   clean: watch at the gate); full e2e exit 0 (desktop 72/0/3, mobile 73/0/2); verify
   exit 0; probe digest 80bffa7e (783 files). Sixth empty-heredoc incident, no effect.
-- Running: WP5-UX-T03-FREEZE (committer; digest after staging) on base 5edc548.
-- Next action: on the freeze result, record commit/push, then write the WP5-UX-T04 brief
-  (day editor side panel and bottom sheet; worker-high, opus, novelty).
+- WP5-UX-T03-FREEZE done: b6324b7 on main, pushed (38 files, digest 80bffa7e after
+  staging and on HEAD, all checks exit 0; one harmless `| node -e` stdin slip).
+- Running: WP5-UX-T04 (worker-high, opus, novelty; side-panel/bottom-sheet day editor,
+  hours+minutes leave, one-tap break confirmation, in-cell label picker) on base
+  b6324b7 / 80bffa7e.
+- T04 done: side panel, bottom sheet, hours+minutes leave, one-tap break confirmation,
+  in-cell label picker (three new pure models); unit 1808; full e2e exit 0 (desktop
+  76/0/3, mobile 77/0/2); verify exit 0; digest 6f362af9 (789 files). Eighth stdin-rule
+  slip (empty `cat` heredoc, no effect).
+- Running: WP5-UX-T04-FREEZE (committer) on base b6324b7.
+- Next action: on the freeze result, record commit/push, then write the WP5-UX-T05 brief
+  (Review restyle; worker, sonnet).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

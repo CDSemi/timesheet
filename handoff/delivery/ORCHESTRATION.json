@@ -28,8 +28,12 @@
   "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "WP5-UX-T03-FREEZE",
+  "next_task_id": "WP5-UX-T04-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-08",
+      "observation": "WP5-UX-T03-FREEZE (committer, sonnet) ran one accidental '... | node -e \"1\"' pipe after the push despite the capitalised no-stdin rule; no output, no effect, recorded in its brief. Stdin slips now occur in worker and committer profiles alike (seventh incident overall); none left a background task this round."
+    },
     {
       "date": "2026-10-08",
       "observation": "WP5-UX-T03 (worker, sonnet): another empty heredoc by mistake (sixth incident; created an empty scratch file in the task folder, no effect), and one native vitest worker crash (0xC0000005, access violation) in the unrelated opening-balance integration test on the first unit run; the rerun was clean. The gate brief must watch for a recurring native crash (possible flaky native module under parallel workers)."
@@ -176,7 +180,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
+    "last_commit": "b6324b7cd0cca0d44b18f82b835387a8846bb0b1",
     "unpushed": []
   },
   "owner_decisions": [
@@ -14564,9 +14568,107 @@
       "id": "WP5-UX-T03-FREEZE",
       "package": "WP5",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "WP5-UX-T03"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7ef01d58b0a435f8",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T03-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T03-FREEZE/checks.txt",
+        "handoff/delivery/evidence/WP5-UX-T03-FREEZE/commit-message.txt"
+      ],
+      "baseline_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
+      "branch": "main",
+      "commit_sha": "b6324b7cd0cca0d44b18f82b835387a8846bb0b1",
+      "pushed": true,
+      "source_digest": "80bffa7ef2c6c140a7531c8e0b4cff1c4237fc6c314cf069de36a9789aa6b650",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 38 files (17 slice paths: 4 new, 2 deleted, 11 modified; 21 handoff records); digest after staging and on the new HEAD 80bffa7e (783 files); node v24.21.0; precommit PASS (38 files, 0 findings), diff-check, JSON parse, validator (273 tasks), check_recovery (87) and preflight exit 0; remote main = b6324b7. One accidental '| node -e \"1\"' pipe after the push (stdin fed to node; no output, no effect), recorded in the brief.",
+      "next_action": "None; WP5-UX-T04 follows."
+    },
+    {
+      "id": "WP5-UX-T04",
+      "package": "WP5",
+      "kind": "implement",
+      "status": "done",
+      "depends_on": [
+        "WP5-UX-T03-FREEZE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "opus",
+      "requested_effort": "high",
+      "model_override_reason": "novelty",
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": true
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a3bfe6137bc9d9ced",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/DayEditor.tsx",
+        "src/client/components",
+        "src/client/TimesheetScreen.tsx",
+        "src/client/styles.css",
+        "tests/client",
+        "tests/e2e",
+        "handoff/delivery/tasks/WP5-UX-T04.md",
+        "handoff/delivery/evidence/WP5-UX-T04"
+      ],
+      "ownership_note": "src/client/components is owned only for the files the brief lists (DayFieldsForm, DayFigures, SessionForm, BreaksEditor, LocalTimeField, sessionModel draft helpers, BatchDialog single-day use, TimesheetSheet and SheetWeekTable picker hook-up) and for new pure helper modules of this editor; any other existing file there (for example ClockOutDialog, TimeProblemPrompt) is stop-and-report. tests/e2e excludes fixtures.ts.",
+      "prompt": "handoff/delivery/tasks/WP5-UX-T04.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T04.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-T04/typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/lint.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/unit.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/verify.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/digest.txt",
+        "handoff/delivery/evidence/WP5-UX-T04/editor-panel-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T04/editor-label-picker-desktop-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T04/editor-label-picker-mobile-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-T04/editor-sheet-mobile-synthetic.png"
+      ],
+      "baseline_commit": "b6324b7cd0cca0d44b18f82b835387a8846bb0b1",
+      "source_digest": "6f362af9f9a2d09995d2c3f48d732abfce43772ae352efa40c00bf7825ffa538",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "implemented: added leaveInputModel.ts, dayEditorModel.ts, labelPickerModel.ts and their three unit tests; modified DayEditor.tsx, TimesheetScreen.tsx, BatchDialog.tsx, DayFieldsForm.tsx, DayFigures.tsx, SheetWeekTable.tsx, TimesheetSheet.tsx, sessionModel.ts, styles.css, tests/client/sessionModel.test.ts and the day-editor, import and sharing e2e specs; nothing deleted; no unowned file touched. Unit 82 files / 1808 passed; full e2e exit 0: desktop 76/0/3, mobile 77/0/2 (new editor tests added); typecheck, lint, verify (smoke port 47840) exit 0; digest 6f362af9 (789 files), no probe needed. One empty 'cat' heredoc (empty scratch file in the task folder, nothing fed to node; eighth stdin-rule slip); no background task left.",
+      "next_action": "WP5-UX-T04-FREEZE commits and pushes the slice; then WP5-UX-T05."
+    },
+    {
+      "id": "WP5-UX-T04-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-T04"
       ],
       "profile": "timesheet-committer",
       "requested_model": "sonnet",
@@ -14584,18 +14686,18 @@
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
-        "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
-        "handoff/delivery/evidence/WP5-UX-T03-FREEZE"
+        "handoff/delivery/tasks/WP5-UX-T04-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-T04-FREEZE"
       ],
-      "prompt": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
-      "report": "handoff/delivery/tasks/WP5-UX-T03-FREEZE.md",
+      "prompt": "handoff/delivery/tasks/WP5-UX-T04-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-T04-FREEZE.md",
       "evidence": [],
-      "baseline_commit": "5edc548e0a5a7acc37565861fa419b6f55272fa6",
+      "baseline_commit": "b6324b7cd0cca0d44b18f82b835387a8846bb0b1",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the T03 slice and the listed handoff records, computes the digest after staging, commits on main and pushes; then the coordinator writes the WP5-UX-T04 brief."
+      "next_action": "Committer stages the T04 slice and the listed handoff records, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-T05 brief."
     }
   ],
   "future_packages": [

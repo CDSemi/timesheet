@@ -438,31 +438,46 @@ describe('server figures, E-2 notice and day fields', () => {
   });
 
   it('builds the day entry body with the version it saw and drops the kind without leave', () => {
-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+    // 4 hours and 0 minutes are the same integer 240 leave minutes the API always took.
+    const built = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
     expect(built).toEqual({
       ok: true,
       request: { category: 'Worked', leave_minutes: 240, leave_kind: 'vacation', wfh: true, notes: 'n', expected_version: 3, reason: 'because' },
     });
-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
+    const none = buildDayEntryRequest({ category: 'Off', leave: { hours: '0', minutes: '0' }, leaveKind: 'sick', wfh: false, notes: '' }, null);
     expect(none).toEqual({
       ok: true,
       request: { category: 'Off', leave_minutes: 0, leave_kind: null, wfh: false, notes: '', expected_version: null },
     });
+    const partial = buildDayEntryRequest({ category: 'Worked', leave: { hours: '1', minutes: '30' }, leaveKind: 'ot', wfh: false, notes: '' }, 2);
+    expect(partial).toMatchObject({ ok: true, request: { leave_minutes: 90, leave_kind: 'ot' } });
   });
 
-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
+  it('leaves a missing kind to the server and rejects only malformed or out-of-range leave fields', () => {
+    const missingKind = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '' }, leaveKind: '', wfh: false, notes: '' }, 1);
     expect(missingKind).toMatchObject({ ok: true, request: { leave_minutes: 240, leave_kind: null } });
-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
+    const bad: Array<[string, string]> = [
+      ['1.5', '0'],
+      ['-1', '0'],
+      ['24', '1'],
+      ['25', '0'],
+      ['0', '60'],
+      ['abc', '0'],
+      ['0', '1e1'],
+    ];
+    for (const [hours, minutes] of bad) {
+      const result = buildDayEntryRequest({ category: 'Worked', leave: { hours, minutes }, leaveKind: '', wfh: false, notes: '' }, 1);
+      expect(result.ok, `${hours} h ${minutes} m`).toBe(false);
     }
   });
 
-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
+  it('starts the form from the day in hours and minutes, and hints the typed leave as hours and minutes', () => {
     const draftFields = dayFieldsDraft(day({ category: 'Vacation', leave_minutes: 240, leave_kind: 'vacation', wfh: true }));
-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
-    expect(leaveHint('240')).toBe('4h 00m');
-    expect(leaveHint('')).toBeNull();
-    expect(leaveHint('1.5')).toBeNull();
+    expect(draftFields).toEqual({ category: 'Vacation', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: '' });
+    expect(dayFieldsDraft(day({ leave_minutes: 95 })).leave).toEqual({ hours: '1', minutes: '35' });
+    expect(leaveHint({ hours: '4', minutes: '0' })).toBe('4h 00m');
+    expect(leaveHint({ hours: '', minutes: '45' })).toBe('45m');
+    expect(leaveHint({ hours: '', minutes: '' })).toBeNull();
+    expect(leaveHint({ hours: '1.5', minutes: '' })).toBeNull();
   });
 });

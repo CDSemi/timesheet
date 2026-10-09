@@ -221,6 +221,8 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
   await expect(batch.getByLabel('Category for selected days')).toBeDisabled();
   await expect(page.getByRole('checkbox', { name: `Select ${layout.cacheDay}` })).toBeDisabled();
   await expect(page.locator(`[data-day="${layout.cacheDay}"]`)).toContainText('Holiday');
+  // Imported days are read-only history: the label cells carry no in-cell picker.
+  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
 
   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
   await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();

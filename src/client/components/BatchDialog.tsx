@@ -14,7 +14,8 @@ const STATUS_TEXT: Record<DayBatchPreview['entries'][number]['status'], string> 
 /**
  * Native modal dialog for a batch edit. Step one previews every date and asks for the reason
  * when the server requires one; step two lists the recorded sessions of conflicting dates and
- * needs an explicit confirmation. Sessions are never changed by a label edit.
+ * needs an explicit confirmation. Sessions are never changed by a label edit. The in-cell label
+ * picker uses the same dialog for its one-entry preview (single-day use, with its own title).
  */
 export function BatchDialog({
   preview,
@@ -22,6 +23,7 @@ export function BatchDialog({
   zone,
   error,
   busy,
+  title = 'Review category change',
   onCommit,
   onClose,
 }: {
@@ -30,6 +32,8 @@ export function BatchDialog({
   zone: string;
   error: string | null;
   busy: boolean;
+  /** The first step's heading; a single-day label pick names its date. */
+  title?: string;
   onCommit: (input: { reason: string; confirmConflicts: boolean }) => void;
   onClose: () => void;
 }) {
@@ -54,7 +58,7 @@ export function BatchDialog({
     <dialog ref={dialog} className="dialog" aria-labelledby="batch-title" onClose={onClose}>
       {step === 'review' ? (
         <div className="stack">
-          <h2 id="batch-title">Review category change</h2>
+          <h2 id="batch-title">{title}</h2>
           <p>
             {preview.changed_count} {preview.changed_count === 1 ? 'day' : 'days'} will change. Nothing is saved until you commit.
           </p>

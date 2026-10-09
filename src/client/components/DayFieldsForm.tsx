@@ -1,14 +1,16 @@
-import { type SubmitEvent, useState } from 'react';
+import { type SubmitEvent, useId, useState } from 'react';
 import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
 import { describeError, isStaleVersion } from './errors.ts';
+import { LEAVE_MAX_HOURS } from './leaveInputModel.ts';
 import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
 
 const KIND_TEXT: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
 
 /**
- * Category, partial leave minutes with their kind, WFH and notes. The E-2 notice appears when
- * the server reports that the day's OT-kind leave differs from consumed OT leave; it informs
- * only, and this form never spends, reserves or releases OT.
+ * Label (category), partial leave typed as hours and minutes with its kind, WFH and notes. The
+ * hours and minutes become the same integer leave minutes the day endpoint always took. The E-2
+ * notice appears when the server reports that the day's OT-kind leave differs from consumed OT
+ * leave; it informs only, and this form never spends, reserves or releases OT.
  */
 export function DayFieldsForm({
   day,
@@ -26,12 +28,13 @@ export function DayFieldsForm({
   /** The route set the write goes through: the caller's own by default, a share's when editing for an owner. */
   request?: Requester;
 }) {
+  const id = useId();
   const [draft, setDraft] = useState(() => dayFieldsDraft(day));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const mismatch = otMismatchNotice(day);
   const reasonMissing = reasonRequired && reason.trim() === '';
-  const hint = leaveHint(draft.leaveMinutes);
+  const hint = leaveHint(draft.leave);
 
   async function save(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,16 +57,17 @@ export function DayFieldsForm({
   }
 
   return (
-    <form className="editor-form stack" onSubmit={save} aria-label="Day fields">
-      <h3>Day fields</h3>
+    // noValidate: the leave fields are checked by parseLeaveInput, whose message is shown in the form (role alert).
+    <form className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
+      <h3>Label and leave</h3>
       {mismatch !== null && (
         <p className="warn-box" role="status" data-warning="ot-leave-mismatch">
           <strong>Notice.</strong> {mismatch}
         </p>
       )}
-      <div className="field-grid">
+      <div className="label-row">
         <label>
-          Category
+          Label
           <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}>
             {CATEGORIES.map((category) => (
               <option key={category} value={category}>
@@ -71,40 +75,56 @@ export function DayFieldsForm({
               </option>
             ))}
           </select>
-          {day.category_source === 'default' && (
-            <span className="muted hint">Calendar default. Saving records it as your choice.</span>
-          )}
+          {day.category_source === 'default' && <span className="muted hint">Calendar default. Saving records it as your choice.</span>}
         </label>
-        <label>
-          Partial leave minutes
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={1440}
-            step={1}
-            value={draft.leaveMinutes}
-            onChange={(event) => setDraft({ ...draft, leaveMinutes: event.target.value })}
-          />
-          <span className="muted hint">{hint === null ? 'Whole minutes.' : `Leave ${hint}.`}</span>
-        </label>
-        <label>
-          Leave kind
-          <select value={draft.leaveKind} onChange={(event) => setDraft({ ...draft, leaveKind: event.target.value as LeaveKind | '' })}>
-            <option value="">Not set</option>
-            {LEAVE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {KIND_TEXT[kind]}
-              </option>
-            ))}
-          </select>
-          <span className="muted hint">Required with leave minutes. It never reserves or spends OT.</span>
+        <label className="inline">
+          <input type="checkbox" checked={draft.wfh} onChange={(event) => setDraft({ ...draft, wfh: event.target.checked })} />
+          Worked from home (WFH)
         </label>
       </div>
-      <label className="inline">
-        <input type="checkbox" checked={draft.wfh} onChange={(event) => setDraft({ ...draft, wfh: event.target.checked })} />
-        Worked from home (WFH)
-      </label>
+      <fieldset className="leave-fields" aria-describedby={`${id}-leave-hint`}>
+        <legend>Partial leave</legend>
+        <div className="leave-grid">
+          <label>
+            Leave hours
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={LEAVE_MAX_HOURS}
+              step={1}
+              value={draft.leave.hours}
+              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, hours: event.target.value } })}
+            />
+          </label>
+          <label>
+            Leave minutes
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={59}
+              step={1}
+              value={draft.leave.minutes}
+              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, minutes: event.target.value } })}
+            />
+          </label>
+          <label>
+            Leave kind
+            <select value={draft.leaveKind} onChange={(event) => setDraft({ ...draft, leaveKind: event.target.value as LeaveKind | '' })}>
+              <option value="">Not set</option>
+              {LEAVE_KINDS.map((kind) => (
+                <option key={kind} value={kind}>
+                  {KIND_TEXT[kind]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p id={`${id}-leave-hint`} className="muted hint">
+          {hint === null ? 'Hours and minutes, at most 24h 00m.' : `Leave ${hint}.`} A kind is required with leave. It never reserves or spends OT.
+        </p>
+      </fieldset>
       <label>
         Notes
         <textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} rows={2} maxLength={2000} />
@@ -115,7 +135,7 @@ export function DayFieldsForm({
         </p>
       )}
       {reasonMissing && <p className="muted hint">Enter a reason for this old period above to save.</p>}
-      <div className="button-row">
+      <div className="button-row editor-actions">
         <button type="submit" disabled={busy || reasonMissing}>
           Save day fields
         </button>

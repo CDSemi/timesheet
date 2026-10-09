@@ -144,4 +144,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 5edc548e0a5a7acc37565861fa419b6f55272fa6; post-HEAD/commit
+  b6324b7cd0cca0d44b18f82b835387a8846bb0b1; pushed yes; remote SHA b6324b7c (same).
+- Staged 38 paths (incl. 2 deletions); nothing was staged beforehand; no unexpected path.
+- Digest before commit and HEAD ls-tree digest after: both
+  80bffa7ef2c6c140a7531c8e0b4cff1c4237fc6c314cf069de36a9789aa6b650.
+- Checks (all exit 0): node v24.21.0; git add; digest; precommit (38 files, 0 findings);
+  diff --check; JSON parse; validate_orchestration; check_recovery; validate_package
+  --preflight; ls-tree digest. Details in evidence/WP5-UX-T03-FREEZE/checks.txt.
+- No fix applied. Note: one stray `| node -e "1"` pipe was run in the digest step
+  (output discarded; no effect).

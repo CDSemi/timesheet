@@ -20,6 +20,7 @@ import type {
 } from '../api.ts';
 import { completenessOf, type CompletenessDisplay } from './dayModel.ts';
 import { minutesText } from './format.ts';
+import { type LeaveInput, leaveInputOf, parseLeaveInput } from './leaveInputModel.ts';
 
 /*
  * Pure logic of the day editor. The server owns every business figure (raw, eligible and
@@ -400,8 +401,8 @@ export const LEAVE_KINDS: readonly LeaveKind[] = ['vacation', 'sick', 'ot'];
 
 export interface DayFieldsDraft {
   category: DayCategory;
-  /** Text of the minutes field; parsed when saving. */
-  leaveMinutes: string;
+  /** The leave as typed, in hours and minutes; converted to the integer leave minutes when saving. */
+  leave: LeaveInput;
   /** Empty until a kind is chosen. */
   leaveKind: LeaveKind | '';
   wfh: boolean;
@@ -411,7 +412,7 @@ export interface DayFieldsDraft {
 export function dayFieldsDraft(day: DayView): DayFieldsDraft {
   return {
     category: day.category ?? 'Worked',
-    leaveMinutes: String(day.leave_minutes),
+    leave: leaveInputOf(day.leave_minutes),
     leaveKind: day.leave_kind ?? '',
     wfh: day.wfh,
     notes: day.entry?.notes ?? '',
@@ -420,13 +421,15 @@ export function dayFieldsDraft(day: DayView): DayFieldsDraft {
 
 export type DayEntryBuild = { ok: true; request: DayEntryRequest } | { ok: false; message: string };
 
-/** The kind is sent only with leave minutes; the server answers `leave_kind_required` when it is missing. */
+/**
+ * The PUT /api/days/:date body. The hours and minutes become the same integer `leave_minutes` as
+ * before (0 to 1440). The kind is sent only with leave minutes; the server answers
+ * `leave_kind_required` when it is missing.
+ */
 export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: number | null, reason?: string): DayEntryBuild {
-  const text = draft.leaveMinutes.trim();
-  const minutes = text === '' ? 0 : Number(text);
-  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
-    return { ok: false, message: 'Enter leave as whole minutes from 0 to 1440.' };
-  }
+  const parsed = parseLeaveInput(draft.leave);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+  const minutes = parsed.minutes;
   const request: DayEntryRequest = {
     category: draft.category,
     leave_minutes: minutes,
@@ -440,10 +443,9 @@ export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: num
   return { ok: true, request };
 }
 
-/** The leave minutes the field holds, in hours and minutes, for a hint; null when it is not a whole number. */
-export function leaveHint(text: string): string | null {
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  const minutes = Number(trimmed);
-  return Number.isInteger(minutes) && minutes >= 0 ? formatDuration(minutes) : null;
+/** The leave the two fields hold, as `4h 00m` for a hint; null when nothing or something invalid is typed. */
+export function leaveHint(input: LeaveInput): string | null {
+  if (input.hours.trim() === '' && input.minutes.trim() === '') return null;
+  const parsed = parseLeaveInput(input);
+  return parsed.ok ? formatDuration(parsed.minutes) : null;
 }
