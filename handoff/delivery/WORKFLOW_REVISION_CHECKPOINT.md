@@ -72,9 +72,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   (desktop 76/0/3, mobile 77/0/2); verify exit 0; digest 0071a588. review.spec per-day
   assertions adapted (audit must confirm no weakening). Ninth stdin-rule slip (empty
   `cat >>` heredoc, no effect).
-- Running: WP5-UX-T05-FREEZE (committer) on base 118a104.
-- Next action: on the freeze result, record commit/push, then write the WP5-UX-T06 brief
-  (docs/04 and docs/12 EN+VI; worker, sonnet).
+- WP5-UX-T05-FREEZE done: 6cbe5d6 on main, pushed (27 files, digest 0071a588, all checks
+  exit 0).
+- T06 done: docs/04, docs/10 (owner decisions 2026-10-08) and docs/12, EN+VI; preflight
+  PASS; verify exit 0; digest 46a3a0c6. Contradiction found: docs/04:16 "Display current
+  viewing zone" versus the period bar showing the zone only when it differs. Coordinator
+  decision: keep the rule, fix the UI in WP5-UX-FIX1.
+- Running: WP5-UX-T06-FREEZE (committer) on base 6cbe5d6.
+- Next action: on the freeze result, write and dispatch WP5-UX-FIX1; then
+  GOV-SUPERSEDE, WP5-UX-GATE and WP5-UX-AUDIT.
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

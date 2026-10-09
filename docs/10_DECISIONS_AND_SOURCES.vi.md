@@ -164,3 +164,17 @@ Không quyết định nào đổi yêu cầu đã chốt.
 Không quyết định nào đổi yêu cầu đã chốt.
 
 - Mặc định an toàn cho I-3 (R3 của WP4-AUDIT-B, WP4-FIXB): I-3 (a) của chủ nói kỳ chưa kết thúc không nhập được. Coordinator cũng coi kỳ đã kết thúc nhưng chưa qua thời điểm đến hạn lương là chỉ-bỏ-qua (`not_due`, lý do `period_not_due`); chính thời điểm đến hạn được tính là đã đến hạn, như lần quét hạn chót. Đây là mặc định thận trọng: chủ có thể đảo ngược, khi đó kỳ đã kết thúc nhưng chưa đến hạn được phép nhập. Quy tắc nằm ở tài liệu 07.
+
+## Quyết định của chủ — 2026-10-08 (thiết kế lại UI, E-1..E-7 của WP5-UX-PLAN)
+
+Nguồn: các yêu cầu trực tiếp trong chat của chủ ngày 2026-10-08, ghi nguyên văn trong bảng task (`owner_decisions`). Yêu cầu: UI hiện tại khó hiểu và khó dùng; chủ muốn thiết kế đẹp và thân thiện hơn, và trang Timesheet có bố cục giống timesheet trong workbook Excel mẫu để người quen bản Excel không bỡ ngỡ. Các câu hỏi ở mục E của người lập kế hoạch được trả lời "OK theo khuyến nghị": mọi đề xuất đều được chấp nhận. Vòng thay đổi chỉ chạm client; không quy tắc nghiệp vụ, nội dung request hay phép tính của server nào đổi. Tài liệu 04 mô tả kết quả.
+
+- E-1 (a): bảng hiện các dòng Excel Day, Date, Label, Time và OT cộng một dòng trạng thái Check. Các dòng chi tiết (worked on a workday, worked on a day off) nằm sau "Show details" trên Timesheet và luôn bật trên Review.
+- E-2 (a): mọi ngày không làm việc theo lịch của server (cuối tuần, ngày lễ, ngày đóng cửa) có một nền nhạt kèm sọc chéo mảnh, và tên ngày lễ được viết trong ô Label. Cách gọi nhãn giữ các loại của app (Worked, Off, Vacation, Sick, Holiday, Shutdown) với "Work from home" là lối tắt trong bộ chọn cho Worked kèm WFH; "Sick Day" và "Off Day (Overtime Used)" của Excel không được đưa lại (E-2 ngày 2026-10-03 vẫn giữ).
+- E-3 (a): sửa trong bảng bên trên desktop và bottom sheet trên điện thoại, và chọn nhãn trực tiếp trong ô như dropdown của Excel. Không áp dụng việc gõ giờ trực tiếp vào ô.
+- E-4: bảng dùng ngày kiểu Mỹ, thời lượng dạng h:mm và giờ 24 giờ, giống PDF người dùng ký.
+- E-5 (a): điều hướng gồm Timesheet, Overtime, History, Settings (cùng Admin); "OT" đổi tên thành "Overtime"; Import mở từ Settings và từ More trên điện thoại.
+- E-6 (a): hiện dòng chữ ký manager trống, có nhãn ("Not used yet") như trên biểu mẫu Excel và PDF.
+- E-7 (a): vòng này gồm khung ứng dụng và token, trang Timesheet, trình sửa ngày và Review. Làm lại giao diện Overtime, History và Settings là vòng sau khi vòng này được chấp nhận.
+- Công thức Excel không được tái tạo: các công thức của workbook mâu thuẫn với quy tắc chuẩn không được sao chép (WP5-UX-PLAN mục B); app hiện các giá trị do server tính, như trên PDF. Đó là công thức OT 8,5 giờ mỗi ngày (chuẩn: tài liệu 02 và 10, ghi theo M gần nhất với giờ nghỉ và quy tắc ngoài lịch), tổng OT kỳ bỏ Chủ nhật và tính theo giờ thập phân (chuẩn: h:mm của cả 14 ngày), ngày payroll lấy từ TODAY() (chuẩn: kỳ đang chọn và quan hệ do server tính, D-12), ngày ký lấy từ TODAY() (chuẩn: ngày sign-off hoặc tự nộp đã lưu theo múi giờ báo cáo) và giờ cuối tuần mặc định ẩn (chuẩn: giờ thực không được seed từ lịch).
+- Hệ quả cho audit: thiết kế lại thay đổi mã nguồn WP5 đã nghiệm thu, nên cần cổng kiểm mới và audit độc lập mới trước khi kích hoạt pilot (tài liệu 08, "Changed source identity invalidates an old audit pass").

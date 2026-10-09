@@ -135,4 +135,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Self-reported model: claude-sonnet-5-5.
+- Pre-HEAD 118a104a0e271a2fb2b8916a2cb1bf85244147bf; post-HEAD/commit
+  6cbe5d6aa7fc9233b70e8ddcd82412e559c2046b; pushed yes; remote main = same SHA.
+- Digest before add and HEAD ls-tree digest after commit: both
+  0071a58848ecf62e0eca19c1e94db6a76116c9043d4cb5bcc2859b45a0f4f6d9. Staged count 27.
+- Checks (exit codes): node --version 0 (v24.21.0); digest 0; git add 0; precommit 0
+  (27 files, 0 findings); diff --check 0; JSON parse 0; validate_orchestration 0;
+  check_recovery 0; validate_package --preflight 0; commit 0; push 0.
+- All 9 source/test paths were changed as expected. Fixes: none. Stop reason: none.
+- Evidence: handoff/delivery/evidence/WP5-UX-T05-FREEZE/ (unstaged).

@@ -71,9 +71,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   (desktop 76/0/3, mobile 77/0/2); verify exit 0; digest 0071a588. Các assertion theo
   ngày trong review.spec được chuyển sang định dạng bảng (audit phải xác nhận không bị
   nới lỏng). Lần thứ chín vi phạm quy tắc stdin (heredoc `cat >>` rỗng, không ảnh hưởng).
-- Đang chạy: WP5-UX-T05-FREEZE (committer) trên gốc 118a104.
-- Bước kế tiếp: khi có kết quả freeze, ghi commit/push rồi viết brief WP5-UX-T06
-  (docs/04 và docs/12 EN+VI; worker, sonnet).
+- WP5-UX-T05-FREEZE xong: 6cbe5d6 trên main, đã push (27 file, digest 0071a588, mọi
+  kiểm tra exit 0).
+- T06 xong: docs/04, docs/10 (quyết định chủ dự án 2026-10-08) và docs/12, EN+VI;
+  preflight PASS; verify exit 0; digest 46a3a0c6. Phát hiện mâu thuẫn: docs/04:16 "Display
+  current viewing zone" so với thanh kỳ lương chỉ hiện múi giờ khi khác múi giờ báo cáo.
+  Quyết định coordinator: giữ quy tắc, sửa UI ở WP5-UX-FIX1.
+- Đang chạy: WP5-UX-T06-FREEZE (committer) trên gốc 6cbe5d6.
+- Bước kế tiếp: khi có kết quả freeze, viết và giao WP5-UX-FIX1; sau đó GOV-SUPERSEDE,
+  WP5-UX-GATE và WP5-UX-AUDIT.
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát
