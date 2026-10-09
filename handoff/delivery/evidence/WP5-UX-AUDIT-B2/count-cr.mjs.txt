@@ -1,0 +1,15 @@
+// WP5-UX-AUDIT-B2: counts CR bytes (0x0d) in each given file; prints the files that contain any. Read-only.
+import { readFileSync } from 'node:fs';
+
+let withCr = 0;
+const files = process.argv.slice(2);
+for (const file of files) {
+  const bytes = readFileSync(file);
+  let count = 0;
+  for (const byte of bytes) if (byte === 0x0d) count += 1;
+  if (count > 0) {
+    withCr += 1;
+    console.log(`${file}: ${count} CR`);
+  }
+}
+console.log(`files checked: ${files.length}; files with CR: ${withCr}`);

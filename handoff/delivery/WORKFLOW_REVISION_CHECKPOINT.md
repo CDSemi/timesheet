@@ -133,10 +133,30 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - WP5-UX-FIX3 done after addendum 1 (DOM order previous, next, review; tab-order
   assertion both projects): unit 1820; full e2e 164/0/10; preflight and verify exit 0;
   digest 8c07aac5.
-- Running: WP5-UX-FIX3-FREEZE (committer) on base aebc06f.
-- Next action: on the freeze result, WP5-UX-REGATE (package-final, clean export of the
-  freeze), then fresh re-audits WP5-UX-AUDIT-A2 and -B2 (WP5-RECHECK superseded_by moves
-  to A2).
+- WP5-UX-FIX3-FREEZE done: 589bcff on main, pushed (38 files, digest 8c07aac5).
+- WP5-UX-REGATE PASS on 589bcff (NAS NOT VERIFIED): digest 8c07aac5 in three forms;
+  verify 1820; e2e 164/0/10; AC-13 x3 and two zones; drill 208/0, image
+  sha256:6ab12fdf7889467842a044430dee0386d9f8755897ff2d4681421f558080cf72 (removed after
+  the run); boundary only formatHoursMinutes; PDF unchanged; A-01, B-01 (659 <= 788),
+  B-02, B-03, B-04 and tab order observed fixed.
+- Board: current_source_digest 8c07aac5; WP5-RECHECK superseded_by WP5-UX-AUDIT-A2.
+- WP5-UX-AUDIT-B2 done: FIX REQUIRED, one Low finding B2-01 (the one-row "Open a day"
+  input clips the typed date at 360/320px, WCAG 1.4.10); B-01..B-04 closed; 0 weakened
+  assertions; full e2e 164/0/10; digest 8c07aac5.
+- WP5-UX-AUDIT-A2 done: PASS on 589bcff / 8c07aac5, no findings; A-01 closed (12
+  malformed entries refused on three layouts; valid bodies equal to 014bd47); Info R2
+  (Escape order under a picker review when shrinking below 1200px) and R5 (grantee bar
+  on the phone) carried.
+- WP5-UX-FIX4 done: full date in the phone Open-a-day field (220px at 360, 180px at 320;
+  390 layout unchanged); O-1..O-3; unit 1820; full e2e 167/0/13; verify exit 0; digest
+  0b8428fd.
+- Running: WP5-UX-FIX4-FREEZE (committer; also carries the regate, A2/B2 and FIX3-FREEZE
+  records since 589bcff).
+- Next action: FIX4-FREEZE, WP5-UX-REGATE2, fresh rechecks WP5-UX-AUDIT-B3 (area B) and
+  WP5-UX-AUDIT-A3 (area-A delta); then A2 and WP5-RECHECK get superseded_by A3.
+- Next action: if both PASS, the WP5 re-accept (STATE, NEXT_ACTION, WP5 handoff,
+  pilot-packet identity refresh to 589bcff / 8c07aac5 / the new image, then the accept
+  commit); otherwise another bounded fix round.
 - Next action: on the FIX3 result, WP5-UX-FIX3-FREEZE; then WP5-UX-REGATE and fresh
   re-audits A2 and B2 (move WP5-RECHECK superseded_by to WP5-UX-AUDIT-A2).
 

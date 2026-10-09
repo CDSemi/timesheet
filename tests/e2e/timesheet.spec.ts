@@ -119,6 +119,33 @@ test.describe('phone first screen', () => {
     await expect(page.locator('[data-zone-note]')).toBeVisible();
     await expectFirstDayAboveTabBar(page);
   });
+
+  /*
+   * WP5-UX-B2-01: the "Open a day" date field keeps at least a full date wide (--date-field-min)
+   * on narrow phones; the row wraps instead of squeezing the value ("10/09/202", "10/0").
+   */
+  for (const width of [390, 360, 320]) {
+    test(`the Open a day date field shows a full date at ${width}px`, async ({ page, signInThroughUi }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const field = page.getByLabel('Open a day');
+      await field.fill('2026-10-09');
+      await expect(field).toHaveValue('2026-10-09');
+      const box = await field.boundingBox();
+      expect(box, 'date field box').not.toBeNull();
+      const minimum = await page.evaluate<number>(
+        "(() => { const probe = document.createElement('div'); probe.style.width = 'var(--date-field-min)'; document.body.append(probe); const px = probe.getBoundingClientRect().width; probe.remove(); return px; })()",
+      );
+      expect(minimum, 'the --date-field-min token resolves to a width').toBeGreaterThanOrEqual(135);
+      expect(box?.width ?? 0, 'the date field is at least a full date wide').toBeGreaterThanOrEqual(minimum - 0.5);
+      expect(await field.evaluate((input) => input.scrollWidth <= input.clientWidth), 'the date value is not clipped').toBe(true);
+      expect(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'no horizontal scroll').toBe(true);
+      const tools = await page.locator('.tools .open-day').boundingBox();
+      await page.locator('.tools .open-day').screenshot({ path: screenshotPath(`fix4-open-day-w${width}-synthetic.png`) });
+      testInfo.annotations.push({ type: 'open-day-field', description: `width ${width}: field ${box?.width}px, row bottom ${(tools?.y ?? 0) + (tools?.height ?? 0)}` });
+    });
+  }
 });
 
 test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({

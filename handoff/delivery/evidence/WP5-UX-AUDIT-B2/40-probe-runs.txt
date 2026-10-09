@@ -1,0 +1,143 @@
+== probe-summary (run-probe.sh exits)
+probe exit=1 grep=. at 2026-10-09T08:43:57Z
+probe exit=0 grep=PB1|PB5 at 2026-10-09T08:44:45Z
+probe exit=0 grep=PB3b at 2026-10-09T08:49:05Z
+probe exit=0 grep=PB3c at 2026-10-09T08:50:03Z
+
+== probe-run-083926.txt
+
+Running 18 tests using 1 worker
+
+  -   1 [desktop] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period
+  -   2 [desktop] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period
+  ok  3 [desktop] › audit-probe\ux2.probe.ts:307:3 › PB2 keyboard order › PB2 full Tab sequence on the Timesheet page with positions (664ms)
+  -   4 [desktop] › audit-probe\ux2.probe.ts:346:3 › PB3 phone widths › PB3 390, 360 and 320px: sideways scroll, overflowing elements, small targets, the tools row
+  ok  5 [desktop] › audit-probe\ux2.probe.ts:405:3 › PB4 editor modes › PB4 768, 1024, 1199, 1200 and 1280px: modal, overlap, focus walk, Escape, focus return, resize (5.6s)
+  x   6 [desktop] › audit-probe\ux2.probe.ts:522:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open (7.6s)
+  ok  7 [desktop] › audit-probe\ux2.probe.ts:563:3 › PB6 period bar order › PB6 Previous, Next, Review: positions and Tab order (751ms)
+  -   8 [desktop] › audit-probe\ux2.probe.ts:589:3 › PB7 contrast › PB7 period card, clock, tools and form header text
+  -   9 [desktop] › audit-probe\ux2.probe.ts:645:3 › PB8 review phone › PB8 review sheet header on a phone
+  x  10 [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period (2.0m)
+  x  11 [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period (2.0m)
+  ok 12 [mobile] › audit-probe\ux2.probe.ts:307:3 › PB2 keyboard order › PB2 full Tab sequence on the Timesheet page with positions (869ms)
+  ok 13 [mobile] › audit-probe\ux2.probe.ts:346:3 › PB3 phone widths › PB3 390, 360 and 320px: sideways scroll, overflowing elements, small targets, the tools row (879ms)
+  -  14 [mobile] › audit-probe\ux2.probe.ts:405:3 › PB4 editor modes › PB4 768, 1024, 1199, 1200 and 1280px: modal, overlap, focus walk, Escape, focus return, resize
+  -  15 [mobile] › audit-probe\ux2.probe.ts:522:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open
+  ok 16 [mobile] › audit-probe\ux2.probe.ts:563:3 › PB6 period bar order › PB6 Previous, Next, Review: positions and Tab order (580ms)
+  ok 17 [mobile] › audit-probe\ux2.probe.ts:589:3 › PB7 contrast › PB7 period card, clock, tools and form header text (1.2s)
+  ok 18 [mobile] › audit-probe\ux2.probe.ts:645:3 › PB8 review phone › PB8 review sheet header on a phone (617ms)
+
+
+  1) [desktop] › audit-probe\ux2.probe.ts:522:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('listbox', { name: 'Label for 2026-10-07' })
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('listbox', { name: 'Label for 2026-10-07' }) with timeout 7000ms
+      - waiting for getByRole('listbox', { name: 'Label for 2026-10-07' })
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      536 |       await expect(list).toBeVisible();
+      537 |       await page.keyboard.press('Escape');
+    > 538 |       await expect(list).toHaveCount(0);
+          |                          ^
+      539 |       const afterPickerEscape = { editorOpen: (await editor.count()) === 1, pickerFocused: await picker.evaluate((element) => element === document.activeElement) };
+      540 |
+      541 |       await page.getByRole('button', { name: new RegExp(`^Label for ${worked}`) }).click();
+        at <task>\clone\audit-probe\ux2.probe.ts:538:26
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB5-nested-Es-6ce88-alog-leaves-the-editor-open-desktop\error-context.md
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB5-nested-Es-6ce88-alog-leaves-the-editor-open-desktop\error-context.md
+
+  2) [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('dialog', { name: 'Clock out' }).getByRole('button', { name: 'Clock out, no breaks taken' })
+
+
+      254 |         const dialog = page.getByRole('dialog', { name: 'Clock out' });
+      255 |         await expect(dialog).toBeVisible();
+    > 256 |         await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+          |                                                                                  ^
+      257 |         await expect(dialog).toHaveCount(0);
+      258 |         await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      259 |         await page.evaluate(() => window.scrollTo(0, 0));
+        at <task>\clone\audit-probe\ux2.probe.ts:256:82
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB1-phone-fir-2078f-on-batch-on-previous-period-mobile\error-context.md
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB1-phone-fir-2078f-on-batch-on-previous-period-mobile\error-context.md
+
+  3) [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('dialog', { name: 'Clock out' }).getByRole('button', { name: 'Clock out, no breaks taken' })
+
+
+      254 |         const dialog = page.getByRole('dialog', { name: 'Clock out' });
+      255 |         await expect(dialog).toBeVisible();
+    > 256 |         await dialog.getByRole('button', { name: 'Clock out, no breaks taken' }).click();
+          |                                                                                  ^
+      257 |         await expect(dialog).toHaveCount(0);
+      258 |         await expect(page.getByRole('button', { name: 'Clock in' })).toBeVisible();
+      259 |         await page.evaluate(() => window.scrollTo(0, 0));
+        at <task>\clone\audit-probe\ux2.probe.ts:256:82
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB1-phone-fir-f3b2f-on-batch-on-previous-period-mobile\error-context.md
+
+    Error Context: <task>\tmp\wp5-ux-audit-b2-probe-output\ux2.probe.ts-PB1-phone-fir-f3b2f-on-batch-on-previous-period-mobile\error-context.md
+
+  3 failed
+    [desktop] › audit-probe\ux2.probe.ts:522:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open 
+    [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period 
+    [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period 
+  7 skipped
+  8 passed (4.5m)
+
+== probe-run-084433.txt
+
+Running 6 tests using 1 worker
+
+  -  1 [desktop] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period
+  -  2 [desktop] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period
+  ok 3 [desktop] › audit-probe\ux2.probe.ts:523:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open (1.1s)
+  ok 4 [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-equal › PB1 zone-equal: clocked out, clocked in, details on, batch on, previous period (2.8s)
+  ok 5 [mobile] › audit-probe\ux2.probe.ts:240:7 › PB1 phone first screen › zone-note › PB1 zone-note: clocked out, clocked in, details on, batch on, previous period (2.6s)
+  -  6 [mobile] › audit-probe\ux2.probe.ts:523:3 › PB5 nested Escape › PB5 editor open at 1280px: Escape in a label picker and in a review dialog leaves the editor open
+
+  3 skipped
+  3 passed (11.6s)
+
+== probe-run-084859.txt
+
+Running 2 tests using 1 worker
+
+  -  1 [desktop] › audit-probe\ux2.probe.ts:406:3 › PB3b open a day field › PB3b the date field with a value at four phone widths
+  ok 2 [mobile] › audit-probe\ux2.probe.ts:406:3 › PB3b open a day field › PB3b the date field with a value at four phone widths (1.0s)
+
+  1 skipped
+  1 passed (5.8s)
+
+== probe-run-084941.txt
+
+Running 2 tests using 1 worker
+
+  -  1 [desktop] › audit-probe\ux2.probe.ts:429:3 › PB3c clock card › PB3c clocked in at three phone widths: clipped text inside the clock and period cards
+  ok 2 [mobile] › audit-probe\ux2.probe.ts:429:3 › PB3c clock card › PB3c clocked in at three phone widths: clipped text inside the clock and period cards (2.4s)
+
+  1 skipped
+  1 passed (22.0s)

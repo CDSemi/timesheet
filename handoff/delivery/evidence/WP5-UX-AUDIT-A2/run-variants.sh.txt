@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Runs the FIX2 unit test file and the FIX2 e2e test against variants of the two FIX2 source files
+# in the scratch copy $T/revert (never in the repository). R0 = 589bcff as reviewed (control),
+# R1 = both files as at 831f760 (fix removed), R2 = only the form as at 831f760 (model fix kept),
+# R3 = the form reads the bad-input flags only from change events (submit-time read removed).
+# Usage: bash run-variants.sh <variant> ; output goes to stdout.
+source <task>/env.sh
+V="$1"
+S=$T/revert
+C=$S/src/client/components
+case "$V" in
+  R0) cp $T/variants/DayFieldsForm-589.tsx $C/DayFieldsForm.tsx; cp $T/variants/leaveInputModel-589.ts $C/leaveInputModel.ts ;;
+  R1) cp $T/variants/DayFieldsForm-831.tsx $C/DayFieldsForm.tsx; cp $T/variants/leaveInputModel-831.ts $C/leaveInputModel.ts ;;
+  R2) cp $T/variants/DayFieldsForm-831.tsx $C/DayFieldsForm.tsx; cp $T/variants/leaveInputModel-589.ts $C/leaveInputModel.ts ;;
+  R3) cp $T/variants/DayFieldsForm-mut-onchange-only.tsx $C/DayFieldsForm.tsx; cp $T/variants/leaveInputModel-589.ts $C/leaveInputModel.ts ;;
+  *) echo "unknown variant $V"; exit 2 ;;
+esac
+cd $S || exit 2
+echo "== variant $V at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "-- files (git hash-object --no-filters)"
+git hash-object --no-filters $C/DayFieldsForm.tsx $C/leaveInputModel.ts
+echo "-- build"
+npmr run build > $T/raw/variant-$V-build.txt 2>&1
+echo "build exit=$?"
+echo "-- unit: tests/client/leaveInputModel.test.ts"
+node node_modules/vitest/vitest.mjs run tests/client/leaveInputModel.test.ts 2>&1
+echo "unit exit=$?"
+echo "-- e2e: day-editor.spec.ts -g 'malformed leave' (both projects)"
+node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts -g "malformed leave" 2>&1
+echo "e2e exit=$?"

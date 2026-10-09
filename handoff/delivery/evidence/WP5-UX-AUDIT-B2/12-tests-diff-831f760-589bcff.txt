@@ -1,0 +1,324 @@
+diff --git a/tests/client/leaveInputModel.test.ts b/tests/client/leaveInputModel.test.ts
+index 3f971c4..b2bed7f 100644
+--- a/tests/client/leaveInputModel.test.ts
++++ b/tests/client/leaveInputModel.test.ts
+@@ -1,5 +1,12 @@
+ import { describe, expect, it } from 'vitest';
+-import { LEAVE_INPUT_MESSAGE, LEAVE_MAX_MINUTES, leaveInputOf, parseLeaveInput } from '../../src/client/components/leaveInputModel.ts';
++import {
++  invalidLeaveParts,
++  LEAVE_INPUT_MESSAGE,
++  LEAVE_MAX_MINUTES,
++  leaveInputOf,
++  parseLeaveInput,
++} from '../../src/client/components/leaveInputModel.ts';
++import { leaveHint } from '../../src/client/components/sessionModel.ts';
+ 
+ /*
+  * Partial leave typed as hours and minutes: an input conversion to the same integer leave
+@@ -44,6 +51,36 @@ describe('leave typed as hours and minutes', () => {
+     }
+   });
+ 
++  it('refuses malformed text such as "2-" and "3-", and an empty or out of range part', () => {
++    for (const text of ['2-', '3-', 'e', '1.5', '-1']) {
++      expect(parseLeaveInput({ hours: text, minutes: '30' }), `hours ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++      expect(parseLeaveInput({ hours: '4', minutes: text }), `minutes ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    }
++    expect(parseLeaveInput({ hours: '', minutes: '60' }).ok).toBe(false);
++    expect(parseLeaveInput({ hours: '25', minutes: '' }).ok).toBe(false);
++  });
++
++  // A number field holds "" for text the browser cannot read ("2-", "e"), exactly like an empty field,
++  // so the form passes the browser's own bad-input flag along; it must never be read as 0.
++  it('refuses a part the browser flagged as bad input, whatever value it reports', () => {
++    expect(parseLeaveInput({ hours: '', minutes: '30', hoursBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    expect(parseLeaveInput({ hours: '4', minutes: '', minutesBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: true, minutesBad: true }).ok).toBe(false);
++    expect(parseLeaveInput({ hours: '2', minutes: '30', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 150 });
++    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 0 });
++    expect(leaveHint({ hours: '', minutes: '30', hoursBad: true })).toBeNull();
++  });
++
++  it('names the parts that are wrong so the form can mark them', () => {
++    expect(invalidLeaveParts({ hours: '2', minutes: '30' })).toEqual({ hours: false, minutes: false });
++    expect(invalidLeaveParts({ hours: '', minutes: '' })).toEqual({ hours: false, minutes: false });
++    expect(invalidLeaveParts({ hours: '', minutes: '30', hoursBad: true })).toEqual({ hours: true, minutes: false });
++    expect(invalidLeaveParts({ hours: '4', minutes: '3-' })).toEqual({ hours: false, minutes: true });
++    expect(invalidLeaveParts({ hours: '25', minutes: '60' })).toEqual({ hours: true, minutes: true });
++    // Each part is fine alone but the sum passes 24h 00m: both are marked.
++    expect(invalidLeaveParts({ hours: '24', minutes: '1' })).toEqual({ hours: true, minutes: true });
++  });
++
+   it('starts the fields from the stored leave minutes, and the round trip is exact', () => {
+     expect(leaveInputOf(0)).toEqual({ hours: '0', minutes: '0' });
+     expect(leaveInputOf(240)).toEqual({ hours: '4', minutes: '0' });
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 4584bd0..f9030c3 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -597,6 +597,78 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
+   }
+ });
+ 
++test('malformed leave hours or minutes are never saved as another leave; empty fields still save 0', async ({ page, employeeSeed, signInThroughUi }) => {
++  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  const puts: string[] = [];
++  page.on('request', (request) => {
++    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${date}`) puts.push(request.postData() ?? '');
++  });
++  try {
++    await signInThroughUi();
++    const editor = await openEditor(page, date);
++    const fields = editor.getByRole('form', { name: 'Day fields' });
++    const hours = fields.getByLabel('Leave hours');
++    const minutes = fields.getByLabel('Leave minutes');
++    const save = fields.getByRole('button', { name: 'Save day fields' });
++    await fields.getByLabel('Leave kind').selectOption('vacation');
++    const untouched = await employeeSeed.dayView(date);
++
++    // The browser holds text such as "2-" or "e" in a number field as an empty value with a bad-input flag;
++    // it must not be read as 0 (hours "2-" with 30 minutes was once stored as 30, not 150).
++    const refuse = async (hoursKeys: string | null, minutesKeys: string | null, marked: { hours: boolean; minutes: boolean }) => {
++      await hours.fill('');
++      await minutes.fill('');
++      if (hoursKeys !== null) await hours.pressSequentially(hoursKeys);
++      else await hours.fill('2');
++      if (minutesKeys !== null) await minutes.pressSequentially(minutesKeys);
++      else await minutes.fill('30');
++      await save.click();
++      const alert = fields.getByRole('alert');
++      await expect(alert).toHaveCount(1);
++      await expect(alert).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
++      const alertId = await alert.getAttribute('id');
++      expect(alertId, 'the error has an id the fields point to').toBeTruthy();
++      for (const [field, isMarked] of [[hours, marked.hours], [minutes, marked.minutes]] as const) {
++        if (isMarked) {
++          await expect(field).toHaveAttribute('aria-invalid', 'true');
++          await expect(field).toHaveAttribute('aria-describedby', new RegExp(alertId ?? '\\0'));
++        } else {
++          await expect(field).not.toHaveAttribute('aria-invalid', 'true');
++        }
++      }
++      expect(puts, 'nothing is sent').toEqual([]);
++      const stored = await employeeSeed.dayView(date);
++      expect(stored.leave_minutes).toBe(0);
++      expect(stored.entry?.version ?? null).toBe(untouched.entry?.version ?? null);
++    };
++    await refuse('2-', null, { hours: true, minutes: false });
++    await refuse(null, '3-', { hours: false, minutes: true });
++    await refuse('e', null, { hours: true, minutes: false });
++    await refuse('1.5', '0', { hours: true, minutes: false });
++    await refuse('-1', null, { hours: true, minutes: false });
++    await refuse('0', '60', { hours: false, minutes: true });
++    await refuse('24', '1', { hours: true, minutes: true });
++
++    // Valid input is unchanged: 2 h 30 m is the same 150 leave minutes.
++    await hours.fill('2');
++    await minutes.fill('30');
++    await save.click();
++    await expect(editor.getByText('Day fields saved.')).toBeVisible();
++    expect(puts.map((body) => JSON.parse(body) as { leave_minutes: number })).toMatchObject([{ leave_minutes: 150 }]);
++    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(150);
++
++    // Empty fields still save 0.
++    await hours.fill('');
++    await minutes.fill('');
++    await save.click();
++    await expect.poll(() => puts.length).toBe(2);
++    expect(JSON.parse(puts[1] ?? '{}')).toMatchObject({ leave_minutes: 0 });
++    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(0);
++  } finally {
++    await employeeSeed.resetDay(date);
++  }
++});
++
+ test('the OT leave mismatch warning informs without spending or reserving anything', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+   const project = testInfo.project.name;
+   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+@@ -758,7 +830,12 @@ test('future days show as upcoming from the server date, past days without a rec
+   const next = page.getByRole('button', { name: 'Next period' });
+   const row = page.locator(`[data-day="${futureDay}"]`);
+   for (let step = 0; step < 4 && (await row.count()) === 0; step += 1) {
++    // Wait for the sheet to change before looking for the row: the old sheet also has 14 days, so
++    // counting rows alone raced the render and could click past the period holding the future day.
++    const period = page.getByRole('region', { name: 'Pay period' });
++    const shown = (await period.textContent()) ?? '';
+     await next.click();
++    await expect(period).not.toHaveText(shown);
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+   }
+   await expect(row).toBeVisible();
+@@ -886,6 +963,82 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a
+   }
+ });
+ 
++/** True when a focused element lies entirely inside the open editor's box (the editor hides it). */
++function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boolean; name: string }> {
++  return page.evaluate(`(() => {
++    const active = document.activeElement;
++    const panel = document.querySelector('dialog[open]');
++    if (active === null || active === document.body || panel === null) return { hidden: false, outside: false, name: '' };
++    const name = active.tagName + ' ' + (active.getAttribute('aria-label') ?? (active.textContent ?? '').slice(0, 30));
++    if (panel.contains(active)) return { hidden: false, outside: false, name };
++    const a = active.getBoundingClientRect();
++    const p = panel.getBoundingClientRect();
++    const hidden = a.left >= p.left && a.right <= p.right && a.top >= p.top && a.bottom <= p.bottom;
++    return { hidden, outside: true, name };
++  })()`);
++}
++
++test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet control', () => {
++  test.skip(({ isMobile }) => isMobile, 'The 768 to 1199px side panel is a desktop-project layout');
++
++  for (const width of [768, 1024]) {
++    test(`at ${width}px no focused sheet control lies under the open panel, and Escape closes it from the sheet`, async ({
++      page,
++      employeeSeed,
++      signInThroughUi,
++    }) => {
++      const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++      await page.setViewportSize({ width, height: 800 });
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++      await dayButton(date).click();
++      const editor = page.getByRole('dialog', { name: /Day editor/ });
++      await expect(editor).toBeVisible();
++      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
++      await page.screenshot({ path: screenshotPath(`editor-w${width}-synthetic.png`), animations: 'disabled' });
++
++      // Keyboard walk both ways: whatever takes focus is inside the panel, or is not entirely under it.
++      for (const key of ['Tab', 'Shift+Tab']) {
++        for (let step = 0; step < 70; step += 1) {
++          await page.keyboard.press(key);
++          const state = await focusHiddenByPanel(page);
++          expect(state.hidden, `${state.name} is focused entirely under the panel after ${step + 1} ${key} presses`).toBe(false);
++        }
++      }
++
++      // Focus placed on a sheet control (when the page allows it at all): Escape still closes the panel.
++      await dayButton(other).focus();
++      await page.keyboard.press('Escape');
++      await expect(editor).toHaveCount(0);
++      await expect(dayButton(date)).toBeFocused();
++    });
++  }
++
++  test('at 1280px the panel stays beside the sheet and Escape closes it wherever focus is', async ({ page, employeeSeed, signInThroughUi }) => {
++    const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++    await signInThroughUi();
++    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++    await dayButton(date).click();
++    const editor = page.getByRole('dialog', { name: /Day editor/ });
++    await expect(editor).toBeVisible();
++    expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
++    // Focus on another sheet control, then on the toolbar: Escape closes the panel from both.
++    await dayButton(other).focus();
++    await expect(dayButton(other)).toBeFocused();
++    await page.keyboard.press('Escape');
++    await expect(editor).toHaveCount(0);
++    // Focus returns to the button of the day whose editor was open.
++    await expect(dayButton(date)).toBeFocused();
++    await dayButton(date).click();
++    await expect(editor).toBeVisible();
++    await page.getByRole('button', { name: 'Show details' }).focus();
++    await page.keyboard.press('Escape');
++    await expect(editor).toHaveCount(0);
++    await expect(dayButton(date)).toBeFocused();
++  });
++});
++
+ test('one tap confirms the suggested breaks of a saved session with the same session update and its version', async ({
+   page,
+   employeeSeed,
+diff --git a/tests/e2e/import.spec.ts b/tests/e2e/import.spec.ts
+index 2ef900b..1f53c32 100644
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -384,6 +384,10 @@ test('the Import entry is for the signed-in person and is not part of the admini
+   const nav = page.getByRole('navigation', { name: 'Main' });
+   await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
++  // The Admin view itself (both projects) has no import or opening-balance controls.
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
++  await expect(page.locator('main')).not.toContainText('Opening OT balance');
+   if (isPhone(page)) {
+     await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
+   } else {
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 8ac98b7..762d282 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -57,6 +57,70 @@ test.describe('viewing zone equals the reporting zone', () => {
+   });
+ });
+ 
++/**
++ * WP5-UX-B-01: on a phone the first day row must be fully visible on the first screen, above the
++ * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
++ * the viewing zone equal to the reporting zone and with the longer zone note shown.
++ */
++async function expectFirstDayAboveTabBar(page: Page) {
++  const first = page.locator('[data-day]').first();
++  await expect(first).toBeVisible();
++  const tabs = await page.locator('.shell-tabs').boundingBox();
++  const row = await first.boundingBox();
++  const viewport = page.viewportSize();
++  expect(tabs, 'tab bar box').not.toBeNull();
++  expect(row, 'first day row box').not.toBeNull();
++  expect(viewport, 'viewport').not.toBeNull();
++  expect((row?.y ?? 0) + (row?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
++  expect(tabs?.y ?? 0, 'the tab bar sits on the bottom edge').toBeGreaterThan((viewport?.height ?? 0) / 2);
++  // Nothing was scrolled to get here.
++  expect(await page.evaluate('window.scrollY')).toBe(0);
++}
++
++test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
++  await signInThroughUi();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  const bar = page.locator('.period-bar');
++  const previous = bar.getByRole('button', { name: 'Previous period' });
++  const next = bar.getByRole('button', { name: 'Next period' });
++  const review = bar.locator('[data-review-link]');
++  await previous.focus();
++  await page.keyboard.press('Tab');
++  await expect(next).toBeFocused();
++  await page.keyboard.press('Tab');
++  await expect(review).toBeFocused();
++  // Visual order: top to bottom, then left to right (no overlap of rows is assumed within 4px).
++  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
++  for (const box of boxes) expect(box, 'control box').not.toBeNull();
++  const [a, b, c] = boxes;
++  const before = (first: typeof a, second: typeof a) =>
++    (first?.y ?? 0) + 4 < (second?.y ?? 0) || (Math.abs((first?.y ?? 0) - (second?.y ?? 0)) <= 4 && (first?.x ?? 0) < (second?.x ?? 0));
++  expect(before(a, b), 'Previous comes before Next visually').toBe(true);
++  expect(before(b, c), 'Next comes before Review visually').toBe(true);
++});
++
++test.describe('phone first screen', () => {
++  test.skip(({ isMobile }) => !isMobile, 'The first-screen budget is the 390x844 phone');
++
++  test.describe('viewing zone equals the reporting zone', () => {
++    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++    test('the first day row is fully visible above the tab bar', async ({ page, signInThroughUi }) => {
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      await expect(page.locator('[data-zone-note]')).toHaveCount(0);
++      await expectFirstDayAboveTabBar(page);
++    });
++  });
++
++  test('the first day row is fully visible above the tab bar with the zone note shown', async ({ page, signInThroughUi }) => {
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await expect(page.locator('[data-zone-note]')).toBeVisible();
++    await expectFirstDayAboveTabBar(page);
++  });
++});
++
+ test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({
+   page,
+   employeeSeed,

@@ -1,0 +1,297 @@
+// WP5-UX-AUDIT-A2 scope 2 (AC-04) and scope 3 (no new risk from the modal editor), on the reviewed
+// build 589bcff, in three layouts: 1280 (non-modal panel), 1024 (modal side panel, FIX3) and the
+// 390 phone (modal bottom sheet). Reason-required corrections, stale versions and the conflict
+// confirmation through the picker and the editor; then the modal editor's own risks: unsaved input
+// across a layout switch, Escape never writes, the delete confirmation, nested review dialogs and
+// the inert page. Synthetic accounts on example.invalid only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { editorLayout, openDay, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LA = 'America/Los_Angeles';
+
+test('AC-04: reason, stale version and conflict through the picker and the editor in each layout', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Edit Probe', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'four past free workdays').toBeGreaterThanOrEqual(4);
+  const [staleDay = '', quickDay = '', conflictDay = '', fieldsStaleDay = ''] = free;
+  const batch: any[] = [];
+  const dayPuts: any[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname === '/api/days/batch') batch.push(request.postDataJSON());
+    if (request.method() === 'PUT' && pathname.startsWith('/api/days/')) dayPuts.push({ path: pathname, body: request.postDataJSON() });
+  });
+  const result: Record<string, unknown> = { project: testInfo.project.name };
+  const picker = (workDate: string) => page.getByRole('button', { name: new RegExp(`^Label for ${workDate}`) });
+  const pick = async (workDate: string, label: string) => {
+    await picker(workDate).click();
+    await page.getByRole('listbox', { name: `Label for ${workDate}` }).getByRole('option', { name: label, exact: true }).click();
+  };
+
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+
+  // 1. Reason-required correction through the in-cell picker of an old period.
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldDay = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const oldBefore = await person.api.dayView(oldDay);
+  await pick(oldDay, 'Vacation');
+  const dialog = page.getByRole('dialog', { name: `Review label change for ${oldDay}` });
+  await expect(dialog).toBeVisible();
+  const reasonBox = dialog.getByLabel(/Reason for editing an old or finalized period/);
+  await expect(reasonBox).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  expect(batch.map((body) => body.mode), 'only the preview before the reason').toEqual(['preview']);
+  expect((await person.api.dayView(oldDay)).category, 'nothing saved before the reason').toBe(oldBefore.category);
+  await reasonBox.fill('Audit A2 synthetic correction (picker)');
+  await dialog.getByRole('button', { name: 'Commit changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_reason_commit = batch.at(-1);
+  expect(batch.at(-1)).toMatchObject({ mode: 'commit', reason: 'Audit A2 synthetic correction (picker)', entries: [{ work_date: oldDay, category: 'Vacation' }] });
+
+  // 2. Reason-required correction through the day editor of this layout.
+  await page.locator(`[data-day="${oldDay}"]`).getByRole('button', { name: `Edit ${oldDay}`, exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  result.editor_layout = await editorLayout(page);
+  const fields = editor.getByRole('form', { name: 'Day fields' });
+  await fields.getByLabel('Worked from home (WFH)').check();
+  await expect(fields.getByRole('button', { name: 'Save day fields' })).toBeDisabled();
+  expect(dayPuts, 'no day PUT before the reason').toEqual([]);
+  await editor.getByLabel('Reason for editing an old or finalized period').fill('Audit A2 synthetic correction (editor)');
+  await fields.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  result.editor_reason_put = dayPuts.at(-1);
+  expect(dayPuts.at(-1)?.body).toMatchObject({ reason: 'Audit A2 synthetic correction (editor)', wfh: true, category: 'Vacation' });
+  await editor.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toHaveCount(0);
+  const history = await person.api.call<any>('GET', '/api/history');
+  result.history_reasons = history.audit_events
+    .filter((event: any) => typeof event.reason === 'string' && event.reason.startsWith('Audit A2 synthetic'))
+    .map((event: any) => ({ operation: event.operation, entity_type: event.entity_type, reason: event.reason }));
+  expect((result.history_reasons as any[]).map((event) => event.reason)).toEqual(
+    expect.arrayContaining(['Audit A2 synthetic correction (picker)', 'Audit A2 synthetic correction (editor)']),
+  );
+
+  // 3. Stale version through the picker.
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator(`[data-day="${staleDay}"]`)).toBeVisible();
+  await person.api.putDay(staleDay, { notes: 'changed elsewhere (synthetic)' });
+  const staleBefore = await person.api.dayView(staleDay);
+  batch.length = 0;
+  await pick(staleDay, 'Sick');
+  const staleDialog = page.getByRole('dialog', { name: `Review label change for ${staleDay}` });
+  await expect(staleDialog).toBeVisible();
+  await expect(staleDialog.getByRole('alert')).toContainText('Some dates changed elsewhere');
+  await expect(staleDialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  result.picker_stale_modes = batch.map((body) => body.mode);
+  expect(batch.map((body) => body.mode)).toEqual(['preview']);
+  await staleDialog.getByRole('button', { name: 'Cancel' }).click();
+  expect((await person.api.dayView(staleDay)).entry?.version).toBe(staleBefore.entry?.version);
+
+  // 4. Stale version through the editor's day fields form (a write the editor loaded earlier).
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  dayPuts.length = 0;
+  const fieldsEditor = await openDay(page, fieldsStaleDay);
+  await person.api.putDay(fieldsStaleDay, { notes: 'changed behind the editor (synthetic)' });
+  const behind = await person.api.dayView(fieldsStaleDay);
+  const fieldsForm = fieldsEditor.getByRole('form', { name: 'Day fields' });
+  await fieldsForm.getByLabel('Notes').fill('typed in the editor (synthetic)');
+  await fieldsForm.getByRole('button', { name: 'Save day fields' }).click();
+  const fieldsStale = fieldsEditor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(fieldsStale).toBeVisible();
+  const fieldsAfter = await person.api.dayView(fieldsStaleDay);
+  result.editor_fields_stale = { sent_expected_version: dayPuts.at(-1)?.body?.expected_version ?? 'none', server_version: behind.entry?.version, after_version: fieldsAfter.entry?.version, after_notes: fieldsAfter.entry?.notes };
+  expect(dayPuts.at(-1)?.body?.expected_version ?? null, 'the editor sent the version it loaded').toBeNull();
+  expect(fieldsAfter.entry?.version).toBe(behind.entry?.version);
+  expect(fieldsAfter.entry?.notes).toBe('changed behind the editor (synthetic)');
+  await fieldsStale.getByRole('button', { name: 'Reload day' }).click();
+  await expect(fieldsStale).toHaveCount(0);
+  await expect(fieldsEditor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes')).toHaveValue('changed behind the editor (synthetic)');
+  await fieldsEditor.getByRole('button', { name: 'Close' }).click();
+
+  // 5. Stale version through the one-tap break confirmation of the editor.
+  await person.api.seedUnconfirmedBreaksDay(quickDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.locator(`[data-day="${quickDay}"]`).getByRole('button', { name: `Edit ${quickDay}`, exact: true }).click();
+  const quickEditor = page.getByRole('dialog', { name: /Day editor/ });
+  const quick = quickEditor.getByRole('group', { name: /^Breaks of the session/ });
+  await expect(quick.getByRole('button', { name: 'Confirm suggested breaks' })).toBeVisible();
+  const session = (await person.api.dayView(quickDay)).sessions[0];
+  await person.api.call('PUT', `/api/sessions/${session?.id}`, {
+    start: { local: `${quickDay}T09:00`, zone: LA },
+    end: { local: `${quickDay}T18:30`, zone: LA },
+    input_zone: LA,
+    breaks: [],
+    breaks_confirmed: false,
+    expected_version: session?.version,
+  });
+  const changed = (await person.api.dayView(quickDay)).sessions[0];
+  await quick.getByRole('button', { name: 'Confirm suggested breaks' }).click();
+  const staleAlert = quickEditor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(staleAlert).toBeVisible();
+  const quickAfter = (await person.api.dayView(quickDay)).sessions[0];
+  result.quick_stale = { loaded_version: session?.version, changed_version: changed?.version, after_version: quickAfter?.version, after_confirmed: quickAfter?.breaks_confirmed };
+  expect(quickAfter?.version).toBe(changed?.version);
+  expect(quickAfter?.breaks_confirmed).toBe(false);
+
+  // 6. The delete confirmation in this layout's editor: Delete, then Escape, deletes nothing.
+  await staleAlert.getByRole('button', { name: 'Reload day' }).click();
+  await quickEditor.getByRole('button', { name: /^Delete session/ }).click();
+  await expect(quickEditor.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(quickEditor).toHaveCount(0);
+  result.delete_then_escape_sessions = (await person.api.dayView(quickDay)).sessions.length;
+  expect(result.delete_then_escape_sessions, 'Escape after Delete deletes nothing').toBe(1);
+
+  // 7. Conflict confirmation through the picker.
+  await person.api.seedCompleteDay(conflictDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  batch.length = 0;
+  await pick(conflictDay, 'Off');
+  const conflictDialog = page.getByRole('dialog', { name: `Review label change for ${conflictDay}` });
+  await conflictDialog.getByRole('button', { name: 'Review conflicts' }).click();
+  await expect(page.getByRole('dialog', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+  const confirmButton = page.getByRole('button', { name: 'Confirm and commit' });
+  await expect(confirmButton).toBeDisabled();
+  expect((await person.api.dayView(conflictDay)).category).toBe('Worked');
+  await page.getByLabel('I confirm the label change for these dates').check();
+  await confirmButton.click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_conflict_commit = batch.at(-1);
+  expect(batch.at(-1)).toMatchObject({ mode: 'commit', confirm_conflicts: true });
+  expect((await person.api.dayView(conflictDay)).sessions).toHaveLength(1);
+  writeResult(`ac04-${testInfo.project.name}.json`, { oldDay, staleDay, quickDay, conflictDay, fieldsStaleDay, ...result });
+});
+
+test('no new risk: the modal editor keeps unsaved input across a layout switch, Escape never writes, the page behind is inert, nested reviews keep their confirmation', async ({
+  page,
+  adminSeed,
+  builtServer,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Resizes a desktop browser across 1200px and 768px itself');
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Risk Probe', signature: 'none' });
+  const [day = '', otherDay = ''] = await person.api.displayedPeriodFreeWorkdays();
+  const writes: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) writes.push(`${request.method()} ${pathname}`);
+  });
+  const result: Record<string, unknown> = {};
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  writes.length = 0;
+
+  // a. Unsaved input across 1280 -> 1024 -> 700 -> 1280: the same editor keeps what was typed and sends nothing.
+  const editor = await openDay(page, day);
+  const form = editor.getByRole('form', { name: 'Day fields' });
+  await form.getByLabel('Notes').fill('unsaved synthetic note');
+  await form.getByLabel('Leave hours').fill('2');
+  await form.getByLabel('Leave minutes').fill('30');
+  const snapshots: any[] = [];
+  for (const width of [1280, 1024, 700, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(400);
+    snapshots.push({
+      width,
+      layout: await editorLayout(page),
+      notes: await form.getByLabel('Notes').inputValue(),
+      hours: await form.getByLabel('Leave hours').inputValue(),
+      minutes: await form.getByLabel('Leave minutes').inputValue(),
+      focusInEditor: await page.evaluate("document.activeElement !== null && document.querySelector('dialog[data-day-editor]').contains(document.activeElement)"),
+    });
+  }
+  result.layout_switch = snapshots;
+  expect(snapshots.map((s) => s.layout.modal)).toEqual([false, true, true, false]);
+  for (const s of snapshots) expect([s.notes, s.hours, s.minutes], `width ${s.width}: typed input kept`).toEqual(['unsaved synthetic note', '2', '30']);
+  expect(writes, 'nothing written by a layout switch').toEqual([]);
+
+  // b. Escape at 1024 (modal) closes without writing; reopening starts from the server.
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  const reopened = await openDay(page, day);
+  result.reopen_after_escape = {
+    notes: await reopened.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').inputValue(),
+    writes: [...writes],
+  };
+  expect(writes).toEqual([]);
+
+  // c. The page behind the modal editor (1024) is inert: no sheet, clock or picker control takes focus or a click.
+  const inert = await page.evaluate(`(() => {
+    const out = {};
+    const probe = (name, el) => {
+      if (el === null) { out[name] = 'absent'; return; }
+      el.focus();
+      out[name] = { focused: document.activeElement === el };
+    };
+    probe('clock', document.querySelector('.clock-panel button'));
+    probe('label_picker', document.querySelector('[data-label-picker] button'));
+    probe('open_a_day', document.querySelector('.open-day input'));
+    probe('change_several_days', [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Change several days') ?? null);
+    probe('day_button', document.querySelector('[data-day] button[aria-label^="Edit "]'));
+    return out;
+  })()`);
+  result.inert_behind_modal = inert;
+  for (const [name, value] of Object.entries(inert as Record<string, any>)) {
+    if (value !== 'absent') expect(value.focused, `${name} takes focus behind the modal editor`).toBe(false);
+  }
+  const clockClick = await page.locator('.clock-panel button').click({ timeout: 1500, trial: true }).then(() => 'clickable', () => 'blocked');
+  result.clock_click_behind_modal = clockClick;
+  expect(clockClick).toBe('blocked');
+  await page.keyboard.press('Escape');
+  await expect(reopened).toHaveCount(0);
+
+  // d. At 1280 with the editor open, a picker pick in an old period opens its review (modal);
+  //    Escape closes the review only, the editor stays, and nothing is committed.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const wideEditor = await openDay(page, day);
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldDay = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+  writes.length = 0;
+  await page.getByRole('button', { name: new RegExp(`^Label for ${oldDay}`) }).click();
+  await page.getByRole('listbox', { name: `Label for ${oldDay}` }).getByRole('option', { name: 'Sick', exact: true }).click();
+  const review = page.getByRole('dialog', { name: `Review label change for ${oldDay}` });
+  await expect(review).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(review).toHaveCount(0);
+  const editorStays = await wideEditor.count();
+  result.nested_review_escape = { editor_still_open: editorStays === 1, writes: [...writes] };
+  expect(editorStays).toBe(1);
+  expect(writes.filter((w) => w !== 'POST /api/days/batch')).toEqual([]);
+
+  // e. The same review, then the window shrinks below 1200px: the editor turns modal; the review's
+  //    reason rule still holds (Commit disabled without it) and nothing is committed by the switch.
+  writes.length = 0;
+  await page.getByRole('button', { name: new RegExp(`^Label for ${oldDay}`) }).click();
+  await page.getByRole('listbox', { name: `Label for ${oldDay}` }).getByRole('option', { name: 'Sick', exact: true }).click();
+  await expect(review).toBeVisible();
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.waitForTimeout(500);
+  const stacked = await page.evaluate(`(() => [...document.querySelectorAll('dialog')].filter((d) => d.open).map((d) => ({ name: d.getAttribute('aria-labelledby') ?? d.getAttribute('aria-label') ?? '', modal: d.matches(':modal'), editor: d.hasAttribute('data-day-editor') })))()`);
+  result.resize_with_nested_review = { dialogs: stacked };
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const afterFirstEscape = await page.evaluate(`[...document.querySelectorAll('dialog')].filter((d) => d.open).map((d) => d.hasAttribute('data-day-editor') ? 'editor' : 'review')`);
+  (result.resize_with_nested_review as any).open_after_first_escape = afterFirstEscape;
+  if ((await review.count()) === 1) {
+    await expect(review.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+    (result.resize_with_nested_review as any).commit_disabled_without_reason = true;
+  }
+  (result.resize_with_nested_review as any).writes = writes.filter((w) => w !== 'POST /api/days/batch');
+  const batchModes: string[] = [];
+  expect(writes.filter((w) => w !== 'POST /api/days/batch'), 'no other write').toEqual([]);
+  expect((await person.api.dayView(oldDay)).category, 'nothing committed').not.toBe('Sick');
+  result.batch_calls_in_e = writes.filter((w) => w === 'POST /api/days/batch').length;
+  void batchModes;
+  writeResult(`risk-${testInfo.project.name}.json`, { day, otherDay, oldDay, ...result });
+});

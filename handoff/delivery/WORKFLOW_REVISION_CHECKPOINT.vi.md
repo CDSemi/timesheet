@@ -135,10 +135,31 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - WP5-UX-FIX3 xong sau phụ lục 1 (thứ tự DOM trước, sau, review; thêm assertion thứ tự
   Tab cho cả hai bản): unit 1820; toàn bộ e2e 164/0/10; preflight và verify exit 0;
   digest 8c07aac5.
-- Đang chạy: WP5-UX-FIX3-FREEZE (committer) trên gốc aebc06f.
-- Bước kế tiếp: khi có kết quả freeze, WP5-UX-REGATE (gate cuối gói, bản export sạch của
-  freeze), rồi audit lại độc lập WP5-UX-AUDIT-A2 và -B2 (superseded_by của WP5-RECHECK
-  chuyển sang A2).
+- WP5-UX-FIX3-FREEZE xong: 589bcff trên main, đã push (38 file, digest 8c07aac5).
+- WP5-UX-REGATE PASS trên 589bcff (NAS chưa kiểm): digest 8c07aac5 ở ba dạng; verify
+  1820; e2e 164/0/10; AC-13 ba lần và hai múi giờ; drill 208/0, image
+  sha256:6ab12fdf7889467842a044430dee0386d9f8755897ff2d4681421f558080cf72 (đã xóa sau khi
+  chạy); ranh giới chỉ có formatHoursMinutes; PDF không đổi; đã quan sát A-01, B-01
+  (659 <= 788), B-02, B-03, B-04 và thứ tự Tab đều đã sửa.
+- Board: current_source_digest 8c07aac5; superseded_by của WP5-RECHECK là WP5-UX-AUDIT-A2.
+- WP5-UX-AUDIT-B2 xong: FIX REQUIRED, một finding mức Low B2-01 (ô "Open a day" một hàng
+  cắt mất ngày đã gõ ở khổ 360/320px, WCAG 1.4.10); B-01..B-04 đã đóng; 0 assertion bị
+  nới lỏng; toàn bộ e2e 164/0/10; digest 8c07aac5.
+- WP5-UX-AUDIT-A2 xong: PASS trên 589bcff / 8c07aac5, không có finding; A-01 đã đóng (12
+  input sai bị từ chối trên ba bố cục; body hợp lệ giống 014bd47); rủi ro Info R2 (thứ
+  tự Esc khi thu nhỏ dưới 1200px lúc đang mở review của bộ chọn) và R5 (thanh của người
+  được chia sẻ trên điện thoại) được ghi lại, không sửa.
+- WP5-UX-FIX4 xong: ô Open a day trên điện thoại hiện đủ ngày (220px ở 360, 180px ở 320;
+  bố cục 390 không đổi); O-1..O-3; unit 1820; toàn bộ e2e 167/0/13; verify exit 0;
+  digest 0b8428fd.
+- Đang chạy: WP5-UX-FIX4-FREEZE (committer; mang theo các bản ghi regate, A2/B2 và
+  FIX3-FREEZE từ sau 589bcff).
+- Bước kế tiếp: FIX4-FREEZE, WP5-UX-REGATE2, kiểm tra lại độc lập WP5-UX-AUDIT-B3 (phần
+  B) và WP5-UX-AUDIT-A3 (phần A, phần thay đổi); sau đó A2 và WP5-RECHECK có
+  superseded_by A3.
+- Bước kế tiếp: nếu cả hai PASS, nghiệm thu lại WP5 (STATE, NEXT_ACTION, WP5 handoff,
+  cập nhật định danh release trong pilot packet thành 589bcff / 8c07aac5 / image mới,
+  rồi commit nghiệm thu); nếu không, thêm một vòng sửa có giới hạn.
 - Bước kế tiếp: khi có kết quả FIX3, WP5-UX-FIX3-FREEZE; sau đó WP5-UX-REGATE và audit
   lại độc lập A2, B2 (chuyển superseded_by của WP5-RECHECK sang WP5-UX-AUDIT-A2).
 

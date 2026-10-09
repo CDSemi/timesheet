@@ -1,0 +1,165 @@
+--- changed since 014bd47 among files with write calls or body builders
+ src/client/components/BatchDialog.tsx |  8 ++++++--
+ src/client/components/dayModel.ts     | 28 ++++------------------------
+ src/client/components/sessionModel.ts | 32 +++++++++++++++++---------------
+ 3 files changed, 27 insertions(+), 41 deletions(-)
+--- sessionModel.ts diff
+diff --git a/src/client/components/sessionModel.ts b/src/client/components/sessionModel.ts
+index 4d98c47..c583985 100644
+--- a/src/client/components/sessionModel.ts
++++ b/src/client/components/sessionModel.ts
+@@ -20,6 +20,7 @@ import type {
+ } from '../api.ts';
+ import { completenessOf, type CompletenessDisplay } from './dayModel.ts';
+ import { minutesText } from './format.ts';
++import { type LeaveInput, leaveInputOf, parseLeaveInput } from './leaveInputModel.ts';
+ 
+ /*
+  * Pure logic of the day editor. The server owns every business figure (raw, eligible and
+@@ -400,8 +401,8 @@ export const LEAVE_KINDS: readonly LeaveKind[] = ['vacation', 'sick', 'ot'];
+ 
+ export interface DayFieldsDraft {
+   category: DayCategory;
+-  /** Text of the minutes field; parsed when saving. */
+-  leaveMinutes: string;
++  /** The leave as typed, in hours and minutes; converted to the integer leave minutes when saving. */
++  leave: LeaveInput;
+   /** Empty until a kind is chosen. */
+   leaveKind: LeaveKind | '';
+   wfh: boolean;
+@@ -411,7 +412,7 @@ export interface DayFieldsDraft {
+ export function dayFieldsDraft(day: DayView): DayFieldsDraft {
+   return {
+     category: day.category ?? 'Worked',
+-    leaveMinutes: String(day.leave_minutes),
++    leave: leaveInputOf(day.leave_minutes),
+     leaveKind: day.leave_kind ?? '',
+     wfh: day.wfh,
+     notes: day.entry?.notes ?? '',
+@@ -420,13 +421,15 @@ export function dayFieldsDraft(day: DayView): DayFieldsDraft {
+ 
+ export type DayEntryBuild = { ok: true; request: DayEntryRequest } | { ok: false; message: string };
+ 
+-/** The kind is sent only with leave minutes; the server answers `leave_kind_required` when it is missing. */
++/**
++ * The PUT /api/days/:date body. The hours and minutes become the same integer `leave_minutes` as
++ * before (0 to 1440). The kind is sent only with leave minutes; the server answers
++ * `leave_kind_required` when it is missing.
++ */
+ export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: number | null, reason?: string): DayEntryBuild {
+-  const text = draft.leaveMinutes.trim();
+-  const minutes = text === '' ? 0 : Number(text);
+-  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+-    return { ok: false, message: 'Enter leave as whole minutes from 0 to 1440.' };
+-  }
++  const parsed = parseLeaveInput(draft.leave);
++  if (!parsed.ok) return { ok: false, message: parsed.message };
++  const minutes = parsed.minutes;
+   const request: DayEntryRequest = {
+     category: draft.category,
+     leave_minutes: minutes,
+@@ -440,10 +443,9 @@ export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: num
+   return { ok: true, request };
+ }
+ 
+-/** The leave minutes the field holds, in hours and minutes, for a hint; null when it is not a whole number. */
+-export function leaveHint(text: string): string | null {
+-  const trimmed = text.trim();
+-  if (trimmed === '') return null;
+-  const minutes = Number(trimmed);
+-  return Number.isInteger(minutes) && minutes >= 0 ? formatDuration(minutes) : null;
++/** The leave the two fields hold, as `4h 00m` for a hint; null when nothing or something invalid is typed. */
++export function leaveHint(input: LeaveInput): string | null {
++  if (input.hours.trim() === '' && input.minutes.trim() === '') return null;
++  const parsed = parseLeaveInput(input);
++  return parsed.ok ? formatDuration(parsed.minutes) : null;
+ }
+--- dayModel.ts diff
+diff --git a/src/client/components/dayModel.ts b/src/client/components/dayModel.ts
+index e45e20a..97e2b4f 100644
+--- a/src/client/components/dayModel.ts
++++ b/src/client/components/dayModel.ts
+@@ -1,10 +1,11 @@
+-import { addDays, isoWeekday } from '../../domain/dates.ts';
++import { isoWeekday } from '../../domain/dates.ts';
+ import type { BatchConflict, DayBatchEntry, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
+ 
+ /*
+  * Pure presentation logic for the timesheet views. It maps fields the server already computed
+- * (calculation.status, attendance_expected, regular/credited minutes) to display states and
+- * groups days into weeks. It never derives business minutes, completeness rules or overtime.
++ * (calculation.status, attendance_expected, regular/credited minutes) to display states; the
++ * sheet's week bands are built in sheetModel.ts. It never derives business minutes,
++ * completeness rules or overtime.
+  */
+ 
+ export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+@@ -105,27 +106,6 @@ export function toDayDisplay(day: DayView, todayLocal: string | null): DayDispla
+   };
+ }
+ 
+-export interface WeekGroup {
+-  /** The Monday that starts the week. */
+-  weekStart: string;
+-  days: DayDisplay[];
+-}
+-
+-/** Groups consecutive days into Monday to Sunday weeks (a two-week period gives two groups). */
+-export function weekGroups(days: readonly DayView[], todayLocal: string | null): WeekGroup[] {
+-  const groups: WeekGroup[] = [];
+-  for (const day of days) {
+-    const weekStart = addDays(day.work_date, -(isoWeekday(day.work_date) - 1));
+-    let group = groups.at(-1);
+-    if (group?.weekStart !== weekStart) {
+-      group = { weekStart, days: [] };
+-      groups.push(group);
+-    }
+-    group.days.push(toDayDisplay(day, todayLocal));
+-  }
+-  return groups;
+-}
+-
+ /** The only review status the server provides before WP3: draft or finalized. */
+ export function reviewStatus(timesheet: TimesheetView['timesheet']): 'Draft' | 'Finalized' {
+   return timesheet.finalized ? 'Finalized' : 'Draft';
+--- BatchDialog.tsx diff
+diff --git a/src/client/components/BatchDialog.tsx b/src/client/components/BatchDialog.tsx
+index e5d2801..0b2dab7 100644
+--- a/src/client/components/BatchDialog.tsx
++++ b/src/client/components/BatchDialog.tsx
+@@ -14,7 +14,8 @@ const STATUS_TEXT: Record<DayBatchPreview['entries'][number]['status'], string>
+ /**
+  * Native modal dialog for a batch edit. Step one previews every date and asks for the reason
+  * when the server requires one; step two lists the recorded sessions of conflicting dates and
+- * needs an explicit confirmation. Sessions are never changed by a label edit.
++ * needs an explicit confirmation. Sessions are never changed by a label edit. The in-cell label
++ * picker uses the same dialog for its one-entry preview (single-day use, with its own title).
+  */
+ export function BatchDialog({
+   preview,
+@@ -22,6 +23,7 @@ export function BatchDialog({
+   zone,
+   error,
+   busy,
++  title = 'Review category change',
+   onCommit,
+   onClose,
+ }: {
+@@ -30,6 +32,8 @@ export function BatchDialog({
+   zone: string;
+   error: string | null;
+   busy: boolean;
++  /** The first step's heading; a single-day label pick names its date. */
++  title?: string;
+   onCommit: (input: { reason: string; confirmConflicts: boolean }) => void;
+   onClose: () => void;
+ }) {
+@@ -54,7 +58,7 @@ export function BatchDialog({
+     <dialog ref={dialog} className="dialog" aria-labelledby="batch-title" onClose={onClose}>
+       {step === 'review' ? (
+         <div className="stack">
+-          <h2 id="batch-title">Review category change</h2>
++          <h2 id="batch-title">{title}</h2>
+           <p>
+             {preview.changed_count} {preview.changed_count === 1 ? 'day' : 'days'} will change. Nothing is saved until you commit.
+           </p>

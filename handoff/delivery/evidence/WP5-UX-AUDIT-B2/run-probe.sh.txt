@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B2 probes on the built 589bcff clone (dist/ from the full e2e run), own servers on 48001/48002.
+source <task>/env.sh
+cd "$T/clone" || exit 9
+export PROBE_OUT="$T/probe-out"
+export PROBE_WORK="$T/probe-work"
+export PROBE_SHOTS="$T/probe-shots"
+mkdir -p "$PROBE_OUT" "$PROBE_WORK" "$PROBE_SHOTS"
+GREP="${1:-.}"
+"$N24" node_modules/@playwright/test/cli.js test -c audit-probe/probe.config.ts -g "$GREP" > "$T/probe-run-$(date -u +%H%M%S).txt" 2>&1
+echo "probe exit=$? grep=$GREP at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/probe-summary.txt"

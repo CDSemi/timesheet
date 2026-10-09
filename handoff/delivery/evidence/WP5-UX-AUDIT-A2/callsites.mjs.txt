@@ -1,0 +1,54 @@
+// Lists every client API call site ('METHOD', `path`) of two trees and compares the sets.
+// Usage: node callsites.mjs <treeA> <treeB> <labelA> <labelB>
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+const [a, b, labelA = 'A', labelB = 'B'] = process.argv.slice(2);
+
+function files(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) out.push(...files(path));
+    else if (/\.(ts|tsx)$/.test(name)) out.push(path);
+  }
+  return out;
+}
+
+const CALL = /'(GET|POST|PUT|DELETE|PATCH)'\s*,\s*([`'])([^`']+)\2/g;
+
+function sites(root) {
+  const list = [];
+  const base = join(root, 'src', 'client');
+  for (const file of files(base)) {
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(CALL)) {
+      const line = text.slice(0, match.index).split('\n').length;
+      const path = match[3].replace(/\$\{[^}]+\}/g, ':param');
+      list.push({ key: `${match[1]} ${path}`, where: `${relative(root, file).replaceAll('\\', '/')}:${line}` });
+    }
+  }
+  return list;
+}
+
+const sa = sites(a);
+const sb = sites(b);
+const count = (list) => {
+  const map = new Map();
+  for (const item of list) map.set(item.key, (map.get(item.key) ?? 0) + 1);
+  return map;
+};
+const ca = count(sa);
+const cb = count(sb);
+const keys = [...new Set([...ca.keys(), ...cb.keys()])].sort();
+console.log(`call sites: ${labelA} ${sa.length}, ${labelB} ${sb.length}; distinct endpoints: ${labelA} ${ca.size}, ${labelB} ${cb.size}`);
+console.log(`endpoints only in ${labelB}: ${keys.filter((k) => !ca.has(k)).join(', ') || 'none'}`);
+console.log(`endpoints only in ${labelA}: ${keys.filter((k) => !cb.has(k)).join(', ') || 'none'}`);
+console.log('--- per endpoint: count A -> count B (changed counts marked *)');
+for (const key of keys) {
+  const x = ca.get(key) ?? 0;
+  const y = cb.get(key) ?? 0;
+  console.log(`${x === y ? ' ' : '*'} ${key}: ${x} -> ${y}`);
+}
+console.log(`--- ${labelB} call sites`);
+for (const item of sb.sort((p, q) => p.key.localeCompare(q.key) || p.where.localeCompare(q.where))) console.log(`${item.key}  @ ${item.where}`);

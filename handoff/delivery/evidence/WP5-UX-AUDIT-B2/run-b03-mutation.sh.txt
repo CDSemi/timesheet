@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B2, B-03 strength by mutation (scratch clone831 only): the Admin view gets an "Import a workbook"
+# heading; the 589bcff import test must fail on the desktop project, the 831f760 version of the test must not.
+source <task>/env.sh
+S="$T/b03-mutation-summary.txt"
+cd "$T/clone831" || exit 9
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ) HEAD=$(git rev-parse HEAD)" > "$S"
+sed -i 's|<h1>Administration</h1>|<h1>Administration</h1><h2>Import a workbook</h2>|' src/client/AdminScreen.tsx
+echo "mutation applied: $(grep -c 'Import a workbook' src/client/AdminScreen.tsx) line(s) in AdminScreen.tsx" >> "$S"
+git diff --stat >> "$S"
+npmr run build > "$T/b03-build.txt" 2>&1
+echo "build exit=$?" >> "$S"
+export E2E_SCREENSHOT_DIR="$T/e2e-screens-831"
+# 1. The 589bcff test (already copied over) on the mutated Admin view.
+"$N24" node_modules/@playwright/test/cli.js test tests/e2e/import.spec.ts -g "the Import entry is for the signed-in person" --retries=0 > "$T/b03-run-589-test.txt" 2>&1
+echo "589bcff import test on the mutated Admin view: exit=$?" >> "$S"
+# 2. The 831f760 test on the same mutated Admin view.
+git show 831f760838950a59f0e5c880f0bbefda15fe0c61:tests/e2e/import.spec.ts > tests/e2e/import.spec.ts
+"$N24" node_modules/@playwright/test/cli.js test tests/e2e/import.spec.ts -g "the Import entry is for the signed-in person" --retries=0 > "$T/b03-run-831-test.txt" 2>&1
+echo "831f760 import test on the mutated Admin view: exit=$?" >> "$S"
+# Restore the scratch clone's source (the mutation stays out of every other run).
+git checkout -- src/client/AdminScreen.tsx tests/e2e/import.spec.ts
+echo "restored; git status --short:" >> "$S"
+git status --short >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

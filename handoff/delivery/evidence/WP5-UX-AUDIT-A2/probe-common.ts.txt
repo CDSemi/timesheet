@@ -1,0 +1,70 @@
+// Shared helpers of the WP5-UX-AUDIT-A2 probes. Results are written as JSON into the task folder.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+export function writeResult(name: string, data: unknown): void {
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, name), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+export async function signIn(page: any, account: { email: string; password: string }, hash: string): Promise<void> {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+/** Every `/api/` request of a page as "METHOD /path". */
+export function recordApi(page: any): string[] {
+  const list: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) list.push(`${request.method()} ${pathname}`);
+  });
+  return list;
+}
+
+/** Local date `YYYY-MM-DD` and time `HH:MM` of an instant in a zone, by Intl (an oracle independent of the app). */
+export function local(instant: string, zone: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
+}
+
+/** Opens a day's editor through the toolbar's "Open a day" field. */
+export async function openDay(page: any, workDate: string): Promise<any> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.waitFor();
+  await editor.getByRole('form', { name: 'Day fields' }).waitFor();
+  return editor;
+}
+
+/** The layout facts of the open editor: modal or not, inert page, bottom sheet or side panel, its box. */
+export async function editorLayout(page: any): Promise<Record<string, unknown>> {
+  return page.evaluate(`(() => {
+    const d = document.querySelector('dialog[data-day-editor]');
+    if (d === null) return { open: false };
+    const r = d.getBoundingClientRect();
+    return {
+      open: d.open,
+      modal: d.matches(':modal'),
+      className: d.className,
+      box: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      sheetAreaWithEditor: document.querySelector('.sheet-area.with-editor') !== null,
+    };
+  })()`);
+}

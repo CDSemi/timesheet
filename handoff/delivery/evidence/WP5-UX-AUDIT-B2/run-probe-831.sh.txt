@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B2: the same phone probes (PB1 first screen, PB3 widths) on the 831f760 client, for comparison.
+source <task>/env.sh
+cd "$T/clone831" || exit 9
+S="$T/probe-831-summary.txt"
+echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ) HEAD=$(git rev-parse HEAD)" > "$S"
+git status --short >> "$S"
+npmr run build > "$T/probe-831-build.txt" 2>&1
+echo "build exit=$?" >> "$S"
+mkdir -p audit-probe
+cp "$T/clone/audit-probe/probe.config.ts" "$T/clone/audit-probe/ux2.probe.ts" audit-probe/
+grep -q '^audit-probe/$' .git/info/exclude || printf 'audit-probe/\n' >> .git/info/exclude
+export PROBE_OUT="$T/probe-out-831"
+export PROBE_WORK="$T/probe-work-831"
+export PROBE_SHOTS="$T/probe-shots-831"
+mkdir -p "$PROBE_OUT" "$PROBE_WORK" "$PROBE_SHOTS"
+"$N24" node_modules/@playwright/test/cli.js test -c audit-probe/probe.config.ts -g "PB1|PB3" > "$T/probe-831-run.txt" 2>&1
+echo "probe exit=$?" >> "$S"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$S"

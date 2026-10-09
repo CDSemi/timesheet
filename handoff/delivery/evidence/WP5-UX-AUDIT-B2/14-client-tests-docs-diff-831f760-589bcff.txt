@@ -1,0 +1,972 @@
+diff --git a/docs/04_UX_AND_SETTINGS.md b/docs/04_UX_AND_SETTINGS.md
+index 887cd1f..2a968d7 100644
+--- a/docs/04_UX_AND_SETTINGS.md
++++ b/docs/04_UX_AND_SETTINGS.md
+@@ -38,25 +38,25 @@ These are declared design defaults, not claims that every value was user-confirm
+ 
+ ## Timesheet sheet
+ 
+-The Timesheet page shows the form of the Excel workbook and the PDF. The header block carries the company, the title, "Employee:", "Payroll Date:" and "Period:". Two bands, "WEEK 1" and "WEEK 2", each run Monday to Sunday with the rows Day, Date, Label, Time, OT (h:mm) and Check. Check is the only row the Excel form lacks: it states each day's status in words and a shape, never by colour alone (Complete, Running, Open session, Confirm breaks, No times, Upcoming, Calculation problem). "Show details" adds the rows "Worked on a workday" and "Worked on a day off". Below the weeks sit a legend, the "Overtime Total :" box and the signature lines.
++The Timesheet page shows the form of the Excel workbook and the PDF. The header block carries the company, the title, "Employee:", "Payroll Date:" and "Period:". Two bands, "WEEK 1" and "WEEK 2", each run Monday to Sunday with the rows Day, Date, Label, Time, OT (h:mm) and Check. Check is the only row the Excel form lacks: it states each day's status in words and a shape, never by colour alone (Complete, Running, Open session, Confirm breaks, No times, Missing record, Upcoming, Calculation problem). "Show details" adds the rows "Worked on a workday" and "Worked on a day off". Below the weeks sit a legend, the "Overtime Total :" box and the signature lines.
+ 
+ - Label cell: the app label (Worked, Off, Vacation, Sick, Holiday, Shutdown), the holiday name for a Holiday, a second line for work from home or for OT-funded leave minutes, and a note marker. Excel's "Sick Day" and "Off Day (Overtime Used)" are not reintroduced: OT leave stays leave minutes with `leave_kind` ot (document 10, 2026-10-03 E-2). A day with no record shows no placeholder text; empty cells are blank.
+ - Every number is a server field shown as h:mm. The client computes no business minutes. The OT cell follows the PDF rule: the credited minutes of a complete day, "pending" while the day is incomplete or its breaks are unconfirmed, blank for a day without a record. "Overtime Total :" is the server's provisional credited total over all 14 days, including both Sundays, with a note when days are still pending; it equals the PDF total. The Excel formulas that conflict with the canonical rules are not reproduced (document 10, 2026-10-08).
+ - Formats are those of the PDF: US dates (MM/DD in the cells, MM/DD/YYYY in the header and period bar), durations as h:mm, times as 24-hour ranges such as 08:00-17:00 in the display zone, with several sessions listed and a running session marked. The accounting date stays the saved reporting-zone date.
+ - Non-working days (weekends, holidays and closures from the server calendar, never inferred from the weekday) carry one light tint with fine diagonal hatching. Today carries an accent top bar and a "Today" tag. A cell that needs input has an amber tint plus the Check text and shape.
+ - Signature lines: "Employee Signature" shows the signer's name when signed, or the pending-review state, with the date in the saved reporting zone and a link to the Review. "Manager Signature" shows "Not used yet" with an empty date. The signature image never appears on the Timesheet page. The lines and the link are absent in a shared view and for an imported period.
+-- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. Both layouts expose exactly one element per day, named by weekday and date, with an "Edit {date}" button (or "View {date}" when read-only).
++- Phones (below 768px): each week is a four-column table Day | Label | Time | OT, one row per day at least 54px tall, with no sideways scroll; the Check status folds into the Day cell and the Time cell tint. A whole row opens the day editor. The first screen shows the period card (with "<" and ">" beside the title), the one-row clock card and the compact tools, so the first day row is fully visible above the tab bar at 390x844; the page heading and the form title stay for screen readers only. Both layouts expose exactly one element per day, named by weekday and date, with an "Edit {date}" button (or "View {date}" when read-only).
+ - The Review uses the same sheet. In a shared view, the share bar stays above the period bar and controls outside the share are absent.
+ 
+ ## Period bar, clock and batch mode
+ 
+ - Period bar: one title (period dates and a current, past or future badge), the payroll date, the due date in words with the reporting zone (for example "Due Tue 12/08/2026, 17:00 (America/Los_Angeles)"), exactly one status group (review and delivery) and "Review & sign off" (disabled with its reason for an imported period). The bar always names the current viewing zone compactly (for example "Times in America/Los_Angeles"), also when it equals the reporting zone; each day in the sheet keeps its saved accounting date. The reporting zone, display zone, the due time in the display zone and the explanation of accounting dates versus session times show in an extra note only when the display zone differs from the reporting zone. A banner says when edits to the period require a reason.
+ - Clock panel: one state-aware button. Clocked out shows "Clock in"; clocked in shows "Clocked in since HH:MM" with a static ringed dot and "Clock out", which opens the break confirmation. It is absent in a shared view (the owner's clock stays the owner's).
+-- Toolbar: "Open a day" (any date of the period), "Show details" and "Change several days". Batch mode is off by default: the selection boxes, "Select all", "Clear", the label picker and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
++- Toolbar: "Open a day" (any date of the period), "Show details" and "Change several days". Batch mode is off by default: the selection boxes, "Select all", "Clear", the category choice ("Category for selected days") and "Preview changes" appear only after "Change several days" and leave with "Done". Batch category changes still preview conflicts with recorded work before saving. Without edit rights (view-only share) and for an imported period these controls are absent or disabled with their reason.
+ 
+ ## Day editor
+ 
+-- Desktop (from 768px): a non-modal side panel beside the sheet (fixed at the right edge between 768 and 1199px), so the sheet stays visible. Phones: a modal bottom sheet of at most 86% of the screen height. Focus moves to the panel heading on open; Escape or Close returns focus to the day's date button.
++- From 1200px: a non-modal panel in its own column beside the sheet, so the sheet stays visible and usable. From 768 to 1199px: a modal side panel at the right edge with the page behind it inert (focus stays inside the panel), so it never covers a control that can take focus. Phones (below 768px): a modal bottom sheet of at most 86% of the screen height. Focus moves to the panel heading on open; Escape closes the panel wherever focus is (a nested dialog takes Escape first), as does Close, and focus returns to the day's date button.
+ - Order: a status banner, the stale/notice/error messages and the reason field (old or finalized periods), "Times" (sessions with Edit and Delete, one-tap break confirmation, Add session), "Label and leave", and "Figures (computed by the server)". The explicit end date, the visible "Input zone" and the separate save buttons ("Save session", "Save day fields") remain.
+ - One-tap breaks: a session with unconfirmed breaks offers "Confirm suggested breaks" (or "Confirm breaks as listed" for saved rows) and "No breaks taken"; each sends the same session update the form sends and is disabled until a required reason is typed. The suggestion is offered only when every suggested break lies inside the saved session.
+ - Leave is typed as "Leave hours" plus "Leave minutes" with "Leave kind"; the page converts them to the same whole `leave_minutes` (0 to 1440) and refuses fractions or out-of-range values with a message on the page.
+diff --git a/docs/04_UX_AND_SETTINGS.vi.md b/docs/04_UX_AND_SETTINGS.vi.md
+index 9009ad6..86be221 100644
+--- a/docs/04_UX_AND_SETTINGS.vi.md
++++ b/docs/04_UX_AND_SETTINGS.vi.md
+@@ -38,25 +38,25 @@ Dùng giờ/phút, không dùng 1.30 để chỉ 1h30. Hiện múi giờ xem và
+ 
+ ## Bảng Timesheet
+ 
+-Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu gồm công ty, tiêu đề, "Employee:", "Payroll Date:" và "Period:". Hai dải "WEEK 1" và "WEEK 2", mỗi dải chạy từ thứ Hai đến Chủ nhật với các dòng Day, Date, Label, Time, OT (h:mm) và Check. Check là dòng duy nhất biểu mẫu Excel không có: nó nêu trạng thái từng ngày bằng chữ và hình, không bao giờ chỉ bằng màu (Complete, Running, Open session, Confirm breaks, No times, Upcoming, Calculation problem). "Show details" thêm hai dòng "Worked on a workday" và "Worked on a day off". Dưới các tuần là chú giải, ô "Overtime Total :" và các dòng chữ ký.
++Trang Timesheet hiện biểu mẫu của workbook Excel và PDF. Khối đầu gồm công ty, tiêu đề, "Employee:", "Payroll Date:" và "Period:". Hai dải "WEEK 1" và "WEEK 2", mỗi dải chạy từ thứ Hai đến Chủ nhật với các dòng Day, Date, Label, Time, OT (h:mm) và Check. Check là dòng duy nhất biểu mẫu Excel không có: nó nêu trạng thái từng ngày bằng chữ và hình, không bao giờ chỉ bằng màu (Complete, Running, Open session, Confirm breaks, No times, Missing record, Upcoming, Calculation problem). "Show details" thêm hai dòng "Worked on a workday" và "Worked on a day off". Dưới các tuần là chú giải, ô "Overtime Total :" và các dòng chữ ký.
+ 
+ - Ô Label: nhãn của app (Worked, Off, Vacation, Sick, Holiday, Shutdown), tên ngày lễ cho Holiday, một dòng thứ hai cho làm việc tại nhà hoặc số phút nghỉ bằng OT, và dấu ghi chú. "Sick Day" và "Off Day (Overtime Used)" của Excel không được đưa lại: nghỉ bằng OT vẫn là phút nghỉ với `leave_kind` ot (tài liệu 10, E-2 ngày 2026-10-03). Ngày không có bản ghi không hiện chữ giữ chỗ; ô trống để trống.
+ - Mọi con số là trường do server trả về, hiển thị dạng h:mm. Client không tính phút nghiệp vụ. Ô OT theo quy tắc của PDF: phút được ghi của ngày đầy đủ, "pending" khi ngày chưa đủ hoặc nghỉ chưa xác nhận, để trống khi ngày không có bản ghi. "Overtime Total :" là tổng OT được ghi tạm tính của server cho cả 14 ngày, gồm hai Chủ nhật, kèm ghi chú khi còn ngày đang chờ; con số này bằng tổng trên PDF. Các công thức Excel mâu thuẫn với quy tắc chuẩn không được tái tạo (tài liệu 10, 2026-10-08).
+ - Định dạng giống PDF: ngày kiểu Mỹ (MM/DD trong ô, MM/DD/YYYY ở phần đầu và thanh kỳ), thời lượng dạng h:mm, giờ dạng khoảng 24 giờ như 08:00-17:00 theo múi giờ hiển thị, liệt kê nhiều ca và đánh dấu ca đang chạy. Ngày ghi sổ vẫn là ngày theo múi giờ báo cáo đã lưu.
+ - Ngày không làm việc (cuối tuần, ngày lễ và ngày đóng cửa từ lịch của server, không suy ra từ thứ trong tuần) có một nền nhạt kèm sọc chéo mảnh. Hôm nay có thanh nhấn phía trên và nhãn "Today". Ô cần nhập có nền hổ phách cùng chữ và hình trong dòng Check.
+ - Dòng chữ ký: "Employee Signature" hiện tên người ký khi đã ký, hoặc trạng thái chờ xác nhận, kèm ngày theo múi giờ báo cáo đã lưu và liên kết tới Review. "Manager Signature" hiện "Not used yet" với ô ngày trống. Ảnh chữ ký không bao giờ xuất hiện trên trang Timesheet. Các dòng này và liên kết không có trong chế độ xem chia sẻ và với kỳ đã nhập.
+-- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm nút "Edit {date}" (hoặc "View {date}" khi chỉ đọc).
++- Điện thoại (dưới 768px): mỗi tuần là một bảng bốn cột Day | Label | Time | OT, mỗi ngày một hàng cao ít nhất 54px, không cuộn ngang; trạng thái Check gộp vào ô Day và màu ô Time. Chạm cả hàng sẽ mở trình sửa ngày. Màn hình đầu hiện thẻ kỳ (với "<" và ">" cạnh tiêu đề), thẻ đồng hồ một hàng và các công cụ gọn, nên hàng ngày đầu tiên hiện đầy đủ phía trên thanh tab ở 390x844; tiêu đề trang và tiêu đề biểu mẫu chỉ dành cho trình đọc màn hình. Cả hai bố cục chỉ có đúng một phần tử cho mỗi ngày, đặt tên theo thứ và ngày, kèm nút "Edit {date}" (hoặc "View {date}" khi chỉ đọc).
+ - Review dùng cùng bảng này. Trong chế độ xem chia sẻ, thanh chia sẻ vẫn nằm trên thanh kỳ và các điều khiển ngoài quyền chia sẻ bị ẩn.
+ 
+ ## Thanh kỳ, đồng hồ và chế độ nhiều ngày
+ 
+ - Thanh kỳ: một tiêu đề (ngày của kỳ và nhãn hiện tại, quá khứ hoặc tương lai), ngày payroll, hạn nộp bằng chữ kèm múi giờ báo cáo (ví dụ "Due Tue 12/08/2026, 17:00 (America/Los_Angeles)"), đúng một nhóm trạng thái (review và gửi) và "Review & sign off" (bị khóa kèm lý do với kỳ đã nhập). Thanh luôn nêu ngắn gọn múi giờ đang xem (ví dụ "Times in America/Los_Angeles"), kể cả khi trùng múi giờ báo cáo; mỗi ngày trong bảng giữ ngày ghi sổ đã lưu. Múi giờ báo cáo, múi giờ hiển thị, hạn theo giờ hiển thị và lời giải thích ngày ghi sổ so với giờ phiên chỉ hiện trong một ghi chú thêm khi múi giờ hiển thị khác múi giờ báo cáo. Một dòng báo khi sửa kỳ cần lý do.
+ - Bảng đồng hồ: một nút theo trạng thái. Khi chưa vào ca hiện "Clock in"; khi đang vào ca hiện "Clocked in since HH:MM" với chấm vòng tĩnh và "Clock out", nút mở bước xác nhận giờ nghỉ. Nút không có trong chế độ xem chia sẻ (đồng hồ của chủ vẫn là của chủ).
+-- Thanh công cụ: "Open a day" (mọi ngày trong kỳ), "Show details" và "Change several days". Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", bộ chọn nhãn và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
++- Thanh công cụ: "Open a day" (mọi ngày trong kỳ), "Show details" và "Change several days". Chế độ nhiều ngày mặc định tắt: ô chọn, "Select all", "Clear", ô chọn loại ngày ("Category for selected days") và "Preview changes" chỉ hiện sau "Change several days" và mất khi bấm "Done". Đổi loại nhiều ngày vẫn xem trước xung đột với giờ đã ghi trước khi lưu. Khi không có quyền sửa (chia sẻ chỉ xem) và với kỳ đã nhập, các điều khiển này bị ẩn hoặc khóa kèm lý do.
+ 
+ ## Sửa ngày (Day editor)
+ 
+-- Desktop (từ 768px): bảng bên không chặn trang, cạnh bảng timesheet (cố định ở mép phải trong khoảng 768 đến 1199px) nên bảng timesheet vẫn thấy được. Điện thoại: bottom sheet dạng modal cao tối đa 86% màn hình. Tiêu điểm chuyển tới tiêu đề của bảng khi mở; Escape hoặc Close trả tiêu điểm về nút ngày của ngày đó.
++- Từ 1200px: bảng bên không chặn trang, nằm trong cột riêng cạnh bảng timesheet nên bảng timesheet vẫn thấy được và dùng được. Từ 768 đến 1199px: bảng bên dạng modal ở mép phải, trang phía sau bị vô hiệu (tiêu điểm ở lại trong bảng) nên bảng không bao giờ che một điều khiển còn nhận được tiêu điểm. Điện thoại (dưới 768px): bottom sheet dạng modal cao tối đa 86% màn hình. Tiêu điểm chuyển tới tiêu đề của bảng khi mở; Escape đóng bảng dù tiêu điểm đang ở đâu (hộp thoại lồng bên trong nhận Escape trước), Close cũng vậy, và tiêu điểm trở về nút ngày của ngày đó.
+ - Thứ tự: dòng trạng thái, các thông báo cũ/thông tin/lỗi và ô lý do (kỳ cũ hoặc đã chốt), "Times" (các ca với Edit và Delete, xác nhận giờ nghỉ một chạm, Add session), "Label and leave", và "Figures (computed by the server)". Ngày kết thúc rõ ràng, trường "Input zone" nhìn thấy được và các nút lưu riêng ("Save session", "Save day fields") vẫn giữ.
+ - Giờ nghỉ một chạm: ca có giờ nghỉ chưa xác nhận hiện "Confirm suggested breaks" (hoặc "Confirm breaks as listed" cho dòng đã lưu) và "No breaks taken"; mỗi nút gửi đúng lệnh cập nhật ca mà biểu mẫu gửi và bị khóa tới khi nhập lý do bắt buộc. Gợi ý chỉ được đưa ra khi mọi giờ nghỉ gợi ý nằm trong ca đã lưu.
+ - Nghỉ nhập theo "Leave hours" cộng "Leave minutes" với "Leave kind"; trang đổi chúng về đúng `leave_minutes` nguyên (0 đến 1440) và từ chối số lẻ hoặc ngoài khoảng bằng thông báo trên trang.
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index be5b628..15744e8 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -16,10 +16,13 @@ type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: s
+ const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
+ 
+ /**
+- * Day editor (WP5-UX-T04, owner decision E-3 a). On a desktop it is a non-modal side panel beside
+- * the sheet, so the sheet stays usable; on a phone (`modal`) it is a modal bottom sheet that traps
+- * focus. Both are one native `<dialog>` named by its heading ("Day editor ..."): focus moves to the
+- * heading on open, Escape and Close end it, and the caller returns focus to the day's button.
++ * Day editor (WP5-UX-T04, owner decision E-3 a). From 1200px it is a non-modal panel in its own
++ * column beside the sheet, so the sheet stays usable. Below that (`modal`) it is modal and traps
++ * focus, so the page behind is inert and no focusable control can be hidden by it (WCAG 2.4.11):
++ * a side panel from 768px, a bottom sheet below (`bottomSheet`). All are one native `<dialog>`
++ * named by its heading ("Day editor ..."): focus moves to the heading on open, Escape closes it
++ * wherever focus is (unless a nested dialog takes Escape first) and so does Close; the caller
++ * returns focus to the day's button.
+  *
+  * Order inside: the banner of what the day still needs, the times (sessions and breaks, with a
+  * one-tap confirmation of suggested or listed breaks), label and leave, then the server's figures.
+@@ -34,6 +37,7 @@ export function DayEditor({
+   reportingZone,
+   todayLocal,
+   modal,
++  bottomSheet,
+   refresh = 0,
+   onChanged,
+   onClose,
+@@ -44,8 +48,10 @@ export function DayEditor({
+   displayZone: string;
+   reportingZone: string;
+   todayLocal: string | null;
+-  /** True below 768px: a modal bottom sheet. False: the non-modal side panel. */
++  /** True below 1200px: a modal dialog with an inert page. False: the non-modal panel beside the sheet. */
+   modal: boolean;
++  /** True below 768px: the modal dialog is a bottom sheet. Otherwise a side panel at the right edge. */
++  bottomSheet: boolean;
+   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
+   refresh?: number;
+   /** Called after every successful write so the period behind the editor can refresh. */
+@@ -88,6 +94,20 @@ export function DayEditor({
+     heading.current?.focus();
+   }, [modal]);
+ 
++  // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested
++  // modal dialog (a review, the clock-out dialog) takes Escape first, and so does a control that
++  // already used the key (an open label picker). A modal editor closes through its own handlers.
++  useEffect(() => {
++    if (modal) return;
++    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
++      if (event.key !== 'Escape' || event.defaultPrevented) return;
++      if (document.querySelector('dialog:modal') !== null) return;
++      onClose();
++    };
++    document.addEventListener('keydown', closeOnEscape);
++    return () => document.removeEventListener('keydown', closeOnEscape);
++  }, [modal, onClose]);
++
+   const load = useCallback(async () => {
+     try {
+       const [loaded, policyList] = await Promise.all([
+@@ -196,7 +216,7 @@ export function DayEditor({
+   return (
+     <dialog
+       ref={dialog}
+-      className={`day-panel ${modal ? 'day-panel-sheet' : 'day-panel-side'}`}
++      className={`day-panel ${bottomSheet ? 'day-panel-sheet' : 'day-panel-side'}`}
+       aria-labelledby="day-editor-title"
+       data-day-editor={workDate}
+       onKeyDown={keyDown}
+@@ -205,7 +225,7 @@ export function DayEditor({
+         onClose();
+       }}
+     >
+-      {modal && <div className="sheet-handle" aria-hidden="true" />}
++      {bottomSheet && <div className="sheet-handle" aria-hidden="true" />}
+       <header className="editor-head">
+         <div className="editor-title">
+           <h2 id="day-editor-title" ref={heading} tabIndex={-1}>
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index 8bc9679..f108778 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -33,15 +33,22 @@ import { DayEditor } from './DayEditor.tsx';
+ /** The documented layout breakpoint: the 7-column sheet from 768px up, one table per week below it. */
+ const DESKTOP_QUERY = '(min-width: 768px)';
+ 
+-/** True when the desktop sheet should render. Exactly one of the two layouts is ever in the page. */
+-function useDesktop(): boolean {
++/**
++ * From this width the day editor is a non-modal panel in its own column beside the sheet. Below it
++ * the editor is modal (a side panel from 768px, a bottom sheet below that), so it never covers a
++ * control that can still take focus.
++ */
++const WIDE_QUERY = '(min-width: 1200px)';
++
++/** True while a media query matches; the layouts below are chosen with it, never both at once. */
++function useMedia(query: string): boolean {
+   return useSyncExternalStore(
+     (notify) => {
+-      const query = window.matchMedia(DESKTOP_QUERY);
+-      query.addEventListener('change', notify);
+-      return () => query.removeEventListener('change', notify);
++      const list = window.matchMedia(query);
++      list.addEventListener('change', notify);
++      return () => list.removeEventListener('change', notify);
+     },
+-    () => window.matchMedia(DESKTOP_QUERY).matches,
++    () => window.matchMedia(query).matches,
+   );
+ }
+ 
+@@ -94,7 +101,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const own = shared === undefined;
+   const request: Requester = shared?.request ?? ownRequest;
+   const canEdit = shared === undefined || shared.canEdit;
+-  const desktop = useDesktop();
++  const desktop = useMedia(DESKTOP_QUERY);
++  const wide = useMedia(WIDE_QUERY);
+   const [payrollDate, setPayrollDate] = useState<string | null>(null);
+   /** The server's current local date and periods; days after that date show as upcoming. */
+   const [periods, setPeriods] = useState<CurrentPeriods | null>(null);
+@@ -349,7 +357,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+   return (
+     <div>
+-      <header className="toolbar">
++      <header className="toolbar page-head">
+         <div>
+           <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
+           <p className="muted">{shared === undefined ? user.display_name : `Signed in as ${user.display_name}`}</p>
+@@ -364,7 +372,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+       )}
+ 
+       {view !== null && (
+-        <div className={`sheet-area${editDate !== null && desktop ? ' with-editor' : ''}`}>
++        <div className={`sheet-area${editDate !== null && wide ? ' with-editor' : ''}`}>
+           <section className="card stack">
+             <div className="tools">
+               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
+@@ -456,7 +464,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+               displayZone={displayZone}
+               reportingZone={view.reporting_zone}
+               todayLocal={todayLocal}
+-              modal={!desktop}
++              modal={!wide}
++              bottomSheet={!desktop}
+               refresh={editorRefresh}
+               onChanged={load}
+               onClose={closeEditor}
+diff --git a/src/client/components/DayFieldsForm.tsx b/src/client/components/DayFieldsForm.tsx
+index 2ac6228..a545f31 100644
+--- a/src/client/components/DayFieldsForm.tsx
++++ b/src/client/components/DayFieldsForm.tsx
+@@ -1,7 +1,7 @@
+-import { type SubmitEvent, useId, useState } from 'react';
++import { type SubmitEvent, useId, useRef, useState } from 'react';
+ import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
+ import { describeError, isStaleVersion } from './errors.ts';
+-import { LEAVE_MAX_HOURS } from './leaveInputModel.ts';
++import { invalidLeaveParts, LEAVE_MAX_HOURS, type LeaveInput, type LeaveParts } from './leaveInputModel.ts';
+ import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
+ 
+ const KIND_TEXT: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
+@@ -31,21 +31,49 @@ export function DayFieldsForm({
+   const id = useId();
+   const [draft, setDraft] = useState(() => dayFieldsDraft(day));
+   const [error, setError] = useState<string | null>(null);
++  // The refusal of the leave fields, shown beside them; the fields it names point to it.
++  const [leaveError, setLeaveError] = useState<{ message: string; parts: LeaveParts } | null>(null);
+   const [busy, setBusy] = useState(false);
+   const mismatch = otMismatchNotice(day);
+   const reasonMissing = reasonRequired && reason.trim() === '';
+   const hint = leaveHint(draft.leave);
++  const leaveErrorId = `${id}-leave-error`;
++  const hoursField = useRef<HTMLInputElement>(null);
++  const minutesField = useRef<HTMLInputElement>(null);
++
++  function changeLeave(change: Partial<LeaveInput>) {
++    setDraft({ ...draft, leave: { ...draft.leave, ...change } });
++    setLeaveError(null);
++  }
++
++  /** The invalid-state attributes of one leave field while the leave refusal is shown. */
++  function leaveFieldState(invalid: boolean) {
++    return invalid && leaveError !== null
++      ? { 'aria-invalid': true as const, 'aria-describedby': leaveErrorId }
++      : {};
++  }
+ 
+   async function save(event: SubmitEvent<HTMLFormElement>) {
+     event.preventDefault();
+     if (reasonMissing) return;
+-    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason);
++    // The fields themselves are asked now: the browser raises no change event for every unreadable
++    // keystroke (a lone "e"), so the state alone can miss it. A malformed part is never sent.
++    const leave: LeaveInput = {
++      ...draft.leave,
++      hoursBad: hoursField.current?.validity.badInput === true,
++      minutesBad: minutesField.current?.validity.badInput === true,
++    };
++    const checked = { ...draft, leave };
++    // Only the leave fields can refuse here.
++    const built = buildDayEntryRequest(checked, day.entry?.version ?? null, reason);
+     if (!built.ok) {
+-      setError(built.message);
++      setError(null);
++      setLeaveError({ message: built.message, parts: invalidLeaveParts(leave) });
+       return;
+     }
+     setBusy(true);
+     setError(null);
++    setLeaveError(null);
+     try {
+       onSaved(await request<DayView>('PUT', `/days/${day.work_date}`, built.request));
+     } catch (caught) {
+@@ -57,7 +85,8 @@ export function DayFieldsForm({
+   }
+ 
+   return (
+-    // noValidate: the leave fields are checked by parseLeaveInput, whose message is shown in the form (role alert).
++    // noValidate keeps the browser's own popups out: the leave fields are checked by parseLeaveInput, which also
++    // sees the browser's bad-input flag, and its message is shown beside the fields (role alert, aria-invalid).
+     <form className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
+       <h3>Label and leave</h3>
+       {mismatch !== null && (
+@@ -88,25 +117,29 @@ export function DayFieldsForm({
+           <label>
+             Leave hours
+             <input
++              ref={hoursField}
+               type="number"
+               inputMode="numeric"
+               min={0}
+               max={LEAVE_MAX_HOURS}
+               step={1}
+               value={draft.leave.hours}
+-              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, hours: event.target.value } })}
++              onChange={(event) => changeLeave({ hours: event.target.value, hoursBad: event.target.validity.badInput })}
++              {...leaveFieldState(leaveError?.parts.hours === true)}
+             />
+           </label>
+           <label>
+             Leave minutes
+             <input
++              ref={minutesField}
+               type="number"
+               inputMode="numeric"
+               min={0}
+               max={59}
+               step={1}
+               value={draft.leave.minutes}
+-              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, minutes: event.target.value } })}
++              onChange={(event) => changeLeave({ minutes: event.target.value, minutesBad: event.target.validity.badInput })}
++              {...leaveFieldState(leaveError?.parts.minutes === true)}
+             />
+           </label>
+           <label>
+@@ -124,6 +157,11 @@ export function DayFieldsForm({
+         <p id={`${id}-leave-hint`} className="muted hint">
+           {hint === null ? 'Hours and minutes, at most 24h 00m.' : `Leave ${hint}.`} A kind is required with leave. It never reserves or spends OT.
+         </p>
++        {leaveError !== null && (
++          <p id={leaveErrorId} className="error" role="alert">
++            {leaveError.message}
++          </p>
++        )}
+       </fieldset>
+       <label>
+         Notes
+diff --git a/src/client/components/PeriodBar.tsx b/src/client/components/PeriodBar.tsx
+index 9bebb19..ce90bd8 100644
+--- a/src/client/components/PeriodBar.tsx
++++ b/src/client/components/PeriodBar.tsx
+@@ -79,7 +79,11 @@ export function PeriodBar({
+         {imported && <ImportedNote id="imported-reason" />}
+         {!imported && view.reason_required && <span className="notice">Edits to this period require a reason.</span>}
+       </div>
++      {/* DOM order is the reading and tab order on every layout: previous, next, then the review link. */}
+       <div className="period-actions">
++        <button type="button" className="secondary period-step" onClick={() => onMove(1)} aria-label="Next period">
++          &gt;
++        </button>
+         {own &&
+           (imported ? (
+             <button type="button" className="secondary" disabled aria-describedby="imported-reason" data-review-link-disabled={period.payroll_date}>
+@@ -88,9 +92,6 @@ export function PeriodBar({
+           ) : (
+             <ReviewLink payrollDate={period.payroll_date} state={state} />
+           ))}
+-        <button type="button" className="secondary period-step" onClick={() => onMove(1)} aria-label="Next period">
+-          &gt;
+-        </button>
+       </div>
+     </section>
+   );
+diff --git a/src/client/components/leaveInputModel.ts b/src/client/components/leaveInputModel.ts
+index 2dcc8f3..ddabb9e 100644
+--- a/src/client/components/leaveInputModel.ts
++++ b/src/client/components/leaveInputModel.ts
+@@ -14,6 +14,18 @@ const MINUTES_PER_HOUR = 60;
+ export interface LeaveInput {
+   hours: string;
+   minutes: string;
++  /**
++   * A number field reports text it cannot read ("2-", "e") as an empty value, the same as an empty
++   * field. The form copies the browser's `validity.badInput` here so such text is refused, never read as 0.
++   */
++  hoursBad?: boolean;
++  minutesBad?: boolean;
++}
++
++/** Which of the two parts is wrong; both are marked when each is fine alone but the total passes 24h 00m. */
++export interface LeaveParts {
++  hours: boolean;
++  minutes: boolean;
+ }
+ 
+ export type LeaveParse = { ok: true; minutes: number } | { ok: false; message: string };
+@@ -37,12 +49,19 @@ function wholeNumber(text: string): number | null {
+  * 0 to 24, minutes whole and 0 to 59, and the total at most 1440 (24h 00m), as the API requires.
+  */
+ export function parseLeaveInput(input: LeaveInput): LeaveParse {
+-  const hours = wholeNumber(input.hours);
+-  const minutes = wholeNumber(input.minutes);
+-  if (hours === null || minutes === null || hours > LEAVE_MAX_HOURS || minutes >= MINUTES_PER_HOUR) {
+-    return { ok: false, message: LEAVE_INPUT_MESSAGE };
+-  }
+-  const total = hours * MINUTES_PER_HOUR + minutes;
+-  if (total > LEAVE_MAX_MINUTES) return { ok: false, message: LEAVE_INPUT_MESSAGE };
+-  return { ok: true, minutes: total };
++  const parts = invalidLeaveParts(input);
++  if (parts.hours || parts.minutes) return { ok: false, message: LEAVE_INPUT_MESSAGE };
++  // Both parts are valid here, so wholeNumber is never null.
++  return { ok: true, minutes: (wholeNumber(input.hours) ?? 0) * MINUTES_PER_HOUR + (wholeNumber(input.minutes) ?? 0) };
++}
++
++/** The parts of the input that make it invalid; both false when `parseLeaveInput` accepts it. */
++export function invalidLeaveParts(input: LeaveInput): LeaveParts {
++  const hours = input.hoursBad === true ? null : wholeNumber(input.hours);
++  const minutes = input.minutesBad === true ? null : wholeNumber(input.minutes);
++  const hoursWrong = hours === null || hours > LEAVE_MAX_HOURS;
++  const minutesWrong = minutes === null || minutes >= MINUTES_PER_HOUR;
++  if (hoursWrong || minutesWrong) return { hours: hoursWrong, minutes: minutesWrong };
++  const overLimit = hours * MINUTES_PER_HOUR + minutes > LEAVE_MAX_MINUTES;
++  return { hours: overLimit, minutes: overLimit };
+ }
+diff --git a/src/client/styles.css b/src/client/styles.css
+index 0664c48..80a9614 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -976,28 +976,97 @@ textarea {
+   }
+ }
+ 
++/*
++ * Phone first screen (WP5-UX-B-01, mockup A2): the period card, the clock card and the sheet, with
++ * the first day row above the tab bar. The page heading stays for screen readers only (the period
++ * card and the form header already name the person and the period); `<` and `>` flank the period
++ * title; the clock is one row; the tools are two compact rows.
++ */
+ @media (max-width: 767px) {
+-  .period-bar {
+-    flex-wrap: wrap;
++  .page-head {
++    position: absolute;
++    width: var(--hairline);
++    height: var(--hairline);
++    margin: 0;
++    overflow: hidden;
++    clip-path: var(--clip-hidden);
++    white-space: nowrap;
+   }
+ 
+-  .period-main {
+-    flex-basis: 100%;
+-    order: var(--order-first);
++  .workbar {
++    gap: var(--space-2);
++    margin-bottom: var(--space-2);
+   }
+ 
++  .period-bar {
++    display: grid;
++    grid-template-columns: var(--tap-min) minmax(0, var(--track)) var(--tap-min);
++    align-items: center;
++    gap: var(--space-1) var(--space-2);
++    padding: var(--space-3);
++  }
++
++  /* The wrappers dissolve so the buttons, the title and the notes are placed on one grid. */
++  .period-main,
+   .period-actions {
+-    flex: 1;
+-    justify-content: space-between;
++    display: contents;
++  }
++
++  .period-bar > .period-step {
++    grid-column: 1;
++    grid-row: 1;
++  }
++
++  .period-actions > .period-step {
++    grid-column: 3;
++    grid-row: 1;
++  }
++
++  .period-title {
++    grid-column: 2;
++    grid-row: 1;
++  }
++
++  .period-meta,
++  .period-main > :not(.period-title, .period-meta),
++  .period-actions > :not(.period-step) {
++    grid-column: 1 / -1;
++  }
++
++  .period-name {
++    font-size: var(--font-size-md);
++  }
++
++  .period-meta {
++    gap: 0 var(--space-3);
++    font-size: var(--font-size-xs);
++  }
++
++  .zone-note {
++    padding: var(--space-1) var(--space-2);
++    gap: 0;
++  }
++
++  .zone-note .facts {
++    gap: 0 var(--space-3);
+   }
+ 
+   .clock-panel {
+-    flex-direction: column;
+-    align-items: stretch;
++    flex-wrap: nowrap;
++    padding: var(--space-3);
+   }
+ 
+   .clock-button {
+-    width: 100%;
++    flex: none;
++  }
++
++  .sheet-area > .card {
++    gap: var(--space-2);
++    padding: var(--space-3);
++  }
++
++  .tools {
++    gap: var(--space-2);
+   }
+ 
+   .tools-left,
+@@ -1005,6 +1074,50 @@ textarea {
+     width: 100%;
+   }
+ 
++  .tools-left:empty {
++    display: none;
++  }
++
++  .tools .open-day {
++    flex-wrap: nowrap;
++    width: 100%;
++  }
++
++  /* The label sits beside its date field, so the row stays one control high. */
++  .tools .open-day label {
++    flex: 1;
++    flex-direction: row;
++    align-items: center;
++    gap: var(--space-2);
++    min-width: 0;
++    white-space: nowrap;
++  }
++
++  .tools .open-day input {
++    flex: 1;
++    min-width: 0;
++  }
++
++  .tools .open-day {
++    align-items: center;
++  }
++
++  .tools-right {
++    flex-wrap: nowrap;
++    align-items: stretch;
++  }
++
++  .tools-right button {
++    flex: auto;
++    padding-inline: var(--space-2);
++    white-space: nowrap;
++  }
++
++  .zone-note .facts > div {
++    display: flex;
++    gap: var(--space-2);
++  }
++
+   .batch-bar label,
+   select {
+     width: 100%;
+@@ -1572,6 +1685,39 @@ textarea {
+     grid-template-columns: var(--track);
+   }
+ 
++  .sheet {
++    gap: var(--space-3);
++  }
++
++  .form-head {
++    gap: var(--space-1);
++    padding-bottom: var(--space-2);
++  }
++
++  /* A one-line form header as in mockup A2: company and form title together, the fields in small type. */
++  .form-brand {
++    display: flex;
++    flex-wrap: wrap;
++    align-items: baseline;
++    gap: 0 var(--space-2);
++  }
++
++  /* As in mockup A2 the phone header shows the company and the fields; the form title stays for screen readers. */
++  .form-title {
++    position: absolute;
++    width: var(--hairline);
++    height: var(--hairline);
++    margin: 0;
++    overflow: hidden;
++    clip-path: var(--clip-hidden);
++    white-space: nowrap;
++  }
++
++  .form-fields {
++    gap: 0 var(--space-3);
++    font-size: var(--font-size-xs);
++  }
++
+   .company {
+     font-size: var(--font-size-sm);
+   }
+@@ -1741,10 +1887,12 @@ textarea {
+ /* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
+ 
+ /*
+- * One native <dialog> for the day editor. From 768px it is a non-modal side panel: beside the
+- * sheet from 1200px (the sheet keeps its seven columns), fixed at the right edge below that. Below
+- * 768px it is a modal bottom sheet of at most 86% of the height. Inside: a sticky head, then the
+- * banner, the times, label and leave, and the figures, each section separated by a soft rule.
++ * One native <dialog> for the day editor. From 1200px it is a non-modal panel in its own column
++ * beside the sheet (the sheet keeps its seven columns). Below 1200px it is modal, so the page
++ * behind is inert and the panel never hides a control that can still take focus: a side panel
++ * fixed at the right edge from 768px, a bottom sheet of at most 86% of the height below that.
++ * Inside: a sticky head, then the banner, the times, label and leave, and the figures, each
++ * section separated by a soft rule.
+  */
+ .sheet-area {
+   display: grid;
+@@ -1773,6 +1921,10 @@ textarea {
+   height: auto;
+ }
+ 
++.day-panel-side::backdrop {
++  background: var(--scrim);
++}
++
+ @media (min-width: 1200px) {
+   .sheet-area.with-editor {
+     grid-template-columns: minmax(0, var(--track)) var(--editor-width);
+diff --git a/tests/client/leaveInputModel.test.ts b/tests/client/leaveInputModel.test.ts
+index 3f971c4..b2bed7f 100644
+--- a/tests/client/leaveInputModel.test.ts
++++ b/tests/client/leaveInputModel.test.ts
+@@ -1,5 +1,12 @@
+ import { describe, expect, it } from 'vitest';
+-import { LEAVE_INPUT_MESSAGE, LEAVE_MAX_MINUTES, leaveInputOf, parseLeaveInput } from '../../src/client/components/leaveInputModel.ts';
++import {
++  invalidLeaveParts,
++  LEAVE_INPUT_MESSAGE,
++  LEAVE_MAX_MINUTES,
++  leaveInputOf,
++  parseLeaveInput,
++} from '../../src/client/components/leaveInputModel.ts';
++import { leaveHint } from '../../src/client/components/sessionModel.ts';
+ 
+ /*
+  * Partial leave typed as hours and minutes: an input conversion to the same integer leave
+@@ -44,6 +51,36 @@ describe('leave typed as hours and minutes', () => {
+     }
+   });
+ 
++  it('refuses malformed text such as "2-" and "3-", and an empty or out of range part', () => {
++    for (const text of ['2-', '3-', 'e', '1.5', '-1']) {
++      expect(parseLeaveInput({ hours: text, minutes: '30' }), `hours ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++      expect(parseLeaveInput({ hours: '4', minutes: text }), `minutes ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    }
++    expect(parseLeaveInput({ hours: '', minutes: '60' }).ok).toBe(false);
++    expect(parseLeaveInput({ hours: '25', minutes: '' }).ok).toBe(false);
++  });
++
++  // A number field holds "" for text the browser cannot read ("2-", "e"), exactly like an empty field,
++  // so the form passes the browser's own bad-input flag along; it must never be read as 0.
++  it('refuses a part the browser flagged as bad input, whatever value it reports', () => {
++    expect(parseLeaveInput({ hours: '', minutes: '30', hoursBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    expect(parseLeaveInput({ hours: '4', minutes: '', minutesBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
++    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: true, minutesBad: true }).ok).toBe(false);
++    expect(parseLeaveInput({ hours: '2', minutes: '30', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 150 });
++    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 0 });
++    expect(leaveHint({ hours: '', minutes: '30', hoursBad: true })).toBeNull();
++  });
++
++  it('names the parts that are wrong so the form can mark them', () => {
++    expect(invalidLeaveParts({ hours: '2', minutes: '30' })).toEqual({ hours: false, minutes: false });
++    expect(invalidLeaveParts({ hours: '', minutes: '' })).toEqual({ hours: false, minutes: false });
++    expect(invalidLeaveParts({ hours: '', minutes: '30', hoursBad: true })).toEqual({ hours: true, minutes: false });
++    expect(invalidLeaveParts({ hours: '4', minutes: '3-' })).toEqual({ hours: false, minutes: true });
++    expect(invalidLeaveParts({ hours: '25', minutes: '60' })).toEqual({ hours: true, minutes: true });
++    // Each part is fine alone but the sum passes 24h 00m: both are marked.
++    expect(invalidLeaveParts({ hours: '24', minutes: '1' })).toEqual({ hours: true, minutes: true });
++  });
++
+   it('starts the fields from the stored leave minutes, and the round trip is exact', () => {
+     expect(leaveInputOf(0)).toEqual({ hours: '0', minutes: '0' });
+     expect(leaveInputOf(240)).toEqual({ hours: '4', minutes: '0' });
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 4584bd0..f9030c3 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -597,6 +597,78 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
+   }
+ });
+ 
++test('malformed leave hours or minutes are never saved as another leave; empty fields still save 0', async ({ page, employeeSeed, signInThroughUi }) => {
++  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  const puts: string[] = [];
++  page.on('request', (request) => {
++    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${date}`) puts.push(request.postData() ?? '');
++  });
++  try {
++    await signInThroughUi();
++    const editor = await openEditor(page, date);
++    const fields = editor.getByRole('form', { name: 'Day fields' });
++    const hours = fields.getByLabel('Leave hours');
++    const minutes = fields.getByLabel('Leave minutes');
++    const save = fields.getByRole('button', { name: 'Save day fields' });
++    await fields.getByLabel('Leave kind').selectOption('vacation');
++    const untouched = await employeeSeed.dayView(date);
++
++    // The browser holds text such as "2-" or "e" in a number field as an empty value with a bad-input flag;
++    // it must not be read as 0 (hours "2-" with 30 minutes was once stored as 30, not 150).
++    const refuse = async (hoursKeys: string | null, minutesKeys: string | null, marked: { hours: boolean; minutes: boolean }) => {
++      await hours.fill('');
++      await minutes.fill('');
++      if (hoursKeys !== null) await hours.pressSequentially(hoursKeys);
++      else await hours.fill('2');
++      if (minutesKeys !== null) await minutes.pressSequentially(minutesKeys);
++      else await minutes.fill('30');
++      await save.click();
++      const alert = fields.getByRole('alert');
++      await expect(alert).toHaveCount(1);
++      await expect(alert).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
++      const alertId = await alert.getAttribute('id');
++      expect(alertId, 'the error has an id the fields point to').toBeTruthy();
++      for (const [field, isMarked] of [[hours, marked.hours], [minutes, marked.minutes]] as const) {
++        if (isMarked) {
++          await expect(field).toHaveAttribute('aria-invalid', 'true');
++          await expect(field).toHaveAttribute('aria-describedby', new RegExp(alertId ?? '\\0'));
++        } else {
++          await expect(field).not.toHaveAttribute('aria-invalid', 'true');
++        }
++      }
++      expect(puts, 'nothing is sent').toEqual([]);
++      const stored = await employeeSeed.dayView(date);
++      expect(stored.leave_minutes).toBe(0);
++      expect(stored.entry?.version ?? null).toBe(untouched.entry?.version ?? null);
++    };
++    await refuse('2-', null, { hours: true, minutes: false });
++    await refuse(null, '3-', { hours: false, minutes: true });
++    await refuse('e', null, { hours: true, minutes: false });
++    await refuse('1.5', '0', { hours: true, minutes: false });
++    await refuse('-1', null, { hours: true, minutes: false });
++    await refuse('0', '60', { hours: false, minutes: true });
++    await refuse('24', '1', { hours: true, minutes: true });
++
++    // Valid input is unchanged: 2 h 30 m is the same 150 leave minutes.
++    await hours.fill('2');
++    await minutes.fill('30');
++    await save.click();
++    await expect(editor.getByText('Day fields saved.')).toBeVisible();
++    expect(puts.map((body) => JSON.parse(body) as { leave_minutes: number })).toMatchObject([{ leave_minutes: 150 }]);
++    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(150);
++
++    // Empty fields still save 0.
++    await hours.fill('');
++    await minutes.fill('');
++    await save.click();
++    await expect.poll(() => puts.length).toBe(2);
++    expect(JSON.parse(puts[1] ?? '{}')).toMatchObject({ leave_minutes: 0 });
++    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(0);
++  } finally {
++    await employeeSeed.resetDay(date);
++  }
++});
++
+ test('the OT leave mismatch warning informs without spending or reserving anything', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+   const project = testInfo.project.name;
+   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+@@ -758,7 +830,12 @@ test('future days show as upcoming from the server date, past days without a rec
+   const next = page.getByRole('button', { name: 'Next period' });
+   const row = page.locator(`[data-day="${futureDay}"]`);
+   for (let step = 0; step < 4 && (await row.count()) === 0; step += 1) {
++    // Wait for the sheet to change before looking for the row: the old sheet also has 14 days, so
++    // counting rows alone raced the render and could click past the period holding the future day.
++    const period = page.getByRole('region', { name: 'Pay period' });
++    const shown = (await period.textContent()) ?? '';
+     await next.click();
++    await expect(period).not.toHaveText(shown);
+     await expect(page.locator('[data-day]')).toHaveCount(14);
+   }
+   await expect(row).toBeVisible();
+@@ -886,6 +963,82 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a
+   }
+ });
+ 
++/** True when a focused element lies entirely inside the open editor's box (the editor hides it). */
++function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boolean; name: string }> {
++  return page.evaluate(`(() => {
++    const active = document.activeElement;
++    const panel = document.querySelector('dialog[open]');
++    if (active === null || active === document.body || panel === null) return { hidden: false, outside: false, name: '' };
++    const name = active.tagName + ' ' + (active.getAttribute('aria-label') ?? (active.textContent ?? '').slice(0, 30));
++    if (panel.contains(active)) return { hidden: false, outside: false, name };
++    const a = active.getBoundingClientRect();
++    const p = panel.getBoundingClientRect();
++    const hidden = a.left >= p.left && a.right <= p.right && a.top >= p.top && a.bottom <= p.bottom;
++    return { hidden, outside: true, name };
++  })()`);
++}
++
++test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet control', () => {
++  test.skip(({ isMobile }) => isMobile, 'The 768 to 1199px side panel is a desktop-project layout');
++
++  for (const width of [768, 1024]) {
++    test(`at ${width}px no focused sheet control lies under the open panel, and Escape closes it from the sheet`, async ({
++      page,
++      employeeSeed,
++      signInThroughUi,
++    }) => {
++      const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++      await page.setViewportSize({ width, height: 800 });
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++      await dayButton(date).click();
++      const editor = page.getByRole('dialog', { name: /Day editor/ });
++      await expect(editor).toBeVisible();
++      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
++      await page.screenshot({ path: screenshotPath(`editor-w${width}-synthetic.png`), animations: 'disabled' });
++
++      // Keyboard walk both ways: whatever takes focus is inside the panel, or is not entirely under it.
++      for (const key of ['Tab', 'Shift+Tab']) {
++        for (let step = 0; step < 70; step += 1) {
++          await page.keyboard.press(key);
++          const state = await focusHiddenByPanel(page);
++          expect(state.hidden, `${state.name} is focused entirely under the panel after ${step + 1} ${key} presses`).toBe(false);
++        }
++      }
++
++      // Focus placed on a sheet control (when the page allows it at all): Escape still closes the panel.
++      await dayButton(other).focus();
++      await page.keyboard.press('Escape');
++      await expect(editor).toHaveCount(0);
++      await expect(dayButton(date)).toBeFocused();
++    });
++  }
++
++  test('at 1280px the panel stays beside the sheet and Escape closes it wherever focus is', async ({ page, employeeSeed, signInThroughUi }) => {
++    const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
++    await signInThroughUi();
++    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++    await dayButton(date).click();
++    const editor = page.getByRole('dialog', { name: /Day editor/ });
++    await expect(editor).toBeVisible();
++    expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
++    // Focus on another sheet control, then on the toolbar: Escape closes the panel from both.
++    await dayButton(other).focus();
++    await expect(dayButton(other)).toBeFocused();
++    await page.keyboard.press('Escape');
++    await expect(editor).toHaveCount(0);
++    // Focus returns to the button of the day whose editor was open.
++    await expect(dayButton(date)).toBeFocused();
++    await dayButton(date).click();
++    await expect(editor).toBeVisible();
++    await page.getByRole('button', { name: 'Show details' }).focus();
++    await page.keyboard.press('Escape');
++    await expect(editor).toHaveCount(0);
++    await expect(dayButton(date)).toBeFocused();
++  });
++});
++
+ test('one tap confirms the suggested breaks of a saved session with the same session update and its version', async ({
+   page,
+   employeeSeed,
+diff --git a/tests/e2e/import.spec.ts b/tests/e2e/import.spec.ts
+index 2ef900b..1f53c32 100644
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -384,6 +384,10 @@ test('the Import entry is for the signed-in person and is not part of the admini
+   const nav = page.getByRole('navigation', { name: 'Main' });
+   await openMoreOnPhone(page);
+   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
++  // The Admin view itself (both projects) has no import or opening-balance controls.
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
++  await expect(page.locator('main')).not.toContainText('Opening OT balance');
+   if (isPhone(page)) {
+     await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
+   } else {
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 8ac98b7..762d282 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -57,6 +57,70 @@ test.describe('viewing zone equals the reporting zone', () => {
+   });
+ });
+ 
++/**
++ * WP5-UX-B-01: on a phone the first day row must be fully visible on the first screen, above the
++ * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
++ * the viewing zone equal to the reporting zone and with the longer zone note shown.
++ */
++async function expectFirstDayAboveTabBar(page: Page) {
++  const first = page.locator('[data-day]').first();
++  await expect(first).toBeVisible();
++  const tabs = await page.locator('.shell-tabs').boundingBox();
++  const row = await first.boundingBox();
++  const viewport = page.viewportSize();
++  expect(tabs, 'tab bar box').not.toBeNull();
++  expect(row, 'first day row box').not.toBeNull();
++  expect(viewport, 'viewport').not.toBeNull();
++  expect((row?.y ?? 0) + (row?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
++  expect(tabs?.y ?? 0, 'the tab bar sits on the bottom edge').toBeGreaterThan((viewport?.height ?? 0) / 2);
++  // Nothing was scrolled to get here.
++  expect(await page.evaluate('window.scrollY')).toBe(0);
++}
++
++test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
++  await signInThroughUi();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  const bar = page.locator('.period-bar');
++  const previous = bar.getByRole('button', { name: 'Previous period' });
++  const next = bar.getByRole('button', { name: 'Next period' });
++  const review = bar.locator('[data-review-link]');
++  await previous.focus();
++  await page.keyboard.press('Tab');
++  await expect(next).toBeFocused();
++  await page.keyboard.press('Tab');
++  await expect(review).toBeFocused();
++  // Visual order: top to bottom, then left to right (no overlap of rows is assumed within 4px).
++  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
++  for (const box of boxes) expect(box, 'control box').not.toBeNull();
++  const [a, b, c] = boxes;
++  const before = (first: typeof a, second: typeof a) =>
++    (first?.y ?? 0) + 4 < (second?.y ?? 0) || (Math.abs((first?.y ?? 0) - (second?.y ?? 0)) <= 4 && (first?.x ?? 0) < (second?.x ?? 0));
++  expect(before(a, b), 'Previous comes before Next visually').toBe(true);
++  expect(before(b, c), 'Next comes before Review visually').toBe(true);
++});
++
++test.describe('phone first screen', () => {
++  test.skip(({ isMobile }) => !isMobile, 'The first-screen budget is the 390x844 phone');
++
++  test.describe('viewing zone equals the reporting zone', () => {
++    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++    test('the first day row is fully visible above the tab bar', async ({ page, signInThroughUi }) => {
++      await signInThroughUi();
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      await expect(page.locator('[data-zone-note]')).toHaveCount(0);
++      await expectFirstDayAboveTabBar(page);
++    });
++  });
++
++  test('the first day row is fully visible above the tab bar with the zone note shown', async ({ page, signInThroughUi }) => {
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await expect(page.locator('[data-zone-note]')).toBeVisible();
++    await expectFirstDayAboveTabBar(page);
++  });
++});
++
+ test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({
+   page,
+   employeeSeed,

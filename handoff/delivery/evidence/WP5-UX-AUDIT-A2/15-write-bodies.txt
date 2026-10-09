@@ -1,0 +1,72 @@
+--- 014bd47
+<task>/export014/src/client/DayEditor.tsx:120:      const response = await request<{ deleted: boolean; day: DayView }>('DELETE', `/sessions/${session.id}`, body);
+<task>/export014/src/client/DayEditor.tsx-121-      setDeleting(null);
+<task>/export014/src/client/DayEditor.tsx-122-      saved(response.day, 'Session deleted.');
+<task>/export014/src/client/DayEditor.tsx-123-    } catch (caught) {
+<task>/export014/src/client/DayEditor.tsx-124-      setDeleting(null);
+<task>/export014/src/client/DayEditor.tsx-125-      if (isStaleVersion(caught)) stale();
+<task>/export014/src/client/DayEditor.tsx-126-      else setActionError(describeError(caught));
+--
+<task>/export014/src/client/TimesheetScreen.tsx:141:      await api('POST', '/api/clock/in', { input_zone: displayZone });
+<task>/export014/src/client/TimesheetScreen.tsx-142-      load();
+<task>/export014/src/client/TimesheetScreen.tsx-143-    } catch (caught) {
+<task>/export014/src/client/TimesheetScreen.tsx-144-      report(caught);
+<task>/export014/src/client/TimesheetScreen.tsx-145-    }
+<task>/export014/src/client/TimesheetScreen.tsx-146-  }
+<task>/export014/src/client/TimesheetScreen.tsx-147-
+--
+<task>/export014/src/client/TimesheetScreen.tsx:176:      setPreview(await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries }));
+<task>/export014/src/client/TimesheetScreen.tsx-177-    } catch (caught) {
+<task>/export014/src/client/TimesheetScreen.tsx-178-      report(caught);
+<task>/export014/src/client/TimesheetScreen.tsx-179-    } finally {
+<task>/export014/src/client/TimesheetScreen.tsx-180-      setBusy(false);
+<task>/export014/src/client/TimesheetScreen.tsx-181-    }
+<task>/export014/src/client/TimesheetScreen.tsx-182-  }
+--
+<task>/export014/src/client/TimesheetScreen.tsx:191:        mode: 'commit',
+<task>/export014/src/client/TimesheetScreen.tsx-192-        entries,
+<task>/export014/src/client/TimesheetScreen.tsx-193-        ...(input.reason === '' ? {} : { reason: input.reason }),
+<task>/export014/src/client/TimesheetScreen.tsx-194-        ...(input.confirmConflicts ? { confirm_conflicts: true } : {}),
+<task>/export014/src/client/TimesheetScreen.tsx-195-      });
+<task>/export014/src/client/TimesheetScreen.tsx-196-      setPreview(null);
+<task>/export014/src/client/TimesheetScreen.tsx-197-      setSelected(new Set());
+--- 589bcff
+<task>/export/src/client/DayEditor.tsx:177:      const response = await request<{ deleted: boolean; day: DayView }>('DELETE', `/sessions/${session.id}`, body);
+<task>/export/src/client/DayEditor.tsx-178-      setDeleting(null);
+<task>/export/src/client/DayEditor.tsx-179-      saved(response.day, 'Session deleted.');
+<task>/export/src/client/DayEditor.tsx-180-    } catch (caught) {
+<task>/export/src/client/DayEditor.tsx-181-      setDeleting(null);
+<task>/export/src/client/DayEditor.tsx-182-      if (isStaleVersion(caught)) stale();
+<task>/export/src/client/DayEditor.tsx-183-      else setActionError(describeError(caught));
+--
+<task>/export/src/client/TimesheetScreen.tsx:203:      await api('POST', '/api/clock/in', { input_zone: displayZone });
+<task>/export/src/client/TimesheetScreen.tsx-204-      load();
+<task>/export/src/client/TimesheetScreen.tsx-205-    } catch (caught) {
+<task>/export/src/client/TimesheetScreen.tsx-206-      report(caught);
+<task>/export/src/client/TimesheetScreen.tsx-207-    }
+<task>/export/src/client/TimesheetScreen.tsx-208-  }
+<task>/export/src/client/TimesheetScreen.tsx-209-
+--
+<task>/export/src/client/TimesheetScreen.tsx:239:      setPreview(await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries }));
+<task>/export/src/client/TimesheetScreen.tsx-240-    } catch (caught) {
+<task>/export/src/client/TimesheetScreen.tsx-241-      report(caught);
+<task>/export/src/client/TimesheetScreen.tsx-242-    } finally {
+<task>/export/src/client/TimesheetScreen.tsx-243-      setBusy(false);
+<task>/export/src/client/TimesheetScreen.tsx-244-    }
+<task>/export/src/client/TimesheetScreen.tsx-245-  }
+--
+<task>/export/src/client/TimesheetScreen.tsx:256:        mode: 'commit',
+<task>/export/src/client/TimesheetScreen.tsx-257-        entries,
+<task>/export/src/client/TimesheetScreen.tsx-258-        ...(input.reason === '' ? {} : { reason: input.reason }),
+<task>/export/src/client/TimesheetScreen.tsx-259-        ...(input.confirmConflicts ? { confirm_conflicts: true } : {}),
+<task>/export/src/client/TimesheetScreen.tsx-260-      });
+<task>/export/src/client/TimesheetScreen.tsx-261-      setPreview(null);
+<task>/export/src/client/TimesheetScreen.tsx-262-      setSelected(new Set());
+--
+<task>/export/src/client/TimesheetScreen.tsx:302:      const result = await request<DayBatchPreview>('POST', '/days/batch', { mode: 'preview', entries: [entry] });
+<task>/export/src/client/TimesheetScreen.tsx-303-      const outcome = labelPreviewOutcome(result);
+<task>/export/src/client/TimesheetScreen.tsx-304-      if (outcome === 'unchanged') {
+<task>/export/src/client/TimesheetScreen.tsx-305-        setNotice(`No change: ${workDate} is already ${choice}.`);
+<task>/export/src/client/TimesheetScreen.tsx-306-      } else if (outcome === 'commit') {
+<task>/export/src/client/TimesheetScreen.tsx-307-        await sendCommit([entry], { reason: '', confirmConflicts: false }, false);
+<task>/export/src/client/TimesheetScreen.tsx-308-      } else {

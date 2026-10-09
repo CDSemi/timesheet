@@ -1,0 +1,37 @@
+// WP5-UX-AUDIT-A2 synthetic screenshots: the A-01 refusal in the 1024 modal editor, and the phone
+// first screen of a view-only grantee. Synthetic accounts and data only.
+import { join } from 'node:path';
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { openDay, signIn } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const SHOTS = '<task>/shots';
+
+test('screenshot: A-01 refusal in the modal editor at 1024', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'tablet', 'tablet only');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Leave Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editor = await openDay(page, workDate);
+  const form = editor.getByRole('form', { name: 'Day fields' });
+  await form.getByLabel('Leave hours').click();
+  await form.getByLabel('Leave hours').pressSequentially('2-');
+  await form.getByLabel('Leave minutes').fill('30');
+  await form.getByLabel('Leave kind').selectOption('vacation');
+  await form.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(form.getByRole('alert')).toHaveCount(1);
+  await form.getByRole('alert').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(SHOTS, 'a2-leave-refused-1024-modal-synthetic.png'), animations: 'disabled' });
+});
+
+test('screenshot: phone first screen of a view-only grantee', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone only');
+  const ownerP = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner A' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee B', signature: 'none' });
+  await ownerP.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  await signIn(page, grantee.account, `#/shared/${ownerP.account.id}/timesheet`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.screenshot({ path: join(SHOTS, 'a2-phone-grantee-view-only-synthetic.png'), animations: 'disabled' });
+});

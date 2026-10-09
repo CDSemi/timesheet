@@ -1,0 +1,21 @@
+// WP5-UX-AUDIT-A2: the export's own e2e specs on a third layout, a 1024x800 desktop browser, where
+// FIX3 makes the day editor a MODAL side panel (inert page). The mandatory e2e runs only cover 1280
+// (non-modal panel) and the 390 phone (modal bottom sheet). Auditor-owned; outside the export.
+import { join } from 'node:path';
+
+const exportDir = '<task>/export';
+
+export default {
+  testDir: join(exportDir, 'tests', 'e2e'),
+  testMatch: '**/*.spec.ts',
+  outputDir: '<task>/tmp/tablet-e2e-output',
+  workers: 2,
+  reporter: 'list',
+  forbidOnly: true,
+  timeout: 30_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  // Named "desktop" so the specs' project-name branches (7-column sheet from 768px) take the desktop
+  // path; only the width differs from the standard desktop project (1024 instead of 1280).
+  projects: [{ name: 'desktop', use: { viewport: { width: 1024, height: 800 } } }],
+};

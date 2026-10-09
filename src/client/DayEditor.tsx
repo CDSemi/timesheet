@@ -81,7 +81,7 @@ export function DayEditor({
   const firstRefresh = useRef(refresh);
 
   // Opens the panel (non-modal) or the bottom sheet (modal) and moves focus to the heading. A switch
-  // between the two while open (the window crossed 768px) re-opens the same element in the other mode.
+  // between the two while open (the window crossed 1200px) re-opens the same element in the other mode.
   useEffect(() => {
     const element = dialog.current;
     if (element === null) return;

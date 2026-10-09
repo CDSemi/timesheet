@@ -1,0 +1,42 @@
+// WP5-UX-AUDIT-B2: copies text evidence into the evidence folder as masked LF text.
+// Usage: node mask.mjs <outDir> <src>=<name> [<src>=<name> ...]
+// Masks: ANSI colour codes; the task folder as <task>; the user profile as <user>; the repository as <project>;
+// CRLF to LF. Fails if a masked file still contains a user-profile path or a non-synthetic e-mail address.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [outDir, ...pairs] = process.argv.slice(2);
+const rules = [
+  [/\x1b\[[0-9;]*[A-Za-z]/g, ''],
+  [/[A-Za-z]:\\\.claude-tmp\\timesheet\\WP5-UX-AUDIT-B2/gi, '<task>'],
+  [/[A-Za-z]:\/\.claude-tmp\/timesheet\/WP5-UX-AUDIT-B2/gi, '<task>'],
+  [/\/[a-z]\/\.claude-tmp\/timesheet\/WP5-UX-AUDIT-B2/gi, '<task>'],
+  [/\.\.\\tmp\\/g, '<task>\\tmp\\'],
+  [/[A-Za-z]:\\Dropbox\\Work\.CDSemi\\timesheet/gi, '<project>'],
+  [/\/[a-z]\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/[A-Za-z]:\\Users\\[^\\\s"']+/gi, '<user>'],
+  [/\/[a-z]\/Users\/[^/\s"']+/gi, '<user>'],
+  [/C:\/Users\/[^/\s"']+/gi, '<user>'],
+  [/\r\n/g, '\n'],
+  [/\r/g, '\n'],
+];
+let problems = 0;
+for (const pair of pairs) {
+  const at = pair.lastIndexOf('=');
+  const src = pair.slice(0, at);
+  const name = pair.slice(at + 1);
+  let text = readFileSync(src, 'utf8');
+  for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
+  const leftovers = [
+    ...text.matchAll(/Users[\\/][A-Za-z0-9_.-]+/g),
+    ...[...text.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)].filter((m) => !/@(example\.invalid|example\.com|anthropic\.com)$/i.test(m[0]) && !/noreply@/i.test(m[0])),
+  ];
+  if (leftovers.length > 0) {
+    problems += leftovers.length;
+    console.log(`${name}: unmasked ${leftovers.map((m) => m[0]).join(', ')}`);
+  }
+  writeFileSync(join(outDir, name), text.endsWith('\n') ? text : `${text}\n`);
+  console.log(`${name}: ${text.length} chars`);
+}
+console.log(`problems=${problems}`);
+process.exitCode = problems === 0 ? 0 : 1;

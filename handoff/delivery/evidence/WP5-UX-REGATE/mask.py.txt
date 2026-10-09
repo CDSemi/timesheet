@@ -1,0 +1,48 @@
+import re
+import shutil
+from pathlib import Path
+
+T = Path(r"<task>")
+EV = Path(r"<repo>\handoff\delivery\evidence\WP5-UX-REGATE")
+EV.mkdir(parents=True, exist_ok=True)
+
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+SUBS = [
+    (re.compile(r"D:[\\/]\.claude-tmp[\\/]timesheet[\\/]WP5-UX-REGATE", re.I), "<task>"),
+    (re.compile(r"/d/\.claude-tmp/timesheet/WP5-UX-REGATE", re.I), "<task>"),
+    (re.compile(r"D:[\\/]Dropbox[\\/]Work\.CDSemi[\\/]timesheet", re.I), "<repo>"),
+    (re.compile(r"/d/Dropbox/Work\.CDSemi/timesheet", re.I), "<repo>"),
+    (re.compile(r"C:[\\/]Users[\\/]<user>", re.I), "C:/Users/<user>"),
+    (re.compile(r"/c/Users/<user>", re.I), "/c/Users/<user>"),
+    (re.compile(r"<user>", re.I), "<user>"),
+]
+
+
+def mask(text: str) -> str:
+    text = ANSI.sub("", text).replace("\r\n", "\n").replace("\r", "\n")
+    for pat, rep in SUBS:
+        text = pat.sub(rep, text)
+    return text
+
+
+out = T / "out"
+skip = {"ex-files.txt", "ex-hashes.txt", "ex-sorted.txt", "ex-files-before.txt", "lstree-sorted.txt"}
+for p in sorted(out.iterdir()):
+    if p.is_file() and p.suffix == ".txt" and p.name not in skip:
+        (EV / p.name).write_bytes(mask(p.read_text(encoding="utf-8", errors="replace")).encode("utf-8"))
+
+for src, dst in [
+    (T / "contrast.mjs", "contrast.mjs.txt"),
+    (T / "run-tz.mjs", "run-tz.mjs.txt"),
+    (T / "ux-regate.spec.ts.keep", "ux-regate.spec.ts.txt"),
+    (T / "tzprobe.test.ts.keep", "tzprobe.test.ts.txt"),
+    (T / "exdigest.sh", "exdigest.sh.txt"),
+    (T / "keys.sh", "keys.sh.txt"),
+    (T / "mask.py", "mask.py.txt"),
+]:
+    (EV / dst).write_bytes(mask(src.read_text(encoding="utf-8")).encode("utf-8"))
+
+pngs = sorted((T / "shots").glob("*-synthetic.png"))
+for png in pngs:
+    shutil.copyfile(png, EV / png.name)
+print(len(pngs), len(list(EV.iterdir())))

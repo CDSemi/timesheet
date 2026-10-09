@@ -1,0 +1,41 @@
+ src/domain/format.ts | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+---
+diff --git a/src/domain/format.ts b/src/domain/format.ts
+index c617331..018c98d 100644
+--- a/src/domain/format.ts
++++ b/src/domain/format.ts
+@@ -6,3 +6,16 @@ export function formatDuration(minutes: number): string {
+   const rest = total % 60;
+   return hours === 0 ? `${sign}${rest}m` : `${sign}${hours}h ${String(rest).padStart(2, '0')}m`;
+ }
++
++/**
++ * Whole minutes as `h:mm`, the form the timesheet PDF prints (90 -> "1:30", 5 -> "0:05"). Display
++ * only: it formats a value the server computed and computes none. For every whole, non-negative
++ * minute count the text equals the PDF's `formatHoursMinutes`; a negative value (the sheet never
++ * receives one) keeps its sign as `formatDuration` does, and a fraction is truncated, so a
++ * screen never fails on an unexpected value.
++ */
++export function formatHoursMinutes(minutes: number): string {
++  const sign = minutes < 0 ? '−' : '';
++  const total = Math.abs(Math.trunc(minutes));
++  return `${sign}${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
++}
+--- api.ts diff (empty = unchanged)
+--- pdf + pdf-visual diff (empty = unchanged)
+--- fix-round outside handoff
+ docs/04_UX_AND_SETTINGS.md               |   8 +-
+ docs/04_UX_AND_SETTINGS.vi.md            |   8 +-
+ src/client/DayEditor.tsx                 |  34 ++++--
+ src/client/TimesheetScreen.tsx           |  29 +++--
+ src/client/components/DayFieldsForm.tsx  |  52 +++++++--
+ src/client/components/PeriodBar.tsx      |   7 +-
+ src/client/components/leaveInputModel.ts |  35 ++++--
+ src/client/styles.css                    | 180 ++++++++++++++++++++++++++++---
+ tests/client/leaveInputModel.test.ts     |  39 ++++++-
+ tests/e2e/day-editor.spec.ts             | 153 ++++++++++++++++++++++++++
+ tests/e2e/import.spec.ts                 |   4 +
+ tests/e2e/timesheet.spec.ts              |  64 +++++++++++
+ 12 files changed, 555 insertions(+), 58 deletions(-)
+--- package files since 014bd47

@@ -1,0 +1,55 @@
+// Compares the PUT /api/days/:date bodies of the same leave entries at 014bd47 and 589bcff (probe JSON).
+// Usage: node compare-leave.mjs <results-dir>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
+const sets = {
+  '589bcff desktop': load('leave-589bcff-desktop.json'),
+  '589bcff tablet': load('leave-589bcff-tablet.json'),
+  '589bcff mobile': load('leave-589bcff-mobile.json'),
+  '014bd47 desktop': load('leave-014bd47-desktop.json'),
+  '014bd47 mobile': load('leave-014bd47-mobile.json'),
+};
+
+console.log('== Per case: PUT count, leave_minutes sent, stored after, page message');
+for (const [label, data] of Object.entries(sets)) {
+  console.log(`-- ${label} (workDate ${data.workDate})`);
+  for (const r of data.results) {
+    const puts = r.put_bodies ?? [];
+    const sent = puts.map((b) => b.leave_minutes).join(',') || '-';
+    const after = typeof r.stored_after === 'object' ? r.stored_after.leave_minutes : r.stored_after;
+    const msg = (r.alert_texts ?? r.alerts ?? []).join(' | ') || '-';
+    const native = r.state ? ` formValid=${r.state.formValid} badInput=${r.state.badInput}` : '';
+    const marks = r.hours_attrs ? ` aria-invalid h=${r.hours_attrs.ariaInvalid ?? '-'} m=${r.minutes_attrs.ariaInvalid ?? '-'}` : '';
+    console.log(`  ${r.case}: PUTs=${puts.length} sent=${sent} stored=${after}${native}${marks} msg=${msg}`);
+  }
+}
+
+console.log('\n== Valid entries: body sent at 589bcff (hours + minutes) vs 014bd47 (minutes), expected_version excluded');
+const strip = (body) => {
+  const { expected_version: _ignored, ...rest } = body;
+  return JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b))));
+};
+const pairs = [
+  ['empty hours and minutes', 'empty', 0],
+  ['valid 2h 30m', 'valid 150 (2h 30m)', 150],
+  ['valid 4h 00m typed', 'valid 240 typed (4h 00m)', 240],
+  ['valid 0h 45m (hours empty)', 'valid 45 (0h 45m)', 45],
+  ['valid 8h 00m (the required day)', 'valid 480 (8h 00m)', 480],
+  ['client-valid 24h 00m, refused by the server rule', 'client-valid 1440, refused by the server rule', 1440],
+];
+let mismatches = 0;
+for (const project of ['desktop', 'mobile']) {
+  const now = sets[`589bcff ${project}`];
+  const then = sets[`014bd47 ${project}`];
+  for (const [a, b, minutes] of pairs) {
+    const x = now.results.find((r) => r.case === a)?.put_bodies?.[0];
+    const y = then.results.find((r) => r.case === b)?.put_bodies?.[0];
+    const same = x !== undefined && y !== undefined && strip(x) === strip(y);
+    if (!same) mismatches += 1;
+    console.log(`  ${project} ${minutes}: ${same ? 'SAME' : 'DIFFERENT'} 589=${x === undefined ? 'none' : strip(x)} 014=${y === undefined ? 'none' : strip(y)}`);
+  }
+}
+console.log(`mismatches=${mismatches}`);

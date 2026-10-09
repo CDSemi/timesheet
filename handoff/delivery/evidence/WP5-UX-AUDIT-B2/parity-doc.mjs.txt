@@ -1,0 +1,36 @@
+// WP5-UX-AUDIT-B2: whole-document EN/VI parity of the review pair (not line-aligned): heading count, table rows,
+// bullet count, and the multisets of code spans and of numbers (decimal comma mapped to a point). Read-only.
+import { readFileSync } from 'node:fs';
+
+const [enPath, viPath] = process.argv.slice(2);
+const facts = (path) => {
+  const text = readFileSync(path, 'utf8');
+  const lines = text.split(/\r?\n/);
+  const code = [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const noCode = text.replace(/`[^`]+`/g, '');
+  const numbers = [...noCode.replace(/(\d),(\d)/g, '$1.$2').matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0]);
+  return {
+    headings: lines.filter((line) => /^#{1,6}\s/.test(line)).length,
+    tableRows: lines.filter((line) => /^\|/.test(line)).length,
+    bullets: lines.filter((line) => /^\s*-\s/.test(line)).length,
+    code,
+    numbers,
+  };
+};
+const count = (items) => items.reduce((map, item) => map.set(item, (map.get(item) ?? 0) + 1), new Map());
+const diff = (a, b) => {
+  const ca = count(a);
+  const cb = count(b);
+  const out = [];
+  for (const key of new Set([...ca.keys(), ...cb.keys()])) if ((ca.get(key) ?? 0) !== (cb.get(key) ?? 0)) out.push(`${key}: EN ${ca.get(key) ?? 0} VI ${cb.get(key) ?? 0}`);
+  return out;
+};
+const en = facts(enPath);
+const vi = facts(viPath);
+console.log(`headings EN ${en.headings} VI ${vi.headings}; table rows EN ${en.tableRows} VI ${vi.tableRows}; bullets EN ${en.bullets} VI ${vi.bullets}`);
+const codeDiff = diff(en.code, vi.code);
+console.log(`code spans EN ${en.code.length} VI ${vi.code.length}; differences ${codeDiff.length}`);
+for (const item of codeDiff) console.log(`  ${item}`);
+const numberDiff = diff(en.numbers, vi.numbers);
+console.log(`numbers EN ${en.numbers.length} VI ${vi.numbers.length}; differences ${numberDiff.length}`);
+for (const item of numberDiff) console.log(`  ${item}`);

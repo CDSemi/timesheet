@@ -1,0 +1,117 @@
+// WP5-UX-AUDIT-A2 scope 3: the compact phone first screen (FIX3) must not hide or drop a control an
+// employee needs. On the phone project (390x844, plus 360x740 and 320x640 as narrower phones): each
+// needed control exists, is visible, lies inside the viewport width, is not covered at its centre once
+// scrolled into view, and works (Clock in/out, Open a day, Review & sign off, period steps, toggles,
+// a day's Edit button, the label picker). Synthetic data only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const CONTROLS: Array<[string, (page: any) => any]> = [
+  ['Clock in/out', (page) => page.locator('.clock-panel .clock-button')],
+  ['Open a day (date field)', (page) => page.getByLabel('Open a day')],
+  ['Open day (button)', (page) => page.getByRole('button', { name: 'Open day', exact: true })],
+  ['Review & sign off', (page) => page.locator('.period-bar [data-review-link]')],
+  ['Previous period', (page) => page.getByRole('button', { name: 'Previous period' })],
+  ['Next period', (page) => page.getByRole('button', { name: 'Next period' })],
+  ['Show details', (page) => page.getByRole('button', { name: 'Show details' })],
+  ['Change several days', (page) => page.getByRole('button', { name: 'Change several days' })],
+  ['first day Edit', (page) => page.locator('[data-day] button[aria-label^="Edit "]').first()],
+  ['first label picker', (page) => page.locator('[data-label-picker] button').first()],
+];
+
+async function inspect(page: any, name: string, locator: any) {
+  const count = await locator.count();
+  if (count === 0) return { name, count };
+  const first = locator.first();
+  await first.scrollIntoViewIfNeeded();
+  const visible = await first.isVisible();
+  const box = await first.boundingBox();
+  const facts = await first.evaluate((el: Element) => {
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      innerWidth: window.innerWidth,
+      inside: r.left >= -0.5 && r.right <= window.innerWidth + 0.5,
+      notCovered: hit !== null && (hit === el || el.contains(hit) || hit.contains(el) || (el as HTMLElement).labels?.[0]?.contains(hit) === true),
+      hit: hit === null ? null : `${hit.tagName}.${(hit as HTMLElement).className}`,
+      disabled: (el as HTMLButtonElement).disabled === true,
+    };
+  });
+  return { name, count, visible, box: box === null ? null : { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.width), h: Math.round(box.height) }, ...facts };
+}
+
+test('phone: every control an employee needs is present, visible, inside the screen and works', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'The compact first screen is the phone layout');
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Phone Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('.clock-panel[data-clock="out"]')).toHaveCount(1);
+  const sizes = [
+    { width: 390, height: 844 },
+    { width: 360, height: 740 },
+    { width: 320, height: 640 },
+  ];
+  const layouts: any[] = [];
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await page.evaluate('window.scrollTo(0, 0)');
+    await page.waitForTimeout(300);
+    const controls = [];
+    for (const [name, make] of CONTROLS) controls.push(await inspect(page, name, make(page)));
+    const pageHead = await page.evaluate(`(() => {
+      const head = document.querySelector('.page-head');
+      return head === null ? null : { controls: head.querySelectorAll('button, a, input, select, textarea').length, text: head.textContent.trim() };
+    })()`);
+    const widths = await page.evaluate('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
+    layouts.push({ size, controls, pageHead, widths });
+    await page.evaluate('window.scrollTo(0, 0)');
+  }
+
+  // They work (on the 390 phone): Clock in, Clock out opens its dialog, Open a day, the period steps, the review link.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate('window.scrollTo(0, 0)');
+  const actions: Record<string, unknown> = {};
+  await page.locator('.clock-panel .clock-button').click();
+  await expect(page.locator('.clock-panel[data-clock="in"]')).toHaveCount(1);
+  actions.clock_in = 'running';
+  await page.waitForTimeout(1_500);
+  await page.locator('.clock-panel .clock-button').click();
+  const clockOut = page.getByRole('dialog').filter({ hasText: /Clock out/ });
+  await expect(clockOut).toBeVisible();
+  actions.clock_out_dialog = 'opened';
+  await page.keyboard.press('Escape');
+  await expect(clockOut).toHaveCount(0);
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  actions.open_a_day = await editor.evaluate((d: Element) => ({ modal: d.matches(':modal'), className: d.className }));
+  await editor.getByRole('button', { name: 'Close' }).click();
+  const title = page.locator('.period-title');
+  const before = (await title.textContent()) ?? '';
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(title).not.toHaveText(before);
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(title).toHaveText(before);
+  actions.period_steps = 'previous and next work';
+  await page.locator('.period-bar [data-review-link]').click();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  actions.review_link = await page.evaluate('window.location.hash');
+
+  writeResult(`phone-controls-${testInfo.project.name}.json`, { layouts, actions });
+  for (const layout of layouts) {
+    for (const control of layout.controls) {
+      expect(control.count, `${layout.size.width}: ${control.name} present`).toBeGreaterThan(0);
+      expect(control.visible, `${layout.size.width}: ${control.name} visible`).toBe(true);
+      expect(control.inside, `${layout.size.width}: ${control.name} inside the screen width`).toBe(true);
+      expect(control.notCovered, `${layout.size.width}: ${control.name} not covered (${control.hit})`).toBe(true);
+    }
+    expect(layout.pageHead.controls, 'the visually hidden page heading holds no control').toBe(0);
+  }
+});

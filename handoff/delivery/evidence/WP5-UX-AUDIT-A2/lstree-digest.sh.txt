@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Digest of record (ls-tree form): sorted "<path> <blob>" for every file outside handoff/ at a commit.
+# Usage: bash lstree-digest.sh <commit> <out-file>
+set -u
+REPO=<project>
+C="$1"; OUT="$2"
+git -C "$REPO" ls-tree -r --format='%(path) %(objectname)' "$C" > "$OUT.raw"
+grep -v '^handoff/' "$OUT.raw" > "$OUT.nohandoff"
+LC_ALL=C sort "$OUT.nohandoff" > "$OUT"
+wc -l < "$OUT"
+sha256sum "$OUT"

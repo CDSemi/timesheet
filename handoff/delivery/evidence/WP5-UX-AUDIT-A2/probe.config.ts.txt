@@ -1,0 +1,26 @@
+// WP5-UX-AUDIT-A2 probe configuration (auditor-owned, outside the reviewed export).
+// The runner is the @playwright/test CLI of the export under test; the specs import that export's
+// own tests/e2e/fixtures.ts (built server, synthetic accounts on example.invalid). Three layouts:
+// desktop 1280 (non-modal panel beside the sheet), tablet 1024 (modal side panel, FIX3) and the
+// 390x844 phone (modal bottom sheet, compact first screen).
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+export default {
+  testDir: here,
+  testMatch: '**/*.spec.ts',
+  outputDir: join(here, '..', 'tmp', 'probe-output'),
+  workers: 1,
+  reporter: 'list',
+  forbidOnly: true,
+  timeout: 180_000,
+  expect: { timeout: 10_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'tablet', use: { viewport: { width: 1024, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+};
