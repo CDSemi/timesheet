@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B mandatory checks: typecheck, lint, unit/integration tests, then the full e2e suite.
+source <task>/env.sh
+cd "$T/clone" || exit 9
+{
+  echo "node: $("$N24" --version)"
+  echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$T/checks-summary.txt"
+
+npmr run typecheck > "$T/typecheck.raw.txt" 2>&1
+echo "typecheck exit=$?" >> "$T/checks-summary.txt"
+
+npmr run lint > "$T/lint.raw.txt" 2>&1
+echo "lint exit=$?" >> "$T/checks-summary.txt"
+
+npmr test > "$T/test.raw.txt" 2>&1
+echo "test exit=$?" >> "$T/checks-summary.txt"
+
+export E2E_SCREENSHOT_DIR="$T/e2e-screens"
+mkdir -p "$E2E_SCREENSHOT_DIR"
+npmr run test:e2e > "$T/e2e.raw.txt" 2>&1
+echo "e2e exit=$?" >> "$T/checks-summary.txt"
+echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/checks-summary.txt"

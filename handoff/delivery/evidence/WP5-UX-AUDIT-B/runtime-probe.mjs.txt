@@ -1,0 +1,124 @@
+// WP5-UX-AUDIT-B runtime probe (auditor-written, outside git). Self-closing: starts the BUILT server on
+// port 47930 with --trace-deprecation --pending-deprecation, a fresh synthetic database under the task
+// folder, local capture only and the job runner off; drives the redesigned screens in installed Edge on
+// a desktop, a 1024px window and a phone; records browser console messages, page errors, synthetic
+// screenshots and the server's own output; then stops the server through its child handle.
+import { spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { chromium } from '@playwright/test';
+
+const T = process.env.AUDIT_TASK_DIR;
+if (T === undefined) throw new Error('AUDIT_TASK_DIR is required');
+const work = join(T, 'rt');
+const shots = join(T, 'shots');
+mkdirSync(work, { recursive: true });
+mkdirSync(shots, { recursive: true });
+const port = 47930;
+const origin = `http://127.0.0.1:${port}`;
+const employeePassword = randomBytes(18).toString('base64url');
+const env = {
+  ...process.env,
+  NODE_ENV: 'development',
+  NODE_OPTIONS: '--trace-deprecation --pending-deprecation',
+  HOST: '127.0.0.1',
+  PORT: String(port),
+  APP_ORIGINS: origin,
+  OUTBOUND_MODE: 'capture',
+  MAIL_FROM: '<email>',
+  JOB_RUNNER: 'off',
+  DATA_DIR: join(work, 'private-data'),
+  DATABASE_PATH: join(work, 'timesheet.db'),
+  SEED_ADMIN_PASSWORD: randomBytes(18).toString('base64url'),
+  SEED_EMPLOYEE_PASSWORD: employeePassword,
+};
+const log = [];
+for (const command of ['migrate', 'seed']) {
+  const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { env, encoding: 'utf8' });
+  log.push(`cli ${command} exit ${result.status}`);
+  log.push(`${result.stdout}${result.stderr}`.trim());
+  if (result.status !== 0) throw new Error(`cli ${command} failed`);
+}
+const server = spawn(process.execPath, ['dist/server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverOutput = '';
+server.stdout.on('data', (chunk) => (serverOutput += String(chunk)));
+server.stderr.on('data', (chunk) => (serverOutput += String(chunk)));
+const exited = new Promise((resolve) => server.once('exit', (code, signal) => resolve(`exit ${code ?? signal}`)));
+
+const consoleMessages = [];
+const pageErrors = [];
+const measures = {};
+try {
+  let healthy = false;
+  for (let attempt = 0; attempt < 60 && !healthy; attempt += 1) {
+    try {
+      healthy = (await fetch(`${origin}/api/health`)).ok;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  if (!healthy) throw new Error('server not healthy');
+  const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  try {
+    const layouts = [
+      { name: 'desktop', options: { viewport: { width: 1280, height: 800 } } },
+      { name: 'w1024', options: { viewport: { width: 1024, height: 768 } } },
+      { name: 'phone', options: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+    ];
+    for (const layout of layouts) {
+      const context = await browser.newContext({ ...layout.options, locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+      const page = await context.newPage();
+      page.on('console', (message) => consoleMessages.push(`${layout.name} ${message.type()}: ${message.text()}`));
+      page.on('pageerror', (error) => pageErrors.push(`${layout.name}: ${error.message}`));
+      await page.goto(origin);
+      await page.getByLabel('Email').fill('<email>');
+      await page.getByLabel('Password').fill(employeePassword);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.locator('[data-day]').nth(13).waitFor();
+      await page.screenshot({ path: join(shots, `timesheet-${layout.name}-first-screen-synthetic.png`), animations: 'disabled' });
+      const first = await page.locator('[data-day]').first().boundingBox();
+      measures[layout.name] = { firstDayTop: first?.y ?? null, viewportHeight: page.viewportSize()?.height ?? null };
+      // Open a day in the editor (side panel or bottom sheet).
+      const date = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+      await page.locator(`[data-day="${date}"]`).getByRole('button', { name: new RegExp(`^(Edit|View) ${date}$`) }).click();
+      await page.getByRole('heading', { name: 'Figures (computed by the server)' }).waitFor();
+      await page.screenshot({ path: join(shots, `editor-${layout.name}-synthetic.png`), animations: 'disabled' });
+      await page.keyboard.press('Escape');
+      for (const hash of ['#/ot', '#/history', '#/settings', '#/import']) {
+        await page.goto(`${origin}/${hash}`);
+        await page.locator('main h1').first().waitFor();
+      }
+      const periods = await page.evaluate(() => fetch('/api/periods/current').then((response) => response.json()));
+      await page.goto(`${origin}/#/review/${periods.current.payroll_date}`);
+      await page.locator('[data-review-day]').nth(13).waitFor();
+      await context.close();
+    }
+  } finally {
+    await browser.close();
+  }
+} finally {
+  server.kill();
+  log.push(`server stop: ${await exited}`);
+}
+const deprecations = serverOutput.split('\n').filter((line) => /deprecat/i.test(line));
+const browserDeprecations = consoleMessages.filter((line) => /deprecat/i.test(line));
+writeFileSync(
+  join(T, 'runtime-probe.raw.txt'),
+  [
+    `node ${process.version}; NODE_OPTIONS=${env.NODE_OPTIONS}; port ${port}`,
+    ...log,
+    `server output lines: ${serverOutput.split('\n').filter((line) => line.trim() !== '').length}`,
+    `server deprecation lines: ${deprecations.length}`,
+    ...deprecations,
+    `browser console messages: ${consoleMessages.length}`,
+    ...consoleMessages,
+    `browser deprecation messages: ${browserDeprecations.length}`,
+    `page errors: ${pageErrors.length}`,
+    ...pageErrors,
+    `first day position: ${JSON.stringify(measures)}`,
+    '--- server output ---',
+    serverOutput.trim(),
+  ].join('\n') + '\n',
+);
+console.log(`done: server deprecations ${deprecations.length}, browser deprecations ${browserDeprecations.length}, page errors ${pageErrors.length}`);

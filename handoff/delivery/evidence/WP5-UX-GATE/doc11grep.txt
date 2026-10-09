@@ -1,0 +1,62 @@
+12:## Placeholders and conventions
+17:- `<project>`: the Compose project name; `<project-dir>`: the folder with the release export (`Dockerfile`, `compose.example.yaml`).
+22:- `<compose>` stands for `docker compose --project-name <project> --file <project-dir>/compose.example.yaml`. Compose reads the four variables below from `<project-dir>/.env` (mode 600; it holds no secret, only paths and a tag), so every `<compose>` command binds the documented env file, data folder and image. Without that file Compose falls back to `./timesheet.env`, `./data` and `timesheet:local`, which is wrong on the NAS.
+31:- `<compose-restored>` stands for `TIMESHEET_DATA_DIR=<restore-dir> docker compose --project-name <project>-restored --file <project-dir>/compose.example.yaml` (section 6). A variable set in the shell wins over `<project-dir>/.env`, so the restored instance binds `<restore-dir>` and has its own Compose project name; it never shares the live data or project.
+32:- `<compose-previous>` stands for `TIMESHEET_IMAGE=<previous-image> TIMESHEET_DATA_DIR=<restore-dir> TIMESHEET_ENV_FILE=<rollback-env-file> docker compose --project-name <project>-rollback --file <project-dir>/compose.example.yaml` (section 8); `<rollback-env-file>` is a mode 600 copy of `<env-file>` with `JOB_RUNNER=off` added.
+36:## Drill stages
+40:## 1. Install on Synology Container Manager
+59:   <compose> up --detach --build
+60:   <compose> ps
+61:   <compose> logs --no-color timesheet
+67:## 2. NAS verification checklist
+74:- [ ] The service is healthy after `up`, after `<compose> restart`, and after a NAS reboot (`restart: unless-stopped`).
+85:## 3. First-run bootstrap
+93:   <compose> exec -T timesheet <cli> bootstrap --config /data/bootstrap.json
+100:   <compose> exec -T timesheet <cli> bootstrap --new-token
+105:## 4. Backup schedule
+112:   <compose> exec -T timesheet <cli> backup --to /data/backups
+118:   <compose> exec -T timesheet <cli> backup --to /data/backups --prune
+124:## 5. Retention
+129:  <compose> exec -T timesheet <cli> backup prune --in /data/backups --dry-run
+136:## 6. Isolated restore
+144:   docker run --rm --read-only --network none --tmpfs /tmp:size=64m,mode=1777 --env-file <env-file> \
+149:3. The result is `<restore-dir>/timesheet.db` and `<restore-dir>/private-data`. To inspect it, stop the live instance first (never run two queues on the same data, and never let the old and the restored production queues run together), then start a second instance whose `/data` is `<restore-dir>`, in capture mode, under its own Compose project name. Use `<compose-restored>` (section "Placeholders and conventions"); the image must already exist, so do not build. **[Drill stage 3]** (the drill stops the source, then starts the restored instance)
+152:   <compose-restored> up --detach --no-build
+153:   <compose-restored> ps
+156:   Stop it with `<compose-restored> down` when the inspection is over.
+160:## 7. Reconciliation after a restore
+162:A restore holds every queued or leased `send_email` and `send_reminder` job of the backup, and marks every interrupted send as uncertain. Mail the source may already have sent must never go out again. Jobs created after the restore are not held; they wait only for the resume. Every step below is audited as a system event. Run the commands against the restored instance: write `<compose-restored>` where they say `<compose>`.
+167:   <compose> exec -T timesheet <cli> outbound release
+174:   <compose> exec -T timesheet <cli> outbound resume
+175:   <compose> exec -T timesheet <cli> outbound resume --confirm
+181:   <compose> exec -T timesheet <cli> outbound release --job <job-id> --confirm
+182:   <compose> exec -T timesheet <cli> outbound release --all --confirm
+188:   <compose> exec -T timesheet <cli> outbound drop --job <job-id> --confirm
+193:## 8. Upgrade and rollback
+195:### Upgrade
+201:   <compose> up --detach --build
+206:### Rollback
+214:   docker run --rm --read-only --network none --tmpfs /tmp:size=64m,mode=1777 --env-file <env-file> \
+219:3. Start the previous image (the tag `<previous-image>`, never a same-tag rebuild) on `<restore-dir>` with `JOB_RUNNER=off` in its environment, with `<compose-previous> up --detach --no-build` (it uses the rollback env file). A restored older schema has no outbound pause, so jobs created after the rollback are not held: keep the runner off until reconciliation is done. The drill proved only that the previous build with its runner on sent nothing from the held jobs (`JOB_RUNNER=off` is the documented rule, not a drill step).
+223:## 9. Refreshing the image digest
+237:   <compose> build --no-cache
+242:## 10. Workbook import and the opening balance
+255:## 11. An independent host alert
+270:## 12. What the administrator status shows
+283:## 13. Pilot activation
+302:   <compose> exec -T timesheet <cli> backup --to /data/backups
+313:     <compose> up --detach --force-recreate --no-build
+314:     <compose> ps
+315:     <compose> logs --no-color timesheet
+342:## 14. Deactivation
+352:   <compose> up --detach --force-recreate --no-build
+353:   <compose> ps
+361:## 15. Rollback card for the first installation
+383:## 16. Pilot operator notes
+385:1. Migrate once before the first start (R-A2). Concurrent openers of a brand-new database file can fail with `SQLITE_BUSY`. Start one instance, wait until `<compose> ps` reports it healthy, and only then run any CLI command or start anything else on that data. To migrate explicitly first: `<compose> run --rm --no-deps timesheet <cli> migrate`. **[owner NAS step, unverified]**
+392:## Command map
+396:| `<compose> up --detach --build`, `ps`, `logs`, `restart` | Drill stage 1 |
+406:| Upgrade: `<compose> up --detach --build` on an older schema | Drill stage 4 |
+410:| `<compose> build --no-cache` | Drill stage 1 (the drill builds the image) |
+413:| Pilot activation: capture self-test, pre-activation backup and `sha256sum` of its manifest, `OUTBOUND_MODE=smtp` with `PRODUCTION_SENDING_ENABLED=true`, `<compose> up --detach --force-recreate --no-build` | Owner NAS step, unverified (the drill never sends real mail) |
+417:| `<compose> run --rm --no-deps timesheet <cli> migrate` | Owner NAS step, unverified |

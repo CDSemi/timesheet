@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { LEAVE_INPUT_MESSAGE, LEAVE_MAX_MINUTES, leaveInputOf, parseLeaveInput } from '../../src/client/components/leaveInputModel.ts';
+import {
+  invalidLeaveParts,
+  LEAVE_INPUT_MESSAGE,
+  LEAVE_MAX_MINUTES,
+  leaveInputOf,
+  parseLeaveInput,
+} from '../../src/client/components/leaveInputModel.ts';
+import { leaveHint } from '../../src/client/components/sessionModel.ts';
 
 /*
  * Partial leave typed as hours and minutes: an input conversion to the same integer leave
@@ -42,6 +49,36 @@ describe('leave typed as hours and minutes', () => {
       expect(parseLeaveInput({ hours: text, minutes: '0' }).ok, `hours ${text}`).toBe(false);
       expect(parseLeaveInput({ hours: '0', minutes: text }).ok, `minutes ${text}`).toBe(false);
     }
+  });
+
+  it('refuses malformed text such as "2-" and "3-", and an empty or out of range part', () => {
+    for (const text of ['2-', '3-', 'e', '1.5', '-1']) {
+      expect(parseLeaveInput({ hours: text, minutes: '30' }), `hours ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
+      expect(parseLeaveInput({ hours: '4', minutes: text }), `minutes ${text}`).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
+    }
+    expect(parseLeaveInput({ hours: '', minutes: '60' }).ok).toBe(false);
+    expect(parseLeaveInput({ hours: '25', minutes: '' }).ok).toBe(false);
+  });
+
+  // A number field holds "" for text the browser cannot read ("2-", "e"), exactly like an empty field,
+  // so the form passes the browser's own bad-input flag along; it must never be read as 0.
+  it('refuses a part the browser flagged as bad input, whatever value it reports', () => {
+    expect(parseLeaveInput({ hours: '', minutes: '30', hoursBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
+    expect(parseLeaveInput({ hours: '4', minutes: '', minutesBad: true })).toEqual({ ok: false, message: LEAVE_INPUT_MESSAGE });
+    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: true, minutesBad: true }).ok).toBe(false);
+    expect(parseLeaveInput({ hours: '2', minutes: '30', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 150 });
+    expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: false, minutesBad: false })).toEqual({ ok: true, minutes: 0 });
+    expect(leaveHint({ hours: '', minutes: '30', hoursBad: true })).toBeNull();
+  });
+
+  it('names the parts that are wrong so the form can mark them', () => {
+    expect(invalidLeaveParts({ hours: '2', minutes: '30' })).toEqual({ hours: false, minutes: false });
+    expect(invalidLeaveParts({ hours: '', minutes: '' })).toEqual({ hours: false, minutes: false });
+    expect(invalidLeaveParts({ hours: '', minutes: '30', hoursBad: true })).toEqual({ hours: true, minutes: false });
+    expect(invalidLeaveParts({ hours: '4', minutes: '3-' })).toEqual({ hours: false, minutes: true });
+    expect(invalidLeaveParts({ hours: '25', minutes: '60' })).toEqual({ hours: true, minutes: true });
+    // Each part is fine alone but the sum passes 24h 00m: both are marked.
+    expect(invalidLeaveParts({ hours: '24', minutes: '1' })).toEqual({ hours: true, minutes: true });
   });
 
   it('starts the fields from the stored leave minutes, and the round trip is exact', () => {

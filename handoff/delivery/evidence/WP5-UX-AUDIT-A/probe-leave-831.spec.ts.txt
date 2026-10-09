@@ -1,0 +1,30 @@
+// Leave-input probe on the reviewed build 831f760 (run with the export's own Playwright CLI).
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { type LeaveCase, runLeaveCase, writeResult } from './leave-common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const H = 'Leave hours';
+const M = 'Leave minutes';
+const CASES: LeaveCase[] = [
+  { name: 'control: hours 2, minutes 30', fields: [{ label: H, input: { fill: '2' } }, { label: M, input: { fill: '30' } }], kind: 'vacation', meant: 150 },
+  { name: 'malformed hours typed "2-", minutes 30', fields: [{ label: H, input: { keys: '2-' } }, { label: M, input: { fill: '30' } }], kind: 'vacation', meant: 150 },
+  { name: 'malformed hours typed "2-", minutes 0', fields: [{ label: H, input: { keys: '2-' } }, { label: M, input: { fill: '0' } }], kind: 'vacation', meant: 120 },
+  { name: 'malformed hours typed "e", minutes 30', fields: [{ label: H, input: { keys: 'e' } }, { label: M, input: { fill: '30' } }], kind: 'vacation', meant: 30 },
+  { name: 'malformed minutes typed "3-", hours 4', fields: [{ label: H, input: { fill: '4' } }, { label: M, input: { keys: '3-' } }], kind: 'vacation', meant: 243 },
+  { name: 'empty hours and minutes', fields: [{ label: H, input: { fill: '' } }, { label: M, input: { fill: '' } }], kind: 'vacation', meant: 0 },
+  { name: 'hours 1.5 (fraction)', fields: [{ label: H, input: { fill: '1.5' } }, { label: M, input: { fill: '0' } }], kind: 'vacation', meant: 90 },
+  { name: 'hours 24, minutes 1 (over the limit)', fields: [{ label: H, input: { fill: '24' } }, { label: M, input: { fill: '1' } }], kind: 'vacation', meant: 1441 },
+];
+
+test('leave input at 831f760: what the same keystrokes send and store', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(240_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Leave Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  expect(workDate, 'a past free workday').not.toBe('');
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const results: Array<Record<string, unknown>> = [];
+  for (const item of CASES) results.push(await runLeaveCase(page, person.api, workDate, item));
+  writeResult(`leave-831f760-${testInfo.project.name}.json`, { commit: '831f760', project: testInfo.project.name, workDate, results });
+});

@@ -1,0 +1,90 @@
+// Shared body of the leave-input probe (WP5-UX-AUDIT-A). The same keystrokes go into the day
+// editor's leave field(s) of a build; the probe records what the browser holds, whether the
+// form would pass native validation, which PUT /api/days/:date bodies leave the page, and the
+// leave the server stored. Synthetic accounts only; every case resets the day afterwards.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+export interface FieldInput {
+  /** Typed key by key after selecting the field's text (malformed text a person can type). */
+  keys?: string;
+  /** Set with fill (well-formed values and the empty string). */
+  fill?: string;
+}
+
+export interface LeaveCase {
+  name: string;
+  /** The field label and its input, in order; the 831f760 form has two fields, 014bd47 one. */
+  fields: Array<{ label: string; input: FieldInput }>;
+  kind: string;
+  /** What the person means, in minutes. */
+  meant: number;
+}
+
+export async function runLeaveCase(page: any, api: any, workDate: string, item: LeaveCase): Promise<Record<string, unknown>> {
+  const puts: Array<Record<string, unknown>> = [];
+  const listener = (request: any) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${workDate}`) puts.push(request.postDataJSON());
+  };
+  page.on('request', listener);
+  try {
+    await page.getByLabel('Open a day').fill(workDate);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await editor.waitFor();
+    const form = editor.getByRole('form', { name: 'Day fields' });
+    await form.waitFor();
+    for (const field of item.fields) {
+      // 014bd47 puts the hint inside the label ("Partial leave minutes Leave 0m."), so match the start.
+      const box = form.getByLabel(new RegExp(`^${field.label}`));
+      if (field.input.fill !== undefined) {
+        await box.fill(field.input.fill);
+      } else {
+        await box.click();
+        await box.press('Control+A');
+        await box.pressSequentially(field.input.keys ?? '');
+      }
+    }
+    await form.getByLabel('Leave kind').selectOption(item.kind);
+    const state = await form.evaluate((element: HTMLFormElement) => ({
+      noValidate: element.noValidate,
+      checkValidity: element.checkValidity(),
+      numbers: [...element.querySelectorAll('input[type="number"]')].map((input) => {
+        const box = input as HTMLInputElement;
+        return { name: box.labels?.[0]?.textContent?.trim() ?? '', value: box.value, badInput: box.validity.badInput, valid: box.validity.valid };
+      }),
+      hint: [...element.querySelectorAll('.hint')].map((hint) => hint.textContent?.trim() ?? ''),
+    }));
+    const before = await api.dayView(workDate);
+    await form.getByRole('button', { name: 'Save day fields' }).click();
+    // Either the page answers (saved or an alert), or nothing happens (native validation).
+    await page.waitForTimeout(2_000);
+    const saved = await editor.getByText('Day fields saved.').count();
+    const alerts = await form.getByRole('alert').allInnerTexts();
+    const after = await api.dayView(workDate);
+    return {
+      case: item.name,
+      meant_minutes: item.meant,
+      form_state: state,
+      put_bodies: puts.map((body) => ({ leave_minutes: body.leave_minutes, leave_kind: body.leave_kind })),
+      page_saved_notice: saved > 0,
+      page_alerts: alerts,
+      stored_before: { leave_minutes: before.leave_minutes, leave_kind: before.leave_kind, version: before.entry?.version ?? null },
+      stored_after: { leave_minutes: after.leave_minutes, leave_kind: after.leave_kind, version: after.entry?.version ?? null },
+      different_from_meant_saved: puts.length > 0 && after.leave_minutes !== item.meant,
+    };
+  } finally {
+    page.off('request', listener);
+    await page.keyboard.press('Escape');
+    await api.resetDay(workDate);
+    await page.reload();
+  }
+}
+
+export function writeResult(name: string, data: unknown): void {
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, name), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}

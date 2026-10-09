@@ -1,0 +1,51 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/leaveInputModel.test.ts (9 tests | 2 failed) 18ms
+   ❯ leave typed as hours and minutes (9)
+     × refuses a part the browser flagged as bad input, whatever value it reports 5ms
+     × names the parts that are wrong so the form can mark them 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/leaveInputModel.test.ts > leave typed as hours and minutes > refuses a part the browser flagged as bad input, whatever value it reports
+AssertionError: expected { ok: true, minutes: 30 } to deeply equal { ok: false, …(1) }
+
+- Expected
++ Received
+
+  {
+-   "message": "Enter leave as whole hours (0 to 24) and minutes (0 to 59), at most 24h 00m.",
+-   "ok": false,
++   "minutes": 30,
++   "ok": true,
+  }
+
+ ❯ tests/client/leaveInputModel.test.ts:66:75
+     64|   // so the form passes the browser's own bad-input flag along; it mus…
+     65|   it('refuses a part the browser flagged as bad input, whatever value …
+     66|     expect(parseLeaveInput({ hours: '', minutes: '30', hoursBad: true …
+       |                                                                           ^
+     67|     expect(parseLeaveInput({ hours: '4', minutes: '', minutesBad: true…
+     68|     expect(parseLeaveInput({ hours: '', minutes: '', hoursBad: true, m…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/leaveInputModel.test.ts > leave typed as hours and minutes > names the parts that are wrong so the form can mark them
+TypeError: invalidLeaveParts is not a function
+ ❯ tests/client/leaveInputModel.test.ts:75:12
+     73|
+     74|   it('names the parts that are wrong so the form can mark them', () =>…
+     75|     expect(invalidLeaveParts({ hours: '2', minutes: '30' })).toEqual({…
+       |            ^
+     76|     expect(invalidLeaveParts({ hours: '', minutes: '' })).toEqual({ ho…
+     77|     expect(invalidLeaveParts({ hours: '', minutes: '30', hoursBad: tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  00:05:29
+   Duration  367ms (import 56%, transform 35%, tests 8%, worker 2%)
+

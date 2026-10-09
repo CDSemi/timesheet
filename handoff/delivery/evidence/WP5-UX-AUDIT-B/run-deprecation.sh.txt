@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B: lint, unit tests and the client build with Node deprecation tracing on; counts deprecation lines.
+source <task>/env.sh
+cd "$T/clone" || exit 9
+export NODE_OPTIONS='--trace-deprecation --pending-deprecation'
+npmr run lint > "$T/dep-lint.raw.txt" 2>&1
+echo "lint exit=$?" > "$T/dep-summary.txt"
+npmr test > "$T/dep-test.raw.txt" 2>&1
+echo "test exit=$?" >> "$T/dep-summary.txt"
+npmr run build > "$T/dep-build.raw.txt" 2>&1
+echo "build exit=$?" >> "$T/dep-summary.txt"
+for f in dep-lint dep-test dep-build; do
+  echo "$f deprecation lines: $(grep -c -i 'deprecat' "$T/$f.raw.txt")" >> "$T/dep-summary.txt"
+done

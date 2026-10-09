@@ -1,0 +1,57 @@
+// WP5-UX-AUDIT-B: structural EN/VI parity of the docs this round changed (headings, bullets, table rows,
+// code spans, links and numbers per section). Read-only.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = process.argv[2];
+const pairs = ['04_UX_AND_SETTINGS', '08_AI_WORKFLOW_AND_BUDGET', '10_DECISIONS_AND_SOURCES', '12_RELEASE_NOTES'];
+function shape(text) {
+  const lines = text.split(/\r?\n/);
+  const sections = [];
+  let current = { heading: '(top)', bullets: 0, subBullets: 0, rows: 0, code: [], numbers: [] };
+  for (const line of lines) {
+    if (/^#{1,6} /.test(line)) {
+      sections.push(current);
+      current = { heading: line.replace(/^#+ /, ''), bullets: 0, subBullets: 0, rows: 0, code: [], numbers: [] };
+      continue;
+    }
+    if (/^- /.test(line)) current.bullets += 1;
+    if (/^ {2}- /.test(line)) current.subBullets += 1;
+    if (/^\|/.test(line)) current.rows += 1;
+    current.code.push(...[...line.matchAll(/`([^`]+)`/g)].map((match) => match[1]));
+    current.numbers.push(...(line.replace(/\]\([^)]*\)/g, ']').match(/\b\d+(?:[.:,]\d+)*\b/g) ?? []));
+  }
+  sections.push(current);
+  return sections;
+}
+let problems = 0;
+for (const name of pairs) {
+  const en = shape(readFileSync(join(root, `docs/${name}.md`), 'utf8'));
+  const vi = shape(readFileSync(join(root, `docs/${name}.vi.md`), 'utf8'));
+  console.log(`${name}: sections EN ${en.length}, VI ${vi.length}`);
+  if (en.length !== vi.length) problems += 1;
+  for (let index = 0; index < Math.max(en.length, vi.length); index += 1) {
+    const a = en[index];
+    const b = vi[index];
+    if (a === undefined || b === undefined) {
+      console.log(`  section ${index} missing on one side`);
+      problems += 1;
+      continue;
+    }
+    const diffs = [];
+    if (a.bullets !== b.bullets) diffs.push(`bullets ${a.bullets}/${b.bullets}`);
+    if (a.subBullets !== b.subBullets) diffs.push(`sub-bullets ${a.subBullets}/${b.subBullets}`);
+    if (a.rows !== b.rows) diffs.push(`table rows ${a.rows}/${b.rows}`);
+    const codeA = [...a.code].sort().join('|');
+    const codeB = [...b.code].sort().join('|');
+    if (codeA !== codeB) diffs.push(`code spans differ: EN-only [${a.code.filter((c) => !b.code.includes(c)).join(', ')}] VI-only [${b.code.filter((c) => !a.code.includes(c)).join(', ')}]`);
+    const numA = [...a.numbers].sort().join('|');
+    const numB = [...b.numbers].sort().join('|');
+    if (numA !== numB) diffs.push(`numbers differ: EN-only [${a.numbers.filter((c) => !b.numbers.includes(c)).join(', ')}] VI-only [${b.numbers.filter((c) => !a.numbers.includes(c)).join(', ')}]`);
+    if (diffs.length > 0) {
+      problems += 1;
+      console.log(`  [${index}] "${a.heading}" / "${b.heading}": ${diffs.join('; ')}`);
+    }
+  }
+}
+console.log(`sections with a structural difference: ${problems}`);

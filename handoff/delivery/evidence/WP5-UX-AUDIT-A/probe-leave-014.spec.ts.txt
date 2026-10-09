@@ -1,0 +1,28 @@
+// Leave-input probe on the accepted build 014bd47 (run with export014's own Playwright CLI).
+import { expect, newPerson, test } from '../export014/tests/e2e/fixtures.ts';
+import { type LeaveCase, runLeaveCase, writeResult } from './leave-common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const F = 'Partial leave minutes';
+const CASES: LeaveCase[] = [
+  { name: 'control: minutes 150', fields: [{ label: F, input: { fill: '150' } }], kind: 'vacation', meant: 150 },
+  { name: 'malformed minutes typed "2-"', fields: [{ label: F, input: { keys: '2-' } }], kind: 'vacation', meant: 120 },
+  { name: 'malformed minutes typed "150-"', fields: [{ label: F, input: { keys: '150-' } }], kind: 'vacation', meant: 150 },
+  { name: 'malformed minutes typed "e"', fields: [{ label: F, input: { keys: 'e' } }], kind: 'vacation', meant: 0 },
+  { name: 'empty minutes', fields: [{ label: F, input: { fill: '' } }], kind: 'vacation', meant: 0 },
+  { name: 'minutes 1.5 (fraction)', fields: [{ label: F, input: { fill: '1.5' } }], kind: 'vacation', meant: 2 },
+  { name: 'minutes 1441 (over the limit)', fields: [{ label: F, input: { fill: '1441' } }], kind: 'vacation', meant: 1441 },
+];
+
+test('leave input at 014bd47: what the same keystrokes send and store', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(240_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Leave Probe', signature: 'none' });
+  const [workDate = ''] = await person.api.displayedPeriodFreeWorkdays();
+  expect(workDate, 'a past free workday').not.toBe('');
+  await signInPageAs(person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const results: Array<Record<string, unknown>> = [];
+  for (const item of CASES) results.push(await runLeaveCase(page, person.api, workDate, item));
+  writeResult(`leave-014bd47-${testInfo.project.name}.json`, { commit: '014bd47', project: testInfo.project.name, workDate, results });
+});

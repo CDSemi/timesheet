@@ -1,0 +1,92 @@
+// WP5-UX-AUDIT-B: scans src/client/styles.css outside the token blocks for hard-coded colour,
+// radius, shadow, duration, transition, animation and font values; lists custom properties
+// defined outside the token blocks and var() references that no block defines. Read-only.
+import { readFileSync } from 'node:fs';
+
+const path = process.argv[2];
+const text = readFileSync(path, 'utf8');
+const lines = text.split(/\r?\n/);
+
+function blockEnd(start) {
+  let depth = 0;
+  for (let index = start; index < lines.length; index += 1) {
+    for (const char of lines[index]) {
+      if (char === '{') depth += 1;
+      if (char === '}') {
+        depth -= 1;
+        if (depth === 0) return index;
+      }
+    }
+  }
+  return lines.length - 1;
+}
+const tokenRanges = [];
+for (let index = 0; index < lines.length; index += 1) {
+  const line = lines[index];
+  if (/^:root\s*\{/.test(line) || /^@media \(prefers-color-scheme: dark\)/.test(line) || /^@media \(prefers-reduced-motion: reduce\)/.test(line)) {
+    const end = blockEnd(index);
+    tokenRanges.push([index + 1, end + 1]);
+    index = end;
+  }
+}
+const inToken = (lineNo) => tokenRanges.some(([a, b]) => lineNo >= a && lineNo <= b);
+
+// Strip comments while keeping line numbers.
+const stripped = text.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+const slines = stripped.split(/\r?\n/);
+
+const colour = /#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|hwb|color-mix)\(|\b(white|black|red|green|blue|gray|grey|orange|yellow|silver|navy|teal|purple|transparent|currentColor)\b/;
+const findings = [];
+const defsOutside = [];
+for (let index = 0; index < slines.length; index += 1) {
+  const lineNo = index + 1;
+  const line = slines[index];
+  const decl = /^\s*([a-z-]+)\s*:\s*(.+?);?\s*$/.exec(line);
+  if (decl === null) continue;
+  const [, prop, value] = decl;
+  if (prop.startsWith('--')) {
+    if (!inToken(lineNo)) defsOutside.push(`${lineNo}\t${line.trim()}`);
+    continue;
+  }
+  if (inToken(lineNo)) continue;
+  const v = value.trim();
+  const add = (kind) => findings.push(`${kind}\t${lineNo}\t${line.trim()}`);
+  if (colour.test(v.replace(/var\([^)]*\)/g, ''))) {
+    // transparent and currentColor are keywords, not palette values; report them separately.
+    const kw = /\b(transparent|currentColor)\b/.test(v) && !/#|rgb|hsl|\b(white|black|red|green|blue|gray|grey)\b/.test(v);
+    add(kw ? 'colour-keyword' : 'colour-literal');
+  }
+  if (prop === 'border-radius' && !/^(var\(--radius\)( var\(--radius\))?( 0 0)?|0|var\(--shape-round\)|inherit)$/.test(v)) add('radius');
+  if (prop === 'box-shadow' && /\d+px|rgb|#/.test(v.replace(/var\([^)]*\)/g, ''))) add('shadow-literal');
+  if (prop === 'transition' && v !== 'var(--transition)' && v !== 'none') add('transition');
+  if (/^transition-/.test(prop)) add('transition-sub');
+  if (/^animation/.test(prop)) add('animation');
+  if (/\b\d+(\.\d+)?m?s\b/.test(v) && !/^\d/.test(prop)) add('duration');
+  if (prop === 'font-family' && !/^var\(--font-mono\)(, monospace)?$|^inherit$/.test(v)) add('font-family');
+  if (/url\(/.test(v)) add('url');
+  if (/!important/.test(v)) add('important');
+}
+for (let index = 0; index < slines.length; index += 1) {
+  if (/@keyframes|@font-face|@import/.test(slines[index])) findings.push(`at-rule\t${index + 1}\t${slines[index].trim()}`);
+}
+console.log(`token blocks (lines): ${tokenRanges.map(([a, b]) => `${a}-${b}`).join(', ')}`);
+console.log(`findings outside the token blocks: ${findings.length}`);
+for (const item of findings) console.log(item);
+console.log(`custom properties defined outside the token blocks: ${defsOutside.length}`);
+for (const item of defsOutside) console.log(item);
+
+// Undefined var() references
+const defined = new Set([...stripped.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((match) => match[1]));
+const used = new Set([...stripped.matchAll(/var\((--[a-z0-9-]+)/g)].map((match) => match[1]));
+const undefinedRefs = [...used].filter((name) => !defined.has(name));
+console.log(`var() names used: ${used.size}; defined: ${defined.size}; used but never defined: ${undefinedRefs.length} ${undefinedRefs.join(' ')}`);
+const unused = [...defined].filter((name) => !used.has(name));
+console.log(`defined but never used in styles.css: ${unused.length} ${unused.join(' ')}`);
+
+const radius = /--radius:\s*([^;]+);/.exec(text)?.[1];
+const duration = /--duration:\s*([^;]+);/.exec(text)?.[1];
+const ease = /--ease:\s*([^;]+);/.exec(text)?.[1];
+const transition = /--transition:\s*([^;]+);/.exec(text)?.[1];
+console.log(`--radius=${radius}; --duration=${duration}; --ease=${ease}; --transition=${transition}`);
+const transitions = slines.filter((line) => /^\s*transition\s*:/.test(line));
+console.log(`transition declarations: ${transitions.length}; all var(--transition): ${transitions.every((line) => /transition:\s*var\(--transition\)/.test(line))}`);

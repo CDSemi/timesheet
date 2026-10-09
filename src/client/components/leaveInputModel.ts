@@ -14,6 +14,18 @@ const MINUTES_PER_HOUR = 60;
 export interface LeaveInput {
   hours: string;
   minutes: string;
+  /**
+   * A number field reports text it cannot read ("2-", "e") as an empty value, the same as an empty
+   * field. The form copies the browser's `validity.badInput` here so such text is refused, never read as 0.
+   */
+  hoursBad?: boolean;
+  minutesBad?: boolean;
+}
+
+/** Which of the two parts is wrong; both are marked when each is fine alone but the total passes 24h 00m. */
+export interface LeaveParts {
+  hours: boolean;
+  minutes: boolean;
 }
 
 export type LeaveParse = { ok: true; minutes: number } | { ok: false; message: string };
@@ -37,12 +49,19 @@ function wholeNumber(text: string): number | null {
  * 0 to 24, minutes whole and 0 to 59, and the total at most 1440 (24h 00m), as the API requires.
  */
 export function parseLeaveInput(input: LeaveInput): LeaveParse {
-  const hours = wholeNumber(input.hours);
-  const minutes = wholeNumber(input.minutes);
-  if (hours === null || minutes === null || hours > LEAVE_MAX_HOURS || minutes >= MINUTES_PER_HOUR) {
-    return { ok: false, message: LEAVE_INPUT_MESSAGE };
-  }
-  const total = hours * MINUTES_PER_HOUR + minutes;
-  if (total > LEAVE_MAX_MINUTES) return { ok: false, message: LEAVE_INPUT_MESSAGE };
-  return { ok: true, minutes: total };
+  const parts = invalidLeaveParts(input);
+  if (parts.hours || parts.minutes) return { ok: false, message: LEAVE_INPUT_MESSAGE };
+  // Both parts are valid here, so wholeNumber is never null.
+  return { ok: true, minutes: (wholeNumber(input.hours) ?? 0) * MINUTES_PER_HOUR + (wholeNumber(input.minutes) ?? 0) };
+}
+
+/** The parts of the input that make it invalid; both false when `parseLeaveInput` accepts it. */
+export function invalidLeaveParts(input: LeaveInput): LeaveParts {
+  const hours = input.hoursBad === true ? null : wholeNumber(input.hours);
+  const minutes = input.minutesBad === true ? null : wholeNumber(input.minutes);
+  const hoursWrong = hours === null || hours > LEAVE_MAX_HOURS;
+  const minutesWrong = minutes === null || minutes >= MINUTES_PER_HOUR;
+  if (hoursWrong || minutesWrong) return { hours: hoursWrong, minutes: minutesWrong };
+  const overLimit = hours * MINUTES_PER_HOUR + minutes > LEAVE_MAX_MINUTES;
+  return { hours: overLimit, minutes: overLimit };
 }

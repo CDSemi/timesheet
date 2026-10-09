@@ -1,0 +1,49 @@
+// WP5-UX-AUDIT-B: lists numeric length/time literals in declarations outside the token blocks of
+// styles.css, and compares with the accepted baseline (014bd47) so new literals stand out. Read-only.
+import { readFileSync } from 'node:fs';
+
+function literals(path) {
+  const text = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+  const lines = text.split(/\r?\n/);
+  const ranges = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^:root\s*\{|^@media \(prefers-color-scheme: dark\)|^@media \(prefers-reduced-motion: reduce\)/.test(lines[index])) {
+      let depth = 0;
+      let end = index;
+      for (let j = index; j < lines.length; j += 1) {
+        for (const char of lines[j]) {
+          if (char === '{') depth += 1;
+          if (char === '}') depth -= 1;
+        }
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+      ranges.push([index, end]);
+      index = end;
+    }
+  }
+  const out = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (ranges.some(([a, b]) => index >= a && index <= b)) continue;
+    const line = lines[index];
+    if (/^\s*@media/.test(line)) continue; // breakpoints are documented literals
+    const decl = /^\s*([a-z-]+)\s*:\s*(.+?);?\s*$/.exec(line);
+    if (decl === null || decl[1].startsWith('--')) continue;
+    const value = decl[2].replace(/var\([^)]*\)/g, '');
+    const found = value.match(/(?<![\w-])-?\d*\.?\d+(px|rem|em|%|vh|vw|dvh|svh|fr|ms|s|deg|ch)\b/g);
+    if (found !== null) out.push({ line: index + 1, text: line.trim(), found });
+    else if (/(?<![\w-])\d*\.\d+(?![\w%])|(?<![\w-])[2-9]\d*(?![\w%.])/.test(value) && !/^(z-index|order|flex|font-weight|grid-(column|row)(-start|-end)?|opacity|line-height|flex-(grow|shrink))$/.test(decl[1])) {
+      out.push({ line: index + 1, text: line.trim(), found: ['unitless'] });
+    }
+  }
+  return out;
+}
+
+const [current, baseline] = process.argv.slice(2);
+const now = literals(current);
+const before = baseline === undefined ? [] : literals(baseline);
+const beforeTexts = new Set(before.map((item) => item.text));
+console.log(`literal declarations outside the token blocks: current ${now.length}, baseline ${before.length}`);
+for (const item of now) console.log(`${beforeTexts.has(item.text) ? 'old' : 'NEW'}\t${item.line}\t${item.text}\t[${item.found.join(' ')}]`);

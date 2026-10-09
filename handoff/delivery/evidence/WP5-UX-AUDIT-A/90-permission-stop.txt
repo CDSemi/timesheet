@@ -1,0 +1,28 @@
+WP5-UX-AUDIT-A stop record (2026-10-09T06:43Z, attempt 1)
+
+What happened
+- While reading docs/02 R-07, a Git Bash command of this auditor redirected grep output to
+  "$TMP/../raw-r07.txt" in a shell where env.sh was not sourced. TMP was the session default
+  (D:\.claude-tmp), so the file was created as D:\raw-r07.txt (one line of docs/02 text,
+  "68:## R-07 — history and zones"; no personal data, no secret).
+- The same command also piped into `head -c 0` (no output kept); an earlier grep pipeline did the
+  same with `head -c 3000`. Both slips are against the brief rule "never pipe output into head or
+  tail"; no server or node process was involved and nothing stayed running.
+- The auditor then tried to delete only that stray file: `rm "D:/raw-r07.txt"`.
+- A built-in Claude Code safety check denied that call ("Dangerous rm operation detected").
+  The file was NOT removed. It is left for the owner to delete: D:\raw-r07.txt.
+
+Why the audit stops here
+- The brief and the dispatch prompt say: "If a permission check denies a call, stop and report."
+  The auditor did not retry, split or script the removal and stops the audit at this point.
+
+State at the stop (all checks below were run by this auditor in the clean export of 831f760)
+- Digest of record 3d274c9e (789 files) before and after, export and repository forms equal.
+- npm ci exit 0; npm test exit 0 (82 files, 1817 tests); build exit 0; the seven mandatory e2e
+  specs exit 0 (94 tests: 90 passed, 4 skipped by design, 0 failed); AC-13 once exit 0.
+- Code review done for scope items 1, 2, 6 and partly 3, 4, 5 (see the task Results).
+- Not done: the own device-zone probe (item 3), the own AC-04 reason/stale reproduction through
+  the new panel/sheet/picker (item 4), the own sharing/isolation probe (item 5), the own privacy
+  DOM/network probe (item 6), and the browser probe of an open leave-input question (item 2).
+- No process of this auditor is running (both background runs completed; e2e servers were
+  stopped by the Playwright fixture).

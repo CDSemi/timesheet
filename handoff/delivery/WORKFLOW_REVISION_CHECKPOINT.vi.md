@@ -94,9 +94,41 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - GOV-SUPERSEDE-AUDIT PASS (opus mới, không có finding; 48 tình huống, giữ 85 probe cũ,
   diệt 27/30 mutant; R1/R2 tùy chọn trong governance backlog; R3 là kỷ luật của
   coordinator) tại 831f760 / 3d274c9e.
-- Đang chạy: GOV-SUPERSEDE-ACCEPT (committer; chỉ bản ghi handoff).
-- Bước kế tiếp: viết brief WP5-UX-GATE (gate đầy đủ trên bản export sạch của 831f760,
-  digest 3d274c9e) và giao; sau đó audit opus độc lập WP5-UX-AUDIT.
+- GOV-SUPERSEDE-ACCEPT xong: 5beae2f trên main, đã push (40 file handoff). GOV-SUPERSEDE
+  đã nghiệm thu.
+- WP5-UX-GATE PASS trên 831f760 (NAS chưa kiểm): digest 3d274c9e ở ba dạng; verify 1817;
+  e2e 155/0/5; AC-13 ba lần và dưới hai múi giờ thật; drill 208/0, image
+  sha256:2c8d9db2…24143 (đã xóa sau khi chạy); ranh giới chỉ có formatHoursMinutes; PDF
+  không đổi; tương phản >= 4.65 (đường kẻ không phải chữ 2.86/2.97 được ghi nhận); npm
+  test ba lần ổn định; thanh trên cùng là sticky (lỗi ghép ảnh đã giải thích); 44px và
+  không cuộn ngang.
+- Board: current_source_digest 3d274c9e; WP5-RECHECK superseded_by WP5-UX-AUDIT-A.
+- Đang chạy (song song, chỉ đọc): WP5-UX-AUDIT-A (toàn vẹn nghiệp vụ, múi giờ, đường
+  sửa, chia sẻ, riêng tư, PDF; cổng 47910-47929) và WP5-UX-AUDIT-B (đúng yêu cầu chủ dự
+  án, độ chặt của test, trợ năng, chuẩn UI, tài liệu, e2e đầy đủ; cổng 47930-47949), cả
+  hai là opus mới.
+- WP5-UX-AUDIT-B xong: FIX REQUIRED. B-01 (Medium) màn hình đầu trên điện thoại không
+  thấy dòng ngày nào; B-02 (Medium) panel bên ở khổ 768-1199px che các control của bảng
+  vẫn nhận focus, Esc trên bảng không đóng panel, docs/04:59 mô tả sai; B-03 (Low)
+  assertion import bị nới lỏng (import.spec.ts:382-396); B-04 (Low) docs/04 dòng 41, 55
+  (EN/VI). Các kiểm tra của auditor đều đạt; digest 3d274c9e.
+- WP5-UX-AUDIT-A: lần bàn giao đầu NOT VERIFIED (dừng sau khi lệnh xóa file thừa
+  D:\raw-r07.txt bị chặn; đã nhờ chủ dự án xóa); đang chạy tiếp, gồm câu hỏi
+  `noValidate` của ô nghỉ phép và dòng cảnh báo lỗ hổng của npm ci.
+- WP5-UX-AUDIT-A xong (2026-10-09): FIX REQUIRED, A-01 (Medium) nhập nghỉ phép sai định
+  dạng bị lưu thành giá trị khác (noValidate + leaveInputModel); các probe của auditor về
+  múi giờ, AC-04, chia sẻ, cách ly và riêng tư đều đạt; cảnh báo 'high' của npm là
+  source-map-js chỉ dùng khi phát triển, đã có từ trước (R-RA6).
+- Vòng sửa (quyết định coordinator 2026-10-09): WP5-UX-FIX2 (A-01) đang chạy, rồi
+  FIX2-FREEZE, WP5-UX-FIX3 (B-01..B-04), FIX3-FREEZE, WP5-UX-REGATE, audit lại độc lập
+  WP5-UX-AUDIT-A2 và -B2.
+- WP5-UX-FIX2 xong: nhập nghỉ phép sai định dạng bị từ chối (role=alert, aria-invalid,
+  không gửi gì); unit 1820; toàn bộ e2e desktop 78/0/3, mobile 79/0/2; verify exit 0;
+  digest 574bbc02. Sửa thêm một chỗ chờ e2e dễ chập chờn có từ trước (audit lại phải xác
+  nhận không bị nới lỏng).
+- Đang chạy: WP5-UX-FIX2-FREEZE (committer; mang theo các bản ghi gate, audit A/B và
+  nghiệm thu GOV từ sau 5beae2f).
+- Bước kế tiếp: khi có kết quả freeze, viết và giao WP5-UX-FIX3 (B-01..B-04).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

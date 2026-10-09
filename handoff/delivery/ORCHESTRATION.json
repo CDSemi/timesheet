@@ -25,11 +25,15 @@
     "observed_at": "2026-10-02",
     "note": "Main session runs Opus 5.5 by owner choice; session ID inferred from the session scratchpad path."
   },
-  "current_source_digest": "150420e76cbd5daf167d4cb74006da5438b2bd132b63976a25cbcf4ff6533e61",
+  "current_source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
   "max_active_subagents": 2,
   "max_source_writers": 1,
-  "next_task_id": "GOV-SUPERSEDE-ACCEPT",
+  "next_task_id": "WP5-UX-FIX2-FREEZE",
   "runtime_observations": [
+    {
+      "date": "2026-10-08",
+      "observation": "WP5-UX-AUDIT-A (auditor, opus) accidentally created a stray file outside its task folder, D:\\raw-r07.txt (33 bytes, one docs/02 line); a permission check denied its rm and it stopped as the brief requires. The coordinator does not route around the denial; the owner is asked to delete the file. The auditor also piped two greps into head -c despite the profile line added by GOV-SUPERSEDE (profile reload may need a client restart, or the rule is ignored)."
+    },
     {
       "date": "2026-10-08",
       "observation": "WP5-UX-T03-FREEZE (committer, sonnet) ran one accidental '... | node -e \"1\"' pipe after the push despite the capitalised no-stdin rule; no output, no effect, recorded in its brief. Stdin slips now occur in worker and committer profiles alike (seventh incident overall); none left a background task this round."
@@ -181,7 +185,7 @@
   "git": {
     "branch": "main",
     "release_declared": false,
-    "last_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+    "last_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
     "unpushed": []
   },
   "owner_decisions": [
@@ -299,6 +303,16 @@
     }
   ],
   "coordinator_decisions": [
+    {
+      "date": "2026-10-09",
+      "basis": "WP5-UX-AUDIT-A FIX REQUIRED (A-01 Medium, leave input) and WP5-UX-AUDIT-B FIX REQUIRED (B-01, B-02 Medium; B-03, B-04 Low) on 831f760 / 3d274c9e; docs/08 'FIX REQUIRED creates bounded fixes followed by gate/audit on the new digest'; one source writer.",
+      "decision": "Two sequential bounded fixes, each with its own freeze: WP5-UX-FIX2 (A-01; worker-high, sonnet; risk H because leave minutes feed the ledger) then WP5-UX-FIX3 (B-01..B-04; worker-high, sonnet). Then one package-final regate (WP5-UX-REGATE) and fresh re-audits of both areas (WP5-UX-AUDIT-A2, WP5-UX-AUDIT-B2) by new agents; WP5-RECHECK's superseded_by moves to WP5-UX-AUDIT-A2 when that task is created. The dev-only source-map-js advisory is pre-existing (R-RA6) and out of scope."
+    },
+    {
+      "date": "2026-10-08",
+      "basis": "WP5-UX-GATE PASS on 831f760 (digest 3d274c9e); docs/08 audit row 'WP5 as 2-3 area audits plus one integration pass'; GOV-SUPERSEDE accepted (superseded_by names one target); GOV-SUPERSEDE-AUDIT R3 (coordinator discipline).",
+      "decision": "Re-audit WP5 in two parallel fresh opus areas on 831f760: WP5-UX-AUDIT-A (business integrity, zones, edit paths, sharing, isolation, privacy, PDF) and WP5-UX-AUDIT-B (owner-request fidelity, test strength, accessibility, UI standards, docs); the gate already reran the integrated WP5 checks (e2e, AC-13, drill), which serves as the integration pass. current_source_digest moves to 3d274c9e and WP5-RECHECK gets superseded_by WP5-UX-AUDIT-A in the same edit. WP5 is re-accepted (STATE, NEXT_ACTION, handoff, pilot-packet identity refresh) only when BOTH areas PASS on 3d274c9e; a FIX REQUIRED in either area opens a bounded fix round with a new freeze, gate and re-audit of the affected areas."
+    },
     {
       "date": "2026-10-08",
       "basis": "WP5-UX-T06 recorded a contradiction: docs/04:16 (canonical, EN and VI) says 'Display current viewing zone and saved accounting date'; the WP5-UX-T03 period bar shows the display-zone fact only when it differs from the reporting zone. That condition came from the WP5-UX-PLAN design direction, not from an owner answer (E-1..E-7 did not ask about it). AGENTS rule 8: user-confirmed requirements outrank; do not silently change behaviour; R-07 keeps instants, accounting dates and zones distinct.",
@@ -12905,6 +12919,7 @@
       "package": "WP5",
       "kind": "audit",
       "status": "done",
+      "superseded_by": "WP5-UX-AUDIT-A",
       "reviewed_commit": "014bd47a8d906c944d2781eba4f2b91c5a532419",
       "depends_on": [
         "WP5-REGATE2",
@@ -15223,7 +15238,7 @@
       "id": "GOV-SUPERSEDE-ACCEPT",
       "package": "GOV",
       "kind": "commit",
-      "status": "running",
+      "status": "done",
       "depends_on": [
         "GOV-SUPERSEDE-AUDIT"
       ],
@@ -15236,10 +15251,10 @@
         "risk": "L",
         "novelty": false
       },
-      "actual_model": null,
-      "actual_source": null,
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
       "actual_effort": null,
-      "agent_id": null,
+      "agent_id": "ae1f9f66ec323d7c8",
       "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
       "attempt": 1,
       "owned_paths": [
@@ -15248,13 +15263,311 @@
       ],
       "prompt": "handoff/delivery/tasks/GOV-SUPERSEDE-ACCEPT.md",
       "report": "handoff/delivery/tasks/GOV-SUPERSEDE-ACCEPT.md",
-      "evidence": [],
+      "evidence": [
+        "handoff/delivery/evidence/GOV-SUPERSEDE-ACCEPT/checks.txt",
+        "handoff/delivery/evidence/GOV-SUPERSEDE-ACCEPT/commit-message.txt"
+      ],
       "baseline_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+      "branch": "main",
+      "commit_sha": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
+      "pushed": true,
+      "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "committed and pushed: 40 handoff files (review pair, gate and audit records, three evidence folders, board, checkpoint pair); digest 3d274c9e before and on the new HEAD; node v24.21.0; precommit PASS (40 files, 0 findings), diff-check, JSON parse, validator PASS (286 tasks), check_recovery PASS (106) and preflight exit 0; remote main = 5beae2f.",
+      "next_action": "None; GOV-SUPERSEDE accepted. WP5-UX-GATE follows."
+    },
+    {
+      "id": "WP5-UX-GATE",
+      "package": "WP5",
+      "kind": "gate",
+      "status": "done",
+      "freeze_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+      "depends_on": [
+        "WP5-UX-FIX1-FREEZE",
+        "GOV-SUPERSEDE-ACCEPT"
+      ],
+      "profile": "timesheet-verifier",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a7729e654a4974fbf",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-GATE.md",
+        "handoff/delivery/evidence/WP5-UX-GATE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-GATE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-GATE.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-GATE/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/00-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/exdigest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/exdigest-after.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/repo-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/01-npm-ci.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/02-lint.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/03-verify.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/05-ac13-1.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/05-ac13-2.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/05-ac13-3.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/06-ac13-Asia_Tokyo.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/06-ac13-America_New_York.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/07-drill-summary.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/07-drill.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/10-audit.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/11-vsum.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/15-docker-ps.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/20-bound-stat.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/20-bound-diff.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/21-pdf-stat.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/22-scope.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/30-npmtest-1.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/30-npmtest-2.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/30-npmtest-3.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/40-contrast.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/60-uxgate-run.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/probe-phone.txt",
+        "handoff/delivery/evidence/WP5-UX-GATE/timesheet-desktop-light-synthetic.png",
+        "handoff/delivery/evidence/WP5-UX-GATE/timesheet-phone-light-synthetic.png"
+      ],
+      "baseline_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
+      "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "PASS",
+      "gate_notes": "Package-final gate on a clean export of 831f760; NAS items NOT VERIFIED. Digest of record 3d274c9e (789 files) equal in the clean export (before and after), the ls-tree form and npm run digest (last). Item 1: npm ci, lint, verify (82 files, 1817 tests, smoke) exit 0 with zero deprecation lines; e2e 155 passed / 5 skipped (desktop 77, mobile 78), pdf-visual passed; AC-13 x3 and under Asia/Tokyo and America/New_York passed with the zone reported; drill --wp3 208 PASS / 0 FAIL, image sha256:2c8d9db297e783d5a2ec7aa1c134d53ef14180adabc75b24beb09412afd24143, forbidden-file scan PASS; compose config forms and env keys clean; npm audit 0 vulnerabilities; validators PASS (check_recovery 106); precommit self-test PASS. Item 2: src/server and src/domain diff since 014bd47 is only src/domain/format.ts (+13 lines, formatHoursMinutes). Item 3: PDF paths unchanged. Item 4: 67 non-handoff paths, all client, formatter, tests, docs or .claude/agents. Item 5: lowest text contrast 4.65; info only: --sheet-rule-strong on card 2.86 light / 2.97 dark against 3:1 for non-text lines. Item 6: npm test three times exit 0, no native worker crash. Item 7: the top bar is sticky, one on screen, no overlap; the T02 mid-image bar was a full-page capture artifact; 10 synthetic screenshots. Item 8: no control below 44x44 on the phone (four states); scrollWidth = innerWidth = 390. Docker cleaned (ps empty, image removed).",
+      "next_action": "None; fresh opus area audits WP5-UX-AUDIT-A and WP5-UX-AUDIT-B on 831f760."
+    },
+    {
+      "id": "WP5-UX-AUDIT-A",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "history": [
+        "hand-back 1 (same agent acb592d06034e4ad5): NOT VERIFIED, stopped early per the brief after a permission check denied its rm of a stray file it created outside the task folder (D:\\raw-r07.txt, 33 bytes, one line copied from docs/02); two grep commands piped into head -c. Checks run: npm test 82 files / 1817 passed; seven e2e specs both projects 90 passed / 4 skipped / 0 failed; AC-13 1/1; digest 3d274c9e before and after; npm ci printed '1 high severity vulnerability' (the gate's npm audit --omit=dev recorded 0; not investigated). Open question, not reproduced: DayFieldsForm.tsx:61 noValidate may let a malformed leave entry save as 0 where 014bd47 refused. Not done: device-zone, AC-04 reason/stale, sharing/isolation, privacy and leave-input probes. Coordinator: resume the same agent to finish; never retry or work around the denied rm; the owner is asked to delete the stray file."
+      ],
+      "reviewed_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+      "depends_on": [
+        "WP5-UX-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "acb592d06034e4ad5",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_UX_REVIEW_A.md",
+        "handoff/delivery/WP5_UX_REVIEW_A.vi.md",
+        "handoff/delivery/tasks/WP5-UX-AUDIT-A.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-AUDIT-A.md",
+      "report": "handoff/delivery/tasks/WP5-UX-AUDIT-A.md",
+      "evidence": [
+        "handoff/delivery/WP5_UX_REVIEW_A.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/00-digest.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/02-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/04-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/05-ac13.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/06-npm-audit.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/10-scope.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/11-digest-continuation.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/40-leave-probe-runs.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/42-audit-a-probe-run.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/43-novalidate-014.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/43-novalidate-831.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-A/90-permission-stop.txt"
+      ],
+      "baseline_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
+      "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "reviewed_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-UX-A-01 (Medium): src/client/components/DayFieldsForm.tsx:60-61 (noValidate) with leaveInputModel.ts:29-33: a malformed leave entry is saved as a different leave. Same keystrokes on both commits: at 831f760 hours '2-' with 30 minutes was stored as 30 (meant 150) and hours 4 with minutes '3-' as 240; at 014bd47 the same input made the form invalid, no PUT, nothing stored. Empty fields save 0 on both commits. Required fix: treat validity.badInput (and any non-numeric part) as invalid so nothing is sent; add unit and e2e tests."
+      ],
+      "notes": [
+        "npm ci 'high' advisory: source-map-js, dev-only via vite; npm audit --omit=dev 0; lock file unchanged since 014bd47, which prints the same line (pre-existing, already carried as R-RA6).",
+        "Mandatory checks: npm test 82 files / 1817 passed; seven e2e specs both projects 90 passed / 4 skipped / 0 failed; AC-13 1/1.",
+        "Own probes, all 8 passed on both layouts: device-zone change (no regrouping), AC-04 reason, stale version and conflict through the new UI, AC-16/AC-01 sharing and isolation, signature privacy.",
+        "Digest 3d274c9e at start and end. First hand-back stopped on a denied rm of a stray file outside the task folder (see history)."
+      ],
+      "next_action": "WP5-UX-FIX2 fixes A-01 (addresses_audit WP5-UX-AUDIT-A); a fresh area-A re-audit follows the regate."
+    },
+    {
+      "id": "WP5-UX-AUDIT-B",
+      "package": "WP5",
+      "kind": "audit",
+      "status": "done",
+      "reviewed_commit": "831f760838950a59f0e5c880f0bbefda15fe0c61",
+      "depends_on": [
+        "WP5-UX-GATE"
+      ],
+      "profile": "timesheet-auditor",
+      "requested_model": "opus",
+      "requested_effort": "xhigh",
+      "model_override_reason": null,
+      "routing": {
+        "size": "L",
+        "risk": "M",
+        "novelty": false
+      },
+      "actual_model": "claude-opus-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a784ba424fba55130",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/WP5_UX_REVIEW_B.md",
+        "handoff/delivery/WP5_UX_REVIEW_B.vi.md",
+        "handoff/delivery/tasks/WP5-UX-AUDIT-B.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-AUDIT-B.md",
+      "report": "handoff/delivery/tasks/WP5-UX-AUDIT-B.md",
+      "evidence": [
+        "handoff/delivery/WP5_UX_REVIEW_B.md",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/00-README.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/01-digest-before.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/02-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/03-lint.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/04-npm-test.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/05-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/06-checks-summary.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/08-deprecation-summary.txt",
+        "handoff/delivery/evidence/WP5-UX-AUDIT-B/09-runtime-probe.txt"
+      ],
+      "baseline_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
+      "source_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "reviewed_digest": "3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9",
+      "author_agent_ids": [],
+      "decision": "FIX REQUIRED",
+      "findings": [
+        "WP5-UX-B-01 (Medium): on a 390x844 phone the first day row starts at 836.6px, below the bottom tab bar at 788px; no day shows on the first screen although plan section C and the mockup A2 caption promised one.",
+        "WP5-UX-B-02 (Medium): between 768 and 1199px the fixed side panel covers 12 sheet controls that keep keyboard focus (WCAG 2.2 SC 2.4.11 focus not obscured), and Escape pressed on the sheet does not close it; docs/04:59 is inaccurate about this.",
+        "WP5-UX-B-03 (Low, weakened assertion): tests/e2e/import.spec.ts:382-396 import-absence checks on desktop now run on the Settings page instead of the Admin page.",
+        "WP5-UX-B-04 (Low, docs): docs/04 lines 41 and 55 (EN and VI) are inaccurate about the label picker and omit 'Missing record'."
+      ],
+      "notes": [
+        "Weakened-assertion review: 20 changed test files checked; only B-03 is weaker.",
+        "Own checks: typecheck 0, lint 0, npm test 82 files / 1817 passed, full e2e 155 passed / 5 skipped / 0 failed (desktop 77+3, mobile 78+2), 0 deprecation lines; digest 3d274c9e identical before and after in three forms; nothing left running."
+      ],
+      "next_action": "WP5-UX-FIX3 fixes B-01..B-04 (addresses_audit WP5-UX-AUDIT-B) after WP5-UX-FIX2; then freeze, regate and a fresh area-B re-audit."
+    },
+    {
+      "id": "WP5-UX-FIX2",
+      "package": "WP5",
+      "kind": "fix",
+      "status": "done",
+      "addresses_audit": "WP5-UX-AUDIT-A",
+      "depends_on": [
+        "WP5-UX-GATE"
+      ],
+      "profile": "timesheet-worker-high",
+      "requested_model": "sonnet",
+      "requested_effort": "high",
+      "model_override_reason": null,
+      "routing": {
+        "size": "S",
+        "risk": "H",
+        "novelty": false
+      },
+      "actual_model": "claude-sonnet-5-5",
+      "actual_source": "self_reported",
+      "actual_effort": null,
+      "agent_id": "a4890095edaa146dc",
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "src/client/components/DayFieldsForm.tsx",
+        "src/client/components/leaveInputModel.ts",
+        "src/client/styles.css",
+        "tests/client/leaveInputModel.test.ts",
+        "tests/e2e/day-editor.spec.ts",
+        "tests/e2e/ot-leave.spec.ts",
+        "handoff/delivery/tasks/WP5-UX-FIX2.md",
+        "handoff/delivery/evidence/WP5-UX-FIX2"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX2.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX2.md",
+      "evidence": [
+        "handoff/delivery/evidence/WP5-UX-FIX2/20-repro-unit.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/22-repro-e2e.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/30-typecheck.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/31-lint.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/32-test.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/34-e2e-targeted.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/40-e2e-full.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/45-day-editor-base.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/46-counts.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/50-verify.txt",
+        "handoff/delivery/evidence/WP5-UX-FIX2/51-digest.txt"
+      ],
+      "baseline_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
+      "source_digest": "574bbc022ba2a8391e914e351979c60909d76ff6099d249ce23730f2a2c525d8",
+      "reviewed_digest": null,
+      "author_agent_ids": [],
+      "decision": "fixed A-01: reproduced first (a number input reports '2-' as value '' with validity.badInput, which was read as 0; unit parse returned ok with 30 minutes; new e2e showed no alert and the day saved). leaveInputModel adds hoursBad/minutesBad and invalidLeaveParts; DayFieldsForm reads validity.badInput through refs at submit (a lone 'e' raises no change event); a refusal sends nothing and shows a role=alert message in the fieldset with aria-invalid and aria-describedby; noValidate kept. Files: DayFieldsForm.tsx, leaveInputModel.ts, tests/client/leaveInputModel.test.ts, tests/e2e/day-editor.spec.ts (also a pre-existing racy wait in the 'future days' case that failed at the base too; no assertion weakened: re-audit to confirm). Unit 1820 passed; full e2e desktop 78/0/3, mobile 79/0/2; verify exit 0; digest 574bbc02. One stray /dev/null redirect on a no-op command (wrote nothing).",
+      "next_action": "WP5-UX-FIX2-FREEZE commits and pushes; then WP5-UX-FIX3."
+    },
+    {
+      "id": "WP5-UX-FIX2-FREEZE",
+      "package": "WP5",
+      "kind": "commit",
+      "status": "running",
+      "depends_on": [
+        "WP5-UX-FIX2"
+      ],
+      "profile": "timesheet-committer",
+      "requested_model": "sonnet",
+      "requested_effort": "medium",
+      "model_override_reason": null,
+      "routing": {
+        "size": "M",
+        "risk": "L",
+        "novelty": false
+      },
+      "actual_model": null,
+      "actual_source": null,
+      "actual_effort": null,
+      "agent_id": null,
+      "session_id": "d5029c61-21ee-4f70-9252-41ab1589f937",
+      "attempt": 1,
+      "owned_paths": [
+        "handoff/delivery/tasks/WP5-UX-FIX2-FREEZE.md",
+        "handoff/delivery/evidence/WP5-UX-FIX2-FREEZE"
+      ],
+      "prompt": "handoff/delivery/tasks/WP5-UX-FIX2-FREEZE.md",
+      "report": "handoff/delivery/tasks/WP5-UX-FIX2-FREEZE.md",
+      "evidence": [],
+      "baseline_commit": "5beae2f668d15fc77a39b91a91e2c8bb6195d65a",
       "source_digest": null,
       "reviewed_digest": null,
       "author_agent_ids": [],
       "decision": null,
-      "next_action": "Committer stages the GOV gate/audit records, review and evidence, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-GATE brief."
+      "next_action": "Committer stages the FIX2 change plus the gate, audit and accept records, runs the checks, commits on main and pushes; then the coordinator writes the WP5-UX-FIX3 brief."
     }
   ],
   "future_packages": [

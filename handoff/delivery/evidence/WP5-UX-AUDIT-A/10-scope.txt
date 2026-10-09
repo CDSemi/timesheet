@@ -1,0 +1,91 @@
+Scope 014bd47..831f760 (src and tests, name-status):
+M	src/client/DayEditor.tsx
+M	src/client/ReviewScreen.tsx
+M	src/client/SettingsScreen.tsx
+M	src/client/TimesheetScreen.tsx
+M	src/client/components/AppShell.tsx
+M	src/client/components/BatchBar.tsx
+M	src/client/components/BatchDialog.tsx
+D	src/client/components/ClockBar.tsx
+A	src/client/components/ClockPanel.tsx
+M	src/client/components/DayFieldsForm.tsx
+M	src/client/components/DayFigures.tsx
+D	src/client/components/DayList.tsx
+M	src/client/components/DayStatus.tsx
+A	src/client/components/PeriodBar.tsx
+D	src/client/components/PeriodHeader.tsx
+M	src/client/components/ReviewDays.tsx
+A	src/client/components/SheetWeekTable.tsx
+M	src/client/components/SubmissionStatus.tsx
+D	src/client/components/TimesheetGrid.tsx
+A	src/client/components/TimesheetSheet.tsx
+A	src/client/components/dayEditorModel.ts
+M	src/client/components/dayModel.ts
+M	src/client/components/format.ts
+A	src/client/components/labelPickerModel.ts
+A	src/client/components/leaveInputModel.ts
+A	src/client/components/periodBarModel.ts
+M	src/client/components/reviewModel.ts
+M	src/client/components/sessionModel.ts
+A	src/client/components/sheetModel.ts
+M	src/client/styles.css
+M	src/domain/format.ts
+A	tests/client/dayEditorModel.test.ts
+M	tests/client/dayModel.test.ts
+A	tests/client/labelPickerModel.test.ts
+A	tests/client/leaveInputModel.test.ts
+A	tests/client/periodBarModel.test.ts
+M	tests/client/reviewModel.test.ts
+M	tests/client/sessionModel.test.ts
+A	tests/client/sheetModel.test.ts
+M	tests/domain/engine.test.ts
+M	tests/e2e/admin.spec.ts
+M	tests/e2e/day-editor.spec.ts
+M	tests/e2e/history-settings.spec.ts
+M	tests/e2e/import.spec.ts
+M	tests/e2e/isolation.spec.ts
+M	tests/e2e/ot-leave.spec.ts
+M	tests/e2e/review.spec.ts
+M	tests/e2e/setup.spec.ts
+M	tests/e2e/sharing.spec.ts
+M	tests/e2e/shell.spec.ts
+M	tests/e2e/timesheet.spec.ts
+
+git diff --stat 014bd47 831f760 -- src/server src/domain:
+ src/domain/format.ts | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+git diff --stat 014bd47 831f760 -- src/server/pdf src/shared src/server: (empty output, exit 0)
+exit=0
+
+git diff 014bd47 831f760 -- src/domain/format.ts:
+diff --git a/src/domain/format.ts b/src/domain/format.ts
+index c617331..018c98d 100644
+--- a/src/domain/format.ts
++++ b/src/domain/format.ts
+@@ -6,3 +6,16 @@ export function formatDuration(minutes: number): string {
+   const rest = total % 60;
+   return hours === 0 ? `${sign}${rest}m` : `${sign}${hours}h ${String(rest).padStart(2, '0')}m`;
+ }
++
++/**
++ * Whole minutes as `h:mm`, the form the timesheet PDF prints (90 -> "1:30", 5 -> "0:05"). Display
++ * only: it formats a value the server computed and computes none. For every whole, non-negative
++ * minute count the text equals the PDF's `formatHoursMinutes`; a negative value (the sheet never
++ * receives one) keeps its sign as `formatDuration` does, and a fraction is truncated, so a
++ * screen never fails on an unexpected value.
++ */
++export function formatHoursMinutes(minutes: number): string {
++  const sign = minutes < 0 ? '−' : '';
++  const total = Math.abs(Math.trunc(minutes));
++  return `${sign}${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
++}
+
+Client HTTP call strings (method + path + body expression), 014bd47 vs 831f760, line numbers stripped; diff:
+68a69
+> 'POST', '/days/batch', { mode: 'preview', entries: [entry] })
+83a85
+> 'PUT', `/sessions/${session.id}`, quickBreaksRequest(session, quick, choice, reason))
+diff exit=1 (1 = the two added lines only)
+
+src/client/api.ts changed: no (not in the name-status list)

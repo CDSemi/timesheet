@@ -1,7 +1,7 @@
-import { type SubmitEvent, useId, useState } from 'react';
+import { type SubmitEvent, useId, useRef, useState } from 'react';
 import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
 import { describeError, isStaleVersion } from './errors.ts';
-import { LEAVE_MAX_HOURS } from './leaveInputModel.ts';
+import { invalidLeaveParts, LEAVE_MAX_HOURS, type LeaveInput, type LeaveParts } from './leaveInputModel.ts';
 import { buildDayEntryRequest, CATEGORIES, dayFieldsDraft, LEAVE_KINDS, leaveHint, otMismatchNotice } from './sessionModel.ts';
 
 const KIND_TEXT: Record<LeaveKind, string> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
@@ -31,21 +31,49 @@ export function DayFieldsForm({
   const id = useId();
   const [draft, setDraft] = useState(() => dayFieldsDraft(day));
   const [error, setError] = useState<string | null>(null);
+  // The refusal of the leave fields, shown beside them; the fields it names point to it.
+  const [leaveError, setLeaveError] = useState<{ message: string; parts: LeaveParts } | null>(null);
   const [busy, setBusy] = useState(false);
   const mismatch = otMismatchNotice(day);
   const reasonMissing = reasonRequired && reason.trim() === '';
   const hint = leaveHint(draft.leave);
+  const leaveErrorId = `${id}-leave-error`;
+  const hoursField = useRef<HTMLInputElement>(null);
+  const minutesField = useRef<HTMLInputElement>(null);
+
+  function changeLeave(change: Partial<LeaveInput>) {
+    setDraft({ ...draft, leave: { ...draft.leave, ...change } });
+    setLeaveError(null);
+  }
+
+  /** The invalid-state attributes of one leave field while the leave refusal is shown. */
+  function leaveFieldState(invalid: boolean) {
+    return invalid && leaveError !== null
+      ? { 'aria-invalid': true as const, 'aria-describedby': leaveErrorId }
+      : {};
+  }
 
   async function save(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (reasonMissing) return;
-    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason);
+    // The fields themselves are asked now: the browser raises no change event for every unreadable
+    // keystroke (a lone "e"), so the state alone can miss it. A malformed part is never sent.
+    const leave: LeaveInput = {
+      ...draft.leave,
+      hoursBad: hoursField.current?.validity.badInput === true,
+      minutesBad: minutesField.current?.validity.badInput === true,
+    };
+    const checked = { ...draft, leave };
+    // Only the leave fields can refuse here.
+    const built = buildDayEntryRequest(checked, day.entry?.version ?? null, reason);
     if (!built.ok) {
-      setError(built.message);
+      setError(null);
+      setLeaveError({ message: built.message, parts: invalidLeaveParts(leave) });
       return;
     }
     setBusy(true);
     setError(null);
+    setLeaveError(null);
     try {
       onSaved(await request<DayView>('PUT', `/days/${day.work_date}`, built.request));
     } catch (caught) {
@@ -57,7 +85,8 @@ export function DayFieldsForm({
   }
 
   return (
-    // noValidate: the leave fields are checked by parseLeaveInput, whose message is shown in the form (role alert).
+    // noValidate keeps the browser's own popups out: the leave fields are checked by parseLeaveInput, which also
+    // sees the browser's bad-input flag, and its message is shown beside the fields (role alert, aria-invalid).
     <form className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
       <h3>Label and leave</h3>
       {mismatch !== null && (
@@ -88,25 +117,29 @@ export function DayFieldsForm({
           <label>
             Leave hours
             <input
+              ref={hoursField}
               type="number"
               inputMode="numeric"
               min={0}
               max={LEAVE_MAX_HOURS}
               step={1}
               value={draft.leave.hours}
-              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, hours: event.target.value } })}
+              onChange={(event) => changeLeave({ hours: event.target.value, hoursBad: event.target.validity.badInput })}
+              {...leaveFieldState(leaveError?.parts.hours === true)}
             />
           </label>
           <label>
             Leave minutes
             <input
+              ref={minutesField}
               type="number"
               inputMode="numeric"
               min={0}
               max={59}
               step={1}
               value={draft.leave.minutes}
-              onChange={(event) => setDraft({ ...draft, leave: { ...draft.leave, minutes: event.target.value } })}
+              onChange={(event) => changeLeave({ minutes: event.target.value, minutesBad: event.target.validity.badInput })}
+              {...leaveFieldState(leaveError?.parts.minutes === true)}
             />
           </label>
           <label>
@@ -124,6 +157,11 @@ export function DayFieldsForm({
         <p id={`${id}-leave-hint`} className="muted hint">
           {hint === null ? 'Hours and minutes, at most 24h 00m.' : `Leave ${hint}.`} A kind is required with leave. It never reserves or spends OT.
         </p>
+        {leaveError !== null && (
+          <p id={leaveErrorId} className="error" role="alert">
+            {leaveError.message}
+          </p>
+        )}
       </fieldset>
       <label>
         Notes

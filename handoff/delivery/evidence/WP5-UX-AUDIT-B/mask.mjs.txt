@@ -1,0 +1,33 @@
+// WP5-UX-AUDIT-B: copies raw logs and scripts into the evidence folder as masked LF text.
+// Usage: node mask.mjs <destDir> <src>=<destName> ...   (a src prefixed with "raw:" is copied as LF text without masking)
+// The account name is read from the environment, so this file holds no user-profile literal.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [dest, ...pairs] = process.argv.slice(2);
+const account = basename(process.env.USERPROFILE ?? process.env.HOME ?? '');
+if (account === '') throw new Error('no user profile in the environment');
+const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const slash = String.raw`(?:\\\\|\\|/)`;
+const taskPattern = new RegExp(String.raw`(?:[a-z]:|/[a-z])${slash}\.claude-tmp${slash}timesheet${slash}WP5-UX-AUDIT-B`, 'gi');
+const claudeTmpPattern = new RegExp(String.raw`(?:[a-z]:|/[a-z])${slash}\.claude-tmp${slash}claude${slash}[^\s"']+`, 'gi');
+const userPattern = new RegExp(String.raw`(?:[a-z]:|/[a-z])${slash}Users${slash}${escape(account)}`, 'gi');
+const emailPattern = /[\w.%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,})\b/gi;
+const devPasswordPattern = /(generated dev password:\s*)\S+/gi;
+let total = 0;
+for (const pair of pairs) {
+  const at = pair.lastIndexOf('=');
+  const raw = pair.startsWith('raw:');
+  const src = pair.slice(raw ? 4 : 0, at);
+  const name = pair.slice(at + 1);
+  let text = readFileSync(src, 'utf8').replace(/\r\n?/g, '\n');
+  if (!raw) {
+    text = text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+    text = text.replace(taskPattern, '<task>').replace(claudeTmpPattern, '<claude-tmp>').replace(userPattern, '<user>');
+    text = text.replace(emailPattern, '<email>').replace(devPasswordPattern, '$1<masked>');
+  }
+  if (!text.endsWith('\n')) text += '\n';
+  writeFileSync(join(dest, name), text, 'utf8');
+  total += 1;
+}
+console.log(`wrote ${total} files into ${dest}`);

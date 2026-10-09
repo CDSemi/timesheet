@@ -1,0 +1,504 @@
+// WP5-UX-AUDIT-A own probes on the reviewed build 831f760 (auditor-owned; outside the export).
+// R-07 device-zone change, AC-04 reason / stale / conflict through the new panel, bottom sheet and
+// in-cell picker, AC-16 / AC-01 sharing and isolation, and signature-image privacy. Synthetic
+// accounts on example.invalid only; results are written as JSON into the task folder.
+import { addDays } from '../export/src/domain/dates.ts';
+import { expect, newPerson, statusInPage, test } from '../export/tests/e2e/fixtures.ts';
+import { writeResult } from './leave-common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const LA = 'America/Los_Angeles';
+
+async function signIn(page: any, account: { email: string; password: string }, hash: string) {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+function recordApi(page: any): string[] {
+  const list: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) list.push(`${request.method()} ${pathname}`);
+  });
+  return list;
+}
+
+/** Local date `YYYY-MM-DD` and time `HH:MM` of an instant in a zone, by Intl (an oracle independent of the app). */
+function local(instant: string, zone: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
+}
+
+function dayDiff(later: string, earlier: string): number {
+  return Math.round((Date.parse(`${later}T00:00:00Z`) - Date.parse(`${earlier}T00:00:00Z`)) / 86_400_000);
+}
+
+/** The text the sheet should print for a session in a zone, and the start-date marker. */
+function expectedRange(session: { start_utc: string; end_utc: string | null }, workDate: string, zone: string) {
+  const start = local(session.start_utc, zone);
+  const startDate = start.date === workDate ? null : `${start.date.slice(5, 7)}/${start.date.slice(8, 10)}`;
+  if (session.end_utc === null) return { text: start.time, startDate };
+  const end = local(session.end_utc, zone);
+  const later = dayDiff(end.date, start.date);
+  return { text: `${start.time}-${end.time}${later > 0 ? `+${later}` : ''}`, startDate };
+}
+
+const COLLECT_DAYS = `[...document.querySelectorAll('[data-day]')].map((el) => ({
+  date: el.getAttribute('data-day'),
+  ranges: [...el.querySelectorAll('[data-range]')].map((r) => {
+    const sub = r.querySelector('.cell-sub');
+    const marker = sub === null ? '' : sub.textContent;
+    return { key: r.getAttribute('data-range'), startDate: sub === null ? null : marker, text: r.textContent.slice(marker.length) };
+  }),
+  ot: el.querySelector('[data-ot]') === null ? '' : el.querySelector('[data-ot]').textContent,
+}))`;
+
+const COLLECT_REVIEW = `[...document.querySelectorAll('[data-review-day]')].map((el) => ({
+  date: el.getAttribute('data-review-day'),
+  ranges: [...el.querySelectorAll('[data-range]')].map((r) => {
+    const sub = r.querySelector('.cell-sub');
+    const marker = sub === null ? '' : sub.textContent;
+    return { key: r.getAttribute('data-range'), startDate: sub === null ? null : marker, text: r.textContent.slice(marker.length) };
+  }),
+  ot: el.querySelector('[data-ot]') === null ? '' : el.querySelector('[data-ot]').textContent,
+}))`;
+
+test('R-07: a device-zone change shows other clock times but never regroups a day', async ({ browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Zone Probe', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'three past free workdays').toBeGreaterThanOrEqual(3);
+  const late = free[0] ?? '';
+  const early = free[1] ?? '';
+  const overnight = free.at(-1) ?? '';
+  expect(addDays(overnight, 1) <= person.todayLocal, 'the overnight end is not in the future').toBe(true);
+  await person.api.createSession(late, '23:00', '23:50', []);
+  await person.api.createSession(early, '00:20', '01:10', []);
+  await person.api.call(
+    'POST',
+    `/api/days/${overnight}/sessions`,
+    {
+      start: { local: `${overnight}T22:00`, zone: LA },
+      end: { local: `${addDays(overnight, 1)}T02:00`, zone: LA },
+      input_zone: LA,
+      breaks_confirmed: true,
+      breaks: [],
+    },
+    201,
+  );
+  const sheet = await person.api.call<any>('GET', `/api/timesheets/${person.payrollDate}`);
+  const owner = new Map<string, string>();
+  const sessions: any[] = [];
+  for (const day of sheet.days) for (const session of day.sessions) {
+    owner.set(session.id, day.work_date);
+    sessions.push({ ...session, work_date: day.work_date });
+  }
+  expect(sessions.length).toBe(3);
+
+  const zones = ['America/Los_Angeles', 'Asia/Tokyo', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Ho_Chi_Minh'];
+  const runs: any[] = [];
+  const use = testInfo.project.use as any;
+  for (const zone of zones) {
+    const context = await browser.newContext({
+      baseURL: builtServer.origin,
+      timezoneId: zone,
+      locale: 'en-US',
+      viewport: use.viewport,
+      isMobile: use.isMobile ?? false,
+      hasTouch: use.hasTouch ?? false,
+      deviceScaleFactor: use.deviceScaleFactor ?? 1,
+    });
+    const page = await context.newPage();
+    await signIn(page, person.account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator(`[data-range="${sessions[0].id}"]`)).toHaveCount(1);
+    const resolved = await page.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+    const days = await page.evaluate(COLLECT_DAYS);
+    const periodZone = await page.locator('.period-bar [data-period-zone]').innerText();
+    const zoneNote = await page.locator('[data-zone-note]').count();
+    const total = await page.locator('[data-ot-total]').innerText();
+    await page.evaluate(`window.location.hash = '#/review/${person.payrollDate}'`);
+    await expect(page.locator('[data-review-day]')).toHaveCount(14);
+    const review = await page.evaluate(COLLECT_REVIEW);
+    runs.push({ zone, resolved, periodZone, zoneNote, total, days, review });
+    await context.close();
+  }
+
+  const reference = runs[0];
+  const checks: string[] = [];
+  for (const run of runs) {
+    expect(run.days.map((day: any) => day.date), `${run.zone}: 14 accounting dates`).toEqual(sheet.days.map((day: any) => day.work_date));
+    for (const day of run.days) {
+      for (const range of day.ranges) {
+        expect(owner.get(range.key), `${run.zone}: session ${range.key} stays on its accounting date`).toBe(day.date);
+        const session = sessions.find((item) => item.id === range.key);
+        const want = expectedRange(session, day.date, run.resolved);
+        expect(range.text, `${run.zone}: ${range.key} text`).toBe(want.text);
+        expect(range.startDate, `${run.zone}: ${range.key} start-date marker`).toBe(want.startDate);
+      }
+    }
+    expect(run.days.map((day: any) => day.ot), `${run.zone}: OT cells`).toEqual(reference.days.map((day: any) => day.ot));
+    expect(run.total, `${run.zone}: Overtime Total`).toBe(reference.total);
+    expect(run.periodZone, `${run.zone}: period bar names the viewing zone`).toBe(`Times in ${run.resolved}`);
+    expect(run.zoneNote, `${run.zone}: zone note only when the zones differ`).toBe(run.resolved === sheet.reporting_zone ? 0 : 1);
+    expect(run.review, `${run.zone}: the review is the same in every device zone`).toEqual(reference.review);
+    checks.push(`${run.zone} (${run.resolved}): ok`);
+  }
+  for (const day of reference.review) {
+    for (const range of day.ranges) {
+      const session = sessions.find((item) => item.id === range.key);
+      const want = expectedRange(session, day.date, sheet.reporting_zone);
+      expect(range.text, `review ${range.key} in the reporting zone`).toBe(want.text);
+    }
+  }
+  writeResult(`r07-${testInfo.project.name}.json`, {
+    reporting_zone: sheet.reporting_zone,
+    sessions: sessions.map((item) => ({ id: item.id, work_date: item.work_date, start_utc: item.start_utc, end_utc: item.end_utc })),
+    runs: runs.map((run) => ({
+      zone: run.zone,
+      resolved: run.resolved,
+      periodZone: run.periodZone,
+      zoneNote: run.zoneNote,
+      total: run.total,
+      sessionCells: run.days.filter((day: any) => day.ranges.length > 0),
+      reviewSessionCells: run.review.filter((day: any) => day.ranges.length > 0),
+    })),
+    checks,
+  });
+});
+
+test('AC-04: reason, stale version and conflict through the picker, the side panel or bottom sheet', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Edit Probe', signature: 'none' });
+  const free = await person.api.displayedPeriodFreeWorkdays();
+  expect(free.length, 'three past free workdays').toBeGreaterThanOrEqual(3);
+  const [staleDay = '', quickDay = '', conflictDay = ''] = free;
+  const batch: any[] = [];
+  const dayPuts: any[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname === '/api/days/batch') batch.push(request.postDataJSON());
+    if (request.method() === 'PUT' && pathname.startsWith('/api/days/')) dayPuts.push({ path: pathname, body: request.postDataJSON() });
+  });
+  const result: Record<string, unknown> = {};
+  const picker = (workDate: string) => page.getByRole('button', { name: new RegExp(`^Label for ${workDate}`) });
+  const pick = async (workDate: string, label: string) => {
+    await picker(workDate).click();
+    await page.getByRole('listbox', { name: `Label for ${workDate}` }).getByRole('option', { name: label, exact: true }).click();
+  };
+
+  await signIn(page, person.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+
+  // 1. Reason-required correction through the in-cell picker of an old period.
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const oldDay = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const oldBefore = await person.api.dayView(oldDay);
+  await pick(oldDay, 'Vacation');
+  const dialog = page.getByRole('dialog', { name: `Review label change for ${oldDay}` });
+  await expect(dialog).toBeVisible();
+  const reasonBox = dialog.getByLabel(/Reason for editing an old or finalized period/);
+  await expect(reasonBox).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  expect(batch.map((body) => body.mode), 'only the preview before the reason').toEqual(['preview']);
+  expect((await person.api.dayView(oldDay)).category, 'nothing saved before the reason').toBe(oldBefore.category);
+  await reasonBox.fill('Audit A synthetic correction (picker)');
+  await dialog.getByRole('button', { name: 'Commit changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_reason_commit = batch.at(-1);
+  expect(batch.at(-1)).toMatchObject({ mode: 'commit', reason: 'Audit A synthetic correction (picker)', entries: [{ work_date: oldDay, category: 'Vacation' }] });
+  expect((await person.api.dayView(oldDay)).category).toBe('Vacation');
+
+  // 2. Reason-required correction through the day editor (side panel on desktop, bottom sheet on a phone).
+  await page.locator(`[data-day="${oldDay}"]`).getByRole('button', { name: `Edit ${oldDay}`, exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  result.editor_modal = await editor.evaluate((element: Element) => element.matches(':modal'));
+  const fields = editor.getByRole('form', { name: 'Day fields' });
+  await fields.getByLabel('Worked from home (WFH)').check();
+  await expect(fields.getByRole('button', { name: 'Save day fields' })).toBeDisabled();
+  expect(dayPuts, 'no day PUT before the reason').toEqual([]);
+  await editor.getByLabel('Reason for editing an old or finalized period').fill('Audit A synthetic correction (panel)');
+  await fields.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  result.panel_reason_put = dayPuts.at(-1);
+  expect(dayPuts.at(-1)?.body).toMatchObject({ reason: 'Audit A synthetic correction (panel)', wfh: true, category: 'Vacation' });
+  expect((await person.api.dayView(oldDay)).wfh).toBe(true);
+  await editor.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toHaveCount(0);
+  const history = await person.api.call<any>('GET', '/api/history');
+  result.history_reasons = history.audit_events
+    .filter((event: any) => typeof event.reason === 'string' && event.reason.startsWith('Audit A synthetic'))
+    .map((event: any) => ({ operation: event.operation, entity_type: event.entity_type, reason: event.reason }));
+  expect((result.history_reasons as any[]).map((event) => event.reason)).toEqual(
+    expect.arrayContaining(['Audit A synthetic correction (picker)', 'Audit A synthetic correction (panel)']),
+  );
+
+  // 3. Stale version through the picker: the day changed elsewhere after the page loaded it.
+  await page.getByRole('button', { name: 'Next period' }).click();
+  await expect(page.locator(`[data-day="${staleDay}"]`)).toBeVisible();
+  await person.api.putDay(staleDay, { notes: 'changed elsewhere (synthetic)' });
+  const staleBefore = await person.api.dayView(staleDay);
+  batch.length = 0;
+  await pick(staleDay, 'Sick');
+  const staleDialog = page.getByRole('dialog', { name: `Review label change for ${staleDay}` });
+  await expect(staleDialog).toBeVisible();
+  await expect(staleDialog.locator(`[data-preview-date="${staleDay}"]`)).toContainText('changed elsewhere');
+  await expect(staleDialog.getByRole('alert')).toContainText('Some dates changed elsewhere');
+  await expect(staleDialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  result.picker_stale_batch = batch.map((body) => structuredClone(body));
+  result.picker_stale_dialog = await staleDialog.innerText();
+  expect(batch.map((body) => body.mode)).toEqual(['preview']);
+  expect(batch[0]?.entries?.[0]?.expected_version ?? null, 'the pick carries the version the page loaded').toBeNull();
+  await staleDialog.getByRole('button', { name: 'Cancel' }).click();
+  const staleAfter = await person.api.dayView(staleDay);
+  expect(staleAfter.category).toBe(staleBefore.category);
+  expect(staleAfter.entry?.version).toBe(staleBefore.entry?.version);
+
+  // 4. Stale version through the one-tap break confirmation of the editor.
+  await person.api.seedUnconfirmedBreaksDay(quickDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.locator(`[data-day="${quickDay}"]`).getByRole('button', { name: `Edit ${quickDay}`, exact: true }).click();
+  const quickEditor = page.getByRole('dialog', { name: /Day editor/ });
+  const quick = quickEditor.getByRole('group', { name: /^Breaks of the session/ });
+  await expect(quick.getByRole('button', { name: 'Confirm suggested breaks' })).toBeVisible();
+  const session = (await person.api.dayView(quickDay)).sessions[0];
+  await person.api.call('PUT', `/api/sessions/${session?.id}`, {
+    start: { local: `${quickDay}T09:00`, zone: LA },
+    end: { local: `${quickDay}T18:30`, zone: LA },
+    input_zone: LA,
+    breaks: [],
+    breaks_confirmed: false,
+    expected_version: session?.version,
+  });
+  const changed = (await person.api.dayView(quickDay)).sessions[0];
+  await quick.getByRole('button', { name: 'Confirm suggested breaks' }).click();
+  const staleAlert = quickEditor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  await expect(staleAlert).toBeVisible();
+  const quickAfter = (await person.api.dayView(quickDay)).sessions[0];
+  result.quick_stale = { loaded_version: session?.version, changed_version: changed?.version, after_version: quickAfter?.version, after_confirmed: quickAfter?.breaks_confirmed };
+  expect(quickAfter?.version).toBe(changed?.version);
+  expect(quickAfter?.breaks_confirmed).toBe(false);
+  await staleAlert.getByRole('button', { name: 'Reload day' }).click();
+  await expect(staleAlert).toHaveCount(0);
+  await quickEditor.getByRole('button', { name: 'Close' }).click();
+
+  // 5. Conflict confirmation through the picker: recorded work needs an explicit confirmation.
+  await person.api.seedCompleteDay(conflictDay);
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  batch.length = 0;
+  await pick(conflictDay, 'Off');
+  const conflictDialog = page.getByRole('dialog', { name: `Review label change for ${conflictDay}` });
+  await conflictDialog.getByRole('button', { name: 'Review conflicts' }).click();
+  await expect(page.getByRole('dialog', { name: 'Recorded work conflicts with the new label' })).toBeVisible();
+  const confirmButton = page.getByRole('button', { name: 'Confirm and commit' });
+  await expect(confirmButton).toBeDisabled();
+  expect((await person.api.dayView(conflictDay)).category).toBe('Worked');
+  await page.getByLabel('I confirm the label change for these dates').check();
+  await confirmButton.click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  result.picker_conflict_commit = batch.at(-1);
+  expect(batch.at(-1)).toMatchObject({ mode: 'commit', confirm_conflicts: true });
+  const conflictAfter = await person.api.dayView(conflictDay);
+  expect(conflictAfter.category).toBe('Off');
+  expect(conflictAfter.sessions).toHaveLength(1);
+  writeResult(`ac04-${testInfo.project.name}.json`, { oldDay, staleDay, quickDay, conflictDay, ...result });
+});
+
+test('AC-16 / AC-01: a view-only grantee has no edit, clock, batch or Open-a-day control; an edit grantee edits through the share; a third user sees nothing', async ({
+  page,
+  browser,
+  adminSeed,
+  builtServer,
+}, testInfo) => {
+  test.setTimeout(300_000);
+  const ownerP = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner A' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee B', signature: 'none' });
+  const other = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Other C', signature: 'none' });
+  const [ownerDay = '', editDay = ''] = await ownerP.api.displayedPeriodFreeWorkdays();
+  await ownerP.api.seedCompleteDay(ownerDay);
+  const note = `private-synthetic-${Date.now().toString(36)}`;
+  await ownerP.api.putDay(ownerDay, { notes: note });
+  const ownerSession = (await ownerP.api.dayView(ownerDay)).sessions[0]?.id ?? '';
+  await ownerP.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  const ownerId = ownerP.account.id;
+  const result: Record<string, unknown> = {};
+
+  const requests = recordApi(page);
+  await signIn(page, grantee.account, `#/shared/${ownerId}/timesheet`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator(`[data-range="${ownerSession}"]`)).toHaveCount(1);
+  const count = async (locator: any) => locator.count();
+  const viewControls = {
+    open_a_day: await count(page.getByLabel('Open a day')),
+    change_several_days: await count(page.getByRole('button', { name: 'Change several days' })),
+    clock_buttons: await count(page.getByRole('button', { name: /^Clock (in|out)$/ })),
+    clock_panel: await count(page.locator('.clock-panel')),
+    label_pickers: await count(page.locator('[data-label-picker]')),
+    checkboxes: await count(page.getByRole('checkbox')),
+    edit_buttons: await count(page.getByRole('button', { name: /^Edit \d{4}-\d{2}-\d{2}$/ })),
+    view_buttons: await count(page.getByRole('button', { name: /^View \d{4}-\d{2}-\d{2}$/ })),
+    signature_strip: await count(page.getByRole('region', { name: 'Signatures' })),
+    review_links: await count(page.locator('[data-sheet-review-link], [data-review-link]')),
+    images: await count(page.locator('img')),
+  };
+  result.view_only_controls = viewControls;
+  expect(viewControls).toMatchObject({ open_a_day: 0, change_several_days: 0, clock_buttons: 0, clock_panel: 0, label_pickers: 0, checkboxes: 0, edit_buttons: 0, view_buttons: 14, signature_strip: 0, review_links: 0, images: 0 });
+  await page.locator(`[data-day="${ownerDay}"]`).getByRole('button', { name: `View ${ownerDay}`, exact: true }).click();
+  const viewer = page.getByRole('dialog', { name: /^Day / });
+  await expect(viewer).toBeVisible();
+  const viewerControls = {
+    add_session: await count(viewer.getByRole('button', { name: 'Add session' })),
+    edit_or_delete: await count(viewer.getByRole('button', { name: /^(Edit|Delete) session/ })),
+    save_day_fields: await count(viewer.getByRole('button', { name: 'Save day fields' })),
+    quick_breaks: await count(viewer.getByRole('button', { name: /Confirm (suggested )?breaks|No breaks taken/ })),
+    textareas: await count(viewer.locator('textarea')),
+  };
+  result.view_only_editor = viewerControls;
+  expect(viewerControls).toEqual({ add_session: 0, edit_or_delete: 0, save_day_fields: 0, quick_breaks: 0, textareas: 0 });
+  await viewer.getByRole('button', { name: 'Close' }).click();
+  const outside = requests.filter((entry) => {
+    const path = entry.slice(entry.indexOf(' ') + 1);
+    // The sign-in screen's own calls (setup status, login) come before the shared view opens.
+    return !path.startsWith(`/api/shared/${ownerId}/`) && !['/api/shares', '/api/auth/me', '/api/auth/login', '/api/auth/setup'].includes(path);
+  });
+  result.view_only_outside_requests = outside;
+  expect(outside).toEqual([]);
+  expect(requests.some((entry) => entry.includes('/api/signatures'))).toBe(false);
+
+  // The owner turns the share into edit; the grantee edits a label through the share.
+  const { given } = await ownerP.api.call<any>('GET', '/api/shares');
+  await ownerP.api.call('PUT', `/api/shares/${given[0].id}`, { items: { timesheets: 'edit', ot_read: false, pdf_download: false } });
+  requests.length = 0;
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const editControls = {
+    open_a_day: await count(page.getByLabel('Open a day')),
+    change_several_days: await count(page.getByRole('button', { name: 'Change several days' })),
+    clock_buttons: await count(page.getByRole('button', { name: /^Clock (in|out)$/ })),
+    label_pickers: await count(page.locator('[data-label-picker]')),
+    signature_strip: await count(page.getByRole('region', { name: 'Signatures' })),
+    review_links: await count(page.locator('[data-sheet-review-link], [data-review-link]')),
+  };
+  result.edit_controls = editControls;
+  expect(editControls).toMatchObject({ open_a_day: 1, change_several_days: 1, clock_buttons: 0, signature_strip: 0, review_links: 0 });
+  expect(editControls.label_pickers).toBeGreaterThan(0);
+  await page.getByRole('button', { name: new RegExp(`^Label for ${editDay}`) }).click();
+  await page.getByRole('listbox', { name: `Label for ${editDay}` }).getByRole('option', { name: 'Vacation', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 1 day.');
+  const batchCalls = requests.filter((entry) => entry.endsWith('/days/batch'));
+  result.edit_batch_requests = batchCalls;
+  expect(batchCalls).toEqual([`POST /api/shared/${ownerId}/days/batch`, `POST /api/shared/${ownerId}/days/batch`]);
+  expect((await ownerP.api.dayView(editDay)).category).toBe('Vacation');
+  const ownerHistory = await ownerP.api.call<any>('GET', '/api/history');
+  const attributed = ownerHistory.audit_events.filter((event: any) => event.via_share === true);
+  result.owner_history_via_share = attributed.map((event: any) => ({ operation: event.operation, actor_display_name: event.actor_display_name }));
+  expect(attributed.some((event: any) => event.actor_display_name === 'Synthetic Grantee B')).toBe(true);
+
+  // A third user: nothing of the owner, by screen or by id swap.
+  const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: 'Asia/Ho_Chi_Minh', locale: 'en-US', viewport: (testInfo.project.use as any).viewport });
+  const third = await context.newPage();
+  await signIn(third, other.account, '#/timesheet');
+  await expect(third.locator('[data-day]')).toHaveCount(14);
+  const isolation = {
+    note_on_page: (await third.locator('body').innerText()).includes(note),
+    owner_session_in_dom: await third.locator(`[data-range="${ownerSession}"]`).count(),
+    shared_timesheet_status: await statusInPage(third, 'GET', `/api/shared/${ownerId}/timesheets/${ownerP.payrollDate}`),
+    shared_day_status: await statusInPage(third, 'GET', `/api/shared/${ownerId}/days/${ownerDay}`),
+    own_day_sessions: (await other.api.dayView(ownerDay)).sessions.length,
+    owner_session_put_status: await statusInPage(third, 'PUT', `/api/sessions/${ownerSession}`, {
+      start: { local: `${ownerDay}T09:00`, zone: LA },
+      end: { local: `${ownerDay}T10:00`, zone: LA },
+      input_zone: LA,
+      breaks: [],
+      breaks_confirmed: true,
+      expected_version: 1,
+    }),
+  };
+  await third.evaluate(`window.location.hash = '#/shared/${ownerId}/timesheet'`);
+  await third.waitForTimeout(1_500);
+  (isolation as any).shared_route_shows_owner_note = (await third.locator('body').innerText()).includes(note);
+  (isolation as any).shared_route_owner_session = await third.locator(`[data-range="${ownerSession}"]`).count();
+  result.isolation = isolation;
+  expect(isolation).toMatchObject({ note_on_page: false, owner_session_in_dom: 0, own_day_sessions: 0 });
+  expect([403, 404]).toContain(isolation.shared_timesheet_status);
+  expect([403, 404]).toContain(isolation.shared_day_status);
+  expect([403, 404]).toContain(isolation.owner_session_put_status);
+  expect((isolation as any).shared_route_shows_owner_note).toBe(false);
+  expect((isolation as any).shared_route_owner_session).toBe(0);
+  expect((await ownerP.api.dayView(ownerDay)).sessions[0]?.id).toBe(ownerSession);
+  await context.close();
+  writeResult(`sharing-${testInfo.project.name}.json`, result);
+});
+
+test('privacy: the signature image is on the Review only, never on the Timesheet page, before or after sign-off', async ({ page, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const signer = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Signer' });
+  const [day = ''] = await signer.api.displayedPeriodFreeWorkdays();
+  await signer.api.seedCompleteDay(day);
+  const requests = recordApi(page);
+  const result: Record<string, unknown> = {};
+
+  await signIn(page, signer.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('[data-signature="employee"]')).toHaveText('Not signed yet');
+  await page.waitForTimeout(1_000);
+  result.timesheet_before = {
+    images: await page.locator('img').count(),
+    signature_requests: requests.filter((entry) => entry.includes('/api/signatures')),
+    strip: await page.locator('[data-signature="employee"]').innerText(),
+  };
+
+  requests.length = 0;
+  await page.evaluate(`window.location.hash = '#/review/${signer.payrollDate}'`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  const image = page.getByRole('img', { name: 'Your saved signature image' });
+  await expect(image).toBeVisible();
+  result.review = {
+    images: await page.locator('img').count(),
+    image_src: await image.getAttribute('src'),
+    signature_requests: requests.filter((entry) => entry.includes('/api/signatures')),
+    image_inside_sheet: await page.locator('[data-review-day] img, article.sheet img').count(),
+  };
+  await page.getByLabel('Your name').fill('Synthetic Signer');
+  const acknowledgement = page.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if ((await acknowledgement.count()) > 0) await acknowledgement.check();
+  await page.getByRole('button', { name: 'Sign off & Submit' }).click();
+  await expect(page.getByRole('heading', { name: 'Submitted' })).toBeVisible();
+  const finalization = await signer.api.call<any>('GET', `/api/timesheets/${signer.payrollDate}/finalization`);
+  const signedLocal = local(finalization.signoff.signed_at, (await signer.api.today()).reportingZone).date;
+
+  requests.length = 0;
+  await page.evaluate(`window.location.hash = '#/timesheet'`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await expect(page.locator('[data-signature="employee"]')).toHaveText('Signed by Synthetic Signer');
+  await page.waitForTimeout(1_000);
+  result.timesheet_after = {
+    images: await page.locator('img').count(),
+    signature_requests: requests.filter((entry) => entry.includes('/api/signatures')),
+    strip: await page.locator('[data-signature="employee"]').innerText(),
+    strip_date: await page.locator('[data-signature="employee-date"]').innerText(),
+    expected_date: `${signedLocal.slice(5, 7)}/${signedLocal.slice(8, 10)}/${signedLocal.slice(0, 4)}`,
+  };
+  expect(result.timesheet_before).toMatchObject({ images: 0, signature_requests: [] });
+  expect(result.review).toMatchObject({ images: 1, image_inside_sheet: 0 });
+  expect((result.review as any).image_src).toMatch(/^\/api\/signatures\//);
+  expect(result.timesheet_after).toMatchObject({ images: 0, signature_requests: [] });
+  expect((result.timesheet_after as any).strip_date).toBe((result.timesheet_after as any).expected_date);
+  writeResult(`privacy-${testInfo.project.name}.json`, result);
+});

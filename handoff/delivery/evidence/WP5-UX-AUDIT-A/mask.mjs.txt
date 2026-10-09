@@ -1,0 +1,23 @@
+// Masks task-local paths and the user profile, strips ANSI codes and writes LF text.
+// Usage: node mask.mjs <outDir> <file>...  (each file is written to <outDir>/<basename>)
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [outDir, ...files] = process.argv.slice(2);
+const rules = [
+  [/[A-Za-z]:[\\/]\.claude-tmp[\\/]timesheet[\\/]WP5-UX-AUDIT-A/gi, '<task>'],
+  [/\/d\/\.claude-tmp\/timesheet\/WP5-UX-AUDIT-A/gi, '<task>'],
+  [/[A-Za-z]:[\\/]Users[\\/][^\\/\s"']+/gi, '<user-home>'],
+  [/\/c\/Users\/[^/\s"']+/gi, '<user-home>'],
+  [/[A-Za-z]:[\\/]Dropbox[\\/]Work\.CDSemi[\\/]timesheet/gi, '<project>'],
+  [/\/d\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>'],
+  [/[A-Za-z0-9._%+-]+@(?!example\.invalid)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>'],
+];
+const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g');
+for (const file of files) {
+  let text = readFileSync(file, 'utf8').replace(ansi, '').replace(/\r\n?/g, '\n');
+  for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
+  if (!text.endsWith('\n')) text += '\n';
+  writeFileSync(join(outDir, basename(file)), text, 'utf8');
+  console.log(`masked ${basename(file)} (${Buffer.byteLength(text)} bytes)`);
+}

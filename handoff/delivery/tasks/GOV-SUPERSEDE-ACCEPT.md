@@ -121,4 +121,11 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 831f760838950a59f0e5c880f0bbefda15fe0c61 (= origin/main); post-HEAD and
+  commit 5beae2f668d15fc77a39b91a91e2c8bb6195d65a; pushed yes; remote SHA the same.
+- Digests: working tree before add and HEAD ls-tree after commit both
+  3d274c9e93c1acfb06ebea8de2df2396192548b881212d799a98e0304a3c7ea9. Staged count 40.
+- Checks (all exit 0): node 24.21.0; precommit PASS (40 files); diff --cached --check;
+  JSON parse; validate_orchestration PASS; check_recovery PASS (106); validate_package
+  --preflight PASS. Details in evidence/GOV-SUPERSEDE-ACCEPT/checks.txt.
+- Fixes applied: none. Stop reason: none.

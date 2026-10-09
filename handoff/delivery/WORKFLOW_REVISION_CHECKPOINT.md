@@ -95,9 +95,38 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - GOV-SUPERSEDE-AUDIT PASS (fresh opus, no findings; 48 scenarios, 85 earlier probes kept,
   27/30 mutants killed; R1/R2 optional in the governance backlog; R3 coordinator
   discipline) at 831f760 / 3d274c9e.
-- Running: GOV-SUPERSEDE-ACCEPT (committer; handoff records only).
-- Next action: write the WP5-UX-GATE brief (full gate on a clean export of 831f760,
-  digest 3d274c9e) and dispatch it; then a fresh opus WP5-UX-AUDIT.
+- GOV-SUPERSEDE-ACCEPT done: 5beae2f on main, pushed (40 handoff files). GOV-SUPERSEDE
+  accepted.
+- WP5-UX-GATE PASS on 831f760 (NAS NOT VERIFIED): digest 3d274c9e in three forms; verify
+  1817; e2e 155/0/5; AC-13 x3 and two real zones; drill 208/0, image
+  sha256:2c8d9db2…24143 (removed after the run); boundary only formatHoursMinutes; PDF
+  unchanged; contrast >= 4.65 (non-text rule line 2.86/2.97 noted); npm test x3 stable;
+  top bar sticky (capture artifact explained); 44px and no horizontal scroll.
+- Board: current_source_digest 3d274c9e; WP5-RECHECK superseded_by WP5-UX-AUDIT-A.
+- Running (parallel, read-only): WP5-UX-AUDIT-A (integrity, zones, edit paths, sharing,
+  privacy, PDF; ports 47910-47929) and WP5-UX-AUDIT-B (owner fidelity, test strength,
+  accessibility, UI standards, docs, full e2e; ports 47930-47949), both fresh opus.
+- WP5-UX-AUDIT-B done: FIX REQUIRED. B-01 (Medium) no day row on the first phone screen;
+  B-02 (Medium) side panel at 768-1199px obscures focusable sheet controls, Escape on the
+  sheet does not close it, docs/04:59 inaccurate; B-03 (Low) weakened import-absence
+  assertion (import.spec.ts:382-396); B-04 (Low) docs/04 lines 41, 55 (EN/VI). Own
+  checks all green; digest 3d274c9e.
+- WP5-UX-AUDIT-A: first hand-back NOT VERIFIED (stopped after a denied rm of the stray
+  file D:\raw-r07.txt it created; owner asked to delete it); resumed to finish, including
+  the leave-input `noValidate` question and the npm ci vulnerability line.
+- WP5-UX-AUDIT-A done (2026-10-09): FIX REQUIRED, A-01 (Medium) malformed leave input
+  saved as a different leave (noValidate + leaveInputModel); own probes for zones,
+  AC-04, sharing, isolation and privacy all passed; npm 'high' is the pre-existing
+  dev-only source-map-js (R-RA6).
+- Fix round (coordinator decision 2026-10-09): WP5-UX-FIX2 (A-01) running now, then
+  FIX2-FREEZE, WP5-UX-FIX3 (B-01..B-04), FIX3-FREEZE, WP5-UX-REGATE, fresh re-audits
+  WP5-UX-AUDIT-A2 and -B2.
+- WP5-UX-FIX2 done: malformed leave input refused (role=alert, aria-invalid, nothing
+  sent); unit 1820; full e2e desktop 78/0/3, mobile 79/0/2; verify exit 0; digest
+  574bbc02. Also fixed a pre-existing racy e2e wait (re-audit to confirm no weakening).
+- Running: WP5-UX-FIX2-FREEZE (committer; also carries the gate, audit A/B and GOV
+  accept records since 5beae2f).
+- Next action: on the freeze result, write and dispatch WP5-UX-FIX3 (B-01..B-04).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

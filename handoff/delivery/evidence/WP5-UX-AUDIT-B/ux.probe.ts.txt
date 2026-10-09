@@ -1,0 +1,487 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, test } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B independent probes (auditor-written, not part of the reviewed source; stored
+ * outside git through .git/info/exclude). Synthetic data only, on the built server of the e2e
+ * fixture. Each probe records what it measured into PROBE_OUT as JSON; a few hard expectations
+ * guard the measurement itself.
+ */
+
+const OUT = process.env.PROBE_OUT ?? join(process.cwd(), 'probe-out');
+mkdirSync(OUT, { recursive: true });
+function record(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${name}.json`), `${JSON.stringify(data, null, 2)}\n`);
+}
+
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+const consoleMessages: string[] = [];
+
+async function describeActive(page: Page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return { tag: 'BODY', name: '', day: null as string | null, inDialog: false, region: '' };
+    const element = active as HTMLElement;
+    const dialog = document.querySelector('dialog[open]');
+    const dayHost = element.closest('[data-day], [data-review-day]');
+    const nav = element.closest('nav');
+    const region = nav !== null ? `nav:${nav.className}` : element.closest('dialog') !== null ? 'dialog' : element.closest('.sheet') !== null ? 'sheet' : element.closest('.workbar') !== null ? 'workbar' : element.closest('header') !== null ? 'header' : 'page';
+    return {
+      tag: element.tagName,
+      name: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 60),
+      day: dayHost?.getAttribute('data-day') ?? dayHost?.getAttribute('data-review-day') ?? null,
+      inDialog: dialog !== null && dialog.contains(element),
+      region,
+    };
+  });
+}
+
+async function seedStates(page: Page, seed: { displayedPeriodFreeWorkdays: () => Promise<string[]>; seedCompleteDay: (d: string) => Promise<void>; seedUnconfirmedBreaksDay: (d: string) => Promise<void> }) {
+  const free = await seed.displayedPeriodFreeWorkdays();
+  // Keep at least one past day without times ("No times") and seed two states when there is room.
+  if (free.length >= 3) {
+    await seed.seedCompleteDay(free[0] ?? '');
+    await seed.seedUnconfirmedBreaksDay(free[1] ?? '');
+  }
+  page.on('console', (message) => consoleMessages.push(`${message.type()}: ${message.text()}`));
+}
+
+test('P1 keyboard order, accessible names and hidden row names on the sheet', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const domDates = await page.locator('[data-day]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-day') ?? ''));
+  const sorted = [...domDates].sort();
+
+  // Tab from the top of the page through every stop, until the sequence returns to its first stop.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const stops: Array<Awaited<ReturnType<typeof describeActive>>> = [];
+  for (let step = 0; step < 220; step += 1) {
+    await page.keyboard.press('Tab');
+    const stop = await describeActive(page);
+    if (stops.length > 3 && stop.name === stops[0]?.name && stop.tag === stops[0]?.tag) break;
+    stops.push(stop);
+  }
+  const dayStops = stops.filter((stop) => stop.day !== null).map((stop) => `${stop.day} ${stop.name}`);
+  const dayOrder = stops.filter((stop) => stop.day !== null).map((stop) => stop.day ?? '');
+  const nondecreasing = dayOrder.every((date, index) => index === 0 || date >= (dayOrder[index - 1] ?? ''));
+  const editNames = stops.filter((stop) => /^(Edit|View) \d{4}-\d{2}-\d{2}$/.test(stop.name)).map((stop) => stop.name.slice(5));
+
+  // Names: one named element per day; the visual row labels are hidden; cells carry hidden row names.
+  const dayNames = await page.locator('[data-day]').evaluateAll((nodes) => nodes.map((node) => `${node.getAttribute('role') ?? node.tagName}:${node.getAttribute('aria-label') ?? ''}`));
+  const rowLabelsHidden = await page.locator('.row-labels').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-hidden')));
+  const firstDay = page.locator('[data-day]').first();
+  const ariaFirst = await firstDay.ariaSnapshot();
+  const seededDay = domDates.find((date) => date !== '') ?? '';
+  const srOnly = await page.locator('[data-day] .sr-only').evaluateAll((nodes) => [...new Set(nodes.map((node) => (node.textContent ?? '').trim()))]);
+  const groupsByRole = project === 'desktop' ? await page.getByRole('group', { name: /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}$/ }).count() : await page.getByRole('row', { name: /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}$/ }).count();
+
+  record(`P1-${project}`, {
+    domDates,
+    domOrderChronological: JSON.stringify(domDates) === JSON.stringify(sorted),
+    totalTabStops: stops.length,
+    dayTabStops: dayStops,
+    dayStopsNondecreasing: nondecreasing,
+    editButtonOrder: editNames,
+    editButtonsChronological: JSON.stringify(editNames) === JSON.stringify([...editNames].sort()),
+    regions: stops.map((stop) => `${stop.region}|${stop.tag}|${stop.name}`),
+    dayNames,
+    namedDayElementsByRole: groupsByRole,
+    rowLabelsAriaHidden: rowLabelsHidden,
+    hiddenRowNames: srOnly,
+    firstDayAriaSnapshot: ariaFirst,
+    seededDayExample: seededDay,
+  });
+  expect(stops.length).toBeGreaterThan(10);
+});
+
+test('P2 day editor focus: open, Escape, return; bottom sheet focus trap', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const date = (await page.locator('[data-day]').nth(1).getAttribute('data-day')) ?? '';
+  const button = page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}`, exact: true });
+  const result: Record<string, unknown> = { date };
+
+  // Keyboard open: focus the day's button and press Enter.
+  await button.focus();
+  await page.keyboard.press('Enter');
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  result.focusAfterOpen = await describeActive(page);
+  result.focusOnHeading = await page.evaluate(() => document.activeElement?.id === 'day-editor-title');
+  result.dialogModal = await editor.evaluate((element) => element.matches(':modal'));
+  result.dialogName = await editor.evaluate((element) => document.getElementById(element.getAttribute('aria-labelledby') ?? '')?.textContent?.trim() ?? '');
+
+  // Tab forward and backward; record whether focus ever leaves the dialog (and where it goes).
+  const forward: Array<Awaited<ReturnType<typeof describeActive>>> = [];
+  for (let step = 0; step < 60; step += 1) {
+    await page.keyboard.press('Tab');
+    forward.push(await describeActive(page));
+  }
+  const backward: Array<Awaited<ReturnType<typeof describeActive>>> = [];
+  for (let step = 0; step < 40; step += 1) {
+    await page.keyboard.press('Shift+Tab');
+    backward.push(await describeActive(page));
+  }
+  const outside = (list: typeof forward) => list.filter((stop) => !stop.inDialog);
+  result.forwardStops = forward.map((stop) => `${stop.inDialog ? 'in' : 'OUT'}|${stop.region}|${stop.tag}|${stop.name}`);
+  result.forwardOutsideCount = outside(forward).length;
+  result.forwardOutsideNonBody = outside(forward).filter((stop) => stop.tag !== 'BODY').length;
+  result.backwardOutsideCount = outside(backward).length;
+  result.backwardOutsideNonBody = outside(backward).filter((stop) => stop.tag !== 'BODY').length;
+
+  if (project === 'desktop') {
+    // Escape from inside the panel closes it and focus returns to the day's button.
+    await editor.getByRole('heading', { level: 2 }).focus();
+    await page.keyboard.press('Tab');
+    result.beforeEscape = await describeActive(page);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    result.focusAfterEscape = await describeActive(page);
+    result.returnedToDayButton = await button.evaluate((element) => element === document.activeElement);
+    // Escape while focus is back on the sheet with the panel open: the non-modal panel stays.
+    await page.keyboard.press('Enter');
+    await expect(editor).toBeVisible();
+    await button.focus();
+    await page.keyboard.press('Escape');
+    result.panelOpenAfterEscapeFromSheet = (await editor.count()) === 1;
+  } else {
+    // Escape closes the sheet; focus returns to the day's button.
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    result.focusAfterEscape = await describeActive(page);
+    result.returnedToDayButton = await button.evaluate((element) => element === document.activeElement);
+    // The whole row opens the editor too (touch); Close returns focus to the day's button.
+    await page.locator(`[data-day="${date}"] td.t-time`).click();
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    result.returnedAfterRowTapAndClose = await button.evaluate((element) => element === document.activeElement);
+  }
+  record(`P2-${project}`, result);
+});
+
+interface TargetReport {
+  state: string;
+  scrollWidth: number;
+  clientWidth: number;
+  dialogOverflow: number | null;
+  controls: number;
+  small: string[];
+}
+
+async function measureTargets(page: Page, state: string): Promise<TargetReport> {
+  return page.evaluate((stateName) => {
+    const selector = 'a[href], button, input, select, textarea, [role="option"], [tabindex]:not([tabindex="-1"]), label.pick';
+    const dialog = document.querySelector('dialog[open]');
+    const scope = dialog !== null && dialog.matches(':modal') ? dialog : document;
+    const small: string[] = [];
+    let controls = 0;
+    for (const node of Array.from(scope.querySelectorAll(selector))) {
+      const element = node as HTMLElement;
+      const style = getComputedStyle(element);
+      if (style.visibility === 'hidden' || style.display === 'none') continue;
+      // A checkbox is measured by its label wrapper (label.pick), as the project does.
+      if (element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio') && element.closest('label') !== null) continue;
+      const box = element.getBoundingClientRect();
+      if (box.width === 0 && box.height === 0) continue;
+      controls += 1;
+      if (box.width < 43.5 || box.height < 43.5) {
+        small.push(`${element.tagName}${element.className === '' ? '' : `.${String(element.className).split(' ')[0]}`} "${(element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 40)}" ${Math.round(box.width)}x${Math.round(box.height)}`);
+      }
+    }
+    const open = document.querySelector('dialog[open]');
+    return {
+      state: stateName,
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      dialogOverflow: open === null ? null : open.scrollWidth - open.clientWidth,
+      controls,
+      small,
+    };
+  }, state);
+}
+
+test('P3 phone: 44px targets, no sideways scroll in every state, and where the first day appears', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone only');
+  test.setTimeout(90_000);
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const reports: TargetReport[] = [];
+  const first = await page.locator('[data-day]').first().boundingBox();
+  const firstWeekLast = await page.locator('[data-day]').nth(6).boundingBox();
+  const viewport = page.viewportSize();
+  const tabbar = await page.locator('.shell-tabs').boundingBox();
+  const position = {
+    firstDayTop: first?.y ?? null,
+    firstDayBottom: first === null ? null : first.y + first.height,
+    seventhDayBottom: firstWeekLast === null ? null : firstWeekLast.y + firstWeekLast.height,
+    viewportHeight: viewport?.height ?? null,
+    tabbarTop: tabbar?.y ?? null,
+    firstDayFullyInFirstScreen: first !== null && tabbar !== null && first.y + first.height <= tabbar.y,
+    formHeaderTop: (await page.locator('.form-head').boundingBox())?.y ?? null,
+    toolsTop: (await page.locator('.tools').boundingBox())?.y ?? null,
+    clockTop: (await page.locator('.clock-panel').boundingBox())?.y ?? null,
+    periodTop: (await page.locator('.period-bar').boundingBox())?.y ?? null,
+    pageHeight: await page.evaluate(() => document.documentElement.scrollHeight),
+  };
+  reports.push(await measureTargets(page, 'timesheet default'));
+  await page.getByRole('button', { name: 'Show details' }).click();
+  reports.push(await measureTargets(page, 'show details on'));
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  reports.push(await measureTargets(page, 'batch mode on'));
+  await page.getByRole('button', { name: 'Done' }).click();
+  const date = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  await page.getByRole('button', { name: new RegExp(`^Label for ${date}`) }).click();
+  await expect(page.getByRole('listbox')).toBeVisible();
+  reports.push(await measureTargets(page, 'label picker open'));
+  await page.keyboard.press('Escape');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+  reports.push(await measureTargets(page, 'More open'));
+  await page.keyboard.press('Escape');
+  await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}`, exact: true }).click();
+  await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  reports.push(await measureTargets(page, 'editor sheet'));
+  await page.getByRole('dialog').getByRole('button', { name: 'Add session' }).click();
+  reports.push(await measureTargets(page, 'editor sheet, add session form'));
+  await page.keyboard.press('Escape');
+  const { currentPayrollDate } = await employeeSeed.today();
+  await page.goto(`/#/review/${currentPayrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  reports.push(await measureTargets(page, 'review'));
+  record('P3-mobile', { position, reports, console: consoleMessages });
+});
+
+test('P4 text and non-text contrast as rendered, light and dark', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.setTimeout(90_000);
+  const project = testInfo.project.name;
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Show details' }).click();
+  const out: Record<string, unknown> = {};
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.waitForTimeout(100);
+    out[scheme] = await page.evaluate(() => {
+      function parse(color: string): [number, number, number, number] {
+        const match = /rgba?\(([^)]+)\)/.exec(color);
+        if (match === null) return [0, 0, 0, 0];
+        const parts = (match[1] ?? '').split(/[ ,/]+/).filter((part) => part !== '').map(Number);
+        return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts.length > 3 ? (parts[3] ?? 1) : 1];
+      }
+      function blend(top: number[], bottom: number[]): number[] {
+        const a = top[3] ?? 1;
+        return [0, 1, 2].map((i) => (top[i] ?? 0) * a + (bottom[i] ?? 0) * (1 - a)).concat(1);
+      }
+      function lum(rgb: number[]): number {
+        const [r, g, b] = rgb.slice(0, 3).map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
+      }
+      function ratio(a: number[], b: number[]): number {
+        const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+        return ((x ?? 0) + 0.05) / ((y ?? 0) + 0.05);
+      }
+      function background(element: Element | null): number[] {
+        const stack: number[][] = [];
+        for (let node = element; node !== null; node = node.parentElement) {
+          const bg = parse(getComputedStyle(node).backgroundColor);
+          if (bg[3] > 0) stack.push(bg);
+          if (bg[3] >= 1) break;
+        }
+        let color = [255, 255, 255, 1];
+        const root = parse(getComputedStyle(document.body).backgroundColor);
+        if (root[3] >= 1) color = root;
+        for (const layer of stack.reverse()) color = blend(layer, color);
+        return color;
+      }
+      const results: Array<{ text: string; ratio: number; size: number; weight: number; where: string }> = [];
+      const walker = document.createTreeWalker(document.querySelector('main') ?? document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        const text = (node.textContent ?? '').trim();
+        if (text === '') continue;
+        const element = node.parentElement;
+        if (element === null) continue;
+        const style = getComputedStyle(element);
+        if (style.visibility === 'hidden' || style.display === 'none' || element.closest('.sr-only') !== null) continue;
+        const box = element.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) continue;
+        const fg = parse(style.color);
+        const bg = background(element);
+        const effective = blend(fg, bg);
+        const opacityHost = element.closest('button:disabled, [aria-disabled="true"]');
+        results.push({
+          text: text.slice(0, 40),
+          ratio: Math.round(ratio(effective, bg) * 100) / 100,
+          size: Number.parseFloat(style.fontSize),
+          weight: Number.parseInt(style.fontWeight, 10),
+          where: `${element.tagName.toLowerCase()}.${String(element.className).split(' ')[0] ?? ''}${opacityHost === null ? '' : ' (disabled)'}`,
+        });
+      }
+      const failing = results.filter((item) => {
+        const large = item.size >= 24 || (item.size >= 18.66 && item.weight >= 700);
+        return item.ratio < (large ? 3 : 4.5) && !item.where.includes('(disabled)');
+      });
+      const min = results.filter((item) => !item.where.includes('(disabled)')).reduce((m, item) => Math.min(m, item.ratio), 99);
+      // Non-text: the lines and boxes of the sheet against the card they sit on.
+      const card = background(document.querySelector('.sheet'));
+      const lines: Record<string, number> = {};
+      const probe = (name: string, selector: string, property: string) => {
+        const element = document.querySelector(selector);
+        if (element === null) return;
+        const color = parse(getComputedStyle(element).getPropertyValue(property));
+        lines[name] = Math.round(ratio(blend(color, card), card) * 100) / 100;
+      };
+      probe('form-head rule (--sheet-rule-strong)', '.form-head', 'border-bottom-color');
+      probe('ot-total box (--sheet-rule-strong)', '.ot-total', 'border-top-color');
+      probe('signature line (--sheet-rule-strong)', '.sig-line', 'border-bottom-color');
+      probe('week band frame (--sheet-rule)', '.sheet-week', 'border-top-color');
+      probe('day column rule (--sheet-rule)', '.sheet-day, .sheet-table td', 'border-right-color');
+      const attention = document.querySelector('.attention');
+      if (attention !== null) lines['attention tint vs card (bg)'] = Math.round(ratio(background(attention), card) * 100) / 100;
+      const off = document.querySelector('.nonworking');
+      if (off !== null) lines['non-working tint vs card (bg)'] = Math.round(ratio(background(off), card) * 100) / 100;
+      return { textNodes: results.length, minTextRatio: min, failing, nonText: lines };
+    });
+  }
+  // Running-session dot and transitions under reduced motion.
+  out.reducedMotion = await page.evaluate(() => {
+    const animated = Array.from(document.querySelectorAll('*')).filter((node) => getComputedStyle(node).animationName !== 'none').length;
+    const button = document.querySelector('button');
+    return { animatedElements: animated, buttonTransition: button === null ? '' : getComputedStyle(button).transition };
+  });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+  out.normalMotion = await page.evaluate(() => {
+    const button = document.querySelector('button');
+    const link = document.querySelector('a.nav-link, a.tab');
+    return {
+      buttonTransition: button === null ? '' : getComputedStyle(button).transition,
+      linkTransition: link === null ? '' : getComputedStyle(link).transition,
+      fonts: Array.from(new Set(Array.from(document.querySelectorAll('body *')).map((node) => getComputedStyle(node).fontFamily))),
+      radius: Array.from(new Set(Array.from(document.querySelectorAll('.card, button, input, .badge, .ot-total')).map((node) => getComputedStyle(node).borderTopLeftRadius))),
+    };
+  });
+  record(`P4-${project}`, out);
+});
+
+test('P5 status never by colour alone on the sheet', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const project = testInfo.project.name;
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const days = await page.locator('[data-day]').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const attention = node.querySelector('.attention') !== null || node.classList.contains('attention');
+      const check = node.querySelector('[data-check]');
+      const label = (node.querySelector('[data-cell="label"], td.t-label')?.textContent ?? '').trim();
+      return {
+        date: node.getAttribute('data-day'),
+        nonworking: node.classList.contains('nonworking'),
+        hatch: getComputedStyle(node.querySelector('.d-label, td.t-label') ?? node).backgroundImage.includes('gradient') || getComputedStyle(node).backgroundImage.includes('gradient'),
+        today: node.classList.contains('today'),
+        todayTag: node.querySelector('.today-tag')?.textContent ?? null,
+        attention,
+        checkKey: check?.getAttribute('data-check') ?? null,
+        checkText: (check?.textContent ?? '').trim(),
+        checkShape: check?.querySelector('.shape') !== null && check !== null,
+        label,
+      };
+    }),
+  );
+  const attentionWithoutWords = days.filter((day) => day.attention && (day.checkText === '' || !day.checkShape));
+  const nonworkingWithoutCue = days.filter((day) => day.nonworking && (!day.hatch || day.label === ''));
+  const todayWithoutTag = days.filter((day) => day.today && day.todayTag !== 'Today');
+  record(`P5-${project}`, { days, attentionWithoutWords, nonworkingWithoutCue, todayWithoutTag });
+  expect(days).toHaveLength(14);
+});
+
+test('P7 phone: which controls the tap-target loops exclude with filter({ visible: true })', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone only');
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const selectors = {
+    timesheet: 'button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline',
+    shell: 'button, a[href], input:not([type="checkbox"]), label.inline',
+    review: 'button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline',
+  };
+  const hiddenOf = async (selector: string) => {
+    const all = page.locator(selector);
+    const out: string[] = [];
+    const count = await all.count();
+    for (let index = 0; index < count; index += 1) {
+      const item = all.nth(index);
+      if (!(await item.isVisible())) {
+        out.push(await item.evaluate((element) => `${element.tagName}.${String(element.className)} in ${element.closest('nav, header, dialog, section, article')?.className ?? 'page'} "${(element.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 30)}" display=${getComputedStyle(element).display} parentDisplay=${getComputedStyle(element.parentElement ?? element).display}`));
+      }
+    }
+    return { total: count, hidden: out };
+  };
+  const result: Record<string, unknown> = {};
+  result.timesheet = await hiddenOf(selectors.timesheet);
+  result.shell = await hiddenOf(selectors.shell);
+  const { currentPayrollDate } = await employeeSeed.today();
+  await page.goto(`/#/review/${currentPayrollDate}`);
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  result.review = await hiddenOf(selectors.review);
+  record('P7-mobile', result);
+});
+
+test('P8 phone row heights and the 360px width', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone only');
+  await seedStates(page, employeeSeed);
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const heights = await page.locator('[data-day]').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().height * 10) / 10));
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.waitForTimeout(200);
+  const narrow = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
+  record('P8-mobile', { rowHeights: heights, minRowHeight: Math.min(...heights), at360: narrow });
+});
+
+test('P6 desktop between 768 and 1199px: no sideways scroll and the fixed panel does not hide the focused day', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop only');
+  await seedStates(page, employeeSeed);
+  const widths: Record<string, unknown> = {};
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  for (const width of [768, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const date = (await page.locator('[data-day]').first().getAttribute('data-day')) ?? '';
+    await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}`, exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    // Move focus to each day button of the sheet behind the panel; is it hidden under the panel?
+    const hidden = await page.evaluate(() => {
+      const panel = document.querySelector('dialog[open]')?.getBoundingClientRect();
+      const out: string[] = [];
+      for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-day] button.sheet-date, [data-day] .label-trigger'))) {
+        button.focus();
+        button.scrollIntoView({ block: 'nearest' });
+        const box = button.getBoundingClientRect();
+        if (panel === undefined) continue;
+        const covered = box.left >= panel.left && box.right <= panel.right && box.top >= panel.top && box.bottom <= panel.bottom;
+        if (covered) out.push(button.getAttribute('aria-label') ?? '');
+      }
+      return out;
+    });
+    widths[String(width)] = { overflow, focusableEntirelyUnderPanel: hidden, count: hidden.length };
+    await page.keyboard.press('Escape');
+  }
+  record('P6-desktop', widths);
+});

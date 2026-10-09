@@ -597,6 +597,78 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
   }
 });
 
+test('malformed leave hours or minutes are never saved as another leave; empty fields still save 0', async ({ page, employeeSeed, signInThroughUi }) => {
+  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
+  const puts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${date}`) puts.push(request.postData() ?? '');
+  });
+  try {
+    await signInThroughUi();
+    const editor = await openEditor(page, date);
+    const fields = editor.getByRole('form', { name: 'Day fields' });
+    const hours = fields.getByLabel('Leave hours');
+    const minutes = fields.getByLabel('Leave minutes');
+    const save = fields.getByRole('button', { name: 'Save day fields' });
+    await fields.getByLabel('Leave kind').selectOption('vacation');
+    const untouched = await employeeSeed.dayView(date);
+
+    // The browser holds text such as "2-" or "e" in a number field as an empty value with a bad-input flag;
+    // it must not be read as 0 (hours "2-" with 30 minutes was once stored as 30, not 150).
+    const refuse = async (hoursKeys: string | null, minutesKeys: string | null, marked: { hours: boolean; minutes: boolean }) => {
+      await hours.fill('');
+      await minutes.fill('');
+      if (hoursKeys !== null) await hours.pressSequentially(hoursKeys);
+      else await hours.fill('2');
+      if (minutesKeys !== null) await minutes.pressSequentially(minutesKeys);
+      else await minutes.fill('30');
+      await save.click();
+      const alert = fields.getByRole('alert');
+      await expect(alert).toHaveCount(1);
+      await expect(alert).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
+      const alertId = await alert.getAttribute('id');
+      expect(alertId, 'the error has an id the fields point to').toBeTruthy();
+      for (const [field, isMarked] of [[hours, marked.hours], [minutes, marked.minutes]] as const) {
+        if (isMarked) {
+          await expect(field).toHaveAttribute('aria-invalid', 'true');
+          await expect(field).toHaveAttribute('aria-describedby', new RegExp(alertId ?? '\\0'));
+        } else {
+          await expect(field).not.toHaveAttribute('aria-invalid', 'true');
+        }
+      }
+      expect(puts, 'nothing is sent').toEqual([]);
+      const stored = await employeeSeed.dayView(date);
+      expect(stored.leave_minutes).toBe(0);
+      expect(stored.entry?.version ?? null).toBe(untouched.entry?.version ?? null);
+    };
+    await refuse('2-', null, { hours: true, minutes: false });
+    await refuse(null, '3-', { hours: false, minutes: true });
+    await refuse('e', null, { hours: true, minutes: false });
+    await refuse('1.5', '0', { hours: true, minutes: false });
+    await refuse('-1', null, { hours: true, minutes: false });
+    await refuse('0', '60', { hours: false, minutes: true });
+    await refuse('24', '1', { hours: true, minutes: true });
+
+    // Valid input is unchanged: 2 h 30 m is the same 150 leave minutes.
+    await hours.fill('2');
+    await minutes.fill('30');
+    await save.click();
+    await expect(editor.getByText('Day fields saved.')).toBeVisible();
+    expect(puts.map((body) => JSON.parse(body) as { leave_minutes: number })).toMatchObject([{ leave_minutes: 150 }]);
+    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(150);
+
+    // Empty fields still save 0.
+    await hours.fill('');
+    await minutes.fill('');
+    await save.click();
+    await expect.poll(() => puts.length).toBe(2);
+    expect(JSON.parse(puts[1] ?? '{}')).toMatchObject({ leave_minutes: 0 });
+    expect((await employeeSeed.dayView(date)).leave_minutes).toBe(0);
+  } finally {
+    await employeeSeed.resetDay(date);
+  }
+});
+
 test('the OT leave mismatch warning informs without spending or reserving anything', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
   const project = testInfo.project.name;
   const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
@@ -758,7 +830,12 @@ test('future days show as upcoming from the server date, past days without a rec
   const next = page.getByRole('button', { name: 'Next period' });
   const row = page.locator(`[data-day="${futureDay}"]`);
   for (let step = 0; step < 4 && (await row.count()) === 0; step += 1) {
+    // Wait for the sheet to change before looking for the row: the old sheet also has 14 days, so
+    // counting rows alone raced the render and could click past the period holding the future day.
+    const period = page.getByRole('region', { name: 'Pay period' });
+    const shown = (await period.textContent()) ?? '';
     await next.click();
+    await expect(period).not.toHaveText(shown);
     await expect(page.locator('[data-day]')).toHaveCount(14);
   }
   await expect(row).toBeVisible();

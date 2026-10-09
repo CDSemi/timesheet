@@ -1,0 +1,167 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-GATE probe (scratch only, never committed): synthetic screenshots, the fixed/sticky top bar
+ * check on the phone, tap targets and horizontal overflow on the main screens.
+ */
+const OUT = process.env.UXGATE_OUT ?? '';
+
+interface Violation {
+  name: string;
+  w: number;
+  h: number;
+}
+
+async function targetsOf(page: Page): Promise<{ count: number; small: Violation[]; scroll: number; inner: number }> {
+  return page.evaluate(() => {
+    const sel = 'button, a[href], select, input:not([type="checkbox"]):not([type="hidden"]), label.pick, label.inline, [role="button"], [role="tab"]';
+    const small: Array<{ name: string; w: number; h: number }> = [];
+    let count = 0;
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (r.width === 0 || r.height === 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+      count += 1;
+      if (r.width < 44 || r.height < 44) {
+        small.push({ name: (el.textContent ?? '').trim().slice(0, 30) || el.getAttribute('aria-label') || el.tagName, w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    }
+    return { count, small, scroll: document.documentElement.scrollWidth, inner: window.innerWidth };
+  });
+}
+
+test('ux gate: screenshots, top bar, tap targets, overflow', async ({ page, adminSeed, builtServer }, testInfo) => {
+  const project = testInfo.project.name;
+  const phone = project === 'mobile';
+  const tag = phone ? 'phone' : 'desktop';
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Reviewer' });
+  const days = await person.api.displayedPeriodFreeWorkdays();
+  expect(days.length).toBeGreaterThanOrEqual(4);
+  const [d1 = '', d2 = '', d3 = '', d4 = ''] = days;
+  await person.api.seedCompleteDay(d1);
+  await person.api.seedCompleteDay(d2);
+  await person.api.seedCompleteDay(d3);
+  await person.api.seedUnconfirmedBreaksDay(d4);
+
+  const log: string[] = [];
+  const note = (line: string) => log.push(line);
+
+  await page.goto('/');
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+
+  // 1. Timesheet, light then dark, viewport capture at the top.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.screenshot({ path: screenshotPath(`timesheet-${tag}-light-synthetic.png`), animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: screenshotPath(`timesheet-${tag}-dark-synthetic.png`), animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'light' });
+
+  const t0 = await targetsOf(page);
+  note(`timesheet ${tag}: controls=${t0.count} below44=${t0.small.length} scrollWidth=${t0.scroll} innerWidth=${t0.inner} ${JSON.stringify(t0.small)}`);
+
+  if (phone) {
+    // Top bar: sticky or fixed? Count, position, and overlap with content at the top and at the bottom.
+    const info = await page.evaluate(() => {
+      const bars = Array.from(document.querySelectorAll<HTMLElement>('.shell-bar'));
+      const fixedTop = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter((el) => {
+        const s = getComputedStyle(el);
+        return s.position === 'fixed' && el.getBoundingClientRect().top <= 1 && el.getBoundingClientRect().height > 0 && el.getBoundingClientRect().width > 0;
+      });
+      const bar = bars[0];
+      const main = document.querySelector<HTMLElement>('main');
+      const barRect = bar?.getBoundingClientRect();
+      const mainRect = main?.getBoundingClientRect();
+      const firstChild = main?.firstElementChild?.getBoundingClientRect();
+      return {
+        barCount: bars.length,
+        barPosition: bar ? getComputedStyle(bar).position : 'none',
+        barTop: barRect?.top ?? null,
+        barBottom: barRect?.bottom ?? null,
+        mainTop: mainRect?.top ?? null,
+        firstContentTop: firstChild?.top ?? null,
+        fixedAtTop: fixedTop.map((el) => `${el.tagName}.${el.className}`),
+        scrollHeight: document.documentElement.scrollHeight,
+        innerHeight: window.innerHeight,
+      };
+    });
+    note(`topbar at scrollY=0: ${JSON.stringify(info)}`);
+    expect(info.barCount).toBe(1);
+    // Scroll to the bottom and capture the viewport.
+    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: screenshotPath(`timesheet-${tag}-bottom-light-synthetic.png`), animations: 'disabled' });
+    const bottom = await page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>('.shell-bar');
+      const tabs = document.querySelector<HTMLElement>('.shell-tabs');
+      const br = bar?.getBoundingClientRect();
+      const tr = tabs?.getBoundingClientRect();
+      const probe = document.elementFromPoint(window.innerWidth / 2, (br?.top ?? 0) + (br?.height ?? 0) / 2);
+      // The last visible content element above the tab bar.
+      const main = document.querySelector<HTMLElement>('main');
+      const lastEl = main?.lastElementChild?.getBoundingClientRect();
+      return {
+        scrollY: window.scrollY,
+        barTop: br?.top ?? null,
+        barBottom: br?.bottom ?? null,
+        barOnTopOfContent: probe ? !!probe.closest('.shell-bar') : false,
+        tabsTop: tr?.top ?? null,
+        lastContentBottom: lastEl?.bottom ?? null,
+        tabsOverlapLastContent: tr && lastEl ? lastEl.bottom > tr.top + 0.5 : null,
+      };
+    });
+    note(`topbar at bottom: ${JSON.stringify(bottom)}`);
+    // Mid-page viewport capture too (not saved), to record bar position.
+    await page.evaluate('window.scrollTo(0, 0)');
+  }
+
+  // 2. Day editor (panel on desktop, sheet on phone).
+  await page.getByLabel('Open a day').fill(d4);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+  await page.waitForTimeout(500);
+  const quick = editor.getByRole('group', { name: /^Breaks of the session/ });
+  await quick.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: screenshotPath(`editor-${phone ? 'sheet-phone' : 'panel-desktop'}-synthetic.png`), animations: 'disabled' });
+  const t1 = await targetsOf(page);
+  note(`editor ${tag}: controls=${t1.count} below44=${t1.small.length} scrollWidth=${t1.scroll} innerWidth=${t1.inner} ${JSON.stringify(t1.small)}`);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+
+  // 3. Batch mode (phone).
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByLabel(`Select ${d1}`).check();
+  await page.getByLabel(`Select ${d2}`).check();
+  await expect(page.getByText('2 days selected')).toBeVisible();
+  await page.evaluate('window.scrollTo(0, 0)');
+  if (phone) await page.screenshot({ path: screenshotPath('batch-phone-synthetic.png'), animations: 'disabled' });
+  const t2 = await targetsOf(page);
+  note(`batch ${tag}: controls=${t2.count} below44=${t2.small.length} scrollWidth=${t2.scroll} innerWidth=${t2.inner} ${JSON.stringify(t2.small)}`);
+  await page.getByRole('button', { name: /Cancel|Done|Exit|Leave/ }).first().click().catch(() => undefined);
+
+  // 4. Review.
+  await page.goto(`/#/review/${person.payrollDate}`);
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: screenshotPath(`review-${tag}-synthetic.png`), animations: 'disabled' });
+  const t3 = await targetsOf(page);
+  note(`review ${tag}: controls=${t3.count} below44=${t3.small.length} scrollWidth=${t3.scroll} innerWidth=${t3.inner} ${JSON.stringify(t3.small)}`);
+
+  if (OUT !== '') writeFileSync(join(OUT, `probe-${tag}.txt`), `${log.join('\n')}\n`);
+  if (phone) {
+    for (const t of [t0, t1, t2, t3]) {
+      expect(t.scroll).toBeLessThanOrEqual(t.inner);
+    }
+  }
+});
