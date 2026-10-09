@@ -976,33 +976,146 @@ textarea {
   }
 }
 
+/*
+ * Phone first screen (WP5-UX-B-01, mockup A2): the period card, the clock card and the sheet, with
+ * the first day row above the tab bar. The page heading stays for screen readers only (the period
+ * card and the form header already name the person and the period); `<` and `>` flank the period
+ * title; the clock is one row; the tools are two compact rows.
+ */
 @media (max-width: 767px) {
+  .page-head {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    margin: 0;
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+
+  .workbar {
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
   .period-bar {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: var(--tap-min) minmax(0, var(--track)) var(--tap-min);
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-3);
   }
 
-  .period-main {
-    flex-basis: 100%;
-    order: var(--order-first);
-  }
-
+  /* The wrappers dissolve so the buttons, the title and the notes are placed on one grid. */
+  .period-main,
   .period-actions {
-    flex: 1;
-    justify-content: space-between;
+    display: contents;
+  }
+
+  .period-bar > .period-step {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .period-actions > .period-step {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .period-title {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .period-meta,
+  .period-main > :not(.period-title, .period-meta),
+  .period-actions > :not(.period-step) {
+    grid-column: 1 / -1;
+  }
+
+  .period-name {
+    font-size: var(--font-size-md);
+  }
+
+  .period-meta {
+    gap: 0 var(--space-3);
+    font-size: var(--font-size-xs);
+  }
+
+  .zone-note {
+    padding: var(--space-1) var(--space-2);
+    gap: 0;
+  }
+
+  .zone-note .facts {
+    gap: 0 var(--space-3);
   }
 
   .clock-panel {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: nowrap;
+    padding: var(--space-3);
   }
 
   .clock-button {
-    width: 100%;
+    flex: none;
+  }
+
+  .sheet-area > .card {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .tools {
+    gap: var(--space-2);
   }
 
   .tools-left,
   .tools-right {
     width: 100%;
+  }
+
+  .tools-left:empty {
+    display: none;
+  }
+
+  .tools .open-day {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  /* The label sits beside its date field, so the row stays one control high. */
+  .tools .open-day label {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .tools .open-day input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tools .open-day {
+    align-items: center;
+  }
+
+  .tools-right {
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+
+  .tools-right button {
+    flex: auto;
+    padding-inline: var(--space-2);
+    white-space: nowrap;
+  }
+
+  .zone-note .facts > div {
+    display: flex;
+    gap: var(--space-2);
   }
 
   .batch-bar label,
@@ -1572,6 +1685,39 @@ textarea {
     grid-template-columns: var(--track);
   }
 
+  .sheet {
+    gap: var(--space-3);
+  }
+
+  .form-head {
+    gap: var(--space-1);
+    padding-bottom: var(--space-2);
+  }
+
+  /* A one-line form header as in mockup A2: company and form title together, the fields in small type. */
+  .form-brand {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+  }
+
+  /* As in mockup A2 the phone header shows the company and the fields; the form title stays for screen readers. */
+  .form-title {
+    position: absolute;
+    width: var(--hairline);
+    height: var(--hairline);
+    margin: 0;
+    overflow: hidden;
+    clip-path: var(--clip-hidden);
+    white-space: nowrap;
+  }
+
+  .form-fields {
+    gap: 0 var(--space-3);
+    font-size: var(--font-size-xs);
+  }
+
   .company {
     font-size: var(--font-size-sm);
   }
@@ -1741,10 +1887,12 @@ textarea {
 /* ---- Day editor panel and bottom sheet, in-cell label picker (WP5-UX-T04) ------- */
 
 /*
- * One native <dialog> for the day editor. From 768px it is a non-modal side panel: beside the
- * sheet from 1200px (the sheet keeps its seven columns), fixed at the right edge below that. Below
- * 768px it is a modal bottom sheet of at most 86% of the height. Inside: a sticky head, then the
- * banner, the times, label and leave, and the figures, each section separated by a soft rule.
+ * One native <dialog> for the day editor. From 1200px it is a non-modal panel in its own column
+ * beside the sheet (the sheet keeps its seven columns). Below 1200px it is modal, so the page
+ * behind is inert and the panel never hides a control that can still take focus: a side panel
+ * fixed at the right edge from 768px, a bottom sheet of at most 86% of the height below that.
+ * Inside: a sticky head, then the banner, the times, label and leave, and the figures, each
+ * section separated by a soft rule.
  */
 .sheet-area {
   display: grid;
@@ -1771,6 +1919,10 @@ textarea {
   z-index: var(--layer-panel);
   width: min(var(--editor-width), calc(100vw - 2 * var(--space-3)));
   height: auto;
+}
+
+.day-panel-side::backdrop {
+  background: var(--scrim);
 }
 
 @media (min-width: 1200px) {

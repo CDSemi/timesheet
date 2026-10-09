@@ -79,7 +79,11 @@ export function PeriodBar({
         {imported && <ImportedNote id="imported-reason" />}
         {!imported && view.reason_required && <span className="notice">Edits to this period require a reason.</span>}
       </div>
+      {/* DOM order is the reading and tab order on every layout: previous, next, then the review link. */}
       <div className="period-actions">
+        <button type="button" className="secondary period-step" onClick={() => onMove(1)} aria-label="Next period">
+          &gt;
+        </button>
         {own &&
           (imported ? (
             <button type="button" className="secondary" disabled aria-describedby="imported-reason" data-review-link-disabled={period.payroll_date}>
@@ -88,9 +92,6 @@ export function PeriodBar({
           ) : (
             <ReviewLink payrollDate={period.payroll_date} state={state} />
           ))}
-        <button type="button" className="secondary period-step" onClick={() => onMove(1)} aria-label="Next period">
-          &gt;
-        </button>
       </div>
     </section>
   );

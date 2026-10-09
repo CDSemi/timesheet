@@ -384,6 +384,10 @@ test('the Import entry is for the signed-in person and is not part of the admini
   const nav = page.getByRole('navigation', { name: 'Main' });
   await openMoreOnPhone(page);
   await expect(nav.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page');
+  // The Admin view itself (both projects) has no import or opening-balance controls.
+  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText('Opening OT balance');
   if (isPhone(page)) {
     await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
   } else {

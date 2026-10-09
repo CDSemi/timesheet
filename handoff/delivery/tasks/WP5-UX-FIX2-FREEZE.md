@@ -135,4 +135,12 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Model: claude-sonnet-5-5. Node v24.21.0 (portable).
+- Pre-HEAD 5beae2f668d15fc77a39b91a91e2c8bb6195d65a; commit and post-HEAD
+  aebc06f85a945b988f0254e2406e30eb4ef244e5; pushed yes; remote SHA the same.
+- Digests: working tree before add 574bbc02...c525d8; HEAD ls-tree after commit equal.
+- Staged 185: GATE 72 (5 png... 10 png across folders), AUDIT-A 33, AUDIT-B 50, FIX2 11,
+  GOV-SUPERSEDE-ACCEPT 2; plus 4 source/test files and handoff records.
+- Checks all exit 0: precommit PASS (185), diff --check, JSON, validate_orchestration,
+  check_recovery (106), validate_package --preflight. No fixes applied; nothing was
+  pre-staged. Details in evidence/WP5-UX-FIX2-FREEZE/checks.txt.

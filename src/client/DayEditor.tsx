@@ -16,10 +16,13 @@ type Editing = { kind: 'none' } | { kind: 'new' } | { kind: 'edit'; sessionId: s
 const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
 
 /**
- * Day editor (WP5-UX-T04, owner decision E-3 a). On a desktop it is a non-modal side panel beside
- * the sheet, so the sheet stays usable; on a phone (`modal`) it is a modal bottom sheet that traps
- * focus. Both are one native `<dialog>` named by its heading ("Day editor ..."): focus moves to the
- * heading on open, Escape and Close end it, and the caller returns focus to the day's button.
+ * Day editor (WP5-UX-T04, owner decision E-3 a). From 1200px it is a non-modal panel in its own
+ * column beside the sheet, so the sheet stays usable. Below that (`modal`) it is modal and traps
+ * focus, so the page behind is inert and no focusable control can be hidden by it (WCAG 2.4.11):
+ * a side panel from 768px, a bottom sheet below (`bottomSheet`). All are one native `<dialog>`
+ * named by its heading ("Day editor ..."): focus moves to the heading on open, Escape closes it
+ * wherever focus is (unless a nested dialog takes Escape first) and so does Close; the caller
+ * returns focus to the day's button.
  *
  * Order inside: the banner of what the day still needs, the times (sessions and breaks, with a
  * one-tap confirmation of suggested or listed breaks), label and leave, then the server's figures.
@@ -34,6 +37,7 @@ export function DayEditor({
   reportingZone,
   todayLocal,
   modal,
+  bottomSheet,
   refresh = 0,
   onChanged,
   onClose,
@@ -44,8 +48,10 @@ export function DayEditor({
   displayZone: string;
   reportingZone: string;
   todayLocal: string | null;
-  /** True below 768px: a modal bottom sheet. False: the non-modal side panel. */
+  /** True below 1200px: a modal dialog with an inert page. False: the non-modal panel beside the sheet. */
   modal: boolean;
+  /** True below 768px: the modal dialog is a bottom sheet. Otherwise a side panel at the right edge. */
+  bottomSheet: boolean;
   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
   refresh?: number;
   /** Called after every successful write so the period behind the editor can refresh. */
@@ -87,6 +93,20 @@ export function DayEditor({
     else element.show();
     heading.current?.focus();
   }, [modal]);
+
+  // A non-modal panel leaves the sheet focusable, so Escape closes it wherever focus is. A nested
+  // modal dialog (a review, the clock-out dialog) takes Escape first, and so does a control that
+  // already used the key (an open label picker). A modal editor closes through its own handlers.
+  useEffect(() => {
+    if (modal) return;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('dialog:modal') !== null) return;
+      onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [modal, onClose]);
 
   const load = useCallback(async () => {
     try {
@@ -196,7 +216,7 @@ export function DayEditor({
   return (
     <dialog
       ref={dialog}
-      className={`day-panel ${modal ? 'day-panel-sheet' : 'day-panel-side'}`}
+      className={`day-panel ${bottomSheet ? 'day-panel-sheet' : 'day-panel-side'}`}
       aria-labelledby="day-editor-title"
       data-day-editor={workDate}
       onKeyDown={keyDown}
@@ -205,7 +225,7 @@ export function DayEditor({
         onClose();
       }}
     >
-      {modal && <div className="sheet-handle" aria-hidden="true" />}
+      {bottomSheet && <div className="sheet-handle" aria-hidden="true" />}
       <header className="editor-head">
         <div className="editor-title">
           <h2 id="day-editor-title" ref={heading} tabIndex={-1}>

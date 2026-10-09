@@ -124,9 +124,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - WP5-UX-FIX2 done: malformed leave input refused (role=alert, aria-invalid, nothing
   sent); unit 1820; full e2e desktop 78/0/3, mobile 79/0/2; verify exit 0; digest
   574bbc02. Also fixed a pre-existing racy e2e wait (re-audit to confirm no weakening).
-- Running: WP5-UX-FIX2-FREEZE (committer; also carries the gate, audit A/B and GOV
-  accept records since 5beae2f).
-- Next action: on the freeze result, write and dispatch WP5-UX-FIX3 (B-01..B-04).
+- WP5-UX-FIX2-FREEZE done: aebc06f on main, pushed (185 files, digest 574bbc02).
+- WP5-UX-FIX3 first hand-back: B-01 (phone first row bottom 758px < 788px tab bar),
+  B-02 (modal with inert page below 1200px; Escape closes from anywhere), B-03, B-04
+  done; unit 1820; full e2e 162/0/10; preflight and verify exit 0; digest b4df9213.
+  Residual phone tab order (review link before `>`) sent back as addendum 1 to the same
+  worker before the freeze.
+- WP5-UX-FIX3 done after addendum 1 (DOM order previous, next, review; tab-order
+  assertion both projects): unit 1820; full e2e 164/0/10; preflight and verify exit 0;
+  digest 8c07aac5.
+- Running: WP5-UX-FIX3-FREEZE (committer) on base aebc06f.
+- Next action: on the freeze result, WP5-UX-REGATE (package-final, clean export of the
+  freeze), then fresh re-audits WP5-UX-AUDIT-A2 and -B2 (WP5-RECHECK superseded_by moves
+  to A2).
+- Next action: on the FIX3 result, WP5-UX-FIX3-FREEZE; then WP5-UX-REGATE and fresh
+  re-audits A2 and B2 (move WP5-RECHECK superseded_by to WP5-UX-AUDIT-A2).
 
 - Active package and role: WP3 (fix round 1: regate and rechecks); coordinator. Actual
   model claude-opus-5-5 (owner choice; profile inherit); effort not observable. Session

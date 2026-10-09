@@ -57,6 +57,70 @@ test.describe('viewing zone equals the reporting zone', () => {
   });
 });
 
+/**
+ * WP5-UX-B-01: on a phone the first day row must be fully visible on the first screen, above the
+ * bottom tab bar (the approved mockup A2: period card, clock card, then the sheet). Checked with
+ * the viewing zone equal to the reporting zone and with the longer zone note shown.
+ */
+async function expectFirstDayAboveTabBar(page: Page) {
+  const first = page.locator('[data-day]').first();
+  await expect(first).toBeVisible();
+  const tabs = await page.locator('.shell-tabs').boundingBox();
+  const row = await first.boundingBox();
+  const viewport = page.viewportSize();
+  expect(tabs, 'tab bar box').not.toBeNull();
+  expect(row, 'first day row box').not.toBeNull();
+  expect(viewport, 'viewport').not.toBeNull();
+  expect((row?.y ?? 0) + (row?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+  expect(tabs?.y ?? 0, 'the tab bar sits on the bottom edge').toBeGreaterThan((viewport?.height ?? 0) / 2);
+  // Nothing was scrolled to get here.
+  expect(await page.evaluate('window.scrollY')).toBe(0);
+}
+
+test('the period card keeps its tab order equal to its visual reading order: Previous, Next, then Review', async ({ page, signInThroughUi }) => {
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const bar = page.locator('.period-bar');
+  const previous = bar.getByRole('button', { name: 'Previous period' });
+  const next = bar.getByRole('button', { name: 'Next period' });
+  const review = bar.locator('[data-review-link]');
+  await previous.focus();
+  await page.keyboard.press('Tab');
+  await expect(next).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(review).toBeFocused();
+  // Visual order: top to bottom, then left to right (no overlap of rows is assumed within 4px).
+  const boxes = [await previous.boundingBox(), await next.boundingBox(), await review.boundingBox()];
+  for (const box of boxes) expect(box, 'control box').not.toBeNull();
+  const [a, b, c] = boxes;
+  const before = (first: typeof a, second: typeof a) =>
+    (first?.y ?? 0) + 4 < (second?.y ?? 0) || (Math.abs((first?.y ?? 0) - (second?.y ?? 0)) <= 4 && (first?.x ?? 0) < (second?.x ?? 0));
+  expect(before(a, b), 'Previous comes before Next visually').toBe(true);
+  expect(before(b, c), 'Next comes before Review visually').toBe(true);
+});
+
+test.describe('phone first screen', () => {
+  test.skip(({ isMobile }) => !isMobile, 'The first-screen budget is the 390x844 phone');
+
+  test.describe('viewing zone equals the reporting zone', () => {
+    test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+    test('the first day row is fully visible above the tab bar', async ({ page, signInThroughUi }) => {
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await expect(page.locator('[data-zone-note]')).toHaveCount(0);
+      await expectFirstDayAboveTabBar(page);
+    });
+  });
+
+  test('the first day row is fully visible above the tab bar with the zone note shown', async ({ page, signInThroughUi }) => {
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await expect(page.locator('[data-zone-note]')).toBeVisible();
+    await expectFirstDayAboveTabBar(page);
+  });
+});
+
 test('shows 14 days with due date, completeness, pending OT, both zones and accounting dates', async ({
   page,
   employeeSeed,

@@ -33,15 +33,22 @@ import { DayEditor } from './DayEditor.tsx';
 /** The documented layout breakpoint: the 7-column sheet from 768px up, one table per week below it. */
 const DESKTOP_QUERY = '(min-width: 768px)';
 
-/** True when the desktop sheet should render. Exactly one of the two layouts is ever in the page. */
-function useDesktop(): boolean {
+/**
+ * From this width the day editor is a non-modal panel in its own column beside the sheet. Below it
+ * the editor is modal (a side panel from 768px, a bottom sheet below that), so it never covers a
+ * control that can still take focus.
+ */
+const WIDE_QUERY = '(min-width: 1200px)';
+
+/** True while a media query matches; the layouts below are chosen with it, never both at once. */
+function useMedia(query: string): boolean {
   return useSyncExternalStore(
     (notify) => {
-      const query = window.matchMedia(DESKTOP_QUERY);
-      query.addEventListener('change', notify);
-      return () => query.removeEventListener('change', notify);
+      const list = window.matchMedia(query);
+      list.addEventListener('change', notify);
+      return () => list.removeEventListener('change', notify);
     },
-    () => window.matchMedia(DESKTOP_QUERY).matches,
+    () => window.matchMedia(query).matches,
   );
 }
 
@@ -94,7 +101,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const own = shared === undefined;
   const request: Requester = shared?.request ?? ownRequest;
   const canEdit = shared === undefined || shared.canEdit;
-  const desktop = useDesktop();
+  const desktop = useMedia(DESKTOP_QUERY);
+  const wide = useMedia(WIDE_QUERY);
   const [payrollDate, setPayrollDate] = useState<string | null>(null);
   /** The server's current local date and periods; days after that date show as upcoming. */
   const [periods, setPeriods] = useState<CurrentPeriods | null>(null);
@@ -349,7 +357,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
 
   return (
     <div>
-      <header className="toolbar">
+      <header className="toolbar page-head">
         <div>
           <h1>{shared === undefined ? 'Timesheet' : `${shared.ownerName}'s timesheet`}</h1>
           <p className="muted">{shared === undefined ? user.display_name : `Signed in as ${user.display_name}`}</p>
@@ -364,7 +372,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       )}
 
       {view !== null && (
-        <div className={`sheet-area${editDate !== null && desktop ? ' with-editor' : ''}`}>
+        <div className={`sheet-area${editDate !== null && wide ? ' with-editor' : ''}`}>
           <section className="card stack">
             <div className="tools">
               <div className="tools-left">{canEdit && <OpenDay onOpen={openEditor} />}</div>
@@ -456,7 +464,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               displayZone={displayZone}
               reportingZone={view.reporting_zone}
               todayLocal={todayLocal}
-              modal={!desktop}
+              modal={!wide}
+              bottomSheet={!desktop}
               refresh={editorRefresh}
               onChanged={load}
               onClose={closeEditor}

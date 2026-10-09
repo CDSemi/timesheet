@@ -126,9 +126,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   không gửi gì); unit 1820; toàn bộ e2e desktop 78/0/3, mobile 79/0/2; verify exit 0;
   digest 574bbc02. Sửa thêm một chỗ chờ e2e dễ chập chờn có từ trước (audit lại phải xác
   nhận không bị nới lỏng).
-- Đang chạy: WP5-UX-FIX2-FREEZE (committer; mang theo các bản ghi gate, audit A/B và
-  nghiệm thu GOV từ sau 5beae2f).
-- Bước kế tiếp: khi có kết quả freeze, viết và giao WP5-UX-FIX3 (B-01..B-04).
+- WP5-UX-FIX2-FREEZE xong: aebc06f trên main, đã push (185 file, digest 574bbc02).
+- WP5-UX-FIX3 bàn giao lần đầu: xong B-01 (dòng đầu trên điện thoại kết thúc ở 758px <
+  788px), B-02 (dạng hộp thoại khóa nền dưới 1200px; Esc đóng từ mọi chỗ), B-03, B-04;
+  unit 1820; toàn bộ e2e 162/0/10; preflight và verify exit 0; digest b4df9213. Thứ tự
+  Tab trên điện thoại (link review đứng trước `>`) được trả lại cùng worker qua phụ lục 1
+  trước khi freeze.
+- WP5-UX-FIX3 xong sau phụ lục 1 (thứ tự DOM trước, sau, review; thêm assertion thứ tự
+  Tab cho cả hai bản): unit 1820; toàn bộ e2e 164/0/10; preflight và verify exit 0;
+  digest 8c07aac5.
+- Đang chạy: WP5-UX-FIX3-FREEZE (committer) trên gốc aebc06f.
+- Bước kế tiếp: khi có kết quả freeze, WP5-UX-REGATE (gate cuối gói, bản export sạch của
+  freeze), rồi audit lại độc lập WP5-UX-AUDIT-A2 và -B2 (superseded_by của WP5-RECHECK
+  chuyển sang A2).
+- Bước kế tiếp: khi có kết quả FIX3, WP5-UX-FIX3-FREEZE; sau đó WP5-UX-REGATE và audit
+  lại độc lập A2, B2 (chuyển superseded_by của WP5-RECHECK sang WP5-UX-AUDIT-A2).
 
 - Package và vai trò: WP3 (vòng sửa 1: chạy lại gate và kiểm tra lại); coordinator.
   Model thật claude-opus-5-5 (chủ dự án chọn; profile inherit); effort không quan sát

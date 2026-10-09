@@ -963,6 +963,82 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a 
   }
 });
 
+/** True when a focused element lies entirely inside the open editor's box (the editor hides it). */
+function focusHiddenByPanel(page: Page): Promise<{ hidden: boolean; outside: boolean; name: string }> {
+  return page.evaluate(`(() => {
+    const active = document.activeElement;
+    const panel = document.querySelector('dialog[open]');
+    if (active === null || active === document.body || panel === null) return { hidden: false, outside: false, name: '' };
+    const name = active.tagName + ' ' + (active.getAttribute('aria-label') ?? (active.textContent ?? '').slice(0, 30));
+    if (panel.contains(active)) return { hidden: false, outside: false, name };
+    const a = active.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    const hidden = a.left >= p.left && a.right <= p.right && a.top >= p.top && a.bottom <= p.bottom;
+    return { hidden, outside: true, name };
+  })()`);
+}
+
+test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet control', () => {
+  test.skip(({ isMobile }) => isMobile, 'The 768 to 1199px side panel is a desktop-project layout');
+
+  for (const width of [768, 1024]) {
+    test(`at ${width}px no focused sheet control lies under the open panel, and Escape closes it from the sheet`, async ({
+      page,
+      employeeSeed,
+      signInThroughUi,
+    }) => {
+      const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+      await dayButton(date).click();
+      const editor = page.getByRole('dialog', { name: /Day editor/ });
+      await expect(editor).toBeVisible();
+      await expect(editor.getByRole('heading', { level: 2 })).toBeFocused();
+      await page.screenshot({ path: screenshotPath(`editor-w${width}-synthetic.png`), animations: 'disabled' });
+
+      // Keyboard walk both ways: whatever takes focus is inside the panel, or is not entirely under it.
+      for (const key of ['Tab', 'Shift+Tab']) {
+        for (let step = 0; step < 70; step += 1) {
+          await page.keyboard.press(key);
+          const state = await focusHiddenByPanel(page);
+          expect(state.hidden, `${state.name} is focused entirely under the panel after ${step + 1} ${key} presses`).toBe(false);
+        }
+      }
+
+      // Focus placed on a sheet control (when the page allows it at all): Escape still closes the panel.
+      await dayButton(other).focus();
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await expect(dayButton(date)).toBeFocused();
+    });
+  }
+
+  test('at 1280px the panel stays beside the sheet and Escape closes it wherever focus is', async ({ page, employeeSeed, signInThroughUi }) => {
+    const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+    await signInThroughUi();
+    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
+    await dayButton(date).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    expect(await editor.evaluate((element) => element.matches(':modal'))).toBe(false);
+    // Focus on another sheet control, then on the toolbar: Escape closes the panel from both.
+    await dayButton(other).focus();
+    await expect(dayButton(other)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    // Focus returns to the button of the day whose editor was open.
+    await expect(dayButton(date)).toBeFocused();
+    await dayButton(date).click();
+    await expect(editor).toBeVisible();
+    await page.getByRole('button', { name: 'Show details' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(dayButton(date)).toBeFocused();
+  });
+});
+
 test('one tap confirms the suggested breaks of a saved session with the same session update and its version', async ({
   page,
   employeeSeed,
