@@ -216,8 +216,15 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   phần A; 20316 phép kiểm DST; server giống từng byte). Phần A đã cập nhật.
 - Câu hỏi WP5-UX-Q2 trên board và trong NEXT_ACTION (+vi); brief chờ WP5-UX-A11Y-SWEEP
   (phương án a).
-- Đang chạy: WP5-UX-CKPT3 (commit checkpoint trước khi hỏi); sau đó board chuyển
-  `blocked` với next_task_id WP5-UX-A11Y-SWEEP (lần chuyển này chưa commit).
+- WP5-UX-CKPT3 xong: d3935e7 trên main, đã push (310 file handoff, digest 07c3ca00).
+- Board: status `blocked`, next_task_id WP5-UX-A11Y-SWEEP (pending), chờ chủ dự án trả
+  lời WP5-UX-Q2. Chưa commit: lần chuyển trạng thái này, kết quả và evidence của CKPT3,
+  và cập nhật checkpoint này (+ en).
+- Bước kế tiếp: ghi nguyên văn câu trả lời; (a) giao WP5-UX-A11Y-SWEEP, rồi một vòng sửa,
+  freeze, gate lại, kiểm tra lại B và phần thay đổi của A; (b) một task sửa chỉ
+  B5-01..B5-03; (c) một task tài liệu ghi backlog đã chấp nhận vào docs/10 (+ vi) và
+  pilot trên 5e104e1 khi WP5 chưa được nghiệm thu lại chính thức; (d) pilot packet giữ
+  014bd47 và vòng UI tiếp tục sau pilot.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

@@ -131,4 +131,13 @@ Push per the profile. Append to this brief:
 
 ## Results
 
-(committer appends here)
+- Pre-HEAD 5e104e14dad71268a9185920c04ed0ee2a4b31c2 (= origin/main); post-HEAD
+  d3935e781c358f378b1802a75adeef8d71837939; pushed yes; remote SHA equals the commit.
+- Digest before add 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635;
+  ls-tree digest of new HEAD identical.
+- Staged 310 (REGATE4 81, AUDIT-A5 107, AUDIT-B5 105, FIX6-FREEZE 2, plus 15 record
+  files); 27 .png files (AUDIT-B5 17, REGATE4 10), all named *-synthetic.png.
+- Checks (all exit 0): node v24.21.0; digest; git add; precommit PASS 310/0/0;
+  diff --cached --check; JSON parse; validate_orchestration PASS; check_recovery PASS
+  106 probes; validate_package --preflight PASS; post-commit ls-tree digest match.
+- No fix applied; no stop. Evidence: handoff/delivery/evidence/WP5-UX-CKPT3/checks.txt.

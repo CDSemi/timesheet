@@ -212,8 +212,15 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   behaviour; 20316 DST checks; server byte-identical). Area A current.
 - Owner question WP5-UX-Q2 on the board and in NEXT_ACTION (+vi); pending brief
   WP5-UX-A11Y-SWEEP (option a).
-- Running: WP5-UX-CKPT3 (checkpoint commit before the question); afterwards the board is
-  set to `blocked` with next_task_id WP5-UX-A11Y-SWEEP (uncommitted flip).
+- WP5-UX-CKPT3 done: d3935e7 on main, pushed (310 handoff files, digest 07c3ca00).
+- Board: status `blocked`, next_task_id WP5-UX-A11Y-SWEEP (pending), waiting for the
+  owner's answer to WP5-UX-Q2. Uncommitted: this flip, the CKPT3 results and evidence,
+  and this checkpoint update (+ vi).
+- Next action: record the owner's answer verbatim; (a) dispatch WP5-UX-A11Y-SWEEP, then
+  one fix round, freeze, regate, fresh B and A-delta rechecks; (b) a fix task for
+  B5-01..B5-03 only; (c) a docs task recording the accepted backlog in docs/10 (+ vi)
+  and the pilot on 5e104e1 without formal WP5 re-acceptance; (d) the pilot packet stays
+  on 014bd47 and the UI round resumes after the pilot.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).
