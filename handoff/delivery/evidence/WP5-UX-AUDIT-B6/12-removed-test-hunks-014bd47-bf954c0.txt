@@ -1,0 +1,455 @@
+removed lines: 105
+tests/client/dayModel.test.ts @@ -12 +11,0 @@ import {
+-  weekGroups,
+
+tests/client/dayModel.test.ts @@ -158,27 +157 @@ describe('toDayDisplay', () => {
+-describe('weekGroups', () => {
+-  it('splits a two-week period into Monday to Sunday groups', () => {
+-    const dates = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 8, 28 + index)).toISOString().slice(0, 10));
+-    const groups = weekGroups(
+-      dates.map((date) => day(date)),
+-      null,
+-    );
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 7],
+-      ['2026-10-05', 7],
+-    ]);
+-    expect(groups[0]?.days[0]?.weekday).toBe('Mon');
+-    expect(groups[1]?.days[6]?.weekday).toBe('Sun');
+-  });
+-
+-  it('groups a period that starts mid-week into partial weeks', () => {
+-    const groups = weekGroups([day('2026-09-30'), day('2026-10-01'), day('2026-10-05')], null);
+-    expect(groups.map((group) => [group.weekStart, group.days.length])).toEqual([
+-      ['2026-09-28', 2],
+-      ['2026-10-05', 1],
+-    ]);
+-  });
+-
+-  it('returns nothing for no days', () => {
+-    expect(weekGroups([], null)).toEqual([]);
+-  });
+-});
++// The week grouping moved to sheetModel.ts (sheetWeeks); its cases live in sheetModel.test.ts.
+
+tests/client/sessionModel.test.ts @@ -441 +441,2 @@ describe('server figures, E-2 notice and day fields', () => {
+-    const built = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
++    // 4 hours and 0 minutes are the same integer 240 leave minutes the API always took.
++    const built = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: 'n' }, 3, ' because ');
+
+tests/client/sessionModel.test.ts @@ -446 +447 @@ describe('server figures, E-2 notice and day fields', () => {
+-    const none = buildDayEntryRequest({ category: 'Off', leaveMinutes: '0', leaveKind: 'sick', wfh: false, notes: '' }, null);
++    const none = buildDayEntryRequest({ category: 'Off', leave: { hours: '0', minutes: '0' }, leaveKind: 'sick', wfh: false, notes: '' }, null);
+
+tests/client/sessionModel.test.ts @@ -453,2 +456,2 @@ describe('server figures, E-2 notice and day fields', () => {
+-  it('leaves a missing kind to the server and rejects only a malformed minutes field', () => {
+-    const missingKind = buildDayEntryRequest({ category: 'Worked', leaveMinutes: '240', leaveKind: '', wfh: false, notes: '' }, 1);
++  it('leaves a missing kind to the server and rejects only malformed or out-of-range leave fields', () => {
++    const missingKind = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '' }, leaveKind: '', wfh: false, notes: '' }, 1);
+
+tests/client/sessionModel.test.ts @@ -456,2 +459,12 @@ describe('server figures, E-2 notice and day fields', () => {
+-    for (const bad of ['1.5', '-1', '1441', 'abc']) {
+-      expect(buildDayEntryRequest({ category: 'Worked', leaveMinutes: bad, leaveKind: '', wfh: false, notes: '' }, 1).ok).toBe(false);
++    const bad: Array<[string, string]> = [
++      ['1.5', '0'],
++      ['-1', '0'],
++      ['24', '1'],
++      ['25', '0'],
++      ['0', '60'],
++      ['abc', '0'],
++      ['0', '1e1'],
++    ];
++    for (const [hours, minutes] of bad) {
++      const result = buildDayEntryRequest({ category: 'Worked', leave: { hours, minutes }, leaveKind: '', wfh: false, notes: '' }, 1);
++      expect(result.ok, `${hours} h ${minutes} m`).toBe(false);
+
+tests/client/sessionModel.test.ts @@ -461 +474 @@ describe('server figures, E-2 notice and day fields', () => {
+-  it('starts the form from the day, and hints whole minutes as hours and minutes', () => {
++  it('starts the form from the day in hours and minutes, and hints the typed leave as hours and minutes', () => {
+
+tests/client/sessionModel.test.ts @@ -463,4 +476,6 @@ describe('server figures, E-2 notice and day fields', () => {
+-    expect(draftFields).toEqual({ category: 'Vacation', leaveMinutes: '240', leaveKind: 'vacation', wfh: true, notes: '' });
+-    expect(leaveHint('240')).toBe('4h 00m');
+-    expect(leaveHint('')).toBeNull();
+-    expect(leaveHint('1.5')).toBeNull();
++    expect(draftFields).toEqual({ category: 'Vacation', leave: { hours: '4', minutes: '0' }, leaveKind: 'vacation', wfh: true, notes: '' });
++    expect(dayFieldsDraft(day({ leave_minutes: 95 })).leave).toEqual({ hours: '1', minutes: '35' });
++    expect(leaveHint({ hours: '4', minutes: '0' })).toBe('4h 00m');
++    expect(leaveHint({ hours: '', minutes: '45' })).toBe('45m');
++    expect(leaveHint({ hours: '', minutes: '' })).toBeNull();
++    expect(leaveHint({ hours: '1.5', minutes: '' })).toBeNull();
+
+tests/domain/engine.test.ts @@ -7 +7 @@ import { decideDeficit } from '../../src/domain/deficit.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
++import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+
+tests/e2e/admin.spec.ts @@ -393 +408,11 @@ test.describe('navigation', () => {
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings']);
++    const phone = isPhone(page);
++    // The desktop bar lists Settings (Import is a link inside Settings); the phone's tab bar lists the three
++    // frequent screens and "More" holds Settings, Import and, for administrators, Admin.
++    const frequent = ['Timesheet', 'Overtime', 'History'];
++    if (phone) {
++      await expect(nav.getByRole('link')).toHaveText(frequent);
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings']);
++    }
+
+tests/e2e/admin.spec.ts @@ -401 +428,6 @@ test.describe('navigation', () => {
+-    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'OT', 'History', 'Import', 'Settings', 'Admin']);
++    if (phone) {
++      await openMoreOnPhone(page);
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Import', 'Admin']);
++    } else {
++      await expect(nav.getByRole('link')).toHaveText([...frequent, 'Settings', 'Admin']);
++    }
+
+tests/e2e/day-editor.spec.ts @@ -4 +4,2 @@ import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.
+-import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
++import { namedDayButton } from './dayButton.ts';
++import { expect, newPerson, screenshotPath, type SeedClient, test } from './fixtures.ts';
+
+tests/e2e/day-editor.spec.ts @@ -10 +11,4 @@ import { expect, screenshotPath, type SeedClient, test } from './fixtures.ts';
+- * notice; the reason prompt for old periods; and future days shown as upcoming.
++ * notice; the reason prompt for old periods; and future days shown as upcoming. WP5-UX-T04: the
++ * editor is a non-modal side panel on a desktop and a modal bottom sheet on a phone (focus in and
++ * back out), one tap confirms suggested breaks with the same session update, and the sheet's label
++ * cell is a picker that previews and commits one batch entry (reason and conflicts unchanged).
+
+tests/e2e/day-editor.spec.ts @@ -47 +51 @@ async function openEditor(page: Page, workDate: string): Promise<Locator> {
+-  await expect(editor.getByRole('heading', { name: 'Figures from the server' })).toBeVisible();
++  await expect(editor.getByRole('heading', { name: 'Figures (computed by the server)' })).toBeVisible();
+
+tests/e2e/day-editor.spec.ts @@ -98 +102 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
+-    await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}` }).click();
++    await namedDayButton(page, date, 'Edit').click();
+
+tests/e2e/day-editor.spec.ts @@ -557 +569,13 @@ test('partial leave 240 with kind vacation saves; the kind is required; WFH is s
+-    await fields.getByLabel('Partial leave minutes').fill('240');
++    // Leave is typed as hours and minutes (docs/04); 4 h 0 m is sent as the same 240 leave minutes.
++    await expect(fields.getByLabel('Leave hours')).toHaveValue('0');
++    await expect(fields.getByLabel('Leave minutes')).toHaveValue('0');
++    // Out of range (more than 59 minutes) is refused in the page; nothing is saved.
++    const untouched = await employeeSeed.dayView(date);
++    await fields.getByLabel('Leave minutes').fill('60');
++    await fields.getByRole('button', { name: 'Save day fields' }).click();
++    await expect(fields.getByRole('alert')).toContainText('Enter leave as whole hours (0 to 24) and minutes (0 to 59)');
++    const refused = await employeeSeed.dayView(date);
++    expect(refused.leave_minutes).toBe(0);
++    expect(refused.entry?.version ?? null).toBe(untouched.entry?.version ?? null);
++    await fields.getByLabel('Leave hours').fill('4');
++    await fields.getByLabel('Leave minutes').fill('0');
+
+tests/e2e/day-editor.spec.ts @@ -732 +828,3 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('missing record');
++  // The sheet's Check words: a past expected day without times says "No times" (status key missing).
++  await expect(page.locator(`[data-day="${pastDay}"]`)).toContainText('No times');
++  await expect(page.locator(`[data-day="${pastDay}"] [data-check="missing"]`)).toHaveCount(1);
+
+tests/e2e/day-editor.spec.ts @@ -740,3 +843,7 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await expect(row).toContainText('upcoming');
+-  await expect(row).not.toContainText('missing record');
+-  await expect(row).not.toContainText('pending OT');
++  await expect(row).toContainText('Upcoming');
++  await expect(row.locator('[data-check="upcoming"]')).toHaveCount(1);
++  await expect(row).not.toContainText('No times');
++  await expect(row).not.toContainText('Missing record');
++  await expect(row.locator('[data-check="missing"]')).toHaveCount(0);
++  await expect(row.locator('[data-ot="pending"]')).toHaveCount(0);
++  await expect(row).not.toContainText('pending');
+
+tests/e2e/day-editor.spec.ts @@ -747 +854 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await row.getByRole('button', { name: `Edit ${futureDay}` }).click();
++  await namedDayButton(page, futureDay, 'Edit').click();
+
+tests/e2e/history-settings.spec.ts @@ -253 +253 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+-  // The period status sits in the grid area (the caption of the desktop grid, above the day list on a phone).
++  // The period status is the one status group of the period bar (above the clock and the sheet), not repeated in the sheet.
+
+tests/e2e/history-settings.spec.ts @@ -261,2 +261,8 @@ test('history shows the signed revision with its PDF and delivery; download, exp
+-  if (project === 'desktop') await expect(page.locator('table.grid caption [data-grid-status="line"]')).toHaveCount(1);
+-  else await expect(page.locator('table.grid')).toHaveCount(0);
++  const layout = project === 'desktop' ? 'desktop' : 'phone';
++  await expect(page.locator('.period-bar [data-grid-status="line"]')).toHaveCount(1);
++  await expect(page.locator('[data-sheet] [data-grid-status="line"]')).toHaveCount(0);
++  await expect(page.locator(`[data-sheet="${layout}"]`)).toHaveCount(1);
++  await expect(page.locator(`[data-sheet]:not([data-sheet="${layout}"])`)).toHaveCount(0);
++  // The signature line of the sheet names the signer; never an image on the Timesheet page.
++  await expect(page.locator('[data-signature="employee"]')).toContainText('Signed by');
++  await expect(page.locator('[data-sheet] img')).toHaveCount(0);
+
+tests/e2e/import.spec.ts @@ -103 +116,3 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
+-  await expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('aria-current', 'page');
++  // Import is its own entry under "More" on a phone; the desktop bar marks Settings, the screen it is reached from.
++  await openMoreOnPhone(page);
++  await expect(nav.getByRole('link', { name: isPhone(page) ? 'Import' : 'Settings' })).toHaveAttribute('aria-current', 'page');
+
+tests/e2e/import.spec.ts @@ -209 +231 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+-  await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
++  await namedDayButton(page, layout.cacheDay, 'View').click();
+
+tests/e2e/import.spec.ts @@ -367 +401,11 @@ test('the Import entry is for the signed-in person and is not part of the admini
+-  await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  // The Admin view itself (both projects) has no import or opening-balance controls.
++  await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
++  await expect(page.getByRole('heading', { name: 'Import a workbook' })).toHaveCount(0);
++  await expect(page.locator('main')).not.toContainText('Opening OT balance');
++  if (isPhone(page)) {
++    await expect(nav.getByRole('link', { name: 'Import' })).toBeVisible();
++  } else {
++    // The desktop bar reaches Import through the "Import from Excel" link in Settings.
++    await nav.getByRole('link', { name: 'Settings' }).click();
++    await expect(page.getByRole('link', { name: 'Import from Excel' })).toBeVisible();
++  }
+
+tests/e2e/isolation.spec.ts @@ -98 +107,2 @@ test('a second employee cannot reach employee 1 by hash swap or by id swap', asy
+-    await expect(row).not.toContainText('complete');
++    await expect(row).not.toContainText('Complete');
++    await expect(row.locator('[data-check="complete"]')).toHaveCount(0);
+
+tests/e2e/isolation.spec.ts @@ -177 +188,2 @@ test('an admin cannot open employee data through any admin screen', async (
+-    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"]`)).not.toContainText('Complete');
++    await expect(page.locator(`[data-day="${owner.workDate}"] [data-check="complete"]`)).toHaveCount(0);
+
+tests/e2e/ot-leave.spec.ts @@ -97 +97 @@ test('reserve, partial use, cancel the rest and reverse, with history', async ({
+-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'OT' }).click();
++  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Overtime' }).click();
+
+tests/e2e/review.spec.ts @@ -4 +4 @@ import { addDays } from '../../src/domain/dates.ts';
+-import { formatDuration } from '../../src/domain/format.ts';
++import { formatDuration, formatHoursMinutes } from '../../src/domain/format.ts';
+
+tests/e2e/review.spec.ts @@ -131 +131 @@ interface ApiReview {
+-    days: Array<{ work_date: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
++    days: Array<{ work_date: string; completeness: string; calculation: { regular_minutes: number | null; nonworking_minutes: number | null; credited_minutes: number | null } | null }>;
+
+tests/e2e/review.spec.ts @@ -198,4 +198,4 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-    for (const [label, minutes] of [
+-      ['Regular', day.calculation?.regular_minutes ?? null],
+-      ['Off-calendar', day.calculation?.nonworking_minutes ?? null],
+-      ['Credit', day.calculation?.credited_minutes ?? null],
++    // The detail rows are always on in the review: worked on a workday / on a day off, as h:mm.
++    for (const [detail, minutes] of [
++      ['regular', day.calculation?.regular_minutes ?? null],
++      ['off-calendar', day.calculation?.nonworking_minutes ?? null],
+
+tests/e2e/review.spec.ts @@ -203,2 +203,2 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-      const cell = row.locator(`td[data-label="${label}"]`);
+-      await expect(cell, `${day.work_date} ${label}`).toHaveText(minutes === null ? 'none' : formatDuration(minutes));
++      const cell = page.locator(`[data-detail="${detail}"][data-detail-day="${day.work_date}"]`);
++      await expect(cell, `${day.work_date} ${detail}`).toHaveText(minutes === null ? '' : formatHoursMinutes(minutes));
+
+tests/e2e/review.spec.ts @@ -208 +214 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-  await expect(completeRow).toContainText('complete');
++  await expect(completeRow).toContainText('Complete');
+
+tests/e2e/review.spec.ts @@ -211 +217 @@ test('the review shows the server content for all 14 days, then the sign-off sub
+-  await expect(pendingRow).toContainText('breaks unconfirmed');
++  await expect(pendingRow).toContainText('breaks not confirmed');
+
+tests/e2e/review.spec.ts @@ -351 +357 @@ test('a period finalized in another window reloads with a clear message and no s
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+
+tests/e2e/review.spec.ts @@ -376 +382 @@ test('an identical sign-off repeated from a second window is recognised and crea
+-  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('complete');
++  await expect(page.locator(`[data-review-day="${day}"]`)).toContainText('Complete');
+
+tests/e2e/review.spec.ts @@ -484 +490,4 @@ test('mobile: the review fits the width and every control is at least 44px', asy
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline');
++  // Only rendered controls are tap targets: the desktop bar (display none below 768px) is excluded.
++  const targets = page
++    .locator('button, a[href], input:not([type="checkbox"]):not([type="radio"]), textarea, label.inline')
++    .filter({ visible: true });
+
+tests/e2e/setup.spec.ts @@ -160 +160,5 @@ test('first-time setup creates the administrator once and never returns', async
+-    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++    // The desktop bar shows Sign out in the banner; on a phone it sits under "More" in the tab bar.
++    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++    const signOut = (await more.isVisible()) ? page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign out' }) : page.getByRole('banner').getByRole('button', { name: 'Sign out' });
++    if (await more.isVisible()) await more.click();
++    await expect(signOut).toBeVisible();
+
+tests/e2e/setup.spec.ts @@ -163 +167 @@ test('first-time setup creates the administrator once and never returns', async
+-    await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click();
++    await signOut.click();
+
+tests/e2e/sharing.spec.ts @@ -230 +242 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  for (const name of ['Clock in', 'Clock out', 'Preview changes', 'Select all', 'Clear']) {
++  for (const name of ['Clock in', 'Clock out', 'Change several days', 'Open day', 'Preview changes', 'Select all', 'Clear']) {
+
+tests/e2e/sharing.spec.ts @@ -234 +247,4 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
++  await expect(page.getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0);
++  // The label cells are plain text: no in-cell label picker without edit rights.
++  await expect(page.locator('[data-label-picker]')).toHaveCount(0);
++  await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
+
+tests/e2e/sharing.spec.ts @@ -240 +258 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  await page.getByRole('button', { name: `View ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'View').click();
+
+tests/e2e/sharing.spec.ts @@ -310 +329,3 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  // Edit rights show the edit controls, but still no Clock in/out and no review.
++  // Edit rights show the edit controls (batch mode is opened first), but still no Clock in/out and no review.
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await page.getByRole('button', { name: 'Change several days' }).click();
+
+tests/e2e/sharing.spec.ts @@ -312 +333,4 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
++  await page.getByRole('button', { name: 'Done' }).click();
++  await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
++  await expect(page.getByLabel('Open a day')).toBeVisible();
++  await expect(namedDayButton(page, workDay, 'Edit')).toBeVisible();
+
+tests/e2e/sharing.spec.ts @@ -319 +356 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'Edit').click();
+
+tests/e2e/shell.spec.ts @@ -31 +30,0 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+-  await expect(nav.getByRole('link')).toHaveCount(5);
+
+tests/e2e/shell.spec.ts @@ -34 +33,24 @@ test('sign-in form, then the shell on the timesheet route', async ({ page, signI
+-  await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  if (project === 'mobile') {
++    // Phone: three tabs and "More"; the less frequent entries and Sign out open from it.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History']);
++    const more = nav.getByRole('button', { name: 'More' });
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await more.click();
++    await expect(more).toHaveAttribute('aria-expanded', 'true');
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings', 'Import']);
++    await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible();
++    await page.screenshot({ path: screenshotPath(`shell-more-${project}-synthetic.png`) });
++    await page.keyboard.press('Escape');
++    await expect(more).toHaveAttribute('aria-expanded', 'false');
++    await expect(more).toBeFocused();
++    // Each tab is at least 56x44 px.
++    for (const tab of [...(await nav.getByRole('link').all()), more]) {
++      const box = await tab.boundingBox();
++      expect(box?.height ?? 0).toBeGreaterThanOrEqual(56);
++      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
++    }
++  } else {
++    // Desktop: the top bar lists the main screens (Import is a link inside Settings) and has Sign out.
++    await expect(nav.getByRole('link')).toHaveText(['Timesheet', 'Overtime', 'History', 'Settings']);
++    await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
++  }
+
+tests/e2e/shell.spec.ts @@ -54,2 +76,2 @@ test('the existing timesheet view works inside the shell', async ({ page, employ
+-  await expect(row).toContainText('complete');
+-  await expect(row).toContainText('8h 00m');
++  await expect(row).toContainText('Complete');
++  await expect(row.locator('[data-check="complete"]')).toHaveCount(1);
+
+tests/e2e/shell.spec.ts @@ -71 +96,2 @@ test('mobile: no horizontal overflow and tap targets of at least 44px', async ({
+-  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline');
++  // Only rendered controls are tap targets: the desktop bar is not displayed on a phone.
++  const targets = page.locator('button, a[href], input:not([type="checkbox"]), label.inline').filter({ visible: true });
+
+tests/e2e/timesheet.spec.ts @@ -5 +7,2 @@ import { expect, screenshotPath, test } from './fixtures.ts';
+- * Two-week grid (desktop), day list (mobile) and batch category edit, on both projects.
++ * The Excel-style sheet (two week bands on desktop, a table per week on a phone) and batch
++ * category edit, on both projects.
+
+tests/e2e/timesheet.spec.ts @@ -47,4 +203,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  const sheet = await employeeSeed.call<{ period: { due_local_date: string; period_start: string } }>(
+-    'GET',
+-    `/api/timesheets/${currentPayrollDate}`,
+-  );
++  const sheet = await employeeSeed.call<{
++    period: { due_local_date: string; period_start: string; due_at_utc: string };
++    totals: { provisional_credited_minutes: number; pending_days: number };
++  }>('GET', `/api/timesheets/${currentPayrollDate}`);
++  const complete = await employeeSeed.dayView(completeDay);
++  const completeSession = complete.sessions[0];
++  expect(completeSession?.end_utc, 'the seeded complete day has one ended session').toBeTruthy();
+
+tests/e2e/timesheet.spec.ts @@ -55 +214 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // Exactly one of the grid and the list renders, chosen by the 768px media query.
++  // Exactly one of the two sheet layouts renders, chosen by the 768px media query.
+
+tests/e2e/timesheet.spec.ts @@ -57,2 +216,10 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(page.locator('table.grid')).toHaveCount(isDesktop ? 1 : 0);
+-  await expect(page.locator('.day-list')).toHaveCount(isDesktop ? 0 : 1);
++  await expect(page.locator('[data-sheet="desktop"]')).toHaveCount(isDesktop ? 1 : 0);
++  await expect(page.locator('[data-sheet="phone"]')).toHaveCount(isDesktop ? 0 : 1);
++  // The Excel form: company header, two Monday to Sunday bands of seven days, Overtime Total, signature lines.
++  const form = page.getByRole('article', { name: 'Timesheet form' });
++  await expect(form).toContainText('C&D Semiconductor Services, Inc.');
++  const weeks = form.locator('section.sheet-week');
++  await expect(weeks).toHaveCount(2);
++  for (const index of [0, 1]) await expect(weeks.nth(index).locator('[data-day]')).toHaveCount(7);
++  await expect(form.locator('[data-ot-total]')).toHaveText(formatHoursMinutes(sheet.totals.provisional_credited_minutes));
++  await expect(form.getByRole('region', { name: 'Signatures' })).toContainText('Manager Signature');
+
+tests/e2e/timesheet.spec.ts @@ -66 +233,16 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(page.locator('.facts')).toContainText(sheet.period.due_local_date);
++  // WP5-UX-B4-02: the display-zone due time is in the US format of the bar ("Wed 10/14/2026, 07:00"), computed here by the test runtime.
++  const dueParts = Object.fromEntries(
++    new Intl.DateTimeFormat('en-US', { timeZone: displayZone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
++      .formatToParts(new Date(sheet.period.due_at_utc))
++      .map((part) => [part.type, part.value]),
++  );
++  const dueInDisplayZone = `${dueParts.weekday} ${dueParts.month}/${dueParts.day}/${dueParts.year}, ${dueParts.hour}:${dueParts.minute}`;
++  await expect(page.locator('[data-zone-note] dd').nth(2)).toHaveText(dueInDisplayZone);
++  // The zone note shows because the display zone differs from the reporting zone; the due date in words is the reporting-zone fields.
++  await expect(page.locator('[data-zone-note]')).toBeVisible();
++  // The period bar names the viewing zone compactly, and the reporting zone stays in the note.
++  await expect(page.locator('.period-bar [data-period-zone]')).toHaveText(`Times in ${displayZone}`);
++  await page.locator('.period-bar').screenshot({ path: screenshotPath(`zone-${project}-synthetic.png`), animations: 'disabled' });
++  const dueIso = sheet.period.due_local_date;
++  await expect(page.locator('[data-period-due]')).toContainText(`${dueIso.slice(5, 7)}/${dueIso.slice(8, 10)}/${dueIso.slice(0, 4)}`);
++  await expect(page.locator('[data-period-due]')).toContainText(reportingZone);
+
+tests/e2e/timesheet.spec.ts @@ -69 +261,5 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(dayRow(page, sheet.period.period_start)).toContainText(sheet.period.period_start);
++  // Each day is named by its accounting date (the ISO date); its date cell prints the US form date.
++  const start = sheet.period.period_start;
++  await expect(dayRow(page, start)).toHaveAccessibleName(new RegExp(`${start}$`));
++  await expect(dayRow(page, start)).toContainText(`${start.slice(5, 7)}/${start.slice(8, 10)}`);
++  await expect(namedDayButton(page, start, 'Edit')).toBeVisible();
+
+tests/e2e/timesheet.spec.ts @@ -72,6 +268,21 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // A complete day shows complete and 8h 00m; unconfirmed breaks show pending OT.
+-  await expect(dayRow(page, completeDay)).toContainText('complete');
+-  await expect(dayRow(page, completeDay)).toContainText('8h 00m');
+-  await expect(dayRow(page, completeDay)).not.toContainText('pending OT');
+-  await expect(dayRow(page, pendingDay)).toContainText('confirm breaks');
+-  await expect(dayRow(page, pendingDay)).toContainText('pending OT');
++  // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).
++  const range = `${clockText(completeSession?.start_utc ?? '', displayZone)}-${clockText(completeSession?.end_utc ?? '', displayZone)}`;
++  await expect(dayRow(page, completeDay)).toContainText(range);
++  await expect(dayRow(page, completeDay)).not.toContainText('09:00-18:00');
++
++  // A complete day shows Complete, its server OT as h:mm and, under Show details, 8:00 worked on a workday;
++  // unconfirmed breaks show Confirm breaks and pending OT.
++  await expect(dayRow(page, completeDay)).toContainText('Complete');
++  await expect(dayRow(page, completeDay).locator('[data-ot]')).toHaveText(formatHoursMinutes(complete.calculation?.credited_minutes ?? -1));
++  await expect(dayRow(page, completeDay).locator('[data-cell="ot"]')).not.toContainText('pending');
++  await expect(dayRow(page, pendingDay)).toContainText('Confirm breaks');
++  await expect(dayRow(page, pendingDay).locator('[data-cell="ot"] [data-ot="pending"]')).toHaveText('pending');
++  const details = page.getByRole('button', { name: 'Show details' });
++  await expect(details).toHaveAttribute('aria-pressed', 'false');
++  await expect(page.locator('[data-detail]')).toHaveCount(0);
++  await details.click();
++  await expect(details).toHaveAttribute('aria-pressed', 'true');
++  const regular = page.locator(`[data-detail="regular"][data-detail-day="${completeDay}"]`);
++  await expect(regular).toHaveText(formatHoursMinutes(complete.calculation?.regular_minutes ?? -1));
++  await expect(regular).toHaveText('8:00');
++  await expect(page.locator('[data-detail="regular"]')).toHaveCount(14);
+
+tests/e2e/timesheet.spec.ts @@ -80 +291 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  // No em dash or en dash placeholder anywhere on the screen.
++  // No em dash or en dash placeholder anywhere on the screen, and no "none" placeholder on the sheet.
+
+tests/e2e/timesheet.spec.ts @@ -88 +300,4 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-    const targets = page.locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline');
++    // Only rendered controls are tap targets: the desktop bar is not displayed below 768px.
++    const targets = page
++      .locator('button, a[href], select, input:not([type="checkbox"]), label.pick, label.inline')
++      .filter({ visible: true });
+

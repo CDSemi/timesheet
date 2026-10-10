@@ -1,0 +1,21 @@
+// WP5-UX-AUDIT-B6: copy a log into the evidence folder masked (LF, no ANSI, <task>/<project>/<user>/<email>).
+// Usage: node mask.mjs <source> <target>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [source, target] = process.argv.slice(2);
+let text = readFileSync(source, 'utf8');
+text = text.replace(/\r\n?/g, '\n');
+// eslint-disable-next-line no-control-regex
+text = text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+const user = process.env.USERNAME ?? 'none-such-user';
+const task = [/[A-Za-z]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX-AUDIT-B6/gi, /\/[a-z]\/\.claude-tmp\/timesheet\/WP5-UX-AUDIT-B6/gi];
+for (const pattern of task) text = text.replace(pattern, '<task>');
+text = text.replace(/[A-Za-z]:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet/gi, '<project>');
+text = text.replace(/\/[a-z]\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<project>');
+text = text.replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"']+/gi, 'C:\Users\<user>');
+text = text.replace(/\/c\/Users\/[^/\s"']+/gi, '/c/Users/<user>');
+if (user.length > 2) text = text.split(user).join('<user>');
+// Any address that is not a full synthetic example.invalid address is masked.
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9.-]*/g, (address) => (/@example\.invalid$/i.test(address) ? address : '<email>'));
+if (!text.endsWith('\n')) text += '\n';
+writeFileSync(target, text);

@@ -1,0 +1,17 @@
+// Prints a short summary of one days-*.json probe result (for the auditor's own check while probes run).
+// Usage: node peek-days.mjs <file>
+import { readFileSync } from 'node:fs';
+
+const r = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+console.log(`build ${r.build} project ${r.project} zone ${r.reporting_zone} dst_session_seeded ${r.dst_session_seeded}`);
+console.log(`periods ${JSON.stringify(r.periods)}`);
+console.log(`sessions ${JSON.stringify(r.sessions)}`);
+console.log(`problems ${r.problems.length}`);
+for (const p of r.problems.slice(0, 10)) console.log(`  ${p}`);
+let clicks = 0;
+for (const run of r.runs) {
+  clicks += run.clicks.length;
+  const withRanges = run.rows.filter((row) => row.ranges.length > 0).map((row) => `${row.date}:${row.ranges.map((x) => `${x.startDate ?? ''}|${x.text}`).join(',')}`);
+  console.log(`${run.zone} (${run.resolved}) offset ${run.offset} ${run.first}..${run.last} rows ${run.rows.length} kinds ${[...new Set(run.rows.map((row) => row.kind))]} sample name "${run.rows[0]?.name}" clicks ${run.clicks.length} ${withRanges.join(' ')}`);
+}
+console.log(`total clicks ${clicks}`);

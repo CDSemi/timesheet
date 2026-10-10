@@ -1,0 +1,23 @@
+// Compares the two client-arith scans in 16-client-arith.txt (bf954c0 first, 5e104e1 second) by file and
+// code text (line numbers ignored), and prints the bf954c0 hits that the 5e104e1 scan does not have, with
+// whether their file was in the 5e104e1 scan at all. Usage: node arith-diff.mjs <16-client-arith.txt>
+import { readFileSync } from 'node:fs';
+
+const text = readFileSync(process.argv[2], 'utf8').replace(/\r\n/g, '\n');
+const [first = '', second = ''] = text.split(/\n\$ node client-arith\.mjs <ex5e1>/);
+const hits = (block) =>
+  block
+    .split('\n')
+    .map((line) => /^(src\/client\/[^:]+):\d+: (.*)$/.exec(line))
+    .filter((m) => m !== null)
+    .map((m) => ({ file: m[1], code: m[2] }));
+const a = hits(first);
+const b = hits(second);
+const key = (h) => `${h.file} :: ${h.code}`;
+const inB = new Set(b.map(key));
+const filesB = new Set(b.map((h) => h.file));
+const onlyA = a.filter((h) => !inB.has(key(h)));
+const onlyB = b.filter((h) => !new Set(a.map(key)).has(key(h)));
+console.log(`bf954c0 hits ${a.length}, 5e104e1 hits ${b.length}; bf954c0-only ${onlyA.length}; 5e104e1-only ${onlyB.length}`);
+for (const h of onlyA) console.log(`  bf954c0 only (${filesB.has(h.file) ? 'file scanned at 5e104e1' : 'file not changed 014bd47..5e104e1, so not scanned there'}): ${h.file}: ${h.code}`);
+for (const h of onlyB) console.log(`  5e104e1 only: ${h.file}: ${h.code}`);

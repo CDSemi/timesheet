@@ -1,0 +1,182 @@
+// WP5-UX-AUDIT-A6 delta probe (scope 1, AC-16 and AC-01): the "Shared with me" switcher reaches exactly
+// the same routes before FIX7 (5e104e1: choosing an entry navigates) and after it (bf954c0: choosing changes
+// nothing, "Open" navigates). A grantee G receives a view-only share from owner A and an edit share from
+// owner B; a third person C shares nothing. For a fixed sequence of choices (A, B, my timesheets, B, A, my
+// timesheets) the probe records the address, the share bar, the heading, the owner-only controls, which
+// owner's data is on the page and every API request; then the isolation: G and C reach nothing of C or A.
+// Registered by switcher.bf9.spec.ts and switcher.5e1.spec.ts. Synthetic data only.
+import { writeResult } from './common.ts';
+
+export interface SwitcherOptions {
+  build: string;
+  /** 'open': choose, then press Open (bf954c0). 'change': choosing navigates (5e104e1). */
+  mode: 'open' | 'change';
+}
+
+const DAY_BUTTONS = 'button.sheet-date, button.sheet-day-button';
+
+export function registerSwitcherProbe(fx: any, options: SwitcherOptions): void {
+  const { test, expect, newPerson, statusInPage } = fx;
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test(`switcher routes, read-only shared view, owner-only controls and isolation (${options.build})`, async ({ page, browser, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(15_000);
+    const ownerA = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner A' });
+    const ownerB = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner B' });
+    const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee G', signature: 'none' });
+    const other = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Other C', signature: 'none' });
+    const notes: Record<string, string> = {};
+    const sessionIds: Record<string, string> = {};
+    for (const [key, person] of [['A', ownerA], ['B', ownerB], ['G', grantee], ['C', other]] as const) {
+      const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+      await person.api.seedCompleteDay(day);
+      notes[key] = `note-${key}-${Date.now().toString(36)}-synthetic`;
+      await person.api.putDay(day, { notes: notes[key] });
+      sessionIds[key] = (await person.api.dayView(day)).sessions[0]?.id ?? '';
+    }
+    await ownerA.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+    await ownerB.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+    const ids: Record<string, string> = { A: ownerA.account.id, B: ownerB.account.id, G: grantee.account.id, C: other.account.id };
+    const tokenise = (text: string) => Object.entries(ids).reduce((acc, [key, id]) => acc.split(id).join(`<${key}>`), text);
+
+    const requests: string[] = [];
+    page.on('request', (request: any) => {
+      const { pathname, search } = new URL(request.url());
+      if (pathname.startsWith('/api/')) requests.push(tokenise(`${request.method()} ${pathname}${search}`));
+    });
+    await page.goto('/#/timesheet');
+    await page.getByLabel('Email').fill(grantee.account.email);
+    await page.getByLabel('Password').fill(grantee.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const select = page.locator('.shell-switcher select');
+    await expect(select).toHaveCount(1);
+    const switcherOptions = await select.locator('option').evaluateAll((list: any[]) => list.map((o) => ({ value: o.value, label: o.textContent })));
+
+    const snapshot = async () =>
+      page.evaluate(`(() => {
+        const count = (sel) => document.querySelectorAll(sel).length;
+        const names = [...document.querySelectorAll(${JSON.stringify(DAY_BUTTONS)})].map((b) => (b.getAttribute('aria-label') || '').split(' ')[0]);
+        const bar = document.querySelector('[data-share-bar]');
+        const body = document.body.innerText;
+        return {
+          hash: window.location.hash,
+          shareBar: bar === null ? null : bar.getAttribute('data-share-bar'),
+          shareBarTitle: bar === null ? null : (bar.querySelector('[data-share-bar-title]') || bar).textContent.replace(/\\s+/g, ' ').trim(),
+          heading: (document.querySelector('main h1, h1') || { textContent: '' }).textContent.replace(/\\s+/g, ' ').trim(),
+          days: count('[data-day]'),
+          clockButtons: [...document.querySelectorAll('button')].filter((b) => /^Clock (in|out)$/.test(b.textContent.trim())).length,
+          openADay: count('.open-day'),
+          changeSeveralDays: [...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Change several days').length,
+          labelPickers: count('[data-label-picker]'),
+          checkboxes: count('input[type=checkbox]'),
+          editDayButtons: names.filter((n) => n === 'Edit').length,
+          viewDayButtons: names.filter((n) => n === 'View').length,
+          signatureLines: count('[data-signature], [data-sheet-review-link]'),
+          switcherValue: (document.querySelector('.shell-switcher select') || { value: null }).value,
+          notesOnPage: ${JSON.stringify(Object.keys(notes))}.filter((key) => body.includes(${JSON.stringify(notes)}[key])),
+          sessionsOnPage: ${JSON.stringify(Object.keys(sessionIds))}.filter((key) => document.querySelector('[data-range="' + ${JSON.stringify(sessionIds)}[key] + '"]') !== null),
+        };
+      })()`);
+
+    const steps: any[] = [];
+    const targets: Array<'A' | 'B' | ''> = ['A', 'B', '', 'B', 'A', ''];
+    for (const target of targets) {
+      const value = target === '' ? '' : ids[target];
+      const before = await snapshot();
+      requests.length = 0;
+      let afterChoice: any = null;
+      if (options.mode === 'open') {
+        await select.selectOption(value);
+        await page.waitForTimeout(600);
+        afterChoice = { hash: (await snapshot()).hash, requests: [...requests] };
+        await page.locator('.shell-switcher button[type="submit"]').click();
+      } else {
+        await select.selectOption(value);
+      }
+      if (target === '') {
+        await expect(page.locator('[data-share-bar]')).toHaveCount(0);
+        await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+      } else {
+        await expect(page.locator(`[data-share-bar="${value}"]`)).toBeVisible();
+      }
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      await page.waitForTimeout(800);
+      const after = await snapshot();
+      steps.push({ from: tokenise(before.hash), target: target === '' ? 'my timesheets' : target, afterChoice: afterChoice === null ? null : { hash: tokenise(afterChoice.hash), requests: afterChoice.requests }, landed: { ...after, hash: tokenise(after.hash), shareBar: after.shareBar === null ? null : tokenise(after.shareBar), switcherValue: tokenise(after.switcherValue ?? '') }, requests: [...requests].sort() });
+    }
+
+    // Isolation: G opens C's (never shared) address; C sees no switcher and none of A's data.
+    requests.length = 0;
+    await page.evaluate(`window.location.hash = '#/shared/${ids.C}'`);
+    await page.waitForTimeout(1_500);
+    const gOnC = await snapshot();
+    const isolation: Record<string, unknown> = {
+      grantee_on_C_address: { ...gOnC, hash: tokenise(gOnC.hash) },
+      grantee_on_C_requests: [...requests],
+      grantee_C_timesheet_status: await statusInPage(page, 'GET', `/api/shared/${ids.C}/timesheets/${other.payrollDate}`),
+      grantee_A_put_status: await statusInPage(page, 'PUT', `/api/shared/${ids.A}/days/${(await ownerA.api.displayedPeriodFreeWorkdays())[0]}`, { category: 'Off', leave_minutes: 0, leave_kind: null, wfh: false, notes: '', expected_version: null }),
+    };
+    const use = testInfo.project.use as any;
+    const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: 'America/Los_Angeles', locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false });
+    const third = await context.newPage();
+    third.setDefaultTimeout(15_000);
+    await third.goto('/#/timesheet');
+    await third.getByLabel('Email').fill(other.account.email);
+    await third.getByLabel('Password').fill(other.account.password);
+    await third.getByRole('button', { name: 'Sign in' }).click();
+    await expect(third.locator('[data-day]')).toHaveCount(14);
+    isolation.C_switchers = await third.locator('.shell-switcher').count();
+    await third.evaluate(`window.location.hash = '#/shared/${ids.A}'`);
+    await third.waitForTimeout(1_500);
+    const body = await third.locator('body').innerText();
+    isolation.C_on_A_address_notes = Object.keys(notes).filter((key) => body.includes(notes[key] ?? '\u0000'));
+    isolation.C_on_A_address_sessions = [];
+    for (const key of Object.keys(sessionIds)) if ((await third.locator(`[data-range="${sessionIds[key]}"]`).count()) > 0) (isolation.C_on_A_address_sessions as string[]).push(key);
+    isolation.C_A_timesheet_status = await statusInPage(third, 'GET', `/api/shared/${ids.A}/timesheets/${ownerA.payrollDate}`);
+    isolation.C_B_timesheet_status = await statusInPage(third, 'GET', `/api/shared/${ids.B}/timesheets/${ownerB.payrollDate}`);
+    await context.close();
+
+    writeResult(`switcher-${options.build}-${testInfo.project.name}.json`, {
+      build: options.build,
+      project: testInfo.project.name,
+      switcher_options: switcherOptions.map((o: any) => ({ value: tokenise(o.value), label: o.label })),
+      steps,
+      isolation,
+    });
+
+    // The facts that must hold on every build.
+    for (const step of steps) {
+      const landed = step.landed;
+      if (step.target === 'my timesheets') {
+        expect(landed.hash).toBe('#/timesheet');
+        expect(landed.shareBar).toBeNull();
+        expect(landed.sessionsOnPage).toEqual(['G']);
+        expect(landed.notesOnPage.filter((key: string) => key !== 'G')).toEqual([]);
+      } else {
+        expect(landed.hash).toMatch(new RegExp(`^#/shared/<${step.target}>(/timesheet)?$`));
+        expect(landed.shareBar).toBe(`<${step.target}>`);
+        expect(landed.sessionsOnPage).toEqual([step.target]);
+        expect(landed.notesOnPage.filter((key: string) => key !== step.target)).toEqual([]);
+        expect(landed.clockButtons).toBe(0);
+        expect(landed.signatureLines).toBe(0);
+        if (step.target === 'A') expect([landed.openADay, landed.changeSeveralDays, landed.labelPickers, landed.checkboxes, landed.editDayButtons, landed.viewDayButtons]).toEqual([0, 0, 0, 0, 0, 14]);
+        for (const request of step.requests) expect(request.startsWith(`GET /api/shared/<${step.target}>/`) || ['GET /api/shares', 'GET /api/auth/me'].includes(request), request).toBe(true);
+      }
+      if (step.afterChoice !== null) {
+        expect(step.afterChoice.hash, 'the choice alone does not navigate').toBe(step.from);
+        expect(step.afterChoice.requests, 'the choice alone sends nothing').toEqual([]);
+      }
+    }
+    expect(isolation.C_switchers).toBe(0);
+    expect((isolation.C_on_A_address_notes as string[]).filter((key) => key !== 'C')).toEqual([]);
+    expect((isolation.C_on_A_address_sessions as string[]).filter((key) => key !== 'C')).toEqual([]);
+    expect([403, 404]).toContain(isolation.grantee_C_timesheet_status);
+    expect([403, 404]).toContain(isolation.C_A_timesheet_status);
+    expect([403, 404]).toContain(isolation.C_B_timesheet_status);
+    expect([403, 404]).toContain(isolation.grantee_A_put_status);
+    expect((isolation.grantee_on_C_address as any).notesOnPage.filter((key: string) => key === 'C')).toEqual([]);
+    expect((isolation.grantee_on_C_address as any).sessionsOnPage.filter((key: string) => key === 'C')).toEqual([]);
+  });
+}

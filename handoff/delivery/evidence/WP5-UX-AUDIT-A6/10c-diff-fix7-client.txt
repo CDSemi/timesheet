@@ -1,0 +1,999 @@
+diff --git a/src/client/App.tsx b/src/client/App.tsx
+index c27c85c..32d483b 100644
+--- a/src/client/App.tsx
++++ b/src/client/App.tsx
+@@ -179,7 +179,11 @@ function LoginForm({ onSignedIn, created }: { onSignedIn: (user: User) => void;
+             required
+           />
+         </label>
+-        {error !== null && <p className="error">{error}</p>}
++        {error !== null && (
++          <p className="error" role="alert">
++            {error}
++          </p>
++        )}
+         <button type="submit" disabled={busy}>
+           Sign in
+         </button>
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index e135035..e42f017 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -7,6 +7,7 @@ import { describeError, isStaleVersion } from './components/errors.ts';
+ import { sessionText } from './components/format.ts';
+ import { expectedFinishText, inputZoneChoices, policyOn } from './components/sessionModel.ts';
+ import { SessionForm } from './components/SessionForm.tsx';
++import { useBlockSizeProperty } from './components/useBlockSize.ts';
+ import { WEEKDAYS } from './components/dayModel.ts';
+ import { formatDuration } from '../domain/format.ts';
+ import { isoWeekday } from '../domain/dates.ts';
+@@ -69,6 +70,9 @@ export function DayEditor({
+   readOnly?: boolean;
+ }) {
+   const dialog = useRef<HTMLDialogElement>(null);
++  const head = useRef<HTMLElement>(null);
++  // The sticky head is 123 to 166px tall; the panel's scroll padding follows it (WP5-UX-AX-01).
++  useBlockSizeProperty(head, '--editor-head-size', dialog);
+   const heading = useRef<HTMLHeadingElement>(null);
+   const timesHeading = useRef<HTMLHeadingElement>(null);
+   const [day, setDay] = useState<DayView | null>(null);
+@@ -247,7 +251,7 @@ export function DayEditor({
+       }}
+     >
+       {bottomSheet && <div className="sheet-handle" aria-hidden="true" />}
+-      <header className="editor-head">
++      <header ref={head} className="editor-head">
+         <div className="editor-title">
+           <h2 id="day-editor-title" ref={heading} tabIndex={-1}>
+             {readOnly ? 'Day' : 'Day editor'} <span className="mono">{`${weekday} ${workDate}`}</span>
+diff --git a/src/client/SettingsScreen.tsx b/src/client/SettingsScreen.tsx
+index d080397..7d23562 100644
+--- a/src/client/SettingsScreen.tsx
++++ b/src/client/SettingsScreen.tsx
+@@ -176,7 +176,11 @@ export function SettingsScreen({ onSharesChanged }: { onSharesChanged: () => voi
+       <form className="card stack" aria-label="New policy version" onSubmit={submit}>
+         <h2>New policy version</h2>
+         <PolicyFields draft={draft} onChange={edit} />
+-        {!result.ok && <p className="notice">{result.message}</p>}
++        {!result.ok && (
++          <p className="notice" role="status">
++            {result.message}
++          </p>
++        )}
+         {error !== null && (
+           <p className="error" role="alert" data-error="policy">
+             {error}
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index f108778..a0f0118 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -53,16 +53,21 @@ function useMedia(query: string): boolean {
+ }
+ 
+ /**
+- * Moves focus back to a day's own button ("Edit {date}" or "View {date}") after the day editor
+- * closed; when that day is not on the sheet (opened through "Open a day"), to what opened it.
++ * Moves focus back to a day's own button (found by the day's `data-day`, never by its accessible
++ * name) after the day editor closed; when that day is not on the sheet (opened through "Open a day"),
++ * to what opened it.
+  */
+ function focusDay(workDate: string, opener: Element | null) {
+-  const day = document.querySelector(`[data-day="${workDate}"]`);
+-  const button = day?.querySelector<HTMLElement>(`button[aria-label="Edit ${workDate}"], button[aria-label="View ${workDate}"]`);
+-  if (button !== null && button !== undefined) button.focus();
++  const button = document.querySelector<HTMLElement>(`[data-day="${workDate}"] [data-day-button]`);
++  if (button !== null) button.focus();
+   else if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+ }
+ 
++/** Moves focus back to an element after a dialog closed, when it is still on the page and enabled. */
++function focusIfAvailable(element: HTMLElement | null) {
++  if (element !== null && element.isConnected && !element.matches(':disabled')) element.focus();
++}
++
+ /** Moves focus back to a day's label picker after its review dialog closed. */
+ function focusLabelPicker(workDate: string) {
+   document.querySelector<HTMLElement>(`[data-label-picker="${workDate}"] button`)?.focus();
+@@ -142,6 +147,9 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const returnFocusTo = useRef<string | null>(null);
+   /** The date whose label picker gets focus back when its review dialog closes. */
+   const returnToPicker = useRef<string | null>(null);
++  /** What opened the batch review ("Preview changes"); it gets focus back when the review is cancelled. */
++  const batchOpener = useRef<HTMLElement | null>(null);
++  const returnToBatchOpener = useRef(false);
+ 
+   const report = (caught: unknown) => setMessage(describeError(caught));
+ 
+@@ -228,6 +236,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+   async function previewBatch() {
+     if (view === null) return;
++    // Read before the busy state disables the button and the browser drops its focus.
++    batchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+     setMessage(null);
+     setNotice(null);
+     setStaleNotice(null);
+@@ -318,15 +328,23 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+ 
+   function closePreview() {
+     if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
++    else returnToBatchOpener.current = true;
+     setPreview(null);
+   }
+ 
+-  // After a label pick's review dialog is gone (the page is no longer inert), focus goes back to the picker.
++  // After a review dialog is gone (the page is no longer inert), focus goes back to what opened it:
++  // a label pick's picker, or "Preview changes" after a cancelled batch review (WP5-UX-AX-08).
+   useEffect(() => {
++    if (preview !== null) return;
+     const date = returnToPicker.current;
+-    if (preview !== null || date === null) return;
+-    returnToPicker.current = null;
+-    focusLabelPicker(date);
++    if (date !== null) {
++      returnToPicker.current = null;
++      focusLabelPicker(date);
++    }
++    if (returnToBatchOpener.current) {
++      returnToBatchOpener.current = false;
++      focusIfAvailable(batchOpener.current);
++    }
+   }, [preview]);
+ 
+   function openEditor(workDate: string) {
+@@ -397,7 +415,11 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+                 )}
+               </div>
+             </div>
+-            {message !== null && <p className="error">{message}</p>}
++            {message !== null && (
++              <p className="error" role="alert">
++                {message}
++              </p>
++            )}
+             {notice !== null && (
+               <p className="notice-ok" role="status">
+                 {notice}
+diff --git a/src/client/components/AdminUsers.tsx b/src/client/components/AdminUsers.tsx
+index c8d94a1..dca6dbf 100644
+--- a/src/client/components/AdminUsers.tsx
++++ b/src/client/components/AdminUsers.tsx
+@@ -99,7 +99,11 @@ export function UserCreateForm({
+         </label>
+       </div>
+       <p className="hint muted">You type the temporary password and give it to the person yourself. It is stored only as a hash and is never shown again.</p>
+-      {problem !== null && <p className="notice">{problem}</p>}
++      {problem !== null && (
++        <p className="notice" role="status">
++          {problem}
++        </p>
++      )}
+       {error !== null && (
+         <p className="error" role="alert" data-error="user-create">
+           {error}
+diff --git a/src/client/components/AppShell.tsx b/src/client/components/AppShell.tsx
+index 47919cd..6d015ed 100644
+--- a/src/client/components/AppShell.tsx
++++ b/src/client/components/AppShell.tsx
+@@ -3,6 +3,7 @@ import { api, type ReceivedShare, type User } from '../api.ts';
+ import { parseReviewHash, reviewHash } from './reviewModel.ts';
+ import { SharingSwitcher } from './SharingSwitcher.tsx';
+ import { parseSharedHash, type SharedView } from './sharingModel.ts';
++import { useBlockSizeProperty } from './useBlockSize.ts';
+ 
+ /**
+  * The screens reachable from the navigation. Import (the person's own workbook and opening
+@@ -114,6 +115,9 @@ export function AppShell({
+   const [moreOpen, setMoreOpen] = useState(false);
+   const moreButton = useRef<HTMLButtonElement>(null);
+   const tabsRef = useRef<HTMLElement>(null);
++  const barRef = useRef<HTMLElement>(null);
++  // The sticky bar wraps (52 to 107px); scroll padding follows its real height (WP5-UX-AX-01).
++  useBlockSizeProperty(barRef, '--shell-bar-size');
+   const { tabs, more } = mobileRoutesFor(user.role);
+   // Import belongs under Settings on the desktop bar; on the phone it is its own entry under "More".
+   const desktopCurrent = route === 'import' ? 'settings' : route;
+@@ -149,7 +153,7 @@ export function AppShell({
+ 
+   return (
+     <>
+-      <header className="shell-bar">
++      <header ref={barRef} className="shell-bar">
+         <span className="shell-brand">C&amp;D Semi</span>
+         <nav className="shell-nav" aria-label="Main">
+           {desktopRoutesFor(user.role).map((item) => (
+diff --git a/src/client/components/BatchDialog.tsx b/src/client/components/BatchDialog.tsx
+index 0b2dab7..d016bf1 100644
+--- a/src/client/components/BatchDialog.tsx
++++ b/src/client/components/BatchDialog.tsx
+@@ -38,15 +38,31 @@ export function BatchDialog({
+   onClose: () => void;
+ }) {
+   const dialog = useRef<HTMLDialogElement>(null);
++  const heading = useRef<HTMLHeadingElement>(null);
+   const [step, setStep] = useState<'review' | 'conflicts'>('review');
+   const [reason, setReason] = useState('');
+   const [confirmed, setConfirmed] = useState(false);
++  /**
++   * True after the first step change. The headings take focus only from then on, so on open the
++   * dialog still focuses its first control as before.
++   */
++  const [stepChanged, setStepChanged] = useState(false);
+ 
+   useEffect(() => {
+     const element = dialog.current;
+     if (element !== null && !element.open) element.showModal();
+   }, []);
+ 
++  // A step change replaces the dialog's content: focus moves to the new step's heading, never to the page (WP5-UX-AX-08).
++  useEffect(() => {
++    if (stepChanged) heading.current?.focus();
++  }, [step, stepChanged]);
++
++  function goTo(next: 'review' | 'conflicts') {
++    setStepChanged(true);
++    setStep(next);
++  }
++
+   const needsReason = preview.reason_required;
+   const reasonMissing = needsReason && reason.trim() === '';
+   const hasConflicts = preview.requires_conflict_confirmation;
+@@ -58,7 +74,9 @@ export function BatchDialog({
+     <dialog ref={dialog} className="dialog" aria-labelledby="batch-title" onClose={onClose}>
+       {step === 'review' ? (
+         <div className="stack">
+-          <h2 id="batch-title">{title}</h2>
++          <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
++            {title}
++          </h2>
+           <p>
+             {preview.changed_count} {preview.changed_count === 1 ? 'day' : 'days'} will change. Nothing is saved until you commit.
+           </p>
+@@ -97,7 +115,7 @@ export function BatchDialog({
+               Cancel
+             </button>
+             {hasConflicts ? (
+-              <button type="button" onClick={() => setStep('conflicts')} disabled={!canContinue}>
++              <button type="button" onClick={() => goTo('conflicts')} disabled={!canContinue}>
+                 Review conflicts
+               </button>
+             ) : (
+@@ -109,7 +127,9 @@ export function BatchDialog({
+         </div>
+       ) : (
+         <div className="stack">
+-          <h2 id="batch-title">Recorded work conflicts with the new label</h2>
++          <h2 id="batch-title" ref={heading} tabIndex={stepChanged ? -1 : undefined}>
++            Recorded work conflicts with the new label
++          </h2>
+           <p>No work session is edited or deleted. Only the day label changes.</p>
+           <ul className="plain conflict-list">
+             {details.map(({ conflict, sessions }) => (
+@@ -138,7 +158,7 @@ export function BatchDialog({
+             </p>
+           )}
+           <div className="dialog-actions">
+-            <button type="button" className="secondary" onClick={() => setStep('review')}>
++            <button type="button" className="secondary" onClick={() => goTo('review')}>
+               Back
+             </button>
+             <button type="button" onClick={() => submit(true)} disabled={!confirmed || busy}>
+diff --git a/src/client/components/ImportCommit.tsx b/src/client/components/ImportCommit.tsx
+index 342d646..daf52a5 100644
+--- a/src/client/components/ImportCommit.tsx
++++ b/src/client/components/ImportCommit.tsx
+@@ -28,10 +28,21 @@ export function ImportCommit({
+   onCancel: () => void;
+ }) {
+   const panel = useRef<HTMLDivElement>(null);
++  const askButton = useRef<HTMLButtonElement>(null);
++  /** Set by "Back to the preview" or Escape: the button that opened the confirmation gets focus back (WP5-UX-AX-08). */
++  const returnToAsk = useRef(false);
+   useEffect(() => {
+     if (confirming) panel.current?.focus();
++    else if (returnToAsk.current) {
++      returnToAsk.current = false;
++      askButton.current?.focus();
++    }
+   }, [confirming]);
+   const counts = commitCounts(plan, decisions);
++  const cancel = () => {
++    returnToAsk.current = true;
++    onCancel();
++  };
+ 
+   if (!confirming) {
+     return (
+@@ -44,7 +55,7 @@ export function ImportCommit({
+           </p>
+         )}
+         <div className="button-row">
+-          <button type="button" onClick={onAsk} disabled={busy}>
++          <button ref={askButton} type="button" onClick={onAsk} disabled={busy}>
+             Review and commit
+           </button>
+         </div>
+@@ -61,7 +72,7 @@ export function ImportCommit({
+         tabIndex={-1}
+         ref={panel}
+         onKeyDown={(event) => {
+-          if (event.key === 'Escape' && !busy) onCancel();
++          if (event.key === 'Escape' && !busy) cancel();
+         }}
+       >
+         <h4 id="import-confirm-title">Commit this import?</h4>
+@@ -81,7 +92,7 @@ export function ImportCommit({
+           <button type="button" disabled={busy} onClick={onConfirm}>
+             Confirm import
+           </button>
+-          <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
++          <button type="button" className="secondary" disabled={busy} onClick={cancel}>
+             Back to the preview
+           </button>
+         </div>
+diff --git a/src/client/components/OpeningBalanceForm.tsx b/src/client/components/OpeningBalanceForm.tsx
+index 86400be..626ff47 100644
+--- a/src/client/components/OpeningBalanceForm.tsx
++++ b/src/client/components/OpeningBalanceForm.tsx
+@@ -55,12 +55,24 @@ export function OpeningBalanceForm({
+   const [error, setError] = useState<string | null>(null);
+   const [busy, setBusy] = useState(false);
+   const confirmPanel = useRef<HTMLDivElement>(null);
++  const reviewButton = useRef<HTMLButtonElement>(null);
++  /** Set by "Back to edit" or Escape: the button that opened the confirmation gets focus back (WP5-UX-AX-08). */
++  const returnToReview = useRef(false);
+   const ids = { minutes: useId(), asOf: useId(), reason: useId(), evidence: useId() };
+ 
+   useEffect(() => {
+     if (step === 'confirm') confirmPanel.current?.focus();
++    else if (returnToReview.current) {
++      returnToReview.current = false;
++      reviewButton.current?.focus();
++    }
+   }, [step]);
+ 
++  function backToEdit() {
++    returnToReview.current = true;
++    setStep('edit');
++  }
++
+   const parsed = parseSignedMinutes(values);
+   const set = (change: Partial<OpeningFormValues>) => setValues((current) => ({ ...current, ...change }));
+ 
+@@ -97,7 +109,7 @@ export function OpeningBalanceForm({
+         ref={confirmPanel}
+         data-confirm={mode}
+         onKeyDown={(event) => {
+-          if (event.key === 'Escape' && !busy) setStep('edit');
++          if (event.key === 'Escape' && !busy) backToEdit();
+         }}
+       >
+         <h4 id="opening-confirm-title">{correcting ? 'Record this correction?' : 'Record this opening balance?'}</h4>
+@@ -150,7 +162,7 @@ export function OpeningBalanceForm({
+           <button type="button" disabled={busy} onClick={() => void confirm()}>
+             {correcting ? 'Confirm correction' : 'Confirm and post'}
+           </button>
+-          <button type="button" className="secondary" disabled={busy} onClick={() => setStep('edit')}>
++          <button type="button" className="secondary" disabled={busy} onClick={backToEdit}>
+             Back to edit
+           </button>
+         </div>
+@@ -251,7 +263,9 @@ export function OpeningBalanceForm({
+         </p>
+       )}
+       <div className="button-row">
+-        <button type="submit">Review before posting</button>
++        <button ref={reviewButton} type="submit">
++          Review before posting
++        </button>
+         {onCancel !== undefined && (
+           <button type="button" className="secondary" onClick={onCancel}>
+             Cancel
+diff --git a/src/client/components/OpeningBalancePanel.tsx b/src/client/components/OpeningBalancePanel.tsx
+index eb5ec62..54446a6 100644
+--- a/src/client/components/OpeningBalancePanel.tsx
++++ b/src/client/components/OpeningBalancePanel.tsx
+@@ -33,6 +33,15 @@ export function OpeningBalancePanel() {
+   const [correcting, setCorrecting] = useState(false);
+   const [notice, setNotice] = useState<Notice | null>(null);
+   const noticeRef = useRef<HTMLParagraphElement>(null);
++  const correctButton = useRef<HTMLButtonElement>(null);
++  /** Set by Cancel: "Correct the opening balance" gets focus back once it is shown again (WP5-UX-AX-08). */
++  const returnToCorrect = useRef(false);
++
++  useEffect(() => {
++    if (correcting || !returnToCorrect.current) return;
++    returnToCorrect.current = false;
++    correctButton.current?.focus();
++  }, [correcting]);
+ 
+   const load = useCallback(async () => {
+     try {
+@@ -155,11 +164,14 @@ export function OpeningBalancePanel() {
+               opening={opening}
+               postedMinutes={state.balance.posted_minutes}
+               onSubmit={submit}
+-              onCancel={() => setCorrecting(false)}
++              onCancel={() => {
++                returnToCorrect.current = true;
++                setCorrecting(false);
++              }}
+             />
+           ) : (
+             <div className="button-row">
+-              <button type="button" className="secondary" onClick={() => setCorrecting(true)}>
++              <button ref={correctButton} type="button" className="secondary" onClick={() => setCorrecting(true)}>
+                 Correct the opening balance
+               </button>
+             </div>
+diff --git a/src/client/components/SharingBar.tsx b/src/client/components/SharingBar.tsx
+index 7902174..60b3b99 100644
+--- a/src/client/components/SharingBar.tsx
++++ b/src/client/components/SharingBar.tsx
+@@ -1,16 +1,21 @@
++import { useRef } from 'react';
+ import type { ReceivedShare } from '../api.ts';
+ import { abilitiesOf, barTitle, itemsSummary, SHARED_VIEW_LABEL, type SharedView, sharedHash } from './sharingModel.ts';
++import { useBlockSizeProperty } from './useBlockSize.ts';
+ 
+ /**
+  * The persistent bar of a shared view: whose timesheets these are, whether they are view only or
+  * can be edited, the items the share holds, the views it opens and the way back to one's own
+  * timesheets. It stays on every shared screen, so a person never mistakes another person's data for
+- * their own.
++ * their own. From 768px it is sticky below the shell bar; its measured height joins the page's scroll
++ * padding, so a focused control is never hidden under it (WP5-UX-AX-01).
+  */
+ export function SharingBar({ share, current }: { share: ReceivedShare; current: SharedView }) {
+   const { views } = abilitiesOf(share.items);
++  const barRef = useRef<HTMLElement>(null);
++  useBlockSizeProperty(barRef, '--share-bar-size');
+   return (
+-    <section className="share-bar stack" aria-label="Shared access" data-share-bar={share.owner.id}>
++    <section ref={barRef} className="share-bar stack" aria-label="Shared access" data-share-bar={share.owner.id}>
+       <div className="share-bar-head">
+         <strong data-share-bar-title="true">{barTitle(share.owner.display_name, share.items)}</strong>
+         <a className="button-link" href="#/timesheet">
+diff --git a/src/client/components/SharingGrantForm.tsx b/src/client/components/SharingGrantForm.tsx
+index 4d3b885..5b54e5f 100644
+--- a/src/client/components/SharingGrantForm.tsx
++++ b/src/client/components/SharingGrantForm.tsx
+@@ -50,7 +50,11 @@ export function SharingGrantForm({ onGranted }: { onGranted: (share: GivenShare)
+         </span>
+       </label>
+       <SharingItemsFields items={items} onChange={setItems} disabled={busy} />
+-      {problem !== null && <p className="notice">{problem}</p>}
++      {problem !== null && (
++        <p className="notice" role="status">
++          {problem}
++        </p>
++      )}
+       {error !== null && (
+         <p className="error" role="alert" data-error="share-grant">
+           {error}
+diff --git a/src/client/components/SharingRows.tsx b/src/client/components/SharingRows.tsx
+index ec68ea6..61f4bab 100644
+--- a/src/client/components/SharingRows.tsx
++++ b/src/client/components/SharingRows.tsx
+@@ -72,15 +72,32 @@ function ItemList({ items }: { items: ShareItems }) {
+ 
+ type Mode = 'idle' | 'change' | 'end';
+ 
+-/** One share the caller gave: its items, since when, a change of items and the end of the share (after a confirmation). */
++/**
++ * One share the caller gave: its items, since when, a change of items and the end of the share (after a
++ * confirmation). The change step takes focus when it opens; cancelling either step returns focus to the
++ * button that opened it (WP5-UX-AX-08).
++ */
+ export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChanged: (message: string) => void }) {
+   const [mode, setMode] = useState<Mode>('idle');
+   const [draft, setDraft] = useState<ShareItems>(share.items);
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const name = share.grantee.display_name;
++  const changeButton = useRef<HTMLButtonElement>(null);
++  const endButton = useRef<HTMLButtonElement>(null);
++  const changePanel = useRef<HTMLDivElement>(null);
++  /** The step that was just cancelled; its opener gets focus once the buttons are back. */
++  const returnFrom = useRef<Mode>('idle');
++
++  useEffect(() => {
++    if (mode === 'change') changePanel.current?.focus();
++    if (mode !== 'idle' || returnFrom.current === 'idle') return;
++    (returnFrom.current === 'change' ? changeButton : endButton).current?.focus();
++    returnFrom.current = 'idle';
++  }, [mode]);
+ 
+   function close() {
++    returnFrom.current = mode;
+     setMode('idle');
+     setError(null);
+     setDraft(share.items);
+@@ -121,18 +138,22 @@ export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChang
+       <ItemList items={share.items} />
+       {mode === 'idle' && (
+         <div className="button-row">
+-          <button type="button" className="secondary" onClick={() => setMode('change')} aria-label={`Change items shared with ${name}`}>
++          <button ref={changeButton} type="button" className="secondary" onClick={() => setMode('change')} aria-label={`Change items shared with ${name}`}>
+             Change
+           </button>
+-          <button type="button" className="secondary" onClick={() => setMode('end')} aria-label={`End sharing with ${name}`}>
++          <button ref={endButton} type="button" className="secondary" onClick={() => setMode('end')} aria-label={`End share with ${name}`}>
+             End share
+           </button>
+         </div>
+       )}
+       {mode === 'change' && (
+-        <div className="stack">
++        <div className="stack" role="group" aria-label={`Change items shared with ${name}`} tabIndex={-1} ref={changePanel}>
+           <SharingItemsFields items={draft} onChange={setDraft} disabled={busy} />
+-          {problem !== null && <p className="notice">{problem}</p>}
++          {problem !== null && (
++            <p className="notice" role="status">
++              {problem}
++            </p>
++          )}
+           {error !== null && (
+             <p className="error" role="alert">
+               {error}
+@@ -163,12 +184,23 @@ export function GivenShareRow({ share, onChanged }: { share: GivenShare; onChang
+   );
+ }
+ 
+-/** One share the caller received: its items, since when, a way into it, and leaving it (after a confirmation). */
++/**
++ * One share the caller received: its items, since when, a way into it, and leaving it (after a
++ * confirmation). Cancelling the confirmation returns focus to "Leave" (WP5-UX-AX-08).
++ */
+ export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLeft: (message: string) => void }) {
+   const [asking, setAsking] = useState(false);
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const name = share.owner.display_name;
++  const leaveButton = useRef<HTMLButtonElement>(null);
++  const returnToLeave = useRef(false);
++
++  useEffect(() => {
++    if (asking || !returnToLeave.current) return;
++    returnToLeave.current = false;
++    leaveButton.current?.focus();
++  }, [asking]);
+ 
+   async function leave() {
+     setBusy(true);
+@@ -199,6 +231,7 @@ export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLe
+           error={error}
+           onConfirm={() => void leave()}
+           onCancel={() => {
++            returnToLeave.current = true;
+             setAsking(false);
+             setError(null);
+           }}
+@@ -208,7 +241,7 @@ export function ReceivedShareRow({ share, onLeft }: { share: ReceivedShare; onLe
+           <a className="button-link" href={sharedHash(share.owner.id, null)} aria-label={`Open ${name}'s shared items`}>
+             Open
+           </a>
+-          <button type="button" className="secondary" onClick={() => setAsking(true)} aria-label={`Leave ${name}'s shared items`}>
++          <button ref={leaveButton} type="button" className="secondary" onClick={() => setAsking(true)} aria-label={`Leave ${name}'s shared items`}>
+             Leave
+           </button>
+         </div>
+diff --git a/src/client/components/SharingSwitcher.tsx b/src/client/components/SharingSwitcher.tsx
+index a0edd19..598505e 100644
+--- a/src/client/components/SharingSwitcher.tsx
++++ b/src/client/components/SharingSwitcher.tsx
+@@ -1,29 +1,43 @@
++import { type SubmitEvent, useState } from 'react';
+ import type { ReceivedShare } from '../api.ts';
+ import { sharedHash } from './sharingModel.ts';
+ 
+ /**
+- * The shell's "Shared with me" switcher: one entry per person who shares timesheets with the user.
+- * Choosing one opens that person's shared items; choosing "My timesheets" returns. It is absent while
+- * nobody shares anything.
++ * The shell's "Shared with me" switcher: one entry per person who shares timesheets with the user,
++ * and "My timesheets". Choosing an entry changes nothing by itself (WCAG 2.2 SC 3.2.2, WP5-UX-AX-06):
++ * the arrow keys can move through the people without leaving the screen, and "Open" goes to the chosen
++ * person's shared items (or back to the user's own timesheets). It is absent while nobody shares anything.
+  */
+ export function SharingSwitcher({ received, ownerId }: { received: readonly ReceivedShare[]; ownerId: string | null }) {
+   if (received.length === 0) return null;
++  // A new screen starts the choice again from the person (or "My timesheets") being shown.
++  return <SwitcherForm key={ownerId ?? ''} received={received} ownerId={ownerId} />;
++}
++
++function SwitcherForm({ received, ownerId }: { received: readonly ReceivedShare[]; ownerId: string | null }) {
++  const [choice, setChoice] = useState(ownerId ?? '');
++
++  function open(event: SubmitEvent<HTMLFormElement>) {
++    event.preventDefault();
++    window.location.hash = choice === '' ? '#/timesheet' : sharedHash(choice, null);
++  }
++
+   return (
+-    <label className="inline shell-switcher">
+-      <span className="muted">Shared with me</span>
+-      <select
+-        value={ownerId ?? ''}
+-        onChange={(event) => {
+-          window.location.hash = event.target.value === '' ? '#/timesheet' : sharedHash(event.target.value, null);
+-        }}
+-      >
+-        <option value="">My timesheets</option>
+-        {received.map((share) => (
+-          <option key={share.id} value={share.owner.id}>
+-            {share.owner.display_name}
+-          </option>
+-        ))}
+-      </select>
+-    </label>
++    <form className="shell-switcher" aria-label="Shared with me" onSubmit={open}>
++      <label className="inline">
++        <span className="muted">Shared with me</span>
++        <select value={choice} onChange={(event) => setChoice(event.target.value)}>
++          <option value="">My timesheets</option>
++          {received.map((share) => (
++            <option key={share.id} value={share.owner.id}>
++              {share.owner.display_name}
++            </option>
++          ))}
++        </select>
++      </label>
++      <button type="submit" className="secondary">
++        Open
++      </button>
++    </form>
+   );
+ }
+diff --git a/src/client/components/SheetWeekTable.tsx b/src/client/components/SheetWeekTable.tsx
+index 3e4a6de..c2bb230 100644
+--- a/src/client/components/SheetWeekTable.tsx
++++ b/src/client/components/SheetWeekTable.tsx
+@@ -1,7 +1,7 @@
+ import { type KeyboardEvent, type MouseEvent, useId, useRef, useState } from 'react';
+ import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.tsx';
+ import { LABEL_CHOICES, type LabelChoice } from './labelPickerModel.ts';
+-import { DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
++import { dayButtonName, DETAIL_ROWS, type SheetDay, type SheetWeek } from './sheetModel.ts';
+ 
+ /** The in-cell label picker of the sheet (E-3 a): what each day's label is now, and what a pick does. */
+ export interface LabelPickerActions {
+@@ -165,7 +165,7 @@ export function LabelPicker({ day, picker }: { day: SheetDay; picker: LabelPicke
+   );
+ }
+ 
+-/** "Edit" while the day can change, otherwise "View"; the stable accessible name of the day button. */
++/** "Edit" while the day can change, otherwise "View": the first word of the day button's name (`dayButtonName`). */
+ export const dayVerb = (actions: Pick<DayActions, 'editable' | 'locked'>): 'Edit' | 'View' => (actions.editable && !actions.locked ? 'Edit' : 'View');
+ 
+ /** A click anywhere on the day opens it, except on its own controls (they act themselves). */
+@@ -276,7 +276,13 @@ function DayRows({ day, details, actions, verb }: { day: SheetDay; details: bool
+                 <span className="mono">{day.dateText}</span>
+               </span>
+             ) : (
+-              <button type="button" className="sheet-day-button" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
++              <button
++                type="button"
++                className="sheet-day-button"
++                onClick={() => actions.onEdit(day.workDate)}
++                aria-label={dayButtonName(verb, day, 'phone')}
++                data-day-button
++              >
+                 <span className="t-weekday">{day.weekday}</span>
+                 <span className="mono">{day.dateText}</span>
+               </button>
+diff --git a/src/client/components/TimesheetSheet.tsx b/src/client/components/TimesheetSheet.tsx
+index bc81b53..5f3447d 100644
+--- a/src/client/components/TimesheetSheet.tsx
++++ b/src/client/components/TimesheetSheet.tsx
+@@ -3,6 +3,7 @@ import { CheckBadge, LabelContent, OtContent, TimeContent } from './DayStatus.ts
+ import { minutesText, usDate } from './format.ts';
+ import { periodStatus, reviewHash, reviewLinkLabel } from './reviewModel.ts';
+ import {
++  dayButtonName,
+   DETAIL_ROWS,
+   overtimeTotal,
+   SHEET_COMPANY,
+@@ -55,7 +56,7 @@ function SheetDayColumn({ day, details, actions }: { day: SheetDay; details: boo
+         {review ? (
+           <span className="sheet-date-text">{day.dateText}</span>
+         ) : (
+-          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={`${verb} ${day.workDate}`}>
++          <button type="button" className="sheet-date" onClick={() => actions.onEdit(day.workDate)} aria-label={dayButtonName(verb, day, 'sheet')} data-day-button>
+             {day.dateText}
+           </button>
+         )}
+diff --git a/src/client/components/sheetModel.ts b/src/client/components/sheetModel.ts
+index e9be677..092a38a 100644
+--- a/src/client/components/sheetModel.ts
++++ b/src/client/components/sheetModel.ts
+@@ -98,7 +98,17 @@ export interface SheetWeek {
+ 
+ const LEAVE_WORD: Readonly<Record<string, string>> = { vacation: 'Vacation', sick: 'Sick', ot: 'OT' };
+ 
+-export const hm = (minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
++/**
++ * The accessible name of a day's button (WCAG 2.2 SC 2.5.3 label in name, WP5-UX-AX-05): the verb, the
++ * visible text, then the ISO accounting date. The desktop sheet shows "09/28" ("Edit 09/28 (2026-09-28)"),
++ * a phone row "Mon 09/28" ("Edit Mon 09/28 (2026-09-28)"); "View" when the day only opens to read.
++ */
++export function dayButtonName(verb: 'Edit' | 'View', day: Pick<SheetDay, 'weekday' | 'dateText' | 'workDate'>, layout: 'sheet' | 'phone'): string {
++  const visible = layout === 'phone' ? `${day.weekday} ${day.dateText}` : day.dateText;
++  return `${verb} ${visible} (${day.workDate})`;
++}
++
++export const hm =(minutes: number | null | undefined): string => (minutes === null || minutes === undefined ? '' : formatHoursMinutes(minutes));
+ 
+ /** What the label cell reads from a day: the day view of the Timesheet page and the review payload both fit. */
+ export interface LabelSource {
+diff --git a/src/client/components/useBlockSize.ts b/src/client/components/useBlockSize.ts
+new file mode 100644
+index 0000000..80ed7ec
+--- /dev/null
++++ b/src/client/components/useBlockSize.ts
+@@ -0,0 +1,24 @@
++import { type RefObject, useLayoutEffect } from 'react';
++
++/**
++ * Writes the rendered height of a sticky element to a CSS custom property while it is mounted
++ * (WP5-UX-AX-01, WCAG 2.2 SC 2.4.11). The stylesheet turns the property into scroll padding (and a
++ * sticky offset), so a control that takes focus scrolls clear of the bar whatever height it wraps to.
++ * The property goes on `host` (the document root when absent) and is removed again on unmount, so the
++ * stylesheet's default applies. CSSOM writes are not inline style markup, so the page CSP allows them.
++ */
++export function useBlockSizeProperty(element: RefObject<HTMLElement | null>, property: `--${string}`, host?: RefObject<HTMLElement | null>): void {
++  useLayoutEffect(() => {
++    const node = element.current;
++    const target = host === undefined ? document.documentElement : host.current;
++    if (node === null || target === null) return;
++    const write = () => target.style.setProperty(property, `${node.getBoundingClientRect().height}px`);
++    write();
++    const observer = new ResizeObserver(write);
++    observer.observe(node);
++    return () => {
++      observer.disconnect();
++      target.style.removeProperty(property);
++    };
++  }, [element, property, host]);
++}
+diff --git a/src/client/styles.css b/src/client/styles.css
+index c342716..fba4790 100644
+--- a/src/client/styles.css
++++ b/src/client/styles.css
+@@ -20,7 +20,8 @@
+   --accent: #1f5fbf;
+   --on-accent: #ffffff;
+   --error: #b42318;
+-  --ok: #1a7f4b;
++  /* 4.5:1 or more on every light surface token, also under the selection tint (WP5-UX-AX-09, SC 1.4.3) */
++  --ok: #136a42;
+   --warn: #8a5a00;
+ 
+   /* Shape and motion */
+@@ -82,6 +83,7 @@
+   --dialog-fit: 92vw;
+   --dialog-fit-wide: 96vw;
+   --select-min: 10rem;
++  --switcher-select-min: 6rem;
+   --facts-min: 11rem;
+   --figures-min: 9rem;
+   --counter-min: 6rem;
+@@ -139,6 +141,16 @@
+   --layer-bar: 3;
+   --shadow-tabbar: 0 -1px 0 var(--line), 0 -8px 24px rgb(28 36 48 / 0.06);
+   --more-width: 16rem;
++  /*
++   * Rendered block sizes of the sticky bars (WP5-UX-AX-01, SC 2.4.11). The shell writes the measured
++   * sizes over these defaults (a bar wraps to 104px at 768px and with the "Shared with me" switcher),
++   * so scroll padding keeps a focused control clear of them; a bar that is not shown counts as none.
++   */
++  --size-none: 0px;
++  --shell-bar-size: var(--bar-height-compact);
++  --share-bar-size: var(--size-none);
++  --editor-head-size: var(--size-none);
++  --focus-clearance: var(--space-2);
+ 
+   /* Type: the system stack only (the CSP allows no web fonts) */
+   --root-font-size: 15px;
+@@ -379,6 +391,14 @@ body {
+   box-shadow: none;
+ }
+ 
++/*
++ * A control that takes focus scrolls clear of the sticky shell bar (and, from 768px, the sticky share
++ * bar below it), whatever height they wrap to (WP5-UX-AX-01, SC 2.4.11).
++ */
++html {
++  scroll-padding-top: calc(var(--shell-bar-size) + var(--focus-clearance));
++}
++
+ @media (max-width: 767px) {
+   html {
+     scroll-padding-bottom: calc(var(--tabbar-height) + var(--space-2));
+@@ -386,6 +406,14 @@ body {
+ }
+ 
+ @media (min-width: 768px) {
++  :root {
++    --shell-bar-size: var(--bar-height);
++  }
++
++  html {
++    scroll-padding-top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--focus-clearance));
++  }
++
+   .shell-bar {
+     min-height: var(--bar-height);
+   }
+@@ -471,6 +499,16 @@ textarea:hover {
+   border-color: var(--muted);
+ }
+ 
++/*
++ * Shift+Tab into a date or time field focuses the browser's own picker button inside it: the field then
++ * matches neither :focus nor :focus-visible, only :focus-within, so the shared ring follows that (WP5-UX-B5
++ * R-12; a click or Tab into these fields already matches :focus-visible, so nothing else changes).
++ */
++input[type='date']:focus-within,
++input[type='time']:focus-within {
++  box-shadow: var(--focus-ring);
++}
++
+ input[type='checkbox'],
+ input[type='radio'] {
+   width: var(--control-check-size);
+@@ -781,6 +819,11 @@ tr.nonworking td {
+   box-shadow: inset 0 0 0 var(--hairline) var(--accent);
+ }
+ 
++/* A pressed toggle keeps its pressed edge and still shows the focus ring (WP5-UX-AX-04, SC 2.4.7). */
++.tools button[aria-pressed='true']:focus-visible {
++  box-shadow: var(--focus-ring), inset 0 0 0 var(--hairline) var(--accent);
++}
++
+ .facts {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(var(--facts-min), var(--track)));
+@@ -954,6 +997,18 @@ textarea {
+   background: var(--scrim);
+ }
+ 
++/*
++ * A dialog that scrolls is a keyboard stop of its own; its ring is inset so the overflow never clips it
++ * (WP5-UX-AX-03, SC 2.4.7). Step headings take focus only as a starting point: not controls, so no ring.
++ */
++.dialog:focus-visible {
++  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
++}
++
++.dialog [tabindex='-1']:focus-visible {
++  box-shadow: none;
++}
++
+ .dialog h2 {
+   margin: 0;
+   font-size: var(--font-size-lg);
+@@ -1493,12 +1548,18 @@ textarea {
+   box-shadow: inset var(--sheet-today-bar) 0 0 var(--accent);
+ }
+ 
++/* In batch mode a narrow Day cell puts the selection box above the day button (WP5-UX-AX-10, SC 1.4.10). */
+ .t-day-head {
+   display: flex;
++  flex-wrap: wrap;
+   align-items: center;
+   gap: var(--space-1);
+ }
+ 
++.t-day-head > .sheet-day-button {
++  max-width: 100%;
++}
++
+ .sheet .sheet-day-button {
+   display: flex;
+   flex-direction: column;
+@@ -1916,6 +1977,13 @@ textarea {
+   box-shadow: var(--shadow-overlay);
+   overflow: auto;
+   overscroll-behavior: contain;
++  /* A focused control scrolls clear of the sticky editor head (WP5-UX-AX-01, SC 2.4.11). */
++  scroll-padding-top: calc(var(--editor-head-size) + var(--focus-clearance));
++}
++
++/* The scrolling panel is a keyboard stop of its own: an inset ring the overflow cannot clip (WP5-UX-AX-03). */
++.day-panel:focus-visible {
++  box-shadow: var(--focus-ring-inset), var(--shadow-overlay);
+ }
+ 
+ .day-panel-side {
+@@ -1943,11 +2011,15 @@ textarea {
+   .day-panel-side {
+     position: sticky;
+     inset: auto;
+-    top: calc(var(--bar-height) + var(--space-3));
++    top: calc(var(--shell-bar-size) + var(--share-bar-size) + var(--space-3));
+     width: auto;
+-    max-height: calc(100dvh - var(--bar-height) - 2 * var(--space-3));
++    max-height: calc(100dvh - var(--shell-bar-size) - var(--share-bar-size) - 2 * var(--space-3));
+     box-shadow: var(--shadow-panel);
+   }
++
++  .day-panel-side:focus-visible {
++    box-shadow: var(--focus-ring-inset), var(--shadow-panel);
++  }
+ }
+ 
+ .day-panel-sheet {
+@@ -2272,8 +2344,17 @@ textarea {
+   transition: var(--transition);
+ }
+ 
++/*
++ * The focused list keeps the ring, and the active option (what Enter picks) carries the inset ring
++ * (WP5-UX-AX-02, SC 1.4.11 and 2.4.7); the chosen option stays marked by colour and weight.
++ */
++.label-list:focus-visible {
++  box-shadow: var(--focus-ring), var(--shadow-overlay);
++}
++
+ .label-option.active {
+   background: var(--day-selected);
++  box-shadow: var(--focus-ring-inset);
+ }
+ 
+ .label-option[aria-selected='true'] {
+@@ -2858,10 +2939,6 @@ code {
+ 
+ /* ---- Sharing (FR-17): Settings, the shell switcher, the persistent owner bar -------------- */
+ 
+-.shell-switcher {
+-  gap: var(--space-2);
+-}
+-
+ .flash {
+   display: flex;
+   flex-wrap: wrap;
+@@ -2948,14 +3025,42 @@ code {
+   color: var(--muted);
+ }
+ 
++/* Sticky below the sticky shell bar, never under it (WP5-UX-AX-01, SC 2.4.11). */
+ @media (min-width: 768px) {
+   .share-bar {
+     position: sticky;
+-    top: 0;
++    top: var(--shell-bar-size);
+     z-index: var(--layer-sticky);
+   }
+ }
+ 
++/*
++ * "Shared with me": the choice, then an explicit Open (WP5-UX-AX-06, SC 3.2.2). The choice narrows
++ * before the row wraps, so a 320px bar keeps the label, the choice and Open on one line.
++ */
++.shell-switcher {
++  display: flex;
++  flex: 0 1 auto;
++  align-items: center;
++  gap: var(--space-2);
++  min-width: 0;
++  max-width: 100%;
++}
++
++.shell-switcher label {
++  flex: 1 1 auto;
++  min-width: 0;
++}
++
++.shell-switcher select {
++  flex: 1 1 auto;
++  min-width: var(--switcher-select-min);
++}
++
++.shell-switcher button {
++  flex: none;
++}
++
+ /* ---- Outbound pause banner of the operations status (WP4-T07) ---------------------------- */
+ 
+ /* A panel in the warning colour with a rule on its leading edge, so the pause stays visible beside the facts. */

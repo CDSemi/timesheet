@@ -250,3 +250,14 @@ Attempt 2: STOPPED before commit (no commit, no push).
 - git diff --cached --check exit 0. Not run: JSON parse, validators, preflight, commit, push.
 - Process slip: one extra shell call used a redirect to the null device and a node -e probe
   (no effect on repo); noted for the record.
+
+Attempt 3: COMMITTED and PUSHED.
+
+- Pre-HEAD = origin/main = 5b349f8; staged list before add = 143 paths (equal to status set).
+- Commit bf954c0b371ad9a5fe461a603c5d476ea210e66c on main; pushed yes; remote SHA the same. No tag.
+- Digests: working tree b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563;
+  HEAD ls-tree digest identical.
+- Checks (exit): node v24.21.0; precommit 0 (143 files, 0 blocks); diff --check 0; JSON parse 0;
+  validate_orchestration 0; check_recovery 0 (106 probes); validate_package --preflight 0.
+  Output in evidence/WP5-UX-FIX7-FREEZE/checks-attempt3.txt (unstaged).
+- Fixes applied: none. Process slip: one call piped ls into head and ran a guessed script name.

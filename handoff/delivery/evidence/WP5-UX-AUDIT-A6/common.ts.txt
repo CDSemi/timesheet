@@ -1,0 +1,220 @@
+// Shared helpers of the WP5-UX-AUDIT-A6 probes (method of WP5-UX-AUDIT-A2..A5, adapted to bf954c0).
+// Build-agnostic: no import of a build's fixtures or of @playwright/test. Results are JSON files in the
+// task folder (raw/probe-results). Synthetic accounts on example.invalid only.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'raw', 'probe-results');
+
+export function writeResult(name: string, data: unknown): void {
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, name), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+export async function signIn(page: any, account: { email: string; password: string }, hash: string): Promise<void> {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password').fill(account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+/** Every `/api/` request of a page as "METHOD /path". */
+export function recordApi(page: any): string[] {
+  const list: string[] = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) list.push(`${request.method()} ${pathname}`);
+  });
+  return list;
+}
+
+/** The JSON body of a request, or a marker for a binary or empty body. */
+export function bodyOf(request: any): unknown {
+  const raw = request.postDataBuffer();
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw.toString('utf8'));
+  } catch {
+    return `<binary ${raw.length} bytes>`;
+  }
+}
+
+/** Every non-GET `/api/` request except sign-in/out, with its body, in the order the page sent them. */
+export function recordWrites(page: any): Array<{ call: string; body: any }> {
+  const list: Array<{ call: string; body: any }> = [];
+  page.on('request', (request: any) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
+      list.push({ call: `${request.method()} ${pathname}`, body: bodyOf(request) });
+    }
+  });
+  return list;
+}
+
+/** Local date `YYYY-MM-DD`, time `HH:MM` and weekday of an instant in a zone, by Intl (an oracle independent of the app). */
+export function local(instant: string, zone: string): { date: string; time: string; weekday: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}`, weekday: get('weekday') };
+}
+
+/** The zone-note due text: "Ddd MM/DD/YYYY, HH:MM" in the zone. */
+export function dueOracle(instant: string, zone: string): string {
+  const l = local(instant, zone);
+  return `${l.weekday} ${l.date.slice(5, 7)}/${l.date.slice(8, 10)}/${l.date.slice(0, 4)}, ${l.time}`;
+}
+
+/** The weekday of an accounting date, computed in UTC (independent of any zone). */
+export function civilWeekday(date: string): string {
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(`${date}T00:00:00Z`).getUTCDay()] ?? '';
+}
+
+/** bf954c0: the day's own button, selected by the day's data-day and the button's data-day-button marker. */
+export function dayButtonBf9(page: any, workDate: string): any {
+  return page.locator(`[data-day="${workDate}"] [data-day-button]`);
+}
+
+/** bf954c0 accessible name of a day button (docs/04 line 48): "Edit 09/28 (2026-09-28)", phone "Edit Mon 09/28 (2026-09-28)". */
+export function dayNameBf9(verb: 'Edit' | 'View', workDate: string): RegExp {
+  return new RegExp(`^${verb} (?:${civilWeekday(workDate)} )?${workDate.slice(5, 7)}/${workDate.slice(8, 10)} \\(${workDate}\\)$`);
+}
+
+/** 5e104e1 (before FIX7): the day's own button had the name "Edit {date}" or "View {date}". */
+export function dayButton5e1(page: any, workDate: string): any {
+  return page.locator(`[data-day="${workDate}"]`).locator(`button[aria-label="Edit ${workDate}"], button[aria-label="View ${workDate}"]`);
+}
+
+/** Opens a day's editor through the toolbar's "Open a day" field. */
+export async function openDay(page: any, workDate: string): Promise<any> {
+  await page.getByLabel('Open a day').fill(workDate);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await editor.waitFor();
+  await editor.getByRole('form', { name: 'Day fields' }).waitFor();
+  return editor;
+}
+
+/** The layout facts of the open editor: modal or not, bottom sheet or side panel, its box. */
+export async function editorLayout(page: any): Promise<Record<string, unknown>> {
+  return page.evaluate(`(() => {
+    const d = document.querySelector('dialog[data-day-editor]');
+    if (d === null) return { open: false };
+    const r = d.getBoundingClientRect();
+    return {
+      open: d.open,
+      modal: d.matches(':modal'),
+      className: d.className,
+      box: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  })()`);
+}
+
+/**
+ * Facts of one control after it took focus (the browser scrolls it into view with the page's scroll
+ * padding): visible, inside the viewport, its centre and sample points hit it (not covered by a sticky
+ * bar, the editor head or anything else), and what covers it if anything.
+ */
+export async function controlFacts(page: any, locator: any): Promise<Record<string, any>> {
+  return locator.evaluate((el: any) => {
+    const r = el.getBoundingClientRect();
+    const labels = el.labels ? [...el.labels] : [];
+    const own = (hit: any) => hit !== null && (hit === el || el.contains(hit) || labels.some((label: any) => label.contains(hit)));
+    let visible = 0;
+    const covers = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) {
+        const x = r.left + 1 + ((r.width - 2) * (i + 0.5)) / 5;
+        const y = r.top + 1 + ((r.height - 2) * (j + 0.5)) / 5;
+        if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
+          covers.add('outside the viewport');
+          continue;
+        }
+        const hit = document.elementFromPoint(x, y);
+        if (own(hit)) visible += 1;
+        else if (hit !== null) {
+          const cover = hit.closest('.shell-bar, .shell-tabs, .share-bar, .editor-head, dialog, .period-bar, header') || hit;
+          covers.add(`${cover.tagName.toLowerCase()}.${String(cover.className).split(' ')[0]}`);
+        }
+      }
+    }
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const centre = cx >= 0 && cy >= 0 && cx < window.innerWidth && cy < window.innerHeight ? own(document.elementFromPoint(cx, cy)) : false;
+    const style = getComputedStyle(el);
+    return {
+      box: { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 },
+      focused: document.activeElement === el,
+      visibleSamples: visible,
+      centreHit: centre,
+      covers: [...covers],
+      visibility: style.visibility,
+      opacity: style.opacity,
+      pointerEvents: style.pointerEvents,
+      disabled: el.disabled === true,
+    };
+  });
+}
+
+/** A5 helper (unchanged): facts of one control: present, visible, inside the viewport width, not covered at its centre, its focus paint. */
+export async function inspectControl(page: any, name: string, locator: any): Promise<Record<string, any>> {
+  const count = await locator.count();
+  if (count === 0) return { name, count };
+  const first = locator.first();
+  await first.evaluate((el: Element) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+  const visible = await first.isVisible();
+  const facts = await first.evaluate((el: Element) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const style = getComputedStyle(el);
+    return {
+      box: { x: Math.round(r.left * 10) / 10, y: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 },
+      inside: r.left >= -0.5 && r.right <= window.innerWidth + 0.5,
+      notCovered: hit !== null && (hit === el || el.contains(hit) || hit.contains(el) || (el as HTMLInputElement).labels?.[0]?.contains(hit) === true),
+      disabled: (el as HTMLButtonElement).disabled === true,
+      focused: document.activeElement === el,
+      focusVisible: el.matches(':focus-visible'),
+      hover: el.matches(':hover'),
+      boxShadow: style.boxShadow,
+      opacity: style.opacity,
+      visibility: style.visibility,
+      pointerEvents: style.pointerEvents,
+    };
+  });
+  return { name, count, visible, ...facts };
+}
+
+/** Sticky sizes as the stylesheet sees them, and the bars' real heights. */
+export async function stickySizes(page: any): Promise<Record<string, any>> {
+  return page.evaluate(`(() => {
+    const root = document.documentElement;
+    const cs = getComputedStyle(root);
+    const h = (sel) => { const el = document.querySelector(sel); return el === null ? null : Math.round(el.getBoundingClientRect().height * 10) / 10; };
+    const editor = document.querySelector('dialog[data-day-editor]');
+    return {
+      width: window.innerWidth,
+      shellBarSizeVar: cs.getPropertyValue('--shell-bar-size').trim(),
+      shareBarSizeVar: cs.getPropertyValue('--share-bar-size').trim(),
+      scrollPaddingTop: cs.scrollPaddingTop,
+      shellBarHeight: h('.shell-bar'),
+      shareBarHeight: h('.share-bar'),
+      shareBarPosition: document.querySelector('.share-bar') === null ? null : getComputedStyle(document.querySelector('.share-bar')).position,
+      shareBarTop: document.querySelector('.share-bar') === null ? null : getComputedStyle(document.querySelector('.share-bar')).top,
+      editorHeadSizeVar: editor === null ? null : getComputedStyle(editor).getPropertyValue('--editor-head-size').trim(),
+      editorHeadHeight: h('dialog[data-day-editor] .editor-head'),
+      editorScrollPaddingTop: editor === null ? null : getComputedStyle(editor).scrollPaddingTop,
+      editorTop: editor === null ? null : Math.round(editor.getBoundingClientRect().top * 10) / 10,
+      editorMaxHeight: editor === null ? null : getComputedStyle(editor).maxHeight,
+    };
+  })()`);
+}

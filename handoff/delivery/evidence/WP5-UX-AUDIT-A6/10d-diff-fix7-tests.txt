@@ -1,0 +1,977 @@
+diff --git a/tests/client/sheetModel.test.ts b/tests/client/sheetModel.test.ts
+index 01268ea..2101077 100644
+--- a/tests/client/sheetModel.test.ts
++++ b/tests/client/sheetModel.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it } from 'vitest';
+ import type { Calculation, DayEntry, DayView, FinalizationResponse, Session } from '../../src/client/api.ts';
+ import {
++  dayButtonName,
+   overtimeTotal,
+   sessionRange,
+   sheetCheck,
+@@ -273,6 +274,22 @@ describe('sheetDay', () => {
+   });
+ });
+ 
++describe('dayButtonName (WCAG 2.5.3 label in name)', () => {
++  it('starts with the verb, contains the visible text of each layout and ends with the ISO accounting date', () => {
++    const shown = sheetDay(day('2026-11-30'), LA, null);
++    expect(shown).toMatchObject({ weekday: 'Mon', dateText: '11/30' });
++    expect(dayButtonName('Edit', shown, 'sheet')).toBe('Edit 11/30 (2026-11-30)');
++    expect(dayButtonName('Edit', shown, 'phone')).toBe('Edit Mon 11/30 (2026-11-30)');
++    expect(dayButtonName('View', shown, 'phone')).toBe('View Mon 11/30 (2026-11-30)');
++  });
++
++  it('keeps the saved accounting date whatever the display zone', () => {
++    for (const zone of [LA, 'Asia/Ho_Chi_Minh', 'Pacific/Kiritimati']) {
++      expect(dayButtonName('View', sheetDay(day('2026-12-06'), zone, null), 'sheet')).toBe('View 12/06 (2026-12-06)');
++    }
++  });
++});
++
+ describe('sheetWeeks', () => {
+   const fourteen = Array.from({ length: 14 }, (_, index) => new Date(Date.UTC(2026, 10, 23 + index)).toISOString().slice(0, 10));
+ 
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 6db082f..f737c42 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -1,6 +1,7 @@
+ import type { Locator, Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
+ import { dateTimeIn, instantOfWallTime, wallTimeIn } from '../client/zoneOracle.ts';
++import { namedDayButton } from './dayButton.ts';
+ import { expect, newPerson, screenshotPath, type SeedClient, test } from './fixtures.ts';
+ 
+ /*
+@@ -98,7 +99,7 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
+   try {
+     await signInThroughUi();
+     // The grid (desktop) or the day list (mobile) opens the editor.
+-    await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}` }).click();
++    await namedDayButton(page, date, 'Edit').click();
+     const editor = page.getByRole('dialog', { name: /Day editor/ });
+     await expect(editor).toBeVisible();
+     await expect(editor.getByText('No session recorded for this day.')).toBeVisible();
+@@ -850,7 +851,7 @@ test('future days show as upcoming from the server date, past days without a rec
+   await snap(page, 'upcoming-days', project);
+ 
+   // The editor shows the same state for that day.
+-  await row.getByRole('button', { name: `Edit ${futureDay}` }).click();
++  await namedDayButton(page, futureDay, 'Edit').click();
+   const editor = page.getByRole('dialog', { name: /Day editor/ });
+   await expect(figure(editor, 'status')).toContainText('upcoming');
+ });
+@@ -902,7 +903,7 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a
+   const project = testInfo.project.name;
+   const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+   await signInThroughUi();
+-  const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++  const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+   await dayButton(date).click();
+   const editor = page.getByRole('dialog', { name: /Day editor/ });
+   await expect(editor).toBeVisible();
+@@ -991,7 +992,7 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
+       await page.setViewportSize({ width, height: 800 });
+       await signInThroughUi();
+       await expect(page.locator('[data-day]')).toHaveCount(14);
+-      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++      const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+       await dayButton(date).click();
+       const editor = page.getByRole('dialog', { name: /Day editor/ });
+       await expect(editor).toBeVisible();
+@@ -1018,7 +1019,7 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
+   test('at 1280px the panel stays beside the sheet and Escape closes it wherever focus is', async ({ page, employeeSeed, signInThroughUi }) => {
+     const [date = '', other = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 2);
+     await signInThroughUi();
+-    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++    const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+     await dayButton(date).click();
+     const editor = page.getByRole('dialog', { name: /Day editor/ });
+     await expect(editor).toBeVisible();
+@@ -1307,7 +1308,7 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
+       await page.setViewportSize({ width: 1280, height: 800 });
+       await signInPageAs(person.account, '#/timesheet');
+       await expect(page.locator('[data-day]')).toHaveCount(14);
+-      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
++      const dayButton = namedDayButton(page, editDay, 'Edit');
+ 
+       // The non-modal editor beside the sheet, then a label pick on a worked day opens the review over it.
+       await dayButton.click();
+diff --git a/tests/e2e/dayButton.ts b/tests/e2e/dayButton.ts
+new file mode 100644
+index 0000000..e91fbd4
+--- /dev/null
++++ b/tests/e2e/dayButton.ts
+@@ -0,0 +1,28 @@
++import type { Locator, Page } from '@playwright/test';
++
++/*
++ * The day's own button on the Timesheet sheet (desktop date button, phone day button). Specs select it
++ * by the day's `data-day` and the button's `data-day-button` marker, never by its accessible name.
++ * WP5-UX-AX-05 (WCAG 2.2 SC 2.5.3): the name starts with the verb, then the visible text, then the ISO
++ * date, for example "Edit 09/28 (2026-09-28)" on the desktop sheet and "Edit Mon 09/28 (2026-09-28)" on
++ * a phone, "View ..." when the day only opens to read (docs/04).
++ */
++
++/** The button that opens one day's editor. */
++export function dayButton(scope: Page | Locator, workDate: string): Locator {
++  return scope.locator(`[data-day="${workDate}"] [data-day-button]`);
++}
++
++/** The accessible name of a day's button: the verb, the visible "MM/DD" (a phone adds the weekday), the ISO date. */
++export function dayButtonName(verb: 'Edit' | 'View', workDate: string): RegExp {
++  const [, month = '', day = ''] = /^\d{4}-(\d{2})-(\d{2})$/.exec(workDate) ?? [];
++  return new RegExp(`^${verb} (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?${month}/${day} \\(${workDate}\\)$`);
++}
++
++/** The day's button, which must also carry the accessible name of `verb` ("Edit" or "View"). */
++export function namedDayButton(scope: Page | Locator, workDate: string, verb: 'Edit' | 'View'): Locator {
++  return dayButton(scope, workDate).and(scope.getByRole('button', { name: dayButtonName(verb, workDate) }));
++}
++
++/** Any day button's accessible name, for checks that do not name the date. */
++export const ANY_DAY_BUTTON_NAME = /^(Edit|View) (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}\/\d{2} \(\d{4}-\d{2}-\d{2}\)$/;
+diff --git a/tests/e2e/focus-ring.spec.ts b/tests/e2e/focus-ring.spec.ts
+index 3e9ac67..e94cd71 100644
+--- a/tests/e2e/focus-ring.spec.ts
++++ b/tests/e2e/focus-ring.spec.ts
+@@ -1,5 +1,6 @@
+ import type { Locator, Page } from '@playwright/test';
+-import { expect, screenshotPath, test } from './fixtures.ts';
++import { ANY_DAY_BUTTON_NAME } from './dayButton.ts';
++import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+  * WP5-UX-B4-01: the shared focus indicator is a UI component boundary under WCAG 2.2 SC 1.4.11
+@@ -112,6 +113,53 @@ function expectRing(name: string, probe: Probe): number {
+   return ratio;
+ }
+ 
++/** The computed box-shadow once the shared transition has finished (unchanged over two reads). */
++async function settledShadow(locator: Locator): Promise<string> {
++  const read = async () => locator.evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).boxShadow ?? 'none');
++  let settled = await read();
++  await expect
++    .poll(
++      async () => {
++        const first = await read();
++        await locator.page().waitForTimeout(400);
++        settled = await read();
++        return first === settled;
++      },
++      { message: 'the box-shadow is settled' },
++    )
++    .toBe(true);
++  return settled;
++}
++
++/** The background colours from the element (itself included or not) up to the page, nearest first. */
++async function backdropsOf(locator: Locator, includeSelf: boolean): Promise<string[]> {
++  return locator.evaluate((element, self) => {
++    const view = element.ownerDocument.defaultView;
++    const backdrops: string[] = [];
++    for (let node = self ? element : element.parentElement; node; node = node.parentElement) backdrops.push(view?.getComputedStyle(node).backgroundColor ?? '');
++    return backdrops;
++  }, includeSelf);
++}
++
++/**
++ * An inset ring (`--focus-ring-inset`): the thinnest inset layer touches the element's edge, so it must
++ * reach 3:1 against each surface beside it (the element's own surface and the one outside its edge).
++ */
++function expectInsetRing(name: string, boxShadow: string, surfaces: string[][]): number {
++  const inset = parseLayers(boxShadow).filter((layer) => layer.inset && layer.spread > 0);
++  const edge = inset.length === 0 ? undefined : inset.reduce((a, b) => (b.spread < a.spread ? b : a));
++  expect(edge, `${name} paints an inset focus ring (${boxShadow})`).toBeDefined();
++  if (edge === undefined) return 0;
++  let lowest = Number.POSITIVE_INFINITY;
++  for (const backdrops of surfaces) {
++    const surface = backdropOf(backdrops);
++    const ratio = contrast(ringOn(edge.colour, surface), surface);
++    expect(ratio, `${name} inset ring ${boxShadow} against ${JSON.stringify(backdrops.slice(0, 3))}`).toBeGreaterThanOrEqual(MINIMUM_RATIO);
++    lowest = Math.min(lowest, ratio);
++  }
++  return lowest;
++}
++
+ /** Every surface token the shared ring can sit on, and the token ring painted on each. */
+ async function surfaceRatios(page: Page): Promise<Record<string, number>> {
+   const raw = await page.locator('body').evaluate((body) => {
+@@ -150,10 +198,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     const tokenRatios = await surfaceRatios(page);
+     const measured: Record<string, number> = {};
+     const nav = page.getByRole('navigation', { name: 'Main' });
++    const sheetDate = page.locator('[data-day] [data-day-button]').first();
++    await expect(sheetDate).toHaveAccessibleName(ANY_DAY_BUTTON_NAME);
+     const controls: Array<[string, Locator]> = [
+       ['button', page.getByRole('button', { name: 'Clock in' })],
+       ['link', nav.getByRole('link', { name: 'Overtime' })],
+-      ['sheet date', page.getByRole('button', { name: /^(Edit|View) \d{4}-\d{2}-\d{2}$/ }).first()],
++      ['sheet date', sheetDate],
+     ];
+     if (project === 'mobile') controls.push(['phone tab', nav.getByRole('link', { name: 'History' })]);
+     for (const [name, locator] of controls) {
+@@ -166,4 +216,103 @@ for (const colorScheme of ['light', 'dark'] as const) {
+     }
+     console.log(`focus-ring contrast ${project} ${colorScheme}: tokens ${JSON.stringify(tokenRatios)} controls ${JSON.stringify(measured)}`);
+   });
++
++  /*
++   * WP5-UX-AX-02 (SC 1.4.11 and 2.4.7): with the label picker open from the keyboard, the focused list
++   * shows the ring and the active option (what Enter picks) shows an inset ring of at least 3:1.
++   */
++  test(`WP5-UX-AX-02: the open label picker shows a ring on the list and on the active option (${colorScheme})`, async ({ page, signInThroughUi }) => {
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const trigger = page.locator('[data-label-picker] button').first();
++    await trigger.scrollIntoViewIfNeeded();
++    await page.keyboard.press('Shift');
++    await trigger.focus();
++    await page.keyboard.press('Enter');
++    const list = page.getByRole('listbox');
++    await expect(list).toBeFocused();
++    await page.keyboard.press('ArrowDown');
++    expect(await list.evaluate((element) => element.matches(':focus-visible')), 'the list is focused from the keyboard').toBe(true);
++    const listRatio = expectRing('label list', { boxShadow: await settledShadow(list), backdrops: await backdropsOf(list, false) });
++    const active = list.locator('.label-option.active');
++    await expect(active).toHaveCount(1);
++    const optionRatio = expectInsetRing('active label option', await settledShadow(active), [await backdropsOf(active, true), await backdropsOf(active, false)]);
++    console.log(`label picker ring ${colorScheme}: list ${listRatio.toFixed(2)} active option ${optionRatio.toFixed(2)}`);
++    await page.keyboard.press('Escape');
++    await expect(trigger).toBeFocused();
++  });
++
++  /*
++   * WP5-UX-AX-03 (SC 2.4.7): a scrolling day editor is a keyboard stop of its own (the browser makes a
++   * scroll container focusable); reached with Shift+Tab from Close it shows an inset ring.
++   */
++  test(`WP5-UX-AX-03: the day editor dialog shows an inset ring when it is the keyboard stop (${colorScheme})`, async ({
++    page,
++    adminSeed,
++    builtServer,
++    signInPageAs,
++  }) => {
++    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Ring Person', signature: 'none' });
++    const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
++    expect(day, 'a past free workday in the displayed period').not.toBe('');
++    await person.api.seedCompleteDay(day);
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInPageAs(person.account, '#/timesheet');
++    // A click on the day's time cell opens the editor (selected by data-day, not by any name).
++    await page.locator(`[data-day="${day}"] :is(.d-time, .t-time)`).click();
++    const editor = page.locator(`dialog[data-day-editor="${day}"]`);
++    await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
++    expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight), 'the editor scrolls').toBe(true);
++    await page.keyboard.press('Shift');
++    await editor.getByRole('button', { name: 'Close', exact: true }).focus();
++    await page.keyboard.press('Shift+Tab');
++    expect(await editor.evaluate((element) => element === element.ownerDocument.activeElement && element.matches(':focus-visible')), 'the dialog is the keyboard stop').toBe(true);
++    const ratio = expectInsetRing('day editor dialog', await settledShadow(editor), [await backdropsOf(editor, true)]);
++    console.log(`day editor dialog ring ${colorScheme}: ${ratio.toFixed(2)}`);
++  });
++
++  /*
++   * WP5-UX-B5 R-12 (SC 2.4.7), needed for the sweep's "no stop without a ring": Shift+Tab into a date
++   * field lands on the browser's own picker button inside it; the field still shows the shared ring.
++   */
++  test(`R-12: a date field reached with Shift+Tab shows the focus ring (${colorScheme})`, async ({ page, signInThroughUi, isMobile }) => {
++    test.skip(isMobile, 'The touch layout focuses the field itself (it already matches :focus-visible)');
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    const field = page.getByLabel('Open a day');
++    await expect(page.getByRole('button', { name: 'Open day', exact: true })).toBeDisabled();
++    await page.keyboard.press('Shift');
++    await page.getByRole('button', { name: 'Show details', exact: true }).focus();
++    await page.keyboard.press('Shift+Tab');
++    await expect(field).toBeFocused();
++    const ratio = expectRing('date field', { boxShadow: await settledShadow(field), backdrops: await backdropsOf(field, false) });
++    console.log(`date field ring after Shift+Tab ${colorScheme}: ${ratio.toFixed(2)}`);
++  });
++
++  /*
++   * WP5-UX-AX-04 (SC 2.4.7 and 1.4.11): a pressed toolbar toggle ("Show details", "Change several days")
++   * keeps the focus ring when it takes keyboard focus; its pressed state alone is not a ring.
++   */
++  test(`WP5-UX-AX-04: a pressed toolbar toggle still shows the focus ring (${colorScheme})`, async ({ page, signInThroughUi }) => {
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInThroughUi();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    for (const name of ['Show details', 'Change several days']) {
++      const toggle = page.getByRole('button', { name, exact: true });
++      await toggle.click();
++      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
++      await page.mouse.move(0, 0);
++      await toggle.evaluate((element) => element.blur());
++      const pressedOnly = await settledShadow(toggle);
++      const probe = await focusedProbe(toggle);
++      expect(probe.boxShadow, `${name}: focused and pressed differs from pressed only`).not.toBe(pressedOnly);
++      const outset = parseLayers(probe.boxShadow).filter((layer) => !layer.inset && layer.spread > 0);
++      expect(outset.length, `${name} paints an outer focus ring (${probe.boxShadow})`).toBeGreaterThan(0);
++      expectRing(`pressed ${name}`, probe);
++      await toggle.click();
++      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
++    }
++  });
+ }
+diff --git a/tests/e2e/import.spec.ts b/tests/e2e/import.spec.ts
+index 1f53c32..802fc86 100644
+--- a/tests/e2e/import.spec.ts
++++ b/tests/e2e/import.spec.ts
+@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
+ import { type Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
+ import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
++import { namedDayButton } from './dayButton.ts';
+ import { type BuiltServer, expect, newPerson, type Person, screenshotPath, SeedClient, statusInPage, test } from './fixtures.ts';
+ 
+ /*
+@@ -170,6 +171,8 @@ test('upload, preview with source cells, decide, confirm and commit; the same wo
+   await expect(summary).toContainText(`${imported} days in 1 period will be saved as "Imported, unverified".`);
+   await expect(summary).toContainText(`${required - 1} day${required - 1 === 1 ? '' : 's'} will be skipped by decision.`);
+   await page.getByRole('button', { name: 'Back to the preview' }).click();
++  // WP5-UX-AX-08: going back returns focus to the button that opened the confirmation.
++  await expect(page.getByRole('button', { name: 'Review and commit' })).toBeFocused();
+   expect((await person.api.call<{ imports: Array<{ state: string }> }>('GET', '/api/imports')).imports[0]?.state).toBe('preview');
+   await page.getByRole('button', { name: 'Review and commit' }).click();
+   await page.getByRole('button', { name: 'Confirm import' }).click();
+@@ -225,7 +228,7 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+   await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+ 
+   // The day opens to read only, and the server refuses the same edit the disabled controls stand for.
+-  await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
++  await namedDayButton(page, layout.cacheDay, 'View').click();
+   await expect(page.getByRole('dialog')).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Add session' })).toHaveCount(0);
+   await page.keyboard.press('Escape');
+@@ -346,6 +349,11 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
+   expect(ledger.entries).toHaveLength(1);
+   await second.close();
+ 
++  // WP5-UX-AX-08: cancelling the correction returns focus to the button that opened it.
++  await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
++  await panel.getByRole('form', { name: 'Correct the opening balance' }).getByRole('button', { name: 'Cancel', exact: true }).click();
++  await expect(panel.getByRole('button', { name: 'Correct the opening balance' })).toBeFocused();
++
+   // The correction needs a reason and evidence, shows what changes, and posts one correction entry.
+   await panel.getByRole('button', { name: 'Correct the opening balance' }).click();
+   const correction = panel.getByRole('form', { name: 'Correct the opening balance' });
+@@ -360,6 +368,12 @@ test('the opening balance: validation, confirmation, a repeat that changes nothi
+   await correction.getByRole('button', { name: 'Review before posting' }).click();
+   await expect(panel.locator('[data-confirm-change]')).toHaveText('+12h 30m to +10h 00m');
+   await expect(panel.locator('[data-confirm-result]')).toHaveAttribute('data-confirm-result', '600');
++  // WP5-UX-AX-08: back to the form, focus is on the button that opened the confirmation; the values stay.
++  await panel.getByRole('button', { name: 'Back to edit' }).click();
++  await expect(correction.getByRole('button', { name: 'Review before posting' })).toBeFocused();
++  await expect(correction.getByLabel('Hours', { exact: true })).toHaveValue('10');
++  await correction.getByRole('button', { name: 'Review before posting' }).click();
++  await expect(panel.locator('[data-confirm-change]')).toHaveText('+12h 30m to +10h 00m');
+   await panel.getByRole('button', { name: 'Confirm correction' }).click();
+   await expect(panel.locator('[data-opening-current]')).toHaveAttribute('data-opening-current', '600');
+   await expect(panel.locator('[data-opening-correction]')).toHaveCount(1);
+diff --git a/tests/e2e/keyboard-access.spec.ts b/tests/e2e/keyboard-access.spec.ts
+new file mode 100644
+index 0000000..1cafc99
+--- /dev/null
++++ b/tests/e2e/keyboard-access.spec.ts
+@@ -0,0 +1,510 @@
++import type { Page } from '@playwright/test';
++import { dayButton, dayButtonName } from './dayButton.ts';
++import { type BuiltServer, expect, newPerson, type Person, type SeedClient, test } from './fixtures.ts';
++
++/*
++ * WP5-UX-FIX7: the WCAG 2.2 AA keyboard and screen-reader items of the accessibility sweep
++ * (WP5-UX-A11Y-SWEEP, WP5-UX-AX-01 and AX-05 to AX-10; AX-02 to AX-04 are in focus-ring.spec.ts),
++ * through the real UI of the BUILT server. Every test creates its own synthetic accounts over the
++ * admin API (example.invalid); nothing is sent anywhere.
++ */
++test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
++
++test.beforeEach(({ page }) => {
++  page.on('pageerror', (error) => {
++    throw error;
++  });
++});
++
++const ME = 'Synthetic Keyboard User';
++const OWNER = 'Synthetic Sharing Owner';
++
++interface World {
++  me: Person;
++  owner: Person;
++  /** A complete past day of `me` in the displayed period (a session with three confirmed breaks). */
++  complete: string;
++}
++
++/** `me` with a complete day, and `owner` who shares timesheets (view only) with `me`; `mutual` adds the share back. */
++async function newWorld(adminSeed: SeedClient, server: BuiltServer, options: { mutual?: boolean } = {}): Promise<World> {
++  const me = await newPerson(adminSeed, server, { displayName: ME, signature: 'none' });
++  const owner = await newPerson(adminSeed, server, { displayName: OWNER, signature: 'none' });
++  const [complete = '', unconfirmed = ''] = await me.api.displayedPeriodFreeWorkdays();
++  expect(complete, 'a past free workday in the displayed period').not.toBe('');
++  await me.api.seedCompleteDay(complete);
++  if (unconfirmed !== '') await me.api.seedUnconfirmedBreaksDay(unconfirmed);
++  const [ownerDay = ''] = await owner.api.displayedPeriodFreeWorkdays();
++  if (ownerDay !== '') await owner.api.seedCompleteDay(ownerDay);
++  const items = { timesheets: 'view', ot_read: false, pdf_download: false };
++  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items }, 201);
++  if (options.mutual === true) await me.api.call('POST', '/api/shares', { grantee_email: owner.account.email, items }, 201);
++  return { me, owner, complete };
++}
++
++/* ---- Colour maths (WCAG 2.x relative luminance) -------------------------------------------------- */
++
++type Rgba = [number, number, number, number];
++
++function parseColour(text: string): Rgba {
++  const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
++  const [r = 0, g = 0, b = 0, a = 1] = numbers;
++  return [r, g, b, a];
++}
++
++function over(top: Rgba, bottom: Rgba): Rgba {
++  const alpha = top[3] + bottom[3] * (1 - top[3]);
++  if (alpha === 0) return [0, 0, 0, 0];
++  const mix = (index: 0 | 1 | 2) => (top[index] * top[3] + bottom[index] * bottom[3] * (1 - top[3])) / alpha;
++  return [mix(0), mix(1), mix(2), alpha];
++}
++
++function luminance([r, g, b]: Rgba): number {
++  const channel = (value: number) => {
++    const s = value / 255;
++    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
++  };
++  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
++}
++
++function contrast(a: Rgba, b: Rgba): number {
++  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
++  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
++}
++
++/** Composites a list of CSS colours, nearest first, over white. */
++function composite(nearestFirst: string[]): Rgba {
++  return nearestFirst.reduceRight<Rgba>((below, css) => over(parseColour(css), below), [255, 255, 255, 1]);
++}
++
++/* ---- WP5-UX-AX-01: Shift+Tab never stops on a control hidden under sticky content (SC 2.4.11) ------- */
++
++interface Stop {
++  key: number;
++  name: string;
++  visible: number;
++  covers: string[];
++  inside: boolean;
++}
++
++/*
++ * The page scripts below are plain JavaScript strings: the test project has no DOM library, as in
++ * day-editor.spec.ts (focusHiddenByPanel).
++ */
++
++/** The focused element: a stable key, its name, and how many of 25 sample points show it on top (elementFromPoint). */
++async function focusedStop(page: Page, scope: string): Promise<Stop | null> {
++  return page.evaluate<Stop | null>(`(() => {
++    const active = document.activeElement;
++    if (!(active instanceof HTMLElement) || active === document.body) return null;
++    window.walkKeys = window.walkKeys || new WeakMap();
++    let key = window.walkKeys.get(active);
++    if (key === undefined) {
++      window.walkNext = (window.walkNext || 0) + 1;
++      key = window.walkNext;
++      window.walkKeys.set(active, key);
++    }
++    const labels = active.labels ? [...active.labels] : [];
++    const rect = active.getBoundingClientRect();
++    let visible = 0;
++    const covers = new Set();
++    for (let i = 0; i < 5; i += 1) {
++      for (let j = 0; j < 5; j += 1) {
++        const x = rect.left + 1 + ((rect.width - 2) * (i + 0.5)) / 5;
++        const y = rect.top + 1 + ((rect.height - 2) * (j + 0.5)) / 5;
++        if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
++          covers.add('outside the viewport');
++          continue;
++        }
++        const hit = document.elementFromPoint(x, y);
++        if (hit !== null && (active.contains(hit) || labels.some((label) => label.contains(hit)))) visible += 1;
++        else if (hit !== null) {
++          const cover = hit.closest('.shell-bar, .shell-tabs, .share-bar, .editor-head, dialog') || hit;
++          covers.add(cover.tagName.toLowerCase() + '.' + String(cover.className).split(' ')[0]);
++        }
++      }
++    }
++    const name = (active.getAttribute('aria-label') || active.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
++    return { key, name: active.tagName.toLowerCase() + ' "' + name + '"', visible, covers: [...covers], inside: active.closest(${JSON.stringify(scope)}) !== null };
++  })()`);
++}
++
++/** Focuses the last visible focusable control inside `scope` (the browser scrolls it into view). */
++async function focusLast(page: Page, scope: string): Promise<void> {
++  const found = await page.evaluate<boolean>(`(() => {
++    const root = document.querySelector(${JSON.stringify(scope)});
++    const candidates = root === null ? [] : [...root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')];
++    const last = candidates.filter((element) => element.getClientRects().length > 0).at(-1);
++    if (last === undefined) return false;
++    last.focus();
++    return document.activeElement === last;
++  })()`);
++  expect(found, `a focusable control in ${scope}`).toBe(true);
++}
++
++/**
++ * Shift+Tab from the last control of `scope` until focus leaves it (or cycles): every stop must show at
++ * least one of its 25 sample points (SC 2.4.11). Returns the hidden stops and the number of stops.
++ */
++async function walkBackward(page: Page, scope: string, label: string): Promise<{ stops: number; hidden: string[] }> {
++  await focusLast(page, scope);
++  const seen = new Set<number>();
++  const hidden: string[] = [];
++  let last: number | undefined;
++  let repeats = 0;
++  for (let index = 0; index < 160; index += 1) {
++    const stop = await focusedStop(page, scope);
++    if (stop === null || !stop.inside) break;
++    // A date or time input keeps focus while Shift+Tab moves through its segments.
++    if (stop.key === last && repeats < 6) {
++      repeats += 1;
++    } else {
++      if (stop.key !== last && seen.has(stop.key)) break;
++      repeats = 0;
++      last = stop.key;
++      seen.add(stop.key);
++      if (stop.visible === 0) hidden.push(`${label}: ${stop.name} under ${stop.covers.join(', ')}`);
++    }
++    await page.keyboard.press('Shift+Tab');
++  }
++  return { stops: seen.size, hidden };
++}
++
++async function walkScreens(page: Page, world: World, signInPageAs: (credentials: { email: string; password: string }, startHash?: string) => Promise<void>, width: number) {
++  await page.emulateMedia({ reducedMotion: 'reduce' });
++  await signInPageAs(world.me.account, '#/timesheet');
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  await expect(page.getByRole('button', { name: /^Clock (in|out)$/ })).toBeVisible();
++  const results = [await walkBackward(page, 'body', `${width} Timesheet`)];
++
++  await page.goto('/#/settings');
++  await expect(page.locator('[data-settings="sharing"]')).toBeVisible();
++  await expect(page.getByRole('list', { name: 'Shares I received' })).toBeVisible();
++  results.push(await walkBackward(page, 'body', `${width} Settings`));
++
++  await page.goto(`/#/shared/${world.owner.account.id}`);
++  await expect(page.locator('[data-share-bar]')).toBeVisible();
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  results.push(await walkBackward(page, 'body', `${width} shared view`));
++
++  await page.goto('/#/timesheet');
++  // A click on the day's time cell opens the editor (selected by data-day, not by any name).
++  await page.locator(`[data-day="${world.complete}"] :is(.d-time, .t-time)`).click();
++  const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
++  await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
++  await expect(editor.getByRole('button', { name: 'Save day fields' })).toBeVisible();
++  results.push(await walkBackward(page, `dialog[data-day-editor="${world.complete}"]`, `${width} day editor`));
++
++  const hidden = results.flatMap((result) => result.hidden);
++  console.log(`AX-01 ${width}px: stops ${results.map((result) => result.stops).join('/')} (Timesheet/Settings/shared/editor), hidden ${hidden.length}`);
++  expect(results.every((result) => result.stops > 5), 'each walk reached several stops').toBe(true);
++  expect(hidden, 'stops entirely hidden by sticky or fixed content').toEqual([]);
++}
++
++test.describe('WP5-UX-AX-01 on the desktop project', () => {
++  test.skip(({ isMobile }) => isMobile, 'Desktop widths');
++  for (const size of [
++    { width: 1280, height: 800 },
++    { width: 768, height: 1024 },
++  ]) {
++    test(`Shift+Tab never stops on a hidden control at ${size.width}px: Timesheet, Settings, shared view, day editor`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
++      test.setTimeout(180_000);
++      await page.setViewportSize(size);
++      await walkScreens(page, await newWorld(adminSeed, builtServer), signInPageAs, size.width);
++    });
++  }
++});
++
++test.describe('WP5-UX-AX-01 on the mobile project', () => {
++  test.skip(({ isMobile }) => !isMobile, 'Phone widths');
++  for (const size of [
++    { width: 390, height: 844 },
++    { width: 320, height: 640 },
++  ]) {
++    test(`Shift+Tab never stops on a hidden control at ${size.width}px: Timesheet, Settings, shared view, day editor`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
++      test.setTimeout(180_000);
++      await page.setViewportSize(size);
++      await walkScreens(page, await newWorld(adminSeed, builtServer), signInPageAs, size.width);
++    });
++  }
++});
++
++/* ---- WP5-UX-AX-05: label in name (SC 2.5.3) ------------------------------------------------------- */
++
++test('WP5-UX-AX-05: each day button and "End share" carry their visible text in the accessible name', async ({ page, adminSeed, builtServer, signInPageAs }) => {
++  test.setTimeout(90_000);
++  const world = await newWorld(adminSeed, builtServer);
++  const check = async (verb: 'Edit' | 'View') => {
++    const days = page.locator('[data-day]');
++    await expect(days).toHaveCount(14);
++    const dates = await days.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-day') ?? ''));
++    for (const date of dates) {
++      const button = dayButton(page, date);
++      await expect(button).toHaveCount(1);
++      const visible = (await button.innerText()).replace(/\s+/g, ' ').trim();
++      await expect(button, `the day button of ${date}`).toHaveAccessibleName(`${verb} ${visible} (${date})`);
++      await expect(button).toHaveAccessibleName(dayButtonName(verb, date));
++    }
++  };
++  await signInPageAs(world.me.account, '#/timesheet');
++  await check('Edit');
++  await page.goto(`/#/shared/${world.owner.account.id}`);
++  await expect(page.locator('[data-share-bar]')).toBeVisible();
++  await check('View');
++
++  // The owner's "End share" button: visible "End share", name "End share with {name}".
++  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
++  if (await more.isVisible()) await more.click();
++  await page.getByRole('button', { name: 'Sign out' }).click();
++  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
++  await signInPageAs(world.owner.account, '#/settings');
++  const end = page.getByRole('list', { name: 'Shares I gave' }).getByRole('button', { name: `End share with ${ME}`, exact: true });
++  await expect(end).toBeVisible();
++  await expect(end).toHaveText('End share');
++});
++
++/* ---- WP5-UX-AX-06: choosing in "Shared with me" does not change the screen (SC 3.2.2) --------------- */
++
++test('WP5-UX-AX-06: the "Shared with me" choice changes nothing until Open is pressed', async ({ page, adminSeed, builtServer, signInPageAs }) => {
++  const world = await newWorld(adminSeed, builtServer);
++  const ownerId = world.owner.account.id;
++  await signInPageAs(world.me.account, '#/timesheet');
++  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++  const select = page.getByRole('combobox', { name: 'Shared with me' });
++  const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
++  await select.focus();
++  await page.keyboard.press('ArrowDown');
++  await expect(select).toHaveValue(ownerId);
++  await page.waitForTimeout(500);
++  await expect(page).toHaveURL(/#\/timesheet$/);
++  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++  await expect(page.locator('[data-share-bar]')).toHaveCount(0);
++
++  // The explicit Open goes to the chosen person's shared items; the choice stays on that person.
++  await page.keyboard.press('Tab');
++  await expect(open).toBeFocused();
++  await page.keyboard.press('Enter');
++  await expect(page).toHaveURL(new RegExp(`#/shared/${ownerId}`));
++  await expect(page.locator('[data-share-bar]')).toBeVisible();
++  await expect(page.getByRole('heading', { name: `${OWNER}'s timesheet` })).toBeVisible();
++  await expect(select).toHaveValue(ownerId);
++
++  // "My timesheets" stays an entry: choosing it changes nothing, Open returns.
++  await select.selectOption({ label: 'My timesheets' });
++  await page.waitForTimeout(300);
++  await expect(page).toHaveURL(new RegExp(`#/shared/${ownerId}`));
++  await open.click();
++  await expect(page).toHaveURL(/#\/timesheet$/);
++  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++});
++
++/* ---- WP5-UX-AX-07: status messages (SC 4.1.3) --------------------------------------------------- */
++
++test('WP5-UX-AX-07: a failed sign-in is an alert and a share form problem is a status message', async ({ page, adminSeed, builtServer, signInPageAs }) => {
++  await page.goto('/');
++  await page.getByLabel('Email').fill(builtServer.credentials.employee.email);
++  await page.getByLabel('Password').fill('wrong-synthetic-password');
++  await page.getByRole('button', { name: 'Sign in' }).click();
++  await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect');
++
++  const person = await newPerson(adminSeed, builtServer, { displayName: ME, signature: 'none' });
++  await signInPageAs(person.account, '#/settings');
++  const form = page.getByRole('form', { name: 'Share my timesheets' });
++  await form.getByRole('radio', { name: 'None' }).check();
++  await expect(form.getByRole('status')).toHaveText('Turn on at least one shared item.');
++});
++
++/* ---- WP5-UX-AX-08: focus order after a dialog or an inline step closes (SC 2.4.3) ----------------- */
++
++test('WP5-UX-AX-08: the batch review returns focus to "Preview changes" and moves focus to each step heading', async ({ page, adminSeed, builtServer, signInPageAs }) => {
++  test.setTimeout(90_000);
++  const world = await newWorld(adminSeed, builtServer);
++  await signInPageAs(world.me.account, '#/timesheet');
++  await expect(page.locator('[data-day]')).toHaveCount(14);
++  await page.getByRole('button', { name: 'Change several days' }).click();
++  await page.getByRole('checkbox', { name: `Select ${world.complete}` }).check();
++  await page.getByLabel('Category for selected days').selectOption('Off');
++  const preview = page.getByRole('button', { name: 'Preview changes' });
++  const dialog = page.getByRole('dialog');
++  const openReview = async () => {
++    await preview.focus();
++    await page.keyboard.press('Enter');
++    await expect(dialog.getByRole('heading', { name: 'Review category change' })).toBeVisible();
++  };
++
++  await openReview();
++  await page.keyboard.press('Escape');
++  await expect(dialog).toHaveCount(0);
++  await expect(preview, 'after Escape').toBeFocused();
++
++  await openReview();
++  await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
++  await page.keyboard.press('Enter');
++  await expect(dialog).toHaveCount(0);
++  await expect(preview, 'after Cancel').toBeFocused();
++
++  await openReview();
++  await dialog.getByRole('button', { name: 'Review conflicts' }).focus();
++  await page.keyboard.press('Enter');
++  await expect(dialog.getByRole('heading', { name: 'Recorded work conflicts with the new label' }), 'the conflicts step heading').toBeFocused();
++  await dialog.getByRole('button', { name: 'Back', exact: true }).focus();
++  await page.keyboard.press('Enter');
++  await expect(dialog.getByRole('heading', { name: 'Review category change' }), 'the review step heading').toBeFocused();
++  await page.keyboard.press('Escape');
++  await expect(preview, 'after Escape from the second visit').toBeFocused();
++
++  // Nothing was saved: the day keeps its category and its session.
++  const day = await world.me.api.dayView(world.complete);
++  expect(day.category).toBe('Worked');
++  expect(day.sessions).toHaveLength(1);
++});
++
++test('WP5-UX-AX-08: the sharing rows in Settings return focus to the button that opened a confirmation or a change', async ({
++  page,
++  adminSeed,
++  builtServer,
++  signInPageAs,
++}) => {
++  test.setTimeout(90_000);
++  const world = await newWorld(adminSeed, builtServer, { mutual: true });
++  await signInPageAs(world.me.account, '#/settings');
++  const given = page.getByRole('list', { name: 'Shares I gave' });
++  const received = page.getByRole('list', { name: 'Shares I received' });
++  const end = given.getByRole('button', { name: /^End shar(e|ing) with / });
++  const change = given.getByRole('button', { name: /^Change items shared with / });
++  const leave = received.getByRole('button', { name: /^Leave .*shared items$/ });
++  const confirm = page.locator('[data-confirm="share"]');
++
++  for (const [opener, how] of [
++    [end, 'Escape'],
++    [end, 'Cancel'],
++    [leave, 'Escape'],
++    [leave, 'Cancel'],
++  ] as const) {
++    await opener.focus();
++    await page.keyboard.press('Enter');
++    await expect(confirm).toBeFocused();
++    if (how === 'Escape') await page.keyboard.press('Escape');
++    else {
++      await confirm.getByRole('button', { name: 'Cancel', exact: true }).focus();
++      await page.keyboard.press('Enter');
++    }
++    await expect(confirm).toHaveCount(0);
++    await expect(opener, `${how} returns focus`).toBeFocused();
++  }
++
++  await change.focus();
++  await page.keyboard.press('Enter');
++  await expect(given.getByRole('group', { name: /^Change items shared with / }), 'the change step takes focus').toBeFocused();
++  await given.getByRole('button', { name: 'Cancel', exact: true }).focus();
++  await page.keyboard.press('Enter');
++  await expect(change, 'Cancel returns focus').toBeFocused();
++
++  // Nothing changed: both shares still exist.
++  const shares = await world.me.api.call<{ given: unknown[]; received: unknown[] }>('GET', '/api/shares');
++  expect([shares.given.length, shares.received.length]).toEqual([1, 1]);
++});
++
++/* ---- WP5-UX-AX-09: "Complete" text contrast on a selected row (SC 1.4.3) ------------------------- */
++
++for (const colorScheme of ['light', 'dark'] as const) {
++  test(`WP5-UX-AX-09: the "Complete" status text reaches 4.5:1 on a selected batch row and on every surface (${colorScheme})`, async ({
++    page,
++    adminSeed,
++    builtServer,
++    signInPageAs,
++  }) => {
++    const world = await newWorld(adminSeed, builtServer);
++    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
++    await signInPageAs(world.me.account, '#/timesheet');
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    await page.getByRole('button', { name: 'Change several days' }).click();
++    await page.getByRole('checkbox', { name: `Select ${world.complete}` }).check();
++    const status = page.locator(`[data-day="${world.complete}"] .status-complete`).first();
++    await expect(status).toHaveText(/Complete/);
++    const rendered = await status.evaluate((element) => {
++      const view = element.ownerDocument.defaultView;
++      const chain = [element];
++      for (let node = element.parentElement; node; node = node.parentElement) chain.push(node);
++      return { colour: view?.getComputedStyle(element).color ?? '', backdrops: chain.map((node) => view?.getComputedStyle(node).backgroundColor ?? '') };
++    });
++    const background = composite(rendered.backdrops);
++    const ratio = contrast(over(parseColour(rendered.colour), background), background);
++    expect(ratio, `"Complete" ${rendered.colour} on ${JSON.stringify(rendered.backdrops.slice(0, 4))}`).toBeGreaterThanOrEqual(4.5);
++
++    // The status token against every surface it can be drawn on, a selected row included.
++    const tokens = await page.locator('body').evaluate((body) => {
++      const probe = body.ownerDocument.createElement('div');
++      body.append(probe);
++      const read = (value: string) => {
++        probe.style.backgroundColor = value;
++        const computed = body.ownerDocument.defaultView?.getComputedStyle(probe).backgroundColor ?? '';
++        probe.style.backgroundColor = '';
++        return computed;
++      };
++      const result = {
++        ok: read('var(--ok)'),
++        selected: read('var(--day-selected)'),
++        surfaces: ['--card', '--bg', '--off', '--sheet-head', '--sheet-head-off', '--day-nonworking', '--attention-bg'].map((token) => ({ token, colour: read(`var(${token})`) })),
++      };
++      probe.remove();
++      return result;
++    });
++    const ok = parseColour(tokens.ok);
++    const ratios: Record<string, number> = {};
++    for (const { token, colour } of tokens.surfaces) {
++      for (const [name, stack] of [
++        [token, [colour]],
++        [`--day-selected over ${token}`, [tokens.selected, colour]],
++      ] as const) {
++        const surface = composite([...stack]);
++        const value = contrast(over(ok, surface), surface);
++        expect(value, `--ok ${tokens.ok} on ${name}`).toBeGreaterThanOrEqual(4.5);
++        ratios[name] = Math.round(value * 100) / 100;
++      }
++    }
++    console.log(`AX-09 ${colorScheme}: rendered ${ratio.toFixed(2)}; --ok ${JSON.stringify(ratios)}`);
++  });
++}
++
++/* ---- WP5-UX-AX-10: the phone batch row reflows at 320px (SC 1.4.10) ------------------------------- */
++
++test.describe('WP5-UX-AX-10 on the mobile project', () => {
++  test.skip(({ isMobile }) => !isMobile, 'Phone widths');
++  for (const size of [
++    { width: 390, height: 844 },
++    { width: 320, height: 640 },
++  ]) {
++    test(`in batch mode at ${size.width}px each day button stays inside its cell and clear of the label`, async ({ page, adminSeed, builtServer, signInPageAs }) => {
++      const world = await newWorld(adminSeed, builtServer);
++      await page.setViewportSize(size);
++      await signInPageAs(world.me.account, '#/timesheet');
++      await expect(page.locator('[data-day]')).toHaveCount(14);
++      await page.getByRole('button', { name: 'Change several days' }).click();
++      await expect(page.getByRole('group', { name: 'Batch category edit' })).toBeVisible();
++      const rows = await page.locator('tr.sheet-row[data-day]').evaluateAll((elements) =>
++        elements.map((row) => {
++          const box = (selector: string) => {
++            const rect = row.querySelector(selector)?.getBoundingClientRect();
++            return rect === undefined ? null : { left: rect.left, right: rect.right, width: rect.width, height: rect.height };
++          };
++          return { day: row.getAttribute('data-day'), button: box('button.sheet-day-button'), cell: box('td.t-day'), label: box('td.t-label'), pick: box('label.pick') };
++        }),
++      );
++      expect(rows).toHaveLength(14);
++      const problems: string[] = [];
++      for (const { day, button, cell, label, pick } of rows) {
++        if (button === null || cell === null || label === null || pick === null) {
++          problems.push(`${day}: missing part`);
++          continue;
++        }
++        if (button.right > cell.right + 0.5) problems.push(`${day}: day button ${(button.right - cell.right).toFixed(1)}px outside its cell`);
++        if (button.right > label.left + 0.5) problems.push(`${day}: day button ${(button.right - label.left).toFixed(1)}px over the label cell`);
++        if (pick.width < 44 || pick.height < 44) problems.push(`${day}: selection target ${pick.width}x${pick.height}`);
++      }
++      expect(problems).toEqual([]);
++      const widths = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
++      expect(widths.scroll, 'no sideways scroll').toBeLessThanOrEqual(widths.inner);
++    });
++  }
++});
+diff --git a/tests/e2e/sharing.spec.ts b/tests/e2e/sharing.spec.ts
+index 40fabcc..38d0a90 100644
+--- a/tests/e2e/sharing.spec.ts
++++ b/tests/e2e/sharing.spec.ts
+@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
+ import { crc32, deflateSync } from 'node:zlib';
+ import { type Page } from '@playwright/test';
+ import { addDays } from '../../src/domain/dates.ts';
++import { dayButtonName, namedDayButton } from './dayButton.ts';
+ import {
+   type BuiltServer,
+   type CreatedAccount,
+@@ -228,6 +229,9 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   await switchUser(page, signInPageAs, grantee.account, '#/timesheet');
+   await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
+   await switcher(page).selectOption({ label: 'Synthetic Owner' });
++  // WP5-UX-AX-06: the choice alone changes nothing; the explicit Open goes there.
++  await expect(page.getByRole('heading', { name: 'Timesheet', exact: true })).toBeVisible();
++  await page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true }).click();
+   await expect(bar(page).locator('[data-share-bar-title]')).toHaveText("Viewing Synthetic Owner's timesheets - view only");
+   await expect(bar(page).getByText('Timesheets: view only')).toBeVisible();
+   await expect(page.getByRole('heading', { name: "Synthetic Owner's timesheet" })).toBeVisible();
+@@ -240,7 +244,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+   }
+   await expect(page.getByLabel('Open a day')).toHaveCount(0);
+   await expect(page.getByRole('checkbox')).toHaveCount(0);
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
++  await expect(page.getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0);
+   // The label cells are plain text: no in-cell label picker without edit rights.
+   await expect(page.locator('[data-label-picker]')).toHaveCount(0);
+   await expect(page.getByRole('button', { name: /^Label for / })).toHaveCount(0);
+@@ -251,7 +255,7 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+ 
+   // A read-only day: the figures and fields are shown, and no add, edit, delete or save control exists.
+   await page.screenshot({ path: screenshotPath(`sharing-view-only-${project}-synthetic.png`), animations: 'disabled' });
+-  await page.getByRole('button', { name: `View ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'View').click();
+   const dialog = page.getByRole('dialog');
+   await expect(dialog.getByRole('heading', { name: new RegExp(`Day .*${workDay}`) })).toBeVisible();
+   await expect(dialog.locator('[data-day-fields="read-only"]')).toContainText(note);
+@@ -329,7 +333,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+   await page.getByRole('button', { name: 'Done' }).click();
+   await expect(page.getByRole('button', { name: 'Preview changes' })).toHaveCount(0);
+   await expect(page.getByLabel('Open a day')).toBeVisible();
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
++  await expect(namedDayButton(page, workDay, 'Edit')).toBeVisible();
+   for (const name of ['Clock in', 'Clock out']) await expect(page.getByRole('button', { name, exact: true }), name).toHaveCount(0);
+   await expect(page.getByRole('link', { name: /review/i })).toHaveCount(0);
+   await expect(page.locator('[data-signature], [data-sheet-review-link]')).toHaveCount(0);
+@@ -349,7 +353,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+ 
+   const grantedNote = `edited-by-grantee-${randomBytes(4).toString('hex')}`;
+   await page.screenshot({ path: screenshotPath(`sharing-edit-${project}-synthetic.png`), animations: 'disabled' });
+-  await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'Edit').click();
+   const dialog = page.getByRole('dialog');
+   await expect(dialog.getByRole('heading', { name: new RegExp(`Day editor .*${workDay}`) })).toBeVisible();
+   await dialog.getByLabel('Notes').fill(grantedNote);
+@@ -358,7 +362,7 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+   await page.screenshot({ path: screenshotPath(`sharing-edit-day-${project}-synthetic.png`), animations: 'disabled' });
+   await dialog.getByRole('button', { name: 'Close' }).click();
+   // Focus returns to the day's button.
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
++  await expect(namedDayButton(page, workDay, 'Edit')).toBeFocused();
+   expectOnlySharedRequests(recorded.list, owner.account.id);
+   expect((await owner.api.dayView(workDay)).entry?.notes).toBe(grantedNote);
+   // The server also refuses the live clock for an edit share.
+diff --git a/tests/e2e/timesheet.spec.ts b/tests/e2e/timesheet.spec.ts
+index 5922c73..6190cd6 100644
+--- a/tests/e2e/timesheet.spec.ts
++++ b/tests/e2e/timesheet.spec.ts
+@@ -1,5 +1,6 @@
+ import type { Page } from '@playwright/test';
+ import { formatHoursMinutes } from '../../src/domain/format.ts';
++import { namedDayButton } from './dayButton.ts';
+ import { expect, screenshotPath, test } from './fixtures.ts';
+ 
+ /*
+@@ -261,7 +262,7 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+   const start = sheet.period.period_start;
+   await expect(dayRow(page, start)).toHaveAccessibleName(new RegExp(`${start}$`));
+   await expect(dayRow(page, start)).toContainText(`${start.slice(5, 7)}/${start.slice(8, 10)}`);
+-  await expect(dayRow(page, start).getByRole('button', { name: `Edit ${start}`, exact: true })).toBeVisible();
++  await expect(namedDayButton(page, start, 'Edit')).toBeVisible();
+   await expect(page.getByText('accounting dates', { exact: false }).first()).toBeVisible();
+ 
+   // Session times are in the display zone (Asia/Ho_Chi_Minh), not in the reporting zone of the seed (09:00-18:00 LA).

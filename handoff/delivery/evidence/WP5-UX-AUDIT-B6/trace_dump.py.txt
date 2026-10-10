@@ -1,0 +1,27 @@
+"""WP5-UX-AUDIT-B6: list the entries of a Playwright trace.zip (names, and the error/step lines of test.trace).
+
+Usage: python trace_dump.py <trace.zip> <out.txt>
+"""
+import json
+import sys
+import zipfile
+
+src, out = sys.argv[1], sys.argv[2]
+lines = []
+with zipfile.ZipFile(src) as archive:
+    for info in archive.infolist():
+        lines.append(f"entry {info.filename} {info.file_size}")
+    for name in archive.namelist():
+        if not name.endswith('.trace'):
+            continue
+        for raw in archive.read(name).decode('utf-8', 'replace').splitlines():
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue
+            kind = event.get('type')
+            if kind in ('before', 'after', 'error', 'stdout', 'stderr'):
+                keep = {k: event.get(k) for k in ('type', 'callId', 'title', 'apiName', 'startTime', 'endTime', 'error', 'text', 'message') if event.get(k) is not None}
+                lines.append(f"{name}: {json.dumps(keep)[:600]}")
+with open(out, 'w', encoding='utf-8', newline='\n') as handle:
+    handle.write('\n'.join(lines) + '\n')

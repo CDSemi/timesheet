@@ -1,0 +1,28 @@
+// WP5-UX-AUDIT-B6: summarise P3 name scans (label in name) and the day-button names. Usage: node names-summary.mjs <p3.json> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const data = JSON.parse(readFileSync(input, 'utf8'));
+const lines = [];
+const rows = data.rows;
+lines.push(`controls scanned: ${rows.length}; errors: ${rows.filter((row) => row.role === 'error').length}`);
+const mismatches = rows.filter((row) => !row.contains);
+lines.push(`name does not contain the visible text: ${mismatches.length} (symbolic only: ${mismatches.filter((row) => row.symbolic).length})`);
+const groups = new Map();
+for (const row of mismatches) {
+  const kind = row.symbolic ? `symbolic "${row.visible}" -> "${row.name}"` : `${row.role} visible "${row.visible}" name "${row.name.replace(/\d{4}-\d{2}-\d{2}/g, '{date}')}"`;
+  groups.set(kind, (groups.get(kind) ?? 0) + 1);
+}
+for (const [kind, count] of [...groups.entries()].sort((a, b) => b[1] - a[1])) lines.push(`  ${count} x ${kind}`);
+const dayRows = data.days;
+const dayBad = dayRows.filter((row) => {
+  const verb = row.shared ? 'View' : 'Edit';
+  return row.label !== `${verb} ${row.visible} (${row.day})`;
+});
+lines.push(`day buttons: ${dayRows.length}; name equals "{verb} {visible text} ({ISO date})": ${dayRows.length - dayBad.length}; other: ${dayBad.length}`);
+for (const row of dayRows.slice(0, 3)) lines.push(`  sample ${JSON.stringify(row)}`);
+for (const row of dayRows.filter((r) => r.shared).slice(0, 2)) lines.push(`  sample shared ${JSON.stringify(row)}`);
+for (const row of dayBad) lines.push(`  BAD ${JSON.stringify(row)}`);
+const endShare = rows.filter((row) => /End share/.test(row.visible) || /End shar/.test(row.name));
+for (const row of endShare.slice(0, 2)) lines.push(`  end share: visible "${row.visible}" name "${row.name}" contains=${row.contains}`);
+writeFileSync(output, `${lines.join('\n')}\n`);

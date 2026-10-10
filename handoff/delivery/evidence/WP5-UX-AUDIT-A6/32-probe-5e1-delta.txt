@@ -1,0 +1,55 @@
+$ playwright test --config probe.5e1.config.ts dialogs switcher days sticky  (CLI of the 5e1 export)
+
+Running 15 tests using 1 worker
+
+  ok  1 [desktop] › lib-days.ts:62:3 › day selection by data-day, names and accounting dates in 8 device zones and 4 periods (5e104e1) (21.4s)
+  ok  2 [desktop] › lib-dialogs.ts:25:3 › Timesheet dialogs: Cancel, Escape, Back and step changes write nothing; commits keep their bodies (5e104e1) (4.1s)
+  ok  3 [desktop] › lib-dialogs.ts:174:3 › Settings and Import steps: Cancel, Escape and Back write nothing; commits keep their bodies (5e104e1) (3.1s)
+  ok  4 [desktop] › lib-sticky.ts:23:3 › sticky sizes and scroll padding never hide or block an edit, clock, reason or confirmation control (5e104e1) (1.0m)
+  ok  5 [desktop] › lib-switcher.ts:22:3 › switcher routes, read-only shared view, owner-only controls and isolation (5e104e1) (9.7s)
+  ok  6 [tablet] › lib-days.ts:62:3 › day selection by data-day, names and accounting dates in 8 device zones and 4 periods (5e104e1) (22.9s)
+  ok  7 [tablet] › lib-dialogs.ts:25:3 › Timesheet dialogs: Cancel, Escape, Back and step changes write nothing; commits keep their bodies (5e104e1) (4.1s)
+  ok  8 [tablet] › lib-dialogs.ts:174:3 › Settings and Import steps: Cancel, Escape and Back write nothing; commits keep their bodies (5e104e1) (3.5s)
+  ok  9 [tablet] › lib-sticky.ts:23:3 › sticky sizes and scroll padding never hide or block an edit, clock, reason or confirmation control (5e104e1) (31.4s)
+  ok 10 [tablet] › lib-switcher.ts:22:3 › switcher routes, read-only shared view, owner-only controls and isolation (5e104e1) (10.2s)
+  x  11 [mobile] › lib-days.ts:62:3 › day selection by data-day, names and accounting dates in 8 device zones and 4 periods (5e104e1) (1.5s)
+  ok 12 [mobile] › lib-dialogs.ts:25:3 › Timesheet dialogs: Cancel, Escape, Back and step changes write nothing; commits keep their bodies (5e104e1) (4.5s)
+  ok 13 [mobile] › lib-dialogs.ts:174:3 › Settings and Import steps: Cancel, Escape and Back write nothing; commits keep their bodies (5e104e1) (3.4s)
+  ok 14 [mobile] › lib-sticky.ts:23:3 › sticky sizes and scroll padding never hide or block an edit, clock, reason or confirmation control (5e104e1) (1.0m)
+  ok 15 [mobile] › lib-switcher.ts:22:3 › switcher routes, read-only shared view, owner-only controls and isolation (5e104e1) (9.9s)
+
+
+  1) [mobile] › lib-days.ts:62:3 › day selection by data-day, names and accounting dates in 8 device zones and 4 periods (5e104e1) 
+
+    Error: locator.click: Error: strict mode violation: locator('[data-day="2026-09-28"] button.sheet-date, button.sheet-day-button') resolved to 14 elements:
+        1) <button type="button" class="sheet-day-button" aria-label="Edit 2026-09-28">…</button> aka getByRole('button', { name: 'Edit 2026-09-28' })
+        2) <button type="button" class="sheet-day-button" aria-label="Edit 2026-09-29">…</button> aka getByRole('button', { name: 'Edit 2026-09-29' })
+        3) <button type="button" class="sheet-day-button" aria-label="Edit 2026-09-30">…</button> aka getByRole('button', { name: 'Edit 2026-09-30' })
+        4) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-01">…</button> aka getByRole('button', { name: 'Edit 2026-10-01' })
+        5) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-02">…</button> aka getByRole('button', { name: 'Edit 2026-10-02' })
+        6) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-03">…</button> aka getByRole('button', { name: 'Edit 2026-10-03' })
+        7) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-04">…</button> aka getByRole('button', { name: 'Edit 2026-10-04' })
+        8) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-05">…</button> aka getByRole('button', { name: 'Edit 2026-10-05' })
+        9) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-06">…</button> aka getByRole('button', { name: 'Edit 2026-10-06' })
+        10) <button type="button" class="sheet-day-button" aria-label="Edit 2026-10-07">…</button> aka getByRole('button', { name: 'Edit 2026-10-07' })
+        ...
+
+    Call log:
+      - waiting for locator('[data-day="2026-09-28"] button.sheet-date, button.sheet-day-button')
+
+
+      150 |           for (const row of rows) {
+      151 |             const button = page.locator(`[data-day="${row.date}"] ${options.buttonSelector}`);
+    > 152 |             await button.click();
+          |                          ^
+      153 |             const editor = page.locator('dialog[data-day-editor]');
+      154 |             await expect(editor).toHaveCount(1);
+      155 |             await expect(editor.locator('h2#day-editor-title')).toBeVisible();
+        at <task>\probe\lib-days.ts:152:26
+
+    Error Context: ..\tmp\probe-output-5e1\days.5e1-day-selection-by--75f91-ones-and-4-periods-5e104e1--mobile\error-context.md
+
+  1 failed
+    [mobile] › lib-days.ts:62:3 › day selection by data-day, names and accounting dates in 8 device zones and 4 periods (5e104e1) 
+  14 passed (4.4m)
+exit 1

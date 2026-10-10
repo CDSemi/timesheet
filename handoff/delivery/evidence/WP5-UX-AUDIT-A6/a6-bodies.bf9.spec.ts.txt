@@ -1,0 +1,136 @@
+// WP5-UX-AUDIT-A6 item 2 (A5 method): request bodies of the clock (in, out), the review sign-off, the batch
+// ("Change several days", old period, reason), the in-cell picker (current period, one day), the editor's day
+// fields and a new session on bf954c0, in each layout (1280 side panel, 1024 modal editor, 390 phone sheet),
+// for the comparison with the same flows on 014bd47 (a6-bodies.014.spec.ts). The day editor is opened from the
+// day's own button, selected by data-day + data-day-button and checked for its new accessible name. Synthetic only.
+import { expect, newPerson, test } from '../export/tests/e2e/fixtures.ts';
+import { dayButtonBf9, dayNameBf9, editorLayout, recordWrites, signIn, writeResult } from './common.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+// The same notes text as the reused 014bd47 probe (a6-bodies.014.spec.ts), so the bodies compare byte for byte.
+const NOTES = 'A5 body probe notes (synthetic)';
+
+test('write bodies of the clock, the sign-off, the batch, the picker, the day fields and a session (bf954c0)', async ({ page, browser, adminSeed, builtServer }, testInfo) => {
+  test.setTimeout(300_000);
+  const writes = recordWrites(page);
+  const result: Record<string, unknown> = { commit: 'bf954c0', project: testInfo.project.name };
+  const use = testInfo.project.use as any;
+
+  // Clock in and out (no breaks taken).
+  const clocker = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Clock Probe', signature: 'none' });
+  await signIn(page, clocker.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Clock in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Clock out', exact: true })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await page.getByRole('button', { name: 'Clock out', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Clock out' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('radio', { name: /No breaks taken/ }).check();
+  await dialog.locator('button[type="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  result.clock = writes.filter((w) => w.call.startsWith('POST /api/clock/'));
+  expect(writes.map((w) => w.call)).toEqual(['POST /api/clock/in', 'POST /api/clock/out']);
+
+  // Day fields and a new session in the editor of this layout, then the in-cell picker on a third free day.
+  const editorPerson = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Editor Probe', signature: 'none' });
+  const [fieldsDay = '', sessionDay = '', pickDay = ''] = await editorPerson.api.displayedPeriodFreeWorkdays();
+  expect(pickDay, 'three free workdays').not.toBe('');
+  const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: 'America/Los_Angeles', locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false });
+  const second = await context.newPage();
+  const editorWrites = recordWrites(second);
+  await signIn(second, editorPerson.account, '#/timesheet');
+  await expect(second.locator('[data-day]')).toHaveCount(14);
+  await expect(dayButtonBf9(second, fieldsDay)).toHaveAccessibleName(dayNameBf9('Edit', fieldsDay));
+  await dayButtonBf9(second, fieldsDay).click();
+  let editor = second.getByRole('dialog', { name: /Day editor/ });
+  const fields = editor.getByRole('form', { name: 'Day fields' });
+  await fields.waitFor();
+  await expect(second.locator(`dialog[data-day-editor="${fieldsDay}"]`)).toHaveCount(1);
+  result.editor_layout = await editorLayout(second);
+  await fields.getByLabel('Notes').fill(NOTES);
+  await fields.getByLabel('Leave hours').fill('2');
+  await fields.getByLabel('Leave minutes').fill('30');
+  await fields.getByLabel('Leave kind').selectOption('vacation');
+  await fields.getByLabel('Worked from home (WFH)').check();
+  await fields.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(editor.getByText('Day fields saved.')).toBeVisible();
+  await editor.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(dayButtonBf9(second, sessionDay)).toHaveAccessibleName(dayNameBf9('Edit', sessionDay));
+  await dayButtonBf9(second, sessionDay).click();
+  editor = second.getByRole('dialog', { name: /Day editor/ });
+  await expect(second.locator(`dialog[data-day-editor="${sessionDay}"]`)).toHaveCount(1);
+  await editor.getByRole('button', { name: 'Add session' }).click();
+  const form = editor.getByRole('form', { name: 'New session' });
+  await form.getByLabel('Input zone').fill('America/Los_Angeles');
+  await form.getByLabel('Start time', { exact: true }).fill('09:00');
+  await form.getByLabel('End time', { exact: true }).fill('10:00');
+  await form.getByRole('radio', { name: /No breaks taken/ }).check();
+  await form.getByRole('button', { name: 'Save session' }).click();
+  await expect(editor.getByText('Session saved.')).toBeVisible();
+  await editor.getByRole('button', { name: 'Close' }).click();
+  await expect(editor).toHaveCount(0);
+  const pickBefore = await editorPerson.api.dayView(pickDay);
+  await second.getByRole('button', { name: new RegExp(`^Label for ${pickDay}`) }).click();
+  await second.getByRole('listbox', { name: `Label for ${pickDay}` }).getByRole('option', { name: 'Vacation', exact: true }).click();
+  await expect(second.getByRole('status')).toContainText('Saved 1 day.');
+  result.editor_days = { fieldsDay, sessionDay, pickDay };
+  result.editor = editorWrites.slice(0, 2);
+  result.picker = editorWrites.slice(2);
+  result.pick_before_version = pickBefore.entry?.version ?? null;
+  expect(editorWrites.map((w) => w.call)).toEqual([`PUT /api/days/${fieldsDay}`, `POST /api/days/${sessionDay}/sessions`, 'POST /api/days/batch', 'POST /api/days/batch']);
+  expect((await editorPerson.api.dayView(pickDay)).category).toBe('Vacation');
+  await context.close();
+
+  // Sign-off of the displayed period with one complete day.
+  const signer = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Signer Probe' });
+  const [day = ''] = await signer.api.displayedPeriodFreeWorkdays();
+  await signer.api.seedCompleteDay(day);
+  const signContext = await browser.newContext({ baseURL: builtServer.origin, timezoneId: 'Asia/Ho_Chi_Minh', locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false });
+  const third = await signContext.newPage();
+  const signWrites = recordWrites(third);
+  await signIn(third, signer.account, `#/review/${signer.payrollDate}`);
+  await expect(third.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  const review = await signer.api.call<any>('GET', `/api/timesheets/${signer.payrollDate}/review`);
+  await third.getByLabel('Your name').fill('Synthetic Signer Probe');
+  const acknowledgement = third.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+  if ((await acknowledgement.count()) > 0) await acknowledgement.check();
+  const response = third.waitForResponse((r: any) => r.request().method() === 'POST' && new URL(r.url()).pathname.startsWith(`/api/timesheets/${signer.payrollDate}/`));
+  await third.getByRole('button', { name: 'Sign off & Submit' }).click();
+  const answered = await response;
+  result.signoff = signWrites;
+  result.signoff_status = answered.status();
+  result.review_binding = { payload_hash: review.payload_hash, expected_version: review.expected_version };
+  const body = signWrites.at(-1)?.body;
+  expect(body.reviewed_hash, 'the sign-off is bound to the reviewed payload').toBe(review.payload_hash);
+  expect(body.expected_version).toBe(review.expected_version);
+  expect(answered.status()).toBeLessThan(300);
+  await signContext.close();
+
+  // Batch ("Change several days") in an old period: two days to Sick, preview, reason, commit.
+  writes.length = 0;
+  await page.evaluate("window.location.hash = '#/timesheet'");
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  await page.getByRole('button', { name: 'Previous period' }).click();
+  await expect(page.locator('.period-title .badge.old')).toBeVisible();
+  const d1 = (await page.locator('[data-day]').nth(2).getAttribute('data-day')) ?? '';
+  const d2 = (await page.locator('[data-day]').nth(3).getAttribute('data-day')) ?? '';
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByLabel(`Select ${d1}`).check();
+  await page.getByLabel(`Select ${d2}`).check();
+  await page.getByLabel('Category for selected days').selectOption('Sick');
+  await page.getByRole('button', { name: 'Preview changes' }).click();
+  const batchDialog = page.getByRole('dialog');
+  const batchReason = batchDialog.getByLabel(/Reason for editing an old or finalized period/);
+  await expect(batchReason).toBeVisible();
+  await expect(batchDialog.getByRole('button', { name: 'Commit changes' })).toBeDisabled();
+  await batchReason.fill('Audit A5 batch reason (synthetic)');
+  await batchDialog.getByRole('button', { name: 'Commit changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 2 days.');
+  result.batch_days = [d1, d2];
+  result.batch = writes.filter((w) => w.call.endsWith('/days/batch'));
+  expect(writes.map((w) => w.call)).toEqual(['POST /api/days/batch', 'POST /api/days/batch']);
+  writeResult(`bodies-bf954c0-${testInfo.project.name}.json`, result);
+});

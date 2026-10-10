@@ -249,7 +249,39 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - WP5-UX-FIX7-MASK attempt 2 done: both lines fixed; whole handoff sweep 0 blocked
   emails, 0 profile-path hits in changed paths; 21 older pattern hits in committed files
   noted for a later read-only privacy classification.
-- Running: WP5-UX-FIX7-FREEZE attempt 3 (143 paths). Then WP5-UX-REGATE5, fresh B6 and A6.
+- WP5-UX-FIX7-FREEZE attempt 3 done: bf954c0b371ad9a5fe461a603c5d476ea210e66c on main,
+  pushed (143 paths; working-tree and HEAD digests b7c011d2; every check exit 0).
+- WP5-UX-REGATE5 PASS (verifier, self-reported claude-sonnet-5-5; NAS NOT VERIFIED) on
+  bf954c0 / b7c011d2: unit 1823, full e2e 208/0/24, drill 208 PASS, image
+  sha256:1b7b561e3d6ca29cedd4fc7bb5bc3b2cecd1c8c88a6b86370e9b267c0765caf4; fix scope the
+  29 paths; AX-01 0 hidden stops in 64 walks; rings 5.3-6.8:1; two admin/Settings status
+  notices verified in source only.
+- WP5-UX-AUDIT-A6 PASS (fresh opus, self-reported claude-opus-5-5), no findings: FIX7
+  changes no area-A behaviour (no write on Cancel/Escape/Back, bodies equal since 014bd47,
+  same 6 switcher routes, AC-16 and isolation, data-day selection across DST and device
+  zones, sticky hook hides nothing); npm test 1823, area-A e2e 155/0/23, AC-13 1/1.
+  Board: A5, A4, A3, A2 and WP5-RECHECK superseded_by A6; current digest b7c011d2.
+- WP5-UX-AUDIT-B6 FIX REQUIRED (fresh opus): every fix-round item closed (B5-01..B5-03,
+  AX-04..AX-10, R-12; 200 walks, 7320 stops, 0 hidden, 0 without a ring; no weakened
+  assertion; e2e run 2 208/0/24, run 1 had one transient ECONNRESET in
+  automation.spec.ts:118). New Low finding WP5-UX-B6-01 (pre-existing): at 390x844 a
+  person with a received share and the zone note gets a two-row shell bar; the first day
+  row ends at 830.2px, below the tab bar at 788px (docs/04 line 48).
+- Coordinator decisions: fix the layout and keep docs/04 line 48; keep docs/10 unchanged
+  for the re-accept (it is inside the digest), Q1 and Q2 stay on the board and go into
+  the WP5 handoff.
+- WP5-UX-FIX8 done (self-reported claude-sonnet-5-5; reported, not independent proof):
+  CSS-only one-row compact bar below 768px (`styles.css`, new `--switcher-basis` token)
+  and two mobile e2e checks in `sharing.spec.ts` that fail on bf954c0; 390x844 first-row
+  bottoms 659 / 758 / 667 / 766 against 788; unit 1823; full e2e 210/0/26; verify 0;
+  digest b07727b2.
+- WP5-UX-FIX8-FREEZE attempt 1 stopped: the board listed two FIX7-FREEZE evidence files
+  that were never written, so the validators failed (precommit clean, 393 staged).
+  Board list corrected.
+- Attempt 2 stopped on the validator: FIX8 listed the FIX REQUIRED audit B6 in
+  depends_on. Removed; addresses_audit keeps the link.
+- Running: WP5-UX-FIX8-FREEZE attempt 3 (committer, expected HEAD bf954c0). Then
+  WP5-UX-REGATE6, delta rechecks B7 and A7, then the WP5 re-accept.
 - Next: if both PASS, the WP5 re-accept (pilot packet identity refresh to 5e104e1 /
   07c3ca00 / image 218dd7cc…, docs/10 owner decision Q1, STATE, NEXT_ACTION, WP5
   handoff, accept commit).

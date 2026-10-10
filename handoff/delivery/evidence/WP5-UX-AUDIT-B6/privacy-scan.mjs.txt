@@ -1,0 +1,29 @@
+// WP5-UX-AUDIT-B6: apply the email and profile-path rules of scripts/precommit-check.mjs (same patterns) to
+// the files this audit writes. Usage: node privacy-scan.mjs <out.txt> <file or dir> [...]
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [out, ...roots] = process.argv.slice(2);
+const EMAIL = /[\w.%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,}|localhost)\b/gi;
+const ALLOWED_DOMAINS = /(?:^|\.)example\.(?:com|org|net)$|\.(?:test|invalid|example)$|^localhost$/i;
+const PROFILE_PATHS = [/(?:^|[^\w.-])(?:[a-z]:[\\/]+|\/(?:mnt\/)?[a-z]\/)users[\\/]+([^\\/\s"'`,;)]+)/i, /(?:^|[^\w.-])\/Users\/([^\\/\s"'`,;)]+)/];
+const PLACEHOLDER = /^(?:[<%$[{~*]|(?:user|username|name|you|your[_-]?name|me|public|default|runner|node|app)$)/i;
+const files = [];
+for (const root of roots) {
+  if (statSync(root).isDirectory()) for (const name of readdirSync(root)) files.push(join(root, name));
+  else files.push(root);
+}
+const findings = [];
+let scanned = 0;
+for (const file of files) {
+  if (!/\.(txt|md)$/.test(file)) continue;
+  scanned += 1;
+  const lines = readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, index) => {
+    for (const match of line.matchAll(EMAIL)) if (!ALLOWED_DOMAINS.test(match[1] ?? '')) findings.push(`${file}:${index + 1} email (masked here)`);
+    const account = PROFILE_PATHS.map((pattern) => pattern.exec(line)?.[1]?.replace(/[.:]+$/, '')).find((value) => value !== undefined && !PLACEHOLDER.test(value));
+    if (account !== undefined) findings.push(`${file}:${index + 1} profile-path`);
+    if (/\r/.test(line)) findings.push(`${file}:${index + 1} CR character`);
+  });
+}
+writeFileSync(out, `scanned ${scanned} text files; findings ${findings.length}\n${findings.join('\n')}\n`);

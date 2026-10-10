@@ -1,0 +1,9 @@
+// Prints every row of a sticky-*.json result for one control name (auditor's own check).
+// Usage: node peek-control.mjs <file> <control name>
+import { readFileSync } from 'node:fs';
+
+const [file, name] = process.argv.slice(2);
+const r = JSON.parse(readFileSync(file, 'utf8'));
+for (const row of r.results.filter((x) => x.name === name)) {
+  console.log(`${row.width} ${row.scenario} ${row.position}: ${row.trial ?? `focused ${row.focused} centre ${row.centreHit} samples ${row.visibleSamples} covers ${JSON.stringify(row.covers)} box ${JSON.stringify(row.box)}`}`);
+}

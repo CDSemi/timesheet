@@ -1,0 +1,81 @@
+// Lists every client API call site ('METHOD', `path` or 'path') under src/client of two trees,
+// compares the endpoint sets and counts, and prints the write call texts that exist in only one
+// tree (call text = from the method literal to the end of the call, whitespace collapsed).
+// Usage: node callsites.mjs <treeA> <treeB> <labelA> <labelB>
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+const [a, b, labelA = 'A', labelB = 'B'] = process.argv.slice(2);
+
+function files(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) out.push(...files(path));
+    else if (/\.(ts|tsx)$/.test(name)) out.push(path);
+  }
+  return out.sort();
+}
+
+const CALL = /'(GET|POST|PUT|DELETE|PATCH)'\s*,\s*([`'])([^`']+)\2/g;
+// Calls whose path is an expression (for example modeEndpoint(...)).
+const VARIABLE = /'(GET|POST|PUT|DELETE|PATCH)'\s*,\s*([A-Za-z_][\w.]*\()/g;
+
+function callText(text, index) {
+  let depth = 1;
+  let i = index;
+  while (i < text.length && depth > 0) {
+    const ch = text[i];
+    if (ch === '(' || ch === '{' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === '}' || ch === ']') depth -= 1;
+    i += 1;
+  }
+  return text.slice(index, i - 1).replace(/\s+/g, ' ').trim();
+}
+
+function sites(root) {
+  const list = [];
+  for (const file of files(join(root, 'src', 'client'))) {
+    const text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    const rel = relative(root, file).replaceAll('\\', '/');
+    for (const pattern of [CALL, VARIABLE]) {
+      for (const match of text.matchAll(pattern)) {
+        const line = text.slice(0, match.index).split('\n').length;
+        const path = pattern === CALL ? match[3].replace(/\$\{[^}]+\}/g, ':param') : `<${match[2]}...>`;
+        list.push({ method: match[1], key: `${match[1]} ${path}`, where: `${rel}:${line}`, call: callText(text, match.index) });
+      }
+    }
+  }
+  return list;
+}
+
+const sa = sites(a);
+const sb = sites(b);
+const count = (list) => {
+  const map = new Map();
+  for (const item of list) map.set(item.key, (map.get(item.key) ?? 0) + 1);
+  return map;
+};
+const ca = count(sa);
+const cb = count(sb);
+const keys = [...new Set([...ca.keys(), ...cb.keys()])].sort();
+console.log(`call sites: ${labelA} ${sa.length}, ${labelB} ${sb.length}; distinct endpoints: ${labelA} ${ca.size}, ${labelB} ${cb.size}`);
+console.log(`endpoints only in ${labelB}: ${keys.filter((k) => !ca.has(k)).join(', ') || 'none'}`);
+console.log(`endpoints only in ${labelA}: ${keys.filter((k) => !cb.has(k)).join(', ') || 'none'}`);
+console.log('--- per endpoint: count A -> count B (changed counts marked *)');
+for (const key of keys) {
+  const x = ca.get(key) ?? 0;
+  const y = cb.get(key) ?? 0;
+  console.log(`${x === y ? ' ' : '*'} ${key}: ${x} -> ${y}`);
+}
+const writeKey = (item) => `${item.key} :: ${item.call}`;
+const wa = new Set(sa.filter((s) => s.method !== 'GET').map(writeKey));
+const wb = new Set(sb.filter((s) => s.method !== 'GET').map(writeKey));
+const onlyB = sb.filter((s) => s.method !== 'GET' && !wa.has(writeKey(s)));
+const onlyA = sa.filter((s) => s.method !== 'GET' && !wb.has(writeKey(s)));
+console.log(`--- write call texts only in ${labelB}: ${onlyB.length}`);
+for (const item of onlyB) console.log(`  ${item.where}  ${item.call}`);
+console.log(`--- write call texts only in ${labelA}: ${onlyA.length}`);
+for (const item of onlyA) console.log(`  ${item.where}  ${item.call}`);
+console.log(`--- ${labelB} write call sites (${sb.filter((s) => s.method !== 'GET').length})`);
+for (const item of sb.filter((s) => s.method !== 'GET').sort((p, q) => p.key.localeCompare(q.key) || p.where.localeCompare(q.where))) console.log(`${item.key}  @ ${item.where}`);

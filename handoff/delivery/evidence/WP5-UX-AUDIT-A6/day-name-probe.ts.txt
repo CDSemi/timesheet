@@ -1,0 +1,89 @@
+// WP5-UX-AUDIT-A6 delta proof for WP5-UX-AX-05 (unit level): the new day-button name of bf954c0 shows the same
+// accounting date as the cell, in every display zone and under any device zone, and the cell text equals
+// 5e104e1's. For every accounting date of 2025-2027 (every DST change of the listed zones included) and every
+// display zone, compare
+//   bf9 = sheetDay(day, zone) of bf954c0 and dayButtonName(verb, bf9, layout)
+//   old = sheetDay(day, zone) of 5e104e1 (the visible text before FIX7)
+//   oracle = MM/DD and the weekday of the date computed by Intl in UTC (independent of the app)
+// Pass: workDate is the date; dateText and weekday equal the oracle and 5e104e1; the name is exactly
+// "{verb} {visible} ({date})" with visible "MM/DD" (sheet) or "Ddd MM/DD" (phone). A day with a session that
+// crosses midnight in the display zone is used, so the zone has something to move (it must not move the date).
+// Usage: node day-name-probe.ts <bf954c0-export> <5e104e1-export> [device-zone]
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [bf9Root, oldRoot, deviceZone] = process.argv.slice(2);
+// Git Bash does not pass TZ to a native process, so the device zone is set here, before any module loads.
+if (deviceZone !== undefined) process.env.TZ = deviceZone;
+const bf9 = await import(pathToFileURL(join(bf9Root ?? '', 'src/client/components/sheetModel.ts')).href);
+const old = await import(pathToFileURL(join(oldRoot ?? '', 'src/client/components/sheetModel.ts')).href);
+
+const ZONES = ['America/Los_Angeles', 'America/New_York', 'Europe/London', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Ho_Chi_Minh', 'Asia/Tokyo'];
+
+function day(workDate: string): any {
+  // A Los Angeles 22:00-02:00 session (05:00Z-09:00Z next day in summer): in far zones it starts on another local date.
+  const next = new Date(Date.parse(`${workDate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return {
+    work_date: workDate,
+    classification: { day_class: 'normal', reason: 'scheduled_weekday', name: null },
+    default_category: 'Worked',
+    category: 'Worked',
+    category_source: 'default',
+    attendance_expected: true,
+    leave_minutes: 0,
+    leave_kind: null,
+    wfh: false,
+    ot_leave: { kind_minutes: 0, consumed_minutes: 0, reversed_minutes: 0, mismatch: false },
+    entry: null,
+    sessions: [{ id: 's1', work_date: workDate, start_utc: `${next}T05:00:00Z`, end_utc: `${next}T09:00:00Z`, input_zone: 'America/Los_Angeles', source: 'manual', breaks_confirmed: true, version: 1, breaks: [] }],
+    calculation: null,
+    calculation_error: null,
+    deficit_minutes: null,
+    edit: { period_relation: 'current', reason_required: false },
+  };
+}
+
+function oracle(date: string): { mmdd: string; weekday: string } {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${date}T12:00:00Z`));
+  return { mmdd: `${date.slice(5, 7)}/${date.slice(8, 10)}`, weekday };
+}
+
+let checks = 0;
+const failures: string[] = [];
+const fail = (text: string) => {
+  if (failures.length < 20) failures.push(text);
+};
+let dates = 0;
+let movedStarts = 0;
+for (let t = Date.parse('2025-01-01T00:00:00Z'); t <= Date.parse('2027-12-31T00:00:00Z'); t += 86_400_000) {
+  const date = new Date(t).toISOString().slice(0, 10);
+  dates += 1;
+  const want = oracle(date);
+  for (const zone of ZONES) {
+    const shown = bf9.sheetDay(day(date), zone, null);
+    const before = old.sheetDay(day(date), zone, null);
+    if (shown.time.ranges[0]?.startDate !== null) movedStarts += 1;
+    checks += 1;
+    if (shown.workDate !== date) fail(`${zone} ${date}: workDate ${shown.workDate}`);
+    checks += 1;
+    if (shown.dateText !== want.mmdd || shown.weekday !== want.weekday) fail(`${zone} ${date}: visible ${shown.weekday} ${shown.dateText} != oracle ${want.weekday} ${want.mmdd}`);
+    checks += 1;
+    if (shown.dateText !== before.dateText || shown.weekday !== before.weekday || shown.workDate !== before.workDate) fail(`${zone} ${date}: differs from 5e104e1`);
+    checks += 1;
+    if (JSON.stringify(shown.time) !== JSON.stringify(before.time)) fail(`${zone} ${date}: session text differs from 5e104e1`);
+    for (const verb of ['Edit', 'View'] as const) {
+      checks += 2;
+      const sheet = bf9.dayButtonName(verb, shown, 'sheet');
+      const phone = bf9.dayButtonName(verb, shown, 'phone');
+      if (sheet !== `${verb} ${want.mmdd} (${date})`) fail(`${zone} ${date}: sheet name "${sheet}"`);
+      if (phone !== `${verb} ${want.weekday} ${want.mmdd} (${date})`) fail(`${zone} ${date}: phone name "${phone}"`);
+    }
+  }
+}
+const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+console.log(`device TZ=${process.env.TZ ?? '(unset)'} resolved=${resolved} getTimezoneOffset(2026-01-01)=${new Date('2026-01-01T12:00:00Z').getTimezoneOffset()} getTimezoneOffset(2026-07-01)=${new Date('2026-07-01T12:00:00Z').getTimezoneOffset()}`);
+console.log(`dates=${dates} display-zones=${ZONES.length} checks=${checks} failures=${failures.length} sessions-starting-on-another-local-date=${movedStarts}`);
+for (const line of failures) console.log(`FAIL ${line}`);
+const sample = bf9.sheetDay(day('2026-11-01'), 'Pacific/Kiritimati', null);
+console.log(`sample 2026-11-01 (LA DST end) in Pacific/Kiritimati: visible "${sample.weekday} ${sample.dateText}", session ${JSON.stringify(sample.time.ranges[0])}, names "${bf9.dayButtonName('Edit', sample, 'sheet')}" / "${bf9.dayButtonName('View', sample, 'phone')}"`);
+process.exitCode = failures.length === 0 ? 0 : 1;

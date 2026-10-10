@@ -1,0 +1,210 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { buildSyntheticWorkbook } from '../support/syntheticWorkbook.ts';
+import { type BuiltServer, expect, newPerson, type Person, screenshotPath, type SeedClient, test } from './fixtures.ts';
+
+/*
+ * WP5-UX-REGATE5 probe B (scratch, never committed): AX-08, focus return and step headings by real key presses,
+ * with every non-GET request recorded. Synthetic data.
+ */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', actionTimeout: 15_000 });
+
+const OUT = process.env.UXREGATE_OUT ?? '';
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(join(OUT, 'obs-ax08.txt'), `${line}\n`);
+}
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function recordWrites(page: Page): string[] {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') writes.push(`${request.method()} ${new URL(request.url()).pathname}${request.postDataJSON()?.mode ? ` mode=${request.postDataJSON().mode}` : ''}`);
+  });
+  return writes;
+}
+
+async function newWorld(adminSeed: SeedClient, server: BuiltServer, options: { mutual?: boolean } = {}) {
+  const me = await newPerson(adminSeed, server, { displayName: 'Synthetic Keyboard User', signature: 'none' });
+  const owner = await newPerson(adminSeed, server, { displayName: 'Synthetic Sharing Owner', signature: 'none' });
+  const [complete = ''] = await me.api.displayedPeriodFreeWorkdays();
+  await me.api.seedCompleteDay(complete);
+  const items = { timesheets: 'view', ot_read: false, pdf_download: false };
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items }, 201);
+  if (options.mutual === true) await me.api.call('POST', '/api/shares', { grantee_email: owner.account.email, items }, 201);
+  return { me, owner, complete };
+}
+
+test('AX-08 batch review', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, builtServer);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(world.me.account, '#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const writes = recordWrites(page);
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByRole('checkbox', { name: `Select ${world.complete}` }).check();
+  await page.getByLabel('Category for selected days').selectOption('Off');
+  const preview = page.getByRole('button', { name: 'Preview changes' });
+  const dialog = page.getByRole('dialog');
+  const openReview = async () => {
+    await preview.focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByRole('heading', { name: 'Review category change' })).toBeVisible();
+  };
+  await openReview();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(preview).toBeFocused();
+  note(`${project} batch review: Escape -> focus on "Preview changes": true`);
+  await openReview();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+  await expect(preview).toBeFocused();
+  note(`${project} batch review: Cancel -> focus on "Preview changes": true`);
+  await openReview();
+  await dialog.getByRole('button', { name: 'Review conflicts' }).focus();
+  await page.keyboard.press('Enter');
+  const conflicts = dialog.getByRole('heading', { name: 'Recorded work conflicts with the new label' });
+  await expect(conflicts).toBeFocused();
+  note(`${project} batch review: step change -> focus on the conflicts step heading: true`);
+  if (project === 'desktop') await page.screenshot({ path: screenshotPath('regate5-ax08-step-heading-focus-synthetic.png'), animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Back', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('heading', { name: 'Review category change' })).toBeFocused();
+  note(`${project} batch review: Back -> focus on the review step heading: true`);
+  await page.keyboard.press('Escape');
+  await expect(preview).toBeFocused();
+  const day = await world.me.api.dayView(world.complete);
+  note(`${project} batch review: requests ${JSON.stringify(writes)}; stored category ${day.category}, sessions ${day.sessions.length}`);
+  expect(writes.every((entry) => entry.includes('mode=preview'))).toBe(true);
+  expect(day.category).toBe('Worked');
+});
+
+test('AX-08 sharing steps', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(120_000);
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, builtServer, { mutual: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(world.me.account, '#/settings');
+  const writes = recordWrites(page);
+  const given = page.getByRole('list', { name: 'Shares I gave' });
+  const received = page.getByRole('list', { name: 'Shares I received' });
+  const end = given.getByRole('button', { name: /^End shar(e|ing) with / });
+  const change = given.getByRole('button', { name: /^Change items shared with / });
+  const leave = received.getByRole('button', { name: /^Leave .*shared items$/ });
+  const confirm = page.locator('[data-confirm="share"]');
+  for (const [name, opener, how] of [
+    ['End share', end, 'Escape'],
+    ['End share', end, 'Cancel'],
+    ['Leave', leave, 'Escape'],
+    ['Leave', leave, 'Cancel'],
+  ] as const) {
+    await opener.focus();
+    await page.keyboard.press('Enter');
+    await expect(confirm).toBeFocused();
+    if (how === 'Escape') await page.keyboard.press('Escape');
+    else {
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).focus();
+      await page.keyboard.press('Enter');
+    }
+    await expect(confirm).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    note(`${project} sharing ${name}: ${how} -> focus back on the opener (confirmation took focus on open): true`);
+  }
+  await change.focus();
+  await page.keyboard.press('Enter');
+  await expect(given.getByRole('group', { name: /^Change items shared with / })).toBeFocused();
+  note(`${project} sharing Change: the change step takes focus: true`);
+  await given.getByRole('button', { name: 'Cancel', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(change).toBeFocused();
+  note(`${project} sharing Change: Cancel -> focus back on Change: true`);
+  await change.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  // Escape is not specified for the change step (only the confirmations document it); record what it does, then Cancel.
+  const stillOpen = await given.getByRole('group', { name: /^Change items shared with / }).count();
+  note(`${project} sharing Change: Escape inside the change step leaves the step open (not specified, informational): ${stillOpen === 1}`);
+  await given.getByRole('button', { name: 'Cancel', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(change).toBeFocused();
+  const shares = await world.me.api.call<{ given: unknown[]; received: unknown[] }>('GET', '/api/shares');
+  note(`${project} sharing steps: non-GET requests ${JSON.stringify(writes)}; shares given ${shares.given.length} received ${shares.received.length}`);
+  expect(writes).toEqual([]);
+  if (project === 'desktop') await page.screenshot({ path: screenshotPath('regate5-ax08-sharing-focus-synthetic.png'), animations: 'disabled' });
+});
+
+test('AX-08 import and opening balance', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.setTimeout(150_000);
+  const project = testInfo.project.name;
+  const person: Person = await newPerson(adminSeed, builtServer, { signature: 'none' });
+  const payrollDate = addDays(person.payrollDate, -14);
+  const bytes = buildSyntheticWorkbook({ periods: [{ payrollDate, days: { 1: { label: 'Mystery label' }, 2: { labelFormulaCache: 'Holiday' } } }] });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(person.account, '#/import');
+  const writes = recordWrites(page);
+  await page.locator('[data-import-file]').setInputFiles({ name: 'synthetic-hours.xlsx', mimeType: XLSX, buffer: Buffer.from(bytes) });
+  await page.getByRole('button', { name: 'Upload and preview' }).click();
+  await expect(page.locator('[data-import-notice="created"]')).toBeVisible();
+  const afterUpload = writes.length;
+  const review = page.getByRole('button', { name: 'Review and commit' });
+  await review.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Back to the preview' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to the preview' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(review).toBeFocused();
+  note(`${project} import: "Back to the preview" -> focus back on "Review and commit": true; requests after the upload ${JSON.stringify(writes.slice(afterUpload))}`);
+  await review.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Back to the preview' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const escBack = await review.evaluate((element) => element === element.ownerDocument.activeElement);
+  note(`${project} import: Escape (if the step handles it) -> focus on "Review and commit": ${escBack}`);
+
+  // Opening balance.
+  const asOf = addDays(person.todayLocal, -10);
+  const panel = page.getByRole('region', { name: 'Opening OT balance' });
+  const form = panel.getByRole('form', { name: 'Record the opening balance' });
+  await form.getByLabel('Hours').fill('12');
+  await form.getByLabel('Minutes (0 to 59)').fill('30');
+  await form.getByLabel('As-of date').fill(asOf);
+  await form.getByLabel('Reason', { exact: true }).fill('Synthetic opening balance');
+  await form.getByLabel('Evidence reference').fill('Synthetic ticket 1');
+  const beforeBalance = writes.length;
+  const reviewBefore = form.getByRole('button', { name: 'Review before posting' });
+  await reviewBefore.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('button', { name: 'Back to edit' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Back to edit' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('button', { name: 'Review before posting' })).toBeFocused();
+  note(`${project} opening balance: "Back to edit" -> focus on "Review before posting": true; values kept: hours ${await form.getByLabel('Hours').inputValue()}`);
+  await form.getByRole('button', { name: 'Review before posting' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('button', { name: 'Back to edit' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const escOb = await form.getByRole('button', { name: 'Review before posting' }).evaluate((element) => element === element.ownerDocument.activeElement);
+  note(`${project} opening balance: Escape on the confirmation -> focus on "Review before posting": ${escOb}`);
+  note(`${project} opening balance: requests during the review steps ${JSON.stringify(writes.slice(beforeBalance))}`);
+  expect(writes.slice(beforeBalance)).toEqual([]);
+  // Post, then the correction form Cancel.
+  await form.getByRole('button', { name: 'Review before posting' }).click();
+  await panel.getByRole('button', { name: 'Confirm and post' }).click();
+  await expect(panel.locator('[data-opening-notice]')).toContainText('Recorded in your OT ledger');
+  const correct = panel.getByRole('button', { name: 'Correct the opening balance' });
+  await correct.focus();
+  await page.keyboard.press('Enter');
+  const corr = panel.getByRole('form', { name: 'Correct the opening balance' });
+  const beforeCancel = writes.length;
+  await corr.getByRole('button', { name: 'Cancel', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(correct).toBeFocused();
+  note(`${project} opening balance: correction Cancel -> focus back on "Correct the opening balance": true; requests ${JSON.stringify(writes.slice(beforeCancel))}`);
+  expect(writes.slice(beforeCancel)).toEqual([]);
+  if (project === 'desktop') await page.screenshot({ path: screenshotPath('regate5-ax08-opening-balance-focus-synthetic.png'), animations: 'disabled' });
+});

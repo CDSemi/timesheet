@@ -1,0 +1,29 @@
+// Counts the sticky probe per build and width: distinct controls, focus checks, failures, trial clicks and failures.
+// Usage: node sticky-counts.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+for (const build of ['bf954c0', '5e104e1']) {
+  const names = new Set();
+  for (const project of ['desktop', 'tablet', 'mobile']) {
+    const file = join(dir, `sticky-${build}-${project}.json`);
+    if (!existsSync(file)) {
+      console.log(`MISSING ${file}`);
+      continue;
+    }
+    const r = JSON.parse(readFileSync(file, 'utf8'));
+    const widths = [...new Set(r.results.map((x) => x.width))];
+    for (const width of widths) {
+      const rows = r.results.filter((x) => x.width === width);
+      const checks = rows.filter((x) => x.position !== 'trial-click' && x.missing !== true);
+      const trials = rows.filter((x) => x.position === 'trial-click');
+      const failed = checks.filter((x) => !(x.focused && x.centreHit && x.visibleSamples > 0));
+      const hidden = checks.filter((x) => x.visibleSamples === 0);
+      const missing = rows.filter((x) => x.missing === true);
+      for (const x of checks) names.add(`${x.scenario} / ${x.name}`);
+      console.log(`${build} ${project} ${width}: controls ${new Set(checks.map((x) => `${x.scenario}/${x.name}`)).size}, focus checks ${checks.length}, failing ${failed.length} (entirely hidden ${hidden.length}), trial clicks ${trials.length}, trial failures ${trials.filter((x) => x.trial !== 'ok').length}, missing ${missing.length}`);
+    }
+  }
+  console.log(`${build}: distinct scenario/control pairs ${names.size}`);
+}

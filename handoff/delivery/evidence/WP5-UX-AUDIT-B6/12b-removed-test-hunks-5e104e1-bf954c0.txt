@@ -1,0 +1,62 @@
+removed lines: 15
+tests/e2e/day-editor.spec.ts @@ -101 +102 @@ test('09:00 to 18:00 with breaks shifted by arrival: unknown stays pending, conf
+-    await page.locator(`[data-day="${date}"]`).getByRole('button', { name: `Edit ${date}` }).click();
++    await namedDayButton(page, date, 'Edit').click();
+
+tests/e2e/day-editor.spec.ts @@ -853 +854 @@ test('future days show as upcoming from the server date, past days without a rec
+-  await row.getByRole('button', { name: `Edit ${futureDay}` }).click();
++  await namedDayButton(page, futureDay, 'Edit').click();
+
+tests/e2e/day-editor.spec.ts @@ -905 +906 @@ test('the day editor is a side panel on a desktop and a modal bottom sheet on a
+-  const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++  const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+
+tests/e2e/day-editor.spec.ts @@ -994 +995 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
+-      const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++      const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+
+tests/e2e/day-editor.spec.ts @@ -1021 +1022 @@ test.describe('WP5-UX-B-02: below 1200px the panel never hides a focused sheet c
+-    const dayButton = (workDate: string) => page.locator(`[data-day="${workDate}"]`).getByRole('button', { name: `Edit ${workDate}`, exact: true });
++    const dayButton = (workDate: string) => namedDayButton(page, workDate, 'Edit');
+
+tests/e2e/day-editor.spec.ts @@ -1310 +1311 @@ test.describe('WP5-UX-B3-01: a review dialog open over the editor keeps Escape a
+-      const dayButton = page.locator(`[data-day="${editDay}"]`).getByRole('button', { name: `Edit ${editDay}`, exact: true });
++      const dayButton = namedDayButton(page, editDay, 'Edit');
+
+tests/e2e/focus-ring.spec.ts @@ -2 +2,2 @@ import type { Locator, Page } from '@playwright/test';
+-import { expect, screenshotPath, test } from './fixtures.ts';
++import { ANY_DAY_BUTTON_NAME } from './dayButton.ts';
++import { expect, newPerson, screenshotPath, test } from './fixtures.ts';
+
+tests/e2e/focus-ring.spec.ts @@ -156 +206 @@ for (const colorScheme of ['light', 'dark'] as const) {
+-      ['sheet date', page.getByRole('button', { name: /^(Edit|View) \d{4}-\d{2}-\d{2}$/ }).first()],
++      ['sheet date', sheetDate],
+
+tests/e2e/import.spec.ts @@ -228 +231 @@ test('an imported period shows "Imported, unverified" with edit, sign and submit
+-  await page.getByRole('button', { name: `View ${layout.cacheDay}` }).click();
++  await namedDayButton(page, layout.cacheDay, 'View').click();
+
+tests/e2e/sharing.spec.ts @@ -243 +247 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0);
++  await expect(page.getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0);
+
+tests/e2e/sharing.spec.ts @@ -254 +258 @@ test('Settings, Sharing: the form defaults, the PDF note, a view-only grantee wi
+-  await page.getByRole('button', { name: `View ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'View').click();
+
+tests/e2e/sharing.spec.ts @@ -332 +336 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeVisible();
++  await expect(namedDayButton(page, workDay, 'Edit')).toBeVisible();
+
+tests/e2e/sharing.spec.ts @@ -352 +356 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  await page.getByRole('button', { name: `Edit ${workDay}`, exact: true }).click();
++  await namedDayButton(page, workDay, 'Edit').click();
+
+tests/e2e/sharing.spec.ts @@ -361 +365 @@ test('the owner changes the share to edit; the grantee edits a day without Clock
+-  await expect(page.getByRole('button', { name: `Edit ${workDay}`, exact: true })).toBeFocused();
++  await expect(namedDayButton(page, workDay, 'Edit')).toBeFocused();
+
+tests/e2e/timesheet.spec.ts @@ -264 +265 @@ test('shows 14 days with due date, completeness, pending OT, both zones and acco
+-  await expect(dayRow(page, start).getByRole('button', { name: `Edit ${start}`, exact: true })).toBeVisible();
++  await expect(namedDayButton(page, start, 'Edit')).toBeVisible();
+

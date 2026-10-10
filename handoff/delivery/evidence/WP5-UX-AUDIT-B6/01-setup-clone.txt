@@ -1,0 +1,28 @@
+WP5-UX-AUDIT-B6 - scratch clones and runtime (2026-10-10, UTC)
+
+Runtime: Git Bash; PATH starts with the portable Node 24 bin ($(cygpath -u "$LOCALAPPDATA")/timesheet-dev/node-24.21.0/node_modules/node/bin),
+then $(cygpath -u "$APPDATA")/npm; `node --version` -> v24.21.0 (first shell call, 03:05:43Z). npm 11.18.0 run as
+`node <npm-cli.js>`. TEMP and TMP = <task> (or a per-run subfolder <task>/tmp-<tag>, <task>/rerun1); DATA_DIR = <task>\data and
+DATABASE_PATH = <task>\data\ts.sqlite for every npm, CLI, Playwright and server run (env.sh.txt). Nothing written to
+%LOCALAPPDATA%\timesheet-dev (only the portable node.exe is executed). No Docker. Ports: my probe servers 48300-48311; the e2e
+fixture picks OS-free loopback ports, as in every earlier gate and audit.
+
+Reviewed tree (form 2 of the digest):
+$ cd <task> && git clone --no-local <project> clone                                   -> exit 0
+$ cd <task>/clone && git checkout --detach bf954c0b371ad9a5fe461a603c5d476ea210e66c   -> exit 0
+$ git rev-parse HEAD                                                                  -> bf954c0b371ad9a5fe461a603c5d476ea210e66c
+$ git status --short                                                                  -> (empty, 0 bytes)
+$ node scripts/source-digest.mjs  -> b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563  (793 files, handoff/ excluded)
+$ node <npm-cli.js> ci            -> exit 0 (added 161 packages; "1 high severity vulnerability" notice, see 02a-npm-ci.txt)
+
+Probe folder: <task>/clone/audit-b6/ (b6.probe.ts, b6b.probe.ts, probe.config.ts), kept out of git by `.git/info/exclude`
+("audit-b6/"); `git status --short` of the clone stays empty (one stray grep output written to the clone root by mistake was moved
+to <task> with `mv` before any check that depends on the tree; it was never part of a build or test run).
+
+Base tree for the "new checks fail on 5e104e1" step only:
+$ git clone --no-local <project> clone-old ; git checkout --detach 5e104e14dad71268a9185920c04ed0ee2a4b31c2   -> exit 0, exit 0
+$ git status --short -> (empty) ; node scripts/source-digest.mjs -> 07c3ca00b3408af0c6337e5159635675cead86fbdc1c63f2454c2346a27ce635 (790 files)
+$ node <npm-cli.js> ci -> exit 0 ; node <npm-cli.js> run build -> exit 0
+then the bf954c0 versions of tests/e2e/keyboard-access.spec.ts, tests/e2e/dayButton.ts and tests/e2e/focus-ring.spec.ts were
+written into clone-old with `git show bf954c0:<path> > <path>` (git status: M focus-ring.spec.ts, ?? dayButton.ts,
+?? keyboard-access.spec.ts; nothing else). The reviewed tree (clone) and the working repository were never mutated.

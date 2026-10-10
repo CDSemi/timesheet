@@ -1,0 +1,63 @@
+// WP5-UX-AUDIT-A6: per-layout facts of the A5-method probes on bf954c0 (A-01 leave input, AC-04, AC-16/AC-01,
+// R-07 with the zone-note due time, privacy). Adapted from the WP5-UX-AUDIT-A5 summary.mjs (focus part dropped,
+// leave part added). Usage: node summary.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const load = (name) => (existsSync(join(dir, name)) ? JSON.parse(readFileSync(join(dir, name), 'utf8')) : null);
+const j = (v) => JSON.stringify(v);
+let missing = 0;
+let refusals = 0;
+let refusedWithPut = 0;
+let refusedStored = 0;
+
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  console.log(`==== ${project}`);
+  const lv = load(`leave-bf954c0-${project}.json`);
+  if (lv === null) missing += 1;
+  else {
+    console.log(`A-01 leave (workDate ${lv.workDate}, editor modal=${lv.editor_layout.modal} class=${lv.editor_layout.className})`);
+    for (const r of lv.results) {
+      const refused = r.alert_texts.length === 1 && r.put_bodies.length === 0;
+      if (r.put_bodies.length === 0 && r.alert_texts.length === 1) {
+        refusals += 1;
+        if (r.stored_after.version !== r.stored_before.version) refusedStored += 1;
+      }
+      if (r.put_bodies.length > 0 && r.alert_texts.length === 1 && !/leave_exceeds_required/.test(r.alert_texts[0])) refusedWithPut += 1;
+      console.log(`  ${r.case}: PUTs=${r.put_bodies.length} sent=${r.put_bodies[0]?.leave_minutes ?? '-'} stored=${r.stored_after.leave_minutes} aria-invalid h=${r.hours_attrs.ariaInvalid ?? '-'} m=${r.minutes_attrs.ariaInvalid ?? '-'} ${refused ? 'refused' : ''} msg=${r.alert_texts[0] ?? '-'}`);
+    }
+  }
+  const ac = load(`ac04-${project}.json`);
+  if (ac === null) missing += 1;
+  else {
+    console.log(`AC-04 editor layout: modal=${ac.editor_layout.modal} class=${ac.editor_layout.className} box=${j(ac.editor_layout.box)}`);
+    console.log(`  picker old-period preview body: ${j(ac.picker_preview_body)}`);
+    console.log(`  picker commit with reason: ${j(ac.picker_reason_commit)}`);
+    console.log(`  editor PUT with reason: ${j(ac.editor_reason_put)}`);
+    console.log(`  history reasons: ${j(ac.history_reasons)}`);
+    console.log(`  picker stale modes sent: ${j(ac.picker_stale_modes)}; editor (Open a day) stale: ${j(ac.editor_fields_stale)}`);
+    console.log(`  one-tap break confirmation stale: ${j(ac.quick_stale)}`);
+    console.log(`  Delete then Escape, sessions left: ${ac.delete_then_escape_sessions}; picker conflict commit: ${j(ac.picker_conflict_commit)}`);
+  }
+  const sh = load(`sharing-${project}.json`);
+  if (sh === null) missing += 1;
+  else {
+    console.log(`AC-16 view-only controls: ${j(sh.view_only_controls)}`);
+    console.log(`  view-only editor (read-only, layout modal=${sh.view_only_editor_layout.modal}): ${j(sh.view_only_editor)}; requests outside the shared path: ${j(sh.view_only_outside_requests)}`);
+    console.log(`  edit grantee controls: ${j(sh.edit_controls)}; writes: ${j(sh.edit_writes.map((w) => w.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/, '<owner>')))}`);
+    console.log(`  owner history via share: ${sh.owner_history_via_share.length} events, actors ${j([...new Set(sh.owner_history_via_share.map((e) => e.actor_display_name))])}`);
+    console.log(`AC-01 third user: ${j(sh.isolation)}`);
+  }
+  const r = load(`r07-${project}.json`);
+  if (r === null) missing += 1;
+  else {
+    console.log(`R-07 reporting zone ${r.reporting_zone}; period ${j(r.period)}`);
+    for (const run of r.runs) console.log(`  ${run.zone} (${run.resolved}): bar "${run.periodZone}", words "${run.dueWordsShown}", note ${run.zoneNote ? `"${run.noteDue}" (oracle "${run.noteDueOracle}")` : 'none'}, total ${run.total}, session cells ${j(run.sessionCells.map((d) => [d.date, d.ranges.map((x) => `${x.startDate ?? ''}${x.text}`)]))}`);
+  }
+  const p = load(`privacy-${project}.json`);
+  if (p === null) missing += 1;
+  else console.log(`privacy: ${j(p)}`);
+}
+console.log(`\nA-01: refused entries with the page message and no PUT: ${refusals}; refused with a stored change: ${refusedStored}; refused after a PUT (other than the server rule): ${refusedWithPut}`);
+console.log(`missing result files: ${missing}`);

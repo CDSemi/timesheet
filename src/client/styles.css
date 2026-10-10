@@ -84,6 +84,7 @@
   --dialog-fit-wide: 96vw;
   --select-min: 10rem;
   --switcher-select-min: 6rem;
+  --switcher-basis: 16rem;
   --facts-min: 11rem;
   --figures-min: 9rem;
   --counter-min: 6rem;
@@ -3059,6 +3060,30 @@ code {
 
 .shell-switcher button {
   flex: none;
+}
+
+/*
+ * On a phone the compact bar holds the brand and the switcher on ONE row (WP5-UX-B6-01, docs/04 line 48):
+ * a smaller visible label, a tighter gap and no extra block padding on the label (the select and Open keep
+ * their 44px targets), so a person with a received share keeps the first day row above the tab bar.
+ */
+@media (max-width: 767px) {
+  .shell-bar {
+    column-gap: var(--space-3);
+  }
+
+  /* A basis the brand and the switcher share a 390px row with; a narrower bar wraps the switcher below the brand. */
+  .shell-switcher {
+    flex: 1 1 var(--switcher-basis);
+  }
+
+  .shell-switcher label.inline {
+    padding-block: 0;
+  }
+
+  .shell-switcher label .muted {
+    font-size: var(--font-size-xs);
+  }
 }
 
 /* ---- Outbound pause banner of the operations status (WP4-T07) ---------------------------- */

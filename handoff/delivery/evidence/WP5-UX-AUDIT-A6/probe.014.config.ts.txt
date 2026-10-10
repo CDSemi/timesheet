@@ -1,0 +1,22 @@
+// WP5-UX-AUDIT-A6 probe configuration for the accepted WP5 build 014bd47 (the body baseline). Desktop
+// and phone only (014bd47 has no 1024 modal editor); the runner is the CLI of the 014bd47 export.
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+export default {
+  testDir: here,
+  testMatch: '**/*.014.spec.ts',
+  outputDir: join(here, '..', 'tmp', 'probe-output-014'),
+  workers: 1,
+  reporter: 'list',
+  forbidOnly: true,
+  timeout: 180_000,
+  expect: { timeout: 10_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off', actionTimeout: 15_000, navigationTimeout: 30_000 },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
+  ],
+};

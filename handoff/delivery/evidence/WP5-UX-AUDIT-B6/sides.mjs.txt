@@ -1,0 +1,27 @@
+// WP5-UX-AUDIT-B6: distribution of ring sides present over every measured walk stop of a tag, and the stops
+// whose ring is cut (fewer than 4 sides). Usage: node sides.mjs <probe-out dir> <tag> <out.txt>
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag, outFile] = process.argv.slice(2);
+const histogram = {};
+const cut = [];
+let minAdjacent = Number.POSITIVE_INFINITY;
+let minAdjacentAt = '';
+for (const file of readdirSync(dir).filter((name) => name.startsWith(`${tag}-p1-walks-`))) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  for (const walk of data.walks) {
+    for (const stop of walk.stops ?? []) {
+      const sides = stop.ring?.sidesPresent;
+      if (sides === null || sides === undefined) continue;
+      histogram[sides] = (histogram[sides] ?? 0) + 1;
+      if (sides > 0 && sides < 4) cut.push(`${walk.label} ${walk.direction}: ${stop.tag} "${stop.name.slice(0, 40)}" sides ${sides} rect y ${Math.round(stop.rect.y)} h ${Math.round(stop.rect.height)}`);
+      if (sides > 0 && (stop.ring.minAdjacentBest ?? 99) < minAdjacent) {
+        minAdjacent = stop.ring.minAdjacentBest;
+        minAdjacentAt = `${walk.label} ${walk.direction}: ${stop.tag} "${stop.name.slice(0, 40)}"`;
+      }
+    }
+  }
+}
+const lines = [`ring sides present histogram ${JSON.stringify(histogram)}`, `lowest ring contrast against an adjacent colour: ${minAdjacent} at ${minAdjacentAt}`, `stops with a ring cut to 1-3 sides: ${cut.length}`, ...cut.slice(0, 60).map((item) => `  ${item}`)];
+writeFileSync(outFile, `${lines.join('\n')}\n`);

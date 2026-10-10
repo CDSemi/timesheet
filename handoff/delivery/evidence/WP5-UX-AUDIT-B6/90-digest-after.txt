@@ -1,0 +1,26 @@
+WP5-UX-AUDIT-B6 - digest after all checks (2026-10-10T03:58:25Z UTC; re-confirmed after the review was written, see the end)
+
+Working repository:
+$ git rev-parse HEAD origin/main  -> bf954c0b371ad9a5fe461a603c5d476ea210e66c / bf954c0b371ad9a5fe461a603c5d476ea210e66c
+$ git diff --name-only bf954c0 HEAD -- . ':!handoff'   -> (empty)
+$ git status --short -- . ':!handoff'                  -> (empty: no path outside handoff/ changed during the audit)
+
+Form 1 (git ls-tree form of HEAD = bf954c0): 793 lines; sha256 b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563
+Form 2 (scratch clone at bf954c0): git rev-parse HEAD -> bf954c0b371ad9a5fe461a603c5d476ea210e66c;
+        node scripts/source-digest.mjs -> b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563 (793 files, handoff/ excluded);
+        git status --short -> (empty) after moving my stray grep outputs (see the process note)
+Form 3 (working repository): node scripts/source-digest.mjs -> b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563 (793 files)
+
+All three equal the digest before (00-digest-before.txt) and the digest of record.
+
+Process note (scratch clone only, no effect on any result): four grep outputs that I meant to write to <task> were written with
+relative paths into the clone root (ui-names.txt during e2e run 1; label-cell.txt, policyfields.txt and settings-result.txt
+during the probe runs and e2e run 2). They were untracked text files, never tracked content: the clone's tracked tree stayed at
+bf954c0 (git status showed only these "??" entries), no build input or test file was touched, and the clone digest counted them
+as 796 files until I moved them to <task> with `mv` (793 files and the digest of record again). Typecheck, lint and npm test
+ran before any of them existed.
+
+Re-confirmed at 2026-10-10T04:04:59Z, after the review pair, the Results and this evidence were written:
+  working repository: HEAD bf954c0b371ad9a5fe461a603c5d476ea210e66c; node scripts/source-digest.mjs ->
+  b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563 (793 files); git status lists handoff/ paths only.
+  scratch clone: b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563 (793 files); git status --short empty.

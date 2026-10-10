@@ -1,0 +1,69 @@
+// WP5-UX-AUDIT-A6 follow-up of the sticky probe: the "Open a day" date field. A programmatic focus() (the
+// sticky probe) leaves a date field where it is, so a field placed half under the sticky shell bar stays half
+// covered on the phone. Here the field is reached the way a keyboard user reaches it (Shift+Tab from the next
+// control, and Tab from the previous one) after placing it half under and fully under the sticky region, on
+// both builds. Measures 25 sample points and the centre. Registered for bf954c0 and 5e104e1. Synthetic only.
+import { controlFacts, writeResult } from './common.ts';
+
+export function registerDateFieldProbe(fx: any, build: string): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles' });
+
+  test(`the Open a day field reached by Tab and Shift+Tab from under the sticky bar (${build})`, async ({ page, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(15_000);
+    const project = testInfo.project.name;
+    const sizes = project === 'desktop' ? [{ width: 1280, height: 800 }, { width: 768, height: 1024 }] : project === 'tablet' ? [{ width: 1024, height: 800 }] : [{ width: 390, height: 844 }, { width: 320, height: 640 }];
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Date Field Probe', signature: 'none' });
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Date Field Owner', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: person.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/#/timesheet');
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    const field = page.getByLabel('Open a day');
+    const rows: any[] = [];
+    for (const size of sizes) {
+      await page.setViewportSize(size);
+      await page.waitForTimeout(300);
+      // The neighbours in the tab order (the focusable elements just before and after the field).
+      const neighbours = await field.evaluate((el: any) => {
+        const all = [...document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((x: any) => x.getClientRects().length > 0);
+        const index = all.indexOf(el);
+        const describe = (x: any) => (x === undefined ? null : `${x.tagName.toLowerCase()} "${(x.getAttribute('aria-label') || x.textContent || '').trim().slice(0, 40)}"`);
+        (window as any).probePrev = all[index - 1];
+        (window as any).probeNext = all[index + 1];
+        return { prev: describe(all[index - 1]), next: describe(all[index + 1]) };
+      });
+      for (const cover of ['half', 'full']) {
+        for (const how of ['Shift+Tab from the next control', 'Tab from the previous control']) {
+          await field.evaluate((el: any, frac: number) => {
+            const shell = document.querySelector('.shell-bar');
+            const share = document.querySelector('.share-bar');
+            let stickyBottom = shell === null ? 0 : shell.getBoundingClientRect().height;
+            if (share !== null && getComputedStyle(share).position === 'sticky') stickyBottom += share.getBoundingClientRect().height;
+            const r = el.getBoundingClientRect();
+            const target = frac === 1 ? stickyBottom - r.height - 4 : stickyBottom - r.height / 2;
+            (document.scrollingElement as any).scrollTop += r.top - target;
+          }, cover === 'full' ? 1 : 0.5);
+          await page.waitForTimeout(80);
+          const placed = await field.evaluate((el: any) => Math.round(el.getBoundingClientRect().top * 10) / 10);
+          if (how.startsWith('Shift')) {
+            await page.evaluate("window.probeNext && window.probeNext.focus({ preventScroll: true })");
+            await page.keyboard.press('Shift+Tab');
+          } else {
+            await page.evaluate("window.probePrev && window.probePrev.focus({ preventScroll: true })");
+            await page.keyboard.press('Tab');
+          }
+          await page.waitForTimeout(150);
+          const facts = await controlFacts(page, field);
+          const active = await page.evaluate("(() => { const a = document.activeElement; return a === null ? null : a.tagName.toLowerCase() + (a.getAttribute('aria-label') ? ' ' + a.getAttribute('aria-label') : ''); })()");
+          rows.push({ width: size.width, view: 'own', cover, how, neighbours, placedTop: placed, active, ...facts });
+        }
+      }
+    }
+    writeResult(`datefield-${build}-${project}.json`, { build, project, rows });
+  });
+}

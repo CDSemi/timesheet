@@ -1,0 +1,1659 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
+import { test as base, expect, type Page } from '@playwright/test';
+import { newPerson, type Person, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B6 independent probes (auditor-written for this audit; not part of the reviewed source;
+ * kept out of git through .git/info/exclude of the scratch clone). Synthetic data only. Each project
+ * starts its own built server (dist/) on a fixed port of the task range (desktop PROBE_PORT_BASE, mobile
+ * PROBE_PORT_BASE + 1) with DATA_DIR and DATABASE_PATH inside the task folder, stopped through its handle.
+ *
+ * Keyboard: every walk uses real Tab / Shift+Tab presses; the pickers, toggles, dialogs and the switcher
+ * are driven with real Enter / Escape / arrow presses. Focus ring: at each stop the viewport is captured
+ * with the control focused and again unfocused (blur(); when blur() does not take, the screenshot taken
+ * before the key press that brought focus, if nothing scrolled), and the ring is read on lines across each
+ * side (the pixel run that changed most; its colour against the rendered pixel just outside and inside it).
+ * Occlusion: a 5x5 elementFromPoint grid per stop. Hard expectations only guard the probe itself; the
+ * results are written as JSON and judged in the review.
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const OUT = process.env.PROBE_OUT ?? join(REPO, '..', 'probe-out');
+const WORK = process.env.PROBE_WORK ?? join(REPO, '..', 'probe-work');
+const SHOTS = process.env.PROBE_SHOTS ?? join(REPO, '..', 'probe-shots');
+const PORT_BASE = Number(process.env.PROBE_PORT_BASE ?? '48300');
+const TAG = process.env.PROBE_TAG ?? 'bf954c0';
+const RINGS = process.env.PROBE_RINGS !== '0';
+mkdirSync(OUT, { recursive: true });
+mkdirSync(WORK, { recursive: true });
+mkdirSync(SHOTS, { recursive: true });
+
+function record(name: string, data: unknown) {
+  writeFileSync(join(OUT, `${TAG}-${name}.json`), `${JSON.stringify(data, null, 1)}\n`);
+}
+let shotCount = 0;
+async function shot(page: Page, name: string) {
+  if (!name.endsWith('-synthetic.png')) throw new Error('screenshot names end in -synthetic.png');
+  shotCount += 1;
+  if (shotCount > 400) return;
+  await page.screenshot({ path: join(SHOTS, `${TAG}-${name}`), animations: 'disabled', caret: 'hide' });
+}
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+interface ProbeServer {
+  origin: string;
+  employee: Credentials;
+  admin: Credentials;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+const test = base.extend<{ adminSeed: SeedClient }, { server: ProbeServer }>({
+  server: [
+    async ({}, use, workerInfo) => {
+      const port = workerInfo.project.name === 'desktop' ? PORT_BASE : PORT_BASE + 1;
+      const work = mkdtempSync(join(WORK, `${TAG}-${workerInfo.project.name}-`));
+      const origin = `http://127.0.0.1:${port}`;
+      const employee = { email: 'employee@example.invalid', password: randomBytes(18).toString('base64url') };
+      const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NODE_ENV: 'development',
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        DATABASE_PATH: join(work, 'timesheet.db'),
+        DATA_DIR: join(work, 'private-data'),
+        APP_ORIGINS: origin,
+        OUTBOUND_MODE: 'capture',
+        MAIL_FROM: 'timesheet-capture@example.invalid',
+        SEED_ADMIN_PASSWORD: admin.password,
+        SEED_EMPLOYEE_PASSWORD: employee.password,
+      };
+      for (const command of ['migrate', 'seed']) {
+        const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+        if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+      }
+      const errFd = openSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stderr.txt`), 'w');
+      const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: ['ignore', 'ignore', errFd] });
+      try {
+        await waitHealthy(origin, child);
+        await use({ origin, employee, admin });
+      } finally {
+        if (child.exitCode === null) {
+          const exited = new Promise((done) => child.once('exit', done));
+          child.kill();
+          await exited;
+        }
+        closeSync(errFd);
+        writeFileSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stopped.json`), `${JSON.stringify({ port, exitCode: child.exitCode, signal: child.signalCode })}\n`);
+      }
+    },
+    { scope: 'worker', timeout: 90_000 },
+  ],
+  baseURL: async ({ server }, use) => {
+    await use(server.origin);
+  },
+  adminSeed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.admin.email, server.admin.password));
+  },
+});
+
+test.use({ timezoneId: 'Asia/Ho_Chi_Minh', locale: 'en-US' });
+
+const consoleLines: string[] = [];
+test.beforeEach(async ({ page }) => {
+  page.on('console', (message) => {
+    if (message.type() === 'warning' || message.type() === 'error') consoleLines.push(`${message.type()}: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => consoleLines.push(`pageerror: ${error.message}`));
+});
+test.afterAll(async ({}, workerInfo) => {
+  record(`console-${workerInfo.project.name}`, consoleLines);
+});
+
+/* ---- Synthetic world ------------------------------------------------------------------------------ */
+
+interface World {
+  me: Person;
+  owner: Person;
+  editOwner: Person;
+  complete: string;
+  unconfirmed: string;
+  wfh: string;
+  leave: string;
+}
+
+const ME = 'Synthetic Keyboard Auditor';
+const OWNER = 'Synthetic Share Owner';
+const EDIT_OWNER = 'Synthetic Edit Owner';
+
+async function newWorld(adminSeed: SeedClient, origin: string, options: { mutual?: boolean; editShare?: boolean } = {}): Promise<World> {
+  const server = { origin } as never;
+  const me = await newPerson(adminSeed, server, { displayName: ME, signature: 'none' });
+  const owner = await newPerson(adminSeed, server, { displayName: OWNER, signature: 'none' });
+  const editOwner = await newPerson(adminSeed, server, { displayName: EDIT_OWNER, signature: 'none' });
+  const [complete = '', unconfirmed = '', wfh = '', leave = ''] = await me.api.displayedPeriodFreeWorkdays();
+  expect(complete, 'a free past workday').not.toBe('');
+  await me.api.seedCompleteDay(complete);
+  if (unconfirmed !== '') await me.api.seedUnconfirmedBreaksDay(unconfirmed);
+  if (wfh !== '') {
+    await me.api.seedCompleteDay(wfh);
+    await me.api.putDay(wfh, { wfh: true, notes: 'Synthetic note for the WFH day' });
+  }
+  if (leave !== '') {
+    try {
+      await me.api.putDay(leave, { leave_minutes: 120, leave_kind: 'vacation' });
+    } catch {
+      // recorded by the absence of the line
+    }
+  }
+  for (const person of [owner, editOwner]) {
+    const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+    if (day !== '') await person.api.seedCompleteDay(day);
+  }
+  await owner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  if (options.editShare === true) {
+    await editOwner.api.call('POST', '/api/shares', { grantee_email: me.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+  }
+  if (options.mutual === true) {
+    await me.api.call('POST', '/api/shares', { grantee_email: owner.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  }
+  return { me, owner, editOwner, complete, unconfirmed, wfh, leave };
+}
+
+async function signIn(page: Page, who: Credentials, hash = '#/timesheet') {
+  await page.goto(`/${hash}`);
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+}
+
+async function signOut(page: Page) {
+  const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+  if (await more.isVisible()) await more.click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+}
+
+async function settle(page: Page) {
+  await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))))');
+}
+
+async function gotoTimesheet(page: Page) {
+  await page.goto('/#/timesheet');
+  // A fresh document: no batch mode, editor or form state left from an earlier step.
+  await page.reload();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  // The pointer rests on the sticky shell bar, so no scrolled control is ever hovered during a walk (R-10 aside).
+  await page.mouse.move(1, 1);
+}
+
+/* ---- PNG decoding and colour maths ------------------------------------------------------------------ */
+
+type RGB = [number, number, number];
+interface Img {
+  width: number;
+  height: number;
+  data: Buffer;
+  bpp: number;
+}
+
+function decodePng(buf: Buffer): Img {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const idat: Buffer[] = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos);
+    const type = buf.toString('latin1', pos + 4, pos + 8);
+    const chunk = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === 'IHDR') {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+      bitDepth = chunk[8] ?? 0;
+      colorType = chunk[9] ?? 0;
+      interlace = chunk[12] ?? 0;
+    } else if (type === 'IDAT') idat.push(chunk);
+    else if (type === 'IEND') break;
+    pos += 12 + length;
+  }
+  if (bitDepth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) throw new Error(`unsupported PNG ${bitDepth}/${colorType}/${interlace}`);
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const data = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)] ?? 0;
+    const src = y * (stride + 1) + 1;
+    const dst = y * stride;
+    for (let i = 0; i < stride; i += 1) {
+      const left = i >= bpp ? (data[dst + i - bpp] ?? 0) : 0;
+      const up = y > 0 ? (data[dst - stride + i] ?? 0) : 0;
+      const upLeft = i >= bpp && y > 0 ? (data[dst - stride + i - bpp] ?? 0) : 0;
+      const x = raw[src + i] ?? 0;
+      let value = x;
+      if (filter === 1) value = x + left;
+      else if (filter === 2) value = x + up;
+      else if (filter === 3) value = x + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = x + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      } else if (filter !== 0) throw new Error(`PNG filter ${filter}`);
+      data[dst + i] = value & 0xff;
+    }
+  }
+  return { width, height, data, bpp };
+}
+
+function pixel(img: Img, x: number, y: number): RGB | null {
+  if (x < 0 || y < 0 || x >= img.width || y >= img.height) return null;
+  const o = (y * img.width + x) * img.bpp;
+  return [img.data[o] ?? 0, img.data[o + 1] ?? 0, img.data[o + 2] ?? 0];
+}
+
+function luminance([r, g, b]: RGB): number {
+  const c = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+}
+function contrast(a: RGB, b: RGB): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p) as [number, number];
+  return (x + 0.05) / (y + 0.05);
+}
+const hex = (c: RGB | null) => (c === null ? null : `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function analyseLine(points: Array<{ d: number; f: RGB; u: RGB }>, dsf: number) {
+  let best = -1;
+  let bestCh = 1;
+  points.forEach((point, index) => {
+    const ch = contrast(point.f, point.u);
+    if (ch > bestCh + 1e-9) {
+      bestCh = ch;
+      best = index;
+    }
+  });
+  if (best < 0) return { change: 1, d: null as number | null, ring: null as string | null, outer: null as string | null, inner: null as string | null, outerRatio: null as number | null, innerRatio: null as number | null, bandCss: 0 };
+  const ring = points[best]?.f as RGB;
+  let start = best;
+  let end = best;
+  while (start - 1 >= 0 && contrast(points[start - 1]?.f as RGB, ring) < 1.15) start -= 1;
+  while (end + 1 < points.length && contrast(points[end + 1]?.f as RGB, ring) < 1.15) end += 1;
+  const outer = points[end + 1]?.f ?? null;
+  const inner = points[start - 1]?.f ?? null;
+  return {
+    change: r2(bestCh),
+    d: r2(points[best]?.d ?? 0),
+    ring: hex(ring),
+    outer: hex(outer),
+    inner: hex(inner),
+    outerRatio: outer === null ? null : r2(contrast(ring, outer)),
+    innerRatio: inner === null ? null : r2(contrast(ring, inner)),
+    bandCss: r2((end - start + 1) / dsf),
+  };
+}
+
+/** Differential ring reading: focused image against an unfocused image of the same scroll state. */
+function ringOf(focused: Img, unfocused: Img, rect: Rect, dsf: number) {
+  const sides: Array<{ side: string; at: number } & ReturnType<typeof analyseLine>> = [];
+  for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+    let bestSide: ({ side: string; at: number } & ReturnType<typeof analyseLine>) | null = null;
+    const vertical = side === 'top' || side === 'bottom';
+    const inside = Math.max(0.5, Math.min(6, (vertical ? rect.height : rect.width) / 2 - 0.5));
+    for (const at of [0.3, 0.5, 0.7]) {
+      const points: Array<{ d: number; f: RGB; u: RGB }> = [];
+      if (vertical) {
+        const col = Math.floor((rect.x + at * rect.width) * dsf);
+        const edge = side === 'top' ? rect.y : rect.y + rect.height;
+        const sign = side === 'top' ? -1 : 1;
+        const from = Math.floor((edge - sign * inside) * dsf);
+        const to = Math.floor((edge + sign * 8) * dsf);
+        for (let row = from; sign > 0 ? row <= to : row >= to; row += sign) {
+          const f = pixel(focused, col, row);
+          const u = pixel(unfocused, col, row);
+          if (f === null || u === null) continue;
+          points.push({ d: sign * ((row + 0.5) / dsf - edge), f, u });
+        }
+      } else {
+        const row = Math.floor((rect.y + at * rect.height) * dsf);
+        const edge = side === 'left' ? rect.x : rect.x + rect.width;
+        const sign = side === 'left' ? -1 : 1;
+        const from = Math.floor((edge - sign * inside) * dsf);
+        const to = Math.floor((edge + sign * 8) * dsf);
+        for (let col = from; sign > 0 ? col <= to : col >= to; col += sign) {
+          const f = pixel(focused, col, row);
+          const u = pixel(unfocused, col, row);
+          if (f === null || u === null) continue;
+          points.push({ d: sign * ((col + 0.5) / dsf - edge), f, u });
+        }
+      }
+      const result = { side, at, ...analyseLine(points, dsf) };
+      if (bestSide === null || result.change > bestSide.change) bestSide = result;
+    }
+    if (bestSide !== null) sides.push(bestSide);
+  }
+  const present = sides.filter((side) => side.change >= 3);
+  const adjacent = present.map((side) => Math.max(side.outerRatio ?? 0, side.innerRatio ?? 0)).filter((value) => value > 0);
+  const outerRatios = present.filter((side) => side.outerRatio !== null).map((side) => side.outerRatio ?? 0);
+  return {
+    sidesPresent: present.length,
+    minOuter: outerRatios.length === 0 ? null : r2(Math.min(...outerRatios)),
+    minAdjacentBest: adjacent.length === 0 ? null : r2(Math.min(...adjacent)),
+    minChange: present.length === 0 ? null : r2(Math.min(...present.map((side) => side.change))),
+    maxChange: sides.length === 0 ? null : r2(Math.max(...sides.map((side) => side.change))),
+    sides,
+  };
+}
+
+/** Intrinsic outset-ring reading (no reference image): the strongest pixel within 0-5px outside each side against the pixel 7-9px out. */
+function outsetRingOf(img: Img, rect: Rect, dsf: number) {
+  const sides: Array<{ side: string; ring: string | null; far: string | null; ratio: number; d: number }> = [];
+  for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+    let best: { side: string; ring: string | null; far: string | null; ratio: number; d: number } | null = null;
+    for (const at of [0.3, 0.5, 0.7]) {
+      const vertical = side === 'top' || side === 'bottom';
+      const sign = side === 'top' || side === 'left' ? -1 : 1;
+      const edge = vertical ? (side === 'top' ? rect.y : rect.y + rect.height) : side === 'left' ? rect.x : rect.x + rect.width;
+      const across = vertical ? rect.x + at * rect.width : rect.y + at * rect.height;
+      const read = (d: number) => {
+        const along = Math.floor((edge + sign * d) * dsf);
+        const fixed = Math.floor(across * dsf);
+        return vertical ? pixel(img, fixed, along) : pixel(img, along, fixed);
+      };
+      const far = read(9);
+      if (far === null) continue;
+      for (let d = 0.25; d <= 5; d += 0.5 / dsf) {
+        const value = read(d);
+        if (value === null) continue;
+        const ratio = contrast(value, far);
+        if (best === null || ratio > best.ratio) best = { side, ring: hex(value), far: hex(far), ratio: r2(ratio), d: r2(d) };
+      }
+    }
+    if (best !== null) sides.push(best);
+  }
+  return { min: sides.length === 0 ? null : r2(Math.min(...sides.map((side) => side.ratio))), sides };
+}
+
+/* ---- Stop inspection -------------------------------------------------------------------------------- */
+
+interface StopInfo {
+  key: number;
+  tag: string;
+  type: string | null;
+  role: string | null;
+  name: string;
+  rect: Rect;
+  visible: number;
+  covers: string[];
+  inside: boolean;
+  fv: boolean;
+  fw: boolean;
+  boxShadow: string;
+  scrollY: number;
+  scrollers: number[];
+  day: string | null;
+  dayButton: boolean;
+  picker: string | null;
+}
+
+async function stopInfo(page: Page, scope: string): Promise<StopInfo | null> {
+  return page.evaluate((scopeSelector) => {
+    const w = window as unknown as { __b6keys?: WeakMap<Element, number>; __b6next?: number; __b6last?: Element };
+    const active = document.activeElement as HTMLElement | null;
+    if (active === null || active === document.body || active === document.documentElement) return null;
+    w.__b6keys = w.__b6keys ?? new WeakMap();
+    let key = w.__b6keys.get(active);
+    if (key === undefined) {
+      w.__b6next = (w.__b6next ?? 0) + 1;
+      key = w.__b6next;
+      w.__b6keys.set(active, key);
+    }
+    w.__b6last = active;
+    const labels = (active as HTMLInputElement).labels ? [...((active as HTMLInputElement).labels ?? [])] : [];
+    const rect = active.getBoundingClientRect();
+    let visible = 0;
+    const covers = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      for (let j = 0; j < 5; j += 1) {
+        const x = rect.left + 1 + ((rect.width - 2) * (i + 0.5)) / 5;
+        const y = rect.top + 1 + ((rect.height - 2) * (j + 0.5)) / 5;
+        if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
+          covers.add('outside the viewport');
+          continue;
+        }
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (active.contains(hit) || labels.some((label) => label.contains(hit)))) visible += 1;
+        else if (hit !== null) {
+          const cover = hit.closest('.shell-bar, .shell-tabs, .share-bar, .editor-head, dialog, .more-panel') ?? hit;
+          covers.add(`${cover.tagName.toLowerCase()}.${String(cover.className).split(' ')[0]}`);
+        }
+      }
+    }
+    const scrollers: number[] = [];
+    for (let node: Element | null = active.parentElement; node !== null; node = node.parentElement) {
+      if (node.scrollHeight > node.clientHeight + 1 && getComputedStyle(node).overflowY !== 'visible') scrollers.push(Math.round(node.scrollTop));
+    }
+    const name = (active.getAttribute('aria-label') ?? active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 70);
+    return {
+      key,
+      tag: active.tagName.toLowerCase(),
+      type: active.getAttribute('type'),
+      role: active.getAttribute('role'),
+      name,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      visible,
+      covers: [...covers],
+      inside: active.closest(scopeSelector) !== null,
+      fv: active.matches(':focus-visible'),
+      fw: active.matches(':focus-within'),
+      boxShadow: getComputedStyle(active).boxShadow,
+      scrollY: Math.round(window.scrollY),
+      scrollers,
+      day: active.closest('[data-day]')?.getAttribute('data-day') ?? null,
+      dayButton: active.hasAttribute('data-day-button'),
+      picker: active.closest('[data-label-picker]')?.getAttribute('data-label-picker') ?? null,
+    };
+  }, scope);
+}
+
+async function capture(page: Page): Promise<Buffer> {
+  return page.screenshot({ animations: 'disabled', caret: 'hide' });
+}
+
+interface RingResult {
+  ref: 'blur' | 'previous' | 'none';
+  blurTook: boolean;
+  sidesPresent: number | null;
+  minOuter: number | null;
+  minAdjacentBest: number | null;
+  minChange: number | null;
+  maxChange: number | null;
+}
+
+async function measureRing(page: Page, info: StopInfo, previous: { png: Buffer; info: StopInfo } | null, dsf: number, focusedPng: Buffer): Promise<RingResult> {
+  const blurTook = await page.evaluate(() => {
+    const w = window as unknown as { __b6last?: HTMLElement };
+    const element = w.__b6last;
+    if (element === undefined) return false;
+    element.blur();
+    return document.activeElement !== element && !element.matches(':focus-within');
+  });
+  let refPng: Buffer | null = null;
+  let ref: RingResult['ref'] = 'none';
+  if (blurTook) {
+    refPng = await capture(page);
+    ref = 'blur';
+    await page.evaluate(() => {
+      const w = window as unknown as { __b6last?: HTMLElement };
+      w.__b6last?.focus({ preventScroll: true });
+    });
+  } else if (previous !== null && previous.info.scrollY === info.scrollY && JSON.stringify(previous.info.scrollers) === JSON.stringify(info.scrollers)) {
+    refPng = previous.png;
+    ref = 'previous';
+  }
+  if (refPng === null) return { ref, blurTook, sidesPresent: null, minOuter: null, minAdjacentBest: null, minChange: null, maxChange: null };
+  const result = ringOf(decodePng(focusedPng), decodePng(refPng), info.rect, dsf);
+  return { ref, blurTook, sidesPresent: result.sidesPresent, minOuter: result.minOuter, minAdjacentBest: result.minAdjacentBest, minChange: result.minChange, maxChange: result.maxChange };
+}
+
+interface WalkStop extends StopInfo {
+  ring?: RingResult;
+}
+
+/** Focuses the first or last visible focusable control of `scope` (the starting point of a walk). */
+async function focusEdge(page: Page, scope: string, edge: 'first' | 'last'): Promise<boolean> {
+  return page.evaluate(
+    ([scopeSelector, which]) => {
+      const root = document.querySelector(scopeSelector);
+      const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const candidates = root === null ? [] : [...root.querySelectorAll<HTMLElement>(selector)].filter((element) => element.getClientRects().length > 0 && element.closest('[inert]') === null);
+      const target = which === 'first' ? candidates[0] : candidates.at(-1);
+      if (target === undefined) return false;
+      target.focus();
+      return document.activeElement === target || target.contains(document.activeElement);
+    },
+    [scope, edge] as const,
+  );
+}
+
+async function walk(page: Page, scope: string, direction: 'forward' | 'backward', label: string, dsf: number, rings: boolean) {
+  const stops: WalkStop[] = [];
+  const ok = await focusEdge(page, scope, direction === 'forward' ? 'first' : 'last');
+  if (!ok) return { label, direction, stops, note: 'no focusable control' };
+  await page.keyboard.press('Shift');
+  // Re-establish keyboard modality on the starting control with a real key press pair.
+  await page.keyboard.press(direction === 'forward' ? 'Shift+Tab' : 'Tab');
+  await page.keyboard.press(direction === 'forward' ? 'Tab' : 'Shift+Tab');
+  const seen = new Set<number>();
+  let last: number | undefined;
+  let repeats = 0;
+  let previous: { png: Buffer; info: StopInfo } | null = null;
+  // A stop whose ring could not be measured yet (blur() did not take and the page scrolled since the
+  // previous stop): the screenshot of the next stop serves as its unfocused image if nothing scrolled.
+  let pending: { stop: WalkStop; png: Buffer } | null = null;
+  for (let index = 0; index < 220; index += 1) {
+    await settle(page);
+    const info = await stopInfo(page, scope);
+    if (info === null || !info.inside) break;
+    if (info.key === last && repeats < 8) {
+      // A date or time field keeps focus while the key moves through its segments.
+      repeats += 1;
+    } else {
+      if (info.key !== last && seen.has(info.key)) break;
+      repeats = 0;
+      last = info.key;
+      seen.add(info.key);
+      const stop: WalkStop = { ...info };
+      if (rings) {
+        const focusedPng = await capture(page);
+        if (pending !== null) {
+          const before = pending.stop;
+          if (before.scrollY === info.scrollY && JSON.stringify(before.scrollers) === JSON.stringify(info.scrollers)) {
+            const result = ringOf(decodePng(pending.png), decodePng(focusedPng), before.rect, dsf);
+            before.ring = { ref: 'next' as never, blurTook: false, sidesPresent: result.sidesPresent, minOuter: result.minOuter, minAdjacentBest: result.minAdjacentBest, minChange: result.minChange, maxChange: result.maxChange };
+          }
+          pending = null;
+        }
+        stop.ring = await measureRing(page, info, previous, dsf, focusedPng);
+        if (stop.ring.sidesPresent === null) pending = { stop, png: focusedPng };
+        previous = { png: focusedPng, info };
+      }
+      stops.push(stop);
+    }
+    await page.keyboard.press(direction === 'forward' ? 'Tab' : 'Shift+Tab');
+  }
+  return { label, direction, stops };
+}
+
+/* ---- Per width x theme walks ------------------------------------------------------------------------ */
+
+const WIDTHS: Record<string, Array<{ width: number; height: number }>> = {
+  desktop: [
+    { width: 1280, height: 800 },
+    { width: 768, height: 1024 },
+  ],
+  mobile: [
+    { width: 390, height: 844 },
+    { width: 320, height: 640 },
+  ],
+};
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const index of [0, 1]) {
+    test(`P1 walks ${theme} size#${index}`, async ({ page, adminSeed, server }, testInfo) => {
+      const project = testInfo.project.name;
+      const size = WIDTHS[project]?.[index];
+      if (size === undefined) throw new Error('size');
+      const dsf = project === 'mobile' ? 2 : 1;
+      await page.setViewportSize(size);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      const world = await newWorld(adminSeed, server.origin, { mutual: true, editShare: true });
+      await signIn(page, world.me.account);
+      await gotoTimesheet(page);
+      const tag = `${project}-${size.width}-${theme}`;
+      const walks: unknown[] = [];
+      const errors: string[] = [];
+      const gotoHash = async (hash: string) => {
+        await page.goto(`/${hash}`);
+        await page.reload();
+        await page.mouse.move(1, 1);
+      };
+      const run = async (screen: string, scope: string, prepare: () => Promise<void>) => {
+        for (const direction of ['forward', 'backward'] as const) {
+          try {
+            await prepare();
+            await page.mouse.move(1, 1);
+            walks.push({ screen, ...(await walk(page, scope, direction, `${tag} ${screen}`, dsf, RINGS)) });
+          } catch (error) {
+            errors.push(`${screen} ${direction}: ${String(error).slice(0, 300)}`);
+          }
+        }
+      };
+      await run('timesheet', 'body', async () => gotoTimesheet(page));
+      await run('timesheet-batch', 'body', async () => {
+        await gotoTimesheet(page);
+        const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+        const box = page.getByRole('checkbox', { name: `Select ${world.complete}` });
+        await box.focus();
+        await page.keyboard.press('Space');
+        await expect(box).toBeChecked();
+      });
+      await run('settings', 'body', async () => {
+        await gotoHash('#/settings');
+        await expect(page.getByRole('list', { name: 'Shares I received' })).toBeVisible();
+      });
+      await run('shared-view', 'body', async () => {
+        await gotoHash(`#/shared/${world.owner.account.id}`);
+        await expect(page.locator('[data-share-bar]')).toBeVisible();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+      });
+      await run('overtime', 'body', async () => {
+        await gotoHash('#/ot');
+        await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+        await page.waitForTimeout(400);
+      });
+      await run('history', 'body', async () => {
+        await gotoHash('#/history');
+        await page.waitForTimeout(400);
+      });
+      await run('import', 'body', async () => {
+        await gotoHash('#/import');
+        await page.waitForTimeout(400);
+      });
+      await run('review', 'body', async () => {
+        await gotoTimesheet(page);
+        await page.locator('[data-sheet-review-link], a[href*="review"]').first().click();
+        await page.waitForTimeout(600);
+      });
+      const openEditor = async (owner?: string) => {
+        if (owner === undefined) await gotoTimesheet(page);
+        const date = owner === undefined ? world.complete : ((await world.editOwner.api.displayedPeriodFreeWorkdays())[0] ?? world.complete);
+        const target = owner === undefined ? world.complete : date;
+        const button = page.locator(`[data-day="${target}"] [data-day-button]`);
+        await button.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator(`dialog[data-day-editor="${target}"]`)).toBeVisible();
+        await expect(page.locator(`dialog[data-day-editor="${target}"]`).getByRole('heading', { name: /^Times/ })).toBeVisible();
+        return target;
+      };
+      await run('day-editor', `dialog[data-day-editor="${world.complete}"]`, async () => {
+        await openEditor();
+      });
+      await run('day-editor-session-form', `dialog[data-day-editor="${world.complete}"]`, async () => {
+        await openEditor();
+        const add = page.locator(`dialog[data-day-editor="${world.complete}"]`).getByRole('button', { name: 'Add session' });
+        await add.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator(`dialog[data-day-editor="${world.complete}"] input[type="time"]`).first()).toBeVisible();
+      });
+      // A shared view with edit rights: the editor beside or over the sheet below the share bar.
+      try {
+        await gotoHash(`#/shared/${world.editOwner.account.id}`);
+        await expect(page.locator('[data-share-bar]')).toBeVisible();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        const firstDay = (await page.locator('[data-day]').first().getAttribute('data-day')) ?? '';
+        const button = page.locator(`[data-day="${firstDay}"] [data-day-button]`);
+        await button.focus();
+        await page.keyboard.press('Enter');
+        const editor = page.locator(`dialog[data-day-editor="${firstDay}"]`);
+        await expect(editor).toBeVisible();
+        for (const direction of ['forward', 'backward'] as const) {
+          walks.push({ screen: 'shared-edit-editor', ...(await walk(page, `dialog[data-day-editor="${firstDay}"]`, direction, `${tag} shared-edit-editor`, dsf, RINGS)) });
+        }
+        await page.keyboard.press('Escape');
+        walks.push({ screen: 'shared-edit-sheet', ...(await walk(page, 'body', 'backward', `${tag} shared-edit-sheet`, dsf, RINGS)) });
+      } catch (error) {
+        errors.push(`shared-edit: ${String(error).slice(0, 300)}`);
+      }
+      const geometry = await page.evaluate(() => ({
+        shell: document.querySelector('.shell-bar')?.getBoundingClientRect().height ?? null,
+        html: getComputedStyle(document.documentElement).scrollPaddingTop,
+        shellVar: document.documentElement.style.getPropertyValue('--shell-bar-size'),
+        shareVar: document.documentElement.style.getPropertyValue('--share-bar-size'),
+      }));
+      record(`p1-walks-${tag}`, { tag, size, theme, geometry, errors, walks });
+    });
+  }
+}
+
+/* ---- P2: label picker, dialog stops, pressed toggles, date/time fields (rendered rings) -------------- */
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const index of [0, 1]) {
+    test(`P2 rings ${theme} size#${index}`, async ({ page, adminSeed, server }, testInfo) => {
+      const project = testInfo.project.name;
+      const size = WIDTHS[project]?.[index];
+      if (size === undefined) throw new Error('size');
+      const dsf = project === 'mobile' ? 2 : 1;
+      await page.setViewportSize(size);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      const world = await newWorld(adminSeed, server.origin);
+      await signIn(page, world.me.account);
+      await gotoTimesheet(page);
+      const tag = `${project}-${size.width}-${theme}`;
+      const out: Record<string, unknown> = { tag };
+      const errors: string[] = [];
+
+      // AX-02: the open label picker (first and last day), keyboard only.
+      const pickers: unknown[] = [];
+      for (const which of ['first', 'last'] as const) {
+        try {
+          await gotoTimesheet(page);
+          const triggers = page.locator('[data-label-picker] button.label-trigger');
+          const trigger = which === 'first' ? triggers.first() : triggers.last();
+          await trigger.focus();
+          await page.keyboard.press('Shift');
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+          await expect(trigger).toBeFocused();
+          await page.keyboard.press('Enter');
+          const list = page.getByRole('listbox');
+          await expect(list).toBeFocused();
+          const states: Array<{ key: string; png: Buffer; activeId: string; options: Array<{ id: string; rect: Rect; visible: number }>; list: Rect; listFv: boolean; listShadow: string; activeShadow: string }> = [];
+          for (const key of ['', 'ArrowDown', 'ArrowDown', 'End', 'Home', 'ArrowDown']) {
+            if (key !== '') await page.keyboard.press(key);
+            await settle(page);
+            const state = await page.evaluate(() => {
+              const listbox = document.activeElement as HTMLElement;
+              const activeId = listbox.getAttribute('aria-activedescendant') ?? '';
+              const options = [...listbox.querySelectorAll<HTMLElement>('[role="option"]')].map((option) => {
+                const rect = option.getBoundingClientRect();
+                let visible = 0;
+                for (let i = 0; i < 5; i += 1)
+                  for (let j = 0; j < 5; j += 1) {
+                    const hit = document.elementFromPoint(rect.left + 1 + ((rect.width - 2) * (i + 0.5)) / 5, rect.top + 1 + ((rect.height - 2) * (j + 0.5)) / 5);
+                    if (hit !== null && option.contains(hit)) visible += 1;
+                  }
+                return { id: option.id, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, visible };
+              });
+              const r = listbox.getBoundingClientRect();
+              const active = document.getElementById(activeId);
+              return {
+                activeId,
+                options,
+                list: { x: r.x, y: r.y, width: r.width, height: r.height },
+                listFv: listbox.matches(':focus-visible'),
+                listShadow: getComputedStyle(listbox).boxShadow,
+                activeShadow: active === null ? 'none' : getComputedStyle(active).boxShadow,
+                role: listbox.getAttribute('role'),
+              };
+            });
+            states.push({ key, png: await capture(page), ...state });
+          }
+          const readings = states.map((state, i) => {
+            const activeOption = state.options.find((option) => option.id === state.activeId);
+            const listRing = outsetRingOf(decodePng(state.png), state.list, dsf);
+            let optionRing: ReturnType<typeof ringOf> | null = null;
+            let refKey: string | null = null;
+            if (activeOption !== undefined) {
+              const other = states.find((candidate, j) => j !== i && candidate.activeId !== state.activeId && JSON.stringify(candidate.list) === JSON.stringify(state.list));
+              if (other !== undefined) {
+                optionRing = ringOf(decodePng(state.png), decodePng(other.png), activeOption.rect, dsf);
+                refKey = other.key;
+              }
+            }
+            return {
+              key: state.key,
+              activeId: state.activeId,
+              activeVisible: activeOption?.visible ?? null,
+              listFv: state.listFv,
+              listShadow: state.listShadow,
+              activeShadow: state.activeShadow,
+              listRing: { min: listRing.min, sides: listRing.sides },
+              optionRing: optionRing === null ? null : { ref: refKey, sidesPresent: optionRing.sidesPresent, minOuter: optionRing.minOuter, minAdjacentBest: optionRing.minAdjacentBest, minChange: optionRing.minChange, sides: optionRing.sides.map((side) => ({ side: side.side, change: side.change, ring: side.ring, outer: side.outer, inner: side.inner, outerRatio: side.outerRatio, innerRatio: side.innerRatio })) },
+            };
+          });
+          if (which === 'first') await shot(page, `p2-picker-${tag}-synthetic.png`);
+          await page.keyboard.press('Escape');
+          await settle(page);
+          const back = await trigger.evaluate((element) => element === document.activeElement);
+          pickers.push({ which, readings, escapeReturnsToTrigger: back });
+        } catch (error) {
+          errors.push(`picker ${which}: ${String(error).slice(0, 300)}`);
+        }
+      }
+      out.pickers = pickers;
+
+      // AX-03: the day editor dialog as its own keyboard stop (Shift+Tab from the first control).
+      try {
+        await gotoTimesheet(page);
+        const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+        await button.focus();
+        await page.keyboard.press('Enter');
+        const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+        await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+        const openFocus = await page.evaluate(() => ({ tag: document.activeElement?.tagName ?? '', text: (document.activeElement?.textContent ?? '').trim().slice(0, 60) }));
+        await page.keyboard.press('Tab');
+        await settle(page);
+        const first = await page.evaluate(() => ({ tag: document.activeElement?.tagName ?? '', text: (document.activeElement?.textContent ?? '').trim().slice(0, 40) }));
+        const before = await capture(page);
+        const scrollBefore = await editor.evaluate((element) => element.scrollTop);
+        await page.keyboard.press('Shift+Tab');
+        await settle(page);
+        const state = await editor.evaluate((element) => ({
+          isStop: element === document.activeElement,
+          fv: element.matches(':focus-visible'),
+          scrolls: element.scrollHeight > element.clientHeight,
+          scrollTop: element.scrollTop,
+          shadow: getComputedStyle(element).boxShadow,
+          rect: (() => {
+            const r = element.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+          })(),
+        }));
+        const after = await capture(page);
+        const ring = state.isStop && state.scrollTop === scrollBefore ? ringOf(decodePng(after), decodePng(before), state.rect, dsf) : null;
+        await shot(page, `p2-editor-dialog-stop-${tag}-synthetic.png`);
+        out.editorStop = { openFocus, first, ...state, ring: ring === null ? null : { sidesPresent: ring.sidesPresent, minOuter: ring.minOuter, minAdjacentBest: ring.minAdjacentBest, minChange: ring.minChange, sides: ring.sides.map((side) => ({ side: side.side, change: side.change, ring: side.ring, outer: side.outer, inner: side.inner, outerRatio: side.outerRatio, innerRatio: side.innerRatio })) } };
+        await page.keyboard.press('Escape');
+        await settle(page);
+        out.editorEscapeReturn = await button.evaluate((element) => element === document.activeElement);
+      } catch (error) {
+        errors.push(`editor stop: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-04: pressed toolbar toggles with focus.
+      const toggles: unknown[] = [];
+      for (const name of ['Show details', 'Change several days']) {
+        try {
+          await gotoTimesheet(page);
+          const toggle = page.getByRole('button', { name, exact: true });
+          await toggle.focus();
+          await page.keyboard.press('Shift');
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+          await page.keyboard.press('Enter');
+          await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+          await settle(page);
+          const rect = await toggle.evaluate((element) => {
+            const r = element.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height, fv: element.matches(':focus-visible'), shadow: getComputedStyle(element).boxShadow };
+          });
+          const focused = await capture(page);
+          await toggle.evaluate((element) => element.blur());
+          await settle(page);
+          const unfocused = await capture(page);
+          const unfocusedShadow = await toggle.evaluate((element) => getComputedStyle(element).boxShadow);
+          const ring = ringOf(decodePng(focused), decodePng(unfocused), rect, dsf);
+          toggles.push({ name, ...rect, unfocusedShadow, ring: { sidesPresent: ring.sidesPresent, minOuter: ring.minOuter, minAdjacentBest: ring.minAdjacentBest, minChange: ring.minChange } });
+          await toggle.focus();
+          await page.keyboard.press('Enter');
+        } catch (error) {
+          errors.push(`toggle ${name}: ${String(error).slice(0, 300)}`);
+        }
+      }
+      out.toggles = toggles;
+
+      // R-12: date field "Open a day" reached by Tab and by Shift+Tab; time fields of the session form.
+      const fields: unknown[] = [];
+      const fieldCheck = async (label: string, field: () => Promise<void>, key: 'Tab' | 'Shift+Tab', selector: string) => {
+        try {
+          await field();
+          await settle(page);
+          const beforePng = await capture(page);
+          const beforeScroll = await page.evaluate(() => window.scrollY);
+          await page.keyboard.press(key);
+          await settle(page);
+          const state = await page.evaluate((sel) => {
+            const element = document.querySelector<HTMLElement>(sel);
+            if (element === null) return null;
+            const r = element.getBoundingClientRect();
+            const scrollers: number[] = [];
+            for (let node: Element | null = element.parentElement; node !== null; node = node.parentElement) scrollers.push(Math.round(node.scrollTop));
+            return {
+              active: document.activeElement === element,
+              focus: element.matches(':focus'),
+              fv: element.matches(':focus-visible'),
+              fw: element.matches(':focus-within'),
+              shadow: getComputedStyle(element).boxShadow,
+              rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+              scrollY: Math.round(window.scrollY),
+            };
+          }, selector);
+          const afterPng = await capture(page);
+          const blur = await page.evaluate((sel) => {
+            const element = document.querySelector<HTMLElement>(sel);
+            if (element === null) return null;
+            element.blur();
+            const result = { activeAfterBlur: document.activeElement === element, focusWithinAfterBlur: element.matches(':focus-within') };
+            return result;
+          }, selector);
+          const ring = state !== null && state.scrollY === beforeScroll ? ringOf(decodePng(afterPng), decodePng(beforePng), state.rect, dsf) : null;
+          fields.push({ label, key, state, blur, ring: ring === null ? null : { sidesPresent: ring.sidesPresent, minOuter: ring.minOuter, minAdjacentBest: ring.minAdjacentBest, minChange: ring.minChange, sides: ring.sides.map((side) => ({ side: side.side, change: side.change, ring: side.ring, outer: side.outer, outerRatio: side.outerRatio, innerRatio: side.innerRatio })) } });
+        } catch (error) {
+          errors.push(`field ${label} ${key}: ${String(error).slice(0, 300)}`);
+        }
+      };
+      const openDaySel = '.tools input[type="date"]';
+      await fieldCheck(
+        'Open a day',
+        async () => {
+          await gotoTimesheet(page);
+          await page.getByRole('button', { name: 'Show details', exact: true }).focus();
+          await page.keyboard.press('Shift');
+        },
+        'Shift+Tab',
+        openDaySel,
+      );
+      await fieldCheck(
+        'Open a day',
+        async () => {
+          await gotoTimesheet(page);
+          // The control before the field in the tab order is the last of the period/clock cards.
+          await page.locator(openDaySel).focus();
+          await page.keyboard.press('Shift+Tab');
+          await settle(page);
+        },
+        'Tab',
+        openDaySel,
+      );
+      for (const which of ['first', 'last'] as const) {
+        for (const key of ['Tab', 'Shift+Tab'] as const) {
+          await fieldCheck(
+            `session form ${which} time`,
+            async () => {
+              await gotoTimesheet(page);
+              const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+              await button.focus();
+              await page.keyboard.press('Enter');
+              const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+              await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+              const add = editor.getByRole('button', { name: 'Add session' });
+              await add.focus();
+              await page.keyboard.press('Enter');
+              const times = editor.locator('input[type="time"]');
+              await expect(times.first()).toBeVisible();
+              const count = await times.count();
+              const target = which === 'first' ? 0 : count - 1;
+              await times.nth(target).evaluate((element) => element.setAttribute('data-b6-target', '1'));
+              // Start on the neighbour: focus the target, then move one stop away with a real key.
+              await times.nth(target).focus();
+              await page.keyboard.press(key === 'Tab' ? 'Shift+Tab' : 'Tab');
+              // A time field keeps focus over its segments: press until focus leaves the target.
+              for (let i = 0; i < 6; i += 1) {
+                const still = await page.evaluate(() => document.activeElement?.getAttribute('data-b6-target') === '1');
+                if (!still) break;
+                await page.keyboard.press(key === 'Tab' ? 'Shift+Tab' : 'Tab');
+              }
+              await settle(page);
+            },
+            key,
+            `dialog[data-day-editor="${world.complete}"] [data-b6-target="1"]`,
+          );
+          await page.keyboard.press('Escape');
+        }
+      }
+      out.fields = fields;
+      out.errors = errors;
+      record(`p2-rings-${tag}`, out);
+    });
+  }
+}
+
+/* ---- P3: names (label in name) on every screen ------------------------------------------------------ */
+
+async function nameScan(page: Page, screen: string) {
+  const count = await page.evaluate(() => {
+    const selector = 'button, a[href], [role="button"], [role="link"], [role="tab"], [role="option"], [role="menuitem"], summary';
+    let n = 0;
+    for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+      if (element.getClientRects().length === 0 || element.closest('[inert], [aria-hidden="true"]') !== null) continue;
+      element.setAttribute('data-b6-i', String(n));
+      n += 1;
+    }
+    return n;
+  });
+  const rows: Array<{ screen: string; i: number; role: string; name: string; visible: string; contains: boolean; symbolic: boolean; ariaLabel: string | null; raw?: string }> = [];
+  for (let i = 0; i < count; i += 1) {
+    const locator = page.locator(`[data-b6-i="${i}"]`);
+    try {
+      const [snapshot, visible, ariaLabel] = await Promise.all([
+        locator.ariaSnapshot({ timeout: 3_000 }),
+        locator.evaluate((element) => (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim()),
+        locator.getAttribute('aria-label'),
+      ]);
+      let first = (snapshot.split('\n')[0] ?? '').replace(/:$/, '');
+      // YAML quotes a whole entry that contains ": " as - '...' (with '' for a quote), maybe followed by ": text".
+      const quoted = /^- '((?:[^']|'')*)'/.exec(first);
+      if (quoted !== null) first = `- ${(quoted[1] ?? '').replace(/''/g, "'")}`;
+      const match = /^- ([\w-]+)(?: "((?:[^"\\]|\\.)*)")?/.exec(first);
+      const role = match?.[1] ?? '';
+      const name = (match?.[2] ?? '').replace(/\\"/g, '"');
+      const normal = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+      const symbolic = visible !== '' && !/[\p{L}\p{N}]/u.test(visible);
+      rows.push({ screen, i, role, name, visible, contains: visible === '' || normal(name).includes(normal(visible)), symbolic, ariaLabel, raw: first });
+    } catch (error) {
+      rows.push({ screen, i, role: 'error', name: String(error).slice(0, 120), visible: '', contains: true, symbolic: false, ariaLabel: null });
+    }
+  }
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll('[data-b6-i]')) element.removeAttribute('data-b6-i');
+  });
+  return rows;
+}
+
+test('P3 names', async ({ page, adminSeed, server }, testInfo) => {
+  const project = testInfo.project.name;
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const world = await newWorld(adminSeed, server.origin, { mutual: true, editShare: true });
+  await signIn(page, world.me.account);
+  const rows: unknown[] = [];
+  const days: unknown[] = [];
+  for (const size of WIDTHS[project] ?? []) {
+    await page.setViewportSize(size);
+    await gotoTimesheet(page);
+    rows.push(...(await nameScan(page, `${size.width} timesheet`)));
+    days.push(
+      ...(await page.locator('[data-day] [data-day-button]').evaluateAll((elements, width) =>
+        elements.map((element) => ({ width, day: element.closest('[data-day]')?.getAttribute('data-day'), label: element.getAttribute('aria-label'), visible: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim() })),
+        size.width,
+      )),
+    );
+    const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
+    await toggle.click();
+    rows.push(...(await nameScan(page, `${size.width} timesheet-batch`)));
+    await toggle.click();
+    await page.goto(`/#/shared/${world.owner.account.id}`);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    rows.push(...(await nameScan(page, `${size.width} shared-view`)));
+    days.push(
+      ...(await page.locator('[data-day] [data-day-button]').evaluateAll((elements, width) =>
+        elements.map((element) => ({ width, shared: true, day: element.closest('[data-day]')?.getAttribute('data-day'), label: element.getAttribute('aria-label'), visible: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim() })),
+        size.width,
+      )),
+    );
+    for (const hash of ['#/settings', '#/ot', '#/history', '#/import']) {
+      await page.goto(`/${hash}`);
+      await page.waitForTimeout(500);
+      rows.push(...(await nameScan(page, `${size.width} ${hash}`)));
+    }
+    await gotoTimesheet(page);
+    const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`dialog[data-day-editor="${world.complete}"]`).getByRole('heading', { name: /^Times/ })).toBeVisible();
+    rows.push(...(await nameScan(page, `${size.width} editor`)));
+    await page.keyboard.press('Escape');
+  }
+  record(`p3-names-${project}`, { rows, days });
+});
+
+/* ---- P4: switcher (AX-06), status messages (AX-07), focus returns (AX-08) ------------------------------ */
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const index of [0, 1]) {
+    test(`P4 behaviour ${theme} size#${index}`, async ({ page, adminSeed, server }, testInfo) => {
+      const project = testInfo.project.name;
+      const size = WIDTHS[project]?.[index];
+      if (size === undefined) throw new Error('size');
+      await page.setViewportSize(size);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      const tag = `${project}-${size.width}-${theme}`;
+      const out: Record<string, unknown> = { tag };
+      const errors: string[] = [];
+      const requests: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() !== 'GET') requests.push(`${request.method()} ${new URL(request.url()).pathname} ${request.postData()?.slice(0, 60) ?? ''}`);
+      });
+
+      // AX-07: wrong password twice; the alert is a new element each time.
+      try {
+        await page.goto('/');
+        await page.getByLabel('Email').fill(server.employee.email);
+        await page.getByLabel('Password').fill('wrong-synthetic-password');
+        await page.getByLabel('Password').press('Enter');
+        const alert = page.getByRole('alert');
+        await expect(alert).toHaveText('Email or password is incorrect');
+        await alert.evaluate((element) => element.setAttribute('data-b6-first', '1'));
+        await page.getByLabel('Password').press('Enter');
+        await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect');
+        const sameNode = await page.getByRole('alert').evaluate((element) => element.getAttribute('data-b6-first') === '1');
+        out.loginAlert = { role: 'alert', secondIsNewElement: !sameNode, focusAfter: await page.evaluate(() => document.activeElement?.tagName ?? '') };
+      } catch (error) {
+        errors.push(`login alert: ${String(error).slice(0, 300)}`);
+      }
+
+      const world = await newWorld(adminSeed, server.origin, { mutual: true });
+      await signIn(page, world.me.account);
+      await gotoTimesheet(page);
+
+      // AX-06: the "Shared with me" choice by keys; only Open navigates.
+      try {
+        const select = page.getByRole('combobox', { name: 'Shared with me' });
+        await expect(select).toBeVisible();
+        await select.focus();
+        await page.keyboard.press('Shift');
+        const steps: unknown[] = [];
+        requests.length = 0;
+        for (const key of ['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 's', 'ArrowDown']) {
+          await page.keyboard.press(key);
+          await page.waitForTimeout(250);
+          steps.push({ key, hash: await page.evaluate(() => window.location.hash), value: await select.inputValue(), shareBar: await page.locator('[data-share-bar]').count(), heading: await page.locator('h1').first().innerText() });
+        }
+        const changeRequests = [...requests];
+        // Choose the owner, then Tab to Open and press Enter.
+        await select.selectOption(world.owner.account.id);
+        await page.waitForTimeout(250);
+        const afterSelect = await page.evaluate(() => window.location.hash);
+        await select.focus();
+        await page.keyboard.press('Tab');
+        const openFocused = await page.evaluate(() => (document.activeElement?.textContent ?? '').trim());
+        await page.keyboard.press('Enter');
+        await expect(page.locator('[data-share-bar]')).toBeVisible();
+        const afterOpen = await page.evaluate(() => window.location.hash);
+        // In the shared view: back to "My timesheets" with the arrows changes nothing; Space on Open returns.
+        const select2 = page.getByRole('combobox', { name: 'Shared with me' });
+        await select2.focus();
+        await page.keyboard.press('ArrowUp');
+        await page.waitForTimeout(250);
+        const sharedAfterArrow = { hash: await page.evaluate(() => window.location.hash), value: await select2.inputValue() };
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Space');
+        await expect(page.locator('[data-share-bar]')).toHaveCount(0);
+        const afterSpace = await page.evaluate(() => window.location.hash);
+        // Enter on the closed select itself.
+        const select3 = page.getByRole('combobox', { name: 'Shared with me' });
+        await select3.focus();
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(300);
+        const enterOnSelect = await page.evaluate(() => window.location.hash);
+        const switcherBox = await page.locator('form.shell-switcher').evaluate((element) => {
+          const r = element.getBoundingClientRect();
+          const button = element.querySelector('button')?.getBoundingClientRect();
+          const sel = element.querySelector('select')?.getBoundingClientRect();
+          const bar = document.querySelector('.shell-bar')?.getBoundingClientRect();
+          return { form: [r.x, r.y, r.width, r.height], open: button ? [button.width, button.height] : null, select: sel ? [sel.width, sel.height] : null, bar: bar ? bar.height : null, docWidth: document.documentElement.scrollWidth, inner: window.innerWidth };
+        });
+        await shot(page, `p4-switcher-${tag}-synthetic.png`);
+        out.switcher = { steps, changeRequests, afterSelect, openFocused, afterOpen, sharedAfterArrow, afterSpace, enterOnSelect, switcherBox };
+        await page.goto('/#/timesheet');
+      } catch (error) {
+        errors.push(`switcher: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-07: the Timesheet action error is an alert (clock-in answered 500 by a route mock).
+      try {
+        await gotoTimesheet(page);
+        await page.route('**/api/clock/in', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: 'Synthetic failure' } }) }));
+        const clockIn = page.getByRole('button', { name: 'Clock in', exact: true });
+        await clockIn.focus();
+        await page.keyboard.press('Enter');
+        const alert = page.locator('.error[role="alert"]');
+        await expect(alert).toBeVisible();
+        out.timesheetAlert = { text: await alert.innerText() };
+        await page.unroute('**/api/clock/in');
+      } catch (error) {
+        errors.push(`timesheet alert: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-07: the share form problem is a status message.
+      try {
+        await page.goto('/#/settings');
+        const form = page.getByRole('form', { name: 'Share my timesheets' });
+        await form.getByRole('radio', { name: 'None' }).check();
+        out.shareStatus = { text: await form.getByRole('status').innerText() };
+      } catch (error) {
+        errors.push(`share status: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-08: batch review returns focus to Preview changes; step changes move focus to the heading.
+      try {
+        await gotoTimesheet(page);
+        requests.length = 0;
+        const toggle = page.getByRole('button', { name: 'Change several days', exact: true });
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+        const box = page.getByRole('checkbox', { name: `Select ${world.complete}` });
+        await box.focus();
+        await page.keyboard.press('Space');
+        await page.getByLabel('Category for selected days').selectOption('Off');
+        const preview = page.getByRole('button', { name: 'Preview changes' });
+        const dialog = page.getByRole('dialog');
+        const steps: Record<string, unknown> = {};
+        const open = async () => {
+          await preview.focus();
+          await page.keyboard.press('Enter');
+          await expect(dialog).toBeVisible();
+          await settle(page);
+        };
+        const focused = async () => {
+          await page.waitForTimeout(200);
+          await settle(page);
+          return page.evaluate(() => `${document.activeElement?.tagName ?? ''} ${(document.activeElement?.textContent ?? '').trim().slice(0, 50)}`);
+        };
+        await open();
+        steps.onOpen = await focused();
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        steps.afterEscape = await focused();
+        await open();
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await expect(dialog).toHaveCount(0);
+        steps.afterCancel = await focused();
+        await open();
+        const conflicts = dialog.getByRole('button', { name: 'Review conflicts' });
+        if ((await conflicts.count()) > 0) {
+          await conflicts.focus();
+          await page.keyboard.press('Enter');
+          await settle(page);
+          steps.afterReviewConflicts = await focused();
+          await dialog.getByRole('button', { name: 'Back', exact: true }).focus();
+          await page.keyboard.press('Enter');
+          await settle(page);
+          steps.afterBack = await focused();
+        }
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        steps.afterEscape2 = await focused();
+        steps.requests = [...requests];
+        steps.dayAfter = (await world.me.api.dayView(world.complete)).category;
+        out.batchFocus = steps;
+        await page.getByRole('button', { name: 'Done' }).click();
+      } catch (error) {
+        errors.push(`batch focus: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-08: a label pick that needs a review returns focus to the picker on Escape.
+      try {
+        await gotoTimesheet(page);
+        requests.length = 0;
+        const trigger = page.locator(`[data-label-picker="${world.complete}"] button.label-trigger`);
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('listbox')).toBeFocused();
+        // Move to "Off" (a label that conflicts with recorded work) and pick it.
+        const labels = await page.getByRole('option').allInnerTexts();
+        const target = labels.findIndex((text) => text.trim() === 'Off');
+        await page.keyboard.press('Home');
+        for (let i = 0; i < target; i += 1) await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Enter');
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+        await settle(page);
+        const onOpen = await page.evaluate(() => `${document.activeElement?.tagName ?? ''} ${(document.activeElement?.textContent ?? '').trim().slice(0, 50)}`);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        await page.waitForTimeout(200);
+        await settle(page);
+        out.labelReviewFocus = { onOpen, backOnTrigger: await trigger.evaluate((element) => element === document.activeElement), requests: [...requests], dayAfter: (await world.me.api.dayView(world.complete)).category };
+      } catch (error) {
+        errors.push(`label review focus: ${String(error).slice(0, 300)}`);
+      }
+
+      // AX-08: the sharing rows in Settings.
+      try {
+        await page.goto('/#/settings');
+        requests.length = 0;
+        const given = page.getByRole('list', { name: 'Shares I gave' });
+        const received = page.getByRole('list', { name: 'Shares I received' });
+        const rows: unknown[] = [];
+        for (const [list, pattern, how] of [
+          [given, /^End share with /, 'Escape'],
+          [given, /^End share with /, 'Cancel'],
+          [received, /^Leave .*shared items$/, 'Escape'],
+          [received, /^Leave .*shared items$/, 'Cancel'],
+          [given, /^Change items shared with /, 'Cancel'],
+          [given, /^Change items shared with /, 'Escape'],
+        ] as const) {
+          const opener = list.getByRole('button', { name: pattern });
+          await opener.focus();
+          await page.keyboard.press('Enter');
+          await settle(page);
+          const onOpen = await page.evaluate(() => `${document.activeElement?.tagName ?? ''} ${document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.getAttribute('data-confirm') ?? ''}`);
+          if (how === 'Escape') await page.keyboard.press('Escape');
+          else {
+            await page.getByRole('button', { name: 'Cancel', exact: true }).focus();
+            await page.keyboard.press('Enter');
+          }
+          await page.waitForTimeout(200);
+          await settle(page);
+          const back = await opener.evaluate((element) => element === document.activeElement).catch(() => false);
+          const still = await page.getByRole('button', { name: 'Cancel', exact: true }).count();
+          rows.push({ opener: String(pattern), how, onOpen, back, cancelStillShown: still });
+          if (still > 0) {
+            await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+          }
+        }
+        out.sharingFocus = { rows, requests: [...requests] };
+      } catch (error) {
+        errors.push(`sharing focus: ${String(error).slice(0, 300)}`);
+      }
+      out.errors = errors;
+      record(`p4-behaviour-${tag}`, out);
+    });
+  }
+}
+
+/* ---- P5: contrast of text (rendered colours), AX-09 tokens, status words and shapes --------------------- */
+
+test('P5 contrast', async ({ page, adminSeed, server }, testInfo) => {
+  const project = testInfo.project.name;
+  const out: Record<string, unknown> = {};
+  const world = await newWorld(adminSeed, server.origin, { mutual: true });
+  await signIn(page, world.me.account);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    const scan = async (state: string) =>
+      page.evaluate((label) => {
+        const parse = (text: string): [number, number, number, number] => {
+          const numbers = (/rgba?\(([^)]*)\)/.exec(text)?.[1] ?? '').split(/[\s,/]+/).filter((part) => part !== '').map(Number);
+          const [r = 0, g = 0, b = 0, a = 1] = numbers;
+          return [r, g, b, a];
+        };
+        const over = (top: number[], bottom: number[]) => {
+          const a = (top[3] ?? 1) + (bottom[3] ?? 1) * (1 - (top[3] ?? 1));
+          const mix = (i: number) => ((top[i] ?? 0) * (top[3] ?? 1) + (bottom[i] ?? 0) * (bottom[3] ?? 1) * (1 - (top[3] ?? 1))) / (a || 1);
+          return [mix(0), mix(1), mix(2), a];
+        };
+        const lum = (c: number[]) => {
+          const f = (v: number) => {
+            const s = v / 255;
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * f(c[0] ?? 0) + 0.7152 * f(c[1] ?? 0) + 0.0722 * f(c[2] ?? 0);
+        };
+        const ratio = (a: number[], b: number[]) => {
+          const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p) as [number, number];
+          return (x + 0.05) / (y + 0.05);
+        };
+        const rows: Array<{ state: string; text: string; color: string; bg: string; ratio: number; size: string; weight: string; cls: string }> = [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const seen = new Set<Element>();
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+          const element = node.parentElement;
+          if (element === null || seen.has(element) || (node.textContent ?? '').trim() === '') continue;
+          seen.add(element);
+          if (element.getClientRects().length === 0 || element.closest('[inert], [aria-hidden="true"], .visually-hidden, .sr-only') !== null) continue;
+          const style = getComputedStyle(element);
+          if (style.visibility === 'hidden' || Number(style.opacity) === 0 || style.clipPath === 'inset(50%)') continue;
+          const chain: number[][] = [];
+          for (let e: Element | null = element; e !== null; e = e.parentElement) chain.push(parse(getComputedStyle(e).backgroundColor));
+          const bg = chain.reduceRight((below, c) => over(c, below), [255, 255, 255, 1] as number[]);
+          const page = getComputedStyle(document.body).backgroundColor;
+          void page;
+          const fg = over(parse(style.color), bg);
+          rows.push({ state: label, text: (node.textContent ?? '').trim().slice(0, 40), color: style.color, bg: `rgb(${bg.slice(0, 3).map((v) => Math.round(v)).join(',')})`, ratio: Math.round(ratio(fg, bg) * 100) / 100, size: style.fontSize, weight: style.fontWeight, cls: element.className.toString().slice(0, 40) });
+        }
+        return rows;
+      }, state);
+    const all: unknown[] = [];
+    await gotoTimesheet(page);
+    all.push(...(await scan(`${theme} timesheet`)));
+    await page.getByRole('button', { name: 'Change several days', exact: true }).click();
+    for (const date of [world.complete, world.wfh, world.unconfirmed].filter((d) => d !== '')) await page.getByRole('checkbox', { name: `Select ${date}` }).check();
+    all.push(...(await scan(`${theme} batch-selected`)));
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('button', { name: 'Show details', exact: true }).click();
+    all.push(...(await scan(`${theme} details`)));
+    await page.getByRole('button', { name: 'Show details', exact: true }).click();
+    const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+    await button.click();
+    await expect(page.locator(`dialog[data-day-editor="${world.complete}"]`).getByRole('heading', { name: /^Times/ })).toBeVisible();
+    all.push(...(await scan(`${theme} editor`)));
+    await page.keyboard.press('Escape');
+    for (const hash of ['#/settings', '#/ot', '#/history', '#/import', `#/shared/${world.owner.account.id}`]) {
+      await page.goto(`/${hash}`);
+      await page.waitForTimeout(500);
+      all.push(...(await scan(`${theme} ${hash.startsWith('#/shared') ? '#/shared' : hash}`)));
+    }
+    await gotoTimesheet(page);
+    await page.locator('[data-sheet-review-link], a[href*="review"]').first().click();
+    await page.waitForTimeout(700);
+    all.push(...(await scan(`${theme} review`)));
+    // Status words and shapes of the Check cells.
+    await gotoTimesheet(page);
+    const checks = await page.locator('[data-check]').evaluateAll((elements) =>
+      elements.map((element) => ({ key: element.getAttribute('data-check'), text: (element as HTMLElement).innerText.trim(), shape: element.querySelector('.shape, .live-dot, svg') !== null })),
+    );
+    // AX-09: --ok over every light/dark surface token, with and without the selection tint.
+    const tokens = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      document.body.append(probe);
+      const read = (value: string) => {
+        probe.style.backgroundColor = value;
+        const computed = getComputedStyle(probe).backgroundColor;
+        probe.style.backgroundColor = '';
+        return computed;
+      };
+      const result = { ok: read('var(--ok)'), selected: read('var(--day-selected)'), surfaces: ['--card', '--bg', '--off', '--sheet-head', '--sheet-head-off', '--day-nonworking', '--attention-bg', '--line-soft'].map((token) => ({ token, colour: read(`var(${token})`) })) };
+      probe.remove();
+      return result;
+    });
+    out[theme] = { rows: all, checks, tokens };
+  }
+  record(`p5-contrast-${project}`, out);
+});
+
+/* ---- P6: reflow and targets (phone), AX-10 batch geometry ---------------------------------------------- */
+
+test('P6 reflow and targets', async ({ page, adminSeed, server }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths');
+  const world = await newWorld(adminSeed, server.origin, { mutual: true });
+  await signIn(page, world.me.account);
+  const results: unknown[] = [];
+  const measure = async (state: string, width: number) =>
+    page.evaluate(
+      ([label, w]) => {
+        const selector = 'button, a[href], input, select, textarea, label.pick, [role="option"], summary';
+        const small: Array<{ tag: string; text: string; w: number; h: number }> = [];
+        let controls = 0;
+        for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+          if (element.getClientRects().length === 0 || element.closest('[inert]') !== null) continue;
+          const style = getComputedStyle(element);
+          if (style.visibility === 'hidden') continue;
+          if (element.closest('label.pick') !== null && element.tagName === 'INPUT') continue;
+          const r = element.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          controls += 1;
+          if (r.width < 44 - 0.01 || r.height < 44 - 0.01) small.push({ tag: element.tagName.toLowerCase(), text: (element.innerText || element.getAttribute('aria-label') || element.getAttribute('type') || '').trim().slice(0, 40), w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 });
+        }
+        const overflow: string[] = [];
+        for (const element of document.querySelectorAll<HTMLElement>('body *')) {
+          const r = element.getBoundingClientRect();
+          if (r.width > 0 && (r.right > window.innerWidth + 0.5 || r.left < -0.5) && element.closest('[inert]') === null && getComputedStyle(element).position !== 'fixed') {
+            let clipped = false;
+            for (let p = element.parentElement; p !== null; p = p.parentElement) {
+              const o = getComputedStyle(p).overflowX;
+              if (o === 'hidden' || o === 'auto' || o === 'scroll' || o === 'clip') {
+                clipped = true;
+                break;
+              }
+            }
+            if (!clipped) overflow.push(`${element.tagName.toLowerCase()}.${String(element.className).split(' ')[0]} ${Math.round(r.left)}-${Math.round(r.right)}`);
+          }
+        }
+        return { state: label, width: w, controls, small, scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth, overflow: overflow.slice(0, 20) };
+      },
+      [state, width] as const,
+    );
+  for (const width of [390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: width === 320 ? 640 : 844 });
+    await gotoTimesheet(page);
+    results.push(await measure('timesheet', width));
+    await page.getByRole('button', { name: 'Change several days', exact: true }).click();
+    await page.getByRole('checkbox', { name: `Select ${world.complete}` }).check();
+    results.push(await measure('batch', width));
+    const rows = await page.locator('tr.sheet-row[data-day]').evaluateAll((elements) =>
+      elements.map((row) => {
+        const box = (selector: string) => {
+          const r = row.querySelector(selector)?.getBoundingClientRect();
+          return r === undefined ? null : { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+        };
+        return { day: row.getAttribute('data-day'), button: box('button.sheet-day-button'), cell: box('td.t-day'), label: box('td.t-label'), pick: box('label.pick'), labelText: box('td.t-label .cell-main') };
+      }),
+    );
+    const problems: string[] = [];
+    for (const row of rows) {
+      if (row.button === null || row.cell === null || row.label === null || row.pick === null) {
+        problems.push(`${row.day}: missing`);
+        continue;
+      }
+      if (row.button.right > row.cell.right + 0.5) problems.push(`${row.day}: button ${r2(row.button.right - row.cell.right)}px outside cell`);
+      if (row.button.right > row.label.left + 0.5) problems.push(`${row.day}: button over label cell`);
+      if (row.pick.width < 44 || row.pick.height < 44) problems.push(`${row.day}: pick ${row.pick.width}x${row.pick.height}`);
+      if (row.pick.right > row.cell.right + 0.5) problems.push(`${row.day}: pick outside cell`);
+    }
+    results.push({ state: 'ax10-rows', width, rows: rows.length, problems, sample: rows[0] });
+    if (width === 320 || width === 390) await shot(page, `p6-batch-${width}-synthetic.png`);
+    await page.getByRole('button', { name: 'Done' }).click();
+    const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+    await button.click();
+    await expect(page.locator(`dialog[data-day-editor="${world.complete}"]`).getByRole('heading', { name: /^Times/ })).toBeVisible();
+    results.push(await measure('editor', width));
+    await page.keyboard.press('Escape');
+    const trigger = page.locator('[data-label-picker] button.label-trigger').first();
+    await trigger.click();
+    await expect(page.getByRole('listbox')).toBeVisible();
+    results.push(await measure('picker', width));
+    await page.keyboard.press('Escape');
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' }).click();
+    results.push(await measure('more', width));
+    await page.keyboard.press('Escape');
+    for (const hash of ['#/settings', `#/shared/${world.owner.account.id}`, '#/ot', '#/history', '#/import']) {
+      await page.goto(`/${hash}`);
+      await page.waitForTimeout(500);
+      results.push(await measure(hash.startsWith('#/shared') ? '#/shared' : hash, width));
+    }
+    await gotoTimesheet(page);
+    await page.locator('[data-sheet-review-link], a[href*="review"]').first().click();
+    await page.waitForTimeout(700);
+    results.push(await measure('review', width));
+  }
+  record('p6-reflow-targets-mobile', results);
+});
+
+/* ---- P7: modal behaviour, keyboard order and hover over focus (R-10) ------------------------------------ */
+
+test('P7 modal and order', async ({ page, adminSeed, server }, testInfo) => {
+  const project = testInfo.project.name;
+  const world = await newWorld(adminSeed, server.origin);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signIn(page, world.me.account);
+  const out: Record<string, unknown> = {};
+  const sizes = project === 'desktop' ? [1280, 1024, 768] : [390, 320];
+  for (const width of sizes) {
+    await page.setViewportSize({ width, height: width >= 768 ? 800 : width === 320 ? 640 : 844 });
+    await gotoTimesheet(page);
+    // Keyboard order: day buttons and label pickers in Tab order.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const order: string[] = [];
+    const trail: string[] = [];
+    const seenStops = new Set<number>();
+    for (let i = 0; i < 160; i += 1) {
+      await page.keyboard.press('Tab');
+      const item = await page.evaluate(() => {
+        const w = window as unknown as { __b6ord?: WeakMap<Element, number>; __b6ordNext?: number };
+        const a = document.activeElement as HTMLElement | null;
+        if (a === null || a === document.body) return { key: -1, text: '' };
+        w.__b6ord = w.__b6ord ?? new WeakMap();
+        let key = w.__b6ord.get(a);
+        if (key === undefined) {
+          w.__b6ordNext = (w.__b6ordNext ?? 0) + 1;
+          key = w.__b6ordNext;
+          w.__b6ord.set(a, key);
+        }
+        let text = '';
+        if (a.hasAttribute('data-day-button')) text = `day ${a.closest('[data-day]')?.getAttribute('data-day') ?? ''}`;
+        else {
+          const picker = a.closest('[data-label-picker]');
+          if (picker !== null) text = `label ${picker.getAttribute('data-label-picker') ?? ''}`;
+        }
+        return { key, text };
+      });
+      trail.push(`${item.key}:${item.text}`);
+      if (item.key > 0 && seenStops.has(item.key)) break;
+      if (item.key > 0) seenStops.add(item.key);
+      if (item.text !== '') order.push(item.text);
+    }
+    const dayOrder = order.filter((item) => item.startsWith('day ')).map((item) => item.slice(4));
+    const sorted = [...dayOrder].sort();
+    // Modal behaviour of the editor.
+    const button = page.locator(`[data-day="${world.complete}"] [data-day-button]`);
+    await button.focus();
+    await page.keyboard.press('Enter');
+    const editor = page.locator(`dialog[data-day-editor="${world.complete}"]`);
+    await expect(editor.getByRole('heading', { name: /^Times/ })).toBeVisible();
+    await settle(page);
+    const onOpen = await page.evaluate(() => `${document.activeElement?.tagName ?? ''} ${(document.activeElement?.textContent ?? '').trim().slice(0, 40)}`);
+    const modal = await editor.evaluate((element) => element.matches(':modal'));
+    let outside = 0;
+    for (let i = 0; i < 60; i += 1) {
+      await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab');
+      const inEditor = await page.evaluate((date) => {
+        const a = document.activeElement;
+        return a === null || a === document.body || a.closest(`dialog[data-day-editor="${date}"]`) !== null;
+      }, world.complete);
+      if (!inEditor) outside += 1;
+    }
+    await editor.evaluate((element) => (element.querySelector('h2') as HTMLElement | null)?.focus());
+    await page.keyboard.press('Escape');
+    await settle(page);
+    const closed = (await editor.count()) === 0;
+    const returned = await button.evaluate((element) => element === document.activeElement);
+    // R-10: hover over a keyboard-focused control.
+    const clockIn = page.getByRole('button', { name: 'Clock in', exact: true });
+    await clockIn.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(100);
+    await settle(page);
+    const focusedShadow = await clockIn.evaluate((element) => `${getComputedStyle(element).boxShadow} fv=${element.matches(':focus-visible')}`);
+    await clockIn.hover();
+    await settle(page);
+    const hoveredShadow = await clockIn.evaluate((element) => ({ shadow: getComputedStyle(element).boxShadow, fv: element.matches(':focus-visible') }));
+    await page.mouse.move(0, 0);
+    out[String(width)] = { trail: trail.slice(0, 12), stops: seenStops.size, dayOrder, ascending: JSON.stringify(dayOrder) === JSON.stringify(sorted) && dayOrder.length === 14, labelCount: order.filter((item) => item.startsWith('label ')).length, onOpen, modal, tabStopsOutside: outside, closed, returned, hover: { focusedShadow, hoveredShadow } };
+  }
+  record(`p7-modal-order-${project}`, out);
+});
+
+/* ---- P8: the Admin screen (the seed administrator), walks in both directions --------------------------- */
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const index of [0, 1]) {
+    test(`P8 admin ${theme} size#${index}`, async ({ page, server }, testInfo) => {
+      const project = testInfo.project.name;
+      const size = WIDTHS[project]?.[index];
+      if (size === undefined) throw new Error('size');
+      const dsf = project === 'mobile' ? 2 : 1;
+      await page.setViewportSize(size);
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await signIn(page, server.admin, '#/admin');
+      const tag = `${project}-${size.width}-${theme}`;
+      const walks: unknown[] = [];
+      const errors: string[] = [];
+      for (const direction of ['forward', 'backward'] as const) {
+        try {
+          await page.goto('/#/admin');
+          await page.reload();
+          await page.waitForTimeout(600);
+          await page.mouse.move(1, 1);
+          walks.push({ screen: 'admin', ...(await walk(page, 'body', direction, `${tag} admin`, dsf, RINGS)) });
+        } catch (error) {
+          errors.push(`admin ${direction}: ${String(error).slice(0, 300)}`);
+        }
+      }
+      record(`p1-walks-admin-${tag}`, { tag, size, theme, geometry: null, errors, walks });
+    });
+  }
+}

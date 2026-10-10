@@ -1,0 +1,335 @@
+{
+  "build": "5e104e1",
+  "project": "mobile",
+  "steps": [
+    {
+      "label": "share: grant view only",
+      "writes": [
+        {
+          "call": "POST /api/shares",
+          "body": {
+            "grantee_email": "<grantee-email>",
+            "items": {
+              "timesheets": "view",
+              "ot_read": false,
+              "pdf_download": false
+            }
+          }
+        }
+      ],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "view",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share change: Can edit, Cancel",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "view",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share change: Can edit, Escape (change step still open: 1)",
+      "writes": [],
+      "focus": "input \"\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "view",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share change: Can edit, Save items",
+      "writes": [
+        {
+          "call": "PUT /api/shares/<uuid>",
+          "body": {
+            "items": {
+              "timesheets": "edit",
+              "ot_read": false,
+              "pdf_download": false
+            }
+          }
+        }
+      ],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "edit",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share end: Escape",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "edit",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share end: Cancel",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [
+          {
+            "timesheets": "edit",
+            "ot_read": false,
+            "pdf_download": false
+          }
+        ],
+        "received": 1
+      }
+    },
+    {
+      "label": "share end: End share",
+      "writes": [
+        {
+          "call": "POST /api/shares/<uuid>/revoke",
+          "body": {}
+        }
+      ],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [],
+        "received": 1
+      }
+    },
+    {
+      "label": "share leave: Escape",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [],
+        "received": 1
+      }
+    },
+    {
+      "label": "share leave: Cancel",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsShared with meMy tim\"",
+      "stored": {
+        "given": [],
+        "received": 1
+      }
+    },
+    {
+      "label": "share leave: Leave",
+      "writes": [
+        {
+          "call": "POST /api/shares/<uuid>/revoke",
+          "body": {}
+        }
+      ],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "given": [],
+        "received": 0
+      }
+    },
+    {
+      "label": "import: upload and preview",
+      "writes": [
+        {
+          "call": "POST /api/imports",
+          "body": null
+        }
+      ],
+      "focus": "p \"The workbook was read and stored privately. Review the previ\"",
+      "stored": [
+        "preview"
+      ]
+    },
+    {
+      "label": "import: Review and commit, Back to the preview",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": [
+        "preview"
+      ]
+    },
+    {
+      "label": "import: Review and commit, Escape",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": [
+        "preview"
+      ]
+    },
+    {
+      "label": "import: Review and commit, Confirm import",
+      "writes": [
+        {
+          "call": "POST /api/imports/<uuid>/commit",
+          "body": {
+            "decisions": [
+              {
+                "work_date": "2026-09-15",
+                "action": "skip"
+              },
+              {
+                "work_date": "2026-09-16",
+                "action": "skip"
+              },
+              {
+                "work_date": "2026-09-17",
+                "action": "skip"
+              }
+            ]
+          }
+        }
+      ],
+      "focus": "p \"Imported. The periods below are now read-only history marked\"",
+      "stored": [
+        "committed"
+      ]
+    },
+    {
+      "label": "opening: Review, Back to edit",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "opening": null,
+        "ledger": []
+      }
+    },
+    {
+      "label": "opening: Review, Escape",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "opening": null,
+        "ledger": []
+      }
+    },
+    {
+      "label": "opening: Review, Confirm and post",
+      "writes": [
+        {
+          "call": "POST /api/ot/opening-balance",
+          "body": {
+            "minutes": 750,
+            "as_of_date": "2026-09-29",
+            "reason": "Balance carried over (synthetic)",
+            "evidence_ref": "Synthetic email 2026-01-05",
+            "expected_version": 0
+          }
+        }
+      ],
+      "focus": "p \"Recorded in your OT ledger.\"",
+      "stored": {
+        "opening": 750,
+        "ledger": [
+          [
+            "opening_balance",
+            750
+          ]
+        ]
+      }
+    },
+    {
+      "label": "opening correction: Cancel",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "opening": 750,
+        "ledger": [
+          [
+            "opening_balance",
+            750
+          ]
+        ]
+      }
+    },
+    {
+      "label": "opening correction: Review, Back to edit",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "opening": 750,
+        "ledger": [
+          [
+            "opening_balance",
+            750
+          ]
+        ]
+      }
+    },
+    {
+      "label": "opening correction: Review, Escape",
+      "writes": [],
+      "focus": "body \"C&D SemiTimesheetOvertimeHistorySettingsSynthetic Owner OSig\"",
+      "stored": {
+        "opening": 750,
+        "ledger": [
+          [
+            "opening_balance",
+            750
+          ]
+        ]
+      }
+    },
+    {
+      "label": "opening correction: Review, Confirm correction",
+      "writes": [
+        {
+          "call": "PUT /api/ot/opening-balance",
+          "body": {
+            "minutes": 600,
+            "reason": "Two hours were counted twice (synthetic)",
+            "evidence_ref": "Synthetic ticket 42",
+            "expected_version": 1
+          }
+        }
+      ],
+      "focus": "p \"Recorded in your OT ledger.\"",
+      "stored": {
+        "opening": 600,
+        "ledger": [
+          [
+            "opening_balance",
+            750
+          ],
+          [
+            "correction",
+            -150
+          ]
+        ]
+      }
+    }
+  ]
+}

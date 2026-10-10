@@ -1,0 +1,17 @@
+// Extra privacy check: every "<local-part>@" in the evidence folder that is not followed by the full synthetic
+// domain (catches addresses cut by a probe's text limit, whose domain then ends early). Prints file and the matched
+// text with the local part replaced by <local>; npm's "package@version" banners are expected hits.
+// Usage: node check-at.mjs <evidence-dir>
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+let total = 0;
+for (const name of readdirSync(dir).sort()) {
+  const text = readFileSync(join(dir, name), 'utf8');
+  for (const match of text.matchAll(/[A-Za-z0-9._%+-]@(?!example\.invalid(?![A-Za-z0-9.-]))([^\s"'`<>),;]{0,20})/g)) {
+    total += 1;
+    console.log(`${name}: <local>@${match[1]}`);
+  }
+}
+console.log(`addresses not in the full synthetic form: ${total}`);

@@ -1,0 +1,9 @@
+. <task>/env.sh
+cd $T/export
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+npm run verify > $T/out/03-verify.txt 2>&1
+echo "verify exit $?" > $T/out/03-verify-exit.txt
+grep -ci deprecat $T/out/03-verify.txt >> $T/out/03-verify-exit.txt
+npm run test:e2e > $T/out/04-e2e.txt 2>&1
+echo "e2e exit $?" > $T/out/04-e2e-exit.txt
+grep -ci deprecat $T/out/04-e2e.txt >> $T/out/04-e2e-exit.txt

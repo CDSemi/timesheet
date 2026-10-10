@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Digest of record FIRST: ls-tree of the reviewed commit and HEAD, npm run digest, clean export.
+set -u
+source <task>/env.sh
+RC=bf954c0b371ad9a5fe461a603c5d476ea210e66c
+OUT="$T/raw/00-digest.txt"
+{
+echo "== digest BEFORE (first commands of the audit)"
+date -u +%Y-%m-%dT%H:%M:%SZ
+echo "node $(node --version)"
+cd "$REPO" || exit 2
+echo "reviewed_commit=$(git rev-parse $RC)"
+echo "HEAD=$(git rev-parse HEAD) origin/main=$(git rev-parse origin/main)"
+git ls-tree -r --format='%(path) %(objectname)' $RC | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-rc.txt"
+git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-head.txt"
+echo "ls-tree files outside handoff/: $(wc -l < "$T/raw/lstree-rc.txt")"
+echo "ls-tree digest at bf954c0: $(sha256sum < "$T/raw/lstree-rc.txt")"
+echo "ls-tree digest of HEAD: $(sha256sum < "$T/raw/lstree-head.txt")"
+echo "commits between bf954c0 and HEAD, non-handoff paths:"
+git diff --name-only $RC HEAD -- . ':(exclude)handoff' > "$T/raw/rc-head-nonhandoff.txt"
+cat "$T/raw/rc-head-nonhandoff.txt"
+echo "(end)"
+echo "npm run digest (working tree):"
+npmr run digest --silent
+echo "exit $?"
+echo "git status --short outside handoff/ (expected empty):"
+git status --short -- . ':(exclude)handoff'
+echo "(end)"
+mkdir -p "$T/export"
+git archive $RC | tar -x -C "$T/export"
+echo "git archive exit ${PIPESTATUS[0]} tar exit ${PIPESTATUS[1]}"
+echo "clean git-archive export of bf954c0, git hash-object --no-filters (before any check):"
+bash "$T/exdigest.sh" "$T/export" "$T/raw/exdigest-before"
+diff "$T/raw/exdigest-before-sorted.txt" "$T/raw/lstree-rc.txt" > "$T/raw/exdigest-vs-lstree.diff"
+echo "export path/blob list vs ls-tree path/blob list: diff exit $? ($(wc -c < "$T/raw/exdigest-vs-lstree.diff") bytes)"
+} > "$OUT" 2>&1
+echo done

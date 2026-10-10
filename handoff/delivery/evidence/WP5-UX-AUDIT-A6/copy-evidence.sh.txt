@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Masks and copies the evidence into handoff/delivery/evidence/WP5-UX-AUDIT-A6/ (LF text; scripts as *.sh.txt,
+# *.mjs.txt, *.ts.txt; raw JSON results as *.json.txt). Run after the last probe and the digest AFTER.
+source <task>/env.sh
+mkdir -p "$EV"
+M="$T/scripts/mask.mjs"
+R="$T/raw"
+P="$T/probe"
+S="$T/scripts"
+# Logs and summaries (.txt kept as .txt).
+node "$M" "$EV" "" \
+  "$R/00-README.txt" "$R/00-digest.txt" "$R/00-digest-after.txt" "$R/01-npm-ci.txt" "$R/02-npm-test.txt" "$R/03-build.txt" \
+  "$R/04-e2e.txt" "$R/04b-e2e-per-spec.txt" "$R/05-ac13.txt" "$R/06-npm-audit.txt" "$R/07-typecheck-lint.txt" "$R/10-delta.txt" \
+  "$R/10c-diff-fix7-client.txt" "$R/10d-diff-fix7-tests.txt" "$R/10e-diff-docs.txt" "$R/11b-dist-server.txt" "$R/12a-css-rules.txt" \
+  "$R/12b-day-name-probe.txt" "$R/12c-tests-delta.txt" "$R/13-callsites.txt" "$R/14-body-builders.txt" "$R/16-client-arith.txt" \
+  "$R/16b-client-arith-diff.txt" "$R/20-ex5e1-build.txt" "$R/20-ex014-build.txt" "$R/30-probe-bf9-main.txt" \
+  "$R/30b-probe-bf9-bodies-rerun.txt" "$R/31-probe-bf9-delta.txt" "$R/32-probe-5e1-delta.txt" "$R/32b-probe-5e1-days-rerun.txt" \
+  "$R/33-probe-014-baseline.txt" "$R/34-probe-datefield-bf9.txt" "$R/34-probe-datefield-5e1.txt" "$R/34b-datefield-summary.txt" \
+  "$R/35-sticky-counts.txt" "$R/36-compare.txt" "$R/36a-compare-run1.txt" "$R/37-summary.txt"
+# Raw probe results as .json.txt.
+for f in "$R"/probe-results/*.json; do node "$M" "$EV" ".txt" "$f"; done
+# Scripts and probe sources.
+for f in "$T"/*.sh; do node "$M" "$EV" ".txt" "$f"; done
+for f in "$P"/*.ts; do node "$M" "$EV" ".txt" "$f"; done
+node "$M" "$EV" ".txt" "$P/package.json"
+for f in "$S"/*.mjs "$S"/*.ts; do node "$M" "$EV" ".txt" "$f"; done
+echo done

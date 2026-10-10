@@ -1,0 +1,25 @@
+import { newPerson, expect, screenshotPath, test } from './fixtures.ts';
+
+/* WP5-UX-REGATE5 probe D (scratch): the batch-mode rows at 320px (AX-10), synthetic data. */
+test.use({ locale: 'en-US', timezoneId: 'America/Los_Angeles', actionTimeout: 15_000 });
+
+test('AX-10 batch rows screenshot at 320', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone only');
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Batch User', signature: 'none' });
+  const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+  await person.api.seedCompleteDay(day);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await signInPageAs(person.account, '#/timesheet');
+  await page.getByRole('button', { name: 'Change several days' }).click();
+  await page.getByRole('checkbox', { name: `Select ${day}` }).check();
+  const row = page.locator(`[data-day="${day}"]`);
+  await row.scrollIntoViewIfNeeded();
+  await page.evaluate((workDate) => {
+    const element = document.querySelector(`[data-day="${workDate}"]`);
+    if (element !== null) window.scrollBy(0, element.getBoundingClientRect().top - 220);
+  }, day);
+  await page.waitForTimeout(800);
+  await expect(row).toBeVisible();
+  await page.screenshot({ path: screenshotPath('regate5-batch-rows-w320-synthetic.png'), animations: 'disabled' });
+});

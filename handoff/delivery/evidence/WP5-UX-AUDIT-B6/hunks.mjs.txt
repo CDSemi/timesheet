@@ -1,0 +1,33 @@
+// WP5-UX-AUDIT-B6: from a -U0 git diff, keep only hunks that remove lines (with their added lines).
+// Usage: node hunks.mjs <diff.txt> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const lines = readFileSync(input, 'utf8').split('\n');
+const out = [];
+let file = '';
+let hunk = null;
+const flush = () => {
+  if (hunk !== null && hunk.lines.some((line) => line.startsWith('-'))) {
+    out.push(`${file} ${hunk.header}`);
+    out.push(...hunk.lines);
+    out.push('');
+  }
+  hunk = null;
+};
+let removed = 0;
+for (const line of lines) {
+  if (line.startsWith('diff --git')) {
+    flush();
+    file = line.split(' b/')[1] ?? line;
+  } else if (line.startsWith('@@')) {
+    flush();
+    hunk = { header: line, lines: [] };
+  } else if (hunk !== null && (line.startsWith('-') || line.startsWith('+')) && !line.startsWith('---') && !line.startsWith('+++')) {
+    hunk.lines.push(line);
+    if (line.startsWith('-')) removed += 1;
+  }
+}
+flush();
+out.unshift(`removed lines: ${removed}`);
+writeFileSync(output, `${out.join('\n')}\n`);

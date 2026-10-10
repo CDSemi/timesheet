@@ -1,0 +1,14 @@
+Test change review, git diff -U0 5e104e1..bf954c0 -- tests/e2e tests/client (24-all-tests.diff, removed lines in 24-removed.txt)
+Removed lines: 15 in total; 5 contain expect; 10 are selector lines of the renamed day buttons or an import line.
+Every removed day-button assertion is replaced by an assertion of the same kind on the same element, selected through the
+new helper tests/e2e/dayButton.ts (namedDayButton = the row's [data-day] [data-day-button] element AND its accessible name
+matching "^(Edit|View) (weekday )?MM/DD (YYYY-MM-DD)$"):
+  - sharing.spec toHaveCount(0) of "Edit {day}" -> toHaveCount(0) of dayButtonName('Edit', day) (still: no edit button in a view-only share)
+  - sharing.spec / import.spec / day-editor.spec / timesheet.spec toBeVisible / toBeFocused / click of "Edit|View {day}" -> same matcher on namedDayButton
+  - timesheet.spec dayRow(...).getByRole(button) -> namedDayButton(page, start, 'Edit'): same row scope through data-day, plus the name
+  - focus-ring.spec 'sheet date' name regex -> [data-day] [data-day-button] plus toHaveAccessibleName(ANY_DAY_BUTTON_NAME) (stricter)
+  - the import line removed from focus-ring.spec is replaced by one that adds newPerson (more, not less)
+Added expect lines in the changed and new test files: 105 (git diff count of + lines containing expect, new keyboard-access.spec and dayButton included).
+No existing test was removed or weakened by the diff. The only test.skip lines added (4) are project-specific skips inside the new tests
+(desktop-only or phone-only, as in the existing suite; no fixme). Conclusion: renamed
+day-button names are replaced, not dropped; no assertion removed or weakened.

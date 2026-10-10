@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Static comparisons: API call sites, request-body builders and client arithmetic (A4/A5 scripts reused unchanged as a method).
+source <task>/env.sh
+S="$T/scripts"
+cd "$T" || exit 2
+{
+  echo '$ node callsites.mjs <ex5e1> <export bf954c0> 5e104e1 bf954c0'
+  node "$S/callsites.mjs" "$T/ex5e1" "$T/export" 5e104e1 bf954c0; echo "exit $?"
+  echo
+  echo '$ node callsites.mjs <ex014> <export bf954c0> 014bd47 bf954c0'
+  node "$S/callsites.mjs" "$T/ex014" "$T/export" 014bd47 bf954c0; echo "exit $?"
+} > "$T/raw/13-callsites.txt" 2>&1
+{
+  echo '$ node body-builders.mjs <ex5e1> <export bf954c0> 5e104e1 bf954c0'
+  node "$S/body-builders.mjs" "$T/ex5e1" "$T/export" 5e104e1 bf954c0; echo "exit $?"
+  echo
+  echo '$ node body-builders.mjs <ex014> <export bf954c0> 014bd47 bf954c0'
+  node "$S/body-builders.mjs" "$T/ex014" "$T/export" 014bd47 bf954c0; echo "exit $?"
+} > "$T/raw/14-body-builders.txt" 2>&1
+cd "$REPO" || exit 2
+git diff --name-status 014bd47 bf954c0b371ad9a5fe461a603c5d476ea210e66c -- src/client > "$T/raw/namestatus-014-bf9-client.txt"
+git diff --name-status 014bd47 5e104e14dad71268a9185920c04ed0ee2a4b31c2 -- src/client > "$T/raw/namestatus-014-5e1-client.txt"
+{
+  echo '$ node client-arith.mjs <export bf954c0> <name-status 014bd47..bf954c0 src/client>'
+  node "$S/client-arith.mjs" "$T/export" "$T/raw/namestatus-014-bf9-client.txt"; echo "exit $?"
+  echo
+  echo '$ node client-arith.mjs <ex5e1> <name-status 014bd47..5e104e1 src/client>'
+  node "$S/client-arith.mjs" "$T/ex5e1" "$T/raw/namestatus-014-5e1-client.txt"; echo "exit $?"
+} > "$T/raw/16-client-arith.txt" 2>&1
+echo done

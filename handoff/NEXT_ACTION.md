@@ -18,8 +18,11 @@
   with (a) (2026-10-09). Implementation T01..T06 and fixes FIX1..FIX6 were frozen at
   5e104e1 (digest 07c3ca00); area A re-audit PASS (WP5-UX-AUDIT-A5). The accessibility
   sweep WP5-UX-A11Y-SWEEP found ten WCAG 2.2 AA issues (AX-01..AX-10); WP5-UX-FIX7
-  fixed them in one round (reported; digest b7c011d2). Now: freeze WP5-UX-FIX7-FREEZE,
-  then WP5-UX-REGATE5 and fresh independent rechecks B6 and A6, then the WP5 re-accept.
+  fixed them in one round (frozen at bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS;
+  area A recheck WP5-UX-AUDIT-A6 PASS; area B recheck WP5-UX-AUDIT-B6 closed every
+  accessibility item and found one Low layout item, WP5-UX-B6-01 (phone first screen with
+  a received share and the zone note). WP5-UX-FIX8 fixed it (reported; digest b07727b2).
+  Now: freeze, WP5-UX-REGATE6, delta rechecks B7 and A7, then the WP5 re-accept.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
 See [STATE](delivery/STATE.json), [task board](delivery/ORCHESTRATION.json),

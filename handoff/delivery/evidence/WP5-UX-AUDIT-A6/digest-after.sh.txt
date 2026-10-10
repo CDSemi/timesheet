@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Digest of record AGAIN at the end: the clean export re-hashed (unchanged by the checks), ls-tree of HEAD, npm run digest.
+set -u
+source <task>/env.sh
+OUT="$T/raw/00-digest-after.txt"
+{
+echo "== digest AFTER (all checks and probes done)"
+date -u +%Y-%m-%dT%H:%M:%SZ
+echo "clean export of bf954c0 re-hashed after all checks (git hash-object --no-filters):"
+bash "$T/exdigest.sh" "$T/export" "$T/raw/exdigest-after"
+diff "$T/raw/exdigest-before-sorted.txt" "$T/raw/exdigest-after-sorted.txt" > "$T/raw/exdigest-before-after.diff"
+echo "export before vs after path/blob list diff exit $? ($(wc -c < "$T/raw/exdigest-before-after.diff") bytes)"
+cd "$REPO" || exit 2
+echo "HEAD=$(git rev-parse HEAD) origin/main=$(git rev-parse origin/main)"
+git ls-tree -r --format='%(path) %(objectname)' HEAD | grep -v '^handoff/' | LC_ALL=C sort > "$T/raw/lstree-head-after.txt"
+echo "ls-tree digest of HEAD: $(sha256sum < "$T/raw/lstree-head-after.txt")"
+echo "npm run digest (repository working tree):"
+npmr run digest --silent
+echo "exit $?"
+echo "git status --short outside handoff/ (expected empty):"
+git status --short -- . ':(exclude)handoff'
+echo "(end)"
+} > "$OUT" 2>&1
+echo done

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# npm ci, npm test, typecheck, lint, build and npm audit in the clean bf954c0 export (each with its exit code).
+source <task>/env.sh
+cd "$T/export" || exit 2
+{ echo '$ node --version'; node --version; echo '$ npm ci'; npmr ci; echo "exit $?"; } > "$T/raw/01-npm-ci.txt" 2>&1
+{ echo '$ npm test'; npmr test; echo "exit $?"; } > "$T/raw/02-npm-test.txt" 2>&1
+{ echo '$ npm run typecheck'; npmr run typecheck; echo "exit $?"; echo '$ npm run lint'; npmr run lint; echo "exit $?"; } > "$T/raw/07-typecheck-lint.txt" 2>&1
+{ echo '$ npm run build'; npmr run build; echo "exit $?"; } > "$T/raw/03-build.txt" 2>&1
+{ echo '$ npm audit --omit=dev'; npmr audit --omit=dev; echo "exit $?"; echo '$ npm audit'; npmr audit; echo "exit $?"; } > "$T/raw/06-npm-audit.txt" 2>&1
+echo done > "$T/raw/checks-done.txt"

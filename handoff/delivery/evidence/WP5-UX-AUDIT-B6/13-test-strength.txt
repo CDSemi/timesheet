@@ -1,0 +1,53 @@
+WP5-UX-AUDIT-B6 - test strength since 014bd47 on bf954c0 (every removed test line judged against its replacement)
+
+Commands (working repository, read-only):
+  git diff --numstat 014bd47 bf954c0 -- tests            -> 11-tests-numstat-014bd47-bf954c0.txt (23 files)
+  git diff -U0 014bd47 bf954c0 -- tests                  -> hunks with removed lines: 12-removed-test-hunks-014bd47-bf954c0.txt
+  git diff -U0 5e104e1 bf954c0 -- tests                  -> FIX7 only: 12b-removed-test-hunks-5e104e1-bf954c0.txt
+  hunks.mjs keeps only the hunks that remove lines, with their added lines (hunks.mjs.txt)
+  Removed lines 014bd47..bf954c0: 105 (103 non-blank); FIX7 (5e104e1..bf954c0): 15, all in tests/e2e.
+  playwright.config.ts, vitest.config.ts, tests/e2e/fixtures.ts, eslint.config.js, tsconfig.test.json, tsconfig.client.json:
+  `git diff --stat 014bd47 bf954c0 -- ...` empty (0 bytes).
+  Added `.only` / `fixme` / `it.skip` / `describe.skip` / `.todo(`: none; the whole tests tree has 0 such uses.
+  Added `test.skip`: 7, each a project condition inside a new test (14-skip-added.txt).
+
+FIX7 (5e104e1..bf954c0), the renamed day-button names:
+| File:line (old) | Removed | Replacement | Judgement |
+|---|---|---|---|
+| day-editor.spec.ts:101 | locator([data-day=date]).getByRole('button', { name: `Edit ${date}` }) (substring) | namedDayButton(page, date, 'Edit') = [data-day=date] [data-day-button] AND role button with name ^Edit (Wkd )?MM/DD \(date\)$ | stronger (anchored name with visible text and ISO date, and the day's own button) |
+| day-editor.spec.ts:853 | row.getByRole('button', { name: `Edit ${futureDay}` }) | namedDayButton(page, futureDay, 'Edit') | equal scope (data-day), stronger name |
+| day-editor.spec.ts:905, 994, 1021, 1310 | getByRole('button', { name: `Edit ${d}`, exact: true }) inside [data-day=d] | namedDayButton(page, d, 'Edit') | equal or stronger (exact anchored name kept, element pinned to data-day-button) |
+| focus-ring.spec.ts:156 | getByRole('button', { name: /^(Edit|View) \d{4}-\d{2}-\d{2}$/ }).first() | [data-day] [data-day-button] first + toHaveAccessibleName(ANY_DAY_BUTTON_NAME) | equal (same control; its name asserted against the new pattern) |
+| import.spec.ts:228 | getByRole('button', { name: `View ${cacheDay}` }) (substring) | namedDayButton(page, cacheDay, 'View') | stronger |
+| sharing.spec.ts:243 | expect(getByRole('button', { name: `Edit ${workDay}`, exact: true })).toHaveCount(0) | expect(getByRole('button', { name: dayButtonName('Edit', workDay) })).toHaveCount(0) | equal: the absence check follows the shipped name pattern (the old exact ISO name no longer exists, so keeping it would have been vacuous); line 258 then requires the View button of that day |
+| sharing.spec.ts:254, 352 | click on exact `View/Edit ${workDay}` | namedDayButton(...).click() | stronger |
+| sharing.spec.ts:332, 361 | toBeVisible / toBeFocused on exact `Edit ${workDay}` | same matchers on namedDayButton(page, workDay, 'Edit') | stronger |
+| timesheet.spec.ts:264 | dayRow(start).getByRole('button', { name: `Edit ${start}`, exact: true }) visible | namedDayButton(page, start, 'Edit') visible | equal scope, stronger name |
+| focus-ring.spec.ts:2 | import line | import of ANY_DAY_BUTTON_NAME and newPerson | not an assertion |
+FIX7 adds (no removal): focus-ring AX-02/AX-03/R-12/AX-04 tests; keyboard-access.spec.ts (AX-01 walks at 1280/768/390/320,
+AX-05 names of all 14 day buttons Edit and View plus "End share with", AX-06, AX-07, AX-08 batch and sharing rows, AX-09 light
+and dark, AX-10 at 390 and 320); import.spec AX-08 focus returns and value kept; sharing.spec explicit Open with a "no change on
+choice" assertion; sheetModel.test dayButtonName (3 layouts/verbs, 3 zones). Result: no FIX7 assertion removed or weakened; every
+renamed day-button name is replaced, none dropped.
+
+Whole round (014bd47..5e104e1, re-judged here on the bf954c0 tree):
+| File | Removed | Replacement at bf954c0 | Judgement |
+|---|---|---|---|
+| tests/client/dayModel.test.ts | three weekGroups tests (two-week split, mid-week partial weeks, empty) | sheetModel.test.ts "sheetWeeks" (lines 293-326): the same three cases plus US ranges and the zone-independence case; `weekGroups` no longer exists in src or tests (grep: 0) | equal or stronger (moved with the function) |
+| tests/client/sessionModel.test.ts | leaveMinutes '240' / '0', bad list 1.5 -1 1441 abc, leaveHint('240') | leave { hours, minutes }; bad list of 7 pairs incl. 24h1m, 25h, 60m, 1e1; leaveHint pairs and 95 -> 1 h 35 m | stronger (more refused inputs; same 240 request) |
+| tests/domain/engine.test.ts | import line | import adds formatHoursMinutes | not an assertion |
+| tests/e2e/admin.spec.ts | nav links ['Timesheet','OT','History','Import','Settings'(,'Admin')] | per layout: desktop [Timesheet, Overtime, History, Settings(, Admin)], phone 3 tabs then More with Settings, Import(, Admin) | equal (approved E-5 navigation, exact lists kept) |
+| tests/e2e/day-editor.spec.ts | heading 'Figures from the server'; 'Partial leave minutes' 240; 'missing record'; 'upcoming' / not 'pending OT' | renamed heading; hours/minutes with a refused 60-minute case and an unchanged stored version; 'No times' + data-check=missing count 1; 'Upcoming' + data-check upcoming, no 'No times', no 'Missing record', no data-ot pending, no 'pending' | stronger |
+| tests/e2e/history-settings.spec.ts | grid caption status line (desktop) / no grid (phone) | period-bar status count 1, none in the sheet, the layout's sheet present, the other absent, signature line text, no image | stronger |
+| tests/e2e/import.spec.ts | Import link aria-current; Import link visible in the nav | Import (phone) / Settings (desktop) aria-current; Admin view heading present and no import or opening-balance UI on both projects; desktop reaches Import from Settings | equal or stronger (B-03 of the first audit is covered) |
+| tests/e2e/isolation.spec.ts | not.toContainText('complete') x2 | not.toContainText('Complete') + data-check=complete count 0 | stronger (the old lowercase check would be vacuous with the capitalised Check word) |
+| tests/e2e/ot-leave.spec.ts | nav link 'OT' | nav link 'Overtime' | equal (E-5 rename) |
+| tests/e2e/review.spec.ts | per day Regular / Off-calendar / Credit cells ('none' or h m) | per day detail cells regular and off-calendar as h:mm (blank when null) and the OT cell: credit as h:mm for a complete day, 'pending' while evidence is open, otherwise absent (review.spec.ts:198-212) | equal or stronger (every figure still asserted per day, the credit now through the OT rule of the PDF) |
+| tests/e2e/review.spec.ts | 'complete', 'breaks unconfirmed' | 'Complete', 'breaks not confirmed' | equal (new wording) |
+| tests/e2e/review.spec.ts:484, shell.spec.ts:71, timesheet.spec.ts:88 | tap-target locator without filter | the same locator .filter({ visible: true }) | equal: on the phone only the display:none desktop-bar controls drop out; my own P6 counts every visible button, link, input, select and selection label at 390/375/360/320 in 12 states: no button, select, text field or selection label under 44x44; the only small items are checkboxes/radios whose own label.inline target is at least 44 tall and wide (P10: 0 of 18 under 44x44) and the inline "Import" link inside a sentence on Overtime (42b-..., 42c-...) |
+| tests/e2e/setup.spec.ts | Sign out in the banner | Sign out in the banner (desktop) or under More (phone), visible then clicked | equal |
+| tests/e2e/sharing.spec.ts | 5 absent controls; exact Edit/View names | 7 absent controls (adds Change several days, Open day); no label picker; batch mode opened first on an edit share; namedDayButton | stronger |
+| tests/e2e/shell.spec.ts | nav link count 5; Sign out in banner; row 'complete' and '8h 00m' | exact link lists per layout, More expanded/collapsed with Escape and focus return, tab sizes >= 56x44; 'Complete' + data-check; the 8:00 detail row under Show details (shell.spec.ts:67-82) | stronger (the duration is still asserted, in the sheet's detail row) |
+| tests/e2e/timesheet.spec.ts | table.grid / .day-list counts; '.facts' due date; row contains ISO start; 'complete' '8h 00m' 'pending OT' 'confirm breaks' | data-sheet layout counts, the Excel form (company, two bands of 7 days, OT total, Manager Signature); zone note due time computed by the test runtime; period-bar zone; due date US form + reporting zone; row accessible name ends with ISO date + US date text + namedDayButton; session range in the display zone; Complete; OT cell h:mm from the API; Confirm breaks; pending in the OT cell; Show details pressed state and 14 detail rows with 8:00 | stronger |
+
+Result: no assertion removed or weakened since 014bd47, including FIX7.

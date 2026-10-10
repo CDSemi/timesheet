@@ -1,0 +1,8 @@
+// Prints the problems and the sizes of one sticky-*.json probe result (auditor's own check).
+// Usage: node peek-sticky.mjs <file>
+import { readFileSync } from 'node:fs';
+
+const r = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+console.log(`build ${r.build} project ${r.project}: checks ${r.checks}, trials ${r.trials}, problems ${r.problems.length}`);
+for (const p of r.problems) console.log(`  ${p.width} ${p.scenario} / ${p.name} / ${p.position}: ${p.missing ? 'MISSING' : p.trial ?? `focused ${p.focused} centreHit ${p.centreHit} samples ${p.visibleSamples} covers ${JSON.stringify(p.covers)} box ${JSON.stringify(p.box)} disabled ${p.disabled}`}`);
+for (const s of r.sizes) console.log(`  size ${JSON.stringify(s)}`);

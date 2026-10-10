@@ -1,0 +1,22 @@
+// WP5-UX-AUDIT-B6: per failed Playwright test, the title and the first error lines (list reporter output).
+// Usage: node failures.mjs <log> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+// eslint-disable-next-line no-control-regex
+const lines = readFileSync(input, 'utf8').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').split(/\r?\n/);
+const out = [];
+for (let i = 0; i < lines.length; i += 1) {
+  const head = /^\s+(\d+)\) (\[\w+\]) › (.+)$/.exec(lines[i] ?? '');
+  if (head === null) continue;
+  const block = [];
+  for (let j = i + 1; j < lines.length && j < i + 60; j += 1) {
+    const line = lines[j] ?? '';
+    if (/^\s+\d+\) \[\w+\] › /.test(line)) break;
+    if (/Error|Expected|Received|expect\(|hidden|stops|toBe|toHave|ratio|failed|Timeout/.test(line) && !/^\s+at /.test(line) && !/Call log/.test(line)) block.push(line.trim());
+    if (block.length >= 7) break;
+  }
+  out.push(`${head[1]}) ${head[2]} ${head[3].trim()}`);
+  for (const line of block) out.push(`     ${line.slice(0, 400)}`);
+}
+writeFileSync(output, `${out.join('\n')}\n`);

@@ -1,0 +1,81 @@
+// WP5-UX-AUDIT-B6: summarise P2 (rings), P4 (behaviour), P5 (contrast), P6 (reflow/targets), P7 (modal/order) of a tag.
+// Usage: node summarize2.mjs <probe-out dir> <tag> <out.txt>
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, tag, outFile] = process.argv.slice(2);
+const lines = [];
+const files = readdirSync(dir).filter((name) => name.startsWith(`${tag}-`) && name.endsWith('.json')).sort();
+const min = (values) => (values.length === 0 ? null : Math.min(...values));
+for (const file of files) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  if (file.includes('-p2-rings-')) {
+    lines.push(`== P2 ${data.tag} errors ${JSON.stringify(data.errors)}`);
+    for (const picker of data.pickers ?? []) {
+      const listMin = min(picker.readings.map((r) => r.listRing?.min ?? 0));
+      const optSides = picker.readings.map((r) => r.optionRing?.sidesPresent ?? null);
+      const optMin = min(picker.readings.filter((r) => r.optionRing).map((r) => r.optionRing.minAdjacentBest ?? 0));
+      const optOuter = min(picker.readings.filter((r) => r.optionRing).map((r) => r.optionRing.minOuter ?? 0));
+      const visible = min(picker.readings.map((r) => r.activeVisible ?? 0));
+      const fv = picker.readings.every((r) => r.listFv);
+      lines.push(`  picker ${picker.which}: keys ${picker.readings.map((r) => r.key || 'open').join(',')}; list :focus-visible ${fv}; list ring min ${listMin} (vs the page 9px out); active option ring sides ${optSides.join('/')}, min adjacent ${optMin}, min outer ${optOuter}; active option visible min ${visible}/25; Escape returns to trigger ${picker.escapeReturnsToTrigger}`);
+    }
+    const stop = data.editorStop;
+    if (stop) lines.push(`  editor dialog stop: open focus "${stop.openFocus?.tag} ${stop.openFocus?.text}", first Tab "${stop.first?.text}", Shift+Tab -> dialog is stop ${stop.isStop}, :focus-visible ${stop.fv}, scrolls ${stop.scrolls}, ring sides ${stop.ring?.sidesPresent} min adjacent ${stop.ring?.minAdjacentBest} (sides ${JSON.stringify(stop.ring?.sides?.map((s) => [s.side, s.change, s.outerRatio, s.innerRatio]))}); Escape returns ${data.editorEscapeReturn}`);
+    for (const toggle of data.toggles ?? []) lines.push(`  pressed toggle "${toggle.name}": :focus-visible ${toggle.fv}; focused shadow "${toggle.shadow}" vs unfocused "${toggle.unfocusedShadow}"; ring sides ${toggle.ring.sidesPresent} min adjacent ${toggle.ring.minAdjacentBest}`);
+    for (const field of data.fields ?? []) lines.push(`  field "${field.label}" by ${field.key}: active ${field.state?.active} :focus ${field.state?.focus} :focus-visible ${field.state?.fv} :focus-within ${field.state?.fw}; blur() leaves it active ${field.blur?.activeAfterBlur}; ring (reference = before the key press) sides ${field.ring?.sidesPresent} min adjacent ${field.ring?.minAdjacentBest}`);
+  } else if (file.includes('-p4-behaviour-')) {
+    lines.push(`== P4 ${data.tag} errors ${JSON.stringify(data.errors)}`);
+    lines.push(`  AX-07 login: ${JSON.stringify(data.loginAlert)}; timesheet alert: ${JSON.stringify(data.timesheetAlert)}; share form status: ${JSON.stringify(data.shareStatus)}`);
+    const s = data.switcher;
+    if (s) {
+      lines.push(`  AX-06 keys on the select: ${s.steps.map((step) => `${step.key}->${step.hash}${step.shareBar ? ' BAR' : ''}`).join(', ')}; non-GET requests ${s.changeRequests.length}; selectOption -> ${s.afterSelect}; Tab focus "${s.openFocused}", Enter -> ${s.afterOpen.replace(/[0-9a-f-]{36}/, '{owner}')}; in shared view ArrowUp -> ${s.sharedAfterArrow.hash.replace(/[0-9a-f-]{36}/, '{owner}')} value "${s.sharedAfterArrow.value}"; Space on Open -> ${s.afterSpace}; Enter on the closed select -> ${s.enterOnSelect}; switcher box ${JSON.stringify(s.switcherBox)}`);
+    }
+    const b = data.batchFocus;
+    if (b) lines.push(`  AX-08 batch: open "${b.onOpen}", Escape "${b.afterEscape}", Cancel "${b.afterCancel}", Review conflicts "${b.afterReviewConflicts}", Back "${b.afterBack}", Escape "${b.afterEscape2}"; requests ${b.requests.length} (${[...new Set(b.requests.map((r) => r.slice(0, 40)))].join(' | ')}); day after ${b.dayAfter}`);
+    const l = data.labelReviewFocus;
+    if (l) lines.push(`  AX-08 label review: open "${l.onOpen}", Escape back on trigger ${l.backOnTrigger}; requests ${l.requests.length}; day after ${l.dayAfter}`);
+    const sh = data.sharingFocus;
+    if (sh) lines.push(`  AX-08 sharing rows: ${sh.rows.map((row) => `${row.opener} ${row.how}: open "${row.onOpen}" back ${row.back}${row.cancelStillShown ? ' (step still open)' : ''}`).join('; ')}; non-GET requests ${sh.requests.length}`);
+  } else if (file.includes('-p5-contrast-')) {
+    for (const theme of ['light', 'dark']) {
+      const t = data[theme];
+      if (!t) continue;
+      const rows = t.rows;
+      const large = (row) => {
+        const size = parseFloat(row.size);
+        const weight = Number(row.weight);
+        return size >= 24 || (size >= 18.66 && weight >= 700);
+      };
+      const fails = rows.filter((row) => row.ratio < (large(row) ? 3 : 4.5));
+      const lowest = [...rows].sort((a, b) => a.ratio - b.ratio).slice(0, 6);
+      lines.push(`== P5 ${file.replace(/^.*p5-contrast-/, '').replace('.json', '')} ${theme}: text elements ${rows.length}, under the minimum ${fails.length}; lowest ${lowest.map((row) => `${row.ratio} "${row.text}" (${row.state}, ${row.color} on ${row.bg})`).join('; ')}`);
+      for (const row of fails.slice(0, 20)) lines.push(`    UNDER ${row.ratio} "${row.text}" ${row.state} ${row.color} on ${row.bg} size ${row.size}/${row.weight} .${row.cls}`);
+      const okRows = rows.filter((row) => row.text.startsWith('Complete'));
+      lines.push(`  "Complete" text: ${okRows.length} elements, ratios ${[...new Set(okRows.map((row) => `${row.ratio} on ${row.bg} (${row.state})`))].join('; ')}`);
+      const checks = t.checks;
+      lines.push(`  Check cells: ${checks.length}; with words ${checks.filter((c) => c.text !== '').length}; with a shape ${checks.filter((c) => c.shape).length}; keys ${[...new Set(checks.map((c) => c.key))].join(',')}`);
+      lines.push(`  tokens: --ok ${t.tokens.ok}, --day-selected ${t.tokens.selected}, surfaces ${t.tokens.surfaces.map((s) => `${s.token} ${s.colour}`).join(', ')}`);
+    }
+  } else if (file.includes('-p6-reflow')) {
+    for (const row of data) {
+      if (row.state === 'ax10-rows') lines.push(`== P6 ${row.width} AX-10 batch rows ${row.rows}, problems ${row.problems.length} ${JSON.stringify(row.problems)} sample ${JSON.stringify(row.sample)}`);
+      else lines.push(`== P6 ${row.width} ${row.state}: controls ${row.controls}, under 44x44 ${row.small.length} ${JSON.stringify(row.small)}, scrollWidth ${row.scrollWidth} / innerWidth ${row.innerWidth}, overflow ${row.overflow.length} ${JSON.stringify(row.overflow)}`);
+    }
+  } else if (file.includes('-p7-modal-order-')) {
+    for (const [width, row] of Object.entries(data)) {
+      lines.push(`== P7 ${file.includes('desktop') ? 'desktop' : 'mobile'} ${width}: day buttons in Tab order ${row.dayOrder.length} ascending ${row.ascending}; label pickers ${row.labelCount}; editor open focus "${row.onOpen}", :modal ${row.modal}, Tab/Shift+Tab stops outside the editor in 60 presses ${row.tabStopsOutside}; Escape closes ${row.closed}, focus back on the day button ${row.returned}; hover over a focused "Clock in": focused "${row.hover.focusedShadow}" -> hovered "${row.hover.hoveredShadow.shadow}" (:focus-visible ${row.hover.hoveredShadow.fv})`);
+    }
+  } else if (file.includes('-p10-')) {
+    lines.push(`== P10 ${file}`);
+    for (const row of data.labelTargets ?? []) lines.push(`  ${row.width} ${row.state}: checkboxes/radios ${row.inputs}, whose label target is under 44x44: ${row.notOk.length}${row.notOk.length ? ` ${JSON.stringify(row.notOk)}` : ''}; sample ${JSON.stringify(row.sample)}`);
+    for (const row of data.firstScreen ?? []) lines.push(`  first screen 390x844 ${JSON.stringify(row)}`);
+  } else if (file.includes('-p9-')) {
+    lines.push(`== P9 ${file}`);
+    for (const row of data.targets ?? []) lines.push(`  ${row.width} ${row.state}: targets ${row.count}, under 24px ${row.small.length}${row.small.length ? ` ${JSON.stringify(row.small)}` : ''}`);
+    lines.push(`  policy notice: ${JSON.stringify(data.policyNotice)}`);
+    lines.push(`  admin notice: ${JSON.stringify(data.adminNotice)}`);
+    lines.push(`  switcher after navigation: ${JSON.stringify(data.switcherAfterNavigation)}`);
+  }
+}
+writeFileSync(outFile, `${lines.join('\n')}\n`);

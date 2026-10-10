@@ -1,0 +1,184 @@
+// WP5-UX-AUDIT-A6 delta probe (scope 1, R-07): selecting a day by its data-day opens the same accounting
+// date as before FIX7 in every device zone, around DST changes, with a device zone different from the saved
+// reporting zone (America/Los_Angeles), and the day button's accessible name shows the same accounting date
+// as the cell. Registered by days.bf9.spec.ts (bf954c0) and days.5e1.spec.ts (5e104e1, before FIX7) with
+// each build's own fixtures; the build-specific part is only how the day's button is found.
+// Sessions: the A5 R-07 set (23:00-23:50, 00:20-01:10, 22:00-02:00+1 in Los Angeles) plus one Los Angeles
+// session 08:00-12:00 on 2026-10-03, which spans the Australia/Sydney and Australia/Lord_Howe DST start
+// (2026-10-03T16:00Z and 15:30Z). The periods visited are the previous one (Pacific/Chatham DST start
+// 2026-09-27), the displayed one, the next one (Europe/London DST end 2026-10-25) and the one after
+// (America/Los_Angeles DST end 2026-11-01). Synthetic data only.
+import { civilWeekday, local, writeResult } from './common.ts';
+
+export interface DayProbeOptions {
+  build: string;
+  /** CSS selector, inside a `[data-day]` row, of the day's own button in this build. */
+  buttonSelector: string;
+  addDays: (date: string, days: number) => string;
+}
+
+const LA = 'America/Los_Angeles';
+const ZONES = ['America/Los_Angeles', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Europe/London', 'Asia/Tokyo', 'Pacific/Chatham'];
+const CLICK_ZONES = ['America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Australia/Sydney'];
+const OFFSETS = [-1, 0, 1, 2];
+const CLICK_OFFSETS = [0, 2];
+const DST_DAY = '2026-10-03';
+
+function dayDiff(later: string, earlier: string): number {
+  return Math.round((Date.parse(`${later}T00:00:00Z`) - Date.parse(`${earlier}T00:00:00Z`)) / 86_400_000);
+}
+
+function expectedRange(session: { start_utc: string; end_utc: string | null }, workDate: string, zone: string) {
+  const start = local(session.start_utc, zone);
+  const startDate = start.date === workDate ? null : `${start.date.slice(5, 7)}/${start.date.slice(8, 10)}`;
+  if (session.end_utc === null) return { text: start.time, startDate };
+  const end = local(session.end_utc, zone);
+  const later = dayDiff(end.date, start.date);
+  return { text: `${start.time}-${end.time}${later > 0 ? `+${later}` : ''}`, startDate };
+}
+
+/** Every row of the sheet: its data-day, its own button (name, visible text, marker) and its session ranges. */
+const ROWS = (selector: string) => `[...document.querySelectorAll('[data-day]')].map((row) => {
+  const button = row.querySelector(${JSON.stringify(selector)});
+  return {
+    date: row.getAttribute('data-day'),
+    buttons: row.querySelectorAll(${JSON.stringify(selector)}).length,
+    name: button === null ? null : button.getAttribute('aria-label'),
+    visible: button === null ? null : button.innerText.replace(/\\s+/g, ' ').trim(),
+    marker: button === null ? null : button.hasAttribute('data-day-button'),
+    kind: button === null ? null : button.classList.contains('sheet-day-button') ? 'phone' : button.classList.contains('sheet-date') ? 'sheet' : 'other',
+    ranges: [...row.querySelectorAll('[data-range]')].map((r) => {
+      const sub = r.querySelector('.cell-sub');
+      const marker = sub === null ? '' : sub.textContent;
+      return { key: r.getAttribute('data-range'), startDate: sub === null ? null : marker, text: r.textContent.slice(marker.length) };
+    }),
+  };
+})`;
+
+export function registerDayProbe(fx: any, options: DayProbeOptions): void {
+  const { test, expect, newPerson } = fx;
+  test.use({ locale: 'en-US' });
+
+  test(`day selection by data-day, names and accounting dates in 8 device zones and 4 periods (${options.build})`, async ({ browser, adminSeed, builtServer }: any, testInfo: any) => {
+    test.setTimeout(1_200_000);
+    const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Day Probe', signature: 'none' });
+    const free = await person.api.displayedPeriodFreeWorkdays();
+    expect(free.length).toBeGreaterThanOrEqual(3);
+    const late = free[0] ?? '';
+    const early = free[1] ?? '';
+    const overnight = free.at(-1) ?? '';
+    await person.api.createSession(late, '23:00', '23:50', []);
+    await person.api.createSession(early, '00:20', '01:10', []);
+    await person.api.call('POST', `/api/days/${overnight}/sessions`, {
+      start: { local: `${overnight}T22:00`, zone: LA },
+      end: { local: `${options.addDays(overnight, 1)}T02:00`, zone: LA },
+      input_zone: LA,
+      breaks_confirmed: true,
+      breaks: [],
+    }, 201);
+    const shown = await person.api.call('GET', `/api/timesheets/${person.payrollDate}`);
+    const dstSeeded = shown.days.some((day: any) => day.work_date === DST_DAY) && DST_DAY < person.todayLocal && !shown.reason_required;
+    if (dstSeeded) await person.api.createSession(DST_DAY, '08:00', '12:00', []);
+    const sheet = await person.api.call('GET', `/api/timesheets/${person.payrollDate}`);
+    const owner = new Map<string, string>();
+    const sessions: any[] = [];
+    for (const day of sheet.days) for (const session of day.sessions) {
+      owner.set(session.id, day.work_date);
+      sessions.push({ ...session, work_date: day.work_date });
+    }
+    // The server's days of each visited period (offset from the displayed one).
+    const serverDays = new Map<number, string[]>();
+    let start = sheet.period.period_start as string;
+    let end = sheet.period.period_end as string;
+    serverDays.set(0, sheet.days.map((day: any) => day.work_date));
+    for (const offset of [-1, 1, 2]) {
+      const anchor = offset < 0 ? options.addDays(sheet.period.period_start, -1) : options.addDays(offset === 1 ? end : (serverDays.get(1) ?? []).at(-1) ?? end, 1);
+      const periods = await person.api.call('GET', `/api/periods?from=${anchor}&to=${anchor}`);
+      const payroll = periods.periods[0]?.payroll_date;
+      const other = await person.api.call('GET', `/api/timesheets/${payroll}`);
+      serverDays.set(offset, other.days.map((day: any) => day.work_date));
+    }
+    start = start ?? '';
+    const use = testInfo.project.use as any;
+    const runs: any[] = [];
+    const problems: string[] = [];
+    for (const zone of ZONES) {
+      const context = await browser.newContext({ baseURL: builtServer.origin, timezoneId: zone, locale: 'en-US', viewport: use.viewport, isMobile: use.isMobile ?? false, hasTouch: use.hasTouch ?? false, deviceScaleFactor: use.deviceScaleFactor ?? 1 });
+      const page = await context.newPage();
+      page.setDefaultTimeout(15_000);
+      await page.goto('/#/timesheet');
+      await page.getByLabel('Email').fill(person.account.email);
+      await page.getByLabel('Password').fill(person.account.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.locator('[data-day]')).toHaveCount(14);
+      const resolved = await page.evaluate('Intl.DateTimeFormat().resolvedOptions().timeZone');
+      // Visit -1, then 0, 1, 2 with the period buttons (the way a person moves).
+      await page.getByRole('button', { name: 'Previous period' }).click();
+      await expect(page.locator(`[data-day="${(serverDays.get(-1) ?? [])[0]}"]`)).toHaveCount(1);
+      for (const offset of OFFSETS) {
+        if (offset > -1) {
+          await page.getByRole('button', { name: 'Next period' }).click();
+          await expect(page.locator(`[data-day="${(serverDays.get(offset) ?? [])[0]}"]`)).toHaveCount(1);
+        }
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        if (offset === 0 && sessions.length > 0) await expect(page.locator(`[data-range="${sessions[0].id}"]`)).toHaveCount(1);
+        const rows: any[] = await page.evaluate(ROWS(options.buttonSelector));
+        const want = serverDays.get(offset) ?? [];
+        if (JSON.stringify(rows.map((row) => row.date)) !== JSON.stringify(want)) problems.push(`${zone} ${offset}: data-day list ${JSON.stringify(rows.map((row) => row.date))} != server ${JSON.stringify(want)}`);
+        for (const row of rows) {
+          const mmdd = `${row.date.slice(5, 7)}/${row.date.slice(8, 10)}`;
+          const visibleWant = row.kind === 'phone' ? `${civilWeekday(row.date)} ${mmdd}` : mmdd;
+          if (row.buttons !== 1) problems.push(`${zone} ${offset} ${row.date}: ${row.buttons} day buttons`);
+          if (row.visible !== visibleWant) problems.push(`${zone} ${offset} ${row.date}: visible "${row.visible}" != "${visibleWant}"`);
+          const verb = typeof row.name === 'string' ? row.name.split(' ')[0] : '';
+          if (options.build === 'bf954c0') {
+            if (row.name !== `${verb} ${row.visible} (${row.date})`) problems.push(`${zone} ${offset} ${row.date}: name "${row.name}" is not "{verb} {visible} ({date})"`);
+            if (row.marker !== true) problems.push(`${zone} ${offset} ${row.date}: no data-day-button marker`);
+          } else if (row.name !== `${verb} ${row.date}`) problems.push(`${zone} ${offset} ${row.date}: 5e104e1 name "${row.name}"`);
+          if (verb !== 'Edit' && verb !== 'View') problems.push(`${zone} ${offset} ${row.date}: verb "${verb}"`);
+          if (offset === 0) {
+            for (const range of row.ranges) {
+              if (owner.get(range.key) !== row.date) problems.push(`${zone}: session ${range.key} shown on ${row.date}, saved on ${owner.get(range.key)}`);
+              const session = sessions.find((item) => item.id === range.key);
+              const expected = expectedRange(session, row.date, resolved);
+              if (range.text !== expected.text || range.startDate !== expected.startDate) problems.push(`${zone}: session ${range.key} "${range.startDate ?? ''}|${range.text}" != oracle "${expected.startDate ?? ''}|${expected.text}"`);
+            }
+          }
+        }
+        const clicks: any[] = [];
+        if (CLICK_ZONES.includes(zone) && CLICK_OFFSETS.includes(offset)) {
+          for (const row of rows) {
+            const button = page.locator(`[data-day="${row.date}"] ${options.buttonSelector}`);
+            await button.click();
+            const editor = page.locator('dialog[data-day-editor]');
+            await expect(editor).toHaveCount(1);
+            await expect(editor.locator('h2#day-editor-title')).toBeVisible();
+            const opened = await editor.getAttribute('data-day-editor');
+            const heading = (await editor.locator('h2#day-editor-title').innerText()).replace(/\s+/g, ' ').trim();
+            await editor.getByRole('button', { name: 'Close', exact: true }).click();
+            await expect(page.locator('dialog[data-day-editor]')).toHaveCount(0);
+            await page.waitForTimeout(50);
+            const focus = await page.evaluate(`(() => { const a = document.activeElement; const row = a === null ? null : a.closest('[data-day]'); return { day: row === null ? null : row.getAttribute('data-day'), isDayButton: a !== null && a.matches(${JSON.stringify(options.buttonSelector)}), tag: a === null ? null : a.tagName }; })()`);
+            clicks.push({ date: row.date, opened, heading, focus });
+            if (opened !== row.date) problems.push(`${zone} ${offset} ${row.date}: opened ${opened}`);
+            if (!heading.endsWith(row.date)) problems.push(`${zone} ${offset} ${row.date}: heading "${heading}"`);
+            if (focus.day !== row.date || focus.isDayButton !== true) problems.push(`${zone} ${offset} ${row.date}: focus returned to ${JSON.stringify(focus)}`);
+          }
+        }
+        runs.push({ zone, resolved, offset, first: want[0], last: want.at(-1), rows, clicks });
+      }
+      await context.close();
+    }
+    writeResult(`days-${options.build}-${testInfo.project.name}.json`, {
+      build: options.build,
+      project: testInfo.project.name,
+      reporting_zone: sheet.reporting_zone,
+      dst_session_seeded: dstSeeded,
+      sessions: sessions.map((item) => ({ id: item.id, work_date: item.work_date, start_utc: item.start_utc, end_utc: item.end_utc })),
+      periods: Object.fromEntries([...serverDays.entries()].map(([offset, days]) => [offset, `${days[0]}..${days.at(-1)}`])),
+      problems,
+      runs,
+    });
+    expect(problems).toEqual([]);
+  });
+}

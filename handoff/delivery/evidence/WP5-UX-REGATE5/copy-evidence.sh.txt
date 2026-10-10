@@ -1,0 +1,28 @@
+. <task>/env.sh
+EV=$REPO/handoff/delivery/evidence/WP5-UX-REGATE5
+mkdir -p $EV
+m() { node $T/mask.mjs "$1" "$EV/$2"; }
+# run logs and check output
+for f in 00-head 01-npm-ci 02-lint 03-verify 03-verify-exit 04-e2e 04-e2e-exit 05-ac13-1 05-ac13-2 05-ac13-3 06-ac13-Asia_Tokyo 06-ac13-America_New_York 06-tzprobe-Asia_Tokyo 06-tzprobe-America_New_York 07-drill 07-drill-exit 08-config-live 08-config-restored 08-config-rollback 09-keys-map 10-audit 11-check_recovery 11-precommit-selftest 11-validate_orchestration 11-validate_package 20-bound-stat 21-pdf-stat 22-scope 22-scope-new 22a-fixround 22a-names 22b-5b349f8 22d-docs04 22e-forbidden 24-removed 30-npmtest-1 30-npmtest-2 30-npmtest-3 40-contrast exdigest-before exdigest-after lstree-sha repo-digest repo-digest-after wp3-ci wp3-build 60-regate5-a-run2 6-final-a2 6-final-b2 6-final-c 64-regate5-d-run 15-docker-images-after 00-head-after nonhandoff-status63-ux-regate3-run 63-ux-regate3-b-run 63-ux-regate3-c-run 63-ux-regate3-d-run 63-ux-regate4-run 14-compose-down 14-image-rm 15-docker-ps 15-docker-images-before-rm 25-spec-assertions; do
+  [ -f "$T/out/$f.txt" ] && m "$T/out/$f.txt" "$f.txt"
+done
+# observations
+for f in obs-ax01 obs-ax05 obs-ax06 obs-ax07 obs-ax09 obs-ax10 obs-rings obs-rings-c obs-ax08; do
+  [ -f "$T/obs4/$f.txt" ] && m "$T/obs4/$f.txt" "$f.txt"
+done
+for f in obs-b3 obs-b4 obs-desktop obs-phone obs-r7 obs-targets; do
+  [ -f "$T/obs5/$f.txt" ] && m "$T/obs5/$f.txt" "$f.txt"
+done
+# scripts
+for s in ux-regate3 ux-regate3-b ux-regate3-c ux-regate3-d ux-regate4 ux-regate5-a ux-regate5-b ux-regate5-c ux-regate5-d; do
+  [ -f "$T/specs/$s.spec.ts" ] && m "$T/specs/$s.spec.ts" "$s.spec.ts.txt"
+done
+m $T/contrast5.mjs contrast5.mjs.txt
+m $T/mask.mjs mask.mjs.txt
+m $T/run-tz.mjs run-tz.mjs.txt
+m $T/env.sh env.sh.txt
+m $T/exdigest.sh exdigest.sh.txt
+m $T/keys.sh keys.sh.txt
+m $T/run-verify.sh run-verify.sh.txt
+m $T/copy-evidence.sh copy-evidence.sh.txt
+ls $EV | wc -l

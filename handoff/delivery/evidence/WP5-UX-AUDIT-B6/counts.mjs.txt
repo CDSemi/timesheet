@@ -1,0 +1,25 @@
+// WP5-UX-AUDIT-B6: per-project outcome counts from a Playwright JSON report. Usage: node counts.mjs <report.json> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+const report = JSON.parse(readFileSync(input, 'utf8'));
+const counts = {};
+const failed = [];
+const flaky = [];
+function walk(suite, file) {
+  for (const spec of suite.specs ?? []) {
+    for (const test of spec.tests ?? []) {
+      const project = test.projectName;
+      counts[project] = counts[project] ?? { expected: 0, skipped: 0, unexpected: 0, flaky: 0 };
+      counts[project][test.status] = (counts[project][test.status] ?? 0) + 1;
+      if (test.status === 'unexpected') failed.push(`${project} ${file}:${spec.line} ${spec.title}`);
+      if (test.status === 'flaky') flaky.push(`${project} ${file}:${spec.line} ${spec.title}`);
+    }
+  }
+  for (const child of suite.suites ?? []) walk(child, file ?? child.file);
+}
+for (const suite of report.suites ?? []) walk(suite, suite.file);
+const lines = [`stats ${JSON.stringify(report.stats)}`];
+for (const [project, c] of Object.entries(counts)) lines.push(`${project}: passed ${c.expected}, skipped ${c.skipped}, failed ${c.unexpected}, flaky ${c.flaky}`);
+lines.push(`failed: ${failed.length}`, ...failed.map((item) => `  ${item}`), `flaky: ${flaky.length}`, ...flaky.map((item) => `  ${item}`));
+writeFileSync(output, `${lines.join('\n')}\n`);

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Test lines removed and added by FIX7 (5e104e1..bf954c0), per file, with expect counts; new spec files listed by test title.
+source <task>/env.sh
+cd "$REPO" || exit 2
+RC=bf954c0b371ad9a5fe461a603c5d476ea210e66c
+OUT="$T/raw/12c-tests-delta.txt"
+{
+  echo "== git diff --numstat 5e104e1..bf954c0 -- tests"
+  git diff --numstat 5e104e1 $RC -- tests
+  for f in tests/client/sheetModel.test.ts tests/e2e/day-editor.spec.ts tests/e2e/focus-ring.spec.ts tests/e2e/import.spec.ts tests/e2e/sharing.spec.ts tests/e2e/timesheet.spec.ts; do
+    echo
+    echo "== $f: removed and added lines (-U0)"
+    git diff -U0 5e104e1 $RC -- "$f" | grep -E '^[-+][^-+]'
+    echo "-- expect( lines removed: $(git diff -U0 5e104e1 $RC -- "$f" | grep -cE '^-[^-].*expect\(') added: $(git diff -U0 5e104e1 $RC -- "$f" | grep -cE '^\+[^+].*expect\(')"
+    echo "-- test( declarations at 5e104e1: $(git show 5e104e1:"$f" | grep -cE '^\s*(test|it)\(') at bf954c0: $(git show $RC:"$f" | grep -cE '^\s*(test|it)\(')"
+  done
+  echo
+  echo "== new files: test titles"
+  git show $RC:tests/e2e/keyboard-access.spec.ts | grep -nE "^\s*test\(|test\(\`"
+  git show $RC:tests/e2e/dayButton.ts | grep -nE "^export"
+  echo
+  echo "== tests/e2e/fixtures.ts 014bd47..bf954c0 (expected empty)"
+  git diff --stat 014bd47 $RC -- tests/e2e/fixtures.ts
+  echo "(end)"
+} > "$OUT" 2>&1
+echo done

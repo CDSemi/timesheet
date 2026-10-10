@@ -1,0 +1,16 @@
+// Masks a text file for the evidence folder: task and repository paths, the Windows user name, ANSI colours, CRLF, and
+// every e-mail address that is not a synthetic example.invalid one. Usage: node mask.mjs <in> <out>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [input, output] = process.argv.slice(2);
+let text = readFileSync(input, 'utf8');
+text = text.replace(/\x1b\[[0-9;]*m/g, '');
+text = text.replace(/\r\n/g, '\n');
+const task = ['D:\\\\.claude-tmp\\\\timesheet\\\\WP5-UX-REGATE5', '<task>', '<task>', '<task>'];
+for (const form of task) text = text.split(form).join('<task>');
+const repo = ['D:\\\\Dropbox\\\\Work.CDSemi\\\\timesheet', '<repo>', '<repo>', '<repo>'];
+for (const form of repo) text = text.split(form).join('<repo>');
+text = text.replace(/<user>/gi, '<user>');
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (match) => (/@example\.invalid$/i.test(match) ? match : '<email>'));
+text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*\.?inval\b/g, '<email>');
+writeFileSync(output, text);

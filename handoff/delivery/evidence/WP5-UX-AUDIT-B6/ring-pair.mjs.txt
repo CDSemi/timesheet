@@ -1,0 +1,110 @@
+// WP5-UX-AUDIT-B6: read the inset ring of a dialog from a before/after screenshot pair (same method as the probes:
+// along lines at 30/50/70 % of each side, from 6px inside to 8px outside, the pixel that changed most, against the
+// pixels just outside and inside its run). Usage: node ring-pair.mjs <before.png> <after.png> <x> <y> <w> <h> <dsf> <out.txt>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
+
+const [beforeFile, afterFile, xs, ys, ws, hs, dsfs, out] = process.argv.slice(2);
+function decode(buf) {
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = 0;
+  const idat = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos);
+    const type = buf.toString('latin1', pos + 4, pos + 8);
+    const chunk = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === 'IHDR') {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+      colorType = chunk[9];
+    } else if (type === 'IDAT') idat.push(chunk);
+    else if (type === 'IEND') break;
+    pos += 12 + length;
+  }
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const data = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    const src = y * (stride + 1) + 1;
+    const dst = y * stride;
+    for (let i = 0; i < stride; i += 1) {
+      const left = i >= bpp ? data[dst + i - bpp] : 0;
+      const up = y > 0 ? data[dst - stride + i] : 0;
+      const upLeft = i >= bpp && y > 0 ? data[dst - stride + i - bpp] : 0;
+      const x = raw[src + i];
+      let value = x;
+      if (filter === 1) value = x + left;
+      else if (filter === 2) value = x + up;
+      else if (filter === 3) value = x + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = x + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      }
+      data[dst + i] = value & 0xff;
+    }
+  }
+  return { width, height, data, bpp };
+}
+const px = (img, x, y) => (x < 0 || y < 0 || x >= img.width || y >= img.height ? null : [0, 1, 2].map((k) => img.data[(y * img.width + x) * img.bpp + k]));
+const lum = ([r, g, b]) => {
+  const f = (v) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+};
+const ratio = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100;
+};
+const hex = (c) => (c === null ? null : `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`);
+const before = decode(readFileSync(beforeFile));
+const after = decode(readFileSync(afterFile));
+const rect = { x: Number(xs), y: Number(ys), w: Number(ws), h: Number(hs) };
+const dsf = Number(dsfs);
+const lines = [];
+for (const side of ['top', 'bottom', 'left', 'right']) {
+  let best = null;
+  for (const at of [0.3, 0.5, 0.7]) {
+    const vertical = side === 'top' || side === 'bottom';
+    const sign = side === 'top' || side === 'left' ? -1 : 1;
+    const edge = vertical ? (side === 'top' ? rect.y : rect.y + rect.h) : side === 'left' ? rect.x : rect.x + rect.w;
+    const across = vertical ? rect.x + at * rect.w : rect.y + at * rect.h;
+    const points = [];
+    for (let d = -6; d <= 8; d += 1 / dsf) {
+      const along = Math.floor((edge + sign * d) * dsf);
+      const fixed = Math.floor(across * dsf);
+      const f = vertical ? px(after, fixed, along) : px(after, along, fixed);
+      const u = vertical ? px(before, fixed, along) : px(before, along, fixed);
+      if (f !== null && u !== null) points.push({ d, f, u });
+    }
+    let index = -1;
+    let change = 1;
+    points.forEach((point, i) => {
+      const c = ratio(point.f, point.u);
+      if (c > change) {
+        change = c;
+        index = i;
+      }
+    });
+    if (index < 0) continue;
+    const ring = points[index].f;
+    let start = index;
+    let end = index;
+    while (start > 0 && ratio(points[start - 1].f, ring) < 1.15) start -= 1;
+    while (end < points.length - 1 && ratio(points[end + 1].f, ring) < 1.15) end += 1;
+    const outer = points[end + 1]?.f ?? null;
+    const inner = points[start - 1]?.f ?? null;
+    const result = { side, at, change, ring: hex(ring), outer: hex(outer), inner: hex(inner), outerRatio: outer ? ratio(ring, outer) : null, innerRatio: inner ? ratio(ring, inner) : null };
+    if (best === null || result.change > best.change) best = result;
+  }
+  lines.push(JSON.stringify(best));
+}
+writeFileSync(out, `${lines.join('\n')}\n`);

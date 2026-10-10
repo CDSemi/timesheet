@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# The day-name unit sweep under several device zones.
+source <task>/env.sh
+OUT="$T/raw/12b-day-name-probe.txt"
+: > "$OUT"
+for tz in "" America/Los_Angeles Asia/Tokyo Pacific/Kiritimati Pacific/Pago_Pago Europe/London Australia/Lord_Howe UTC; do
+  {
+    echo "\$ node day-name-probe.ts <export bf954c0> <ex5e1> ${tz:-<no device-zone override>}"
+    if [ -z "$tz" ]; then node "$T/scripts/day-name-probe.ts" "$T/export" "$T/ex5e1"; else node "$T/scripts/day-name-probe.ts" "$T/export" "$T/ex5e1" "$tz"; fi
+    echo "exit $?"
+  } >> "$OUT" 2>&1
+done
+echo done

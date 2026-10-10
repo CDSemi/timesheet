@@ -254,8 +254,40 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - WP5-UX-FIX7-MASK lần 2 xong: đã sửa cả hai dòng; quét toàn bộ handoff: 0 email bị
   chặn, 0 đường dẫn hồ sơ trong các file đã đổi; 21 chỗ khớp mẫu cũ trong các file đã
   commit được ghi lại để phân loại quyền riêng tư (chỉ đọc) sau này.
-- Đang chạy: WP5-UX-FIX7-FREEZE lần 3 (143 đường dẫn). Sau đó WP5-UX-REGATE5, B6 và A6
-  mới.
+- WP5-UX-FIX7-FREEZE lần 3 xong: bf954c0b371ad9a5fe461a603c5d476ea210e66c trên main, đã
+  push (143 đường dẫn; digest cây làm việc và HEAD đều b7c011d2; mọi kiểm tra exit 0).
+- WP5-UX-REGATE5 PASS (verifier, tự báo claude-sonnet-5-5; NAS chưa kiểm) trên bf954c0 /
+  b7c011d2: unit 1823, toàn bộ e2e 208/0/24, drill 208 PASS, image
+  sha256:1b7b561e3d6ca29cedd4fc7bb5bc3b2cecd1c8c88a6b86370e9b267c0765caf4; phạm vi sửa đúng
+  29 đường dẫn; AX-01 0 điểm dừng bị che trong 64 lượt đi phím; viền focus 5.3-6.8:1; hai
+  thông báo status ở admin/Settings chỉ kiểm qua mã nguồn.
+- WP5-UX-AUDIT-A6 PASS (opus mới, tự báo claude-opus-5-5), không có finding: FIX7 không
+  đổi hành vi phần A (Cancel/Escape/Back không ghi gì, body giống nhau từ 014bd47, bộ
+  chuyển chia sẻ vẫn đúng 6 route, AC-16 và cách ly giữ nguyên, chọn ngày bằng data-day
+  đúng qua DST và múi giờ thiết bị, hook thanh dính không che control nào); npm test 1823,
+  e2e phần A 155/0/23, AC-13 1/1. Board: A5, A4, A3, A2 và WP5-RECHECK có superseded_by
+  A6; digest hiện hành b7c011d2.
+- WP5-UX-AUDIT-B6 FIX REQUIRED (opus mới): mọi mục của vòng sửa đã đóng (B5-01..B5-03,
+  AX-04..AX-10, R-12; 200 lượt đi phím, 7320 điểm dừng, 0 bị che, 0 thiếu viền; không
+  assertion nào bị nới lỏng; e2e lần 2 208/0/24, lần 1 có một lỗi ECONNRESET thoáng qua ở
+  automation.spec.ts:118). Finding mới mức Low WP5-UX-B6-01 (có từ trước): ở 390x844,
+  người có timesheet được chia sẻ và có ghi chú múi giờ thì thanh trên cùng thành hai
+  dòng; dòng ngày đầu tiên kết thúc ở 830.2px, dưới thanh tab ở 788px (docs/04 dòng 48).
+- Quyết định coordinator: sửa bố cục, giữ nguyên docs/04 dòng 48; giữ nguyên docs/10 khi
+  nghiệm thu lại (docs/10 nằm trong digest), Q1 và Q2 vẫn ghi trên board và đưa vào WP5
+  handoff.
+- WP5-UX-FIX8 xong (tự báo claude-sonnet-5-5; là báo cáo, chưa phải bằng chứng độc lập):
+  chỉ sửa CSS cho thanh trên cùng còn một dòng dưới 768px (`styles.css`, token mới
+  `--switcher-basis`) và thêm hai kiểm tra e2e mobile trong `sharing.spec.ts`, fail trên
+  bf954c0; ở 390x844 đáy dòng đầu là 659 / 758 / 667 / 766 so với 788; unit 1823; toàn bộ
+  e2e 210/0/26; verify 0; digest b07727b2.
+- WP5-UX-FIX8-FREEZE lần 1 dừng: board ghi hai file evidence của FIX7-FREEZE mà thực tế
+  chưa từng được tạo, nên validator báo lỗi (kiểm tra trước commit sạch, 393 đường dẫn đã
+  stage). Đã sửa danh sách trên board.
+- Lần 2 dừng ở validator: FIX8 ghi audit B6 (FIX REQUIRED) trong depends_on. Đã bỏ;
+  addresses_audit vẫn giữ liên kết.
+- Đang chạy: WP5-UX-FIX8-FREEZE lần 3 (committer, HEAD mong đợi bf954c0). Sau đó
+  WP5-UX-REGATE6, kiểm lại phần thay đổi B7 và A7, rồi nghiệm thu lại WP5.
 - Tiếp theo: nếu cả hai PASS, nghiệm thu lại WP5 (cập nhật định danh pilot packet thành
   5e104e1 / 07c3ca00 / image 218dd7cc…, quyết định Q1 vào docs/10, STATE, NEXT_ACTION, WP5
   handoff, commit nghiệm thu).

@@ -1,0 +1,14 @@
+. <task>/env.sh
+cd $T/export
+grep -ohE '\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b' docs/11_OPERATIONS_RUNBOOK.md docs/12_*.md | LC_ALL=C sort -u > $T/out/keys-list.txt
+rm -f $T/out/09-keys-map.txt
+while IFS= read -r k; do
+  w=""
+  grep -q "$k" .env.example && w="$w .env.example"
+  grep -q "$k" src/server/config.ts && w="$w config.ts"
+  grep -q "$k" src/server/index.ts && w="$w index.ts"
+  grep -q "$k" compose.example.yaml && w="$w compose.example.yaml"
+  grep -q "$k" Dockerfile && w="$w Dockerfile"
+  echo "$k:${w:- NONE}" >> $T/out/09-keys-map.txt
+done < $T/out/keys-list.txt
+cat $T/out/09-keys-map.txt

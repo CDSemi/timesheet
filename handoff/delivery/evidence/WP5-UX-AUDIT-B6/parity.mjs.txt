@@ -1,0 +1,33 @@
+// WP5-UX-AUDIT-B6: EN/VI structural parity. Usage: node parity.mjs <out.txt> <en.md> <vi.md> [<en.md> <vi.md> ...]
+// Per line pair: the same markdown structure marker (heading level, list, table), the same code spans,
+// the same numbers and the same quoted UI strings in double quotes (the UI is English in both files).
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [out, ...pairs] = process.argv.slice(2);
+const report = [];
+const marker = (line) => (/^(#+|\s*[-*] |\s*\d+\. |\|)/.exec(line)?.[1] ?? '').trim();
+const codes = (line) => (line.match(/`[^`]*`/g) ?? []).join(' ');
+const numbers = (line) => (line.replace(/`[^`]*`/g, '').replace(/\]\([^)]*\)/g, ']').match(/\d+(?:[.:]\d+)*/g) ?? []).join(' ');
+const quotes = (line) => (line.match(/"[^"]*"/g) ?? []).join(' ');
+for (let i = 0; i < pairs.length; i += 2) {
+  const en = readFileSync(pairs[i], 'utf8').split('\n');
+  const vi = readFileSync(pairs[i + 1], 'utf8').split('\n');
+  report.push(`== ${pairs[i]} (${en.length} lines) vs ${pairs[i + 1]} (${vi.length} lines)`);
+  let differences = 0;
+  const n = Math.max(en.length, vi.length);
+  for (let line = 0; line < n; line += 1) {
+    const a = en[line] ?? '';
+    const b = vi[line] ?? '';
+    const problems = [];
+    if (marker(a) !== marker(b)) problems.push(`marker ${JSON.stringify(marker(a))} vs ${JSON.stringify(marker(b))}`);
+    if (codes(a) !== codes(b)) problems.push(`code ${codes(a)} | ${codes(b)}`);
+    if (numbers(a) !== numbers(b)) problems.push(`numbers ${numbers(a)} | ${numbers(b)}`);
+    if (quotes(a) !== quotes(b)) problems.push(`quotes ${quotes(a).slice(0, 200)} | ${quotes(b).slice(0, 200)}`);
+    if (problems.length > 0) {
+      differences += 1;
+      report.push(`  line ${line + 1}: ${problems.join('; ')}`);
+    }
+  }
+  report.push(`  lines with a difference: ${differences}`);
+}
+writeFileSync(out, `${report.join('\n')}\n`);

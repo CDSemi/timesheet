@@ -1,0 +1,78 @@
+// WP5-UX-AUDIT-B6: token discipline scan of src/client/styles.css.
+// Usage: node css-scan.mjs <styles.css> <out.txt>
+// Token blocks are the declarations inside a `:root { ... }` rule (also inside @media). Everything else is
+// checked for colour, shadow, duration, radius, font and url literals, transitions that are not the shared
+// token, var() references to undefined custom properties, and inline-style use is checked separately.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [file, out] = process.argv.slice(2);
+const css = readFileSync(file, 'utf8');
+const lines = css.split('\n');
+const report = [];
+const defined = new Set();
+const used = new Map();
+let depth = 0;
+let rootDepth = -1;
+let selector = '';
+let inComment = false;
+const findings = { colour: [], shadow: [], duration: [], radius: [], font: [], url: [], transition: [], keywordColour: [] };
+for (let index = 0; index < lines.length; index += 1) {
+  let line = lines[index] ?? '';
+  // strip comments (single and multi-line)
+  let clean = '';
+  for (let i = 0; i < line.length; i += 1) {
+    if (inComment) {
+      if (line.startsWith('*/', i)) {
+        inComment = false;
+        i += 1;
+      }
+      continue;
+    }
+    if (line.startsWith('/*', i)) {
+      inComment = true;
+      i += 1;
+      continue;
+    }
+    clean += line[i];
+  }
+  line = clean;
+  const opens = (line.match(/\{/g) ?? []).length;
+  const closes = (line.match(/\}/g) ?? []).length;
+  if (opens > 0) {
+    selector = line.slice(0, line.indexOf('{')).trim() || selector;
+    if (/^:root\b/.test(selector) && rootDepth < 0) rootDepth = depth + 1;
+  }
+  depth += opens;
+  const inRoot = rootDepth > 0 && depth >= rootDepth;
+  const decl = /^\s*(--[\w-]+|[a-z-]+)\s*:\s*(.+?);?\s*$/.exec(line);
+  for (const match of line.matchAll(/var\((--[\w-]+)/g)) used.set(match[1], (used.get(match[1]) ?? 0) + 1);
+  if (decl !== null) {
+    const [, property, value] = decl;
+    if (property.startsWith('--')) defined.add(property);
+    if (!inRoot) {
+      const where = `${index + 1}: ${selector} { ${property}: ${value} }`;
+      if (/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab\(/.test(value)) findings.colour.push(where);
+      if (/\b(white|black|red|blue|green|gray|grey|silver)\b/.test(value) && !property.startsWith('--')) findings.keywordColour.push(where);
+      if (property === 'box-shadow' && !/^(var\(--[\w-]+\)(\s*,\s*var\(--[\w-]+\))*|none|inset [^;]*var\(--[\w-]+\)[^;]*|var\(--[\w-]+\),\s*inset [^;]*var\(--[\w-]+\)[^;]*)$/.test(value.trim())) findings.shadow.push(where);
+      if (/\b\d+(\.\d+)?m?s\b/.test(value)) findings.duration.push(where);
+      if (/radius/.test(property) && !/^(var\(--radius\)|0|var\(--radius\) var\(--radius\) 0 0|var\(--shape-round\))$/.test(value.trim())) findings.radius.push(where);
+      if (property === 'font-family' && !/^var\(--font-mono\)(, monospace)?$/.test(value.trim())) findings.font.push(where);
+      if (/url\(/.test(value)) findings.url.push(where);
+      if (property === 'transition' && value.trim() !== 'var(--transition)') findings.transition.push(where);
+    }
+  }
+  depth -= closes;
+  if (rootDepth > 0 && depth < rootDepth) rootDepth = -1;
+}
+const undefinedVars = [...used.keys()].filter((name) => !defined.has(name));
+const transitions = (css.match(/transition:\s*var\(--transition\)/g) ?? []).length;
+report.push(`file ${file}`);
+report.push(`--radius: ${/--radius:\s*([^;]+);/.exec(css)?.[1]}; --transition: ${/--transition:\s*([^;]+);/.exec(css)?.[1]}; --duration: ${/--duration:\s*([^;]+);/.exec(css)?.[1]}`);
+report.push(`transitions using var(--transition): ${transitions}`);
+report.push(`reduced-motion block present: ${/prefers-reduced-motion:\s*reduce/.test(css)}`);
+for (const [kind, list] of Object.entries(findings)) {
+  report.push(`${kind} literals outside token blocks: ${list.length}`);
+  for (const item of list) report.push(`  ${item}`);
+}
+report.push(`custom properties defined: ${defined.size}; referenced: ${used.size}; undefined references: ${undefinedVars.length} ${JSON.stringify(undefinedVars)}`);
+writeFileSync(out, `${report.join('\n')}\n`);

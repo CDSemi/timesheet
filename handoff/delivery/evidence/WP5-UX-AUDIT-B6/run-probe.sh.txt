@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# WP5-UX-AUDIT-B6 probe runner. Usage: run-probe.sh <clone dir> <tag> <port base> [grep] [project] [rings 0|1]
+source <task>/env.sh
+C="$1"; TAGV="$2"; BASE="$3"; GREP="${4:-.}"; PROJECT="${5:-}"; RINGSV="${6:-1}"
+mkdir -p "$T/tmp-$TAGV"
+export TEMP="$(cygpath -w "$T/tmp-$TAGV")"
+export TMP="$TEMP"
+cd "$C" || exit 9
+export PROBE_OUT="$T/probe-out"
+export PROBE_WORK="$T/probe-work"
+export PROBE_SHOTS="$T/probe-shots"
+export PROBE_TAG="$TAGV"
+export PROBE_PORT_BASE="$BASE"
+export PROBE_RINGS="$RINGSV"
+mkdir -p "$PROBE_OUT" "$PROBE_WORK" "$PROBE_SHOTS"
+STAMP="$(date -u +%H%M%S)"
+LOG="probe-run-$TAGV-$STAMP.txt"
+if [ -n "$PROJECT" ]; then
+  node node_modules/@playwright/test/cli.js test -c audit-b6/probe.config.ts -g "$GREP" --project="$PROJECT" > "$T/$LOG" 2>&1
+else
+  node node_modules/@playwright/test/cli.js test -c audit-b6/probe.config.ts -g "$GREP" > "$T/$LOG" 2>&1
+fi
+echo "probe exit=$? tag=$TAGV grep=$GREP project=${PROJECT:-both} rings=$RINGSV log=$LOG at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$T/probe-summary.txt"

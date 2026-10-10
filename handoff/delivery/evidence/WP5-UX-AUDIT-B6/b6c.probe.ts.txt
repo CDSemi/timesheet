@@ -1,0 +1,206 @@
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { test as base, expect, type Page } from '@playwright/test';
+import { newPerson, SeedClient } from '../tests/e2e/fixtures.ts';
+
+/*
+ * WP5-UX-AUDIT-B6 P11 (auditor-written; outside git tracking): the phone first screen of the person's own
+ * Timesheet at load, for a person without and with a received share (the "Shared with me" switcher sits in
+ * the compact shell bar). Runs unchanged on any snapshot (no selector of the reviewed round). Synthetic data
+ * only; own built server on the task port range, stopped through its handle.
+ */
+
+const REPO = resolve(import.meta.dirname, '..');
+const OUT = process.env.PROBE_OUT ?? join(REPO, '..', 'probe-out');
+const WORK = process.env.PROBE_WORK ?? join(REPO, '..', 'probe-work');
+const PORT_BASE = Number(process.env.PROBE_PORT_BASE ?? '48316');
+const TAG = process.env.PROBE_TAG ?? 'b6c';
+mkdirSync(OUT, { recursive: true });
+mkdirSync(WORK, { recursive: true });
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+
+async function waitHealthy(origin: string, child: ChildProcess) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
+    try {
+      if ((await fetch(`${origin}/api/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error('server did not become healthy');
+}
+
+const test = base.extend<{ adminSeed: SeedClient }, { server: { origin: string; admin: Credentials } }>({
+  server: [
+    async ({}, use, workerInfo) => {
+      const port = workerInfo.project.name === 'desktop' ? PORT_BASE : PORT_BASE + 1;
+      const work = mkdtempSync(join(WORK, `${TAG}-${workerInfo.project.name}-`));
+      const origin = `http://127.0.0.1:${port}`;
+      const admin = { email: 'admin@example.invalid', password: randomBytes(18).toString('base64url') };
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NODE_ENV: 'development',
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        DATABASE_PATH: join(work, 'timesheet.db'),
+        DATA_DIR: join(work, 'private-data'),
+        APP_ORIGINS: origin,
+        OUTBOUND_MODE: 'capture',
+        MAIL_FROM: 'timesheet-capture@example.invalid',
+        SEED_ADMIN_PASSWORD: admin.password,
+        SEED_EMPLOYEE_PASSWORD: randomBytes(18).toString('base64url'),
+      };
+      for (const command of ['migrate', 'seed']) {
+        const result = spawnSync(process.execPath, ['dist/server/cli.js', command], { cwd: REPO, env, encoding: 'utf8' });
+        if (result.status !== 0) throw new Error(`cli ${command} failed: ${result.status} ${result.stderr}`);
+      }
+      const errFd = openSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stderr.txt`), 'w');
+      const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: REPO, env, stdio: ['ignore', 'ignore', errFd] });
+      try {
+        await waitHealthy(origin, child);
+        await use({ origin, admin });
+      } finally {
+        if (child.exitCode === null) {
+          const exited = new Promise((done) => child.once('exit', done));
+          child.kill();
+          await exited;
+        }
+        closeSync(errFd);
+        writeFileSync(join(OUT, `${TAG}-server-${workerInfo.project.name}-stopped.json`), `${JSON.stringify({ port, exitCode: child.exitCode, signal: child.signalCode })}\n`);
+      }
+    },
+    { scope: 'worker', timeout: 90_000 },
+  ],
+  baseURL: async ({ server }, use) => {
+    await use(server.origin);
+  },
+  adminSeed: async ({ server }, use) => {
+    await use(await new SeedClient(server.origin).signIn(server.admin.email, server.admin.password));
+  },
+});
+
+test.use({ timezoneId: process.env.PROBE_TZ ?? 'America/Los_Angeles', locale: 'en-US' });
+
+async function signIn(page: Page, who: Credentials) {
+  await page.goto('/#/timesheet');
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+}
+
+/* ---- P12: scrolling dialogs (Clock out, batch review) as their own keyboard stop -------------------------- */
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`P12 scrolling dialogs ${theme}`, async ({ page, adminSeed, server }, testInfo) => {
+    const mobile = testInfo.project.name === 'mobile';
+    const person = await newPerson(adminSeed, { origin: server.origin } as never, { displayName: 'Synthetic Dialog Person', signature: 'none' });
+    const [day = ''] = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(day);
+    await person.api.call('POST', '/api/clock/in', { input_zone: 'America/Los_Angeles' }, 201);
+    await page.setViewportSize(mobile ? { width: 320, height: 640 } : { width: 1280, height: 600 });
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await signIn(page, person.account);
+    const rows: unknown[] = [];
+    const measure = async (label: string) => {
+      const dialog = page.locator('dialog[open]').last();
+      await expect(dialog).toBeVisible();
+      await page.waitForTimeout(300);
+      const scrolls = await dialog.evaluate((element) => element.scrollHeight > element.clientHeight);
+      // On open the dialog focuses its first control; one Shift+Tab from there reaches the dialog itself when it scrolls.
+      const firstInside = await dialog.evaluate((element) => `${element.contains(document.activeElement) && element !== document.activeElement} ${document.activeElement?.tagName ?? ''} ${(document.activeElement?.textContent ?? '').trim().slice(0, 30)}`);
+      const before = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+      const scrollBefore = await dialog.evaluate((element) => element.scrollTop);
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(150);
+      const state = await dialog.evaluate((element) => {
+        const r = element.getBoundingClientRect();
+        return { isStop: document.activeElement === element, fv: element.matches(':focus-visible'), shadow: getComputedStyle(element).boxShadow, scrollTop: element.scrollTop, rect: { x: r.x, y: r.y, width: r.width, height: r.height } };
+      });
+      const after = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+      const fileBase = `${TAG}-p12-${label}-${testInfo.project.name}-${theme}`;
+      writeFileSync(join(OUT, `${fileBase}-before.png.bin`), before);
+      writeFileSync(join(OUT, `${fileBase}-after.png.bin`), after);
+      rows.push({ label, scrolls, firstInside, scrollBefore, ...state, insetRing: /inset/.test(state.shadow) && /0px 0px 0px 2px inset/.test(state.shadow) });
+    };
+    await page.goto('/#/timesheet');
+    await expect(page.locator('[data-day]').first()).toBeVisible();
+    const clockOut = page.getByRole('button', { name: 'Clock out', exact: true });
+    await clockOut.focus();
+    await page.keyboard.press('Enter');
+    await measure('clock-out');
+    await page.keyboard.press('Escape');
+    await page.goto('/#/timesheet');
+    await page.reload();
+    await expect(page.locator('[data-day]').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Change several days', exact: true }).click();
+    await page.getByRole('checkbox', { name: `Select ${day}` }).check();
+    await page.getByLabel('Category for selected days').selectOption('Off');
+    const preview = page.getByRole('button', { name: 'Preview changes' });
+    await preview.focus();
+    await page.keyboard.press('Enter');
+    await measure('batch-review');
+    await page.keyboard.press('Escape');
+    writeFileSync(join(OUT, `${TAG}-p12-dialogs-${testInfo.project.name}-${theme}.json`), `${JSON.stringify(rows, null, 1)}\n`);
+  });
+}
+
+test('P11 phone first screen with and without a received share', async ({ page, adminSeed, server }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'phone widths');
+  const grantor = await newPerson(adminSeed, { origin: server.origin } as never, { displayName: 'Synthetic First Grantor', signature: 'none' });
+  const grantee = await newPerson(adminSeed, { origin: server.origin } as never, { displayName: 'Synthetic First Grantee', signature: 'none' });
+  await grantor.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'view', ot_read: false, pdf_download: false } }, 201);
+  const rows: unknown[] = [];
+  for (const [label, person] of [
+    ['no received share', grantor],
+    ['received share', grantee],
+  ] as const) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, person.account);
+    for (const size of [
+      { width: 390, height: 844 },
+      { width: 375, height: 812 },
+      { width: 360, height: 800 },
+      { width: 320, height: 640 },
+    ]) {
+      await page.setViewportSize(size);
+      await page.goto('/#/timesheet');
+      await page.reload();
+      await expect(page.locator('[data-day]').first()).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      rows.push({
+        who: label,
+        size: `${size.width}x${size.height}`,
+        ...(await page.evaluate(() => {
+          const first = document.querySelector('[data-day]')?.getBoundingClientRect();
+          const tabs = document.querySelector('.shell-tabs')?.getBoundingClientRect();
+          const bar = document.querySelector('.shell-bar')?.getBoundingClientRect();
+          const switcher = document.querySelector('.shell-switcher')?.getBoundingClientRect();
+          return {
+            switcher: switcher === undefined ? null : Math.round(switcher.height * 10) / 10,
+            shellBar: bar === undefined ? null : Math.round(bar.height * 10) / 10,
+            firstRowTop: first === undefined ? null : Math.round(first.top * 10) / 10,
+            firstRowBottom: first === undefined ? null : Math.round(first.bottom * 10) / 10,
+            tabBarTop: tabs === undefined ? null : Math.round(tabs.top * 10) / 10,
+            fullyVisible: first !== undefined && tabs !== undefined && first.bottom <= tabs.top + 0.5,
+          };
+        })),
+      });
+      if (size.width === 390) await page.screenshot({ path: join(OUT, `${TAG}-first-screen-${label.replace(/ /g, '-')}-synthetic.png`), animations: 'disabled', caret: 'hide' });
+    }
+    const more = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More' });
+    await more.click();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  }
+  writeFileSync(join(OUT, `${TAG}-p11-first-screen.json`), `${JSON.stringify(rows, null, 1)}\n`);
+});

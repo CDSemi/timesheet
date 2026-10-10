@@ -1,0 +1,182 @@
+// WP5-UX-AUDIT-A6: compares the probe results of bf954c0 with 5e104e1 (FIX7 delta) and with 014bd47 (body
+// baseline), and summarises the bf954c0-only probes. Prints SAME/DIFF lines and a final mismatch count.
+// Usage: node compare.mjs <probe-results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const read = (name) => (existsSync(join(dir, name)) ? JSON.parse(readFileSync(join(dir, name), 'utf8')) : null);
+let mismatches = 0;
+let missing = 0;
+/** JSON with object keys sorted at every level (key order is not part of a request body's meaning). */
+const canon = (value) => JSON.stringify(value, (key, v) => (v !== null && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+const same = (label, a, b) => {
+  const x = canon(a);
+  const y = canon(b);
+  if (x === y) console.log(`  SAME      ${label}: ${x.length > 260 ? `${x.slice(0, 257)}...` : x}`);
+  else {
+    mismatches += 1;
+    console.log(`  DIFF      ${label}:\n            bf954c0 ${x}\n            other   ${y}`);
+  }
+};
+const need = (name) => {
+  const value = read(name);
+  if (value === null) {
+    missing += 1;
+    console.log(`  MISSING   ${name}`);
+  }
+  return value;
+};
+const stripIds = (value) => JSON.parse(JSON.stringify(value).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>'));
+
+console.log('== 1. Day selection by data-day: bf954c0 vs 5e104e1 (same project, zone, period, date)');
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  const a = need(`days-bf954c0-${project}.json`);
+  const b = need(`days-5e104e1-${project}.json`);
+  if (a === null || b === null) continue;
+  console.log(`-- ${project}: problems bf954c0 ${a.problems.length}, 5e104e1 ${b.problems.length}; DST session seeded ${a.dst_session_seeded}/${b.dst_session_seeded}; periods ${JSON.stringify(a.periods)}`);
+  same(`${project} periods`, a.periods, b.periods);
+  let rows = 0;
+  let clicks = 0;
+  let diffRows = 0;
+  let diffClicks = 0;
+  const nameSamples = new Set();
+  for (const runA of a.runs) {
+    const runB = b.runs.find((r) => r.zone === runA.zone && r.offset === runA.offset);
+    if (runB === undefined) {
+      mismatches += 1;
+      console.log(`  DIFF      ${project} ${runA.zone} ${runA.offset}: no 5e104e1 run`);
+      continue;
+    }
+    for (const rowA of runA.rows) {
+      rows += 1;
+      const rowB = runB.rows.find((r) => r.date === rowA.date);
+      // The visible text, the layout kind, the verb and the session ranges must be the same; the name changed by design.
+      const keyA = { date: rowA.date, visible: rowA.visible, kind: rowA.kind, verb: (rowA.name ?? '').split(' ')[0], ranges: stripIds(rowA.ranges) };
+      const keyB = rowB === undefined ? null : { date: rowB.date, visible: rowB.visible, kind: rowB.kind, verb: (rowB.name ?? '').split(' ')[0], ranges: stripIds(rowB.ranges) };
+      if (JSON.stringify(keyA) !== JSON.stringify(keyB)) {
+        diffRows += 1;
+        mismatches += 1;
+        console.log(`  DIFF      ${project} ${runA.zone} ${runA.offset} ${rowA.date}: ${JSON.stringify(keyA)} vs ${JSON.stringify(keyB)}`);
+      }
+      if (rowA.ranges.length > 0 || rowA.date === runA.first) nameSamples.add(`${runA.zone}|${rowA.date}: bf954c0 "${rowA.name}" / 5e104e1 "${rowB?.name}" / cell "${rowA.visible}"${rowA.ranges.length > 0 ? ` / times ${rowA.ranges.map((r) => `${r.startDate ?? ''}${r.startDate ? ' ' : ''}${r.text}`).join(', ')}` : ''}`);
+    }
+    for (const clickA of runA.clicks) {
+      clicks += 1;
+      const clickB = runB.clicks.find((c) => c.date === clickA.date);
+      const keyA = { opened: clickA.opened, heading: clickA.heading, focusDay: clickA.focus.day, focusOnDayButton: clickA.focus.isDayButton };
+      const keyB = clickB === undefined ? null : { opened: clickB.opened, heading: clickB.heading, focusDay: clickB.focus.day, focusOnDayButton: clickB.focus.isDayButton };
+      if (JSON.stringify(keyA) !== JSON.stringify(keyB) || clickA.opened !== clickA.date) {
+        diffClicks += 1;
+        mismatches += 1;
+        console.log(`  DIFF      ${project} ${runA.zone} ${runA.offset} click ${clickA.date}: ${JSON.stringify(keyA)} vs ${JSON.stringify(keyB)}`);
+      }
+    }
+  }
+  console.log(`  rows compared ${rows} (differing ${diffRows}); clicks compared ${clicks} (differing ${diffClicks}; each opened its own date and returned focus to its own day button on both builds when 0)`);
+  for (const sample of [...nameSamples].filter((s) => /Sydney|Kiritimati|Pago|Lord_Howe/.test(s)).slice(0, 12)) console.log(`    ${sample}`);
+}
+
+console.log('\n== 2. "Shared with me": routes, shared views and isolation, bf954c0 vs 5e104e1');
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  const a = need(`switcher-bf954c0-${project}.json`);
+  const b = need(`switcher-5e104e1-${project}.json`);
+  if (a === null || b === null) continue;
+  console.log(`-- ${project}`);
+  same('switcher options', a.switcher_options, b.switcher_options);
+  a.steps.forEach((stepA, index) => {
+    const stepB = b.steps[index];
+    same(`step ${index + 1} ${stepA.from} -> ${stepA.target}: landed`, stepA.landed, stepB?.landed);
+    same(`step ${index + 1} requests`, stepA.requests, stepB?.requests);
+    if (stepA.afterChoice !== null) console.log(`            bf954c0 after the choice alone: hash ${stepA.afterChoice.hash}, requests ${JSON.stringify(stepA.afterChoice.requests)}`);
+  });
+  const isoA = { ...a.isolation, grantee_on_C_requests: [...a.isolation.grantee_on_C_requests].sort() };
+  const isoB = { ...b.isolation, grantee_on_C_requests: [...b.isolation.grantee_on_C_requests].sort() };
+  same('isolation', isoA, isoB);
+}
+
+console.log('\n== 3. Dialogs: Cancel / Escape / Back write nothing; commit bodies, bf954c0 vs 5e104e1 (and Settings/Import vs 014bd47)');
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  const a = need(`dialogs-ts-bf954c0-${project}.json`);
+  const b = need(`dialogs-ts-5e104e1-${project}.json`);
+  if (a !== null && b !== null) {
+    console.log(`-- Timesheet, ${project}`);
+    a.steps.forEach((stepA, index) => {
+      const stepB = b.steps[index];
+      const norm = (s) => stripIds({ label: s.label, writes: s.writes, stored: s.stored });
+      same(`${stepA.label}`, norm(stepA), stepB === undefined ? null : norm(stepB));
+      console.log(`            focus after: bf954c0 ${stepA.focus} | 5e104e1 ${stepB?.focus}`);
+    });
+  }
+  for (const other of ['5e104e1', '014bd47']) {
+    if (other === '014bd47' && project === 'tablet') continue;
+    const s = need(`dialogs-settings-bf954c0-${project}.json`);
+    const t = need(`dialogs-settings-${other}-${project}.json`);
+    if (s === null || t === null) continue;
+    console.log(`-- Settings and Import, ${project}, vs ${other}`);
+    s.steps.forEach((stepA, index) => {
+      const stepB = t.steps[index];
+      const norm = (x) => ({ label: x.label.replace(/ \(change step still open: \d\)/, ''), writes: x.writes, stored: x.stored });
+      same(`${stepA.label}`, norm(stepA), stepB === undefined ? null : norm(stepB));
+      console.log(`            focus after: bf954c0 ${stepA.focus} | ${other} ${stepB?.focus}`);
+    });
+  }
+}
+
+console.log('\n== 4. Bodies of the clock, sign-off, batch, editor and one-day label change: bf954c0 vs 014bd47');
+const runIndependent = (body) => {
+  if (body === null || typeof body !== 'object') return body;
+  const copy = { ...body };
+  delete copy.expected_version;
+  delete copy.reviewed_hash;
+  return copy;
+};
+for (const [project, base] of [['desktop', 'desktop'], ['tablet', 'desktop'], ['mobile', 'mobile']]) {
+  const a = need(`bodies-bf954c0-${project}.json`);
+  const b = need(`bodies-014bd47-${base}.json`);
+  if (a === null || b === null) continue;
+  console.log(`-- bf954c0 ${project} (editor modal=${a.editor_layout?.modal} class=${a.editor_layout?.className}) vs 014bd47 ${base}`);
+  same('clock calls', a.clock.map((w) => w.call), b.clock.map((w) => w.call));
+  same('clock bodies (run-independent)', a.clock.map((w) => runIndependent({ ...w.body, input_zone: w.body.input_zone })), b.clock.map((w) => runIndependent({ ...w.body, input_zone: w.body.input_zone })));
+  same('clock body keys', a.clock.map((w) => Object.keys(w.body).sort()), b.clock.map((w) => Object.keys(w.body).sort()));
+  same('sign-off call', a.signoff.at(-1)?.call.replace(/\d{4}-\d{2}-\d{2}/, ':p'), b.signoff.at(-1)?.call.replace(/\d{4}-\d{2}-\d{2}/, ':p'));
+  same('sign-off keys', Object.keys(a.signoff.at(-1)?.body ?? {}).sort(), Object.keys(b.signoff.at(-1)?.body ?? {}).sort());
+  same('sign-off run-independent values', runIndependent(a.signoff.at(-1)?.body), runIndependent(b.signoff.at(-1)?.body));
+  console.log(`            sign-off binding bf954c0: reviewed_hash = payload_hash ${a.signoff.at(-1)?.body.reviewed_hash === a.review_binding.payload_hash}, expected_version = reviewed ${a.signoff.at(-1)?.body.expected_version === a.review_binding.expected_version}; status ${a.signoff_status} (014bd47 ${b.signoff_status}); writes on the review page ${a.signoff.length} vs ${b.signoff.length}`);
+  same('batch days', a.batch_days, b.batch_days);
+  same('batch preview and commit bodies', a.batch.map((w) => w.body), b.batch.map((w) => w.body));
+  same('editor day dates', a.editor_days, b.editor_days);
+  same('editor writes (calls)', a.editor.map((w) => w.call), b.editor.map((w) => w.call));
+  same('editor day-fields PUT body', a.editor[0]?.body, b.editor[0]?.body);
+  same('editor new-session POST body', a.editor[1]?.body, b.editor[1]?.body);
+  same('one-day label change calls (picker vs batch bar)', a.picker.map((w) => w.call), b.picker.map((w) => w.call));
+  same('one-day label change bodies (picker vs batch bar)', a.picker.map((w) => w.body), b.picker.map((w) => w.body));
+}
+
+console.log('\n== 5. Sticky sizes and scroll padding (bf954c0 must have no problem; 5e104e1 for comparison)');
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  for (const build of ['bf954c0', '5e104e1']) {
+    const r = need(`sticky-${build}-${project}.json`);
+    if (r === null) continue;
+    const scenarios = [...new Set(r.results.map((x) => x.scenario))];
+    console.log(`-- ${build} ${project}: ${r.checks} focus checks + ${r.trials} trial clicks over ${scenarios.length} scenarios; problems ${r.problems.length}`);
+    for (const p of r.problems.slice(0, 8)) console.log(`     problem: ${p.width} ${p.scenario} / ${p.name} / ${p.position}: ${p.trial ?? `focused ${p.focused} centreHit ${p.centreHit} samples ${p.visibleSamples} covers ${JSON.stringify(p.covers)}`}`);
+    if (build === 'bf954c0') {
+      // A date field is not scrolled by a programmatic focus(); such a row counts as explained only when the keyboard
+      // follow-up (datefield probe) reaches the same field fully visible at the same width with Tab and Shift+Tab.
+      const follow = read(`datefield-bf954c0-${project}.json`);
+      for (const p of r.problems) {
+        const rows = follow === null ? [] : follow.rows.filter((row) => row.width === p.width);
+        const explained = p.name === 'Open a day' && rows.length > 0 && rows.every((row) => row.focused && row.centreHit && row.visibleSamples === 25);
+        console.log(`     ${explained ? 'EXPLAINED' : 'UNEXPLAINED'} ${p.width} ${p.scenario} / ${p.name} / ${p.position}${explained ? `: keyboard Tab/Shift+Tab reach it fully visible (${rows.length} of ${rows.length} rows 25/25, centre hit)` : ''}`);
+        if (!explained) mismatches += 1;
+      }
+      for (const s of r.sizes) console.log(`     ${s.width} ${s.where}: --shell-bar-size ${s.shellBarSizeVar} (bar ${s.shellBarHeight}), --share-bar-size ${s.shareBarSizeVar} (bar ${s.shareBarHeight}, ${s.shareBarPosition}, top ${s.shareBarTop}), scroll-padding-top ${s.scrollPaddingTop}; editor head ${s.editorHeadSizeVar ?? '-'} (head ${s.editorHeadHeight ?? '-'}), editor scroll-padding-top ${s.editorScrollPaddingTop ?? '-'}, editor top ${s.editorTop ?? '-'} max-height ${s.editorMaxHeight ?? '-'}`);
+      const minSamples = Math.min(...r.results.filter((x) => typeof x.visibleSamples === 'number').map((x) => x.visibleSamples));
+      console.log(`     lowest visible sample count of a focused control: ${minSamples} of 25`);
+    }
+  }
+}
+
+console.log(`\nmissing=${missing} mismatches=${mismatches}`);
+process.exitCode = mismatches === 0 && missing === 0 ? 0 : 1;

@@ -1,0 +1,22 @@
+// Summarises the date-field follow-up (datefield-<build>-<project>.json) for both builds side by side.
+// Usage: node datefield-summary.mjs <results-dir>
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+let missing = 0;
+for (const project of ['desktop', 'tablet', 'mobile']) {
+  for (const build of ['bf954c0', '5e104e1']) {
+    const file = join(dir, `datefield-${build}-${project}.json`);
+    if (!existsSync(file)) {
+      missing += 1;
+      console.log(`MISSING ${file}`);
+      continue;
+    }
+    const r = JSON.parse(readFileSync(file, 'utf8'));
+    for (const row of r.rows) {
+      console.log(`${build} ${project} ${row.width} cover=${row.cover} ${row.how}: placed top ${row.placedTop} -> box ${JSON.stringify(row.box)} focused ${row.focused} centre ${row.centreHit} samples ${row.visibleSamples} covers ${JSON.stringify(row.covers)} active ${row.active} (prev ${row.neighbours.prev}, next ${row.neighbours.next})`);
+    }
+  }
+}
+console.log(`missing ${missing}`);

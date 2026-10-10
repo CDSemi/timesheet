@@ -1,0 +1,27 @@
+WP5-UX-AUDIT-B6 - digest before any check (first step after `node --version`, 2026-10-10T03:05:43Z UTC)
+
+$ node --version                                  -> v24.21.0 (portable Node 24 first on PATH via cygpath -u)
+$ cd <project> && git rev-parse HEAD origin/main bf954c0
+  bf954c0b371ad9a5fe461a603c5d476ea210e66c
+  bf954c0b371ad9a5fe461a603c5d476ea210e66c
+  bf954c0b371ad9a5fe461a603c5d476ea210e66c
+$ git diff --name-only bf954c0 HEAD -- . ':!handoff'   -> (empty: no path outside handoff/ differs)
+$ git status --short   -> only handoff/ paths (coordinator files: ORCHESTRATION.json, checkpoint pair, FIX7-FREEZE brief,
+                          evidence/WP5-UX-FIX7-FREEZE/, evidence/WP5-UX-REGATE5/, tasks AUDIT-A6, AUDIT-B6, REGATE5)
+
+Form 1 (git ls-tree form):
+$ git ls-tree -r --format='%(path) %(objectname)' bf954c0 | grep -v '^handoff/' | LC_ALL=C sort  (to a file), then sha256sum < file
+  793 lines
+  b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563
+
+Form 2 (scratch clone at bf954c0, <task>/clone):
+$ git clone --no-local <project> clone ; git checkout --detach bf954c0b371ad9a5fe461a603c5d476ea210e66c   -> exit 0, exit 0
+$ git rev-parse HEAD -> bf954c0b371ad9a5fe461a603c5d476ea210e66c ; git status --short -> 0 bytes
+$ node scripts/source-digest.mjs  -> exit 0
+  b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563  (793 files, handoff/ excluded)
+
+Form 3 (working repository):
+$ node scripts/source-digest.mjs  -> exit 0
+  b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563  (793 files, handoff/ excluded)
+
+All three equal the digest of record b7c011d2f47b6cf45ec085064f6c8e5da1847f8ffdd3ba54ac77dc995a02d563 (793 files).

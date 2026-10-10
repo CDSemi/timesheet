@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Built server and domain of bf954c0, 5e104e1 and 014bd47 (each built in its own clean export): file lists with sha256.
+source <task>/env.sh
+OUT="$T/raw/11b-dist-server.txt"
+{
+  for part in server domain; do
+    for b in export:bf954c0 ex5e1:5e104e1 ex014:014bd47; do
+      dir="${b%%:*}"; label="${b##*:}"
+      echo "== dist/$part of $label"
+      bash "$T/tree-hash.sh" "$T/$dir/dist/$part" "$T/raw/dist-$part-$label.txt"
+    done
+    echo "-- diff dist/$part bf954c0 vs 5e104e1"
+    diff "$T/raw/dist-$part-bf954c0.txt" "$T/raw/dist-$part-5e104e1.txt"; echo "diff exit $?"
+    echo "-- diff dist/$part bf954c0 vs 014bd47"
+    diff "$T/raw/dist-$part-bf954c0.txt" "$T/raw/dist-$part-014bd47.txt" > "$T/raw/dist-$part-diff-014.txt"; echo "diff exit $? ($(wc -l < "$T/raw/dist-$part-diff-014.txt") lines)"
+  done
+} > "$OUT" 2>&1
+echo done

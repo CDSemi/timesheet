@@ -17,8 +17,12 @@
   (a) (2026-10-09). Phần triển khai T01..T06 và các bản sửa FIX1..FIX6 đã freeze ở
   5e104e1 (digest 07c3ca00); audit lại phần A PASS (WP5-UX-AUDIT-A5). Bản rà soát trợ
   năng WP5-UX-A11Y-SWEEP tìm ra mười lỗi WCAG 2.2 AA (AX-01..AX-10); WP5-UX-FIX7 đã sửa
-  trong một vòng (là báo cáo; digest b7c011d2). Hiện tại: freeze WP5-UX-FIX7-FREEZE, rồi
-  WP5-UX-REGATE5 và hai lần kiểm tra lại độc lập mới B6 và A6, rồi nghiệm thu lại WP5.
+  trong một vòng (freeze ở bf954c0, digest b7c011d2); WP5-UX-REGATE5 PASS; kiểm tra lại
+  phần A WP5-UX-AUDIT-A6 PASS; kiểm tra lại phần B WP5-UX-AUDIT-B6 xác nhận đã đóng mọi
+  mục trợ năng và tìm thêm một lỗi bố cục mức Low, WP5-UX-B6-01 (màn hình đầu trên điện
+  thoại khi có timesheet được chia sẻ và ghi chú múi giờ). WP5-UX-FIX8 đã sửa (là báo
+  cáo; digest b07727b2). Hiện tại: freeze, WP5-UX-REGATE6, kiểm lại phần thay đổi B7 và
+  A7, rồi nghiệm thu lại WP5.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
 Xem [STATE](delivery/STATE.json), [bảng task](delivery/ORCHESTRATION.json),

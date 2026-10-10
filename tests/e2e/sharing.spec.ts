@@ -531,3 +531,54 @@ test('a revoked share ends on the grantee next request with a clear message and 
   expect(adminShares).not.toContain(note);
   expect(adminShares).not.toContain(workDay);
 });
+
+/* ---- WP5-UX-B6-01: the phone first screen holds with a received share (docs/04 line 48) ---------------- */
+
+test.describe('phone first screen with a received share', () => {
+  test.skip(({ isMobile }) => !isMobile, 'The first-screen budget is the 390x844 phone');
+
+  for (const [situation, zone] of [
+    ['the zone note shown', 'Asia/Ho_Chi_Minh'],
+    ['the viewing zone equal to the reporting zone', 'America/Los_Angeles'],
+  ] as const) {
+    test.describe(situation, () => {
+      test.use({ timezoneId: zone });
+
+      test('the first day row is fully visible above the tab bar and the shell bar stays one row', async ({
+        page,
+        adminSeed,
+        builtServer,
+        signInPageAs,
+      }) => {
+        test.setTimeout(120_000);
+        const owner = await newPerson(adminSeed, builtServer, 'Synthetic Owner');
+        const grantee = await newPerson(adminSeed, builtServer, 'Synthetic Grantee');
+        await grantByApi(owner, grantee, { timesheets: 'view', ot_read: false, pdf_download: false });
+        await signInPageAs(grantee.account, '#/timesheet');
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await expect(switcher(page)).toBeVisible();
+        if (zone === 'Asia/Ho_Chi_Minh') await expect(page.locator('[data-zone-note]')).toBeVisible();
+        else await expect(page.locator('[data-zone-note]')).toHaveCount(0);
+        const first = await page.locator('[data-day]').first().boundingBox();
+        const tabs = await page.locator('.shell-tabs').boundingBox();
+        const shellBar = await page.locator('.shell-bar').boundingBox();
+        expect(first, 'first day row box').not.toBeNull();
+        expect(tabs, 'tab bar box').not.toBeNull();
+        expect(shellBar, 'shell bar box').not.toBeNull();
+        expect((first?.y ?? 0) + (first?.height ?? 0), 'bottom of the first day row is at or above the tab bar').toBeLessThanOrEqual((tabs?.y ?? 0) + 0.5);
+        expect(shellBar?.height ?? 0, 'the compact shell bar is one row').toBeLessThanOrEqual(60);
+        expect(await page.evaluate('window.scrollY')).toBe(0);
+        // The switcher keeps its visible label, its 44px targets and its place inside the bar.
+        const select = page.getByRole('combobox', { name: 'Shared with me' });
+        const open = page.getByRole('form', { name: 'Shared with me' }).getByRole('button', { name: 'Open', exact: true });
+        for (const box of [await select.boundingBox(), await open.boundingBox()]) {
+          expect(box?.height ?? 0, 'target height').toBeGreaterThanOrEqual(44);
+          expect(box?.width ?? 0, 'target width').toBeGreaterThanOrEqual(44);
+          expect((box?.y ?? 0) + (box?.height ?? 0), 'inside the shell bar').toBeLessThanOrEqual((shellBar?.y ?? 0) + (shellBar?.height ?? 0) + 0.5);
+        }
+        await expect(page.locator('.shell-switcher label')).toContainText('Shared with me');
+        await expectNoSidewaysScroll(page);
+      });
+    });
+  }
+});
